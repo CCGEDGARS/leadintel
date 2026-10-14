@@ -2,7 +2,7 @@ import './workspace-storage-ui.js?v=20261012-v1&active-tools-order=20261012-v1&r
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
 import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20261012-mailbox-controls-v1';
+const SETTINGS_VERSION='20261014-microsoft-help-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-6.1-sol',placeholder:'sk-…',hint:'Recommended for commercial reasoning and controlled writing'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-5-5',placeholder:'sk-ant-…',hint:'Recommended Claude balance for reasoning and writing'},
@@ -80,6 +80,7 @@ function injectUi(){
       </section>
       <div class="ai-security-note"><strong>Credential security</strong><span>Customer API keys are sent directly to LeadIntel's authenticated backend, encrypted before database storage and never added to browser workspace data. No platform provider credentials are used for customer requests.</span></div>
     </aside>`);
+  const settingsDrawer=document.getElementById('ai-settings-drawer');if(settingsDrawer.dataset.eventsBound)return;settingsDrawer.dataset.eventsBound='true';
   document.getElementById('open-settings')?.addEventListener('click',openDrawer);
   document.getElementById('close-settings')?.addEventListener('click',closeDrawer);
   document.getElementById('ai-settings-backdrop')?.addEventListener('click',closeDrawer);
@@ -90,7 +91,7 @@ function injectUi(){
   document.getElementById('personal-linkedin-save')?.addEventListener('click',()=>savePersonalLinkedIn(false));
   document.getElementById('personal-linkedin-remove')?.addEventListener('click',()=>savePersonalLinkedIn(true));
   document.getElementById('test-all-integrations')?.addEventListener('click',testAllIntegrations);
-  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer();});
+  document.addEventListener('keydown',event=>{const help=document.getElementById('microsoft-connection-help');if(help&&!help.hidden){if(event.key==='Escape'){event.preventDefault();closeMicrosoftHelp();}else if(event.key==='Tab'){event.preventDefault();help.querySelector('[data-close-microsoft-help]')?.focus();}return;}if(event.key==='Escape')closeDrawer();});
   render();
 }
 function renderMeetingPlatform(){
@@ -265,9 +266,9 @@ function renderIntegrationMonitoring(){
     <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(integrationTone(firecrawl))}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">${firecrawl.source==='customer'?'Your Firecrawl key':'Connect your own Firecrawl key. Each user pays their provider directly.'}</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>
     <article class="integration-card" data-integration="hunter"><div class="integration-card-head"><div><strong>Hunter</strong><small>Email verification</small></div><span class="integration-status neutral">Not connected</span></div><p class="integration-purpose">Connect your Hunter account for email verification.</p><div class="integration-meta">Optional customer-owned integration</div></article>`;
   communication.innerHTML=`<article class="integration-card workspace-provider-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(googleAccount))}">${esc(googleAccount.label)}</span></div><p class="integration-purpose">Choose Google only if you want to use a Google account for LeadIntel workspace access. Gmail is connected separately.</p><div class="integration-meta">${esc(googleAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('google')}</article>
-    <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(microsoftAccount))}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
+    <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(microsoftAccount))}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft').replace('</div>',microsoftHelpButton()+'</div>')}</article>
     <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(integrationTone(gmail))}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div>${gmailMailActions(gmail)}</article>
-    <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(integrationTone(microsoftMail))}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
+    <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(integrationTone(microsoftMail))}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}${microsoftHelpButton()}</article>`;
   for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')]){if(['gmail','microsoft-mail'].includes(card.dataset.integration)||(signedIn()&&card.classList.contains('workspace-provider-card')))continue;card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');}
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
@@ -282,7 +283,24 @@ function renderIntegrationMonitoring(){
   health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${creditAlerts.length?`Payment alert: ${esc(creditAlerts.join(', '))}`:signedIn()?`${connectionAlerts?'Connection needs attention · ':''}${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
   const button=document.getElementById('test-all-integrations');if(button){button.disabled=!signedIn()||integrationStatus.checking;button.textContent=integrationStatus.checking?'Testing…':'Test all integrations';}
 }
+let microsoftHelpTrigger=null;
+function microsoftHelpButton(){return '<button class="ai-settings-btn microsoft-help-button" data-microsoft-help type="button" aria-haspopup="dialog" aria-controls="microsoft-connection-help">Microsoft connection help</button>';}
+function openMicrosoftHelp(trigger){
+  microsoftHelpTrigger=trigger;
+  let help=document.getElementById('microsoft-connection-help');
+  if(!help){document.getElementById('ai-settings-drawer').insertAdjacentHTML('beforeend',`<div class="microsoft-help-overlay" id="microsoft-connection-help" role="dialog" aria-modal="true" aria-labelledby="microsoft-help-title" hidden><section class="microsoft-help-panel"><h3 id="microsoft-help-title">Connect your Microsoft account</h3>
+  <p>Use your existing Microsoft work, school or personal account. You do not need to create an app registration, buy API credits or enter a client secret.</p>
+  <h4>Normal connection</h4><ol><li>Choose Continue with Microsoft for workspace sign-in.</li><li>Sign in to your own account on Microsoft's page and review the permissions.</li><li>Connect Microsoft 365 separately if you want to send approved outreach from your mailbox. This connection requests send permission, not inbox-read permission.</li></ol>
+  <h4>If your company requires approval</h4><p>Contact your IT administrator if Microsoft says administrator approval is required. Your organisation controls whether you can consent to LeadIntel. Do not bypass company policies.</p>
+  <h4>Error AADSTS700016: application not found</h4><p>This is an application or directory configuration issue, not a password error. Contact LeadIntel support with the error code, timestamp, Request ID and Correlation ID from Microsoft's troubleshooting details. LeadIntel support must check the configured application ID, supported account types and app availability; your IT administrator may need to approve the application.</p>
+  <p>Do not share passwords, client secrets or access tokens. Changing accounts or clearing browser history does not repair the app registration. Using a different sign-in account may open a different workspace.</p>
+  <button class="ai-settings-btn primary" data-close-microsoft-help type="button">Got it</button></section></div>`);help=document.getElementById('microsoft-connection-help');}
+  help.hidden=false;help.querySelector('[data-close-microsoft-help]').focus();
+}
+function closeMicrosoftHelp(){const help=document.getElementById('microsoft-connection-help');if(help)help.hidden=true;if(microsoftHelpTrigger?.isConnected)microsoftHelpTrigger.focus();microsoftHelpTrigger=null;}
 async function handleCommunicationAction(event){
+  const helpButton=event.target.closest('[data-microsoft-help]');if(helpButton){openMicrosoftHelp(helpButton);return;}
+  if(event.target.closest('[data-close-microsoft-help]')){closeMicrosoftHelp();return;}
   const signInButton=event.target.closest('[data-settings-signin]');
   if(signInButton){signInFromSettings(signInButton.dataset.settingsSignin);return;}
   const signOutButton=event.target.closest('[data-settings-signout]');
@@ -325,7 +343,8 @@ function openDrawer(){
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
   render();renderPersonalLinkedIn();renderMeetingPlatform();window.dispatchEvent(new CustomEvent('leadintel:settings-opened'));refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
-function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
+function closeDrawer(){
+  closeMicrosoftHelp();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
 let aiStatusGeneration=0;
 async function refreshStatus(){

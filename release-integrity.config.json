@@ -2285,6 +2285,18 @@
         "function campaignModuleAllowed",
         "await window.LeadIntelCampaignModuleLoader(target)"
       ]
+    },
+    {
+      "id": "microsoft-connection-help",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "microsoft-connection-help",
+        "AADSTS700016",
+        "do not need to create an app registration",
+        "settingsDrawer.dataset.eventsBound"
+      ]
     }
   ],
   "retry": {
