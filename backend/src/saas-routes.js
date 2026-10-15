@@ -1,3 +1,4 @@
+import {handleGmailTestSend} from './gmail-test-send.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {putCustomerProjectState} from './customer-project-state.js';
 import {isContactSuppressed,suppressContact} from './contact-suppression.js';
@@ -133,6 +134,7 @@ export async function handleSaasRoute(request,env,corsOverride){
       await env.DB.prepare(`INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,scopes,status,connected_at,updated_at,disconnected_at) VALUES(?,?,?,?,?,'connected',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL) ON CONFLICT(workspace_id) DO UPDATE SET user_id=excluded.user_id,google_email=excluded.google_email,encrypted_refresh_token=excluded.encrypted_refresh_token,scopes=excluded.scopes,status='connected',connected_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,disconnected_at=NULL`).bind(state.workspace_id,state.user_id,identity.email,encrypted,token.scope||GMAIL_SCOPES.join(' ')).run();await audit(env,{workspaceId:state.workspace_id,userId:state.user_id,type:'gmail.connected',entityType:'gmail_connection',entityId:state.workspace_id,metadata:{google_email:identity.email}});return redirect(withResult(state.return_to,{gmail:'connected'}),cors);
     }catch(cause){return redirect(withResult(state.return_to,{gmail:'error',reason:String(cause?.message||'Gmail connection failed').slice(0,160)}),cors);}
   }
+  if(path==='/api/integrations/gmail/test-send')return handleGmailTestSend(request,env,cors,{requireMember,connectedGmail,gmailAccess});
   if(path==='/api/integrations/gmail/send'&&request.method==='POST'){
     const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner','sales']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Send payload is required',400,cors);const key=String(request.headers.get('Idempotency-Key')||body.idempotency_key||'').trim();if(!validIdempotency(key))return error('A valid idempotency key is required',400,cors);
     const existing=await env.DB.prepare(`SELECT id,status,domain,recipient,subject,gmail_message_id,gmail_thread_id,sent_at FROM gmail_messages WHERE workspace_id=? AND idempotency_key=?`).bind(workspaceId,key).first();
