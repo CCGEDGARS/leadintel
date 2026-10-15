@@ -3,7 +3,7 @@ test('release verifies assistant assets, backend version and authenticated route
 test('returning browsers receive the source selection loader needed by chat',()=>{assert.match(read('customer/index.html'),/writing-references-loader\.js\?[^" ]*writing-assistant=20261012-v1/);});
 test('actual Discovery loader satisfies every configured production smoke token',()=>{const config=JSON.parse(read('release-integrity.config.json')),source=read('customer/discovery-ui.js');for(const check of config.smokeChecks.filter(c=>c.url==='/customer/discovery-ui.js'))for(const token of check.contains||[])assert.ok(source.includes(token),`${check.id}: ${token}`);});
 test('returning browsers receive assistant contract fixes through the complete loader chain',()=>{
- const version='assistant-contract=20261015-v1';
+ const version='assistant-contract=20261015-v2';
  for(const [file,asset] of [['customer/index.html','discovery-ui.js?'],['customer/discovery-ui.js','outreach-ui.js?'],['customer/outreach-ui.js','writing-assistant-ui.js?'],['customer/outreach-ui.js','writing-assistant-context.js?'],['customer/outreach-ui.js','message-editor.js?']]){
   const line=read(file).split('\n').find(line=>line.includes(asset));assert.ok(line?.includes(version),`${file}: ${asset} version`);
  }

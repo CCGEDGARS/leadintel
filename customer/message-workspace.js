@@ -84,13 +84,13 @@
   const selectedPattern=q('message-template-editor');selectedPattern.querySelector('summary').textContent='Selected custom template';templateLibrary.append(selectedPattern);
   styleManager.querySelector('summary').textContent='My style templates';
   libraryContent.append(templateLibrary,styleManager,contentMaterials,originalPeek);
-  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Writing Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div id="mw-adjust-actions" class="mw-assistant-actions"></div>';
+  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Script Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div id="mw-adjust-actions" class="mw-assistant-actions"></div>';
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
   assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
   // The sidebar exposes only a launcher; the writing session lives in its dialog.
   const followUpHost=node('div','mw-follow-up-host');followUpHost.id='mw-follow-up-host';
-  const launcher=node('section','mw-section wa-launcher');launcher.id='mw-writing-assistant-launcher';launcher.innerHTML='<h3>Writing Assistant</h3><p>Want to improve this message?</p><button type="button" class="primary-btn" data-wa-open data-wa-expand aria-haspopup="dialog" disabled>Open assistant →</button>';styleSection.after(launcher);assistant.hidden=true;studio.append(assistant);drafts.after(followUpHost);
+  const launcher=node('section','mw-section wa-launcher');launcher.id='mw-writing-assistant-launcher';launcher.innerHTML='<h3>Script Assistant</h3><p>Want to improve this message?</p><button type="button" class="primary-btn" data-wa-open data-wa-expand aria-haspopup="dialog" disabled>Open assistant →</button>';styleSection.after(launcher);assistant.hidden=true;studio.append(assistant);drafts.after(followUpHost);
   references.querySelector('summary').innerHTML='Content Library <span id="mw-reference-count">Optional · 3 files</span>';
   assistant.append(references);
   editor.append(libraryTools);

@@ -1,3 +1,4 @@
+import {handleScriptLibraryRoute} from './script-library-routes.js';
 import {handleEmailCampaignRoute} from './email-campaign-routes.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {withWorkspaceStorage,reconcileStorageObjects} from './workspace-storage-objects.js';
@@ -64,6 +65,7 @@ export default {
       });
     }
     try{
+      const scripts=await handleScriptLibraryRoute(request,env,cors);if(scripts)return scripts;
       const storage=await handleStorageRoute(request,env,cors);if(storage)return storage;
       const campaigns=await handleEmailCampaignRoute(request,env,cors);if(campaigns)return campaigns;
       const flows=await handleSavedFlowRoute(request,env,cors);if(flows)return flows;

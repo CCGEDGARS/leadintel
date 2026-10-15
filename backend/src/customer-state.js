@@ -1,5 +1,5 @@
 import {flowProjectionStatements} from './saved-flow-store.js';
-import {validateOriginalScriptsWrite} from './original-scripts-policy.js';
+import {validatePlatformOriginalScriptsWrite} from './original-scripts-policy.js';
 import stateBudget from '../../customer/state-budget.js';
 export const MAX_CUSTOMER_STATE_BYTES=500*1024;
 const ALLOWED_KEYS=new Set(['main','discovery','outreach','delivery','meta']);
@@ -29,7 +29,7 @@ export async function putCustomerState(env,{workspaceId,userId,expectedVersion,s
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload});if(decision.conflict)return decision;
   const restored=stateBudget.restoreFromSync(decision.next.payload);
   if(!allowFlowSwitch&&current.payload?.main?.myFlow?.id!==restored.main?.myFlow?.id&&(current.payload?.main?.myFlow?.id||restored.main?.myFlow?.id))throw new Error('Open a flow through My Flows before changing the active flow');
-  const before=current.payload?.outreach?.messageStudio?.originalScripts||{},after=restored?.outreach?.messageStudio?.originalScripts||{};if(JSON.stringify(before)!==JSON.stringify(after)){const member=role?{role}:await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();validateOriginalScriptsWrite(current.payload,restored,member?.role);}
+  await validatePlatformOriginalScriptsWrite(env,current.payload,restored,userId);
   const next=decision.next,encoded=JSON.stringify(next.payload);
   const projection=await flowProjectionStatements(env,workspaceId,current.payload,restored,encoded,next.version);
   const guardSql=projection.guard?' AND EXISTS(SELECT 1 FROM saved_flows WHERE workspace_id=? AND id=? AND revision=?)':'';
