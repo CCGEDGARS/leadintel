@@ -2590,6 +2590,28 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "phone-sidebar-navigation",
+      "type": "text",
+      "url": "/customer/process-map.js",
+      "status": 200,
+      "contains": [
+        "['email','linkedin','phone']",
+        "phone:'Phone call'",
+        "dataset.scriptChannel==='phone'"
+      ]
+    },
+    {
+      "id": "phone-sidebar-handoff",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "if(channel==='phone')",
+        "return workspace.openChannel('phone')",
+        "channel-scripts.js?v=20261015-v2"
+      ]
     }
   ],
   "retry": {

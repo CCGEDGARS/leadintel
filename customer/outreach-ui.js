@@ -1,5 +1,5 @@
 import './test-email-ui.js?v=20261015-v1';
-import './channel-scripts.js?v=20261015-v1';
+import './channel-scripts.js?v=20261015-v2';
 import './writing-assistant.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2';
 import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2';
@@ -1217,6 +1217,22 @@ async function savedBuyerCrmDraft(detail,domain,personId,workspace,{channel='lin
 }
 async function savedLinkedInCrmDraft(detail,domain,personId,workspace){return savedBuyerCrmDraft(detail,domain,personId,workspace);}
 async function openMessageChannel(channel){
+ if(channel==='phone'){
+  const b=crmBridge(),meta=readJson(DISCOVERY_META_KEY);
+  if(!b?.ready||!b.session?.authenticated||b.conflict||b.resolvingSync){toast('Resolve workspace synchronization before opening a message.');return false;}
+  const choice=meta.scriptBuyer;
+  if(!choice||choice.workspaceId!==b.workspace?.id){toast('Select and confirm a recipient in Buyers before preparing a call.');backToDiscovery();return false;}
+  const item=currentItem();
+  if(item?.domain!==choice.domain||item?.selectedPersonId!==choice.personId||!handoffContact?.contact?.id){
+   if(!await openBuyerScripts(choice))return false;
+   if(choice.workspaceId!==crmBridge()?.workspace?.id||JSON.stringify(readJson(DISCOVERY_META_KEY).scriptBuyer)!==JSON.stringify(choice))return false;
+  }
+  const workspace=globalThis.LeadIntelChannelWorkspace;
+  workspace?.render();
+  if(!workspace){toast('Open the selected recipient in Messages before preparing a call.');backToDiscovery();return false;}
+  showOutreachStep();
+  return workspace.openChannel('phone');
+ }
  if(!['email','linkedin'].includes(channel))return false;
  const b=crmBridge(),meta=readJson(DISCOVERY_META_KEY),choice=meta.scriptBuyer?.channel===channel?meta.scriptBuyer:meta[channel==='email'?'selectedEmailBuyer':'selectedLinkedInBuyer'];
  if(!b?.ready||!b.session?.authenticated||b.conflict||b.resolvingSync){toast('Resolve workspace synchronization before opening a message.');return false;}
@@ -1227,7 +1243,7 @@ async function openMessageChannel(channel){
  const rollback=()=>{const latest=readJson(DISCOVERY_META_KEY);localStorage.setItem(DISCOVERY_META_KEY,JSON.stringify({...latest,scriptBuyer:baseline.scriptBuyer,activeJourneyStage:baseline.activeJourneyStage,visibleStep:baseline.visibleStep}));};
  const history=meta.scriptBuyer?.workspaceId===workspace&&['email','linkedin'].includes(meta.scriptBuyer.channel)?{[meta.scriptBuyer.channel==='email'?'selectedEmailBuyer':'selectedLinkedInBuyer']:meta.scriptBuyer}:{};
  localStorage.setItem(DISCOVERY_META_KEY,JSON.stringify({...meta,...history,[channel==='email'?'selectedEmailBuyer':'selectedLinkedInBuyer']:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6}));
- try{const opened=await openBuyerScripts(choice);if(!opened&&current()){rollback();toast('This saved recipient needs confirmation in Buyers.');backToDiscovery();}return opened;}
+ try{const opened=await openBuyerScripts(choice);if(opened&&current()&&globalThis.LeadIntelChannelWorkspace?.phoneActive())await globalThis.LeadIntelChannelWorkspace.openChannel(channel);if(!opened&&current()){rollback();toast('This saved recipient needs confirmation in Buyers.');backToDiscovery();}return opened;}
  catch(error){if(current()){rollback();toast('Unable to reopen the saved message. Your drafts are preserved.');}return false;}finally{if(navigationRequest===messageChannelNavigationRequest)messageChannelNavigationBaseline=null;}
 }
 async function openBuyerScripts(choice){buyerHandoffPending=true;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();const pending=openVerifiedBuyerScripts(choice),request=buyerHandoffRequest;try{return await pending;}finally{if(request===buyerHandoffRequest){buyerHandoffPending=false;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();}}}
