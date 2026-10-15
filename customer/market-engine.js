@@ -453,10 +453,18 @@
   function normalizeMarketState(value={}){
     const input=value&&typeof value==="object"?value:{};
     const signals=(Array.isArray(input.signals)?input.signals:[]).slice(0,20).map(normalizeSignal);
-    const icps=(Array.isArray(input.icps)?input.icps:[]).slice(0,3).map(item=>({
+    const icps=(Array.isArray(input.icps)?input.icps:[]).slice(0,8).map(item=>({
       id:clean(item?.id)||`icp-${slug(item?.name)}`,type:clean(item?.type)||"custom",name:clean(item?.name)||"ICP",active:item?.active!==false,
+      ...(typeof item?.requestedActive==="boolean"?{requestedActive:item.requestedActive}:{}),
+      ...(typeof item?.referenceFingerprint==="string"?{referenceFingerprint:clean(item.referenceFingerprint)}:{}),
+      ...(typeof item?.referenceModelAvailable==="boolean"?{referenceModelAvailable:item.referenceModelAvailable}:{}),
       description:clean(item?.description),targetMarkets:clean(item?.targetMarkets),buyerRoles:clean(item?.buyerRoles),value:clean(item?.value),exclusions:clean(item?.exclusions),offers:clean(item?.offers),rationale:clean(item?.rationale)
     }));
+    // The canonical reference lens supersedes the hidden legacy lens. Keep its
+    // saved preference, but never let a hidden duplicate drive company research.
+    if(icps.some(item=>item.id==="icp-reference-lookalike"))for(const item of icps){
+      if(item.type==="lookalike"){if(typeof item.requestedActive!=="boolean")item.requestedActive=item.active!==false;item.active=false;}
+    }
     const researchMode=RESEARCH_MODES[input.researchMode]?input.researchMode:"quick";
     const defaultResearchSources=researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"];
     const researchSourceTypes=splitList(input.researchSourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);

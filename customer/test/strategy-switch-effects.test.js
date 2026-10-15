@@ -33,7 +33,7 @@ test('ICP rendering distinguishes off and setup-required and disables inactive e
  const elements={'icp-list':{innerHTML:''}};
  const context={state:{profile,market:{icps:[icps[0],{id:'opp',type:'opportunity-led',active:false,name:'Opportunity'}],contentLanguage:'en'}},LeadIntelMarket:{buildIcpCandidates:()=>[]},enforceIcpActivationRequirements:()=>{},icpActivationRequirement:x=>({available:x.type!=='opportunity-led',reason:'Research required',target:'run-market-research',action:'Go to Market Research'}),esc:x=>String(x??''),$:id=>elements[id]};
  vm.runInNewContext(fn(app,'function renderIcps(){','function renderSignalDesigner(){')+';renderIcps()',context);
- assert.match(elements['icp-list'].innerHTML,/Off — this profile/);assert.match(elements['icp-list'].innerHTML,/Setup required/);assert.match(elements['icp-list'].innerHTML,/<fieldset[^>]*disabled/);assert.doesNotMatch(elements['icp-list'].innerHTML,/Why is this off/);
+ assert.match(elements['icp-list'].innerHTML,/This profile won’t be used/);assert.match(elements['icp-list'].innerHTML,/Setup required/);assert.match(elements['icp-list'].innerHTML,/<fieldset[^>]*disabled/);assert.doesNotMatch(elements['icp-list'].innerHTML,/Why is this off/);
 });
 test('failed monitoring save restores confirmed state and never reports an unconfirmed active state',async()=>{
  const elements={'monitoring-enabled':{checked:true}};let persisted=0,notice='';

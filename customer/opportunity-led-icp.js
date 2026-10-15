@@ -50,6 +50,7 @@
       type:clean(item.type)||fallback.type||TYPE,
       name:clean(item.name)||fallback.name||"Opportunity-led ICP",
       active:item.active!==false,
+      requestedActive:typeof item.requestedActive==="boolean"?item.requestedActive:item.active!==false,
       opportunityDataAvailable:Boolean(item.opportunityDataAvailable),
       description:clean(item.description)||fallback.description||"",
       targetMarkets:clean(item.targetMarkets)||fallback.targetMarkets||"",
@@ -82,7 +83,7 @@
       const existing=(normalized.icps||[]).find(item=>item?.type===TYPE||item?.id===ID);
       if(source&&!existing){
         const fallback=buildOpportunityIcp({},value?.contentLanguage||"en");
-        normalized.icps=[...(normalized.icps||[]),sanitizeIcp(source,fallback)].slice(0,4);
+        normalized.icps=[...(normalized.icps||[]),sanitizeIcp(source,fallback)].slice(0,8);
       }
       return normalized;
     };
@@ -91,11 +92,12 @@
       const localized=originalLocalize(market,profile,language);
       const generated=buildOpportunityIcp(profile,language);
       const source=(Array.isArray(market?.icps)?market.icps:[]).find(item=>item?.type===TYPE||item?.id===ID);
-      const preserved=source?sanitizeIcp(source,generated):generated;
+      const preserved=sanitizeIcp(source||generated,generated);
       const opportunityDataAvailable=hasVerifiedOpportunity(localized.opportunities);
       const next={
         ...generated,
-        active:opportunityDataAvailable&&preserved.active,
+        active:opportunityDataAvailable&&preserved.requestedActive,
+        requestedActive:preserved.requestedActive,
         opportunityDataAvailable,
         targetMarkets:preserved.targetMarkets||generated.targetMarkets,
         buyerRoles:preserved.buyerRoles||generated.buyerRoles,
@@ -104,7 +106,7 @@
         offers:preserved.offers||generated.offers
       };
       localized.icps=(localized.icps||[]).filter(item=>item?.type!==TYPE&&item?.id!==ID);
-      localized.icps=[...localized.icps,next].slice(0,4);
+      localized.icps=[...localized.icps,next].slice(0,8);
       return localized;
     };
 

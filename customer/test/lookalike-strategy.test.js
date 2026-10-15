@@ -53,10 +53,10 @@ test('user may switch off the same published Lookalike model without it turning 
   assert.equal(lens.active,false);
 });
 
-test('publishing a new Lookalike model automatically activates the refreshed lens',()=>{
+test('publishing a new Lookalike model preserves an existing Off choice',()=>{
   const existing={id:'icp-reference-lookalike',type:'lookalike-led',active:false,referenceFingerprint:'rc-old'};
   const [lens]=Market.syncReferenceLookalikeIcp([existing],profile,model('rc-new'),'en');
-  assert.equal(lens.active,true);
+  assert.equal(lens.active,false);
   assert.equal(lens.referenceFingerprint,'rc-new');
 });
 

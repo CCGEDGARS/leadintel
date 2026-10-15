@@ -1,0 +1,9 @@
+# ICP switch persistence
+
+The repeated reset had several connected causes: evidence enforcement and Opportunity localization wrote unavailable profiles as Off; reference refresh could overwrite a deliberate Off; normalization retained only three/four ICPs and lost the canonical reference record and its metadata; repairing missing candidates inserted Core as Off. A hidden generic reference profile could also remain effective after its canonical switch was Off.
+
+`requestedActive` now preserves the user's choice separately from effective `active`. Missing evidence suspends effective use without erasing On. Reload, localization, profile reapproval and model refresh retain intent. Downstream eligibility still reads effective `active`, so missing evidence never authorizes discovery. Canonical reference records suppress hidden legacy reference use. Newly missing Core starts On; missing optional profiles stay Off. A fresh reference lens waits for explicit model activation; existing saved Off choices remain Off. Historical Off records cannot reliably be distinguished from deliberate Off and are not forcibly enabled.
+
+Every visible ICP uses one status panel with consistent spacing and information structure: Active, Off, Setup required or Temporarily unavailable, with a repair action when evidence is missing. Temporarily unavailable explains that On is retained. A blocked On switch can still be turned Off.
+
+Regression coverage exercises normalization, actual DOM switch edits, save/reload, absent/restored evidence, localization, reapproval, first reference activation, explicit Off across refresh, hidden legacy suppression and partial all-Off strategy repair. Release smoke checks retain their gates with the new status copy. Authenticated customer acceptance remains separate from automated tests and exact-SHA deployment proof.

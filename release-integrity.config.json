@@ -2452,7 +2452,7 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "Off \u2014 this profile",
+        "This profile won’t be used",
         "Setup required",
         "icp-edit-fields",
         "monitoring-enabled\").addEventListener(\"change\""
