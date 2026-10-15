@@ -145,10 +145,10 @@ test('Market Strategy explains decisions after research in Profile',()=>{
 });
 
 
-test('website monitoring is upfront and expanded, with website entry and results outside advanced settings',()=>{
+test('website monitoring is upfront and optional, with website entry and results outside advanced settings',()=>{
  const {JSDOM}=require('jsdom'),document=new JSDOM(html).window.document;
  const panel=document.getElementById('monitoring-panel'),advanced=document.getElementById('monitoring-advanced');
- assert.equal(panel.open,true);assert.equal(panel.hidden,false);
+ assert.equal(document.getElementById("monitoring-settings").hidden,true);assert.equal(panel.hidden,false);
  assert.equal(advanced.open,false);
  for(const id of ['monitoring-custom-sources','monitoring-frequency','save-monitoring','run-monitoring-now','monitoring-alerts','monitoring-history']){assert.ok(panel.contains(document.getElementById(id)));assert.equal(advanced.contains(document.getElementById(id)),false);}
  assert.ok(advanced.contains(document.getElementById('monitoring-signals')));
