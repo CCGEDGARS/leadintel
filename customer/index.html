@@ -24,13 +24,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260922-hidden-workflow-cta-v1&reset-center=1">
-  <link rel="stylesheet" href="market.css?v=20260924-completion-status-space-v1&icp-data-gates=1&monitoring-visible=20261009-v1&monitoring-disclosure=20261015-v1&monitoring-card-design=20261015-v1&quick-insights=1&icp-unlock-guide=1&research-repair=20261001-v2&reports=20261001-v2&report-library=20261001-v3&strategy=20261001-v2&icp-grid=20261002-v1&research-recovery=20261002-v1&required-focus=20261002-v1&strategy-switches=20261015-v1">
+  <link rel="stylesheet" href="market.css?v=20260924-completion-status-space-v1&icp-data-gates=1&monitoring-visible=20261009-v1&monitoring-disclosure=20261015-v1&monitoring-card-design=20261015-v1&quick-insights=1&icp-unlock-guide=1&research-repair=20261001-v2&reports=20261001-v2&report-library=20261001-v3&strategy=20261001-v2&icp-grid=20261002-v1&research-recovery=20261002-v1&required-focus=20261002-v1&strategy-switches=20261015-v1&overview-standard=20261015-v2">
   <link rel="stylesheet" href="premium.css?v=20260920-tasks-below-settings-v1&editable-steps=1&expanded-sidebar=1&message-channels=20261007-v1">
   <link rel="stylesheet" href="step-action-guidance.css?v=20261001-profile-market-guide-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
-  <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1&lookalike-cta=1&customer-target-copy=1&value-copy=1&planning-cards=20261014-v2&monitoring-card-design=20261015-v1&compact-feature-cards=20261015-v1">
+  <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1&lookalike-cta=1&customer-target-copy=1&value-copy=1&planning-cards=20261014-v2&monitoring-card-design=20261015-v1&compact-feature-cards=20261015-v1&overview-standard=20261015-v2">
   <link rel="stylesheet" href="workspace-save.css?v=20260926-visible-save-v1">
   <link rel="stylesheet" href="background-task-centre.css?v=20260916-task-centre-v1&workspace-activity=20261011-v1">
   <link rel="stylesheet" href="attention-centre.css?v=20261003-workspace-status-v1&workspace-activity=20261011-v1">
@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="writing-references.css?v=20261006-v1&single-material=20261013-v1">
   <link rel="stylesheet" href="event-campaigns.css?v=20261009-v1&event-flow=20261012-v2&setup-cards=20261014-v2&purpose-copy=20261014-v1&event-planning=20261014-v2&planning-cards=20261014-v2">
   <script defer src="event-campaigns.js?v=20261009-v1&event-flow=20261012-v1&event-planning=20261014-v2&planning-cards=20261014-v2"></script>
-  <script defer src="event-campaign-ui.js?v=20261009-balanced-workspace-v1&event-flow=20261012-v2&step6-rescue=20261013-v11&assistant-window=20261013-v1&setup-cards=20261014-v2&purpose-copy=20261014-v1&event-planning=20261014-v2&planning-cards=20261014-v2"></script>
+  <script defer src="event-campaign-ui.js?v=20261009-balanced-workspace-v1&event-flow=20261012-v2&step6-rescue=20261013-v11&assistant-window=20261013-v1&setup-cards=20261014-v2&purpose-copy=20261014-v1&event-planning=20261014-v2&planning-cards=20261014-v2&overview-standard=20261015-v2"></script>
 <link rel="stylesheet" href="email-campaigns.css?v=20261014-v1&setup-cards=20261014-v2&campaign-routes=20261014-v1">
 <script defer src="campaign-research.js?v=20261014-routes-v1&event-planning=20261014-v2&planning-cards=20261014-v2"></script>
 <script defer src="campaign-plan.js?v=20261014-event-flow-v2"></script>
@@ -374,13 +374,14 @@
             <div class="brand-identity-summary monitoring-card-head">
               <div class="brand-identity-intro">
                 <div class="planning-card-label"><span class="eyebrow">Website monitoring</span><span class="planning-optional">Optional</span></div>
-                <h3 id="monitoring-title">Spot sales opportunities on the websites that matter to you.</h3>
-                <p class="reference-value-lead">Choose websites and buying signals. LeadIntel checks them on your schedule and alerts you to relevant changes.</p>
-                <div class="monitoring-card-status" role="status" aria-live="polite"><span class="monitoring-summary-status" id="monitoring-summary-status">Off</span><p id="monitoring-saved-summary" class="monitoring-saved-summary" hidden></p></div>
+                <h3 id="monitoring-title">Spot opportunities on the websites that matter to you.</h3>
+                <p class="reference-value-lead">Choose websites and buying signals, set a schedule, and receive alerts when LeadIntel finds relevant news, projects or changes.</p>
+                <div class="monitoring-card-status" role="status" aria-live="polite"><span class="monitoring-summary-status" id="monitoring-summary-status">Off</span></div>
               </div>
               <button class="brand-identity-toggle lookalike-build-btn planning-card-action" type="button" id="toggle-monitoring-settings" aria-expanded="false" aria-controls="monitoring-settings"><span data-monitoring-action-label>Set up monitoring</span><span aria-hidden="true">→</span></button>
             </div>
             <div id="monitoring-settings" hidden>
+            <p id="monitoring-saved-summary" class="monitoring-saved-summary" hidden></p>
             <div class="market-research-head"><div class="section-title"><span class="eyebrow">Strategy · Website monitoring</span><h3>Spot opportunities on the websites that matter to you</h3><p>Add the public websites where your next opportunity could appear: customer newsrooms, project pages or industry publications. Choose the buying signals and schedule, then enable monitoring when your strategy is active.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
             <label class="monitoring-custom"><span>Websites to monitor · one URL per line</span><textarea id="monitoring-custom-sources" rows="4" aria-describedby="monitoring-websites-help" placeholder="https://example.com/news&#10;https://another-company.com/updates"></textarea></label>
             <p class="monitoring-websites-help" id="monitoring-websites-help">Add company news pages, industry publications or other public sources important to your business.</p>
@@ -615,7 +616,7 @@
   <script defer src="page-quality.js?v=20261010-v1"></script>
   <script defer src="page-quality-ui.js?v=20261010-v1&visible-messages=20261010-v2"></script>
   <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1&retained-companies=20261009-v1&confirm-targeting=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&editable-steps=1&saved-work-navigation=1&reference-discovery=5&company-workflow=20261001-v2&strategy=20261001-v2&profile-review=20261001-v2&icp-cards=20261002-v1&message-studio=20261005-v4&sender-identity=20261006-v1&rescue=20261013-v1"></script>
-  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1&revisit-results=1&visible-actions=1&customer-target-copy=1&value-copy=1&editable-steps=1&expanded-sidebar=2&saved-work-navigation=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&individual-profiles=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v5&message-handoff=20261005-v3&message-channels=20261007-v1&event-flow=20261012-v1&email-campaigns=20261014-v1&campaign-routes=20261014-v1&planning-cards=20261014-v2&compact-feature-cards=20261015-v1"></script>
+  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1&revisit-results=1&visible-actions=1&customer-target-copy=1&value-copy=1&editable-steps=1&expanded-sidebar=2&saved-work-navigation=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&individual-profiles=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v5&message-handoff=20261005-v3&message-channels=20261007-v1&event-flow=20261012-v1&email-campaigns=20261014-v1&campaign-routes=20261014-v1&planning-cards=20261014-v2&compact-feature-cards=20261015-v1&overview-standard=20261015-v2"></script>
   <script defer src="attention-centre-model.js?v=20261003-workspace-status-v1"></script>
   <script defer src="attention-centre.js?v=20261003-workspace-status-v1&optional-hunter=20261004-v1&workspace-activity=20261011-v1&storage=20261012-v1"></script>
   <script defer src="qualification-settings.js?v=20261002-v2&qualification=20261003-qualified-v2"></script>

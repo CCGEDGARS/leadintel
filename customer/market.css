@@ -383,7 +383,7 @@
 /* Optional monitoring: explicit disclosure independent of execution status. */
 .monitoring-card-status{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
 .monitoring-card-status .monitoring-summary-status{margin:0;font-size:12px;font-weight:600}
-#monitoring-panel .monitoring-card-status .monitoring-saved-summary{margin:0;font-size:13px;line-height:1.4;color:#526c5e}
+#monitoring-panel .monitoring-saved-summary{margin:0;font-size:13px;line-height:1.4;color:#526c5e}
 #monitoring-settings{border-top:1px solid #d9e6de;margin-top:20px;padding-top:20px}
 #monitoring-settings[hidden]{display:none}
 .monitoring-saved-summary{font-size:13px}
