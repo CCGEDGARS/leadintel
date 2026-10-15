@@ -6,7 +6,7 @@ import capacityFixture from '../../customer/test/helpers/workspace-capacity.js';
 
 test('shared bundle persists through CAS and restores protected originals and recipients',async()=>{
  const {getCustomerState,putCustomerState}=await import('../src/customer-state.js');const original=capacityFixture(),wire=budget.prepareForSync(original,{allowBundlePacking:true,allowCompressionPacking:true}).payload;let stored=null;
- const env={DB:{prepare(sql){return {bind(...args){return {async first(){return stored;},async run(){stored={workspace_id:'w1',schema_version:1,version:1,payload_json:args[3]};return {meta:{changes:1}};}};}};}}};
+ const env={ADMIN_EMAIL:'platform@example.test',DB:{prepare(sql){return {bind(...args){return {async first(){if(sql==='SELECT email FROM users WHERE id=?')return {email:args[0]==='owner'?'platform@example.test':'member@example.test'};return stored;},async run(){stored={workspace_id:'w1',schema_version:1,version:1,payload_json:args[3]};return {meta:{changes:1}};}};}};}}};
  const saved=await putCustomerState(env,{workspaceId:'w1',userId:'owner',role:'owner',expectedVersion:0,payload:wire});assert.equal(saved.conflict,false);assert.ok(budget.bytes(JSON.parse(stored.payload_json))<=MAX_CUSTOMER_STATE_BYTES);
  const read=await getCustomerState(env,'w1');assert.deepEqual(read.payload,original);assert.equal(read.bundle_codec,'workspace-bundle-v1');
  const changed=structuredClone(original);changed.outreach.messageStudio.originalScripts['email:professional:sv'].body='Unauthorized change';

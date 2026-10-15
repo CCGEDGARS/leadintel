@@ -4,7 +4,7 @@ const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 test('original editor retains Update, Edit and Save; the integrated assistant offers Shorten, Rewrite and Reset',()=>{
  const h=mounted({selected:'professional'});try{
- const panel=h.q('mw-writing-assistant');assert.ok(h.q('mw-writing-assistant-launcher').closest('.mw-rail'));assert.equal(panel.hidden,true);assert.equal(panel.querySelector('h3').textContent,'Writing Assistant');
+ const panel=h.q('mw-writing-assistant');assert.ok(h.q('mw-writing-assistant-launcher').closest('.mw-rail'));assert.equal(panel.hidden,true);assert.equal(panel.querySelector('h3').textContent,'Script Assistant');
  assert.deepEqual([...panel.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent),['Shorten','Rewrite','Reset']);
  assert.ok(h.q('message-generate').closest('.mw-header-actions'));assert.equal(h.q('message-generate').textContent,'Update message');
  for(const id of ['mw-edit-message','mw-save-message'])assert.ok(h.q(id).closest('.mw-editor-actions'));

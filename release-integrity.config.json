@@ -18,7 +18,8 @@
       "ai_task_routing_version": "ai-task-routing-v1",
       "follow_up_assistant_version": "follow-up-assistant-v1",
       "email_campaign_setup_version": "campaign-setup-v2",
-      "system_audit_version": "20261015-delivery-monitoring-v1"
+      "system_audit_version": "20261015-delivery-monitoring-v1",
+      "script_library_version": "channel-scripts-v1"
     }
   },
   "smokeChecks": [
@@ -743,7 +744,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Writing Assistant",
+        "Script Assistant",
         "My content",
         "Approved originals",
         "Content Library",
@@ -1048,7 +1049,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Writing Assistant",
+        "Script Assistant",
         "Rewrite",
         "Shorten",
         "styleSection.after(launcher)",
@@ -2203,7 +2204,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "assistant-window=20261015-v2",
+        "assistant-window=20261015-v3",
         "content-library=20261015-v2"
       ]
     },
@@ -2521,6 +2522,40 @@
       "contains": [
         "audit-monitoring=20261015-v1",
         "audit-delivery=20261015-v1"
+      ]
+    },
+    {
+      "id": "channel-script-workspace",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "Make a call \u00b7 Coming soon",
+        "Script Library",
+        "Set as primary",
+        "Awaiting approved script",
+        "expectedRevision",
+        "phoneScope"
+      ]
+    },
+    {
+      "id": "channel-script-layout",
+      "type": "text",
+      "url": "/customer/channel-scripts.css",
+      "status": 200,
+      "contains": [
+        "sc-channel-picker",
+        "max-width:700px",
+        "data-script-channel=phone"
+      ]
+    },
+    {
+      "id": "script-library-auth",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/script-library",
+      "status": 401,
+      "contains": [
+        "\"error\":\"Authentication required\""
       ]
     }
   ],

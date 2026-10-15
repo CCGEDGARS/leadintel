@@ -34,7 +34,8 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
     if(['/api/follow-up-assistant/context','/api/follow-up-assistant/save'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
     if(parsed.pathname==='/api/flows')return response({status:401,json:{error:'Authenticated workspace membership required'}});
     if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
-    if (['/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
+    if (['/api/script-library','/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
+    if (['/customer/channel-scripts.js','/customer/channel-scripts.css'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/customer/writing-references-ui.js') return response({text:fs.readFileSync(path.join(root,'customer/writing-references-ui.js'),'utf8')});
     if (parsed.pathname === '/customer/api-transport.js' || parsed.pathname === '/customer/account-cache.js') return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/release.json') {
@@ -64,7 +65,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
 }
 
 const storageEntries=['account-cache.js','ai-settings.js','attention-centre.js','api-transport.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[1]).join('\n');
-const shell = 'audit-monitoring=20261015-v1 audit-delivery=20261015-v1 email-campaign-ui.js?v=20261014-v1 email-campaigns.css?v=20261014-v1 email-campaigns=20261014-v1\nassistant-window=20261015-v2 content-library=20261015-v2 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
+const shell = 'audit-monitoring=20261015-v1 audit-delivery=20261015-v1 email-campaign-ui.js?v=20261014-v1 email-campaigns.css?v=20261014-v1 email-campaigns=20261014-v1\nassistant-window=20261015-v3 content-library=20261015-v2 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
   'A new search does not replace your saved selections. This search has finished.',
@@ -198,4 +199,10 @@ test('production proof blocks a missing controlled message editor asset',async()
 
 test('production proof blocks a missing mandatory page-check engine',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1"></script>`,discoveryUi:boundedDiscoveryRuntime});const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/page-quality.js'?response({status:404,text:'missing'}):normal(url),nonce:'page-check-missing'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('mandatory-page-checks-engine')));
+});
+
+test('production proof rejects anonymous access to script library',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:shell,discoveryUi:boundedDiscoveryRuntime});
+ const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'script-auth',fetchImpl:async url=>new URL(String(url)).pathname==='/api/script-library'?response({status:200,json:{core:[]}}):normal(url),nonce:'script-auth'});
+ assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(c=>c.id==='script-library-auth').passed,false);
 });

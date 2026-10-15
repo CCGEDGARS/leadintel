@@ -15,7 +15,7 @@
  }
  function validateWritingDraft(draft,context={}){
   if(!draft||typeof draft.subject!=='string'||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000||/\{\{|\}\}/.test(draft.message))throw Error('Writing Assistant returned an invalid or unfilled draft. Your message is preserved.');
-  if(context.channel!=='linkedin'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
+  if((context.channel||'email')==='email'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
   if(Number.isSafeInteger(context.maximumWords)&&context.maximumWords>0&&draft.message.trim().split(/\s+/).length>context.maximumWords)throw Error(`Writing Assistant exceeded the ${context.maximumWords}-word limit. Your message is preserved.`);
   const links=text=>(String(text||'').match(/https?:\/\/[^\s<>"\])]+/g)||[]).map(url=>url.replace(/[.,;!?]+$/,''));
   const prior=context.currentDraft?.message||'',existing=links(prior),proposed=links(draft.message);
