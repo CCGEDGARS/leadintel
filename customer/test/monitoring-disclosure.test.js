@@ -10,7 +10,7 @@ function setup(){
  const config={enabled:true,frequency:'weekly',researchDepth:'deep',minimumScore:70,sourceTypes:['news'],signalIds:['signal'],customSources:['https://example.com/news']};
  const state={market:{strategyApproved:true,signals:[{id:'signal',name:'Expansion',active:true}],monitoring:{...config}}};
  const calls=[];
- const context={window,document,$,state,monitoringBusy:false,monitoringDraftBaseline:null,esc:String,saveState(){},showToast(){},LeadIntelMarket:{normalizeMonitoring:c=>({...config,...c}),SOURCE_TYPES:{news:{}},filterResearchSourceTypes:s=>s},monitoringApi:async(path,options)=>{calls.push(JSON.parse(options.body));return {config:{}};}};
+ const context={window,document,$,state,monitoringBusy:false,monitoringDraftBaseline:null,monitoringDraftMarket:null,esc:String,saveState(){},showToast(){},LeadIntelMarket:{normalizeMonitoring:c=>({...config,...c}),SOURCE_TYPES:{news:{}},filterResearchSourceTypes:s=>s},monitoringApi:async(path,options)=>{calls.push(JSON.parse(options.body));return {config:{}};}};
  window.LeadIntelWorkspacePersistence={saveWorkspace:async()=>true};
  const dialog=$('monitoring-close-dialog');if(dialog){dialog.showModal=()=>dialog.open=true;dialog.close=()=>dialog.open=false;}
  vm.createContext(context);
@@ -69,4 +69,23 @@ test('locked strategy does not prevent opening or closing the optional panel',as
  c.context.openMonitoringSettings();assert.equal(c.$('monitoring-settings').hidden,false);
  assert.equal(await c.context.saveMonitoringConfig(),false);assert.equal(c.calls.length,0);
  c.context.requestCloseMonitoringSettings();assert.equal(c.$('monitoring-settings').hidden,true);
+});
+test('Run now refuses unsaved changes without mutating saved configuration',async()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
+ c.$('monitoring-frequency').value='daily';c.$('monitoring-enabled').checked=false;
+ await c.context.runMonitoringNow();assert.equal(c.calls.length,0);
+ c.context.discardMonitoringEdits();assert.equal(c.state.market.monitoring.frequency,'weekly');assert.equal(c.state.market.monitoring.enabled,true);
+});
+test('pending save freezes form and competing dialog actions, then returns focus to toggle',async()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-frequency').value='daily';c.context.requestCloseMonitoringSettings();
+ let resolve;c.context.monitoringApi=()=>new Promise(r=>resolve=r);
+ const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));
+ for(const id of ['monitoring-frequency','monitoring-custom-sources','discard-monitoring-close','keep-editing-monitoring'])assert.equal(c.$(id).disabled,true,id);
+ resolve({config:{}});await pending;
+ assert.equal(c.document.activeElement.id,'toggle-monitoring-settings');assert.equal(c.$('monitoring-frequency').disabled,false);
+});
+test('switching workspace state replaces old draft instead of retaining previous workspace inputs',()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-custom-sources').value='https://private-old.example';
+ c.state.market={...c.state.market,monitoring:{...c.state.market.monitoring,customSources:['https://new.example']}};
+ c.context.renderMonitoringControls();assert.equal(c.$('monitoring-custom-sources').value,'https://new.example');
 });
