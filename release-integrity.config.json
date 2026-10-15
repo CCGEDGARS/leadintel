@@ -2445,6 +2445,28 @@
         "data-campaign-plan",
         "Shortfall:"
       ]
+    },
+    {
+      "id": "strategy-switch-effects",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "Off \u2014 this profile",
+        "Setup required",
+        "icp-edit-fields",
+        "monitoring-enabled\").addEventListener(\"change\""
+      ]
+    },
+    {
+      "id": "effective-icp-targeting",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "function effectiveTargetingProfile",
+        "Array.isArray(value.sourceTypes)"
+      ]
     }
   ],
   "retry": {

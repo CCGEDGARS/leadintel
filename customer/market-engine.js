@@ -103,6 +103,25 @@
     return result;
   }
 
+  // Project saved strategy settings into runtime context without mutating the source profile.
+  function effectiveTargetingProfile(profile={},market={}){
+    const configured=Array.isArray(market.icps)&&market.icps.length>0;
+    const active=(market.icps||[]).filter(item=>item.active!==false);
+    const merge=field=>[...new Set(active.map(item=>clean(item[field])).filter(Boolean))].join('; ');
+    const result={...profile};
+    if(configured){
+      for(const [field,key] of Object.entries({idealCustomer:'description',targetMarkets:'targetMarkets',decisionMakers:'buyerRoles',priorityOffers:'offers',opportunityValue:'value'})){
+        result[field]=active.length?(merge(key)||profile[field]||''):'';
+      }
+      result.exclusions=[...new Set([clean(profile.exclusions),merge('exclusions')].filter(Boolean))].join('; ');
+      if(!active.some(item=>['lookalike','lookalike-led'].includes(item.type)||item.id==='icp-reference-lookalike')){
+        result.lookalikeCustomers='';result.referenceSimilarityModel=null;
+      }
+    }
+    if(Array.isArray(market.signals))result.buyingTriggers=market.signals.filter(item=>item.active!==false).map(item=>clean(item.keywords||item.name)).filter(Boolean).join('; ');
+    return result;
+  }
+
   function normalizeSignal(signal={}){
     return {
       id:clean(signal.id)||`signal-${slug(signal.name)}`,
@@ -285,7 +304,7 @@
   function normalizeMonitoring(value={}){
     const frequency=["daily","weekly","monthly"].includes(value.frequency)?value.frequency:"weekly";
     const sourceTypes=splitList(value.sourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
-    return {enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
+    return {enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:Array.isArray(value.sourceTypes)||sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
   }
   function appendResearchHistory(history=[],run={}){
     const item={id:clean(run.id)||`research-${Date.now()}`,mode:RESEARCH_MODES[run.mode]?run.mode:"quick",status:["complete","partial","error"].includes(run.status)?run.status:"error",sourceCount:Math.max(0,Number(run.sourceCount)||0),queryCount:Math.max(0,Number(run.queryCount)||0),completedAt:clean(run.completedAt)||new Date().toISOString()};
@@ -509,5 +528,5 @@
     return results;
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {effectiveTargetingProfile,DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });
