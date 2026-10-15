@@ -230,7 +230,7 @@
 }
 
 /* Profile planning cards share the same overview structure and action placement. */
-#step-2 .planning-card{border:1px solid #a9d5ca;border-left:4px solid #0f6557;border-radius:16px;padding:24px;margin:16px 0;background:linear-gradient(120deg,#f0f8f4,#fff);box-shadow:0 18px 42px rgba(15,101,87,.08)}
+#step-2 .planning-card,#monitoring-panel.planning-card{border:1px solid #a9d5ca;border-left:4px solid #0f6557;border-radius:16px;padding:24px;margin:16px 0;background:linear-gradient(120deg,#f0f8f4,#fff);box-shadow:0 18px 42px rgba(15,101,87,.08)}
 .planning-card>.brand-identity-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,320px);align-items:center;gap:24px;list-style:none;cursor:default;font-weight:400}
 .planning-card>.brand-identity-summary::-webkit-details-marker{display:none}.planning-card>.brand-identity-summary::marker{content:''}
 .planning-card .brand-identity-intro{flex:1;min-width:0}.planning-card .eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0f6557;margin:0}
@@ -240,4 +240,4 @@
 .planning-card .reference-value-points strong{font-size:13px;color:#17382f}.planning-card .reference-value-points span{font-size:13px;line-height:1.4;color:#50625a;margin:0;font-weight:400}.planning-card .reference-value-note{font-size:12px;line-height:1.5}
 .planning-card .planning-card-action{width:100%;min-width:0;display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0;min-height:60px;box-sizing:border-box;cursor:pointer}.planning-card-action span{font-size:14px!important;font-weight:700!important;color:#17382f!important;margin:0!important}
 .planning-setup-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-top:20px;margin-top:20px;border-top:1px solid #d5e4dc}
-@media(max-width:900px){.planning-card>.brand-identity-summary{grid-template-columns:1fr;align-items:stretch}.planning-card .planning-card-action{flex-basis:auto;width:100%}.planning-card .reference-value-points{grid-template-columns:1fr}.planning-setup-head{flex-wrap:wrap}#step-2 .planning-card{padding:20px}}
+@media(max-width:900px){.planning-card>.brand-identity-summary{grid-template-columns:1fr;align-items:stretch}.planning-card .planning-card-action{flex-basis:auto;width:100%}.planning-card .reference-value-points{grid-template-columns:1fr}.planning-setup-head{flex-wrap:wrap}#step-2 .planning-card,#monitoring-panel.planning-card{padding:20px}}
