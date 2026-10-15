@@ -455,7 +455,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "One optional book or material",
+        "Your private bookshelf",
         "What AI learned",
         "Retry analysis"
       ]
@@ -746,7 +746,7 @@
         "Writing Assistant",
         "My content",
         "Approved originals",
-        "Add a book or material",
+        "Content Library",
         "Add to templates",
         "Set as default",
         "Add to flow",
@@ -1626,19 +1626,22 @@
       "id": "workspace-storage-private-status",
       "type": "text",
       "url": "/api/storage/status?workspace_id=release-check",
-      "status": 401
+      "status": 401,
+      "contains": []
     },
     {
       "id": "workspace-storage-checkout-method",
       "type": "text",
       "url": "/api/storage/checkout?workspace_id=release-check",
-      "status": 405
+      "status": 405,
+      "contains": []
     },
     {
       "id": "workspace-storage-webhook-registration",
       "type": "text",
       "url": "/api/webhooks/stripe/storage",
-      "status": 405
+      "status": 405,
+      "contains": []
     },
     {
       "id": "workspace-storage-alert-boundary",
@@ -2042,7 +2045,7 @@
         "styleSection.after(launcher)",
         "libraryTools.open=false",
         "function resizeEditors(document)",
-        "Add a book or material",
+        "Content Library",
         "assistant.append(references)",
         "Want to improve this message?",
         "Open assistant"
@@ -2068,8 +2071,12 @@
       "contains": [
         "view.querySelector('.wa-question').prepend(quickActions)",
         "All active materials",
-        "Attach book or material",
-        "data-wa-attach"
+        "Content Library",
+        "data-wa-attach",
+        "data-wa-edit-body",
+        "data-wa-load-selected",
+        "Use in current flow",
+        "Strengthen persuasion"
       ]
     },
     {
@@ -2177,17 +2184,17 @@
       ]
     },
     {
-      "id": "assistant-single-material",
+      "id": "assistant-three-book-library",
       "type": "text",
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "One optional book or material",
+        "Your private bookshelf",
         "Ready \u00b7 Not in use",
-        "wr-options"
-      ],
-      "notContains": [
-        "[1,2,3].map(slot=>"
+        "wr-options",
+        "[1,2,3].map(slot=>",
+        "wr-book-cover",
+        "data-save-details"
       ]
     },
     {
@@ -2196,8 +2203,8 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "assistant-window=20261013-v1",
-        "single-material=20261013-v1"
+        "assistant-window=20261015-v2",
+        "content-library=20261015-v2"
       ]
     },
     {

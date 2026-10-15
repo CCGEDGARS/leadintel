@@ -57,3 +57,22 @@
 .wa-dialog #mw-reference-count{float:right;font-size:12px;font-weight:400;color:#62776a}
 .wa-dialog .wa-session-note{color:#62776a}
 @media(max-width:720px){.wa-dialog{max-height:94dvh}.wa-dialog #mw-reference-count{float:none;display:block;margin:4px 0 0 16px}.wa-dialog .wa-transcript{max-height:24vh}}
+
+/* Draft-first workspace: review the same starting draft alongside each proposal. */
+.wa-workspace{display:grid;gap:13px;padding:20px;background:#fff;border:1px solid #d4e2d9;border-radius:14px;min-width:0}
+.wa-editor-heading,.wa-draft-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.wa-editor-heading h3{margin:0;font-size:17px}
+.wa-workspace label{display:grid;gap:7px;font-size:12px;font-weight:600;color:#456151}
+.wa-workspace input,.wa-workspace textarea,.wa-script-picker select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbdcd2;border-radius:9px;padding:11px;font:inherit;color:#243b30;background:#fff}.wa-workspace textarea{min-height:320px;resize:vertical;font-size:14px;line-height:1.7}
+.wa-draft-tools{font-size:11px;color:#62776a}.wa-draft-tools button{font-size:11px;padding:6px 9px}.wa-draft-tools span{flex:1}
+.wa-dialog .wa-session.wa-workbench{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+.wa-dialog .wa-session.wa-workbench .wa-context{grid-column:1/-1;grid-row:1}
+.wa-dialog .wa-session.wa-workbench .wa-workspace{grid-column:1;grid-row:2/7;align-self:start}
+.wa-dialog .wa-session.wa-workbench .wa-question{grid-column:2;grid-row:2}
+.wa-dialog .wa-session.wa-workbench .wa-preview{grid-column:2;grid-row:3}
+.wa-dialog .wa-session.wa-workbench .wa-transcript{grid-column:2;grid-row:4;min-height:0;max-height:200px}
+.wa-dialog .wa-session.wa-workbench [data-wa-status]{grid-column:2;grid-row:5}
+.wa-dialog .wa-session.wa-workbench .wa-session-note{grid-column:2;grid-row:6}
+.wa-workspace small{font-size:11px;color:#62776a}.wa-transform button{font-size:12px;padding:9px 8px}.wa-finish{padding-top:12px;border-top:1px solid #e0e9e3}
+.wa-active-book{display:flex;align-items:center;gap:9px;padding:10px;border-radius:9px;background:#f0f6f2;font-size:12px}.wa-active-book span{flex:1;overflow-wrap:anywhere}.wa-active-book img{width:27px;height:38px;object-fit:cover;border-radius:2px}.wa-active-book button{padding:6px 8px;font-size:11px}
+.wa-script-picker{padding:12px;background:#f0f6f2;border-radius:10px}.wa-script-picker pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;max-height:220px;overflow:auto}.wa-workspace [role=status]:empty{display:none}
+@media(max-width:720px){.wa-dialog .wa-session.wa-workbench{grid-template-columns:minmax(0,1fr)}.wa-dialog .wa-session.wa-workbench>*{grid-column:1!important;grid-row:auto!important}.wa-workspace{padding:14px}.wa-active-book{flex-wrap:wrap}.wa-workspace textarea{min-height:260px}}
