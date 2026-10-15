@@ -78,7 +78,7 @@ test("data-dependent ICP switches are disabled until their real prerequisites ex
   assert.match(app, /getCombinedActiveModel\?\.\(portfolio\.migrateLegacy\(saved\)\)/);
   assert.match(app, /data-icp-field="active"[\s\S]{0,240}disabled/);
   assert.match(app, /function enforceIcpActivationRequirements\(\)/);
-  assert.match(app, /Why is this off\?/);
+  assert.match(app, /<strong>Setup required<\/strong>/);
   assert.match(app, /leadintel:reference-customers-updated/);
   assert.match(app, /data-icp-unlock/);
   assert.match(marketCss, /\.market-toggle input:disabled\+span/);

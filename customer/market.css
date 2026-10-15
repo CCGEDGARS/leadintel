@@ -372,6 +372,14 @@
 #monitoring-panel .monitoring-results{margin-top:18px}
 @media(max-width:640px){#monitoring-panel .market-research-head{align-items:stretch;flex-direction:column}.monitoring-summary-status{margin-left:8px}#monitoring-panel>summary{font-size:17px}}
 
+/* Switches and status remain readable; only inactive editable content is muted. */
+.icp-card,.signal-config-row,.opportunity-card{opacity:1}
+.strategy-setting-status{display:block;margin:8px 0 12px;color:var(--muted);font-size:12px;line-height:1.5}
+.icp-edit-fields{border:0;margin:0;padding:0;min-width:0;display:grid;gap:12px}
+.icp-edit-fields:disabled{opacity:.65}
+.icp-edit-fields legend{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.icp-card .market-inline-title:disabled{opacity:1;color:var(--ink);-webkit-text-fill-color:var(--ink)}
+.signal-config-main .strategy-setting-status{margin:0 0 5px}
 /* Optional monitoring: explicit disclosure independent of execution status. */
 #monitoring-panel{border:1px solid #cbded4;background:#f8fbf9;box-shadow:none}
 .monitoring-card-head{display:flex;align-items:center;justify-content:space-between;gap:24px}

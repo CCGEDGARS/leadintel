@@ -458,6 +458,7 @@ function readMarketEdits(markDirty=true){
   document.querySelectorAll("[data-opportunity-active]").forEach(el=>{const item=state.market.opportunities[Number(el.dataset.opportunityActive)];if(item)item.active=el.checked;});
   syncResearchSourcesToSignals();
   if(markDirty){state.market.strategyApproved=false;state.market.strategyApprovedAt="";}
+  enforceIcpActivationRequirements();
   saveState();
 }
 function syncResearchSourcesToSignals(){
@@ -488,23 +489,24 @@ function renderIcps(){
       }
     }
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
-    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
-    ${requirement.available?"":`<div class="icp-unlock-hint" role="status"><strong>Why is this off?</strong><span>${esc(requirement.reason)}</span><button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button></div>`}
-    <label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
+    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
+    <div class="strategy-setting-status" role="status">${!requirement.available?"Setup required":icp.active?"Active — used to find and qualify companies.":"Off — this profile won’t be used to find or qualify companies. Turn it on to use it."}</div>
+    ${requirement.available?"":`<div class="icp-unlock-hint" role="status"><strong>Setup required</strong><span>${esc(requirement.reason)}</span><button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button></div>`}
+    <fieldset class="icp-edit-fields" ${icp.active?"":"disabled"}><legend class="sr-only">${esc(icp.name)} settings</legend><label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
     <label>Exclusions<input data-icp-field="exclusions" data-index="${index}" value="${esc(icp.exclusions)}"></label>
-    <p>${esc(icp.rationale)}</p>
+    </fieldset><p>${esc(icp.rationale)}</p>
   </article>`;
   });
   $("icp-list").innerHTML=cards.join("");
 }
 function renderSignalDesigner(){
   $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">
-    <label class="market-toggle"><input type="checkbox" data-signal-field="active" data-index="${index}" ${signal.active?"checked":""}><span></span></label>
-    <div class="signal-config-main"><input class="signal-name-input" data-signal-field="name" data-index="${index}" value="${esc(signal.name)}"><input class="signal-keywords-input" data-signal-field="keywords" data-index="${index}" value="${esc(signal.keywords)}" placeholder="keywords; phrases"></div>
-    <select data-signal-field="priority" data-index="${index}">${["High","Medium","Low"].map(p=>`<option ${p===signal.priority?"selected":""}>${p}</option>`).join("")}</select>
-    <label class="weight-field"><span>Weight</span><input type="number" min="1" max="10" data-signal-field="weight" data-index="${index}" value="${signal.weight}"></label>
+    <label class="market-toggle"><input type="checkbox" data-signal-field="active" data-index="${index}" aria-label="Use ${esc(signal.name)}" ${signal.active?"checked":""}><span></span></label>
+    <div class="signal-config-main"><small class="strategy-setting-status" role="status">${signal.active?"Active — used in research and matching":"Off — excluded from research and matching"}</small><input class="signal-name-input" data-signal-field="name" ${signal.active?"":"disabled"} data-index="${index}" value="${esc(signal.name)}"><input class="signal-keywords-input" data-signal-field="keywords" ${signal.active?"":"disabled"} data-index="${index}" value="${esc(signal.keywords)}" placeholder="keywords; phrases"></div>
+    <select data-signal-field="priority" ${signal.active?"":"disabled"} data-index="${index}">${["High","Medium","Low"].map(p=>`<option ${p===signal.priority?"selected":""}>${p}</option>`).join("")}</select>
+    <label class="weight-field"><span>Weight</span><input type="number" min="1" max="10" data-signal-field="weight" ${signal.active?"":"disabled"} data-index="${index}" value="${signal.weight}"></label>
     <button class="signal-delete" type="button" data-remove-signal="${index}" aria-label="Remove ${esc(signal.name)}">×</button>
   </div>`).join("");
 }
@@ -604,9 +606,8 @@ function researchContextFingerprint(){
 }
 function returnToProfileResearch(){closeStrategyHandoff();void window.LeadIntelProfileMarket?.open?.();}
 function researchProfile(){
-  const activeMarkets=state.market.icps.filter(item=>item.active).map(item=>item.targetMarkets).filter(Boolean).join("; ");
-  const targetMarkets=activeMarkets||state.profile.targetMarkets;
-  return {...state.profile,targetMarkets,researchMarkets:LeadIntelProfile.expandTargetMarkets(targetMarkets)};
+  const profile=state.market.icps.some(item=>item.active!==false)?LeadIntelMarket.effectiveTargetingProfile(state.profile,state.market):state.profile;
+  return {...profile,researchMarkets:LeadIntelProfile.expandTargetMarkets(profile.targetMarkets)};
 }
 function closeResearchPreview(){
   pendingResearchMode="";
@@ -841,9 +842,10 @@ function renderMarketOpportunities(){
   const target=$("market-opportunities");
   if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
   target.innerHTML=state.market.opportunities.map((opp,index)=>opp.profileOnly?`<article class="opportunity-card unresearched ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" aria-label="Use ${esc(opp.title)}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
   </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100 priority score</span></div></div>
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" aria-label="Use ${esc(opp.title)}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100 priority score</span></div></div>
+    <div class="strategy-setting-status" role="status">${opp.active?"Active — used to prioritize company discovery":"Off — excluded from company discovery"}</div>
     <p class="opportunity-score-note">Relative search priority, not a probability of demand. Buying intent requires company-level evidence.</p>
     <div class="opportunity-meta"><span class="confidence ${(state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence).toLowerCase()}">${state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
     <details class="opportunity-analysis"><summary>View detailed analysis</summary>
@@ -1094,9 +1096,9 @@ function updateMonitoringDisclosure(){
   const summary=$("monitoring-saved-summary");summary.hidden=!configured;
   const count=config.customSources?.length||0;
   summary.textContent=`${count?`${count} website${count===1?"":"s"}`:"Selected source categories"} · ${config.frequency[0].toUpperCase()+config.frequency.slice(1)} · ${config.researchDepth==="deep"?"Deep":"Quick"} research`;
-  $("toggle-monitoring-settings").disabled=monitoringBusy;$("close-monitoring-settings").disabled=monitoringBusy;$("save-monitoring-close").disabled=monitoringBusy||!state.market.strategyApproved;
+  $("toggle-monitoring-settings").disabled=monitoringBusy;$("close-monitoring-settings").disabled=monitoringBusy;$("save-monitoring-close").disabled=monitoringBusy||(!state.market.strategyApproved&&!config.enabled);
   for(const id of ["discard-monitoring-close","keep-editing-monitoring"])$(id).disabled=monitoringBusy;
-  $("monitoring-settings").querySelectorAll("input,select,textarea").forEach(input=>{input.disabled=monitoringBusy||(input.id==="monitoring-enabled"&&!state.market.strategyApproved);});
+  $("monitoring-settings").querySelectorAll("input,select,textarea").forEach(input=>{input.disabled=monitoringBusy||(input.id==="monitoring-enabled"&&!state.market.strategyApproved&&!config.enabled);});
 }
 function openMonitoringSettings(){
   renderMonitoringControls();$("monitoring-settings").hidden=false;monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();updateMonitoringDisclosure();$("monitoring-custom-sources").focus();
@@ -1113,14 +1115,29 @@ function renderMonitoringControls(){
   const selectedSignals=new Set(config.signalIds.length?config.signalIds:state.market.signals.filter(signal=>signal.active).map(signal=>signal.id));$("monitoring-signals").innerHTML=state.market.signals.filter(signal=>signal.active).map(signal=>`<label><input type="checkbox" data-monitor-signal value="${esc(signal.id)}" ${selectedSignals.has(signal.id)?"checked":""}> ${esc(signal.name)}</label>`).join("")||"<span>No active signals</span>";
   const selectedSources=new Set(config.sourceTypes);$("monitoring-sources").innerHTML=Object.keys(LeadIntelMarket.SOURCE_TYPES).map(source=>`<label><input type="checkbox" data-monitor-source value="${source}" ${selectedSources.has(source)?"checked":""}> ${source[0].toUpperCase()+source.slice(1)}</label>`).join("");
   }
-  const locked=!state.market.strategyApproved;$("monitoring-summary-status").textContent=config.enabled?"Active":config.lastRunAt?"Paused":"Off";$("monitoring-enabled").disabled=locked;$("save-monitoring").disabled=locked||monitoringBusy;$("run-monitoring-now").disabled=locked||monitoringBusy;$("monitoring-status").textContent=locked?"Activate the market strategy before enabling monitoring.":config.enabled?`Monitoring active · ${config.frequency}${config.nextRunAt?` · next run ${new Date(config.nextRunAt).toLocaleString()}`:""}`:"Monitoring is off.";
+  const locked=!state.market.strategyApproved;$("monitoring-summary-status").textContent=monitoringBusy?"Saving…":locked&&!config.enabled?"Setup required":config.enabled?"Active":"Off";$("monitoring-enabled").disabled=monitoringBusy||(locked&&!config.enabled);$("save-monitoring").disabled=(locked&&!config.enabled)||monitoringBusy;$("run-monitoring-now").disabled=locked||monitoringBusy;$("monitoring-status").textContent=monitoringBusy?"Saving monitoring settings…":locked&&!config.enabled?"Activate the market strategy before enabling monitoring.":config.enabled?`Monitoring active · ${config.frequency}${config.nextRunAt?` · next run ${new Date(config.nextRunAt).toLocaleString()}`:""}`:"Monitoring is off.";
   if(!preserveDraft&&!$("monitoring-settings").hidden){monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();}updateMonitoringDisclosure();
 }
 function readMonitoringEdits(persist=true){const sourceTypes=LeadIntelMarket.filterResearchSourceTypes([...document.querySelectorAll('[data-monitor-source]:checked')].map(input=>input.value),state.market.signals||[]);const config=LeadIntelMarket.normalizeMonitoring({enabled:$("monitoring-enabled").checked,frequency:$("monitoring-frequency").value,researchDepth:$("monitoring-depth").value,minimumScore:$("monitoring-minimum-score").value,sourceTypes,signalIds:[...document.querySelectorAll('[data-monitor-signal]:checked')].map(input=>input.value),customSources:$("monitoring-custom-sources").value.split(/\n/)});if(persist){state.market.monitoring=config;saveState();}return config;}
 function renderMonitoringAlerts(alerts=[]){$("monitoring-alerts").innerHTML=alerts.length?alerts.map(alert=>`<article class="monitor-alert"><div class="monitor-alert-head"><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><strong>${Number(alert.score)||0}/100</strong></div><p>${esc(alert.summary)}</p><span>${esc(new Date(alert.created_at).toLocaleString())}</span> ${alert.status==="new"?`<button type="button" data-monitor-alert-read="${esc(alert.id)}">Mark read</button>`:""}</article>`).join(""):'<div class="market-empty">No monitoring alerts yet.</div>';}
 function renderMonitoringHistory(runs=[]){$("monitoring-history").innerHTML=runs.length?runs.map(run=>`<div class="monitor-run"><span>${esc(run.trigger_type)} · ${esc(run.research_depth)} · ${esc(run.status)}</span><strong>${Number(run.source_count)||0} sources · ${Number(run.alert_count)||0} alerts</strong></div>`).join(""):'<div class="market-empty">No automatic runs yet.</div>';}
 async function loadMonitoringServerState(force=false){if((monitoringLoaded||monitoringBusy)&&!force)return;const bridge=await waitForMarketServerBridge();if(!bridge?.session?.authenticated||!bridge.workspace?.id){$("monitoring-status").textContent="Sign in to configure automatic monitoring.";return;}monitoringLoaded=true;try{const [config,alerts,runs]=await Promise.all([monitoringApi('/api/market-monitoring/config'),monitoringApi('/api/market-monitoring/alerts'),monitoringApi('/api/market-monitoring/runs')]);state.market.monitoring=LeadIntelMarket.normalizeMonitoring(config.config);state.market.monitoring.nextRunAt=config.config.nextRunAt||"";state.market.monitoring.lastRunAt=config.config.lastRunAt||"";saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);}catch(error){$("monitoring-status").textContent=error.message;}}
-async function saveMonitoringConfig(){if(monitoringBusy)return false;if(!state.market.strategyApproved){showToast("Activate the market strategy first");return false;}const config=readMonitoringEdits(false);monitoringBusy=true;updateMonitoringDisclosure();$("save-monitoring").disabled=true;$("run-monitoring-now").disabled=true;try{if(config.enabled&&!config.signalIds.length)throw new Error("Select at least one signal to monitor");if(config.enabled&&!config.sourceTypes.length&&!config.customSources.length)throw new Error("Select at least one source category or custom source");const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();if(!saved)throw new Error("Save the workspace before enabling monitoring");const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})});state.market.monitoring={...config,nextRunAt:result.config.nextRunAt||"",lastRunAt:result.config.lastRunAt||""};saveState();showToast(config.enabled?"Automatic monitoring enabled":"Monitoring settings saved · monitoring is off");closeMonitoringSettings();return true;}catch(error){keepEditingMonitoring();showToast(error.message);return false;}finally{monitoringBusy=false;renderMonitoringControls();if($("monitoring-settings").hidden)$("toggle-monitoring-settings").focus();}}
+async function saveMonitoringConfig({closeAfterSave=true}={}){
+  if(monitoringBusy)return false;
+  if(!state.market.strategyApproved&&$("monitoring-enabled").checked){showToast("Activate the market strategy first");return false;}
+  const previous=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);let failure='',succeeded=false;
+  try{
+    const config=readMonitoringEdits(false);monitoringBusy=true;renderMonitoringControls();
+    if(config.enabled&&!config.signalIds.length)throw new Error("Select at least one signal to monitor");
+    if(config.enabled&&!config.sourceTypes.length&&!config.customSources.length)throw new Error("Select at least one source category or custom source");
+    const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();if(!saved)throw new Error("Save the workspace before enabling monitoring");
+    const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})});
+    state.market.monitoring={...config,...(result.config?.enabled!==undefined?LeadIntelMarket.normalizeMonitoring(result.config):{}),nextRunAt:result.config.nextRunAt||"",lastRunAt:result.config.lastRunAt||""};saveState();
+    succeeded=true;monitoringDraftBaseline=null;
+    showToast(state.market.monitoring.enabled?"Automatic monitoring enabled":"Automatic monitoring disabled");return true;
+  }catch(error){state.market.monitoring=previous;saveState();failure=error.message;showToast(failure);return false;}
+  finally{monitoringBusy=false;renderMonitoringControls();if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}
+}
 async function runMonitoringNow(){if(monitoringBusy)return;if(monitoringHasEdits()){showToast("Save your monitoring changes before running.");return;}monitoringBusy=true;renderMonitoringControls();try{const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'});showToast(`Monitoring complete · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);}catch(error){showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}}
 async function markMonitoringAlertRead(id){try{await monitoringApi(`/api/market-monitoring/alerts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:'read'})});await loadMonitoringServerState(true);}catch(error){showToast(error.message);}}
 function renderMarketStrategy(){
@@ -1438,13 +1455,13 @@ function bind(){
   $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
     openStrategyHandoff();
-  });$("cancel-strategy-handoff").addEventListener("click",()=>state.market.researchContextStale?returnToProfileResearch():closeStrategyHandoff());$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+  });$("cancel-strategy-handoff").addEventListener("click",()=>state.market.researchContextStale?returnToProfileResearch():closeStrategyHandoff());$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});$("monitoring-enabled").addEventListener("change",()=>void saveMonitoringConfig({closeAfterSave:false}));$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
   $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
-  [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
+  [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>{readMarketEdits();renderIcps();renderMarketOpportunities();renderMonitoringControls();});});
   $("icp-list").addEventListener("click",event=>{
     const button=event.target.closest("[data-icp-unlock]");if(!button)return;
     if(button.dataset.icpUnlock==="run-market-research"){void window.LeadIntelProfileMarket?.open?.();return;}
@@ -1453,7 +1470,7 @@ function bind(){
       setTimeout(()=>document.querySelector("[data-reference-customers-manage]")?.click(),80);
     }
   });
-  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderResearchControls();renderMonitoringControls();});
+  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",openResetCenter);
   document.querySelectorAll("[data-close-reset-center]").forEach(node=>node.addEventListener("click",closeResetCenter));
   $("reset-new-company").addEventListener("click",resetCompanyWorkspace);
