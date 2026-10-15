@@ -12,7 +12,7 @@ export async function prepareAssistantRequest(env,scope,body){
  const context=body.context;if(!['email','linkedin'].includes(context.channel))fail('Unsupported writing channel');
  if(JSON.stringify(context).length>60000)fail('Writing context is too large');
  if(!object(context.currentDraft))fail('Current draft is required');
- text(context.currentDraft.message,12000,'Current message');text(context.currentDraft.subject||'',120,'Current subject');if([...(context.currentDraft.subject||'')].length>60)fail('Current subject is too long');
+ text(context.currentDraft.message,12000,'Current message');text(context.currentDraft.subject||'',500,'Current subject');
  if(context.maximumWords!==undefined&&context.maximumWords!==null&&(!Number.isSafeInteger(context.maximumWords)||context.maximumWords<=0||context.maximumWords>12000))fail('Maximum message words is invalid');
  const history=body.history??[];if(!Array.isArray(history)||history.length>10||JSON.stringify(history).length>14000)fail('Conversation is too long');
  let historyCharacters=0;for(const turn of history){if(!object(turn)||!['user','assistant'].includes(turn.role))fail('Invalid conversation role');historyCharacters+=text(turn.content,12000,'Conversation turn').length;}if(historyCharacters>12000)fail('Conversation is too long');

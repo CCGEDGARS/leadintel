@@ -1,6 +1,6 @@
 const stmt=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
 const fail=(message,status=409)=>{const e=Error(message);e.status=status;throw e;};
-function card(row){return {...row,workspaceId:row.workspace_id,role:row.role||'guidance',active:Boolean(row.active),coverage:JSON.parse(row.coverage_json),techniques:JSON.parse(row.techniques_json)};}
+function card(row){return {...row,workspaceId:row.workspace_id,role:row.role||'guidance',active:Boolean(row.active),presentation:JSON.parse(row.presentation_json||'{}'),coverage:JSON.parse(row.coverage_json),techniques:JSON.parse(row.techniques_json)};}
 async function init(env,scope){if(!scope?.workspaceId)fail('Authenticated workspace required',401);await stmt(env,'INSERT OR IGNORE INTO writing_reference_workspaces(workspace_id) VALUES(?)',scope.workspaceId).run();}
 export async function writingReferenceRevision(env,scope){await init(env,scope);return Number((await stmt(env,'SELECT revision FROM writing_reference_workspaces WHERE workspace_id=?',scope.workspaceId).first()).revision);}
 export async function listWritingReferences(env,scope){await init(env,scope);const {results}=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.status<>'Deleted' ORDER BY s.slot`,scope.workspaceId).all();return results.map(card);}
@@ -36,7 +36,7 @@ export async function putWritingReference(env,scope,{slot,expectedRevision,expec
  if(prior.source_id)await cleanupWritingReference(env,scope,prior.source_id).catch(()=>null);
  return getWritingReference(env,scope,id);
 }
-export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction,role,acknowledgePartial,acknowledgeExtraction}){
+export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction,role,acknowledgePartial,acknowledgeExtraction,presentation}){
  const row=await getWritingReference(env,scope,id);if(row.revision!==Number(expectedRevision))fail('Source changed. Refresh and try again.');
  if(row.status==='Deleting')fail('Source is being deleted');
  if(acknowledgePartial!==undefined&&acknowledgePartial!==true)fail('Partial coverage acknowledgement must be true',400);
@@ -46,19 +46,31 @@ export async function patchWritingReference(env,scope,{id,expectedRevision,activ
  if(active!==undefined&&typeof active!=='boolean')fail('Activation must be a boolean',400);
  if(instruction!==undefined&&(typeof instruction!=='string'||instruction.length>500))fail('Source instruction is too long',400);
  if(role!==undefined&&!['guidance','seller','customer'].includes(role))fail('Invalid source role',400);
+ if(presentation!==undefined){
+  if(!presentation||typeof presentation!=='object'||Array.isArray(presentation)||Object.keys(presentation).some(k=>!['title','description','cover'].includes(k)))fail('Invalid book details',400);
+  for(const [key,max] of [['title',120],['description',280],['cover',150000]])if(presentation[key]!==undefined&&(typeof presentation[key]!=='string'||presentation[key].length>max))fail('Invalid book '+key,400);
+  const cover=presentation.cover;if(cover&&!/^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/.test(cover))fail('Cover must be a small PNG or JPEG image',400);
+  if(cover){let bytes;try{bytes=atob(cover.split(',')[1]);}catch{fail('Invalid cover image',400);}if(!(cover.startsWith('data:image/jpeg;')&&bytes.startsWith('\xff\xd8\xff')||cover.startsWith('data:image/png;')&&bytes.startsWith('\x89PNG\r\n\x1a\n')))fail('Invalid cover image',400);}
+ }
+ const presentationJson=JSON.stringify({...row.presentation,...presentation});
  const nextActive=active===undefined?row.active:active,nextInstruction=instruction===undefined?row.instruction:instruction;
  const result=await env.DB.batch([
-  stmt(env,`UPDATE writing_reference_sources SET active=?,instruction=?,role=?,status=?,coverage_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status<>'Deleting'`,nextActive?1:0,nextInstruction,role===undefined?row.role:role,nextStatus,JSON.stringify(nextCoverage),id,scope.workspaceId,expectedRevision),
+
+  ...(active===true?[
+   stmt(env,`UPDATE writing_reference_slots SET revision=revision+1 WHERE source_id IN (SELECT id FROM writing_reference_sources WHERE workspace_id=? AND id<>? AND active=1) AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,scope.workspaceId,id,id,expectedRevision),
+   stmt(env,`UPDATE writing_reference_sources SET active=0,revision=revision+1 WHERE workspace_id=? AND id<>? AND active=1 AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,scope.workspaceId,id,id,expectedRevision)
+  ]:[]),
+  stmt(env,`UPDATE writing_reference_sources SET active=?,instruction=?,role=?,status=?,coverage_json=?,presentation_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status<>'Deleting'`,nextActive?1:0,nextInstruction,role===undefined?row.role:role,nextStatus,JSON.stringify(nextCoverage),presentationJson,id,scope.workspaceId,expectedRevision),
   stmt(env,`UPDATE writing_reference_slots SET revision=revision+1 WHERE source_id=? AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,id,id,expectedRevision+1),
   stmt(env,`UPDATE writing_reference_workspaces SET revision=revision+1 WHERE workspace_id=? AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,scope.workspaceId,id,expectedRevision+1)
- ]);if(!result[0].meta.changes)fail('Source changed. Refresh and try again.');return getWritingReference(env,scope,id);
+ ]);if(!result[active===true?2:0].meta.changes)fail('Source changed. Refresh and try again.');return getWritingReference(env,scope,id);
 }
 export async function cleanupWritingReference(env,scope,id){
  const row=await stmt(env,'SELECT * FROM writing_reference_sources WHERE id=? AND workspace_id=?',id,scope.workspaceId).first();if(!row||row.status==='Deleted')return;if(row.status!=='Deleting')fail('Source is not marked for deletion');
  try{await env.WRITING_REFERENCES_BUCKET.delete(row.original_key);await env.WRITING_REFERENCES_BUCKET.delete(row.text_key);await env.WRITING_REFERENCES_BUCKET.delete(row.catalogue_key||row.original_key.replace(/original$/,'catalogue.json'));}catch{fail('Source cleanup failed; deletion will retry',503);}
  await env.DB.batch([
   stmt(env,'DELETE FROM writing_reference_chunks WHERE source_id=?',id),stmt(env,'DELETE FROM writing_reference_jobs WHERE source_id=?',id),
-  stmt(env,`UPDATE writing_reference_sources SET status='Deleted',filename='',mime='',content_hash='',original_key='',text_key='',catalogue_key='',coverage_json='{}',summary='',techniques_json='[]',instruction='',error_code='',active=0 WHERE id=? AND workspace_id=? AND status='Deleting'`,id,scope.workspaceId),
+  stmt(env,`UPDATE writing_reference_sources SET status='Deleted',presentation_json='{}',filename='',mime='',content_hash='',original_key='',text_key='',catalogue_key='',coverage_json='{}',summary='',techniques_json='[]',instruction='',error_code='',active=0 WHERE id=? AND workspace_id=? AND status='Deleting'`,id,scope.workspaceId),
   stmt(env,'UPDATE writing_reference_slots SET source_id=NULL,revision=revision+1 WHERE workspace_id=? AND source_id=?',scope.workspaceId,id)
  ]);
 }

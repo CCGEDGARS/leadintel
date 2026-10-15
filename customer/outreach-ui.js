@@ -1,6 +1,6 @@
-import './writing-assistant.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261013-v1';
+import './writing-assistant.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v2';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v1';
-import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261013-v1&assistant-contract=20261015-v1';
+import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v2&assistant-contract=20261015-v1';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
 import './message-evidence.js?v=20261010-evidence-v3';
@@ -9,14 +9,14 @@ import './approved-reference-scripts.js?brutal-copy=20261013-v1&v=20261009-profe
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?writing-assistant=20261012-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&single-editor=20261009-v4&sender-reference=20261010-v2&subject-editor=20261011-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261013-v1';
+import './message-workspace.js?writing-assistant=20261012-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&single-editor=20261009-v4&sender-reference=20261010-v2&subject-editor=20261011-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v2';
 import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&core-renderer=20261011-v3';
 import './message-translations.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
 import './message-studio.js?brutal-copy=20261013-v1&prompt-budget=20261013-v1&generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3';
 import './subject-editor.js?v=20261011-subjects-v1';
-import './message-editor.js?brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261013-v1&assistant-contract=20261015-v1';
+import './message-editor.js?brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v2&assistant-contract=20261015-v1';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -277,7 +277,7 @@ function updateMessageOpening(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?applied-style=20261013-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-single-editor-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&step6-rescue=20261013-v11&assistant-window=20261013-v1';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?applied-style=20261013-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-single-editor-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&step6-rescue=20261013-v11&assistant-window=20261015-v2';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');
@@ -897,10 +897,42 @@ function captureWritingAssistantContext(){
  if(references&&writingAssistantSource!=='all')references.sourceRefs=references.sourceRefs.filter(ref=>ref.id===writingAssistantSource);
  return globalThis.LeadIntelWritingAssistantContext.captureWritingContext({workspace:crmBridge()?.workspace?.id,item,candidate:selectedCandidate(),person:selectedContact(item),studio,facts:studioMessageContext(item,selectedCandidate()),currentDraft:editorDraft(),refs:references,language:globalThis.LeadIntelMessageTranslations?.book?.(item||{})?.activeLanguage,usable:messageWorkspaceUsable()&&!item?.approved&&!state?.editing&&!state?.saving&&!state?.busy&&!subjectEditing&&!subjectBusy&&!studioGenerationBusy&&!messageTranslationBusy&&!messageFactResearchBusy&&!crmBridge()?.conflict});
 }
+function assistantScripts(){
+ const studio=studioState(),linkedin=currentItem()?.channel==='linkedin',current=editorDraft();
+ const rows=[{id:'current',name:'Current Step 6 draft',...current,style:linkedin?studio.linkedinMode:studio.mode}];
+ const templates=linkedin?[...LeadIntelMessageStudio.linkedinDefaults,...Object.values(studio.linkedinTemplates).filter(t=>!t.deleted)]:[...LeadIntelMessageStudio.defaults,...studio.templates.filter(t=>t.isPersonal)];
+ for(const template of templates){
+  // Load patterns, never the example recipient facts in the protected reference document.
+  rows.push({id:'style:'+template.id,name:template.name+(template.isPersonal||template.id.startsWith('template-')?' · Personal template':' · Style'),subject:linkedin?'':template.subject,message:!linkedin&&!template.isPersonal?LeadIntelMessageEditor.referencePattern(template.id):template.body,style:template.id});
+  const personal=studio.personalStyles?.[template.id];if(!linkedin&&personal)rows.push({id:'personal:'+template.id,name:template.name+' · My revision',subject:personal.subject,message:personal.body,style:'personal:'+template.id});
+ }
+ return rows;
+}
+function saveAssistantTemplate(draft,style){
+ if(!captureWritingAssistantContext().usable)throw Error('Choose a buyer and finish pending operations first.');
+ const studio=studioState(),clean=LeadIntelMessageStudio.Library.reusable(draft.subject,draft.message,studioMessageContext(currentItem(),selectedCandidate()),studio.essentials);
+ writingAssistantView?.close();openPersonalReview(clean.subject,clean.body,'','',style);return true;
+}
+async function useAssistantDraft(draft,style){
+ const captured=captureWritingAssistantContext();if(!captured.usable)throw Error('Finish pending message operations before saving.');
+ const context={...captured.context,maximumWords:null,currentDraft:draft};
+ globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(draft,context);
+ const item=currentItem(),studio=studioState();if(item.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,draft,studio.essentials,item.channel);
+ const next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ next.messageStudioDraft.assistantSourceStyle=style;upsertItem(next);renderAll();
+ const result=await saveScriptPackage(next);
+ if(captured.scope!==captureWritingAssistantContext().scope)throw Error('Workspace or recipient changed. Check the original recipient’s saved draft.');
+ if(!result?.ok||result.localOnly)throw Error('Draft kept locally. CRM save failed; retry Use in current flow.');
+ return true; // Deliberately no approval, flow membership or automatic enqueue here.
+}
 function installWritingAssistant(){
  if(writingAssistant||!globalThis.LeadIntelWritingAssistantUI)return;
- const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261013-v1';document.head.append(link);
- writingAssistant=globalThis.LeadIntelWritingAssistant.createWritingAssistant({capture:captureWritingAssistantContext,request:async(payload,{signal})=>{const workspace=crmBridge()?.workspace?.id,response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/writing-assistant/reply?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal});const result=await response.json();if(!response.ok)throw Error(result.error||'Writing Assistant unavailable');return result;},apply:async proposal=>{
+ const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v2';document.head.append(link);
+ writingAssistant=globalThis.LeadIntelWritingAssistant.createWritingAssistant({workbench:true,capture:captureWritingAssistantContext,validatePreview:async(proposal,context)=>{
+  await globalThis.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:crmBridge()?.workspace?.id}).assertGenerationCurrent(proposal.provenance);
+  globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(proposal.draft,context);
+  const item=currentItem();if(item?.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,proposal.draft,studioState().essentials,item.channel);
+ },request:async(payload,{signal})=>{const workspace=crmBridge()?.workspace?.id,response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/writing-assistant/reply?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal});const result=await response.json();if(!response.ok)throw Error(result.error||'Writing Assistant unavailable');return result;},apply:async proposal=>{
   const captured=captureWritingAssistantContext();if(!captured.usable)throw Error('Finish pending message operations before applying.');
   await globalThis.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:crmBridge()?.workspace?.id}).assertGenerationCurrent(proposal.provenance);
   const current=captureWritingAssistantContext();if(!current.usable||captured.fingerprint!==current.fingerprint||captured.scope!==current.scope||captured.referenceRevision!==current.referenceRevision)throw Error('Context changed. Your draft is preserved. Ask again.');
@@ -911,7 +943,7 @@ function installWritingAssistant(){
   const next=LeadIntelMessageEditor.apply(item,draft,{origin:'rewrite',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
   next.messageStudioDraft.writingAssistant={...proposal.provenance,citations:proposal.citations,appliedAt:new Date().toISOString()};upsertItem(next);renderAll();return true;
  },onChange:()=>{writingAssistantView?.render();if(!writingAssistantRendering){writingAssistantRendering=true;try{renderMessageWorkspace();}finally{writingAssistantRendering=false;}}}});
- writingAssistantView=globalThis.LeadIntelWritingAssistantUI.mountWritingAssistant(document,writingAssistant,{contextLabel:()=>{const c=captureWritingAssistantContext().context;return [c.recipient.name,c.recipient.company,c.style,c.language].filter(Boolean).join(' · ');},draftStatus:()=>['rewrite','manual'].includes(currentItem()?.messageStudioDraft?.editorOrigin)?'Edited draft · '+(LeadIntelMessageEditor.savedDraft(currentItem(),editorDraft())?'Saved':'Save required'):'',usable:()=>captureWritingAssistantContext().usable,sources:()=>globalThis.LeadIntelWritingReferenceSelection?.snapshot().cards.filter(c=>c.active&&c.status==='Ready')||[],onSourceChange:id=>{writingAssistantSource=id;writingAssistant.syncContext();writingAssistantView.render();}});
+ writingAssistantView=globalThis.LeadIntelWritingAssistantUI.mountWritingAssistant(document,writingAssistant,{scripts:assistantScripts,saveTemplate:saveAssistantTemplate,useDraft:useAssistantDraft,contextLabel:()=>{const c=captureWritingAssistantContext().context;return [c.recipient.name,c.recipient.company,c.style,c.language].filter(Boolean).join(' · ');},draftStatus:()=>['rewrite','manual'].includes(currentItem()?.messageStudioDraft?.editorOrigin)?'Edited draft · '+(LeadIntelMessageEditor.savedDraft(currentItem(),editorDraft())?'Saved':'Save required'):'',usable:()=>captureWritingAssistantContext().usable,sources:()=>globalThis.LeadIntelWritingReferenceSelection?.snapshot().cards.filter(c=>c.active&&c.status==='Ready')||[],onSourceChange:id=>{writingAssistantSource=id;writingAssistant.syncContext();writingAssistantView.render();}});
  window.addEventListener('leadintel:writing-references-changed',()=>{writingAssistant?.syncContext();writingAssistantView?.render();});
  document.addEventListener('input',event=>{if(['outreach-email-subject','outreach-email-body','outreach-linkedin'].includes(event.target.id)){writingAssistant?.syncContext();writingAssistantView?.render();}});
 }

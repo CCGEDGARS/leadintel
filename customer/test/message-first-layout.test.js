@@ -35,7 +35,7 @@ test('split workspace places only the Writing Assistant launcher directly below 
   assert.equal(document.getElementById('mw-writing-assistant').contains(document.getElementById(id)),false);
  }
  for(const id of ['outreach-email-subject','outreach-email-body','message-mode','message-calendly','mw-rewrite-message','mw-shorten-message','mw-restore-original'])assert.equal(document.querySelectorAll('#'+id).length,1,id);
- const references=document.getElementById('mw-writing-references');assert.ok(document.getElementById('mw-writing-assistant').contains(references));assert.equal(document.querySelectorAll('#mw-writing-references').length,1);assert.match(references.querySelector('summary').textContent,/Add a book or material/);assert.ok(references.querySelector('#mw-writing-reference-host'));assert.equal(references.open,false);
+ const references=document.getElementById('mw-writing-references');assert.ok(document.getElementById('mw-writing-assistant').contains(references));assert.equal(document.querySelectorAll('#mw-writing-references').length,1);assert.match(references.querySelector('summary').textContent,/Content Library/);assert.ok(references.querySelector('#mw-writing-reference-host'));assert.equal(references.open,false);
  let actions=0;document.getElementById('message-save-as-template').addEventListener('click',()=>actions++);tools.open=true;document.getElementById('message-save-as-template').click();assert.equal(actions,1);
  w.close();
 });
@@ -75,7 +75,7 @@ test('the one Writing Assistant material host retains upload, activation, role a
  const app=mountWritingReferences({root,api});await app.refresh();
  const refs=document.getElementById('mw-writing-references');refs.open=true;
  assert.equal(root.closest('#mw-writing-assistant')?.id,'mw-writing-assistant');assert.equal(document.querySelectorAll('#mw-writing-reference-host').length,1);
- assert.equal(root.querySelectorAll('[data-upload]').length,1);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
+ assert.equal(root.querySelectorAll('[data-upload]').length,3);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
  const active=root.querySelector('[data-active]');active.checked=true;active.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
  assert.equal(changes[0].active,true);
  const instruction=root.querySelector('[data-instruction]');instruction.value='Use concise questions';instruction.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
