@@ -34,8 +34,8 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
     if(['/api/follow-up-assistant/context','/api/follow-up-assistant/save'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
     if(parsed.pathname==='/api/flows')return response({status:401,json:{error:'Authenticated workspace membership required'}});
     if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
-    if (['/api/integrations/gmail/test-send','/api/script-library','/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
-    if (['/customer/test-email-ui.js','/customer/test-email.css','/customer/channel-scripts.js','/customer/channel-scripts.css'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if (['/api/script-library/inmail-draft','/api/integrations/gmail/test-send','/api/script-library','/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
+    if (['/customer/linkedin-inmail-ui.js','/customer/linkedin-inmail-engine.js','/customer/approved-linkedin-inmail.js','/customer/test-email-ui.js','/customer/test-email.css','/customer/channel-scripts.js','/customer/channel-scripts.css'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/customer/writing-references-ui.js') return response({text:fs.readFileSync(path.join(root,'customer/writing-references-ui.js'),'utf8')});
     if (parsed.pathname === '/customer/api-transport.js' || parsed.pathname === '/customer/account-cache.js') return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/release.json') {

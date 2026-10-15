@@ -17,13 +17,19 @@
   if(!draft||typeof draft.subject!=='string'||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000||/\{\{|\}\}/.test(draft.message))throw Error('Writing Assistant returned an invalid or unfilled draft. Your message is preserved.');
   if((context.channel||'email')==='email'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
   if(Number.isSafeInteger(context.maximumWords)&&context.maximumWords>0&&draft.message.trim().split(/\s+/).length>context.maximumWords)throw Error(`Writing Assistant exceeded the ${context.maximumWords}-word limit. Your message is preserved.`);
+  if(context.mode==='inmail'){
+   if(context.channel!=='linkedin'||!['initial','connection','followup','calendar'].includes(context.inmailStage))throw Error('Invalid InMail writing context.');
+   if(context.inmailStage==='initial'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('InMail needs a brief one-line subject.');
+   if(context.inmailStage!=='initial'&&draft.subject)throw Error('Only the initial InMail has a subject.');
+   if(context.inmailStage!=='calendar'&&context.seller?.calendly&&draft.message.includes(context.seller.calendly))throw Error('Keep the booking link for the reply after interest.');
+  }
   const links=text=>(String(text||'').match(/https?:\/\/[^\s<>"\])]+/g)||[]).map(url=>url.replace(/[.,;!?]+$/,''));
   const prior=context.currentDraft?.message||'',existing=links(prior),proposed=links(draft.message);
   const supplied=Object.values(context.seller||{}).filter(value=>typeof value==='string'&&/^https?:\/\//i.test(value.trim()));
   const allowed=new Set([...existing,...supplied.flatMap(links)]);
   if(existing.some(link=>!proposed.includes(link)))throw Error('Writing Assistant omitted an existing link. Your message is preserved.');
   if(proposed.some(link=>!allowed.has(link)))throw Error('Writing Assistant added an unapproved link. Your message is preserved.');
-  const sender=context.seller?.sender;if(sender&&!draft.message.includes(sender))throw Error('Writing Assistant omitted the sender identity. Your message is preserved.');
+  const sender=context.seller?.sender;if(sender&&!(context.mode==='inmail'&&(context.inmailStage==='calendar'||context.inmailStage==='followup'&&!prior.includes(sender)))&&!draft.message.includes(sender))throw Error('Writing Assistant omitted the sender identity. Your message is preserved.');
   if(/20[ -]minute/i.test(prior)&&!/20[ -]minute/i.test(draft.message))throw Error('Writing Assistant changed the meeting duration. Your message is preserved.');
   return draft;
  }

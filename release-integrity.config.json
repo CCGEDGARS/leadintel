@@ -20,7 +20,8 @@
       "email_campaign_setup_version": "campaign-setup-v2",
       "system_audit_version": "20261015-delivery-monitoring-v1",
       "script_library_version": "channel-scripts-v1",
-      "test_email_version": "gmail-test-v1"
+      "test_email_version": "gmail-test-v1",
+      "inmail_version": "linkedin-inmail-v1"
     }
   },
   "smokeChecks": [
@@ -2610,7 +2611,53 @@
       "contains": [
         "if(channel==='phone')",
         "return workspace.openChannel('phone')",
-        "channel-scripts.js?v=20261015-v2"
+        "channel-scripts.js?v=20261015-v3"
+      ]
+    },
+    {
+      "id": "linkedin-inmail-ui",
+      "type": "text",
+      "url": "/customer/linkedin-inmail-ui.js",
+      "status": 200,
+      "contains": [
+        "InMail \u00b7 paid account",
+        "inmail-stage-tabs",
+        "Save as my InMail template",
+        "inmail-primary",
+        "inmail-draft"
+      ]
+    },
+    {
+      "id": "linkedin-inmail-sources",
+      "type": "text",
+      "url": "/customer/approved-linkedin-inmail.js",
+      "status": 200,
+      "contains": [
+        "PROFESSIONAL_LINKEDIN.docx",
+        "NLP_LINKEDIN.docx",
+        "FRIENDLY_LINKEDIN.docx",
+        "BRUTAL_HONESTY_LINKEDIN.docx"
+      ]
+    },
+    {
+      "id": "linkedin-inmail-engine",
+      "type": "text",
+      "url": "/customer/linkedin-inmail-engine.js",
+      "status": 200,
+      "contains": [
+        "copyErrors",
+        "reviewedWords",
+        "aiResearchDrafted",
+        "interested"
+      ]
+    },
+    {
+      "id": "linkedin-inmail-auth",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/script-library/inmail-draft",
+      "status": 401,
+      "contains": [
+        "Authentication required"
       ]
     }
   ],

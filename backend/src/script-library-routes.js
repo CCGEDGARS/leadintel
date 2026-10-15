@@ -1,5 +1,6 @@
 import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
+import {inmailScriptSeeds} from './inmail-script-seeds.js';
 import {coreScriptSeeds} from './core-script-seeds.js';
 const channels=['email','linkedin','phone'],styles=['professional','curiosity','friendly','brutal'];
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
@@ -10,10 +11,19 @@ export function validateScript(input,{core=false}={}){
  if(core&&!styles.includes(input.style))fail('Choose one of the four core styles');
  const out={};for(const [key,max] of [['name',80],['subject',500],['body',12000]]){if(typeof input[key]!=='string'||input[key].length>max)fail('Invalid '+key);out[key]=input[key].trim();}
  if(!out.name||!out.body||input.channel==='email'&&!out.subject)fail('Name and script are required; email also requires a subject');
- if(input.channel!=='email'&&out.subject)fail('Only email scripts have a subject');
+ const inmail=input.channel==='linkedin'&&input.mode==='inmail';
+ if(input.mode&&input.mode!=='inmail'&&input.mode!=='direct')fail('Invalid script mode');
+ if(input.mode==='inmail'&&input.channel!=='linkedin')fail('InMail is a LinkedIn mode');
+ if(input.channel!=='email'&&!inmail&&out.subject)fail('Only email scripts have a subject');
+ if(inmail){
+  const ids=['initial','connection','followup','calendar'];
+  if(!Array.isArray(input.stages)||input.stages.length!==4||input.stages.some((s,i)=>s?.id!==ids[i]))fail('InMail requires four ordered stages');
+  const stages=input.stages.map((stage,i)=>{if(typeof stage.body!=='string'||!stage.body.trim()||stage.body.length>12000||typeof stage.subject!=='string'||stage.subject.length>500||i===0&&!stage.subject.trim()||i>0&&stage.subject)fail('Invalid InMail stage body or subject');return {id:ids[i],title:String(stage.title||ids[i]).slice(0,80),condition:String(stage.condition||'').slice(0,200),subject:stage.subject,body:stage.body};});
+  return {...out,channel:'linkedin',mode:'inmail',style:styles.includes(input.style)?input.style:'original',subject:stages[0].subject,body:stages[0].body,stages};
+ }
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
-export async function coreScripts(db){const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map(coreScriptSeeds.map(r=>[r.id,r]));for(const row of result.results||[])rows.set(row.id,{...JSON.parse(row.payload_json),id:row.id,revision:row.revision,builtin:false});return [...rows.values()];}
+export async function coreScripts(db){const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));for(const row of result.results||[])rows.set(row.id,{...JSON.parse(row.payload_json),id:row.id,revision:row.revision,builtin:false});return [...rows.values()];}
 async function cas(db,table,keys,values,payload,expected,extra={}){
  if(!Number.isSafeInteger(expected)||expected<0)fail('Expected revision is required');
  const names=Object.keys(extra),args=Object.values(extra),where=keys.map(k=>k+'=?').join(' AND ');let result;
@@ -32,21 +42,22 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  if(path==='/api/script-library'&&request.method==='GET'){
   const personal=await env.DB.prepare('SELECT id,payload_json,revision FROM personal_script_library WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
-  return json({canManage,core:await coreScripts(env.DB),personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
+  return json({canManage,core:await coreScripts(env.DB),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
  if(Number(request.headers.get('Content-Length'))>40000)fail('Script payload too large',413);
  const body=write?await request.json().catch(()=>null):null;
  if(write&&(!body||JSON.stringify(body).length>40000))fail('Invalid script payload');
- const match=path.match(/^\/api\/script-library\/(core|personal|primary|draft)(?:\/([^/]+))?$/);if(!match)fail('Not found',404);const [,kind,encoded]=match,id=decodeURIComponent(encoded||'');
+ const match=path.match(/^\/api\/script-library\/(core|personal|primary|draft|inmail-draft|inmail-primary)(?:\/([^/]+))?$/);if(!match)fail('Not found',404);const [,kind,encoded]=match,id=decodeURIComponent(encoded||'');
  if(kind==='core'){
   if(!canManage)fail('Only the platform owner can manage core scripts',403);
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
-  if(!/^(email|linkedin|phone):(professional|curiosity|friendly|brutal)$/.test(id))fail('Invalid core script');
+  if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal)$/.test(id))fail('Invalid core script');
   const existing=(await coreScripts(env.DB)).find(r=>r.id===id);
-  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false};if(id!==next.channel+':'+next.style)fail('Script channel or style mismatch');}
+  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
   // Revisions preserve prior approved wording; AI paths have no access to these writes.
   const previous=await env.DB.prepare('SELECT payload_json FROM core_script_registry WHERE id=?').bind(id).first();
-  next.history=[...(previous?JSON.parse(previous.payload_json).history||[]:[]),...(existing?[{body:existing.body,subject:existing.subject,name:existing.name,revision:existing.revision}]:[])].slice(-30);
+  if(existing?.mode==='inmail')next={...next,original:existing.original,sourceFile:existing.sourceFile,sourceSha256:existing.sourceSha256};
+  next.history=[...(previous?JSON.parse(previous.payload_json).history||[]:[]),...(existing?[{body:existing.body,subject:existing.subject,name:existing.name,revision:existing.revision,...(existing.stages?{stages:existing.stages}:{} )}]:[])].slice(-30);
   const saved=await cas(env.DB,'core_script_registry',['id'],[id],next,body.expectedRevision,{updated_by:user.id});return json({script:{...saved,id,builtin:false}},200,cors);
  }
  if(kind==='personal'){
@@ -55,11 +66,26 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   let next;if(request.method==='DELETE'){const old=await env.DB.prepare('SELECT payload_json FROM personal_script_library WHERE workspace_id=? AND user_id=? AND id=?').bind(workspace,user.id,id).first();if(!old)fail('Script not found',404);next={...JSON.parse(old.payload_json),deleted:true};}else next={...validateScript(body),deleted:false};
   const saved=await cas(env.DB,'personal_script_library',['workspace_id','user_id','id'],[workspace,user.id,id],next,body.expectedRevision,{channel:next.channel});return json({script:{...saved,id}},200,cors);
  }
+ if(kind==='inmail-primary'&&request.method==='PUT'){
+  if(body.templateId){const row=await env.DB.prepare('SELECT payload_json FROM personal_script_library WHERE workspace_id=? AND user_id=? AND id=?').bind(workspace,user.id,body.templateId).first();const t=row&&JSON.parse(row.payload_json);if(!t||t.deleted||t.mode!=='inmail')fail('Choose an InMail personal template');}
+  const saved=await cas(env.DB,'inmail_script_preferences',['workspace_id','user_id'],[workspace,user.id],{templateId:body.templateId||null},body.expectedRevision,{template_id:body.templateId||null});return json({ok:true,revision:saved.revision},200,cors);
+ }
  if(kind==='primary'&&request.method==='PUT'){
   if(!channels.includes(id)||!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<0)fail('Invalid primary preference');
-  if(body.templateId){const row=await env.DB.prepare('SELECT channel,payload_json FROM personal_script_library WHERE workspace_id=? AND user_id=? AND id=?').bind(workspace,user.id,body.templateId).first();if(!row||row.channel!==id||JSON.parse(row.payload_json).deleted)fail('Choose an available personal script in this channel');}
+  if(body.templateId){const row=await env.DB.prepare('SELECT channel,payload_json FROM personal_script_library WHERE workspace_id=? AND user_id=? AND id=?').bind(workspace,user.id,body.templateId).first();if(!row||row.channel!==id||JSON.parse(row.payload_json).deleted||JSON.parse(row.payload_json).mode==='inmail')fail('Choose an available personal script in this channel');}
   let result;if(body.expectedRevision===0)result=await env.DB.prepare('INSERT OR IGNORE INTO primary_script_preferences(workspace_id,user_id,channel,template_id,revision) VALUES(?,?,?,?,1)').bind(workspace,user.id,id,body.templateId||null).run();else result=await env.DB.prepare('UPDATE primary_script_preferences SET template_id=?,revision=revision+1 WHERE workspace_id=? AND user_id=? AND channel=? AND revision=?').bind(body.templateId||null,workspace,user.id,id,body.expectedRevision).run();
   if(!result.meta?.changes)fail('Primary changed elsewhere. Refresh before choosing again.',409);return json({ok:true},200,cors);
+ }
+ if(kind==='inmail-draft'){
+  const companyId=write?body.companyId:url.searchParams.get('companyId'),contactId=write?body.contactId:url.searchParams.get('contactId');
+  const contact=await env.DB.prepare('SELECT c.id FROM crm_contacts c JOIN crm_companies co ON co.id=c.company_id AND co.workspace_id=c.workspace_id WHERE c.workspace_id=? AND c.company_id=? AND c.id=? AND c.archived_at IS NULL AND co.deleted_at IS NULL').bind(workspace,companyId||'',contactId||'').first();if(!contact)fail('Select a saved CRM contact before preparing InMail',409);
+  const keys=['workspace_id','user_id','company_id','contact_id'],values=[workspace,user.id,companyId,contactId];
+  if(request.method==='GET'){const row=await env.DB.prepare('SELECT payload_json,revision FROM inmail_script_drafts WHERE workspace_id=? AND user_id=? AND company_id=? AND contact_id=?').bind(...values).first();return json({draft:row?{...JSON.parse(row.payload_json),revision:row.revision}:null},200,cors);}
+  if(request.method!=='PUT')fail('Method not allowed',405);
+  const record=body.record;if(!record||typeof record!=='object'||Array.isArray(record)||!['professional','curiosity','friendly','brutal','original'].includes(record.style)||!['initial','connection','followup','calendar'].includes(record.stage)||!record.stages||!record.values||!record.checks||JSON.stringify(record).length>30000)fail('Invalid InMail draft');
+  for(const [id,draft] of Object.entries(record.stages))if(!['initial','connection','followup','calendar'].includes(id)||typeof draft?.subject!=='string'||typeof draft?.message!=='string'||draft.message.length>12000||draft.subject.length>500||id!=='initial'&&draft.subject)fail('Invalid InMail stage');
+  for(const [key,value] of Object.entries(record.values))if(!/^[A-Za-z][A-Za-z0-9]*$/.test(key)||typeof value!=='string'||value.length>3000)fail('Invalid InMail fact');
+  const saved=await cas(env.DB,'inmail_script_drafts',keys,values,{record,savedAt:new Date().toISOString()},body.expectedRevision);return json({draft:saved},200,cors);
  }
  if(kind==='draft'){
   const companyId=write?body.companyId:url.searchParams.get('companyId'),contactId=write?body.contactId:url.searchParams.get('contactId');
