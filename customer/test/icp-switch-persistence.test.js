@@ -73,3 +73,9 @@ test('first reference activation enables a generated unavailable lens without ov
  assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,true);
  saved[0].requestedActive=false;assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,false);
 });
+
+test('localization never enables a missing optional Opportunity profile after evidence and reload',()=>{
+ const state=Market.localizeGeneratedState({icps:[{id:'icp-core',type:'core',active:false}],opportunities:[{id:'op',active:true,evidence:[{url:'https://example.com/news'}]}]}, {}, 'lv');
+ const opportunity=Market.normalizeMarketState(JSON.parse(JSON.stringify(state))).icps.find(x=>x.type==='opportunity-led');
+ assert.equal(opportunity.active,false);assert.equal(opportunity.requestedActive,false);
+});

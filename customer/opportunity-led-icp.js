@@ -92,7 +92,7 @@
       const localized=originalLocalize(market,profile,language);
       const generated=buildOpportunityIcp(profile,language);
       const source=(Array.isArray(market?.icps)?market.icps:[]).find(item=>item?.type===TYPE||item?.id===ID);
-      const preserved=source?sanitizeIcp(source,generated):generated;
+      const preserved=sanitizeIcp(source||generated,generated);
       const opportunityDataAvailable=hasVerifiedOpportunity(localized.opportunities);
       const next={
         ...generated,
