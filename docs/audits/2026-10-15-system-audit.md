@@ -85,3 +85,80 @@ No mobile screenshot, fresh login, real email receipt, research-result quality o
 Baseline Vercel deployment `dpl_6sVRpAeQknF6kYXyoptUVEcq44Es` reported READY for the base SHA. Live release.json matched; backend health200 reported `6d97819d61d2c83f2c92ceac4826dc9192c5e090` (subsequent base commit changed frontend only). Same-SHA Customer CI `38709313765` and Release Integrity `38709473248` succeeded.
 
 Fix deployment must be verified separately: exact merge SHA → required same-SHA CI → backend deployment → matching live manifest/backend SHA → all mandatory smokes → `release-proof.json` PROVEN. Added `system_audit_version=20261015-delivery-monitoring-v1` health identity and cache/safety smokes. Final commit, PR, proof verdict and deployment URL belong in the delivery report; baseline evidence must never be substituted for proof of these fixes.
+
+## Step 6 deep review — subsequent focused work, 15 October
+
+### Scope and version
+
+The user redirected work to Messages as LeadIntel's principal selling point after reporting a successful Microsoft sign-in. That report is owner acceptance only; the external user's confirmation is still pending. This section records the subsequent Step 6 inspection and local corrections separately from the earlier system audit.
+
+- Inspected base: `4f10010e5215cdeaa5248a392d5db5d5ab17fb47`, repository `CCGEDGARS/leadintel`, starting in detached HEAD; isolated follow-on branch `audit/2026-10-15-step6`.
+- Browser inspected: https://leadintel.ccgroup.lv/customer/ in the existing authenticated owner session. The new changes below are local; no new production release is claimed.
+- Existing build/cache debris was left untouched. No new dependencies, protected template wording, customer draft text or CRM records were deliberately edited. Normal UI navigation can autosave workspace UI state.
+- The August CRM baseline requires durable content activities attached to canonical company/contact records. The newer October decisions govern the split composer, protected templates, explicit Save, one optional reference material and separate follow-up assistant. The older October 12 assistant spec's transient chat/three visible uploads is superseded by October 13's bounded browser-local conversation and one visible upload, preserving existing legacy materials.
+
+### Product judgment
+
+Step 6 has a substantial working foundation: buyer/seller context, reviewed triggers, protected templates, explicit assistant proposals, source-aware reference material, recoverable working copies and a separate sent-history follow-up flow. The present interface conceals much of that value behind warnings and separate disclosures. It is not yet sufficiently clear or independently quality-tested to sign off as the finished flagship experience.
+
+The most useful product direction is to expose the existing reasoning chain: **buyer context → supported reason to contact → message → reviewed change → saved handoff**. This is a design judgment, not a demonstrated conversion improvement. Message effectiveness has not been measured in this review.
+
+### Verified functional defects and local corrections
+
+| ID | Severity | Evidence / cause | Local correction |
+|---|---|---|---|
+| S6-01 | P2 accessibility | In the authenticated assistant, Shift+Tab from Close with the material disclosure collapsed remained on Close. `writing-assistant-ui.js` included controls inside closed details in its manual focus loop. | Exclude collapsed/nested disclosure descendants, hidden/inert/disabled controls and negative tab stops. Preserve ordinary internal Tab behavior. Regression exercises closed and expanded nested panels. |
+| S6-02 | P2 broken proposal handoff | `backend/src/writing-assistant.js` approved URLs from recursively traversing all supplied context; `writing-assistant-context.js` permits only current-draft links and explicitly supplied top-level seller URLs. A research/evidence URL could pass generation but fail Apply. | Align backend prompt and validation with the existing restrictive Apply rule. Cross-layer tests run both validators against the same allowed and rejected URLs. |
+| S6-03 | P2 broken proposal handoff | Assistant generation knew only a 12,000-character cap, while Apply additionally enforced a canonical core word ceiling. An otherwise accepted proposal could therefore be unusable. | Capture the applicable ceiling from the canonical `coreContract`, include it in the assistant request/prompt, and validate before preview and again at Apply. Test exact boundary and one-over for all four core styles. No literal master changes. |
+| S6-04 | P2 incorrect language/custom limits | Chat Apply and direct Shorten/Rewrite imposed the selected core's English ceiling even for translated working copies and personal patterns. The template policy explicitly gives these separate authority. | Use the same applicability predicate for chat and direct adjustments: English core email only; exempt translations, events, LinkedIn, AI Original and personal/custom patterns. Mounted direct-adjustment tests cover both actions across seven contexts. |
+| S6-05 | P2 broken proposal handoff | Backend accepted an empty/whitespace email subject; Apply rejected it. | Reject blank email subjects before exposing a proposal. Keep LinkedIn's empty subject requirement. |
+
+The changed frontend modules receive a cache-bust through the existing index → discovery → outreach import chain. The optional word-limit field allows older clients to continue working during rollout; the refreshed bundle is needed to supply that constraint. These controls do not certify semantic truth and do not grant save, approval or send authority.
+
+### Observed design gaps and recommended bounded polish
+
+| Priority | Observed issue | Proposed change and acceptance criterion |
+|---|---|---|
+| P2 | At a 1348×925 desktop viewport, recipient metadata, editor statuses, actions and the large recovery warning pushed the email body below the initial viewport. Global “Saved automatically” coexisted with local “Unsaved changes.” | Keep the split layout. Distinguish “Workspace synced” from “Message needs Save”; consolidate editor state into one concise row and one recovery disclosure. Make the email and its next required action visible earlier. Do not weaken the Save/Add-to-flow gate or hide an unresolved recovery warning. |
+| P2 | The assistant says the current draft is connected but does not show that draft inside its modal. The user must remember it when evaluating a proposal. | Add a read-only current-draft view and compare it with the proposed subject/body before Apply. On mobile stack the views; do not introduce a second editable draft or a new save path. Reuse the captured editor snapshot and stale-context guard. |
+| P2 | The trigger card says “Applied in the email” and “Selected automatically.” The observed source link points to the company homepage and no date/review status is visible there. Neither label establishes factual verification or current buyer need. | Reuse existing evidence in a compact “Why this message” disclosure: trigger, source/excerpt, known event date, review status and relevant seller capability. Show unknown dates/support plainly. Keep buyer need conditional unless separately evidenced. Do not invent a numerical quality/conversion score. |
+| P2 | Material count “1 material” does not reveal that the stored book is OFF until the disclosure opens. The modal has both Attach and Add entry labels. | Keep one material control; expose “Ready · Not in use” or “In use” beside the closed disclosure. Clarify that it is AI reference material, not an outgoing email attachment. Preserve existing active/inactive behavior and legacy stored sources. |
+| P3 | Context displays internal `brutal · en` codes. Reset sits beside Shorten/Rewrite while approved-template restoration and Update exist elsewhere. | Display “Brutal Honesty · English.” Explain Reset as “Restore first version” and Update as rebuilding from the current template/facts. Preserve exact recovery semantics. Use clear working-copy language for explicit rewrites. |
+| P3 | The assistant opens with a large empty transcript and a broad question field. Direct Shorten/Rewrite applies an alternative, whereas chat offers Apply/Discard; the difference is easy to miss. | Use compact guidance and, if adopted, a few suggested questions that fill the prompt without submitting: assess relevance, flag unsupported claims, clarify the request. Clearly label direct adjustments versus proposed edits. Keep the approved immediate quick-action behavior unless the user explicitly changes that decision. |
+| P3 | Follow-up assistance is below the long first-contact message, while global Business & Research assistance is in a separate rail. | Preserve the separate follow-up workflow and distinguish each assistant's purpose. An in-page shortcut can reveal the existing follow-up panel without adding another assistant or another draft store. |
+
+Recommended sequence: ship the verified contract/accessibility fixes after release gates; then improve editor hierarchy, material status and readable labels; then add current/proposed comparison and the evidence disclosure. The last two are proposed product additions, not implemented features. Avoid introducing more tone styles, parallel draft editors or speculative automation during this polish.
+
+### Functionality traced and verification limits
+
+- **Core messages and shortcuts:** existing mounted tests exercise canonical style selection, five subject choices, blank new-recipient state, recovery/Undo/Reset, manual text preservation, CRM-shaped serialization, event/channel separation and context races. The preserved long working copy visible in the browser is not evidence that the current core generator produced it; the recovery warning is explicit.
+- **Writing Assistant:** captures the visible draft and active recipient/workspace, reviewed seller/buyer context and selected references. Requests use the authenticated workspace's active AI integration. One in-flight request, bounded history, cancellation, late-result rejection, source revision checks and explicit Apply are covered. Apply invalidates saved approval and preserves original/undo history; it does not send.
+- **Material OFF/ON:** code and tests reject inactive/stale/non-Ready source references; selected active sources use bounded lexical retrieval and validated passage IDs. Live owner data showed one book, “Ready · Not in use,” checkbox OFF, Writing guidance role, 112/113 readable pages/sections and 211 learned techniques. Those are observed application labels, not an independent audit of the book or every extracted technique. We did not activate, upload, replace or delete it. A source may guide writing without supplying verified buyer facts. Retrieved passages do not mean the entire book was read for a given request.
+- **Follow-up:** live disclosure loaded sent context and correctly requested the actual previously sent message/date when no complete body was available. No-reply mode exposed last-contact confirmation; the original reply mode was restored and the panel closed. Generation/save were not invoked. Backend tests exercise contact/workspace ownership, sent chronology, suppression, quoted reply evidence, no-reply frequency gates and separately saved CRM drafts. Browser-local unsent follow-up work is not proven cross-device durable.
+- **Persistence:** assistant conversation/instruction is bounded browser-local state, scoped by workspace/buyer/channel with account-cache guards. It is not cloud conversation sync. Durable working message and follow-up save paths are separately covered by fixtures; no customer Save or flow launch was used for this review.
+- **Runtime recovery:** during UI navigation, the header briefly showed a sync retry and browser calls timed out. A later DOM check showed the original follow-up mode restored, panel closed and “SYNCED TO LEADINTEL / Saved automatically.” No persistent defect or root cause was established from that transient observation. Extension metadata errors are not attributed to LeadIntel.
+- **Safety:** no paid AI/research/verification call, email submission, campaign launch, billing change or deliberate customer-record mutation was performed. Existing follow-up history reads and UI disclosures were used for runtime inspection.
+
+### Step 6 test and acceptance record
+
+Fresh focused baseline at the inspected SHA: **382** message-workflow tests (`npm run check:step6`), **103** customer assistant/material/follow-up tests, **69** backend assistant/reference/follow-up tests; all passed with zero skips. These overlap with earlier whole-system suites and must not be added to them as unique coverage.
+
+Local regression verification: 90 affected tests passed, then 12 backend tests passed after the final subject-validation case. Astra independently ran 17 focused tests and found one regression in the new metadata: `maximumWords` entered the existing numeric evidence scan. The final correction excludes that formatting value from factual evidence; its regression rejects a fabricated quantity equal to the ceiling, while allowing the same quantity when explicitly supplied in seller facts. All 16 assistant backend tests passed after correction; Astra independently confirmed the new regression and reported no remaining blocker in the reviewed change.
+
+Final checks on the final source:
+
+- Customer: **2,685 passed**, zero failed/skipped (74.3s). The first full run exposed nine failures in three mounted-test files because their stripped-import harness omitted the actual WritingAssistantContext dependency. The two shared/individual fixtures now load that real module; the affected 29 tests passed before the full rerun. Production already imports the module before editor handlers execute. No assertion or production guard was weakened.
+- Backend: **635 passed**, zero failed/skipped (15.7s). The preceding full run passed 634 before the additional numerical-evidence regression.
+- Static build passed, including the existing discovery deployment checks. Syntax checks passed for all 12 changed/new JavaScript files; `git diff --check` clean.
+- Remote `main` still resolved to `4f10010e5215cdeaa5248a392d5db5d5ab17fb47` at final review. Its existing production proof was `PROVEN` at `2026-10-15T09:31:29.807Z`; this is **LAST KNOWN WORKING** evidence for the prior release, not proof of these local Step 6 fixes.
+- Sol implemented the bounded fixes and test harness corrections. Astra reviewed the change independently and verified its blocker correction. The root review covered actual desktop behavior, evidence/approval boundaries, integration, final checks and this product judgment.
+
+Open acceptance gates:
+
+1. **P1 release gate, not a newly observed production failure:** local Step 6 fixes have no same-SHA production CI/manifest/backend/smoke proof yet. Do not describe them as deployed.
+2. **P2 visual gate:** real mobile/narrow viewport and post-fix native-browser keyboard verification remain outstanding. The available browser has no viewport resize API; local jsdom tests cannot prove pixels or native rendering.
+3. **P2 content-quality gate:** fresh model output, source relevance, language fluency and meaningful personalization need representative fixture-based human assessment with explicitly authorized provider calls. No paid calls were permitted here; passing structural checks does not prove persuasive quality or factual entailment.
+4. **P1 broader SaaS acceptance gate:** second-user Microsoft confirmation and cross-device save/recovery remain pending. The owner's reported Microsoft sign-in is useful evidence but does not close the other user's result.
+5. **P2 integration acceptance gate:** real receipt/reply/scheduler/stop behavior remains excluded by the no-send constraints; mocks demonstrate behavior under the tested scenarios only.
+
+No model token, credit or price meter was exposed for this work. No consumption estimate is reported.
