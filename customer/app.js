@@ -2,7 +2,7 @@ import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=2026
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1';
@@ -366,7 +366,8 @@ function seedMarketStrategy(){
   const previous=state.market||{};
   if(!state.profile)return;
   const language=contentLanguage();
-  const icps=LeadIntelMarket.buildIcpCandidates(state.profile,language).map(item=>{const saved=(previous.icps||[]).find(old=>old.id===item.id);return saved?{...item,active:saved.active}:item;});
+  const icps=LeadIntelMarket.buildIcpCandidates(state.profile,language).map(item=>{const saved=(previous.icps||[]).find(old=>old.id===item.id);return saved?{...item,active:saved.active,requestedActive:typeof saved.requestedActive==="boolean"?saved.requestedActive:saved.active!==false}:item;});
+  for(const saved of previous.icps||[])if(!icps.some(item=>item.id===saved.id))icps.push(saved);
   const previousSignals=previous.signals||[];
   const recommendations=(state.profile.recommendedSignals||[]).map(item=>previousSignals.length&&!previousSignals.some(old=>old.id===item.id)?{...item,active:false}:item);
   const signals=LeadIntelMarket.normalizeSignals(recommendations,previousSignals);
@@ -448,12 +449,17 @@ function icpActivationRequirement(icp={}){
 function enforceIcpActivationRequirements(){
   let changed=false;
   (state.market.icps||[]).forEach(icp=>{
-    if(!icpActivationRequirement(icp).available&&icp.active){icp.active=false;changed=true;}
+    // Persist intent separately from effective availability; a render may suspend use,
+    // but it must not erase an explicit On choice while evidence is loading/missing.
+    if(typeof icp.requestedActive!=="boolean"){icp.requestedActive=icp.active!==false;changed=true;}
+    const superseded=icp.type==="lookalike"&&(state.market.icps||[]).some(item=>item.id==="icp-reference-lookalike");
+    const active=icp.requestedActive&&!superseded&&icpActivationRequirement(icp).available;
+    if(icp.active!==active){icp.active=active;changed=true;}
   });
   if(changed)saveState();
 }
 function readMarketEdits(markDirty=true){
-  document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;if(field==="active"){item.active=icpActivationRequirement(item).available&&el.checked;}else item[field]=el.value.trim();});
+  document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;if(field==="active"){item.requestedActive=el.checked;item.active=icpActivationRequirement(item).available&&item.requestedActive;}else item[field]=el.value.trim();});
   document.querySelectorAll("[data-signal-field]").forEach(el=>{const item=state.market.signals[Number(el.dataset.index)];if(!item)return;const field=el.dataset.signalField;if(field==="active")item.active=el.checked;else if(field==="weight")item.weight=Math.max(1,Math.min(10,Number(el.value)||1));else item[field]=el.value.trim();});
   document.querySelectorAll("[data-opportunity-active]").forEach(el=>{const item=state.market.opportunities[Number(el.dataset.opportunityActive)];if(item)item.active=el.checked;});
   syncResearchSourcesToSignals();
@@ -467,7 +473,7 @@ function syncResearchSourcesToSignals(){
 }
 function renderIcps(){
   const candidates=LeadIntelMarket.buildIcpCandidates(state.profile,state.market.contentLanguage||"en");
-  for(const candidate of candidates){if(!state.market.icps.some(item=>item.type===candidate.type||(candidate.type==="lookalike"&&item.type==="lookalike-led")))state.market.icps.push({...candidate,active:false});}
+  for(const candidate of candidates){if(!state.market.icps.some(item=>item.type===candidate.type||(candidate.type==="lookalike"&&item.type==="lookalike-led")))state.market.icps.push({...candidate,active:candidate.type==="core"?candidate.active:false});}
   enforceIcpActivationRequirements();
   const legacyLookalike=candidates.find(item=>item.type==="lookalike");
   const hasReferenceLens=state.market.icps.some(item=>item.id==="icp-reference-lookalike");
@@ -488,10 +494,13 @@ function renderIcps(){
         if(!savedIcp[field]||savedIcp[field]===legacyLookalike?.[field]||oldEmptyRationale)icp[field]=generated[field];
       }
     }
+    const requested=typeof icp.requestedActive==="boolean"?icp.requestedActive:icp.active!==false;
+    const status=!requirement.available?"blocked":icp.active?"active":"off";
+    const statusTitle=!requirement.available?(requested?"Temporarily unavailable":"Setup required"):icp.active?"Active":"Off";
+    const statusMessage=!requirement.available?(requested?"Your On choice is saved. This profile is excluded until its required evidence is available. ":"")+requirement.reason:icp.active?"This profile is used to find and qualify companies.":"This profile won’t be used to find or qualify companies. Turn it on to use it.";
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
-    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
-    <div class="strategy-setting-status" role="status">${!requirement.available?"Setup required":icp.active?"Active — used to find and qualify companies.":"Off — this profile won’t be used to find or qualify companies. Turn it on to use it."}</div>
-    ${requirement.available?"":`<div class="icp-unlock-hint" role="status"><strong>Setup required</strong><span>${esc(requirement.reason)}</span><button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button></div>`}
+    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${requested?"checked":""} ${requirement.available||requested?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
+    <div class="strategy-setting-status icp-state-notice ${status==="blocked"?"icp-unlock-hint":""}" data-state="${status}" role="status"><strong>${statusTitle}</strong><span>${esc(statusMessage)}</span>${requirement.available?"":`<button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button>`}</div>
     <fieldset class="icp-edit-fields" ${icp.active?"":"disabled"}><legend class="sr-only">${esc(icp.name)} settings</legend><label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>

@@ -397,3 +397,9 @@
 .market-toggle{position:relative}
 .icp-card .market-toggle input,.signal-config-row .market-toggle input,.opportunity-card .market-toggle input{width:38px;height:21px;left:0;top:0;margin:0;padding:0;border:0;border-radius:999px;box-shadow:none}
 .market-toggle input:focus-visible+span{outline:2px solid var(--accent2);outline-offset:3px}
+
+/* Every ICP uses the same status structure; color reflects effective use. */
+.icp-card .icp-state-notice{display:grid;gap:6px;margin:12px 0 16px;padding:12px 14px;border:1px solid #d6dfda;border-radius:10px;background:#f5f7f5;color:#52635a;font-size:12px;line-height:1.5}
+.icp-state-notice strong{font-size:13px}
+.icp-card .icp-state-notice[data-state="active"]{background:#eef8f1;border-color:#b8d9c4;color:#20583b}
+.icp-card .icp-state-notice[data-state="blocked"]{background:#fffaf0;border-color:#dfcfaa;color:#674c14}
