@@ -1790,7 +1790,7 @@
       "contains": [
         "Find more companies like your best customers.",
         "feature-focus",
-        "Start with 3\u20135 companies"
+        "Use customer examples and market research to improve your targeting."
       ]
     },
     {
@@ -2466,6 +2466,22 @@
       "contains": [
         "function effectiveTargetingProfile",
         "Array.isArray(value.sourceTypes)"
+      ]
+    },
+    {
+      "id": "compact-feature-card-standard",
+      "type": "text",
+      "url": "/customer/process-map.js",
+      "status": 200,
+      "contains": [
+        "Use customer examples and market research to improve your targeting.",
+        "planning-card-label",
+        "planning-optional",
+        "aria-haspopup=\"dialog\""
+      ],
+      "notContains": [
+        "<div class=\"reference-value-points\">",
+        "<p class=\"reference-value-note\">"
       ]
     }
   ],
