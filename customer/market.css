@@ -403,3 +403,13 @@
 .icp-state-notice strong{font-size:13px}
 .icp-card .icp-state-notice[data-state="active"]{background:#eef8f1;border-color:#b8d9c4;color:#20583b}
 .icp-card .icp-state-notice[data-state="blocked"]{background:#fffaf0;border-color:#dfcfaa;color:#674c14}
+
+/* Optional Strategy research: one status, one action, findings on demand. */
+.strategy-research-location{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.strategy-research-location h3{margin:0;font-size:17px}.strategy-research-location h3 small{margin-left:6px;font-weight:600}
+.strategy-research-location p{margin:6px 0 0;color:var(--muted);font-size:13px}
+.strategy-research-location .secondary-btn{flex-shrink:0}
+.strategy-research-findings{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+.strategy-research-findings>summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent2)}
+.strategy-research-findings[open]>summary{margin-bottom:16px}
+@media(max-width:680px){.strategy-research-location{align-items:flex-start;flex-direction:column}.strategy-research-location .secondary-btn{width:100%}}

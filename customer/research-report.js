@@ -57,6 +57,7 @@
       const m=getState().market||{};const history=normalize(m.researchReports);
       const latest=history[0]||(!m.researchReportsInitialized&&m.researchResults?.length?snapshot(getState(),'legacy-current'):null);
       for(const host of d.querySelectorAll('[data-research-reports]')){
+        if(host.hasAttribute('data-hide-empty')){host.hidden=!latest;if(!latest){host.replaceChildren();continue;}}
         host.innerHTML=latest?`<div class="report-library-heading"><div><strong>Research reports</strong><p>Open, print or download your saved research.</p></div><button type="button" class="report-latest-button" data-report-latest>View latest report</button></div><details class="report-library-history"><summary>Saved reports <span>${history.length}</span></summary><div class="saved-report-list">${historyHtml(history)}</div>${history.length?'<div class="report-library-footer"><span>Deleting reports keeps your Strategy evidence.</span><button type="button" class="report-delete-button" data-report-delete-all>Delete all reports</button></div>':''}</details>`:'<div class="report-library-heading"><div><strong>No saved reports</strong><p>New research reports will appear here. Your existing evidence remains in Strategy.</p></div></div>';
         host.querySelector('[data-report-latest]')?.addEventListener('click',()=>open(latest));
         host.querySelectorAll('[data-report-index]').forEach(button=>button.onclick=()=>open(history[Number(button.dataset.reportIndex)]));

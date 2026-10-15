@@ -62,12 +62,12 @@ test("every research mode rotates practical phase-specific research insights", (
   assert.match(marketCss, /prefers-reduced-motion:\s*reduce/);
 });
 
-test("running research disables the final handoff and marks markets as in progress", () => {
+test("running research disables the final handoff and exposes progress in the compact summary", () => {
   assert.match(app, /researchRunning\(\).*activate-market-strategy/s);
   assert.match(app, /Research in progress — please wait/);
   assert.match(app, /Research in progress/);
-  assert.match(app, /Researching /);
-  assert.match(app, /data-research-running/);
+  assert.match(app, /running:"Research in progress…"/);
+  assert.match(app, /"View progress →"/);
 });
 
 test("workspace attention exposes only the next actionable requirement", () => {
