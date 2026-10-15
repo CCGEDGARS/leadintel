@@ -153,8 +153,8 @@ function renderSidebarSteps(marker,stage,expanded){
   if(stage.id===6){
     let channels=marker.querySelector('[data-message-channels]');if(!channels){channels=document.createElement('ol');channels.className='sidebar-substeps message-channel-nav';channels.dataset.messageChannels='true';channels.setAttribute('aria-label','Message channels');marker.append(channels);}
     const choice=readStageJson(DISCOVERY_STORAGE_KEY+'_meta').scriptBuyer,workspace=window.LeadIntelServerBridge?.workspace?.id;
-    const active=stage.status==='current'&&currentProcessStep()===6&&workspace&&choice?.workspaceId===workspace?choice.channel:'';
-    channels.replaceChildren(...['email','linkedin'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent=channel==='email'?'Email':'LinkedIn';button.disabled=!stage.available&&stage.status!=='current';if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
+    const active=stage.status==='current'&&currentProcessStep()===6&&workspace&&choice?.workspaceId===workspace?(document.getElementById('step-6')?.dataset.scriptChannel==='phone'?'phone':choice.channel):'';
+    channels.replaceChildren(...['email','linkedin','phone'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent={email:'Email',linkedin:'LinkedIn',phone:'Phone call'}[channel];button.disabled=!stage.available&&stage.status!=='current';if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
   }
 
   let toggle=marker.querySelector('[data-sidebar-expand]');
