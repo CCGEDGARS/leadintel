@@ -40,3 +40,10 @@ test('evidence scoring rewards selected signal matches and recent dated evidence
   assert.ok(score.total>=70);
   assert.deepEqual(score.signalIds,['move']);
 });
+
+test('explicitly empty source selection stays empty and does not generate default-category searches',()=>{
+ const config=normalizeMonitoringConfig({enabled:true,source_types:[],custom_sources:['https://example.com']});
+ assert.deepEqual(config.sourceTypes,[]);
+ const queries=buildMonitoringQueries({main:{profile:{targetMarkets:'Sweden',priorityOffers:'Training'},market:{signals:[{id:'hiring',active:true,name:'Hiring'}]}}},config);
+ assert.ok(queries.length>0);assert.ok(queries.every(query=>query.sourceType==='custom'));
+});
