@@ -502,7 +502,7 @@ function bindOutreach(){
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
   const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function studioState(){return LeadIntelMessageStudio.foundation(outreach.messageStudio||{},mainState(),activeCampaignScenario(),crmBridge()?.session?.user?.name||'');}
@@ -712,7 +712,7 @@ async function sendCurrentApprovedEmail(){
  button.disabled=true;button.textContent='Preparing delivery…';
  try{
   await import('./delivery-engine.js?v=20261009-message-send-v1');
-  await import('./production-gmail-ui.js?v=20261009-message-send-v2');
+  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1');
   const result=await window.LeadIntelProductionMail.sendApprovedFromMessages({domain:item.domain,recipient,approvedAt:item.approvedAt});
   q('mw-send-status').textContent=result.ok?(result.duplicate?'Already sent; duplicate prevented.':result.crmSynced?'Email sent and CRM record saved.':'Email sent; CRM synchronization needs attention. Do not resend.'):(result.cancelled?'Send cancelled.':result.error||'Email could not be sent.');
   if(result.ok){renderAll();window.LeadIntelJourney?.refresh?.();}

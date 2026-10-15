@@ -21,3 +21,24 @@ test('a provider response after a workspace switch cannot record delivery or sav
  const nodes={'delivery-company-select':{value:'example.com'},'delivery-recipient':{value:'buyer@example.com'},'send-with-gmail':{},'confirm-delivery-sent':{click(){records++;}},toast:{classList:{add(){},remove(){}}}},outreachApi={normalizeOutreachState:()=>({items:[{domain:'example.com',approved:true,approvedAt:'2026-09-05',drafts:{}}]}),buildApprovedSendPayload:()=>({recipient:'buyer@example.com',subject:'Subject',textBody:'Body'})},window={LeadIntelPageQuality:quality,LeadIntelOutreach:outreachApi,LeadIntelServerBridge:{gmail:{connected:true},sendGmail:async()=>{workspace='w2';return {ok:true,message:{status:'sent'}};},saveNow:async()=>{saves++;}}};
  const source=fs.readFileSync(path.join(__dirname,'../production-gmail-ui.js'),'utf8').replace(/\}\)\(typeof window!==['"]undefined['"]\?window:globalThis\);\s*$/,'root.sendForTest=send;})(typeof window!==\'undefined\'?window:globalThis);');vm.runInNewContext(source,{window,document:{readyState:'loading',addEventListener(){},getElementById:id=>nodes[id]},localStorage:{getItem:()=>null},LeadIntelOutreach:outreachApi,LeadIntelDelivery:{normalizeEmail:x=>x},confirm:()=>true,crypto:webcrypto,TextEncoder,setTimeout,clearTimeout});await window.sendForTest();assert.equal(records,0);assert.equal(saves,0);assert.match(nodes.toast.textContent,/Provider confirmed the send.*original workspace/);
 });
+
+function mailHarness(provider,result){
+  let confirmations=0;const nodes={'delivery-company-select':{value:'example.com'},'delivery-recipient':{value:'buyer@example.com'},'send-with-gmail':{},'send-with-microsoft':{},'confirm-delivery-sent':{click(){confirmations++;}},toast:{classList:{add(){},remove(){}}}};
+  const pkg={domain:'example.com',approved:true,approvedAt:'2026-09-05',drafts:{}},outreachApi={normalizeOutreachState:()=>({items:[pkg]}),buildApprovedSendPayload:(_pkg,recipient)=>({recipient,subject:'Subject',textBody:'Approved body'})};
+  const delivery={normalizeEmail:x=>x,normalizeDeliveryState:()=>({opportunities:[]}),confirmSend:()=>({state:{opportunities:[{domain:'example.com',sentAt:'now'}]}})};
+  const bridge={session:{authenticated:true},gmail:{connected:provider==='gmail'},microsoftMail:{connected:provider==='microsoft'},sendGmail:async()=>result,sendMicrosoftMail:async()=>result,saveNow:async()=>({saved:true})};
+  const window={LeadIntelOutreach:outreachApi,LeadIntelDelivery:delivery,LeadIntelServerBridge:bridge,confirm:()=>true,dispatchEvent(){},CustomEvent:class{}};
+  const source=fs.readFileSync(path.join(__dirname,'../production-gmail-ui.js'),'utf8').replace(/\}\)\(typeof window!==['"]undefined['"]\?window:globalThis\);\s*$/,'root.sendForTest=send;})(typeof window!==\'undefined\'?window:globalThis);');
+  vm.runInNewContext(source,{window,document:{readyState:'loading',addEventListener(){},getElementById:id=>nodes[id]},localStorage:{getItem:()=>null,setItem(){}},sessionStorage:{setItem(){}},LeadIntelOutreach:outreachApi,LeadIntelDelivery:delivery,LeadIntelDiscovery:{normalizeDiscoveryState:()=>({pipeline:[]}),CRM_STAGES:[]},confirm:()=>true,crypto:webcrypto,TextEncoder,setTimeout:()=>0,clearTimeout(){}});
+  return {window,nodes,confirmed:()=>confirmations};
+}
+for(const provider of ['gmail','microsoft'])test(`${provider} confirmed send with backend sync warning never claims CRM synchronization`,async()=>{
+  const result={ok:true,message:{status:'sent'},sync_warning:true},button=mailHarness(provider,result);
+  await button.window.sendForTest(provider);assert.equal(button.confirmed(),1);assert.match(button.nodes.toast.textContent,/sent|accepted/i);assert.match(button.nodes.toast.textContent,/sync.*needs attention/i);assert.doesNotMatch(button.nodes.toast.textContent,/Pipeline Contacted/);
+  const messages=mailHarness(provider,result),outcome=await messages.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});
+  assert.equal(outcome.ok,true);assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
+});
+for(const provider of ['gmail','microsoft'])test(`${provider} unresolved duplicate requests tell the user to reconcile and never record a sent email`,async()=>{
+  const h=mailHarness(provider,{ok:true,duplicate:true,message:{status:'sending'}});await h.window.sendForTest(provider);assert.equal(h.confirmed(),0);assert.match(h.nodes.toast.textContent,/Sent folder/);
+  const outcome=await h.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});assert.equal(outcome.ok,false);assert.match(outcome.error,/Sent folder/);
+});

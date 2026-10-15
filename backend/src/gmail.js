@@ -38,7 +38,7 @@ export async function refreshGoogleAccessToken(refreshToken,{clientId,clientSecr
 export async function sendGmailMessage(accessToken,message,fetchImpl=fetch){
   if(!accessToken)throw new Error('Gmail access token is required');const raw=base64UrlEncode(message);
   const response=await fetchImpl('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({raw})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.id)throw new Error(payload.error?.message||`Gmail send failed (${response.status})`);
+  const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.id)throw Object.assign(new Error(payload.error?.message||`Gmail send failed (${response.status})`),{deliveryRejected:response.status>=400&&response.status<500&&response.status!==408,retryable:response.status===429});
   return {id:String(payload.id),threadId:String(payload.threadId||payload.id),labelIds:Array.isArray(payload.labelIds)?payload.labelIds:[]};
 }
 export async function fetchGmailThread(accessToken,threadId,fetchImpl=fetch){

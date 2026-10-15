@@ -118,10 +118,13 @@ test('manual send routes reject unsafe HTML before provider calls or durable sid
   }
 });
 
-test('Microsoft and Gmail share one daily send limit',async()=>{
-  const {env,DB,token}=await fixture();for(let i=0;i<20;i++)DB.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,status,sent_at) VALUES(?,?,?,?,?,?,?,datetime('now'))`).run(`g${i}`,'w1',`gmail-${i}`,'example.com',`buyer${i}@example.com`,'Subject','sent');
-  let called=false;const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{called=true;return new Response(null,{status:500});};
-  try{const body={domain:'example.com',recipient:'buyer@example.com',subject:'Subject',body:'Body',idempotency_key:'microsoft-daily-limit-1'};const response=await handleSaasRoute(req('/api/integrations/microsoft-mail/send?workspace_id=w1',{method:'POST',token,body,idempotencyKey:body.idempotency_key}),env,{});assert.ok(response,'Microsoft mailbox send route must handle the request');assert.equal(response.status,429);const result=await response.json();assert.equal(result.code,'DAILY_EMAIL_LIMIT');assert.equal(called,false);}finally{globalThis.fetch=originalFetch;}
+test('manual Gmail and Microsoft sends remain available after more than twenty daily sends',async()=>{
+  for(const provider of ['gmail','microsoft-mail']){
+    const {env,DB,token}=await connectedFixture();
+    for(let i=0;i<21;i++)DB.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,status,sent_at) VALUES(?,?,?,?,?,?,?,datetime('now'))`).run(`g${i}`,'w1',`gmail-${i}`,'example.com',`buyer${i}@example.com`,'Subject','sent');
+    let submissions=0;const originalFetch=globalThis.fetch;globalThis.fetch=async(url)=>{if(String(url).includes('oauth2.googleapis.com/token')||String(url).includes('login.microsoftonline.com/'))return Response.json({access_token:'access'});submissions++;return provider==='gmail'?Response.json({id:'after-limit',threadId:'after-limit'}):new Response(null,{status:202});};
+    try{const response=await manualSend({env,token,provider,key:'manual-above-twenty-1234'});assert.equal(response.status,201);assert.equal((await response.json()).message.status,'sent');assert.equal(submissions,1);}finally{globalThis.fetch=originalFetch;}
+  }
 });
 
 test('Microsoft idempotent retry succeeds even when the shared daily limit is reached',async()=>{
@@ -141,7 +144,7 @@ test('customer activity combines Gmail and Microsoft sends and identifies each p
   DB.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,status,sent_at,gmail_thread_id) VALUES('g1','w1','gmail-activity-1234','gmail.example','gmail@example.com','Gmail subject','sent',datetime('now'),'thread-1')`).run();
   DB.raw.prepare(`INSERT INTO microsoft_mail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_by,sent_at,status,provider_status) VALUES('m1','w1','microsoft-activity-1234','microsoft.example','microsoft@example.com','Microsoft subject','u1',datetime('now'),'sent','accepted')`).run();
   const response=await handleSaasRoute(req('/api/customer/activity?workspace_id=w1',{token}),env,{});
-  assert.equal(response.status,200);const result=await response.json();assert.equal(result.limits.sent_today,2);assert.equal(result.limits.remaining_today,18);
+  assert.equal(response.status,200);const result=await response.json();assert.equal(result.limits.sent_today,2);assert.equal(result.limits.scope,'manual');assert.equal(result.limits.configured_daily_limit,null);assert.equal(result.limits.remaining_today,null);
   assert.deepEqual(new Set(result.recent.map(item=>item.provider)),new Set(['gmail','microsoft']));
 });
 
@@ -151,5 +154,53 @@ test('manual Gmail and Microsoft sends block a contact on the do-not-contact lis
   for(const provider of ['gmail','microsoft-mail']){
     const response=await handleSaasRoute(new Request(`https://api.example.test/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',headers:{'x-leadintel-first-party':'1',Cookie:`leadintel_session=${token}`,'Content-Type':'application/json','Idempotency-Key':`blocked-contact-${provider}-12345`},body:JSON.stringify({domain:'example.com',recipient:'buyer@example.com',subject:'Hello',body:'Hello buyer'})}),env,{});
     assert.equal(response.status,409);assert.equal((await response.json()).code,'CONTACT_SUPPRESSED');
+  }
+});
+
+test('confirmed provider sends survive activity or CRM persistence failures without permitting resubmission',async()=>{
+  for(const provider of ['gmail','microsoft-mail'])for(const failure of ['email_activity_events','crm_activities','audit_events']){
+    const {env,DB,token}=await fixture();const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret('refresh-1',key);
+    DB.raw.prepare("INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);
+    DB.raw.prepare("INSERT INTO microsoft_mail_connections(workspace_id,user_id,microsoft_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);
+    DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('c1','w1','example.com','Example','prospect')");
+    DB.raw.exec(`CREATE TRIGGER fail_sync BEFORE INSERT ON ${failure} BEGIN SELECT RAISE(ABORT,'simulated sync failure'); END`);
+    let submissions=0;const originalFetch=globalThis.fetch;
+    globalThis.fetch=async(url)=>{
+      if(String(url).includes('oauth2.googleapis.com/token')||String(url).includes('login.microsoftonline.com/'))return Response.json({access_token:'access'});
+      submissions++;return provider==='gmail'?Response.json({id:'gm1',threadId:'th1'}):new Response(null,{status:202});
+    };
+    try{
+      const body={domain:'example.com',recipient:'buyer@example.com',subject:'Subject',body:'Body',idempotency_key:'post-send-sync-failure-1234'};
+      const request=()=>req(`/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',token,body,idempotencyKey:body.idempotency_key});
+      const response=await handleSaasRoute(request(),env,{});assert.equal(response.status,201);assert.equal((await response.json()).message.status,'sent');
+      const table=provider==='gmail'?'gmail_messages':'microsoft_mail_messages';assert.equal(DB.raw.prepare(`SELECT status FROM ${table}`).get().status,'sent');
+      const retry=await handleSaasRoute(request(),env,{});assert.equal(retry.status,200);assert.equal((await retry.json()).duplicate,true);assert.equal(submissions,1);
+    }finally{globalThis.fetch=originalFetch;}
+  }
+});
+
+async function connectedFixture(){
+  const f=await fixture();const encryption=await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret('refresh',encryption);
+  f.DB.raw.prepare("INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);
+  f.DB.raw.prepare("INSERT INTO microsoft_mail_connections(workspace_id,user_id,microsoft_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);return f;
+}
+function manualSend({env,token,provider,key='manual-regression-123456'}){const body={domain:'example.com',recipient:'buyer@example.com',subject:'Subject',body:'Body',idempotency_key:key};return handleSaasRoute(req(`/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',token,body,idempotencyKey:key}),env,{});}
+
+test('manual provider sends reject archived CRM companies before provider submission',async()=>{
+  for(const provider of ['gmail','microsoft-mail']){
+    const {env,DB,token}=await connectedFixture();DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('archived','w1','example.com','Archived','archived')");
+    let calls=0;const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{calls++;return Response.json({access_token:'access',id:'sent',threadId:'sent'});};
+    try{const response=await manualSend({env,token,provider});assert.equal(response.status,409);assert.equal((await response.json()).code,'CRM_COMPANY_ARCHIVED');assert.equal(calls,0);assert.equal(DB.raw.prepare('SELECT COUNT(*) count FROM gmail_messages').get().count,0);assert.equal(DB.raw.prepare('SELECT COUNT(*) count FROM microsoft_mail_messages').get().count,0);}finally{globalThis.fetch=originalFetch;}
+  }
+});
+
+test('manual transport ambiguity retains unresolved status and same-key retry cannot resubmit',async()=>{
+  for(const provider of ['gmail','microsoft-mail'])for(const failure of ['network timeout','provider 503']){
+    const {env,DB,token}=await connectedFixture();let submissions=0;const originalFetch=globalThis.fetch;
+    globalThis.fetch=async(url)=>{if(String(url).includes('oauth2.googleapis.com/token')||String(url).includes('login.microsoftonline.com/'))return Response.json({access_token:'access'});submissions++;if(failure==='network timeout')throw new TypeError('network timeout after provider submission');return Response.json({error:{message:'temporarily unavailable'}},{status:503});};
+    try{const response=await manualSend({env,token,provider});assert.equal(response.status,502);const result=await response.json();assert.equal(result.code,'DELIVERY_UNCONFIRMED');assert.equal(result.message.status,'sending');assert.equal(result.reconciliation_required,true);assert.match(result.error,/check.*sent folder/i);
+      const table=provider==='gmail'?'gmail_messages':'microsoft_mail_messages';assert.equal(DB.raw.prepare(`SELECT status FROM ${table}`).get().status,'sending');
+      const retry=await manualSend({env,token,provider});assert.equal(retry.status,200);const duplicate=await retry.json();assert.equal(duplicate.duplicate,true);assert.equal(duplicate.message.status,'sending');assert.equal(submissions,1);assert.equal(DB.raw.prepare("SELECT COUNT(*) count FROM email_activity_events WHERE kind='sent'").get().count,0);
+    }finally{globalThis.fetch=originalFetch;}
   }
 });

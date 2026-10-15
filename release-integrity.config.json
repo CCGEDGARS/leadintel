@@ -17,7 +17,8 @@
       "writing_assistant_version": "writing-assistant-v1",
       "ai_task_routing_version": "ai-task-routing-v1",
       "follow_up_assistant_version": "follow-up-assistant-v1",
-      "email_campaign_setup_version": "campaign-setup-v2"
+      "email_campaign_setup_version": "campaign-setup-v2",
+      "system_audit_version": "20261015-delivery-monitoring-v1"
     }
   },
   "smokeChecks": [
@@ -2452,7 +2453,7 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "This profile won’t be used",
+        "This profile won\u2019t be used",
         "Setup required",
         "icp-edit-fields",
         "monitoring-enabled\").addEventListener(\"change\""
@@ -2482,6 +2483,37 @@
       "notContains": [
         "<div class=\"reference-value-points\">",
         "<p class=\"reference-value-note\">"
+      ]
+    },
+    {
+      "id": "audit-monitoring-context",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function captureMonitoringContext()",
+        "monitoringContextCurrent(context)",
+        "Manage scheduled websites in monitoring settings."
+      ]
+    },
+    {
+      "id": "audit-delivery-confirmation",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "sync_warning",
+        "Sent folder"
+      ]
+    },
+    {
+      "id": "audit-cache-entrypoints",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "audit-monitoring=20261015-v1",
+        "audit-delivery=20261015-v1"
       ]
     }
   ],

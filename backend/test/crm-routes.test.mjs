@@ -112,3 +112,32 @@ sqliteTest('manual LinkedIn message activity preserves buyer draft and remains i
  for(let i=0;i<2;i++){response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1`,{method:'POST',token,body:activity}),env,{});assert.equal(response.status,200);}
  response=await handleCrmRoute(req(`/api/crm/companies/${id}?workspace_id=w1`,{token}),env,{});const rows=(await payload(response)).activities;assert.equal(rows.filter(row=>row.id===activity.id).length,1);const saved=rows.find(row=>row.id===activity.id);assert.equal(saved.channel,'linkedin');assert.equal(JSON.parse(saved.metadata_json).script_package.item.drafts.linkedinMessage,'Reviewed manual message');assert.equal(rows.some(row=>row.activity_type==='email.sent'),false);
 });
+
+sqliteTest('generic CRM contact writes cannot forge verified provider status and address edits revoke stored proof',async()=>{
+  const {env,token}=await fixture();env.DB.raw.exec("ALTER TABLE crm_contacts ADD COLUMN verification_provider TEXT;ALTER TABLE crm_contacts ADD COLUMN verified_at TEXT");
+  const contact={external_person_id:'ext-1',name:'Anna Buyer',work_email:'anna@example.com',email_status:'Verified',source:'apollo',verification_provider:'Apollo',verified_at:new Date().toISOString()};
+  let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Example',domain:'example.com'},contacts:[contact]}}),env,{});
+  const companyId=(await response.json()).company.id;
+  let row=env.DB.raw.prepare('SELECT * FROM crm_contacts').get();assert.equal(row.email_status,'public_unverified');
+  response=await handleCrmRoute(req(`/api/crm/companies/${companyId}/contacts?workspace_id=w1`,{method:'POST',token,body:{contacts:[{...contact,external_person_id:'ext-2',work_email:'other@example.com'}]}}),env,{});
+  assert.equal(response.status,200);assert.equal((await response.json()).contacts[0].email_status,'public_unverified');
+  env.DB.raw.prepare("UPDATE crm_contacts SET email_status='verified',verification_provider='Hunter',verified_at='2026-10-15T00:00:00Z' WHERE id=?").run(row.id);
+  response=await handleCrmRoute(req(`/api/crm/companies/${companyId}/contacts?workspace_id=w1`,{method:'POST',token,body:{contacts:[{external_person_id:'ext-1',source:'apollo',work_email:'unverified-replacement@example.com'}]}}),env,{});
+  assert.equal((await response.json()).contacts[0].normalized_email,'anna@example.com');
+  response=await handleCrmRoute(req(`/api/crm/contacts/${row.id}?workspace_id=w1`,{method:'PATCH',token,body:{title:'Buyer'}}),env,{});
+  row=(await response.json()).contact;assert.equal(row.email_status,'verified');assert.equal(row.verification_provider,'Hunter');
+  response=await handleCrmRoute(req(`/api/crm/contacts/${row.id}?workspace_id=w1`,{method:'PATCH',token,body:{work_email:'changed@example.com',email_status:'Verified'}}),env,{});
+  row=(await response.json()).contact;assert.equal(row.normalized_email,'changed@example.com');assert.equal(row.email_status,'public_unverified');assert.equal(row.verification_provider,null);assert.equal(row.verified_at,null);
+  response=await handleCrmRoute(req(`/api/crm/contacts/${row.id}?workspace_id=w1`,{method:'PATCH',token,body:{email_status:'verified'}}),env,{});
+  assert.equal((await response.json()).contact.email_status,'public_unverified');
+});
+
+sqliteTest('generic Apollo-labelled imports cannot promote case variants into confirmed contacts',async()=>{
+  const {env,token}=await fixture();
+  let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Example',domain:'example.com'}}}),env,{});const id=(await response.json()).company.id;
+  for(const [i,status] of ['verified','Verified','VERIFIED',' verified ','public_confirmed','PUBLIC_CONFIRMED'].entries()){
+    const contact={name:'Anna Buyer',source:'apollo',work_email:`anna${i}@example.com`,email_status:status,verification_provider:'Apollo',verified_at:new Date().toISOString()};
+    response=await handleCrmRoute(req(`/api/crm/companies/${id}/contacts?workspace_id=w1`,{method:'POST',token,body:{contacts:[contact]}}),env,{});
+    assert.equal(response.status,200);assert.equal((await response.json()).contacts[0].email_status,'public_unverified');
+  }
+});

@@ -45,8 +45,8 @@ sqliteTest('outside-window rows are rescheduled and suppressed companies are ski
 });
 
 sqliteTest('one failed send does not stop another and transient failure retries with backoff',async()=>{
-  const env=fixture();seedSequence(env.DB,{id:'s2',domain:'second.com',recipient:'two@second.com',queueId:'q2',source:'pkg2'});let calls=[];const transient=Object.assign(new Error('temporary'),{retryable:true});
-  let first=true;let result=await runOutreachAutomation(env,{now,sendMessage:async({queue})=>{calls.push(queue.id);if(queue.id==='q1'&&first){first=false;throw transient;}return {id:`gm-${queue.id}`,threadId:`th-${queue.id}`};},onSent:noCrm});assert.equal(result.sent,1);assert.deepEqual(calls,['q1','q2']);let failed=env.DB.raw.prepare(`SELECT status,last_error_code,attempt_count,scheduled_send_at FROM outreach_automation_queue WHERE id='q1'`).get();assert.equal(failed.status,'failed');assert.equal(failed.last_error_code,'transient');assert.equal(failed.attempt_count,1);assert.ok(failed.scheduled_send_at>now.toISOString());
+  const env=fixture();seedSequence(env.DB,{id:'s2',domain:'second.com',recipient:'two@second.com',queueId:'q2',source:'pkg2'});let calls=[];const transient=Object.assign(new Error('temporary'),{retryable:true,deliveryNotAttempted:true});
+  let first=true;let result=await runOutreachAutomation(env,{now,sendMessage:async({queue})=>{calls.push(queue.id);if(queue.id==='q1'&&first){first=false;throw transient;}return {id:`gm-${queue.id}`,threadId:`th-${queue.id}`};},onSent:noCrm});assert.equal(result.sent,1);assert.deepEqual(calls,['q1','q2']);let failed=env.DB.raw.prepare(`SELECT status,last_error_code,attempt_count,scheduled_send_at FROM outreach_automation_queue WHERE id='q1'`).get();assert.equal(failed.status,'failed');assert.equal(failed.last_error_code,'pre_delivery_transient');assert.equal(failed.attempt_count,1);assert.ok(failed.scheduled_send_at>now.toISOString());
   result=await runOutreachAutomation(env,{now:new Date('2026-09-08T09:00:00.000Z'),sendMessage:async({queue})=>({id:`gm-${queue.id}`,threadId:`th-${queue.id}`}),onSent:noCrm});assert.equal(result.sent,1);assert.equal(env.DB.raw.prepare(`SELECT status FROM outreach_automation_queue WHERE id='q1'`).get().status,'sent');
 });
 
@@ -78,3 +78,20 @@ sqliteTest('fresh verification failure holds recipient without Gmail and can be 
 });
 sqliteTest('pause during verification prevents Gmail send',async()=>{const env=fixture();let sends=0;await runOutreachAutomation(env,{now,verifyEmail:async()=>{env.DB.raw.prepare("UPDATE outreach_automation_policies SET paused=1 WHERE workspace_id='w1'").run();return {verified:true};},sendMessage:async()=>{sends++;},onSent:noCrm});assert.equal(sends,0);});
 sqliteTest('automatic Gmail respects Microsoft campaign sends in the shared mailbox limit',async()=>{const env=fixture({policy:{workspace_daily_limit:1,mailbox_daily_limit:1}});env.DB.raw.exec("CREATE TABLE IF NOT EXISTS microsoft_mail_messages(id TEXT,workspace_id TEXT,status TEXT,sent_at TEXT,created_at TEXT)");env.DB.raw.exec("INSERT INTO microsoft_mail_messages VALUES('ms1','w1','sent','2026-09-08T07:00:00.000Z','2026-09-08T07:00:00.000Z')");let sent=0;const r=await runOutreachAutomation(env,{now,sendMessage:async()=>{sent++;return {id:'gm',threadId:'th'}},onSent:noCrm});assert.equal(sent,0);assert.equal(r.blocked,1);});
+
+sqliteTest('ambiguous transport failure after submission never schedules an automatic resend',async()=>{
+  for(const message of ['network fetch failed','timeout after submission']){
+    const env=fixture();let submissions=0;const sendMessage=async()=>{submissions++;throw new Error(message);};
+    await runOutreachAutomation(env,{now,sendMessage,onSent:noCrm});
+    assert.equal(env.DB.raw.prepare("SELECT last_error_code FROM outreach_automation_queue WHERE id='q1'").get().last_error_code,'ambiguous_send_state');
+    assert.equal(env.DB.raw.prepare('SELECT status FROM gmail_messages').get().status,'sending');
+    await runOutreachAutomation(env,{now:new Date('2026-09-08T09:00:00Z'),sendMessage,onSent:noCrm});assert.equal(submissions,1);
+  }
+});
+
+sqliteTest('legacy transient failures remain held because prior submission cannot be disproved',async()=>{
+  const env=fixture();env.DB.raw.exec("UPDATE outreach_automation_queue SET status='failed',last_error_code='transient',attempt_count=1 WHERE id='q1'");
+  env.DB.raw.exec("INSERT INTO gmail_messages(id,workspace_id,idempotency_key,status) VALUES('old-attempt','w1','auto-q1-stable-key','failed')");
+  let sends=0;await runOutreachAutomation(env,{now,sendMessage:async()=>{sends++;return {id:'duplicate',threadId:'duplicate'};},onSent:noCrm});
+  assert.equal(sends,0);assert.equal(env.DB.raw.prepare("SELECT status FROM outreach_automation_queue WHERE id='q1'").get().status,'failed');
+});
