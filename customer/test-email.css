@@ -1,0 +1,10 @@
+#test-email-dialog{box-sizing:border-box;width:min(640px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #d7e3de;border-radius:18px;padding:24px;color:#20362e;background:#fff;box-shadow:0 20px 70px #152e3440}
+#test-email-dialog::backdrop{background:#122b3480}
+#test-email-dialog header,#test-email-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#test-email-dialog h2{margin:0;font-size:22px}#test-email-close{border:0;background:none;font-size:28px;cursor:pointer}
+#test-email-dialog label{display:block;font-weight:600;margin:14px 0 6px}
+#test-email-dialog input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cbd8d2;border-radius:8px;font:inherit}
+#test-email-dialog details{margin-top:18px}#test-email-dialog summary{cursor:pointer;font-weight:600}
+#test-email-preview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55;background:#f5f8f6;padding:16px;border-radius:8px;max-height:260px;overflow:auto}
+#test-email-status{line-height:1.5}#test-email-dialog footer{justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:600px){#test-email-dialog{padding:18px}#test-email-dialog footer button{flex:1;min-height:44px}}
