@@ -849,10 +849,15 @@ function renderMarketConditions(){
 }
 function renderMarketOpportunities(){
   const target=$("market-opportunities");
-  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
-  target.innerHTML=state.market.opportunities.map((opp,index)=>opp.profileOnly?`<article class="opportunity-card unresearched ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" aria-label="Use ${esc(opp.title)}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
-  </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
+  const market=state.market;
+  const hasFindings=market.opportunities.some(opp=>!opp.profileOnly)||Boolean(globalThis.LeadIntelMarketConditions?.normalizePack(market.marketConditions))||Boolean(market.researchResults?.length)||Boolean(market.researchReports?.length);
+  const summary=$("strategy-research-summary"),action=$("strategy-research-action"),findings=$("strategy-research-findings");
+  const labels={running:"Research in progress…",error:"Research could not finish — try again",partial:"Partial research available",complete:"Research available"};
+  if(summary)summary.textContent=labels[market.researchStatus]||(hasFindings?"Saved research available":"No research yet");
+  if(action)action.textContent=market.researchStatus==="running"?"View progress →":hasFindings?"Update research →":"Research market →";
+  if(findings)findings.hidden=!hasFindings;
+  target.hidden=!market.opportunities.some(opp=>!opp.profileOnly);
+  target.innerHTML=market.opportunities.map((opp,index)=>opp.profileOnly?"":`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" aria-label="Use ${esc(opp.title)}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100 priority score</span></div></div>
     <div class="strategy-setting-status" role="status">${opp.active?"Active — used to prioritize company discovery":"Off — excluded from company discovery"}</div>
     <p class="opportunity-score-note">Relative search priority, not a probability of demand. Buying intent requires company-level evidence.</p>
