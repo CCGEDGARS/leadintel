@@ -7,3 +7,7 @@ Disclosure state is transient and independent of monitoring.enabled. Closing nev
 Root cause corrected: saveMonitoringConfig previously called renderMonitoringControls before readMonitoringEdits, replacing form edits with the stored configuration. It now captures the draft first, commits local monitoring state only after the API succeeds, and preserves dirty controls during rerenders.
 
 Verification: customer/test/monitoring-disclosure.test.js exercises initial disclosure, reopen, dirty close/discard, rerender preservation, successful payload/save, failed saves, explicit disabling and locked strategy. Existing monitoring UI tests now assert collapsed initial settings. Full customer suite and static production build are required before release. Production claims additionally require exact-SHA release integrity proof.
+
+## Card design alignment
+
+The overview now uses the same planning-card, brand-identity-summary, label, Optional badge and action-button styles as Email campaigns. The shared card surface rules cover Website monitoring in Strategy as well as Profile planning cards. Monitoring status and saved scope appear below the description. Toggle updates preserve separate label and arrow spans (right arrow closed, up arrow open). The existing open/close, save, dirty draft and execution behavior is retained. Desktop uses the shared action column; mobile uses the existing stacked planning-card layout. Browser cache versions cover both affected stylesheets and the app entry point.

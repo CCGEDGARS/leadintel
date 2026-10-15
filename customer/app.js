@@ -1092,7 +1092,7 @@ function monitoringHasEdits(){return monitoringDraftMarket===state.market&&monit
 function updateMonitoringDisclosure(){
   const open=!$("monitoring-settings").hidden,config=state.market.monitoring;
   const configured=Boolean(config.customSources?.length||config.signalIds?.length||config.enabled||config.lastRunAt);
-  const toggle=$("toggle-monitoring-settings");toggle.textContent=open?"Close settings ↑":configured?"Edit settings":"Set up monitoring";toggle.setAttribute("aria-expanded",String(open));
+  const toggle=$("toggle-monitoring-settings");toggle.querySelector("[data-monitoring-action-label]").textContent=open?"Close settings":configured?"Edit settings":"Set up monitoring";toggle.querySelector("[aria-hidden]").textContent=open?"↑":"→";toggle.setAttribute("aria-expanded",String(open));
   const summary=$("monitoring-saved-summary");summary.hidden=!configured;
   const count=config.customSources?.length||0;
   summary.textContent=`${count?`${count} website${count===1?"":"s"}`:"Selected source categories"} · ${config.frequency[0].toUpperCase()+config.frequency.slice(1)} · ${config.researchDepth==="deep"?"Deep":"Quick"} research`;

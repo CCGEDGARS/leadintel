@@ -28,6 +28,8 @@ test('monitoring is optional and closed initially with an accessible explicit bu
 test('open and close leave enabled configuration intact; reopening retains saved values',()=>{
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
  assert.equal(c.$('monitoring-settings').hidden,false);
+ assert.equal(c.$('toggle-monitoring-settings').querySelector('[data-monitoring-action-label]')?.textContent,'Close settings');
+ assert.equal(c.$('toggle-monitoring-settings').querySelector('[aria-hidden]')?.textContent,'↑');
  c.context.requestCloseMonitoringSettings();
  assert.equal(c.$('monitoring-settings').hidden,true);
  assert.equal(c.state.market.monitoring.enabled,true);
