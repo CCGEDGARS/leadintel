@@ -92,6 +92,9 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   }
 }
 
+// Verification is established by the dedicated provider/source confirmation paths.
+function untrustedContact(input){const contact=input&&typeof input==='object'?input:{};const status=String(contact.email_status||'').trim().toLowerCase();return {...contact,email_status:!status||['verified','public_confirmed'].includes(status)?'public_unverified':contact.email_status};}
+
 export async function handleCrmRoute(request,env,corsOverride={}){
   const url=new URL(request.url);const path=url.pathname;const cors=corsOverride||{};
   if(!path.startsWith('/api/crm/'))return null;
@@ -100,7 +103,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
     if(path==='/api/crm/companies'){
       const access=await requireMember(request,env,workspaceId,request.method==='POST'?WRITER_ROLES:[]);if(access.error)return error(access.error,access.status,cors);
       if(request.method==='GET')return json(await listCrmCompanies(env.DB,access.context,{q:url.searchParams.get('q')||'',lifecycle:url.searchParams.get('lifecycle')||'',pipeline_stage:url.searchParams.get('pipeline_stage')||'',limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
-      if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body)return error('CRM company payload is required',400,cors,'CRM_PAYLOAD_REQUIRED');const result=await upsertCrmCompany(env.DB,access.context,body);return json(result,result.created?201:200,cors);}
+      if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body)return error('CRM company payload is required',400,cors,'CRM_PAYLOAD_REQUIRED');const result=await upsertCrmCompany(env.DB,access.context,{...body,...(Array.isArray(body.contacts)?{contacts:body.contacts.map(untrustedContact)}:{})});return json(result,result.created?201:200,cors);}
       return error('Method not allowed',405,cors);
     }
 
@@ -128,7 +131,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
         return error('Method not allowed',405,cors);
       }
       if(company.action==='contacts'){
-        if(request.method==='POST'){const body=await request.json().catch(()=>null);const contacts=Array.isArray(body)?body:Array.isArray(body?.contacts)?body.contacts:[];return json({contacts:await upsertCrmContacts(env.DB,access.context,company.id,contacts)},200,cors);}
+        if(request.method==='POST'){const body=await request.json().catch(()=>null);const contacts=Array.isArray(body)?body:Array.isArray(body?.contacts)?body.contacts:[];return json({contacts:await upsertCrmContacts(env.DB,access.context,company.id,contacts.map(untrustedContact))},200,cors);}
         return error('Method not allowed',405,cors);
       }
       if(company.action==='activities'){

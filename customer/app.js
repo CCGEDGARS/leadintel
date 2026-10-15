@@ -1087,8 +1087,7 @@ function renderSavedResearchWebsites(){
 function removeSavedResearchWebsite(url){
   const target=LeadIntelProfile.normalizeUrl(url);if(!target)return;
   state.market.researchCustomSources=(state.market.researchCustomSources||[]).filter(item=>LeadIntelProfile.normalizeUrl(item)!==target);
-  state.market.monitoring=LeadIntelMarket.normalizeMonitoring({...state.market.monitoring,customSources:(state.market.monitoring?.customSources||[]).filter(item=>LeadIntelProfile.normalizeUrl(item)!==target)});
-  $("research-custom-sources").value=state.market.researchCustomSources.join("\\n");saveState();renderResearchControls();renderMonitoringControls();showToast("Website removed from research and monitoring");
+  $("research-custom-sources").value=state.market.researchCustomSources.join("\n");saveState();renderResearchControls();showToast("Website removed from research. Manage scheduled websites in monitoring settings.");
 }
 function renderResearchControls(){
   state.market.researchMode=normalizeResearchMode(state.market.researchMode);$("research-mode").value=state.market.researchMode;syncResearchSourcesToSignals();const selectedSources=new Set(state.market.researchSourceTypes?.length?state.market.researchSourceTypes:(state.market.researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"]));const tenderAllowed=LeadIntelMarket.filterResearchSourceTypes(["tenders"],state.market.signals||[]).includes("tenders");document.querySelectorAll('#research-source-types input').forEach(input=>{input.disabled=input.value==="tenders"&&!tenderAllowed;input.checked=selectedSources.has(input.value)&&!input.disabled;});
@@ -1098,9 +1097,23 @@ function renderResearchControls(){
   [["run-market-research","quick"],["run-detailed-research","deep"],["run-market-intelligence","intelligence"]].forEach(([id,mode])=>{const button=$(id);const limits=LeadIntelMarket.RESEARCH_MODES[mode];if(button)button.title=`${researchModeUi(mode).label}: maximum ${limits.maxQueries} searches, ${limits.resultsPerQuery} results per search and ${limits.maxStoredResults} stored sources`;});
 }
 function renderResearchHistory(){const target=$("research-history");const history=state.market.researchHistory||[];target.innerHTML=history.length?history.slice(0,5).map(run=>`<span>${esc(run.mode)} · ${run.sourceCount} sources · ${esc(new Date(run.completedAt).toLocaleDateString())}</span>`).join(""):"";}
-async function monitoringApi(path,options={}){const bridge=await waitForMarketServerBridge();if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw new Error("Sign in to use automatic monitoring");const separator=path.includes("?")?"&":"?";const response=await fetch(`${LEADINTEL_API}${path}${separator}workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{credentials:"include",headers:{Accept:"application/json","Content-Type":"application/json",...(options.headers||{})},...options});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Monitoring returned ${response.status}`);return payload;}
+async function monitoringApi(path,options={},context=captureMonitoringContext()){
+  const bridge=await waitForMarketServerBridge();
+  if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
+  if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw new Error("Sign in to use automatic monitoring");
+  const separator=path.includes("?")?"&":"?";
+  const response=await fetch(`${LEADINTEL_API}${path}${separator}workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{credentials:"include",headers:{Accept:"application/json","Content-Type":"application/json",...(options.headers||{})},...options});
+  const payload=await response.json().catch(()=>({}));
+  if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
+  if(!response.ok)throw new Error(payload.error||`Monitoring returned ${response.status}`);return payload;
+}
 function monitoringFormSnapshot(){
   return JSON.stringify([...$("monitoring-settings").querySelectorAll("input,select,textarea")].map(input=>[input.id||input.dataset.monitorSignal||input.dataset.monitorSource,input.value,input.checked]));
+}
+function captureMonitoringContext(){return {market:state.market,workspace:window.LeadIntelServerBridge?.workspace?.id||"",account:window.localStorage?.getItem("leadintel_account_context_v1")||""};}
+function monitoringContextCurrent(context){
+  if(!context||context.market!==state.market)return false;
+  const current=captureMonitoringContext();return context.workspace===current.workspace&&context.account===current.account;
 }
 function monitoringHasEdits(){return monitoringDraftMarket===state.market&&monitoringDraftBaseline!==null&&monitoringFormSnapshot()!==monitoringDraftBaseline;}
 function updateMonitoringDisclosure(){
@@ -1135,25 +1148,47 @@ function renderMonitoringControls(){
 function readMonitoringEdits(persist=true){const sourceTypes=LeadIntelMarket.filterResearchSourceTypes([...document.querySelectorAll('[data-monitor-source]:checked')].map(input=>input.value),state.market.signals||[]);const config=LeadIntelMarket.normalizeMonitoring({enabled:$("monitoring-enabled").checked,frequency:$("monitoring-frequency").value,researchDepth:$("monitoring-depth").value,minimumScore:$("monitoring-minimum-score").value,sourceTypes,signalIds:[...document.querySelectorAll('[data-monitor-signal]:checked')].map(input=>input.value),customSources:$("monitoring-custom-sources").value.split(/\n/)});if(persist){state.market.monitoring=config;saveState();}return config;}
 function renderMonitoringAlerts(alerts=[]){$("monitoring-alerts").innerHTML=alerts.length?alerts.map(alert=>`<article class="monitor-alert"><div class="monitor-alert-head"><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><strong>${Number(alert.score)||0}/100</strong></div><p>${esc(alert.summary)}</p><span>${esc(new Date(alert.created_at).toLocaleString())}</span> ${alert.status==="new"?`<button type="button" data-monitor-alert-read="${esc(alert.id)}">Mark read</button>`:""}</article>`).join(""):'<div class="market-empty">No monitoring alerts yet.</div>';}
 function renderMonitoringHistory(runs=[]){$("monitoring-history").innerHTML=runs.length?runs.map(run=>`<div class="monitor-run"><span>${esc(run.trigger_type)} · ${esc(run.research_depth)} · ${esc(run.status)}</span><strong>${Number(run.source_count)||0} sources · ${Number(run.alert_count)||0} alerts</strong></div>`).join(""):'<div class="market-empty">No automatic runs yet.</div>';}
-async function loadMonitoringServerState(force=false){if((monitoringLoaded||monitoringBusy)&&!force)return;const bridge=await waitForMarketServerBridge();if(!bridge?.session?.authenticated||!bridge.workspace?.id){$("monitoring-status").textContent="Sign in to configure automatic monitoring.";return;}monitoringLoaded=true;try{const [config,alerts,runs]=await Promise.all([monitoringApi('/api/market-monitoring/config'),monitoringApi('/api/market-monitoring/alerts'),monitoringApi('/api/market-monitoring/runs')]);state.market.monitoring=LeadIntelMarket.normalizeMonitoring(config.config);state.market.monitoring.nextRunAt=config.config.nextRunAt||"";state.market.monitoring.lastRunAt=config.config.lastRunAt||"";saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);}catch(error){$("monitoring-status").textContent=error.message;}}
+async function loadMonitoringServerState(force=false){
+  if((monitoringContextCurrent(monitoringLoaded)||monitoringBusy)&&!force)return;
+  const context=captureMonitoringContext(),bridge=await waitForMarketServerBridge();
+  if(!monitoringContextCurrent(context))return;
+  if(!bridge?.session?.authenticated||!bridge.workspace?.id){$("monitoring-status").textContent="Sign in to configure automatic monitoring.";return;}
+  monitoringLoaded=context;
+  try{
+    const [config,alerts,runs]=await Promise.all([monitoringApi('/api/market-monitoring/config',{},context),monitoringApi('/api/market-monitoring/alerts',{},context),monitoringApi('/api/market-monitoring/runs',{},context)]);
+    if(!monitoringContextCurrent(context))return;
+    state.market.monitoring={...LeadIntelMarket.normalizeMonitoring(config.config),nextRunAt:config.config.nextRunAt||"",lastRunAt:config.config.lastRunAt||""};
+    saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);
+  }catch(error){
+    if(monitoringLoaded===context)monitoringLoaded=false;
+    if(monitoringContextCurrent(context))$("monitoring-status").textContent=error.message;
+  }
+}
 async function saveMonitoringConfig({closeAfterSave=true}={}){
   if(monitoringBusy)return false;
   if(!state.market.strategyApproved&&$("monitoring-enabled").checked){showToast("Activate the market strategy first");return false;}
-  const previous=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);let failure='',succeeded=false;
+  const context=captureMonitoringContext(),previous=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);let failure='',succeeded=false;
   try{
     const config=readMonitoringEdits(false);monitoringBusy=true;renderMonitoringControls();
     if(config.enabled&&!config.signalIds.length)throw new Error("Select at least one signal to monitor");
     if(config.enabled&&!config.sourceTypes.length&&!config.customSources.length)throw new Error("Select at least one source category or custom source");
-    const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();if(!saved)throw new Error("Save the workspace before enabling monitoring");
-    const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})});
+    const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();if(!monitoringContextCurrent(context))return false;if(!saved)throw new Error("Save the workspace before enabling monitoring");
+    const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})},context);
+    if(!monitoringContextCurrent(context))return false;
     state.market.monitoring={...config,...(result.config?.enabled!==undefined?LeadIntelMarket.normalizeMonitoring(result.config):{}),nextRunAt:result.config.nextRunAt||"",lastRunAt:result.config.lastRunAt||""};saveState();
     succeeded=true;monitoringDraftBaseline=null;
     showToast(state.market.monitoring.enabled?"Automatic monitoring enabled":"Automatic monitoring disabled");return true;
-  }catch(error){state.market.monitoring=previous;saveState();failure=error.message;showToast(failure);return false;}
-  finally{monitoringBusy=false;renderMonitoringControls();if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}
+  }catch(error){if(monitoringContextCurrent(context)){state.market.monitoring=previous;$("monitoring-enabled").checked=previous.enabled;saveState();failure=error.message;showToast(failure);}return false;}
+  finally{monitoringBusy=false;renderMonitoringControls();if(monitoringContextCurrent(context)){if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}}
 }
-async function runMonitoringNow(){if(monitoringBusy)return;if(monitoringHasEdits()){showToast("Save your monitoring changes before running.");return;}monitoringBusy=true;renderMonitoringControls();try{const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'});showToast(`Monitoring complete · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);}catch(error){showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}}
-async function markMonitoringAlertRead(id){try{await monitoringApi(`/api/market-monitoring/alerts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:'read'})});await loadMonitoringServerState(true);}catch(error){showToast(error.message);}}
+async function runMonitoringNow(){
+  if(monitoringBusy)return;if(monitoringHasEdits()){showToast("Save your monitoring changes before running.");return;}
+  const context=captureMonitoringContext();monitoringBusy=true;renderMonitoringControls();
+  try{const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'},context);if(!monitoringContextCurrent(context))return;
+    showToast(`Monitoring ${result.run.status||'completed'} · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);
+  }catch(error){if(monitoringContextCurrent(context))showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}
+}
+async function markMonitoringAlertRead(id){const context=captureMonitoringContext();try{await monitoringApi(`/api/market-monitoring/alerts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:'read'})},context);if(monitoringContextCurrent(context))await loadMonitoringServerState(true);}catch(error){if(monitoringContextCurrent(context))showToast(error.message);}}
 function renderMarketStrategy(){
   renderResearchReports();
   if(!state.profile)return;

@@ -111,7 +111,7 @@ function bindDelivery(){
   window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==7)return;persistMainStep(7);ensureSelection();renderAll();});
 }
 function loadProductionSaas(){
-  const loadMailboxUi=()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src=asset('production-gmail-ui.js')+'&delivery-modes=2&page-procedures=20261010-v1';ui.dataset.productionGmailUi='true';document.body.appendChild(ui);};
+  const loadMailboxUi=()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src=asset('production-gmail-ui.js')+'&delivery-modes=2&page-procedures=20261010-v1&audit-delivery=20261015-v1';ui.dataset.productionGmailUi='true';document.body.appendChild(ui);};
   if(document.querySelector('script[data-server-bridge]')){loadMailboxUi();return;}
   const bridge=document.createElement('script');bridge.src=SERVER_BRIDGE_ASSET;bridge.dataset.serverBridge='true';
   bridge.addEventListener('load',loadMailboxUi);

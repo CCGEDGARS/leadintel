@@ -39,13 +39,13 @@ test('failed monitoring save restores confirmed state and never reports an uncon
  const elements={'monitoring-enabled':{checked:true}};let persisted=0,notice='';
  const state={market:{strategyApproved:true,monitoring:{enabled:false,frequency:'weekly'}}};
  const context={state,monitoringBusy:false,monitoringDraftBaseline:null,$:id=>elements[id],LeadIntelMarket:Market,window:{LeadIntelWorkspacePersistence:{saveWorkspace:async()=>true}},readMonitoringEdits:()=>{state.market.monitoring={enabled:true,frequency:'weekly',signalIds:['hiring'],sourceTypes:['news']};return state.market.monitoring;},closeMonitoringSettings:()=>{},renderMonitoringControls:()=>{},saveState:()=>persisted++,monitoringApi:async()=>{throw Error('Network failed');},showToast:x=>notice=x};
- await vm.runInNewContext(fn(app,'async function saveMonitoringConfig(','async function runMonitoringNow(){')+';saveMonitoringConfig()',context);
+ await vm.runInNewContext(fn(app,'function captureMonitoringContext()','function monitoringHasEdits()')+fn(app,'async function saveMonitoringConfig(','async function runMonitoringNow(){')+';saveMonitoringConfig()',context);
  assert.equal(state.market.monitoring.enabled,false);assert.match(notice,/Network failed/);assert.ok(persisted>0);
 });
 test('monitoring can be switched off even after strategy edits invalidate approval',async()=>{
  const state={market:{strategyApproved:false,monitoring:{enabled:true}}};let called=false;
  const context={state,monitoringBusy:false,monitoringDraftBaseline:null,$:()=>({checked:false}),LeadIntelMarket:Market,window:{LeadIntelWorkspacePersistence:{saveWorkspace:async()=>true}},readMonitoringEdits:()=>{state.market.monitoring={enabled:false,signalIds:[],sourceTypes:[]};return state.market.monitoring;},closeMonitoringSettings:()=>{},renderMonitoringControls:()=>{},saveState:()=>{},monitoringApi:async()=>{called=true;return {config:{enabled:false}};},showToast:()=>{}};
- await vm.runInNewContext(fn(app,'async function saveMonitoringConfig(','async function runMonitoringNow(){')+';saveMonitoringConfig()',context);
+ await vm.runInNewContext(fn(app,'function captureMonitoringContext()','function monitoringHasEdits()')+fn(app,'async function saveMonitoringConfig(','async function runMonitoringNow(){')+';saveMonitoringConfig()',context);
  assert.equal(called,true);assert.equal(state.market.monitoring.enabled,false);
 });
 test('rendered inactive fields are disabled while the switch remains usable, and re-enabling preserves values',()=>{

@@ -144,5 +144,5 @@ test('saved research websites are visible and individually removable',()=>{
   assert.match(appSource,/function renderSavedResearchWebsites/);
   assert.match(appSource,/data-remove-research-website/);
   assert.match(appSource,/function removeSavedResearchWebsite/);
-  assert.match(appSource,/Website removed from research and monitoring/);
+  assert.match(appSource,/Website removed from research\. Manage scheduled websites in monitoring settings/);
 });

@@ -18,6 +18,6 @@ export async function sendMicrosoftMessage(accessToken,{to,subject,body,textBody
   const graphBody=content.htmlBody?{contentType:'HTML',content:content.htmlBody}:{contentType:'Text',content:content.textBody};
   const payload={message:{subject:cleanSubject,body:graphBody,toRecipients:[{emailAddress:{address:recipient}}]},saveToSentItems:true};
   const response=await fetchImpl('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
-  if(response.status!==202){const failure=await response.json().catch(()=>({}));throw new Error(failure.error?.message||`Microsoft send failed (${response.status})`);}
+  if(response.status!==202){const failure=await response.json().catch(()=>({}));throw Object.assign(new Error(failure.error?.message||`Microsoft send failed (${response.status})`),{deliveryRejected:response.status>=400&&response.status<500&&response.status!==408,retryable:response.status===429});}
   return {accepted:true,status:202};
 }
