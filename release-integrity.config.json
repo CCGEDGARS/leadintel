@@ -462,7 +462,8 @@
       "contains": [
         "Your private bookshelf",
         "What AI learned",
-        "Retry analysis"
+        "Retry analysis",
+        "error.snapshot?.cards"
       ]
     },
     {
