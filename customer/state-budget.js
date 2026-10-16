@@ -46,22 +46,30 @@
   // The dictionary freezes at 65536 entries; both encoding and decoding use the same bound.
   function compressWorkspace(value){
     if(bytes(value)>MAX_RESTORED_BUNDLE_BYTES||Object.values(value).some(section=>bytes(section)>MAX_RESTORED_SECTION_BYTES))return null;
-    const input=new TextEncoder().encode(JSON.stringify(packNestedDiscovery(value))),dictionary=new Map(),codes=[];let next=256,word='';
-    for(const byte of input){const char=String.fromCharCode(byte),joined=word+char;if(joined.length===1||dictionary.has(joined)){word=joined;continue;}codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));if(next<65536)dictionary.set(joined,next++);word=char;}
-    if(word)codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));
-    let raw='';for(const code of codes)raw+=String.fromCharCode(code>>>8,code&255);
-    const shared={main:{format:BUNDLE_FORMAT,encoding:TEXT_ENCODING,data:base64Encode(raw)}};
+    const data=compressText(JSON.stringify(packNestedDiscovery(value)));
+    const shared={main:{format:BUNDLE_FORMAT,encoding:TEXT_ENCODING,data}};
     if(value.meta?.persistence)shared.meta={persistence:cloneValue(value.meta.persistence)};
     return bytes(shared)<bytes(value)?shared:null;
   }
-  function restoreCompressedWorkspace(value){
+  function compressText(text){
+    const input=new TextEncoder().encode(text),dictionary=new Map(),codes=[];let next=256,word='';
+    for(const byte of input){const char=String.fromCharCode(byte),joined=word+char;if(joined.length===1||dictionary.has(joined)){word=joined;continue;}codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));if(next<65536)dictionary.set(joined,next++);word=char;}
+    if(word)codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));
+    let raw='';for(const code of codes)raw+=String.fromCharCode(code>>>8,code&255);
+    return base64Encode(raw);
+  }
+  function decompressText(value,maxEncodedBytes,maxDecodedBytes){
     const invalid=()=>{throw new Error('Invalid stored compressed workspace');};
-    if(![TEXT_ENCODING,LEGACY_TEXT_ENCODING].includes(value.encoding)||typeof value.data!=='string'||value.data.length>MAX_SYNC_BYTES||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
+    if(![TEXT_ENCODING,LEGACY_TEXT_ENCODING].includes(value.encoding)||typeof value.data!=='string'||value.data.length>maxEncodedBytes||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
     let raw;try{raw=typeof atob==='function'?atob(value.data):Buffer.from(value.data,'base64').toString('binary');}catch{invalid();}
     if(raw.length%2||base64Encode(raw)!==value.data)invalid();
     const dictionary=Array.from({length:256},(_,i)=>String.fromCharCode(i));let next=256,previous='',size=0;const chunks=[];
-    for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>MAX_RESTORED_BUNDLE_BYTES)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
-    try{const text=chunks.join(''),decoded=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,char=>char.charCodeAt(0)));const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();return value.encoding===TEXT_ENCODING&&restored.format===NESTED_FORMAT?restoreNestedDiscovery(restored,MAX_RESTORED_BUNDLE_BYTES):restored;}catch{invalid();}
+    for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>maxDecodedBytes)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
+    try{return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(chunks.join(''),char=>char.charCodeAt(0)));}catch{invalid();}
+  }
+  function restoreCompressedWorkspace(value,maxEncodedBytes=MAX_SYNC_BYTES){
+    const decoded=decompressText(value,maxEncodedBytes,MAX_RESTORED_BUNDLE_BYTES);
+    try{const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))throw new Error();return value.encoding===TEXT_ENCODING&&restored.format===NESTED_FORMAT?restoreNestedDiscovery(restored,MAX_RESTORED_BUNDLE_BYTES):restored;}catch{throw new Error('Invalid stored compressed workspace');}
   }
   // Workflow views repeat the same company, buyer pool and provider evidence.
   // Share equal copies on the wire without deleting any record or audit field.
@@ -288,12 +296,49 @@
   }
   function installStorageGuard(){
     if(!root||typeof root.Storage==="undefined"||!root.localStorage||root.Storage.prototype.__leadintelStateBudgetPatched)return;
-    const originalSet=root.Storage.prototype.setItem;
+    const originalSet=root.Storage.prototype.setItem,originalGet=root.Storage.prototype.getItem;
+    const sectionKeys=new Set(['state','discovery','outreach','delivery','discovery_meta'].map(name=>'leadintel_customer_v2_'+name));
+    const prefix='leadintel-local-section-lzw-v1:',cache=new Map();
+    function encodeLocal(value){
+      if(typeof value!=='string'||value.length<65536)return value;
+      // Compress the original string, not parsed JSON: whitespace, approved
+      // wording, Unicode and every evidence field must round-trip byte-for-byte.
+      if(new TextEncoder().encode(value).byteLength>MAX_RESTORED_SECTION_BYTES)return value;
+      const data=compressText(value);
+      if(data.length>MAX_RESTORED_SECTION_BYTES)return value;
+      const encoded=prefix+JSON.stringify({encoding:LEGACY_TEXT_ENCODING,data});
+      return encoded.length<value.length?encoded:value;
+    }
+    function prepareWrite(encoded){
+      if(encoded.startsWith(prefix)&&root.LeadIntelAccountCache){
+        if(!root.LeadIntelAccountCache.prepareLocalStorageCodec)throw new Error('Refresh to upgrade workspace storage safely.');
+        root.LeadIntelAccountCache.prepareLocalStorageCodec();
+      }
+    }
+    root.Storage.prototype.getItem=function(key){
+      // Keep the earlier account guard in the read chain, even on cache hits.
+      const raw=originalGet.call(this,key);
+      if(this!==root.localStorage||!sectionKeys.has(key))return raw;
+      if(raw===null){cache.delete(key);return null;}
+      const previous=cache.get(key);if(previous?.raw===raw)return previous.value;
+      if(!raw.startsWith(prefix)){cache.delete(key);return raw;}
+      const value=decompressText(JSON.parse(raw.slice(prefix.length)),MAX_RESTORED_SECTION_BYTES,MAX_RESTORED_SECTION_BYTES);
+      cache.set(key,{raw,value});return value;
+    };
     root.Storage.prototype.setItem=function(key,value){
       const next=this===root.localStorage&&key===MAIN_STORAGE_KEY?compactMainStorageValue(value):value;
-      return originalSet.call(this,key,next);
+      if(this!==root.localStorage||!sectionKeys.has(key))return originalSet.call(this,key,next);
+      const text=String(next),previous=cache.get(key);
+      const encoded=previous?.value===text&&originalGet.call(this,key)===previous.raw?previous.raw:encodeLocal(text);
+      prepareWrite(encoded);
+      const result=originalSet.call(this,key,encoded);
+      // Only a successful durable write may replace the cached working value.
+      cache.set(key,{raw:encoded,value:text});return result;
     };
     root.Storage.prototype.__leadintelStateBudgetPatched=true;
+    // Free space occupied by older expanded records before server hydration.
+    // A failed migration leaves that exact record intact for recovery.
+    for(const key of sectionKeys){try{const raw=originalGet.call(root.localStorage,key);if(raw&&!raw.startsWith(prefix)){const encoded=encodeLocal(raw);if(encoded!==raw){prepareWrite(encoded);originalSet.call(root.localStorage,key,encoded);}}}catch{}}
   }
 
   installStorageGuard();

@@ -94,9 +94,17 @@
   }
   function hasLegacyArchives(){for(let index=0;index<storage.length;index++)if(String(storage.key(index)).startsWith(ARCHIVE_PREFIX))return true;return false;}
   function clearActive(){for(const store of [storage,session])for(const key of Object.keys(entries(store)))remove(store,key);}
-  function updateContext(workspaceId='',userId=''){
-    context={workspaceId,userId,epoch:root.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)};
-    ticket=JSON.stringify(context);set(storage,CONTEXT_KEY,ticket);
+  const LOCAL_CODEC_EPOCH='li1:';
+  function updateContext(workspaceId='',userId='',codec=String(context.epoch||'').startsWith(LOCAL_CODEC_EPOCH)){
+    const random=root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);
+    const epoch=codec?LOCAL_CODEC_EPOCH+random.replace(/-/g,'').padEnd(32,'0').slice(0,32):random;
+    const next={workspaceId,userId,epoch},nextTicket=JSON.stringify(next);
+    // Persist first: a quota failure must not invalidate this tab's own ticket.
+    set(storage,CONTEXT_KEY,nextTicket);context=next;ticket=nextTicket;
+  }
+  function prepareLocalStorageCodec(){
+    assertAccessible();
+    if(!String(context.epoch||'').startsWith(LOCAL_CODEC_EPOCH))updateContext(context.workspaceId||'',context.userId||'',true);
   }
   function detach(){return transition(()=>after(checkpoint(),()=>{assertCurrent();clearActive();updateContext();verified=false;return true;}));}
   function activate({workspaceId,userId}){
@@ -116,7 +124,7 @@
   }
   function complete(){root.document?.documentElement?.removeAttribute('data-account-check');}
   function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){const message=root.document?.getElementById?.('account-recovery-message');if(message)message.textContent='Your browser could not safely preserve the workspace. Keep your browser data and try again.';}}
-  const api={saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
+  const api={prepareLocalStorageCodec,saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
   root.LeadIntelAccountCache=api;
   // Protect delayed work in old tabs, even before a storage event is delivered.
   if(proto){
