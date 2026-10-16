@@ -72,3 +72,14 @@ test('assistant render evaluates readiness once and refreshes all buttons togeth
  for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template],[data-wa-use-flow]'))assert.equal(button.disabled,true);
  ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-use-flow]').disabled,false);ui.destroy();w.close();
 });
+
+test('deferred closed assistant avoids context work and renders fresh preserved state on opening',()=>{
+ const w=new JSDOM('<section id="mw-writing-assistant"></section>').window;let reads=0,state={messages:[],busy:false};
+ const c={state:()=>state,syncContext(){},ask(){},applyPreview(){},discardPreview(){},cancel(){}};
+ const ui=api.mountWritingAssistant(w.document,c,{deferClosedRendering:true,usable:()=>{reads++;return true;}});
+ ui.render();assert.equal(reads,0);
+ state={messages:[{role:'assistant',content:'Preserved answer'}],busy:false};ui.render();assert.equal(reads,0);
+ w.document.querySelector('[data-wa-expand]').click();assert.equal(reads,1);assert.match(w.document.querySelector('[data-wa-transcript]').textContent,/Preserved answer/);
+ w.document.querySelector('[data-wa-close]').click();ui.render();assert.equal(reads,1);
+ w.document.querySelector('[data-wa-expand]').click();assert.equal(reads,2);ui.destroy();w.close();
+});

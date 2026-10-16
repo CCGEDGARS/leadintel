@@ -128,8 +128,7 @@
   // retries at every hyphen in long scraped asset IDs, causing quadratic work
   // on the main thread during saved-profile restoration.
   function cleanEvidenceText(text){
-    globalThis.LeadIntelStartupTrace?.("profile evidence cleanup:start");
-    const cleaned=stripNavigationChains(String(text??""))
+    return stripNavigationChains(String(text??""))
       .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
       .replace(/\[([^\]]+)\]\((?:https?:\/\/)[^)]+\)/gi," $1 ")
       .replace(/\((?:https?:\/\/)[^)]+\)/gi," ")
@@ -143,8 +142,6 @@
       .replace(/\bCompanies\s+that\s+choose\s+us\b/gi,". ")
       .replace(/\s+/g," ")
       .trim();
-    globalThis.LeadIntelStartupTrace?.("profile evidence cleanup:complete");
-    return cleaned;
   }
   function hasEvidenceNavigationNoise(value){return NAVIGATION_FRAGMENT_RE.test(String(value??""))||isNavigationContaminated(value);}
   function hasAssetNoise(value){
@@ -345,7 +342,6 @@
     };
   }
   function normalizeSavedState(value={}){
-    globalThis.LeadIntelStartupTrace?.("profile normalize:start");
     const migrated=Brief?.migrateState?Brief.migrateState(value):value;
     const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(migrated.answers?.[id]);});
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
@@ -353,7 +349,6 @@
     const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(legacyMarketFocus);
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
     const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready",pageCategory:["company","offers","proof","delivery","contact"].includes(s?.pageCategory)?s.pageCategory:"",...sourceBranding(s)})).filter(s=>s.url):[];
-    globalThis.LeadIntelStartupTrace?.("profile normalize:sources ready");
     const profile=value.profile&&typeof value.profile==="object"?{
       ...value.profile,
       mission:buildMission(),
@@ -365,7 +360,6 @@
         recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
       )
     }:null;
-    globalThis.LeadIntelStartupTrace?.("profile normalize:signals ready");
     if(profile){
       delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(scrapedSources));
       const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs,knownCompanyName(value.website)||clean(value.profile?.companyName)||inferCompanyName(scrapedSources,value.website));
