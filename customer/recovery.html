@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LeadIntel · Safe Workspace Recovery</title>
+<style>body{font:16px system-ui,-apple-system,sans-serif;color:#203044;background:#f5f7f8;margin:0}main{max-width:690px;margin:5vh auto;padding:36px;background:white;border:1px solid #dfe5e9;border-radius:18px;box-shadow:0 8px 24px #1232}h1{font-size:27px;margin-top:0}p{line-height:1.55;color:#4f6071}button,a.action{display:inline-block;border:0;background:#146347;color:white;padding:13px 19px;border-radius:9px;font-weight:650;font-size:15px;text-decoration:none;cursor:pointer;margin:8px 8px 8px 0}button:disabled{opacity:.4;cursor:not-allowed}.secondary{background:#e9eef1;color:#263d4a}#status{white-space:pre-wrap;font-size:14px;padding:15px;background:#eef4f5;border-radius:10px;min-height:28px}label{display:block;margin:18px 0}small{color:#526273}</style></head>
+<body><main><h1>LeadIntel · Safe Workspace Recovery</h1>
+<p>This lightweight page avoids loading the full LeadIntel app. Your saved browser data will not be changed unless you explicitly select the recovery action.</p>
+<p><strong>Step 1:</strong> Download a complete copy of LeadIntel browser storage. Keep this file safe: it may contain business information and private drafts.</p>
+<button id="backup">Download browser recovery copy</button><p id="counts"></p>
+<p><strong>Step 2:</strong> If you are signed in and your workspace is stored on LeadIntel's server, you may restart the local workspace cache from the server. This does not delete server data, but local-only edits might not reappear automatically. Only proceed after downloading the copy.</p>
+<label><input id="confirmed" type="checkbox" disabled> I have securely saved the recovery file and understand unsynced browser edits may need manual restoration.</label>
+<button id="restore" disabled>Restart local workspace from server</button>
+<a class="action secondary" href="/customer/">Return to LeadIntel</a>
+<p id="status" role="status">No browser data has been changed.</p>
+<small>Recovery resets the local customer workflow and synchronization cache only. It does not erase account authentication, connected providers, or the CRM stored on the server.</small>
+</main><script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const workspaceKeys=['leadintel_customer_v2_state','leadintel_customer_v2_discovery','leadintel_customer_v2_outreach','leadintel_customer_v2_delivery','leadintel_customer_v2_discovery_meta','leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1','leadintel_customer_v2_workspace_saved_snapshot_v1','leadintel_customer_v2_workspace_explicit_save_v1','leadintel_customer_v2_server_dirty','leadintel_customer_v2_server_versions','leadintel_customer_v2_server_hydration','leadintel_customer_v2_server_conflict'];
+const isLeadIntel=key=>typeof key==='string'&&key.startsWith('leadintel_');
+function capture(store){const output={};for(let i=0;i<store.length;i++){const key=store.key(i);if(isLeadIntel(key))output[key]=store.getItem(key);}return output;}
+let backedUp=false;
+function describe(){try{const a=capture(localStorage),b=capture(sessionStorage);$('counts').textContent=Object.keys(a).length+' LeadIntel local entries · '+Object.keys(b).length+' session entries';}catch(e){$('counts').textContent='Storage unavailable: '+e.message;}}
+$('backup').onclick=()=>{
+try{
+const record={type:'leadintel-browser-recovery',version:1,created_at:new Date().toISOString(),origin:location.origin,local: capture(localStorage),session:capture(sessionStorage)};
+const blob=new Blob([JSON.stringify(record)],{type:'application/json'});
+const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='leadintel-browser-recovery-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+backedUp=true;$('confirmed').disabled=false;$('status').textContent='Recovery file prepared for download. Confirm you have saved it before proceeding.';
+}catch(e){$('status').textContent='Backup failed: '+e.message+'. No data was changed.';}
+};
+$('confirmed').onchange=()=>{$('restore').disabled=!(backedUp&&$('confirmed').checked);};
+$('restore').onclick=()=>{
+if(!backedUp||!$('confirmed').checked)return;
+if(!window.confirm('Restart the local LeadIntel workflow cache? Server records will be left unchanged. Keep your downloaded backup.'))return;
+try{
+const timestamp=new Date().toISOString();const safeList=[];
+for(const key of workspaceKeys){if(localStorage.getItem(key)!==null)safeList.push(key);}
+for(const key of workspaceKeys){localStorage.removeItem(key);sessionStorage.removeItem(key);}
+$('status').textContent='Local workspace cache restarted at '+timestamp+'. '+safeList.length+' saved keys cleared from this browser. Server data was not modified. Reopening app…';
+setTimeout(()=>location.assign('/customer/?recovery_reload=1'),300);
+}catch(e){$('status').textContent='Recovery interrupted: '+e.message+'. Keep your downloaded backup.';}
+};
+describe();
+})();
+</script></body></html>
