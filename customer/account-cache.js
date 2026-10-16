@@ -147,7 +147,7 @@
     root.addEventListener?.('leadintel:server-ready',run);run();
   }
   function complete(){root.document?.documentElement?.removeAttribute('data-account-check');}
-  function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){const message=root.document?.getElementById?.('account-recovery-message');if(message)message.textContent='Your browser could not safely preserve the workspace. Keep your browser data and try again.';}}
+  function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');const message=root.document?.getElementById?.('account-recovery-message');if(!message)return;if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){message.textContent='Your browser could not safely preserve the workspace. Keep your browser data and try again.';return;}const failure=root.LeadIntelServerBridge?.startupFailure;const code=String(failure?.code||cause?.code||'startup_failed').slice(0,80);const phase=String(failure?.phase||cause?.phase||'verification').slice(0,80);const path=String(failure?.requestPath||cause?.requestPath||'').slice(0,120);message.textContent='Startup check failed ('+code+' / '+phase+(path?' / '+path:'')+'). Your local data is preserved. Retry without clearing browser storage.';}
   const api={afterVerification,prepareLocalStorageCodec,saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
   root.LeadIntelAccountCache=api;
   // Protect delayed work in old tabs, even before a storage event is delivered.
