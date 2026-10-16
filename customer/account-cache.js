@@ -17,6 +17,14 @@
       }
     };
   }
+  if(traceEnabled){
+    for(const name of ['LeadIntelOutreach','LeadIntelMessageStudio','LeadIntelMessageEvidence','LeadIntelMessageFacts','LeadIntelMessageEditor','LeadIntelMessageWorkspace','LeadIntelWritingAssistantContext','LeadIntelMessageTranslations','LeadIntelJourney','LeadIntelCompanyBrain','LeadIntelCanonicalIntelligence','LeadIntelStateBudget']){
+      let stored;Object.defineProperty(root,name,{configurable:true,get(){return stored;},set(api){
+        if(!api||typeof api!=='object'){stored=api;return;}
+        stored={...api};for(const key of Object.keys(api)){const fn=api[key];if(typeof fn!=='function')continue;stored[key]=function(...args){const started=Date.now();try{return fn.apply(this,args);}finally{const duration=Date.now()-started;if(duration>100)root.LeadIntelStartupTrace(name+'.'+key+' duration='+duration);}};}
+      }});
+    }
+  }
   const CONTEXT_KEY='leadintel_account_context_v1';
   const ARCHIVE_PREFIX='leadintel_account_cache_v1:';
   const ARCHIVE_DATABASE='leadintel_account_archives_v1';
