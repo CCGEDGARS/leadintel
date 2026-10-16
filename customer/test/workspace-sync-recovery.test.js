@@ -52,6 +52,22 @@ test('use-server fetches the current research and preserves the local draft befo
  assert.equal(JSON.parse(values.get(MAIN)).website,'server.example');assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer');assert.ok(events.includes('reload'));
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
 });
+test('use-server waits for the durable large-workspace baseline before reloading',async()=>{
+ const {root,values,events}=load(async()=>new Response(JSON.stringify({version:12,payload:{main:{website:'server.example'},discovery:{buyers:[{name:'Newest buyer'}]}}})),{withBridge:true});
+ const p=root.LeadIntelWorkspacePersistence;await p.captureWorkspaceSnapshot();p.markExplicitlySaved();
+ values.set(MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'New local draft'}}));
+ let release,started;const writing=new Promise(resolve=>{started=resolve;}),committed=new Promise(resolve=>{release=resolve;});
+ root.LeadIntelAccountCache={saveRecoverySnapshot:async snapshot=>{started();await committed;values.set('durable-recovery-copy',JSON.stringify(snapshot));return 'committed-snapshot';}};
+ const originalSet=root.localStorage.setItem;root.localStorage.setItem=function(key,value){if(key==='leadintel_customer_v2_workspace_saved_snapshot_v1'){
+   if(!String(value).includes('leadintel-indexed-workspace-snapshot-v1'))throw Object.assign(new Error('Quota exceeded'),{name:'QuotaExceededError'});
+  }return originalSet.call(this,key,value);};
+ const recovery=root.LeadIntelServerBridge.resolveConflictUseServer();
+ try{await writing;assert.equal(events.includes('reload'),false,'reload must wait for IndexedDB commit');}
+ finally{release();}
+ assert.equal((await recovery).resolved,true);assert.ok(events.includes('reload'));
+ assert.equal(JSON.parse(values.get('durable-recovery-copy')).server_version,12);
+ assert.equal(p.syncedBase('w1').version,12);assert.equal(p.hasUnsavedChanges(),false);
+});
 test('recovery download appears during conflict and hides after resolution without deleting the backup',async()=>{
  const {root,values}=load(async()=>new Response(JSON.stringify({version:12,payload:{main:{website:'server.example'}}})),{withBridge:true});
  const visibility=[];let hidden=true;

@@ -153,3 +153,19 @@ With tracing enabled, MutationObserver callbacks also report their source file
 and line on calls 1, 100 and 1000, preserving the native callback receiver,
 arguments and return behavior. These bounded entries identify observer loops
 without logging DOM text, records, full URLs or stored values.
+
+## Asynchronous recovery baseline must commit before reload
+
+Repeated authenticated recovery showed a missing-baseline conflict after choosing
+the cloud version. Five bridge paths called snapshotFromServerPayload without
+awaiting its result: opening saved flows, both automatic reconciliation branches,
+and both conflict-recovery branches. The method is synchronous while localStorage
+has room, but returns a promise when quota moves the baseline into IndexedDB.
+A reload could cancel that transaction before its pointer and baseline committed,
+causing the next boot to lack the revision needed for safe reconciliation.
+
+All five callers now await the durable baseline before marking synchronization
+complete, retrying a save, or reloading. A regression uses the real persistence
+boundary with forced snapshot quota and a held IndexedDB commit: the old bridge
+reloads before commit; the fixed bridge waits, retains both recovery copies, and
+acknowledges the committed baseline with its server revision.

@@ -138,7 +138,7 @@
       if(!response.ok||!payload.state)throw new Error(payload.error||'Could not open flow');
       if(!sameWorkspacePayload(before,bundle())){enterConflict(payload.state,'Work changed while switching flows. Local work was preserved; review the sync conflict.');throw new Error('Work changed during the switch. Local work preserved.');}
       applyPayload(payload.state.payload);bridge.stateVersion=Number(payload.state.version);rememberServerVersion(workspaceId,bridge.stateVersion);clearDirtyLocalState();
-      root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(payload.state.payload,{workspaceId,version:bridge.stateVersion,dirty:false});
+      await root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(payload.state.payload,{workspaceId,version:bridge.stateVersion,dirty:false});
       sessionStorage.setItem(HYDRATION_KEY,`${workspaceId}:${bridge.stateVersion}`);clearTimeout(saveTimer);location.reload();return {ok:true};
     });
   }
@@ -212,10 +212,10 @@
     sessionStorage.removeItem(CONFLICT_KEY);
     if(sync.equal(sync.project(result.payload),sync.project(server))){
       clearDirtyLocalState();sessionStorage.setItem(HYDRATION_KEY,`${workspaceId}:${bridge.stateVersion}`);
-      root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+      await root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
       renderConflictActions();setStatus('Synced to LeadIntel','synced');root.dispatchEvent(new CustomEvent('leadintel:server-synced'));
     }else{
-      root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(server,{workspaceId,version:bridge.stateVersion});
+      await root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(server,{workspaceId,version:bridge.stateVersion});
       rebaseDirtyLocalState();setStatus('Combining non-overlapping changes…','saving');scheduleSave();
     }
     return true;
@@ -255,7 +255,7 @@
           const server=root.LeadIntelStateBudget?.restoreFromSync?.(state.payload)||state.payload;
           const combined=root.LeadIntelWorkspaceSync.merge(base.payload,local,server,{localBase:base.localPayload||base.payload,conflictPreference:source});
           try{applyPayload(combined.payload);}catch(cause){try{applyPayload(local);}catch{}throw cause;}
-          root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:Number(state.version),dirty:true});
+          await root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:Number(state.version),dirty:true});
           bridge.conflict=false;bridge.conflictState=null;bridge.conflictDetails=null;sessionStorage.removeItem(CONFLICT_KEY);
           rebaseDirtyLocalState();renderConflictActions();setStatus('Saving combined changes…','saving');
           const result=await saveNow({saveIntent:true,explicitSave:true});
@@ -268,7 +268,7 @@
           rememberServerVersion(workspaceId,bridge.stateVersion);clearDirtyLocalState();
           bridge.conflict=false;bridge.conflictState=null;bridge.conflictDetails=null;sessionStorage.removeItem(CONFLICT_KEY);
           sessionStorage.setItem(HYDRATION_KEY,`${workspaceId}:${bridge.stateVersion}`);
-          root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+          await root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
           renderConflictActions();setStatus('Synced to LeadIntel','synced');root.dispatchEvent(new CustomEvent('leadintel:server-synced'));location.reload();return {resolved:true,source};
         }
         bridge.conflict=false;bridge.conflictState=null;bridge.conflictDetails=null;sessionStorage.removeItem(CONFLICT_KEY);
