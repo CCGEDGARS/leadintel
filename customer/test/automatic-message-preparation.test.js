@@ -67,7 +67,7 @@ test('the page quality contract checks actual core assembly, accepts deliberate 
  vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
  h.studio=S.normalize({mode:'friendly',essentials:e});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
  const session={ready:true,authenticated:true,workspaceId:'w1'},report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session});
- assert.equal(Q.allowed(report(),'approve'),true);assert.equal(Q.allowed(report(),'flow'),false);const before=JSON.stringify(h.item);
+ assert.equal(Q.allowed(report(),'approve'),false);assert.equal(report().checks.find(row=>row.id==='placeholders-resolved').status,'fail');assert.equal(Q.allowed(report(),'flow'),false);const before=JSON.stringify(h.item);
  h.item.drafts.emailBody='Tampered automatically generated body';assert.equal(report().checks.find(row=>row.id==='template-context').status,'fail');assert.equal(Q.allowed(report(),'approve'),false);
  h.item.messageStudioDraft.editorOrigin='manual';assert.equal(Q.allowed(report(),'approve'),true);assert.equal(h.item.drafts.emailBody,'Tampered automatically generated body');
  h.item.messageStudioDraft.scriptSavedAt='today';h.item.messageStudioDraft.savedDraft=E.workingDraft(h.item);assert.equal(Q.allowed(report(),'flow'),true);

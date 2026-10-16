@@ -15,7 +15,7 @@ test('approved Brutal correction also reaches the default working pattern',()=>{
 test('the approved master revision invalidates all four styles factual preparation',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const studio=S.normalize({mode,essentials}),prepared=E.preparedResponse(E.fieldSources(studio,context),studio,context),stamp=JSON.parse(prepared.source);
-  assert.equal(stamp.masterVersion,'email-master-20261015-v3');
+  assert.equal(stamp.masterVersion,'email-master-20261015-v4');
  }
 });
 test('each core contract publishes its own immutable sequence and measured body ceiling',()=>{

@@ -22,7 +22,7 @@
       "script_library_version": "channel-scripts-v1",
       "test_email_version": "gmail-test-v1",
       "inmail_version": "linkedin-inmail-v1",
-      "email_masters_version": "20261015-v2"
+      "email_masters_version": "20261015-v4"
     }
   },
   "smokeChecks": [
@@ -546,7 +546,8 @@
         "function undoTemplateUpdate(",
         "tailoredOriginal",
         "CRM save failed",
-        "AI repeated an earlier version"
+        "AI repeated an earlier version",
+        "Core paragraph slots are forbidden"
       ]
     },
     {
@@ -2231,7 +2232,7 @@
         "Many project teams simply like to have one more qualified option",
         "we would be happy to assist",
         "I wrote the introduction. The conversation would be with a real human.",
-        "email-master-20261015-v3"
+        "email-master-20261015-v4"
       ],
       "notContains": [
         "A research brought me to"

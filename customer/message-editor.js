@@ -9,7 +9,9 @@
  function outcomeSummary(value){return String(value||'').replace(/\b(reduce|simplify|improve|control|protect|support|keep|save|manage|deliver)\b/g,verb=>({reduce:'reducing',simplify:'simplifying',improve:'improving',control:'controlling',protect:'protecting',support:'supporting',keep:'keeping',save:'saving',manage:'managing',deliver:'delivering'}[verb]));}
  function referencePattern(style){
   if(!A?.records?.[style])throw Error('Approved original is unavailable');
-  return A.approvedPattern(style);
+  const pattern=A.approvedPattern(style);
+  if(/{{(?:development|friendlyOpening|coreExperience)}}/.test(pattern))throw Error('Core paragraph slots are forbidden; restore the approved factual-field pattern');
+  return pattern;
  }
  // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
  function sourceVoiceValues(style,e,raw,context,values){
@@ -24,38 +26,31 @@
   const experience=duration&&experienceIndustry?' with '+duration+' in '+experienceIndustry:'';
   values.sellerDescription=['a',origin,style==='friendly'&&facts.steel?'steel':discipline,'company'].filter(Boolean).join(' ')+(style==='friendly'?'':(style==='professional'?'':experience)+(specialization?(style==='professional'?'':',')+specialization:''));
   if(!discipline)values.sellerDescription='[Add verified company description]';
+  const missing=label=>'[Add verified '+label+']';
   const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
-  const event=reviewed?[context.trigger.summary,context.trigger.excerpt].filter(Boolean).join(' '):'',project=values.subjectProject;
-  const plant=/\b(?:new )?sorting plant\b/i.test(event),foundation=/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:under way|underway|started|start|begun)\b|\bstart\w*[^.!?]{0,40}\bfoundation/i.test(event)&&! /\b(?:not|cancelled|delayed|could|might)\b/i.test(event);
-  const year=event.match(/\b(?:due to (?:run|open|start)|ready by|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
-  if(project&&plant)values.projectDescription='the '+project+' sorting plant';
-  const contractor=event.match(/\bthrough\s+([A-Z][A-Za-z&-]*(?:\s+[A-Z][A-Za-z&-]*){0,2})(?=[.,;]|$)/)?.[1];
-  if(contractor&&context.buyerCompany&&event.includes(context.buyerCompany+' directly'))values.deliveryRoute=', either with '+context.buyerCompany+' directly or through '+contractor;
+  // Only affirmative source clauses establish factual atoms. AI triggerSummary
+  // never supplies an opening sentence or owns the approved paragraph structure.
+  const event=reviewed?[context.trigger.summary,context.trigger.excerpt].filter(Boolean).join(' '):'';
+  const clauses=event.split(/(?<=[.!?])\s+|\n+/).filter(v=>! /\b(?:not|never|no|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(v)),positiveEvent=clauses.join(' '),project=values.subjectProject;
+  const kind=positiveEvent.match(/\b(new )?(sorting plant|factory|plant|office|hospital|warehouse|data cent(?:re|er)|distribution cent(?:re|er)|production facilit(?:y|ies))\b/i);
+  const foundation=clauses.some(v=>/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:is under way|is underway|has (?:already )?(?:started|begun)|started|begun)\b|\bgetting the foundation work started\b|\b(?:is(?: now)? laying|has begun laying|has started laying) the foundations?\b(?=[^.!?]{0,100}\b(?:plant|factory|building|warehouse|facility)\b)/i.test(v));
+  const year=positiveEvent.match(/\b(?:due to (?:run|open|start)|ready by|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
+  Object.assign(values,{subjectProject:project||missing('project'),milestoneWork:foundation?'Foundation work':missing('milestone'),friendlyMilestoneWork:foundation?'the foundation work':missing('milestone'),projectType:kind?kind[0].toLowerCase():missing('project-type'),projectNoun:kind?kind[2].split(' ').at(-1).toLowerCase():missing('project-type'),openingYear:year||missing('opening-year'),deliveryItem:facts.steel?'steel structure':missing('deliverable'),deliveryMaterial:facts.steel?'steel':missing('delivery-material'),experienceDuration:duration||missing('experience-duration'),experienceOutcome:facts.steel&&manufacturing&&duration&&/\bdrawings?\b/i.test(seller)?'turning drawings into steel that arrives on time and fits':missing('experience-outcome'),friendlyScale:''});
+  if(project&&kind)values.projectDescription='the '+project+' '+kind[2].toLowerCase();
+  const contractor=positiveEvent.match(/\bthrough\s+([A-Z][A-Za-z&-]*(?:\s+[A-Z][A-Za-z&-]*){0,2})(?=[.,;]|$)/)?.[1];
+  if(contractor&&context.buyerCompany&&positiveEvent.includes(context.buyerCompany+' directly'))values.deliveryRoute=', either with '+context.buyerCompany+' directly or through '+contractor;
   if(style==='professional'&&facts.steel&&manufacturing){
    const platforms=/\bplatforms?\b/i.test(seller);
    values.offer='steel structures'+(platforms?', platforms':'')+(facts.installation?' or installation work':'');
   }
   if(style==='friendly'){
-   if(facts.steel&&manufacturing&&duration&&/\bdrawings?\b/i.test(seller))values.coreExperience='For '+duration+' we’ve worked on the less glamorous part of projects like yours: turning drawings into steel that arrives on time and fits.';
    if(manufacturing&&facts.installation)values.offer='fabrication or installation';
    if(year&&Number(year)-new Date().getUTCFullYear()===2)values.projectPeriod='your next two years';
-   if(context.trigger?.positive&&foundation&&project){
-    values.friendlyOpening='Congratulations on getting the foundation work started in '+project+'.';
-    const scale=/one of the largest buildings in/i.test(event)&&context.buyerCompany&&event.includes(context.buyerCompany),arctic=/north of the Arctic Circle/i.test(event);
-    if(scale&&arctic&&year)values.friendlyOpening+=' One of the largest buildings in '+context.buyerCompany+'’s history, north of the Arctic Circle, ready by '+year+': impressive job.';
-   }
+   const scale=/one of the largest buildings in/i.test(positiveEvent)&&context.buyerCompany&&positiveEvent.includes(context.buyerCompany),arctic=/north of the Arctic Circle/i.test(positiveEvent);
+   if(scale&&arctic&&year&&foundation&&context.trigger?.positive)values.friendlyScale=' '+A.records.friendly.paragraphs[1].split('. ').slice(1).join('. ').replace('LKAB',context.buyerCompany).replace('2028',year);
   }
-  if(style==='curiosity'){
-   values.workPackages=facts.steel?'steel packages':values.workPackages;
-   if(foundation&&project){
-    values.development='Foundation work in '+project+' is under way.';
-    if(plant&&year)values.development+=' The new sorting plant is due to run in '+year+'.'+(facts.steel?' And somewhere between those two dates, every steel structure has to arrive on time, fit the first time and stay within budget.':'');
-   }
-  }
-  if(style==='brutal'){
-   if(project&&plant&&foundation&&year){values.development=project+'’s new sorting plant came up.';if(foundation&&year&&facts.steel)values.development+=' Foundation work is under way, the plant is due to run in '+year+', and a lot of steel has to arrive on time and fit before then.';}
-   if(/\breliab\w*\b/i.test(seller)&&/\bquality\b/i.test(seller)&&/\bcosts?\b/i.test(seller))values.servicePriorities='reliable partnership, consistent quality and controlled costs';
-  }
+  if(style==='curiosity')values.workPackages=facts.steel?'steel packages':values.workPackages;
+  if(style==='brutal'&&/\breliab\w*\b/i.test(seller)&&/\bquality\b/i.test(seller)&&/\bcosts?\b/i.test(seller))values.servicePriorities='reliable partnership, consistent quality and controlled costs';
   return values;
  }
  function currentCoreBody(style,e,raw,context,values){
@@ -76,11 +71,11 @@
    meetingValue:e.meetingValue?line(e.meetingValue):missing('meeting material')
   });
   let body=referencePattern(style);
-  // Reviewed developments occupy only their declared factual paragraph. The
-  // example's year, geography, scale and project stage are never defaults.
-  if(!values.development)body=body.split('\n\n').filter(p=>p!=='{{development}}'&&p!=='{{friendlyOpening}}').join('\n\n');
-  else {values.development=line(values.development)+'.';values.friendlyOpening=context.trigger?.positive===true?'Congratulations on '+professionalDevelopment(line(values.development))+'.':values.development;}
   sourceVoiceValues(style,e,raw,context,values);
+  const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
+  // Existing unsupported-opening omissions remain explicit. Otherwise the
+  // canonical source frame stays intact, including visibly unresolved atoms.
+  if(!reviewed||style==='friendly'&&!context.trigger?.positive){const openingIndex=style==='brutal'?2:1;if(style!=='professional')body=body.split('\n\n').filter((p,i)=>i!==openingIndex).join('\n\n');}
   if(! /\bNo slides\b/i.test(raw.meetingValue||''))body=body.replace(' No slides.','');
   if(!values.proof)body=body.split('\n\n').filter(p=>p!=='{{proof}}').join('\n\n');
   body=body.replace('{{sellerWebsite}} | {{senderLinkedInUrl}}',[values.sellerWebsite,values.senderLinkedInUrl].filter(Boolean).join(' | '));

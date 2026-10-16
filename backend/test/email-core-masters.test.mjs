@@ -15,7 +15,7 @@ test('four protected email sources use October 15 approved masters',()=>{
  const rows=coreScriptSeeds.filter(row=>row.channel==='email');
  assert.equal(rows.length,4);
  for(const row of rows){
-  assert.equal(row.masterVersion,'20261015-v2');
+  assert.equal(row.masterVersion,'20261015-v4');
   assert.ok(row.original.includes(fixtures[row.style]),row.style);
   assert.ok(row.body.includes({professional:'We would like to be considered as a bidder',curiosity:'Many project teams simply like to have one more qualified option',friendly:'we would be happy to assist',brutal:'I wrote the introduction. The conversation would be with a real human.'}[row.style]),row.style);
   assert.match(row.body,/{{firstName}}/);

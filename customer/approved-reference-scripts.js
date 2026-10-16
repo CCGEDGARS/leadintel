@@ -106,7 +106,11 @@
     "linkedin.com/in/edgarsuntals": "{{senderLinkedInUrl}}"
   },
   "curiosity": {
-    "Foundation work in Malmberget is under way. The new sorting plant is due to run in 2028. And somewhere between those two dates, every steel structure has to arrive on time, fit the first time and stay within budget.": "{{development}}",
+    "Foundation work": "{{milestoneWork}}",
+    "Malmberget": "{{subjectProject}}",
+    "new sorting plant": "{{projectType}}",
+    "2028": "{{openingYear}}",
+    "steel structure": "{{deliveryItem}}",
     "a Latvian steel fabrication and installation company with more than 30 years in steel, specialising in the Scandinavian market": "{{sellerDescription}}",
     "[Real reference: “Recently we delivered X for Y in Norway.”]": "{{proof}}",
     "steel packages": "{{workPackages}}",
@@ -119,9 +123,12 @@
     "linkedin.com/in/edgarsuntals": "{{senderLinkedInUrl}}"
   },
   "friendly": {
-    "Congratulations on getting the foundation work started in Malmberget. One of the largest buildings in LKAB’s history, north of the Arctic Circle, ready by 2028: impressive job.": "{{friendlyOpening}}",
+    "the foundation work": "{{friendlyMilestoneWork}}",
+    "Malmberget": "{{subjectProject}}",
+    " One of the largest buildings in LKAB’s history, north of the Arctic Circle, ready by 2028: impressive job.": "{{friendlyScale}}",
     "a Latvian steel company": "{{sellerDescription}}",
-    "For more than 30 years we’ve worked on the less glamorous part of projects like yours: turning drawings into steel that arrives on time and fits.": "{{coreExperience}}",
+    "more than 30 years": "{{experienceDuration}}",
+    "turning drawings into steel that arrives on time and fits": "{{experienceOutcome}}",
     "I’m Edgars from": "I’m {{senderFirstName}} from",
     "[Real reference: “Most recently, X for Y in Norway.”]": "{{proof}}",
     "fabrication or installation": "{{offer}}",
@@ -136,7 +143,12 @@
     "linkedin.com/in/edgarsuntals": "{{senderLinkedInUrl}}"
   },
   "brutal": {
-    "Malmberget’s new sorting plant came up. Foundation work is under way, the plant is due to run in 2028, and a lot of steel has to arrive on time and fit before then.": "{{development}}",
+    "Malmberget": "{{subjectProject}}",
+    "new sorting plant": "{{projectType}}",
+    "Foundation work": "{{milestoneWork}}",
+    "the plant": "the {{projectNoun}}",
+    "2028": "{{openingYear}}",
+    "a lot of steel": "a lot of {{deliveryMaterial}}",
     "a Latvian steel fabrication and installation company with more than 30 years in steel, specialising in the Scandinavian market": "{{sellerDescription}}",
     "[Real reference: “Most recently, X for Y in Norway.”]": "{{proof}}",
     "reliable partnership, consistent quality and controlled costs": "{{servicePriorities}}",
@@ -156,7 +168,7 @@
  // Policy metadata is separate from the verbatim source. Never edit source wording to fit policy.
  const paragraphRoles={"brutal":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9","source paragraph 10","source paragraph 11"],"friendly":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"],"professional":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8"],"curiosity":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"]};
  const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
-  version:'email-master-20261015-v3',style,channel:'email',aiAuthority:'designated-fields-only',
+  version:'email-master-20261015-v4',style,channel:'email',aiAuthority:'designated-fields-only',
   paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
   maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
   literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
