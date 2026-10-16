@@ -60,15 +60,19 @@
       if(!details){details=root.document.createElement("details");details.className="exact-searches planned-searches";const summary=root.document.createElement("summary");summary.textContent="View exact searches";details.appendChild(summary);details.appendChild(list);wrapper.appendChild(details);}
     }
     const markup=`<div class="research-plan-head"><div><span>Research Plan</span><strong>${esc(meta.depth)} investigation</strong></div><div class="research-plan-badges"><b>${esc(meta.depth)}</b><b>${esc(meta.capacity)}</b></div></div><p class="research-plan-summary">${esc(meta.summary)}</p><div class="research-plan-themes-title">Investigation themes</div><div class="research-plan-themes">${themes.map(item=>`<div class="research-plan-theme">${esc(item)}</div>`).join("")}</div>`;
-    if(card.innerHTML!==markup)card.innerHTML=markup;
+    const template=root.document.createElement('template');template.innerHTML=markup;
+    const normalizedMarkup=template.innerHTML;
+    if(card.innerHTML!==normalizedMarkup)card.innerHTML=normalizedMarkup;
   }
 
   function updateSourceCount(root){
     const list=root.document.getElementById("research-suggested-sources");if(!list)return;
-    list.querySelector(".source-discovery-complete")?.remove();
+    let status=list.querySelector(".source-discovery-complete");
     const cards=list.querySelectorAll(".source-discovery-card");
-    if(!cards.length)return;
-    const status=root.document.createElement("div");status.className="source-discovery-complete";status.textContent=`${cards.length} relevant sources found · review, include or exclude before starting.`;list.prepend(status);
+    if(!cards.length){status?.remove();return;}
+    if(!status){status=root.document.createElement("div");status.className="source-discovery-complete";list.prepend(status);}
+    const text=`${cards.length} relevant sources found · review, include or exclude before starting.`;
+    if(status.textContent!==text)status.textContent=text;
   }
 
   function refresh(root){enhanceResearchPlan(root);updateSourceCount(root);}

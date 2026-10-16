@@ -248,8 +248,12 @@
       if(title&&title.textContent!==view.market)title.textContent=view.market;
       let context=card.querySelector(".pre-research-context");if(!context){context=root.document.createElement("div");context.className="pre-research-context";(title?.parentElement||card).appendChild(context);}
       const focus=view.commercialFocus||"Commercial focus not yet defined";const customer=view.targetCustomers||"Target customers not yet defined";
-      const html=`<div><small>Commercial focus</small><span>${esc(focus)}</span></div><div><small>Target customers</small><span>${esc(customer)}</span></div>`;
-      if(context.innerHTML!==html)context.innerHTML=html;
+      let fields=context.querySelectorAll('span');
+      if(fields.length!==2){context.innerHTML='<div><small>Commercial focus</small><span></span></div><div><small>Target customers</small><span></span></div>';fields=context.querySelectorAll('span');}
+      // Compare text with text: HTML serializers normalize escaped quotes,
+      // otherwise this observer can repeatedly trigger its own DOM mutation.
+      if(fields[0].textContent!==focus)fields[0].textContent=focus;
+      if(fields[1].textContent!==customer)fields[1].textContent=customer;
     });
   }
 
