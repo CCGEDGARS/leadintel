@@ -347,3 +347,21 @@ test('a codec fence fits a completely full UUID context and survives account tra
  await r.root.LeadIntelAccountCache.detach();assert.match(JSON.parse(values.get(context)).epoch,/^li1:/);
  await r.root.LeadIntelAccountCache.activate({workspaceId:'wa',userId:'a'});assert.match(JSON.parse(values.get(context)).epoch,/^li1:/);
 });
+
+test('startup reuses the parsed state body after snapshot work instead of rereading an expired stream',async()=>{
+ const backend=startupBackend();
+ const r=load(startupSeed(),{fetchImpl:async input=>{
+  const response=await backend(input);
+  if(new URL(input).pathname==='/api/customer/state')response.json=async()=>{throw Object.assign(Error('Body stream expired during snapshot work'),{name:'AbortError'});};
+  return response;
+ }});
+ r.session.set('leadintel_customer_v2_server_hydration','wa:3');await r.root.__init();
+ assert.equal(r.root.LeadIntelServerBridge.ready,true);assert.equal(r.attrs.has('data-account-check'),false);
+ assert.equal(r.root.LeadIntelServerBridge.stateVersion,3);
+});
+
+test('the snapshot body fix versions both its entrypoint and imported persistence module',()=>{
+ const html=fs.readFileSync(require.resolve('../index.html'),'utf8'),app=fs.readFileSync(require.resolve('../app.js'),'utf8');
+ assert.match(html,/<script type="module" src="app\.js[^"\n]*snapshot-body=20261016-v1/);
+ assert.match(app,/import '\.\/workspace-persistence\.js[^'\n]*snapshot-body=20261016-v1/);
+});

@@ -178,16 +178,18 @@
     root.fetch=async function(input,init={}){
       const {leadintelSaveIntent=false,leadintelExplicitSave=false,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
       if(method==="GET"){
-        const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json().catch(()=>({}));const workspaceId=url.searchParams.get("workspace_id")||"";
+        // Reuse the parsed body after snapshot work: its original network stream
+        // may expire while a large recovery baseline is being prepared.
+        const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json();const workspaceId=url.searchParams.get("workspace_id")||"";
         if(resetIntentMatchesUrl(url)){const cleared=await clearPendingServerReset(url,body);return jsonResponse(cleared,200);}
         if(isExplicitlySaved()&&hasLocalChangesSinceSnapshot()){
           dirtySinceSave=true;protectLocalChanges();root.setTimeout?.(renderPersistenceStatus,0);
-          return response;
+          return jsonResponse(body,response.status);
         }
         if(body?.payload?.meta?.persistence?.explicit_saved===true||(Number(body.version)>0&&["main","discovery","outreach","delivery"].some(key=>isObject(body.payload?.[key])&&Object.keys(body.payload[key]).length))){
           const versions=safeJson(root.localStorage?.getItem(VERSION_KEY)||'{}',{});
           const sameRevision=isExplicitlySaved()&&readSnapshot()?.server_synced===true&&Number(versions[workspaceId])===Number(body.version);
-          await snapshotFromServerPayload(body.payload,{workspaceId,version:Number(body.version),...(sameRevision?{localData:currentWorkspaceData(),dirty:false}:{})});return response;
+          await snapshotFromServerPayload(body.payload,{workspaceId,version:Number(body.version),...(sameRevision?{localData:currentWorkspaceData(),dirty:false}:{})});return jsonResponse(body,response.status);
         }
         const version=Math.max(0,Number(body?.version)||0);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);
         if(isExplicitlySaved())return jsonResponse({...body,payload:payloadFromSnapshot()},response.status);
