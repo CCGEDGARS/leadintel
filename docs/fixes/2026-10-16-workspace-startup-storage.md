@@ -117,3 +117,9 @@ verification before persistence or the CRM mapper existed. Dynamic bridges
 after DOMContentLoaded still start immediately. A real harness regression
 reproduces the parser-interactive ordering and verifies no request starts until
 the dependency barrier is reached.
+
+Repeated production reloads also caught a retired `improve-profile` button:
+the canonical profile runtime removes its legacy panel before verified app
+mounting. The obsolete direct binding now tolerates that removed control;
+a regression runs the real app bind function against the customer HTML with
+the retired button absent and checks that later controls are still bound.

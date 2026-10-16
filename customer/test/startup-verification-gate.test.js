@@ -59,3 +59,14 @@ test('the pure CRM migration mapper is available before optional support mountin
  assert.ok(source.indexOf("import './crm-engine.js?")<source.indexOf('async function loadSupportModules'));
  const engine=require('../crm-engine.js');assert.equal(typeof engine.mapLocalPipelineItemToCrm,'function');
 });
+test('profile controls retired before verification do not abort binding the remaining app',()=>{
+ const w=new JSDOM(read('index.html'),{url:'https://leadintel.example/customer/',runScripts:'outside-only'}).window;
+ try{
+  w.LeadIntelAccountCache={afterVerification(){}};
+  w.eval(read('app.js').replace(/^import .*$/gm,'')+'\nwindow.__bindApp=bind;');
+  w.document.getElementById('improve-profile').remove();
+  const next=w.document.getElementById('back-to-profile'),add=next.addEventListener.bind(next);let bound=0;
+  next.addEventListener=(name,...args)=>{if(name==='click')bound++;return add(name,...args);};
+  assert.doesNotThrow(()=>w.__bindApp());assert.equal(bound,1);
+ }finally{w.close();}
+});
