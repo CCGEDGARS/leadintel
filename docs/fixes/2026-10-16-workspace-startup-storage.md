@@ -54,3 +54,20 @@ by this repair.
 
 Lesson: a server-side compressed save fitting the sync budget does not prove
 that its expanded browser working copy fits Web Storage. Test both boundaries.
+
+## Production follow-up: parsed response lifetime
+
+The first release removed the quota exception. The affected browser then opened
+with a baseline-unavailable conflict: its local Discovery/outreach/delivery
+sections were empty, while cloud version 5319 retained the complete workflow.
+A recovery copy of both sides was downloaded before restoring the cloud copy.
+The local differences were derived profile metadata and the visible step.
+
+The full-cloud reopen exposed another failure, `Invalid workspace verification
+response`. The GET persistence boundary had already parsed a clone and then
+performed recovery snapshot work, but returned the original network response
+for a second body read. A regression reproduces failure when that original
+stream expires after the clone succeeds. Return a buffered JSON response from
+the already parsed body, and let failed initial body reads propagate rather
+than fabricating empty state. This separates successful network download from
+subsequent local snapshot work without weakening verification.
