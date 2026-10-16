@@ -148,3 +148,8 @@ bridge, snapshot baseline, session/list reads, account activation, workspace
 hydration and verified app mounting. Logs contain fixed stage
 labels and elapsed milliseconds only, without workspace data, identities, URLs
 or credentials. Normal visits do not emit these diagnostic entries.
+
+With tracing enabled, MutationObserver callbacks also report their source file
+and line on calls 1, 100 and 1000, preserving the native callback receiver,
+arguments and return behavior. These bounded entries identify observer loops
+without logging DOM text, records, full URLs or stored values.

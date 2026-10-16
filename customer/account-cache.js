@@ -4,6 +4,19 @@
   const traceStarted=Date.now(),traceEnabled=/(?:[?&])startup_trace=1(?:&|$)/.test(root.location?.search||'');
   root.LeadIntelStartupTrace=phase=>{if(traceEnabled)root.console?.info?.('LeadIntel startup: '+phase+' ('+(Date.now()-traceStarted)+' ms)');};
   root.LeadIntelStartupTrace('account cache loaded');
+  if(traceEnabled&&root.MutationObserver){
+    const NativeObserver=root.MutationObserver;
+    root.MutationObserver=class extends NativeObserver{
+      constructor(callback){
+        const frame=String(new Error().stack||'').split('\n').find(line=>line.includes('/customer/')&&!line.includes('account-cache.js'))||'';
+        const source=frame.match(/\/([\w-]+\.js)(?:\?[^:\s]*)?:(\d+):\d+/),label=source?source[1]+':'+source[2]:'anonymous';let calls=0;
+        super(function(records,observer){const count=++calls,report=count===1||count===100||count===1000;
+          if(report)root.LeadIntelStartupTrace('observer '+label+' #'+count+':start');
+          try{return callback.call(this,records,observer);}finally{if(report)root.LeadIntelStartupTrace('observer '+label+' #'+count+':complete');}
+        });
+      }
+    };
+  }
   const CONTEXT_KEY='leadintel_account_context_v1';
   const ARCHIVE_PREFIX='leadintel_account_cache_v1:';
   const ARCHIVE_DATABASE='leadintel_account_archives_v1';

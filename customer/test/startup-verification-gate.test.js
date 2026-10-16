@@ -1,6 +1,21 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {JSDOM}=require('jsdom');
 const read=name=>fs.readFileSync(require.resolve('../'+name),'utf8');
+test('startup observer diagnostics are opt-in and preserve native callback behavior without DOM data',async()=>{
+ for(const search of ['', '?startup_trace=1']){
+  const w=new JSDOM('<body></body>',{url:'https://leadintel.example/customer/'+search,runScripts:'outside-only'}).window;
+  const logs=[],NativeObserver=w.MutationObserver;w.console.info=message=>logs.push(message);
+  try{
+   w.eval(read('account-cache.js'));assert.equal(w.MutationObserver===NativeObserver,!search);
+   let receiver,received,argument;const observer=new w.MutationObserver(function(records,current){receiver=this;received=records;argument=current;});
+   observer.observe(w.document.body,{childList:true});const privateNode=w.document.createTextNode('private saved draft');w.document.body.append(privateNode);await Promise.resolve();
+   assert.equal(receiver,observer);assert.equal(argument,observer);assert.equal(received[0].addedNodes[0],privateNode);
+   observer.disconnect();assert.equal(logs.some(message=>message.includes('observer anonymous #1:complete')),Boolean(search));
+   assert.ok(logs.every(message=>!message.includes('private saved draft')&&!message.includes('https:')));
+   if(!search)assert.equal(logs.length,0);
+  }finally{w.close();}
+ }
+});
 test('application work waits for successful verification and runs once against the current context',()=>{
  const w=new JSDOM('',{url:'https://leadintel.example/customer/',runScripts:'outside-only'}).window;
  try{
