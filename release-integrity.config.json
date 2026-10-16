@@ -22,7 +22,8 @@
       "script_library_version": "channel-scripts-v1",
       "test_email_version": "gmail-test-v1",
       "inmail_version": "linkedin-inmail-v1",
-      "email_masters_version": "20261015-v4"
+      "email_masters_version": "20261015-v4",
+      "inmail_masters_version": "inmail-facts-20261016-v2"
     }
   },
   "smokeChecks": [
@@ -2637,7 +2638,9 @@
         "PROFESSIONAL_LINKEDIN.docx",
         "NLP_LINKEDIN.docx",
         "FRIENDLY_LINKEDIN.docx",
-        "BRUTAL_HONESTY_LINKEDIN.docx"
+        "BRUTAL_HONESTY_LINKEDIN.docx",
+        "{{milestoneWork}} in {{projectShortName}} is under way.",
+        "For {{experienceDuration}} we\u2019ve done the less glamorous part"
       ]
     },
     {
@@ -2649,7 +2652,9 @@
         "copyErrors",
         "reviewedWords",
         "aiResearchDrafted",
-        "interested"
+        "interested",
+        "inmail-facts-20261016-v2",
+        "Apply facts to sequence using the updated mandatory script"
       ]
     },
     {

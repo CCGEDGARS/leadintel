@@ -29,8 +29,10 @@ export async function coreScripts(db){
   const saved=JSON.parse(row.payload_json),master=rows.get(row.id);
   // Upgrade obsolete built-in copies, never an owner's separately edited master
   // or a deletion tombstone. Retain every replaced original in revision history.
-  const obsolete=master?.channel==='email'&&saved.masterVersion!==master.masterVersion&&(!saved.masterVersion||master.previousBuiltinBodies?.includes(saved.body));
-  if(obsolete&&!saved.deleted)rows.set(row.id,{...master,id:row.id,revision:row.revision,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision}].slice(-30)});
+  const sameStages=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((stage,i)=>stage.id===b[i].id&&stage.body===b[i].body&&stage.subject===b[i].subject);
+  const obsoleteInMail=master?.mode==='inmail'&&saved.masterVersion!==master.masterVersion&&master.previousBuiltinStages?.some(stages=>sameStages(saved.stages,stages)&&saved.body===stages[0].body&&saved.subject===stages[0].subject);
+  const obsolete=obsoleteInMail||master?.channel==='email'&&saved.masterVersion!==master.masterVersion&&(!saved.masterVersion||master.previousBuiltinBodies?.includes(saved.body));
+  if(obsolete&&!saved.deleted)rows.set(row.id,{...master,id:row.id,revision:row.revision,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision,...(saved.stages?{stages:saved.stages}:{})}].slice(-30)});
   else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:!saved.deleted&&saved.body===master?.body&&saved.subject===master?.subject});
  }
  return [...rows.values()];
