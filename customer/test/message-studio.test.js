@@ -22,9 +22,11 @@ test('seller differentiation and proof remain separate without assuming a buyer 
  for(const company of ['ManufacturingCo','SoftwareCo']){const seed=M.seed({profile:{companyName:company},answers:{differentiation:'One accountable partner',proof_points:'Approved case study'}});
  assert.equal(seed.proof,'Approved case study');assert.equal(seed.difference,'One accountable partner');assert.equal(seed.problem,'');assert.equal(seed.company,company);}
 });
-test('all default styles place a single action after meeting value and expose problem as a hypothesis',()=>{
- const s=M.normalize({},essentials);for(const t of s.templates){assert.ok(t.body.includes(t.id==='professional'?'Does your role involve finding trusted partners and managing suppliers for this project?':t.id==='curiosity'?'{{deliveryChallenge}}':t.id==='friendly'?'{{friendlyBenefit}}':'{{honestBenefit}}'));assert.ok(t.body.indexOf(t.id==='professional'?'{{calendly}}':'{{nextAction}}')>t.body.lastIndexOf('{{meetingValue}}'));}
- const p=M.prompt(s);assert.match(p.system,/hypothesis/i);assert.match(p.system,/immediately after/i);
+test('all four default email styles use October 15 approved wording and preserve factual placeholders',()=>{
+ const s=M.normalize({},essentials);const markers={professional:'We would like to be considered as a bidder',curiosity:'Many project teams simply like to have one more qualified option',friendly:'Congratulations on getting the foundation work started',brutal:'I wrote the introduction. The conversation would be with a real human.'};
+ for(const t of s.templates){assert.ok(t.body.includes(markers[t.id]),t.id);assert.match(t.body,/{{firstName}}/);assert.match(t.body,/{{calendly}}/);}
+ for(const style of Object.keys(markers))assert.ok(M.originalText(style,'email').includes(markers[style]));
+ const p=M.prompt(s);assert.match(p.system,/hypothesis/i);
 });
 
 test('restored booking placeholders use only the active workspace valid event link',()=>{
