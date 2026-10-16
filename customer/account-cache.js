@@ -1,6 +1,9 @@
 (function(root){
   'use strict';
   if(root.LeadIntelAccountCache||!root.localStorage)return;
+  const traceStarted=Date.now(),traceEnabled=/(?:[?&])startup_trace=1(?:&|$)/.test(root.location?.search||'');
+  root.LeadIntelStartupTrace=phase=>{if(traceEnabled)root.console?.info?.('LeadIntel startup: '+phase+' ('+(Date.now()-traceStarted)+' ms)');};
+  root.LeadIntelStartupTrace('account cache loaded');
   const CONTEXT_KEY='leadintel_account_context_v1';
   const ARCHIVE_PREFIX='leadintel_account_cache_v1:';
   const ARCHIVE_DATABASE='leadintel_account_archives_v1';
