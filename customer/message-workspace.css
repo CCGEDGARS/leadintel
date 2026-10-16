@@ -495,7 +495,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-editor-head{margin-bottom:8px}
 #message-studio .mw-editor-head h3{font-size:18px}
 #message-studio #mw-draft-provenance{font-size:11px;line-height:1.4;margin:3px 0 0}
-#message-studio #mw-header-actions .mw-update-help{display:none}
+#message-studio #mw-header-actions .mw-update-help{display:block}
 #message-studio .mw-editor-actions{margin:8px 0}
 #message-studio .mw-writing-assistant{margin:12px 0 0;padding:16px}
 #message-studio .mw-follow-up-host:empty{display:none}

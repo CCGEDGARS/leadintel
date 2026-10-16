@@ -78,7 +78,7 @@ test('message context reads one coherent Profile snapshot per action',()=>{
  const h=mounted();try{let reads=0;const original=h.w.mainState;h.w.mainState=()=>{reads++;return original();};const context=h.w.studioMessageContext();assert.equal(reads,1);assert.equal(context.sellerWebsite,'https://north.example');}finally{h.w.close();}
 });
 test('Update message leaves a visible completion receipt beside the button',()=>{
- const h=mounted({selected:'professional'});try{h.q('message-generate').click();assert.match(h.q('mw-update-help').textContent,/Professional updated.*Review and Save/);assert.equal(h.q('message-generate').textContent,'Update message');assert.ok(E.updateUndo(h.item()));}finally{h.w.close();}
+ const h=mounted({selected:'professional'});try{h.q('message-generate').click();const css=h.w.document.createElement('style');css.textContent=read('message-workspace.css');h.w.document.head.append(css);assert.notEqual(h.w.getComputedStyle(h.q('mw-update-help')).display,'none');assert.match(h.q('mw-update-help').textContent,/Professional updated.*Review and Save/);assert.equal(h.q('message-generate').textContent,'Update message');assert.ok(E.updateUndo(h.item()));}finally{h.w.close();}
 });
 
 test('Update reuses completed evidence research instead of restarting a disabled-button wait',()=>{
