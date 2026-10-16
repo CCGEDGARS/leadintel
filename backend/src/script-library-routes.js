@@ -23,7 +23,7 @@ export function validateScript(input,{core=false}={}){
  }
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
-export async function coreScripts(db){const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));for(const row of result.results||[])rows.set(row.id,{...JSON.parse(row.payload_json),id:row.id,revision:row.revision,builtin:false});return [...rows.values()];}
+export async function coreScripts(db){const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));for(const row of result.results||[]){const saved=JSON.parse(row.payload_json),master=rows.get(row.id);if(master?.channel==='email'&&master.masterVersion==='20261015'&&saved.masterVersion!=='20261015'){rows.set(row.id,{...master,id:row.id,revision:row.revision,builtin:false,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision}].slice(-30)});}else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:false});}return [...rows.values()];}
 async function cas(db,table,keys,values,payload,expected,extra={}){
  if(!Number.isSafeInteger(expected)||expected<0)fail('Expected revision is required');
  const names=Object.keys(extra),args=Object.values(extra),where=keys.map(k=>k+'=?').join(' AND ');let result;
@@ -53,7 +53,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
   if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal)$/.test(id))fail('Invalid core script');
   const existing=(await coreScripts(env.DB)).find(r=>r.id===id);
-  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
+  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false,...(existing?.masterVersion?{masterVersion:existing.masterVersion}:{})};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
   // Revisions preserve prior approved wording; AI paths have no access to these writes.
   const previous=await env.DB.prepare('SELECT payload_json FROM core_script_registry WHERE id=?').bind(id).first();
   if(existing?.mode==='inmail')next={...next,original:existing.original,sourceFile:existing.sourceFile,sourceSha256:existing.sourceSha256};
