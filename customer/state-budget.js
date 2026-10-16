@@ -317,7 +317,8 @@
     }
     root.Storage.prototype.getItem=function(key){
       // Keep the earlier account guard in the read chain, even on cache hits.
-      const raw=originalGet.call(this,key);
+      const readStarted=Date.now();const raw=originalGet.call(this,key);
+      if(Date.now()-readStarted>100)root.LeadIntelStartupTrace?.("slow storage read "+key+" duration="+(Date.now()-readStarted));
       if(this!==root.localStorage||!sectionKeys.has(key))return raw;
       if(raw===null){cache.delete(key);return null;}
       const previous=cache.get(key);if(previous?.raw===raw)return previous.value;
@@ -335,7 +336,8 @@
       const encoded=previous?.value===text&&originalGet.call(this,key)===previous.raw?previous.raw:encodeLocal(text);
       root.LeadIntelStartupTrace?.("storage encode:complete "+key);
       prepareWrite(encoded);
-      const result=originalSet.call(this,key,encoded);
+      const writeStarted=Date.now();const result=originalSet.call(this,key,encoded);
+      if(Date.now()-writeStarted>100)root.LeadIntelStartupTrace?.("slow storage write "+key+" duration="+(Date.now()-writeStarted));
       // Only a successful durable write may replace the cached working value.
       cache.set(key,{raw:encoded,value:text});return result;
     };
