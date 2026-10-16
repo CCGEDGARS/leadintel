@@ -141,3 +141,10 @@ Real MutationObserver regressions failed before both fixes and now assert that
 the callbacks settle, subsequent edits still refresh, and literal HTML-like text
 stays text. These conditional reproductions do not alone prove the cause of the
 authenticated Step 6 delay; repeated authenticated acceptance is still required.
+
+The remaining live reload stall requires stage evidence. Adding `startup_trace=1`
+to the URL enables opt-in console timing for the storage codec, parser-loaded
+bridge, snapshot baseline, session/list reads, account activation, workspace
+hydration and verified app mounting. Logs contain fixed stage
+labels and elapsed milliseconds only, without workspace data, identities, URLs
+or credentials. Normal visits do not emit these diagnostic entries.

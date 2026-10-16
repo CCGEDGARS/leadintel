@@ -341,6 +341,8 @@
     for(const key of sectionKeys){try{const raw=originalGet.call(root.localStorage,key);if(raw&&!raw.startsWith(prefix)){const encoded=encodeLocal(raw);if(encoded!==raw){prepareWrite(encoded);originalSet.call(root.localStorage,key,encoded);}}}catch{}}
   }
 
+  root?.LeadIntelStartupTrace?.('storage codec:start');
   installStorageGuard();
+  root?.LeadIntelStartupTrace?.('storage codec:complete');
   return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
