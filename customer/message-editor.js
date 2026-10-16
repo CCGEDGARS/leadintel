@@ -11,6 +11,53 @@
   if(!A?.records?.[style])throw Error('Approved original is unavailable');
   return A.approvedPattern(style);
  }
+ // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
+ function sourceVoiceValues(style,e,raw,context,values){
+  const approved=Object.entries(context.sellerAnswers||{}).filter(([k])=>['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(([,v])=>String(v));
+  const statements=[raw.offer,raw.difference,raw.proof,raw.approach,...approved,...S.subjectEvidenceSources(context).map(row=>row.text)].filter(Boolean).flatMap(v=>String(v).split(/(?<=[.!?])\s+|\n+/)).filter(v=>! /\b(?:no|not|never|without|unconfirmed|unknown)\b/i.test(v));
+  const seller=statements.join(' '),facts=S.subjectSellerFacts(context,raw),manufacturing=/\b(?:fabricat\w*|manufactur\w*|turn\w* drawings)\b/i.test(seller);
+  const origin=[['Latvian',/\b(?:Latvian|based in Latvia|located in Latvia|Latvia-based|Riga,? Latvia)\b/i],['Swedish',/\b(?:Swedish|based in Sweden)\b/i],['Norwegian',/\b(?:Norwegian|based in Norway)\b/i],['German',/\b(?:German|based in Germany)\b/i],['British',/\b(?:British|based in the UK)\b/i]].find(([,r])=>r.test(seller))?.[0]||'';
+  const specialization=/\bspeciali[sz]\w*[^.!?]{0,70}\bScandinavian?\b/i.test(seller)?' specialising in the Scandinavian market':'';
+  const duration=seller.match(/\b(?:(?:more than|over|at least)\s+)?\d+\+?\s+years\b/i)?.[0]?.toLowerCase()||'';
+  const discipline=facts.steel?['steel',manufacturing?'fabrication':'',facts.installation?(manufacturing?'and installation':'installation'):''].filter(Boolean).join(' '):line(e.offer);
+  const experienceIndustry=statements.find(v=>/\byears\b/i.test(v)&&/\bsteel\b/i.test(v))?'steel':/\bmetalwork\w*\b/i.test(seller)?'metalworking':'';
+  const experience=duration&&experienceIndustry?' with '+duration+' in '+experienceIndustry:'';
+  values.sellerDescription=['a',origin,style==='friendly'&&facts.steel?'steel':discipline,'company'].filter(Boolean).join(' ')+(style==='friendly'?'':(style==='professional'?'':experience)+(specialization?(style==='professional'?'':',')+specialization:''));
+  if(!discipline)values.sellerDescription='[Add verified company description]';
+  const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
+  const event=reviewed?[context.trigger.summary,context.trigger.excerpt].filter(Boolean).join(' '):'',project=values.subjectProject;
+  const plant=/\b(?:new )?sorting plant\b/i.test(event),foundation=/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:under way|underway|started|start|begun)\b|\bstart\w*[^.!?]{0,40}\bfoundation/i.test(event)&&! /\b(?:not|cancelled|delayed|could|might)\b/i.test(event);
+  const year=event.match(/\b(?:due to (?:run|open|start)|ready by|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
+  if(project&&plant)values.projectDescription='the '+project+' sorting plant';
+  const contractor=event.match(/\bthrough\s+([A-Z][A-Za-z&-]*(?:\s+[A-Z][A-Za-z&-]*){0,2})(?=[.,;]|$)/)?.[1];
+  if(contractor&&context.buyerCompany&&event.includes(context.buyerCompany+' directly'))values.deliveryRoute=', either with '+context.buyerCompany+' directly or through '+contractor;
+  if(style==='professional'&&facts.steel&&manufacturing){
+   const platforms=/\bplatforms?\b/i.test(seller);
+   values.offer='steel structures'+(platforms?', platforms':'')+(facts.installation?' or installation work':'');
+  }
+  if(style==='friendly'){
+   if(facts.steel&&manufacturing&&duration&&/\bdrawings?\b/i.test(seller))values.coreExperience='For '+duration+' we’ve worked on the less glamorous part of projects like yours: turning drawings into steel that arrives on time and fits.';
+   if(manufacturing&&facts.installation)values.offer='fabrication or installation';
+   if(year&&Number(year)-new Date().getUTCFullYear()===2)values.projectPeriod='your next two years';
+   if(context.trigger?.positive&&foundation&&project){
+    values.friendlyOpening='Congratulations on getting the foundation work started in '+project+'.';
+    const scale=/one of the largest buildings in/i.test(event)&&context.buyerCompany&&event.includes(context.buyerCompany),arctic=/north of the Arctic Circle/i.test(event);
+    if(scale&&arctic&&year)values.friendlyOpening+=' One of the largest buildings in '+context.buyerCompany+'’s history, north of the Arctic Circle, ready by '+year+': impressive job.';
+   }
+  }
+  if(style==='curiosity'){
+   values.workPackages=facts.steel?'steel packages':values.workPackages;
+   if(foundation&&project){
+    values.development='Foundation work in '+project+' is under way.';
+    if(plant&&year)values.development+=' The new sorting plant is due to run in '+year+'.'+(facts.steel?' And somewhere between those two dates, every steel structure has to arrive on time, fit the first time and stay within budget.':'');
+   }
+  }
+  if(style==='brutal'){
+   if(project&&plant&&foundation&&year){values.development=project+'’s new sorting plant came up.';if(foundation&&year&&facts.steel)values.development+=' Foundation work is under way, the plant is due to run in '+year+', and a lot of steel has to arrive on time and fit before then.';}
+   if(/\breliab\w*\b/i.test(seller)&&/\bquality\b/i.test(seller)&&/\bcosts?\b/i.test(seller))values.servicePriorities='reliable partnership, consistent quality and controlled costs';
+  }
+  return values;
+ }
  function currentCoreBody(style,e,raw,context,values){
   const missing=label=>'[Add verified '+label+']';
   const factualAnswers=Object.entries(context.sellerAnswers||{}).filter(([key])=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(([,value])=>String(value));
@@ -33,6 +80,7 @@
   // example's year, geography, scale and project stage are never defaults.
   if(!values.development)body=body.split('\n\n').filter(p=>p!=='{{development}}'&&p!=='{{friendlyOpening}}').join('\n\n');
   else {values.development=line(values.development)+'.';values.friendlyOpening=context.trigger?.positive===true?'Congratulations on '+professionalDevelopment(line(values.development))+'.':values.development;}
+  sourceVoiceValues(style,e,raw,context,values);
   if(! /\bNo slides\b/i.test(raw.meetingValue||''))body=body.replace(' No slides.','');
   if(!values.proof)body=body.split('\n\n').filter(p=>p!=='{{proof}}').join('\n\n');
   body=body.replace('{{sellerWebsite}} | {{senderLinkedInUrl}}',[values.sellerWebsite,values.senderLinkedInUrl].filter(Boolean).join(' | '));
@@ -76,7 +124,7 @@
   return sources;
  }
 
- function coreSellerFlags(context,essentials){const {steel,installation,execution}=S.subjectSellerFacts(context,essentials);return {steel,installation,execution};}
+ function coreSellerFlags(context,essentials){const {steel,installation,execution}=S.subjectSellerFacts(context,essentials);let voice=2166136261;const evidence=JSON.stringify([S.subjectEvidenceSources(context),context.sellerAnswers,context.sellerAnswerStatus]);for(let i=0;i<evidence.length;i++)voice=Math.imul(voice^evidence.charCodeAt(i),16777619);return {steel,installation,execution,voice:(voice>>>0).toString(16)};}
  function fieldFingerprint(studio,context){return JSON.stringify({contract:'verbatim-facts-v7',masterVersion:A.coreContract(studio.mode)?.version,style:studio.mode,sources:fieldSources(studio,context),sender:studio.essentials.sender,company:studio.essentials.company,buyer:context.buyerCompany,name:context.buyerName,role:context.buyerRole,sourceUrl:context.trigger?.url||'',sourceExcerpt:context.trigger?.excerpt||'',positive:context.trigger?.positive===true,sellerFacts:coreSellerFlags(context,studio.essentials),subjectSummary:context.trigger?.subjectSummary||''});}
  function foreignText(text,context={},e={}){let value=String(text||'');for(const name of [e.sender,e.company,context.buyerName,context.buyerCompany])if(name)value=value.split(name).join('');return /[\u0400-\u04ff\u4e00-\u9fff]|\b(?:satsar|miljarder|sorteringsverk|sovringsverk|framtidssäkrar|produktionen|på ett|för att|samtidigt som|arbeits|unternehmen|paplašin|ieguld)\b/i.test(value);}
  function benefit(value,company){let text=line(value);const escaped=String(company||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const subject=escaped?'(?:'+escaped+'|we|they|our team)':'(?:we|they|our team)';text=text.replace(new RegExp('^'+subject+'\\s+(?:can|could|will)\\s+','i'),'').replace(new RegExp('^'+subject+'\\s+(?:helps?|supports?)\\s+','i'),'help ');return /^(?:reduce|simplify|improve|support|protect|keep|increase|deliver|help|strengthen|streamline|save|manage|avoid|ensure|build|develop|provide|achieve)\b/i.test(text)?text.charAt(0).toLowerCase()+text.slice(1):text;}

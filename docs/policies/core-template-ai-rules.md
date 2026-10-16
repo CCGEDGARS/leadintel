@@ -233,3 +233,9 @@ final actions; template generation never supplies approval or send authority.
 The source's “20 minutes on Zoom” and “20-minute chat on Zoom” are valid invitation
 forms and retain the selected working meeting platform. The fuller root cause,
 source boundaries and verification are in `docs/fixes/2026-10-16-email-master-integration.md`.
+
+## Approved source voice correction — 16 October 2026
+
+The October 15 masters remain verbatim. Declared factual spans retain their source sentence frames when the workspace supplies their facts. A generic “a company providing” Profile summary must not replace the approved company description; a verified sorting plant must not become an unspecified project. Source-aware company, experience, work-package, project, milestone and route frames require explicit supporting seller/selected-trigger evidence. Geography, years, Arctic location, contractor and schedule remain unknown unless supported. Other industries derive their description from their own offer. No ERCON, LKAB or Malmberget identity is a runtime default.
+
+Renderer contract `email-master-20261015-v3` invalidates prepared caches. Explicit Update preserves prior text in recovery history and leaves a visible completion receipt; Save remains separate. Source originals, layout/length gates, six-field AI authority and approval/send controls remain unchanged.

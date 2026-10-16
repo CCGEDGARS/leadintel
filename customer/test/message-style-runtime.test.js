@@ -73,3 +73,14 @@ for(const style of ['professional','curiosity','friendly','brutal','original'])t
  retry.resolve({ok:false,json:async()=>({error:'Still unavailable'})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').disabled,false);assert.equal(h.q('message-mode').value,style);
  }finally{h.w.close();}
 });
+
+test('message context reads one coherent Profile snapshot per action',()=>{
+ const h=mounted();try{let reads=0;const original=h.w.mainState;h.w.mainState=()=>{reads++;return original();};const context=h.w.studioMessageContext();assert.equal(reads,1);assert.equal(context.sellerWebsite,'https://north.example');}finally{h.w.close();}
+});
+test('Update message leaves a visible completion receipt beside the button',()=>{
+ const h=mounted({selected:'professional'});try{h.q('message-generate').click();assert.match(h.q('mw-update-help').textContent,/Professional updated.*Review and Save/);assert.equal(h.q('message-generate').textContent,'Update message');assert.ok(E.updateUndo(h.item()));}finally{h.w.close();}
+});
+
+test('Update reuses completed evidence research instead of restarting a disabled-button wait',()=>{
+ const h=mounted({selected:'professional'});try{const item=h.item();item.messageStudioDraft.subjectResearch={key:S.subjectResearchKey(h.w.studioState(),h.w.studioMessageContext()),sources:[]};h.w.upsertItem(item);h.w.renderAll();h.q('message-generate').click();assert.equal(h.requests.length,0);assert.equal(h.q('message-generate').disabled,false);assert.match(h.q('mw-update-help').textContent,/Professional updated/);}finally{h.w.close();}
+});

@@ -156,7 +156,7 @@
  // Policy metadata is separate from the verbatim source. Never edit source wording to fit policy.
  const paragraphRoles={"brutal":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9","source paragraph 10","source paragraph 11"],"friendly":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"],"professional":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8"],"curiosity":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"]};
  const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
-  version:'email-master-20261015-v2',style,channel:'email',aiAuthority:'designated-fields-only',
+  version:'email-master-20261015-v3',style,channel:'email',aiAuthority:'designated-fields-only',
   paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
   maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
   literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
