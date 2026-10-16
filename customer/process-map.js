@@ -44,6 +44,7 @@
  */
 
 (()=>{
+function initializeVerifiedProcessMap(){
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -283,4 +284,6 @@ if(processMap){
   syncContextArchitecture();syncProcessMap();
   window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,openWorkflowStage:openProcessStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
 }
+}
+if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(initializeVerifiedProcessMap);else initializeVerifiedProcessMap();
 })();

@@ -71,3 +71,49 @@ stream expires after the clone succeeds. Return a buffered JSON response from
 the already parsed body, and let failed initial body reads propagate rather
 than fabricating empty state. This separates successful network download from
 subsequent local snapshot work without weakening verification.
+
+## Recurrence: shared body errors and startup ordering
+
+A subsequent authenticated reload reproduced the same recovery screen. The
+stack now ended in `fetchWorkspaces`, before workspace-state hydration. This
+proved that buffering the state GET alone did not cover the shared startup
+request boundary. `api()` swallowed every `response.json()` failure as `{}`;
+a timeout or interrupted body therefore became an invalid payload, bypassing
+the retry policy for transient startup reads.
+
+Successful response-body errors now retain a safe path, phase, HTTP status,
+and original error cause. The three mandatory startup GETs retry transient
+AbortError, TimeoutError and TypeError body failures with their existing bounded
+policy. Malformed successful JSON remains a verification failure. Empty or
+non-JSON HTTP error responses retain status handling. Writes are never retried.
+
+The startup sequence also mounted the app and optional normalization modules
+before verification completed. `app.init -> setStep -> saveState` could mutate
+the local baseline behind the CSS verification overlay. The application now
+loads saved state and mounts only after successful bridge readiness; support
+modules wait at the same boundary. Failure readiness events and stale tabs
+cannot start either callback, and callbacks run only once. The minimal storage,
+persistence and bridge dependencies remain available for authentication and
+hydration, avoiding a circular startup dependency.
+
+Regressions exercise interrupted real ReadableStream bodies at session,
+workspace-list and workspace-state checks, real AbortController deadlines,
+exhausted failures without clearing saved records, non-retried logout writes,
+and the real app's public entrypoints while the verification gate is closed.
+Repeated authenticated reloads are required for acceptance; a single successful
+open and static production smoke checks do not prove restart reliability.
+
+Discovery's saved-message bootstrap and the process-map mount also wait for
+verification, so restoring Step 6 cannot load the full workflow while session
+checks are pending. The pure CRM mapper remains a static prerequisite of the
+support entrypoint so the bridge's post-verification pipeline migration keeps
+its dependency ordering. Public navigation returns without mutation until app
+state exists; page checks explicitly report loading during that interval.
+
+The bridge itself now waits for DOMContentLoaded when running as a parser-
+deferred script. Browsers mark those scripts `interactive` while later module
+dependencies are still loading; the old `loading`-only check could start API
+verification before persistence or the CRM mapper existed. Dynamic bridges
+after DOMContentLoaded still start immediately. A real harness regression
+reproduces the parser-interactive ordering and verifies no request starts until
+the dependency barrier is reached.

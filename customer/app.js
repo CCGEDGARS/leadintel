@@ -23,7 +23,7 @@ const profileFields=[
   ["valueProposition","Value proposition",true],["differentiation","Competitive advantages",true],["proofPoints","Approved proof points",true],
   ["buyingTriggers","Buying situations / triggers",true],["commonObjections","Common buyer objections",true],["exclusions","Negative ICP / exclusions",false]
 ];
-let state=loadState();
+let state=null;
 let editMode=false;
 let pdfModule=null;
 let resetConfirmTimer=null;
@@ -63,6 +63,7 @@ function loadState(){
   }catch{return defaultState();}
 }
 function saveState(){
+  if(!state||(window.LeadIntelAccountCache&&window.LeadIntelServerBridge?.ready!==true))return;
   // The customer modal and the main journey edit the same storage key independently.
   // Keep the modal's latest lists and activation when an older in-memory app state saves.
   try{
@@ -95,6 +96,7 @@ function observeNavigation(){
 }
 function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7?Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.()):false;}
 function setStep(step){
+  if(!state)return false;
   if(Number(step)>=4&&!campaignModuleAllowed(step)&&!LeadIntelTargeting.isConfirmed(state)){LeadIntelTargeting.focusRequired(window,state);return false;}
   state.step=step;saveState();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
@@ -409,6 +411,7 @@ function ensureMarketStrategySeeded(){
   saveState();
 }
 async function openModule(step){
+  if(!state)return false;
   const target=Number(step)||1;readSources();
   if(campaignModuleAllowed(target)){try{if(typeof window.LeadIntelCampaignModuleLoader!=='function')throw Error('Messages are still loading. Your campaign is saved; retry in a moment.');await window.LeadIntelCampaignModuleLoader(target);if(!campaignModuleAllowed(target))return false;setStep(target);return true;}catch(error){showToast(error.message||'Campaign workspace could not load. Retry.');return false;}}
   if(target>=4&&!requireConfirmedTargeting())return false;
@@ -1224,7 +1227,7 @@ function setActivationFeedback(message,tone){
   target.dataset.state=tone||"";
   target.hidden=!message;
 }
-window.LeadIntelPageProcedures={strategyBlockers:()=>strategyHandoffModel().blockers};
+window.LeadIntelPageProcedures={strategyBlockers:()=>state?strategyHandoffModel().blockers:["Workspace verification is still loading."]};
 function strategyHandoffModel(){
   const icps=(state.market.icps||[]).filter(item=>item.active);
   const signals=(state.market.signals||[]).filter(item=>item.active);
@@ -1551,8 +1554,9 @@ function bind(){
   });
 }
 function init(){
+  state=loadState();
   syncInputsFromState();bind();initBrandIdentity();updateCompleteness();updateNavigationAvailability();observeNavigation();
   setStep(state.step||1);
   void resumePendingMarketResearchAfterAuth();
 }
-init();
+if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(init);else init();
