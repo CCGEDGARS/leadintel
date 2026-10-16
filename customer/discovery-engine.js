@@ -1,5 +1,6 @@
 (function(root,factory){
   const api=factory();
+  if(/(?:[?&])startup_trace=1(?:&|$)/.test(root?.location?.search||"")){for(const name of Object.keys(api)){const fn=api[name];if(typeof fn!=="function")continue;api[name]=function(...args){const started=Date.now();try{return fn.apply(this,args);}finally{const duration=Date.now()-started;if(duration>25)root.LeadIntelStartupTrace?.("discovery "+name+" duration="+duration);}};}}
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelDiscovery=api;
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
