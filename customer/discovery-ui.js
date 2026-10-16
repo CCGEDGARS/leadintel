@@ -2407,7 +2407,8 @@ function ensureMessagesStageLoaded(){
 }
 window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===6)void ensureMessagesStageLoaded();});
 const initialStage=()=>{try{return Number(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').step)}catch{return 0;}};
-if(initialStage()===6)void ensureMessagesStageLoaded();
+function restoreInitialMessagesStage(){if(initialStage()===6)void ensureMessagesStageLoaded();}
+if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(restoreInitialMessagesStage);else restoreInitialMessagesStage();
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
 window.addEventListener?.('leadintel:server-conflict',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:server-synced',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
