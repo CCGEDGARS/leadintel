@@ -123,3 +123,21 @@ the canonical profile runtime removes its legacy panel before verified app
 mounting. The obsolete direct binding now tolerates that removed control;
 a regression runs the real app bind function against the customer HTML with
 the retired button absent and checks that later controls are still bound.
+
+## Observer stability found during repeated reload acceptance
+
+A separate render-stability review found two conditional observer feedback loops.
+Profile-only market cards compared escaped HTML against the browser's serialized
+HTML. Quotes and apostrophes serialize differently, so the body observer could
+rewrite the same text forever. These fields now compare textContent and update
+only changed text. Research-plan markup is normalized through an inert template
+before comparison for the same reason.
+
+The research-preview observer also removed and recreated the source-count label
+on every refresh. Populated source cards therefore scheduled another refresh
+indefinitely, including in a hidden preview. The count label now retains its node,
+updates only when the count changes, and disappears when no source cards remain.
+Real MutationObserver regressions failed before both fixes and now assert that
+the callbacks settle, subsequent edits still refresh, and literal HTML-like text
+stays text. These conditional reproductions do not alone prove the cause of the
+authenticated Step 6 delay; repeated authenticated acceptance is still required.

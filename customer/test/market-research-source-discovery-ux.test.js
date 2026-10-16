@@ -4,6 +4,30 @@ const fs=require('node:fs');
 const path=require('node:path');
 const ux=require('../market-research-ux.js');
 const engine=require('../market-engine.js');
+const {JSDOM}=require('jsdom');
+
+test('quoted profile text settles the real page observer and still refreshes after edits',async()=>{
+  const dom=new JSDOM('<body><article class="opportunity-card unresearched"><h4>Market</h4></article></body>',{url:'https://example.test/customer/'});
+  const root=dom.window,state={profile:{targetMarkets:'Sweden',priorityOffers:"Customer's software & \"AI\" <support>",idealCustomer:'\"Enterprise\" buyers'}};
+  root.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
+  let callbacks=0;const NativeObserver=root.MutationObserver,observers=[];
+  root.MutationObserver=class extends NativeObserver{constructor(callback){super(records=>{callbacks++;if(callbacks>20){this.disconnect();return;}callback(records);});observers.push(this);}};
+  try{
+    ux.install(root);root.document.dispatchEvent(new root.Event('DOMContentLoaded'));
+    root.document.body.append(root.document.createElement('aside'));
+    await new Promise(resolve=>root.setTimeout(resolve,0));
+    assert.ok(callbacks<20,`page observer did not settle: ${callbacks} callbacks`);
+    const fields=root.document.querySelectorAll('.pre-research-context span');
+    assert.equal(fields[0].textContent,state.profile.priorityOffers);
+    assert.equal(fields[1].textContent,state.profile.idealCustomer);
+    assert.equal(root.document.querySelector('.pre-research-context support'),null);
+    state.profile.priorityOffers='New "quoted" offer';root.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
+    root.document.body.append(root.document.createElement('aside'));
+    await new Promise(resolve=>root.setTimeout(resolve,0));
+    assert.equal(fields[0].textContent,state.profile.priorityOffers);
+    assert.ok(callbacks<20,'profile edits must also settle');
+  }finally{observers.forEach(observer=>observer.disconnect());dom.window.close();}
+});
 
 const profile={
   targetMarkets:'Latvia',
