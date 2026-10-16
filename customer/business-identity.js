@@ -26,7 +26,7 @@
       .replace(/!\[[^\]]*\]\([^)]+\)/gi," ")
       .replace(/\[([^\]]+)\]\((?:https?:\/\/)[^)]+\)/gi," $1 ")
       .replace(/https?:\/\/\S+/gi," ")
-      .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
+      .replace(/(?<!\S)\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
       .replace(/<[^>]+>/g," ")
       .replace(/[#*_`>|]/g," "))
       .replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ");

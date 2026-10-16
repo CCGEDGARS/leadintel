@@ -124,13 +124,16 @@
     return value;
   }
   function isNavigationContaminated(text){return navigationRuns(text).length>0;}
+  // Start filename scans once per whitespace-delimited token. A word boundary
+  // retries at every hyphen in long scraped asset IDs, causing quadratic work
+  // on the main thread during saved-profile restoration.
   function cleanEvidenceText(text){
     return stripNavigationChains(String(text??""))
       .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
       .replace(/\[([^\]]+)\]\((?:https?:\/\/)[^)]+\)/gi," $1 ")
       .replace(/\((?:https?:\/\/)[^)]+\)/gi," ")
       .replace(/https?:\/\/[^\s)\]]+/gi," ")
-      .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
+      .replace(/(?<!\S)\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
       .replace(/[#*_`>|]/g," ")
       .replace(NAVIGATION_LABEL_RE,". ")
       .replace(/\bRealizētie\s+projekti\s*[–—-]\s*iedvesma\s+tavai\s+darba\s+videi\b/gi,". ")
@@ -143,7 +146,7 @@
   function hasEvidenceNavigationNoise(value){return NAVIGATION_FRAGMENT_RE.test(String(value??""))||isNavigationContaminated(value);}
   function hasAssetNoise(value){
     const text=String(value??"");
-    return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
+    return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|(?<!\S)\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
   }
   function normalizeEvidenceSentence(value){
     return clean(value).replace(/^(?:(?:[A-Z][A-Z0-9&/+.-]{1,})\s+){1,5}(?=[A-Z][a-z])/,'').trim();
