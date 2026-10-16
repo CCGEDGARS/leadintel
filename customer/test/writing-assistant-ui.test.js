@@ -63,3 +63,12 @@ test('reuses the static launcher and never returns request completion focus to t
  open.click();const input=d.querySelector('[data-wa-instruction]');input.value='Keep my unsent instruction';d.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));assert.equal(asks,1);d.querySelector('[data-wa-close]').click();assert.equal(d.activeElement,open);d.getElementById('other').focus();finish();await Promise.resolve();await Promise.resolve();assert.equal(d.activeElement,d.getElementById('other'));assert.equal(d.querySelector('dialog').hasAttribute('open'),false);
  open.click();assert.equal(input.value,'Keep my unsent instruction');assert.match(d.querySelector('[data-wa-transcript]').textContent,/Advice retained/);assert.equal(d.querySelector('[data-wa-body]').textContent,'Preserved proposal');assert.equal(d.querySelector('.wa-session').classList.contains('wa-has-preview'),true);assert.equal(asks,1);d.querySelector('dialog').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(d.activeElement,open);assert.equal(panel.closest('dialog'),d.querySelector('dialog'));ui.destroy();assert.equal(panel.hidden,true);assert.equal(open.disabled,true);assert.equal(launcher.querySelector('button'),open);
 });
+
+test('assistant render evaluates readiness once and refreshes all buttons together',()=>{
+ const w=new JSDOM('<section id="mw-writing-assistant"></section>').window;let checks=0,ready=true;
+ const controller={state:()=>({messages:[],busy:false,scope:'scope',working:{subject:'Subject',message:'Draft'},workingStyle:'original',original:{subject:'Subject',message:'Draft'}}),ask(){},applyPreview(){},discardPreview(){},cancel(){}};
+ const ui=api.mountWritingAssistant(w.document,controller,{usable:()=>{checks++;return ready;}});
+ const before=checks;ready=false;ui.render();assert.equal(checks-before,1);
+ for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template],[data-wa-use-flow]'))assert.equal(button.disabled,true);
+ ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-use-flow]').disabled,false);ui.destroy();w.close();
+});

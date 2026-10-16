@@ -1,11 +1,11 @@
 import './approved-linkedin-inmail.js?v=20261015-v1';
 import './linkedin-inmail-engine.js?v=20261015-v1';
-import './linkedin-inmail-ui.js?v=20261015-v1';
+import './linkedin-inmail-ui.js?v=20261015-v1&startup-render=20261016-v1';
 import './test-email-ui.js?v=20261015-v1';
-import './channel-scripts.js?v=20261015-v3';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v1';
 import './writing-assistant.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1';
-import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2';
+import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v1';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
 import './message-evidence.js?v=20261010-evidence-v3';

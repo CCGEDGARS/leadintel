@@ -23,7 +23,8 @@ function mount(document,a){
  const feedback=el('p');feedback.id='inmail-status';feedback.setAttribute('role','status');host.append(feedback);
  const library=el('details',null,'inmail-library');library.id='inmail-library';library.append(el('summary','InMail Script Library'));const libraryRows=el('div');library.append(libraryRows);q('mw-tools-drawer').querySelector('.mw-tools-content').prepend(library);
  const edit=el('section',null,'inmail-edit');edit.hidden=true;library.append(edit);
- function c(){return a.context();}
+ let renderContext=null;
+ function c(){return renderContext||a.context();}
  function key(){const x=c();return JSON.stringify([x.workspaceId,x.userId,x.companyId,x.contactId]);}
  function fingerprint(){const x=c();return I.fingerprint({...x,values:a.values()});}
  function active(){return mode==='inmail'&&c().channel==='linkedin';}
@@ -68,7 +69,8 @@ function mount(document,a){
   if(catalogue().inmailPrimary?.[0]?.template_id)libraryRows.append(button('Return InMail to core defaults',async()=>{await a.request('/inmail-primary',{method:'PUT',body:{templateId:null,expectedRevision:catalogue().inmailPrimary[0].revision}});await a.refreshLibrary();catalogueKey='';render();}));
   if(catalogue().canManage)for(const seed of root.LeadIntelApprovedInMail?.records||[])if(!catalogueRows.some(r=>r.id===seed.id)){const old=catalogue().core?.find(r=>r.id===seed.id);libraryRows.append(button('Restore '+seed.name+' core',()=>openTemplate({...seed,revision:old?.revision||0})));}
  }
- function render(){const x=c(),target=key(),nextTypeScope=JSON.stringify([x.workspaceId,x.userId]);if(typeScope!==nextTypeScope){typeScope=nextTypeScope;try{mode=root.sessionStorage.getItem('leadintel:inmail-mode:'+typeScope)==='inmail'?'inmail':'direct';}catch{mode='direct';}}types.hidden=x.channel!=='linkedin';styles.hidden=!active();host.hidden=!active();library.hidden=!active();step.dataset.linkedinMode=active()?'inmail':'direct';for(const b of typeButtons.children)b.setAttribute('aria-pressed',String(b.dataset.inmailMode===mode));if(target!==scope){stash();generation++;busy=false;scope=target;loaded=false;record=empty();revision=0;dirty=false;contextKey=fingerprint();editorScope='';edit.hidden=true;catalogueKey='';if(active()&&x.workspaceId&&x.userId&&x.companyId&&x.contactId)void load();}
+ function render(){const previous=renderContext;renderContext=a.context();try{return renderView();}finally{renderContext=previous;}}
+ function renderView(){const x=c(),target=key(),nextTypeScope=JSON.stringify([x.workspaceId,x.userId]);if(typeScope!==nextTypeScope){typeScope=nextTypeScope;try{mode=root.sessionStorage.getItem('leadintel:inmail-mode:'+typeScope)==='inmail'?'inmail':'direct';}catch{mode='direct';}}types.hidden=x.channel!=='linkedin';styles.hidden=!active();host.hidden=!active();library.hidden=!active();step.dataset.linkedinMode=active()?'inmail':'direct';for(const b of typeButtons.children)b.setAttribute('aria-pressed',String(b.dataset.inmailMode===mode));if(target!==scope){stash();generation++;busy=false;scope=target;loaded=false;record=empty();revision=0;dirty=false;contextKey=fingerprint();editorScope='';edit.hidden=true;catalogueKey='';if(active()&&x.workspaceId&&x.userId&&x.companyId&&x.contactId)void load();}
   if(contextKey!==fingerprint()){invalidate();contextKey=fingerprint();stash();}
   if(!active())return;
   for(const b of stylesList.children){b.disabled=!loaded||busy||!x.usable||x.busy;b.setAttribute('aria-pressed',String(b.dataset.inmailStyle===record.style));}for(const b of stageTabs.children){b.disabled=!loaded||busy;b.setAttribute('aria-pressed',String(b.dataset.inmailStage===record.stage));}
