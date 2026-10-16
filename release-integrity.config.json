@@ -14,7 +14,7 @@
       "workflow_version": "approved-workflow-v1",
       "saved_flows_version": "my-flows-v1",
       "payment_alerts_version": "payment-connection-v1",
-      "writing_assistant_version": "writing-assistant-v1",
+      "writing_assistant_version": "writing-assistant-v2",
       "ai_task_routing_version": "ai-task-routing-v1",
       "follow_up_assistant_version": "follow-up-assistant-v1",
       "email_campaign_setup_version": "campaign-setup-v2",
@@ -1678,7 +1678,10 @@
         "createWritingAssistant",
         "applyPreview",
         "syncContext",
-        "AbortController"
+        "AbortController",
+        "reconcileDraft",
+        "loadCurrentDraft",
+        "m.sourceKey===sourceKey(c)"
       ]
     },
     {
@@ -1691,7 +1694,10 @@
         "data-wa-preview",
         "data-wa-source",
         "textContent",
-        "showModal"
+        "showModal",
+        "Load current script",
+        "Keep assistant copy",
+        "Manage book"
       ]
     },
     {

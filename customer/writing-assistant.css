@@ -76,3 +76,5 @@
 .wa-active-book{display:flex;align-items:center;gap:9px;padding:10px;border-radius:9px;background:#f0f6f2;font-size:12px}.wa-active-book span{flex:1;overflow-wrap:anywhere}.wa-active-book img{width:27px;height:38px;object-fit:cover;border-radius:2px}.wa-active-book button{padding:6px 8px;font-size:11px}
 .wa-script-picker{padding:12px;background:#f0f6f2;border-radius:10px}.wa-script-picker pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;max-height:220px;overflow:auto}.wa-workspace [role=status]:empty{display:none}
 @media(max-width:720px){.wa-dialog .wa-session.wa-workbench{grid-template-columns:minmax(0,1fr)}.wa-dialog .wa-session.wa-workbench>*{grid-column:1!important;grid-row:auto!important}.wa-workspace{padding:14px}.wa-active-book{flex-wrap:wrap}.wa-workspace textarea{min-height:260px}}
+
+.wa-active-book{flex-wrap:wrap}.wa-active-book small{flex-basis:100%;color:#52675b;line-height:1.5}[data-wa-incoming]{padding:12px;border:1px solid #d2b77a;border-radius:9px;background:#fff9eb}

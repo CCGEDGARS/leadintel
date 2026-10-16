@@ -33,7 +33,9 @@ export async function retrieveAssistantSources(env,scope,{sourceRefs=[],query=''
  const indexed=all.map(p=>({p,tokens:words(p.text)}));for(const {tokens} of indexed)for(const token of tokens)frequency.set(token,(frequency.get(token)||0)+1);
  const ranked=indexed.map(({p,tokens})=>({p,score:[...queryWords].reduce((n,w)=>n+(tokens.has(w)?Math.log(1+indexed.length/(frequency.get(w)||1)):0),0)})).filter(r=>r.score>0).sort((a,b)=>b.score-a.score||a.p.id.localeCompare(b.p.id));
  const techniques=selectWritingGuidance({catalogues,query,maxCharacters:2200}).techniques;
- const passages=[];for(const {p} of ranked){if(passages.length===8)break;if(JSON.stringify({instructions,techniques,passages:[...passages,p]}).length>12000)continue;passages.push(p);}
+ const methodPassages=all.filter(p=>techniques.some(t=>t.sourceId===p.sourceId&&t.locations?.includes(p.location)));
+ const candidates=[...methodPassages.slice(0,4),...ranked.map(r=>r.p)];
+ const passages=[];for(const p of candidates){if(passages.length===8)break;if(passages.some(prior=>prior.id===p.id))continue;if(JSON.stringify({instructions,techniques,passages:[...passages,p]}).length>12000)continue;passages.push(p);}
  for(const ref of sourceRefs)if(!passages.some(p=>p.sourceId===ref.id)&&!warnings.some(w=>w.includes('unavailable')))warnings.push('No relevant passages found in a selected source. Try a more specific question.');
  if(await writingReferenceRevision(env,scope)!==before)fail('Writing references changed. Ask again.');
  return {referenceRevision:before,sourceRefs:sourceRefs.map(r=>({id:r.id,revision:r.revision})),instructions,techniques,passages,warnings};

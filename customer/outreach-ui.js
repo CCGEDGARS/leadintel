@@ -1,27 +1,27 @@
-import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2';
-import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2';
-import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&startup-render=20261016-v2';
+import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
+import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
+import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3&startup-render=20261016-v2';
 import './test-email-ui.js?v=20261015-v1';
 import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2';
-import './writing-assistant.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3';
-import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2';
-import './writing-assistant-ui.js?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2';
+import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v3&step6-rescue=20261013-v11&assistant-window=20261015-v3';
+import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
+import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v3&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
 import './message-evidence.js?v=20261010-evidence-v3';
 import './content-materials.js?v=20261009-practical-tools-v1';
-import './approved-reference-scripts.js?email-masters=20261015-v1&v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2';
+import './approved-reference-scripts.js?email-masters=20261015-v1&v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?writing-assistant=20261012-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&single-editor=20261009-v4&sender-reference=20261010-v2&subject-editor=20261011-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2';
+import './message-workspace.js?writing-assistant=20261012-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&blank-preparation=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&subject-toolbar=20261011-v1&single-editor=20261009-v4&sender-reference=20261010-v2&subject-editor=20261011-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
 import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&core-renderer=20261011-v3';
 import './message-translations.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?email-masters=20261015-v1&prompt-budget=20261013-v1&generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2';
+import './message-studio.js?email-masters=20261015-v1&prompt-budget=20261013-v1&generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
 import './subject-editor.js?v=20261011-subjects-v1';
-import './message-editor.js?brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2';
+import './message-editor.js?brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v3';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -908,7 +908,7 @@ function captureWritingAssistantContext(){
 }
 function assistantScripts(){
  if(globalThis.LeadIntelInMail?.active())return globalThis.LeadIntelInMail.scripts();
- if(globalThis.LeadIntelChannelWorkspace){const ch=globalThis.LeadIntelChannelWorkspace.channel(),studio=studioState(),legacy=ch==='email'?Object.values(studio.myTemplates||{}):ch==='linkedin'?Object.values(studio.linkedinTemplates||{}):[];return [{id:"current",name:"Current working draft",...globalThis.LeadIntelChannelWorkspace.draft()},...globalThis.LeadIntelChannelWorkspace.rows(),...legacy.filter(r=>!r.deleted).map(r=>({id:"legacy:"+r.id,name:r.name+" · Earlier template",subject:r.subject||"",message:r.body,style:r.sourceStyle||"original"}))];}
+ if(globalThis.LeadIntelChannelWorkspace){const ch=globalThis.LeadIntelChannelWorkspace.channel(),studio=studioState(),legacy=ch==='email'?Object.values(studio.myTemplates||{}):ch==='linkedin'?Object.values(studio.linkedinTemplates||{}):[];return [{id:"current",name:"Current working draft",...globalThis.LeadIntelChannelWorkspace.draft(),style:ch==='linkedin'?studio.linkedinMode:ch==='phone'?globalThis.LeadIntelChannelWorkspace.style():studio.mode},...globalThis.LeadIntelChannelWorkspace.rows(),...legacy.filter(r=>!r.deleted).map(r=>({id:"legacy:"+r.id,name:r.name+" · Earlier template",subject:r.subject||"",message:r.body,style:r.sourceStyle||"original"}))];}
  const studio=studioState(),linkedin=currentItem()?.channel==='linkedin',current=editorDraft();
  const rows=[{id:'current',name:'Current Step 6 draft',...current,style:linkedin?studio.linkedinMode:studio.mode}];
  const templates=linkedin?[...LeadIntelMessageStudio.linkedinDefaults,...Object.values(studio.linkedinTemplates).filter(t=>!t.deleted)]:[...LeadIntelMessageStudio.defaults,...studio.templates.filter(t=>t.isPersonal)];
@@ -942,7 +942,7 @@ async function useAssistantDraft(draft,style){
 }
 function installWritingAssistant(){
  if(writingAssistant||!globalThis.LeadIntelWritingAssistantUI)return;
- const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3';document.head.append(link);
+ const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&assistant-books=20261016-v3&step6-rescue=20261013-v11&assistant-window=20261015-v3';document.head.append(link);
  writingAssistant=globalThis.LeadIntelWritingAssistant.createWritingAssistant({workbench:true,capture:captureWritingAssistantContext,validatePreview:async(proposal,context)=>{
   await globalThis.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:crmBridge()?.workspace?.id}).assertGenerationCurrent(proposal.provenance);
   globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(proposal.draft,context);
