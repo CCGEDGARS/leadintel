@@ -23,7 +23,7 @@ test('seller differentiation and proof remain separate without assuming a buyer 
  assert.equal(seed.proof,'Approved case study');assert.equal(seed.difference,'One accountable partner');assert.equal(seed.problem,'');assert.equal(seed.company,company);}
 });
 test('all four default email styles use October 15 approved wording and preserve factual placeholders',()=>{
- const s=M.normalize({},essentials);const markers={professional:'We would like to be considered as a bidder',curiosity:'Many project teams simply like to have one more qualified option',friendly:'Congratulations on getting the foundation work started',brutal:'I wrote the introduction. The conversation would be with a real human.'};
+ const s=M.normalize({},essentials);const markers={professional:'We would like to be considered as a bidder',curiosity:'Many project teams simply like to have one more qualified option',friendly:'we would be happy to assist',brutal:'I wrote the introduction. The conversation would be with a real human.'};
  for(const t of s.templates){assert.ok(t.body.includes(markers[t.id]),t.id);assert.match(t.body,/{{firstName}}/);assert.match(t.body,/{{calendly}}/);}
  for(const style of Object.keys(markers))assert.ok(M.originalText(style,'email').includes(markers[style]));
  const p=M.prompt(s);assert.match(p.system,/hypothesis/i);

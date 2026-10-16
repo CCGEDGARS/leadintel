@@ -199,3 +199,37 @@ InMail patterns replace only explicit example-specific factual slots. Existing l
 Read-profile, fact-review and read-every-word confirmations precede copying. AI-work and sole-human-authorship claims require separate confirmation where those claims appear. The connection request requires an actual initial-send date, no-reply and timing/wording confirmation; acceptance and interest are separately confirmed before their replies. These are manual drafting controls, not independent verification of arbitrary factual prose or LinkedIn events. Copying never records a send, advances CRM, schedules work or starts automation.
 
 Only the platform owner may edit/delete/reinstate InMail core sequences. Existing master history, deletion tombstones, optimistic concurrency and account isolation apply. InMail personal templates and their primary preference are separate from direct-message templates and primary. Contact drafts are server-backed, quota-accounted and do not replace email/DM/phone drafts. Save may preserve an incomplete draft for later work; Copy remains gated. Script Assistant and AI Generated use an InMail stage context: only the initial stage has a subject, and the booking URL stays in the interest reply. Standard direct-message rules remain unchanged.
+
+## October 15 email masters and corrected import — 16 October 2026
+
+The owner requested correction and use of the four email DOCX originals supplied
+on October 15. These originals supersede the October 9/13 wording and the old
+paragraph-count/word-ceiling table above. The canonical source remains
+`approved-reference-scripts.js`; the independent `approved-core-masters-2026-10-15.json`
+fixture records the source paragraphs and internal line breaks. Brutal includes
+its greeting. Professional's reliability/quality/cost lines and every source
+signature retain their line breaks. Contract `email-master-20261015-v2` measures
+its paragraph and body-word limits directly from each corrected source.
+
+The same declared source-span map now governs the reusable pattern and native
+renderer. Identity, source-backed development paragraphs, seller description and
+experience, services/work packages, project/contracting route, proof, service
+priorities, meeting material, referral focus and supplied links are factual
+slots. They carry current workspace information only. The fixed prose outside
+these spans stays exactly as approved. Source examples do not establish country,
+market, experience, project phase/year, contractor or certification. Unknown
+Professional project/reliability/quality/cost facts remain visible markers;
+unknown references retain [link] in Professional or are omitted as complete blocks
+in other styles. Unsupported contracting routes, missing development paragraphs,
+absent optional profile links and unconfirmed No slides are omitted. The example
+project's two-year horizon has only the nonnumeric “your project” fallback.
+
+All four master versions enter factual fingerprints and source scopes. Explicit
+Update/style selection may restore the new pattern with persistent prior-text
+recovery; reopening never silently replaces a saved/manual draft. Backend seeds
+are generated from the same source, and known obsolete builtins migrate with
+history while owner edits and tombstones remain intact. Missing markers block
+final actions; template generation never supplies approval or send authority.
+The source's “20 minutes on Zoom” and “20-minute chat on Zoom” are valid invitation
+forms and retain the selected working meeting platform. The fuller root cause,
+source boundaries and verification are in `docs/fixes/2026-10-16-email-master-integration.md`.

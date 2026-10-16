@@ -73,12 +73,12 @@ test('a changed Profile evidence corpus invalidates a previous unsuccessful atte
 test('verified seller project references fill the declared link slot without changing masters or saved drafts',()=>{
  const project={...official,url:'https://seller.example/project/industrial-tower',title:'Industrial tower project'};
  const st=studio(),context={...ctx,sellerEvidence:[project],firstName:'Sam',buyerCompany:'Buyer'};
- const draft=E.tailor(st,context);assert.match(draft.message,/projects we are proud of: https:\/\/seller.example\/project\/industrial-tower/);
+ const draft=E.tailor(st,context);assert.match(draft.message,/https:\/\/seller.example\/project\/industrial-tower/);
  for(const row of [{...project,url:'https://other.example/project/tower'},{...project,text:'We do not manufacture or supply steel structures.'},{...project,url:'https://seller.example/'}]){
   assert.match(E.tailor(st,{...context,sellerEvidence:[row]}).message,/\[link\]/);
  }
  const manual=S.normalize({...st,essentials:{...e,proof:'https://seller.example/approved-reference'}});
- assert.match(E.tailor(manual,context).message,/projects we are proud of: https:\/\/seller.example\/approved-reference/);
+ assert.match(E.tailor(manual,context).message,/https:\/\/seller.example\/approved-reference/);
  assert.doesNotMatch(E.tailor(manual,context).message,/industrial-tower/);
 });
 test('reference preparation works for other industries without injecting metalworking claims',()=>{
@@ -91,7 +91,7 @@ test('a missing material remains visible while the comparison and a saved manual
 });
 test('automatic targeted research uses workspace credentials, stores source evidence, completes subjects and preserves saved text through CRM reload',async()=>{
  const h=harness();const body=h.item.drafts.emailBody;assert.equal(await h.c.prepareSubjectEvidence(),true);assert.equal(h.requests.length,1);assert.match(h.requests[0].url,/workspace_id=w1/);assert.equal(h.requests[0].opts.credentials,'include');assert.match(JSON.parse(h.requests[0].opts.body).query,/site:seller\.example/);
- assert.equal(h.item.messageStudioDraft.subjectResearch.sources[0].url,official.url);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);assert.equal(h.item.drafts.emailBody,body);assert.equal(h.item.drafts.emailSubject,'My exact subject');assert.ok(h.item.messageStudioDraft.pendingTemplateUpdate);assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/projects we are proud of: https:\/\/seller.example\/project/);
+ assert.equal(h.item.messageStudioDraft.subjectResearch.sources[0].url,official.url);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);assert.equal(h.item.drafts.emailBody,body);assert.equal(h.item.drafts.emailSubject,'My exact subject');assert.ok(h.item.messageStudioDraft.pendingTemplateUpdate);assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/https:\/\/seller.example\/project/);
  const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(restored.messageStudioDraft.subjectResearch,h.item.messageStudioDraft.subjectResearch);assert.equal(await h.c.prepareSubjectEvidence(),false);assert.equal(h.requests.length,1);
 });
 test('search snippets must be extracted before their facts are used',async()=>{

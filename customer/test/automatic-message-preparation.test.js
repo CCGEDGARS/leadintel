@@ -25,10 +25,10 @@ test('explicit Professional to NLP selection applies the NLP body even for saved
   vm.runInContext(source.slice(source.indexOf('function invalidateStudioDraft'),source.indexOf('function installMessageStudio')),h.c);
   vm.runInContext(source.split('\n').find(line=>line.includes("q('message-mode').onchange=")),h.c);
   h.q('message-mode').value='curiosity';h.q('message-mode').onchange();
-  assert.equal(h.item.messageStudioDraft.mode,'curiosity');assert.match(h.item.drafts.emailBody,/this is not another sales pitch/);E.validateFrame(h.item.drafts.emailBody,'curiosity');
+  assert.equal(h.item.messageStudioDraft.mode,'curiosity');assert.match(h.item.drafts.emailBody,/This is what we stand for/);E.validateFrame(h.item.drafts.emailBody,'curiosity');
   assert.equal(h.item.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(h.item.approved,false);assert.equal(E.savedDraft(h.item),false);assert.equal(A.originalText('curiosity'),master);assert.equal(h.requests.length,0);
   const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(E.updateUndo(restored),before);assert.deepEqual(E.workingDraft(E.undoTemplateUpdate(restored)),before);
-  if(protection==='translated'){const T=h.c.LeadIntelMessageTranslations;assert.equal(T.book(h.item).activeLanguage,'en');assert.equal(T.book(h.item).versions.sv.message,'Min svenska text');const undone=T.capture(E.undoTemplateUpdate(restored));assert.equal(T.book(undone).activeLanguage,'sv');assert.match(T.source(undone).message,/Does your role involve/);assert.equal(T.book(undone).versions.sv.message,before.message);assert.equal(undone.localizationProvenance.language,'sv');}
+  if(protection==='translated'){const T=h.c.LeadIntelMessageTranslations;assert.equal(T.book(h.item).activeLanguage,'en');assert.equal(T.book(h.item).versions.sv.message,'Min svenska text');const undone=T.capture(E.undoTemplateUpdate(restored));assert.equal(T.book(undone).activeLanguage,'sv');assert.match(T.source(undone).message,/We would like to be considered as a bidder/);assert.equal(T.book(undone).versions.sv.message,before.message);assert.equal(undone.localizationProvenance.language,'sv');}
  }
 });
 test('opening Messages selects evidence before rendering but waits for explicit style creation',()=>{
@@ -175,7 +175,7 @@ test('canonical subject selection changes no body and does not create a pending 
 });
 test('selecting a verified official signal preserves a blank draft until explicit Update and does not save or send',async()=>{
  const h=harness();await h.c.chooseBuyingTrigger('https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.updateMessageFromTemplate();
- assert.equal(h.requests.length,0);assert.equal(h.item.messageStudioDraft.editorOrigin,'tailored');assert.equal(h.item.messageStudioDraft.triggerSourceUrl,'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20-minute Zoom/);assert.equal(h.item.drafts.linkedinMessage,'Other channel preserved');assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
+ assert.equal(h.requests.length,0);assert.equal(h.item.messageStudioDraft.editorOrigin,'tailored');assert.equal(h.item.messageStudioDraft.triggerSourceUrl,'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20(?:-minute Zoom| minutes on Zoom)/);assert.equal(h.item.drafts.linkedinMessage,'Other channel preserved');assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
  const before=JSON.stringify(h.item);assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(JSON.stringify(h.item),before);
 });
 test('third-party evidence requires review and cannot automatically enter a draft',async()=>{
@@ -186,7 +186,7 @@ test('all approved styles use the same compact verified project without changing
  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const before=A.originalText(mode);h.studio=S.normalize({mode,essentials:e});h.c.selectMandatoryEmailStyle(mode);
-  assert.equal(h.item.messageStudioDraft.mode,mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20-minute/);assert.equal(A.originalText(mode),before);E.validateFrame(h.item.drafts.emailBody,mode);
+  assert.equal(h.item.messageStudioDraft.mode,mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20(?:-minute| minutes)/);assert.equal(A.originalText(mode),before);E.validateFrame(h.item.drafts.emailBody,mode);
   const ctx=h.c.studioMessageContext(h.item);const ids=mode==='curiosity'?['project','success']:mode==='friendly'?['hello']:mode==='brutal'?['project']:['relevance','development','benefit'];
   for(const id of ids){const subject=S.resolvedSubject(S.chooseSubject(h.studio,mode,id),{...ctx,strictSubjectChoice:true},e);assert.ok(S.validSubject(subject),mode+'/'+id);assert.match(subject,/Northport/);assert.doesNotMatch(subject,/investing|mine\./);}
  }
@@ -234,7 +234,7 @@ test('a confirmed handoff is required and changing its recipient invalidates in-
 test('an active saved translation is preserved and a new English template is proposed separately',()=>{
  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);h.item.messageStudioDraft.languageVersions={originalLanguage:'en',activeLanguage:'sv',versions:{en:{subject:h.item.drafts.emailSubject,message:h.item.drafts.emailBody},sv:{subject:'Svenskt ämne',message:'Min svenska text'}}};
  h.item.drafts.emailSubject='Svenskt ämne';h.item.drafts.emailBody='Min svenska text';h.studio=S.normalize({mode:'friendly',essentials:e});h.c.automaticallyPrepareMessage();
- assert.equal(h.item.drafts.emailBody,'Min svenska text');assert.equal(h.item.messageStudioDraft.languageVersions.versions.sv.message,'Min svenska text');assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/20-minute/);
+ assert.equal(h.item.drafts.emailBody,'Min svenska text');assert.equal(h.item.messageStudioDraft.languageVersions.versions.sv.message,'Min svenska text');assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/20(?:-minute| minutes)/);
 });
 
 test('failed field preparation replaces busy text with the actual error and preserves the current draft',async()=>{

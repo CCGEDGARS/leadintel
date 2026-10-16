@@ -11,7 +11,7 @@ test('English original UI renders the exact approved original read-only',()=>{
  const body=w.document.getElementById('original-script-body');assert.equal(body.value,M.originalText('brutal'));assert.equal(body.readOnly,true);assert.equal(w.document.getElementById('original-script-save').hidden,true);assert.equal(w.document.getElementById('original-script-unlock').hidden,true);dom.window.close();
 });
 test('protected Brutal original exactly preserves the supplied script, separate from reusable generation',()=>{
- const exact=require('../approved-reference-scripts.js').originalText('brutal');assert.match(exact,/20-minute Zoom/);
+ const exact=require('../approved-reference-scripts.js').originalText('brutal');assert.match(exact,/20(?:-minute Zoom| minutes on Zoom)/);
  assert.equal(M.originalText('brutal','email'),exact);
  const s=M.normalize({mode:'brutal'},e),t=s.templates.find(t=>t.id==='brutal');
  assert.equal(t.subject,'LeadIntel. On behalf of {{sender}}');assert.match(t.body,/\{\{senderLinkedInUrl\}\}/);

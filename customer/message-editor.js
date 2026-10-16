@@ -8,46 +8,37 @@
  const words=text=>String(text||'').trim().split(/\s+/).filter(Boolean).length;
  function outcomeSummary(value){return String(value||'').replace(/\b(reduce|simplify|improve|control|protect|support|keep|save|manage|deliver)\b/g,verb=>({reduce:'reducing',simplify:'simplifying',improve:'improving',control:'controlling',protect:'protecting',support:'supporting',keep:'keeping',save:'saving',manage:'managing',deliver:'delivering'}[verb]));}
  function referencePattern(style){
-  const record=A?.records?.[style];if(!record)throw Error('Approved original is unavailable');
-  if(style==='professional')return A.professionalPattern();
-  let body=record.paragraphs.join('\n\n');
-  const common=[['Hi Joakim,','Hi {{firstName}},'],['[Calendly link]','{{calendly}}'],['[Calendly]','{{calendly}}'],['[reference link]','{{referenceUrl}}'],['[link]','{{referenceUrl}}']];
-  const swaps={
-   curiosity:[
-    ['foundation work in Malmberget is under way. The new sorting plant has to be running in 2028. And between those two dates, every steel structure has to arrive on time and fit the first time','{{development}}'],
-    ['(First name Second name)','{{sender}}'],['ERCON','{{company}}'],
-    ['For more than 30 years our team has taken steel from drawing to installed structure: drawing development, manufacturing, installation and the qualified people to do it.','{{coreExperience}}'],
-    ['one reliable partner, consistent quality and controlled costs','{{outcomeSummary}}'],
-    ['[ https://www.ercon.lv ]','{{referenceUrl}}'],
-    ['our latest production data and lessons from comparable projects','{{meetingValue}}'],
-    ['Best regards,\nEdgars','Best regards,\n{{sender}}'],
-    ['Link to Linkedin profile','{{senderLinkedInUrl}}']
-   ],
-   friendly:[
-    ["Congratulations on the start of foundation work in Malmberget. One of the largest buildings in LKAB's history, north of the Arctic Circle, ready by 2028: that is no small job.",'{{friendlyOpening}}'],
-    ["I'm Edgars from ERCON ( https://www.ercon.lv ).","I'm {{sender}} from {{company}} ( {{sellerWebsite}} )."],
-    ['We are a metalworking team that has spent more than 30 years on the less glamorous part of projects like yours: turning drawings into steel that shows up on time and fits.','{{coreExperience}}'],
-    ['an extra pair of reliable hands for drawings, manufacturing, installation or qualified workforce would make the next two years calmer and help protect your margins','an extra pair of reliable hands for {{offer}} would {{value}}'],
-    ['real numbers and a few lessons we learned the hard way','{{meetingValue}}'],
-    ['No slides, no pressure.','{{meetingFormat}}'],
-    ['steelwork','{{referralFocus}}'],
-    ['Warm regards,\nEdgars','Warm regards,\n{{sender}}']
-   ],
-   brutal:[
-    ['( First name Second name )','{{sender}}'],['ERCON','{{company}}'],
-    ['LKAB’s new sorting plant in Malmberget','{{development}}'],
-    ['steel partner','{{partnerType}}'],
-    ['help keep the project running smoothly','{{value}}'],
-    ['For more than 30 years {{company}} have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. https://www.ercon.lv/','{{coreExperience}} {{sellerWebsite}}'],
-    ['with Edgars','with {{sender}}'],
-    ['He’ll bring relevant production data and lessons from previous projects.','{{sender}} will bring {{meetingValue}}.'],
-    ['Edgars will be there','{{sender}} will be there'],
-    ['On behalf of Edgars.','On behalf of {{sender}}.'],
-    ['(Edgars linkedin profile)','{{senderLinkedInUrl}}']
-   ]
-  };
-  for(const [from,to] of [...swaps[style],...common]){if(!body.includes(from)){if(common.some(x=>x[0]===from))continue;throw Error('Approved original factual slots changed; review the contract');}body=body.split(from).join(to);}
-  return body;
+  if(!A?.records?.[style])throw Error('Approved original is unavailable');
+  return A.approvedPattern(style);
+ }
+ function currentCoreBody(style,e,raw,context,values){
+  const missing=label=>'[Add verified '+label+']';
+  const factualAnswers=Object.entries(context.sellerAnswers||{}).filter(([key])=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(([,value])=>String(value));
+  const supplied=[raw.proof,raw.approach,...factualAnswers].filter(Boolean).flatMap(text=>String(text).split(/\n+|(?<=[.!?])\s+/));
+  const proofFor=(kind,regex)=>supplied.find(text=>words(text)<=20&&regex.test(text)&&! /\b(?:no|not|never|unconfirmed|unknown)\b/i.test(text))||missing(kind+' proof');
+  const description=e.offer?'a company providing '+line(e.offer):missing('company description');
+  values.proof=values.referenceUrl||(style==='professional'?'[link]':'');
+  Object.assign(values,{
+   sellerDescription:description,projectDescription:values.subjectProject?'the '+values.subjectProject+' project':missing('project'),deliveryRoute:'',
+   reliabilityProof:proofFor('reliability',/delivered.+(?:on (?:time|schedule)|schedule)|\b(?:reliability|reliable|on[- ]time)\b/i),
+   qualityProof:proofFor('quality',/\b(?:certified|certification|EN 1090|ISO \d+|quality)\b/i),
+   costProof:proofFor('cost',/\b(?:cost|rates?|pricing|price|budget)\b/i),
+   coreExperience:e.difference||'',workPackages:e.offer?line(e.offer)+' packages':missing('work package'),
+   projectPeriod:'your project',servicePriorities:e.value?line(e.value):missing('service priorities'),
+   referralFocus:S.subjectSellerFacts(context,raw).steel?'steelwork':e.offer?line(e.offer):'this work',
+   meetingValue:e.meetingValue?line(e.meetingValue):missing('meeting material')
+  });
+  let body=referencePattern(style);
+  // Reviewed developments occupy only their declared factual paragraph. The
+  // example's year, geography, scale and project stage are never defaults.
+  if(!values.development)body=body.split('\n\n').filter(p=>p!=='{{development}}'&&p!=='{{friendlyOpening}}').join('\n\n');
+  else {values.development=line(values.development)+'.';values.friendlyOpening=context.trigger?.positive===true?'Congratulations on '+professionalDevelopment(line(values.development))+'.':values.development;}
+  if(! /\bNo slides\b/i.test(raw.meetingValue||''))body=body.replace(' No slides.','');
+  if(!values.proof)body=body.split('\n\n').filter(p=>p!=='{{proof}}').join('\n\n');
+  body=body.replace('{{sellerWebsite}} | {{senderLinkedInUrl}}',[values.sellerWebsite,values.senderLinkedInUrl].filter(Boolean).join(' | '));
+  body=body.replace(/{{(\w+)}}/g,(_,key)=>String(values[key]??''));
+  // Preserve source signature/proof line breaks; only normalize horizontal space.
+  return body.split('\n\n').map(p=>p.split('\n').map(line=>line.replace(/[ \t]+/g,' ').trim()).filter(Boolean).join('\n')).filter(Boolean).join('\n\n').replace(/ \|(?=\n|$)|^\| /gm,'').trim();
  }
  // The approved voice is assembled from narrow factual fragments. Profile prose
  // and prepared AI sentences cannot replace this frame when its facts are supplied.
@@ -86,39 +77,22 @@
  }
 
  function coreSellerFlags(context,essentials){const {steel,installation,execution}=S.subjectSellerFacts(context,essentials);return {steel,installation,execution};}
- function fieldFingerprint(studio,context){return JSON.stringify({contract:'verbatim-facts-v7',...(studio.mode==='brutal'?{masterVersion:A.coreContract(studio.mode)?.version}:{}),style:studio.mode,sources:fieldSources(studio,context),sender:studio.essentials.sender,company:studio.essentials.company,buyer:context.buyerCompany,name:context.buyerName,role:context.buyerRole,sourceUrl:context.trigger?.url||'',sourceExcerpt:context.trigger?.excerpt||'',positive:context.trigger?.positive===true,sellerFacts:coreSellerFlags(context,studio.essentials),subjectSummary:context.trigger?.subjectSummary||''});}
+ function fieldFingerprint(studio,context){return JSON.stringify({contract:'verbatim-facts-v7',masterVersion:A.coreContract(studio.mode)?.version,style:studio.mode,sources:fieldSources(studio,context),sender:studio.essentials.sender,company:studio.essentials.company,buyer:context.buyerCompany,name:context.buyerName,role:context.buyerRole,sourceUrl:context.trigger?.url||'',sourceExcerpt:context.trigger?.excerpt||'',positive:context.trigger?.positive===true,sellerFacts:coreSellerFlags(context,studio.essentials),subjectSummary:context.trigger?.subjectSummary||''});}
  function foreignText(text,context={},e={}){let value=String(text||'');for(const name of [e.sender,e.company,context.buyerName,context.buyerCompany])if(name)value=value.split(name).join('');return /[\u0400-\u04ff\u4e00-\u9fff]|\b(?:satsar|miljarder|sorteringsverk|sovringsverk|framtidssäkrar|produktionen|på ett|för att|samtidigt som|arbeits|unternehmen|paplašin|ieguld)\b/i.test(value);}
  function benefit(value,company){let text=line(value);const escaped=String(company||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const subject=escaped?'(?:'+escaped+'|we|they|our team)':'(?:we|they|our team)';text=text.replace(new RegExp('^'+subject+'\\s+(?:can|could|will)\\s+','i'),'').replace(new RegExp('^'+subject+'\\s+(?:helps?|supports?)\\s+','i'),'help ');return /^(?:reduce|simplify|improve|support|protect|keep|increase|deliver|help|strengthen|streamline|save|manage|avoid|ensure|build|develop|provide|achieve)\b/i.test(text)?text.charAt(0).toLowerCase()+text.slice(1):text;}
  function needsPreparation(studio,context={}){const template=studio.templates?.find(t=>t.id===studio.mode);if(context.channel==='linkedin'||template?.isPersonal||studio.personalStyles?.[studio.mode]?.active)return false;const sources=fieldSources(studio,context);return Object.entries(sources).some(([k,v])=>v.length>fieldLimits[k]||words(v)>fieldWords[k]||foreignText(v,context,studio.essentials)||/[\n;]|\.\s+[A-Z]/.test(v))||/^(?:we|they|our team)\s|\bcan\s/i.test(sources.value)||Boolean(studio.essentials.company&&sources.value.includes(studio.essentials.company))||words(assemble(studio,{...context,preparedFields:{fields:sources,source:fieldFingerprint(studio,context)}},false,true).message)>words(A.records[studio.mode]?.paragraphs.join(' ')||'');}
  function preservesField(key,value,studio,context){return Boolean(String(value||'').trim())&&value.length<=fieldLimits[key]&&words(value)<=fieldWords[key]&&!foreignText(value,context,studio.essentials)&&!/[\n;]|\.\s+[A-Z]|https?:\/\/|\{\{|\}\}|<[^>]*>/i.test(value)&&!(key==='value'&&(/^(?:we|they|our team)\s|\b(?:can|could|will)\b/i.test(value)||studio.essentials.company&&value.includes(studio.essentials.company)));}
  function preparationWordLimits(studio,context){
-  if(!fixedProfessional(studio,context)){
-   const template=studio.templates?.find(t=>t.id===studio.mode);
-   if(context.channel==='linkedin'||studio.mode==='original'||template?.isPersonal||studio.personalStyles?.[studio.mode]?.active)return fieldWords;
-   if(!/^(?:For .+ years (?:our team has|.+ have) taken steel|We are a metalworking team that has spent)/.test(coreExperience(studio.mode,studio.essentials,context,studio.essentials)))return fieldWords;
-   const sources=fieldSources(studio,context),fields=Object.fromEntries(Object.keys(fieldLimits).map(key=>[key,sources[key]?.trim()?'work':''])),source=fieldFingerprint(studio,context);
-   const render=values=>words(assemble(studio,{...context,preparedFields:{fields:values,source}},false,true).message),base=render(fields),weights=Object.fromEntries(Object.keys(fields).map(key=>[key,fields[key]?render({...fields,[key]:'work work'})-base:0]));
-   const budget=words(A.records[studio.mode].paragraphs.join(' '))-base+Object.values(weights).reduce((sum,n)=>sum+n,0);
-   const desired=Object.fromEntries(Object.keys(fields).map(key=>[key,sources[key]?Math.min(fieldWords[key],words(sources[key])):0]));
-   const total=Object.keys(fields).reduce((sum,key)=>sum+weights[key]*desired[key],0);
-   if(total<=budget)return fieldWords;
-   // Repeated slots consume their full weight; protected literals never pay for
-   // overlong facts. Only fields exceeding this actual budget may be shortened.
-   return Object.fromEntries(Object.keys(fields).map(key=>[key,weights[key]?Math.max(1,Math.floor(desired[key]*Math.max(0,budget)/total)):fieldWords[key]]));
-  }
-  const sources=fieldSources(studio,context),keys=['triggerSummary','offer','difference'].filter(key=>sources[key].trim());
-  const fields=Object.fromEntries(Object.keys(fieldLimits).map(key=>[key,sources[key]?.trim()?(key==='difference'?'Experience.':'work'):'' ]));
-  const probe={fields,source:fieldFingerprint(studio,context)};
-  const base=assemble(studio,{...context,preparedFields:probe},false,true).message;
-  let remaining=words(A.records.professional.paragraphs.join(' '))-words(base)+keys.length;
-  const limits=Object.fromEntries(Object.keys(fieldWords).map(key=>[key,0])),variable=[];
-  for(const key of keys){if(preservesField(key,sources[key],studio,context)){limits[key]=words(sources[key]);remaining-=limits[key];}else variable.push(key);}
-  // Individually concise fields may still exceed the combined frame (for
-  // example a grammatical quantity adds one word). Reserve actual room before
-  // preserving English fields, rather than requesting an impossible result.
-  while(remaining<variable.length){const key=keys.filter(k=>limits[k]>1).sort((a,b)=>limits[b]-limits[a])[0];if(!key)throw Error('Required facts exceed the approved original budget');limits[key]--;remaining++;}
-  for(let i=0;i<variable.length;i++){const key=variable[i];limits[key]=Math.max(0,Math.min(fieldWords[key],Math.floor(remaining/(variable.length-i))));remaining-=limits[key];}
-  return limits;
+  const template=studio.templates?.find(t=>t.id===studio.mode);
+  if(context.channel==='linkedin'||studio.mode==='original'||template?.isPersonal||studio.personalStyles?.[studio.mode]?.active)return fieldWords;
+  const sources=fieldSources(studio,context),fields=Object.fromEntries(Object.keys(fieldLimits).map(key=>[key,sources[key]?.trim()?'work':''])),source=fieldFingerprint(studio,context);
+  const render=values=>words(assemble(studio,{...context,preparedFields:{fields:values,source}},false,true).message),base=render(fields);
+  const weights=Object.fromEntries(Object.keys(fields).map(key=>[key,fields[key]?render({...fields,[key]:'work work'})-base:0]));
+  const budget=words(A.records[studio.mode].paragraphs.join(' '))-base+Object.values(weights).reduce((sum,n)=>sum+n,0);
+  const desired=Object.fromEntries(Object.keys(fields).map(key=>[key,sources[key]?Math.min(fieldWords[key],words(sources[key])):0]));
+  const total=Object.keys(fields).reduce((sum,key)=>sum+weights[key]*desired[key],0);
+  if(total<=budget)return fieldWords;
+  return Object.fromEntries(Object.keys(fields).map(key=>[key,weights[key]?Math.max(1,Math.min(fieldWords[key],Math.floor(desired[key]*Math.max(0,budget)/total))):fieldWords[key]]));
  }
  function assertPreparedSchema(output){if(!output||Array.isArray(output)||typeof output!=='object'||Object.keys(output).some(k=>!Object.hasOwn(fieldLimits,k)))throw Error('Field preparation returned an unapproved field');if(Object.keys(output).length!==Object.keys(fieldLimits).length||Object.keys(fieldLimits).some(k=>typeof output[k]!=='string'))throw Error('Field preparation must return exactly six string fields');}
  function preparedResponse(raw,studio,context){
@@ -150,7 +124,7 @@
   const trigger=['user_reviewed','source_verified'].includes(context.trigger?.verification)&&context.trigger?.url?line(prepared?.fields.triggerSummary??context.trigger.summary??context.trigger.excerpt):'';
   const website=safeWebsite(context.sellerWebsite),profile=S.approvedSenderLinkedIn(context.senderLinkedInUrl);
   const proof=String(e.proof||'').trim(),referenceUrl=(proof.match(/https?:\/\/[^\s<>"\])]+/)||[])[0]?.replace(/[.,;!?]+$/,'')||S.subjectReference(context)?.url||'',capabilities=website?'Our website outlines our capabilities: '+website:'';
-  const values={...e,value:benefit(e.value,e.company),firstName:context.firstName||context.buyerName||'[Add recipient name]',buyerName:context.buyerName||'',buyerCompany:context.buyerCompany||'',buyerRole:context.buyerRole||'',sellerWebsite:website,senderLinkedInUrl:profile,senderFullName:e.sender||'',senderFirstName:String(e.sender||'').trim().split(/\s+/)[0]||'',senderName:e.sender||'',senderCompany:e.company||'',recipientCompany:context.buyerCompany||'',verifiedProjectOrExpansion:trigger,supportedBenefit:benefit(e.value,e.company),fitScore:context.fitScore??'',subjectProject:S.projectFact(context)||'',deliveryAngle:e.offer||'',
+  const values={...e,value:benefit(e.value,e.company),firstName:context.firstName||context.buyerName||'[Add recipient name]',buyerName:context.buyerName||'',buyerCompany:context.buyerCompany||'',buyerRole:context.buyerRole||'',referenceUrl,sellerWebsite:website,senderLinkedInUrl:profile,senderFullName:e.sender||'',senderFirstName:String(e.sender||'').trim().split(/\s+/)[0]||'',senderName:e.sender||'',senderCompany:e.company||'',recipientCompany:context.buyerCompany||'',verifiedProjectOrExpansion:trigger,supportedBenefit:benefit(e.value,e.company),fitScore:context.fitScore??'',subjectProject:S.projectFact(context)||'',deliveryAngle:e.offer||'',
    calendly:e.calendly||'[Add your Calendly link]',development:trigger,verifiedProject:trigger,verifiedMilestone:trigger,projectMilestone:trigger,
    developmentContext:'',roleQuestion:trigger?'Does your role involve choosing partners for this work?':'',milestoneContext:'',deliveryChallenge:'',
    difference:e.difference||'',serviceFocus:benefit(e.value,e.company),experienceAndApproach:[e.difference,e.offer?'We provide '+line(e.offer)+'.':'',e.approach].filter(Boolean).join(' '),serviceOutcome:benefit(e.value,e.company),
@@ -159,26 +133,15 @@
   values.nextAction=String(e.nextAction||'Choose a suitable time here: {{calendly}}').replaceAll('{{calendly}}',values.calendly);
   const protectedCore=context.channel!=='linkedin'&&!personal&&!template.isPersonal;
   if(protectedCore&&style==='professional'){values.subjectProject=S.projectFact(context)||'';values.development=professionalDevelopment(trigger);const seller=[raw.offer,raw.difference,raw.proof,...Object.keys(context.sellerAnswers||{}).filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers[key])].join(' '),manufacturing=/\b(?:manufactur\w*|metal\w*|steel|fabricat\w*|serial production)\b/i.test(seller);values.planType=manufacturing?'production':'project';values.meetingData=manufacturing?'production':'project';}
-  let body=protectedCore?referencePattern(style):personal?.body||template.body;
-  Object.assign(values,{coreExperience:coreExperience(style,raw,context,e),referenceUrl,outcomeSummary:outcomeSummary(values.value),difference:style==='brutal'?String(e.difference||'').replace(/^Our team\b/,'Their team'):String(e.difference||'').replace(/^Their team\b/,'Our team'),meetingFormat:/\bNo slides\b/i.test(raw.meetingValue||'')?'No slides, no pressure.':''});
-  // Optional evidence blocks are removed as complete paragraphs, never completed with example facts.
   if(protectedCore){
-   if(!trigger||style==='professional'&&!values.subjectProject)body=body.replace('If this is relevant for the {{subjectProject}} project, would you be open','Would you be open').replace('If this is relevant for {{development}}, would you be open','Would you be open');
-   if(!trigger)body=body.split(/\n\n/).filter(p=>!p.includes('{{development}}')&&!p.includes('{{friendlyOpening}}')&&!p.startsWith('Does your role')).join('\n\n');
-   if(!referenceUrl&&style!=='professional')body=body.split(/\n\n/).filter(p=>!p.includes('{{referenceUrl}}')).join('\n\n');
-   if(!referenceUrl&&style==='professional')values.referenceUrl='[link]';
-   if(!website)body=body.replace(' ( {{sellerWebsite}} )','');
-   if(!e.difference)body=body.replace('{{difference}} ','');
-   if(!e.offer)body=body.replace(/(?:We|They) provide \{\{offer\}\}\./g,'');
-   if(!trigger)body=body.split(/\n\n/).filter(p=>!/^I noticed \{\{development\}\}|^As we know, \{\{development\}\}/.test(p)).join('\n\n');
-   if(style!=='professional')values.development=style==='brutal'?professionalDevelopment(trigger):trigger;
-   values.friendlyOpening=trigger?(context.trigger?.positive===true?'Congratulations on '+professionalDevelopment(trigger).replace(/^(.+?) is investing\b/i,'$1’s investment')+'.':trigger+'.'):'';
-   values.partnerType=S.subjectSellerFacts(context,raw).steel?'steel partner':'partner';
-   values.referralFocus=S.subjectSellerFacts(context,raw).steel?'steelwork':'work on '+line(e.offer);
-   if(!referenceUrl&&style==='friendly')body=body.replace("Have a look when you have a coffee in hand. If something catches your eye, I'd enjoy a 20-minute Zoom conversation.","Would you be open to a 20-minute Zoom conversation?");
-   if(!referenceUrl&&style==='brutal')body=body.replace('If something catches your eye, would you be open','Would you be open');
-   if(!e.meetingValue)body=body.split(/\n\n/).filter(p=>!p.includes('{{meetingValue}}')).join('\n\n');
+   const body=S.adaptMeetingInvitation(currentCoreBody(style,e,raw,context,values),e);
+   if(enforceFrame)validateFrame(body,style);
+   const subject=String(S.resolveApprovedSubject(studio,context,e)||template.subject||'').replace(/{{(\w+)}}/g,(_,key)=>String(values[key]??''));
+   if(enforceFrame&&!S.validSubject(subject))throw Error('Choose a clean subject of at most 60 characters.');
+   return {subject,message:body};
   }
+  let body=personal?.body||template.body;
+  Object.assign(values,{coreExperience:coreExperience(style,raw,context,e),referenceUrl,outcomeSummary:outcomeSummary(values.value),difference:style==='brutal'?String(e.difference||'').replace(/^Our team\b/,'Their team'):String(e.difference||'').replace(/^Their team\b/,'Our team'),meetingFormat:/\bNo slides\b/i.test(raw.meetingValue||'')?'No slides, no pressure.':''});
   const fill=text=>String(text||'').replace(/\{\{(\w+)\}\}/g,(_,key)=>{const value=values[key];if(context.requireTemplateValues&&(value===undefined||value===null||!String(value).trim()))throw Error('Missing default template value: '+key);return String(value??'');});
   body=fill(body).split(/\n\n/).map(p=>p.replace(/[ \t]+/g,' ').trim()).filter(Boolean).join('\n\n');
   body=S.adaptMeetingInvitation(body,e);
@@ -217,7 +180,7 @@
   if(!S.validSubject(next))return item;
   return {...item,drafts:{...item.drafts,emailSubject:next},messageStudioDraft:{...info,selectedSubject:next,subjectCorrections:[...(info.subjectCorrections||[]),{subject,correctedAt:new Date().toISOString(),reason:'Generated subject exceeded compact subject policy'}]}};
  }
- function scope(workspace,item,studio,context){return JSON.stringify([workspace,item?.domain,item?.selectedPersonId,item?.channel,context.channel==='linkedin'?studio.linkedinMode:studio.mode,context.trigger?.url||'',context.trigger?.summary||'',context.trigger?.subjectSummary||'',context.trigger?.excerpt||'',context.trigger?.positive===true,coreSellerFlags(context,studio.essentials),studio.essentials,studio.subjectChoices,studio.personalStyles,"verbatim-facts-v7",context.eventCampaign,context.buyerName,context.firstName,context.buyerCompany,context.buyerRole,context.senderLinkedInUrl,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,S.subjectReference(context)?.url||'',context.channel==='linkedin'?[]:S.subjectAudit(studio,context).rows.map(row=>row.subject)]);}
+ function scope(workspace,item,studio,context){return JSON.stringify([workspace,item?.domain,item?.selectedPersonId,item?.channel,context.channel==='linkedin'?studio.linkedinMode:studio.mode,context.trigger?.url||'',context.trigger?.summary||'',context.trigger?.subjectSummary||'',context.trigger?.excerpt||'',context.trigger?.positive===true,coreSellerFlags(context,studio.essentials),studio.essentials,studio.subjectChoices,studio.personalStyles,A.coreContract(studio.mode)?.version,"verbatim-facts-v7",context.eventCampaign,context.buyerName,context.firstName,context.buyerCompany,context.buyerRole,context.senderLinkedInUrl,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,S.subjectReference(context)?.url||'',context.channel==='linkedin'?[]:S.subjectAudit(studio,context).rows.map(row=>row.subject)]);}
  function original(item,key){const d=item.messageStudioDraft?.tailoredOriginal;return d?.key===key?copy(d.draft):null;}
  function workingDraft(item){return {subject:item?.drafts?.emailSubject||'',message:item?.drafts?.emailBody||''};}
  // Sender edits are deterministic slot updates, never a template regeneration.

@@ -32,7 +32,7 @@ for(const style of ['professional','curiosity','friendly','brutal'])test(`every 
 test('reference-style clicks use the protected reference even when a saved personal revision was active',()=>{
  const h=mounted({selected:'professional'});try{
  let studio=S.savePersonalStyle(h.w.studioState(),'professional',{subject:'My revision',body:'My custom body for {{firstName}} from {{sender}}.'});h.w.persistStudio(studio);h.w.renderAll();assert.equal(h.q('mw-use-my-style').checked,true);
- click(h,'professional');assert.match(h.q('outreach-email-body').value,/Keeping a project of that scale/);assert.equal(h.w.studioState().personalStyles.professional.active,false);assert.equal(h.w.studioState().personalStyles.professional.body,studio.personalStyles.professional.body);
+ click(h,'professional');assert.match(h.q('outreach-email-body').value,/We would like to be considered as a bidder/);assert.equal(h.w.studioState().personalStyles.professional.active,false);assert.equal(h.w.studioState().personalStyles.professional.body,studio.personalStyles.professional.body);
  }finally{h.w.close();}
 });
 test('AI Generated creates a fresh draft on each click and clears the old saved marker',async()=>{

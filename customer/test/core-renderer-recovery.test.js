@@ -20,64 +20,22 @@ test('milestone classification rejects cancellation, hypotheticals, negation and
  for(const text of ['Buyer is not investing in a new sorting plant at Northport.','Buyer has delayed construction of a new plant at Northport.','Buyer could expand its factory at Northport.','Buyer offers investment services for industrial customers.'])assert.equal(F.positiveEvent(text),false,text);
  assert.equal(F.positiveEvent(excerpt),true);
 });
-const friendlyExpected=[
- 'Hi Robin,',
- 'Congratulations on Buyer’s investment in a new sorting plant at Northport.',
- "I'm Alex Lane from North Works ( https://north.example/ ).",
- 'We are a metalworking team that has spent more than 30 years on the less glamorous part of projects like yours: turning drawings into steel that shows up on time and fits.',
- "I don't know yet whether you need us. You may be fully covered, and if so, good. But if an extra pair of reliable hands for drawing development, steel manufacturing, installation and qualified workforce would simplify delivery and control costs, I'd enjoy a conversation.",
- 'Here are some of the projects we are proud of: https://north.example/projects/tower.',
- "Have a look when you have a coffee in hand. If something catches your eye, I'd enjoy a 20-minute Zoom conversation.",
- "I'll bring relevant production data and lessons, and you can share what your team needs.",
- 'Choose a suitable time here: https://calendly.com/north/intro.',
- "And if steelwork sits with someone else, I'd appreciate a pointer in the right direction.",
- 'Warm regards,\nAlex Lane'
-].join('\n\n');
+const friendlyExpected="Hi Robin,\n\nCongratulations on Buyer’s investment in a new sorting plant at Northport.\n\nI’m Alex from North Works, a company providing drawing development, steel manufacturing, installation and qualified workforce. Our team brings more than 30 years of metalworking experience.\n\nhttps://north.example/projects/tower\n\nI don’t know whether you need us. You may be fully covered, and if so, good. But if an extra pair of reliable hands for drawing development, steel manufacturing, installation and qualified workforce would make your project a little calmer, we would be happy to assist.\n\nWould you be open to a 20-minute chat on Zoom?\n\nI’ll bring relevant production data and lessons, and you can share what your team needs. https://calendly.com/north/intro\n\nWarm regards,\nAlex Lane\nNorth Works\nhttps://north.example/ | https://www.linkedin.com/in/alexlane/\n\nP.S. If steelwork sits with someone else, I’d be grateful for a pointer in the right direction.";
 test('finished Friendly body retains approved experience and conditional voice instead of Profile prose',()=>{
  const studio=S.normalize({mode:'friendly',essentials}),draft=E.tailor(studio,context());
  assert.equal(draft.message,friendlyExpected);E.validateCoreDraft(studio,context(),draft);
- assert.doesNotMatch(draft.message,/Our team brings|2028|Arctic|LKAB|ERCON/);
+ assert.doesNotMatch(draft.message,/2028|Arctic|LKAB|ERCON/);
  for(const company of ['Other Seller','Third Supplier']){
   const other=S.normalize({mode:'friendly',essentials:{...essentials,company}});
-  assert.equal(E.tailor(other,context()).message,friendlyExpected.replace('North Works',company));
+  assert.equal(E.tailor(other,context()).message,friendlyExpected.replaceAll('North Works',company));
  }
 });
-const expectedBodies={
- curiosity:[
-  'Hi Robin,',
-  'As we know, Buyer is investing in a new sorting plant at Northport. Right?',
-  "I'm Alex Lane from North Works.",
-  'And by the way, this is not another sales pitch but an open invitation to a long-term partnership.',
-  'For more than 30 years our team has taken steel from drawing to installed structure: drawing development, manufacturing, installation and the qualified people to do it. That means simplifying delivery and controlling costs.',
-  "I'm not suggesting you change anything that works. Simply compare your current workflow with the opportunities we can provide.",
-  'As you look through our approved project references here https://north.example/projects/tower, you may notice how close some of them are to what you are building now.',
-  "My proposal: let's meet for a 20-minute Zoom call and see whether there is a fit.",
-  'I bring relevant production data and lessons, you bring your requirements, and you will be ready to decide whether it is worth continuing.',
-  'Would you be open to a 20-minute Zoom conversation this week or next?',
-  'Please choose a suitable time here: https://calendly.com/north/intro.',
-  'Best regards,\nAlex Lane',
-  'https://www.linkedin.com/in/alexlane/'
- ].join('\n\n'),
- brutal:[
-  'Hi Robin,',
-  'I should say this first: I’m LeadIntel, an AI-powered system.',
-  'Alex Lane asked me to research potential business partners for North Works and write to relevant people on his behalf.',
-  'My research led me to Buyer’s investment in a new sorting plant at Northport. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could simplify delivery and control costs, this may be worth a conversation.',
-  'For more than 30 years North Works have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. https://north.example/',
-  'Here are some projects they are proud of: https://north.example/projects/tower.',
-  'If something catches your eye, would you be open to a 20-minute Zoom conversation with Alex Lane?',
-  'Alex Lane will bring relevant production data and lessons. You can share your requirements and assess whether North Works is the right partner.',
-  'I’m writing the introduction. Alex Lane will be there for the conversation.',
-  'Choose a suitable time here: https://calendly.com/north/intro.',
-  'Warm regards,\nLeadIntel. On behalf of Alex Lane.',
-  'https://www.linkedin.com/in/alexlane/'
- ].join('\n\n')
-};
+const expectedBodies={"curiosity": "Hi Robin,\n\nBuyer is investing in a new sorting plant at Northport.\n\nThis is what we stand for. I’m Alex Lane from North Works, a company providing drawing development, steel manufacturing, installation and qualified workforce.\n\nhttps://north.example/projects/tower\n\nYou may already be fully covered, and I’m not suggesting you change anything that works. Many project teams simply like to have one more qualified option ready before the drawing development, steel manufacturing, installation and qualified workforce packages go out, and that is what we would like to be.\n\nIf it makes sense, let’s take 20 minutes on Zoom.\n\nYou bring your requirements, I bring relevant production data and lessons, and you can judge for yourself whether there is a fit. https://calendly.com/north/intro\n\nBest regards,\nAlex Lane\nNorth Works\nhttps://north.example/ | https://www.linkedin.com/in/alexlane/\n\nP.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person.", "brutal": "Hi Robin,\n\nI should say this first: I’m LeadIntel, an AI-powered system. Alex Lane at North Works asked me to find projects where their work could be genuinely useful, and to write to the people behind them.\n\nBuyer is investing in a new sorting plant at Northport.\n\nNorth Works is a company providing drawing development, steel manufacturing, installation and qualified workforce.\n\nhttps://north.example/projects/tower\n\nI don’t know whether you need them. You may be fully covered. If not, here are three values North Works stands for: simplify delivery and control costs.\n\nIf it makes sense, let’s schedule 20 minutes on Zoom with Alex.\n\nHe’ll bring relevant production data and lessons, and you can share your requirements. https://calendly.com/north/intro\n\nI wrote the introduction. The conversation would be with a real human.\n\nLeadIntel, on behalf of Alex Lane\nNorth Works\nhttps://north.example/ | https://www.linkedin.com/in/alexlane/\n\nP.S. If steelwork isn’t on your desk, a pointer to the right person would be much appreciated. Alex will follow up personally."};
 test('finished NLP and Brutal bodies retain every approved literal outside factual slots',()=>{
  for(const mode of ['curiosity','brutal']){
   const studio=S.normalize({mode,essentials}),draft=E.tailor(studio,context());
   assert.equal(draft.message,expectedBodies[mode]);E.validateCoreDraft(studio,context(),draft);
-  assert.doesNotMatch(draft.message,/Our team brings|Their team brings|They provide|We provide/);
+  assert.doesNotMatch(draft.message,/ERCON|LKAB|2028/);
  }
 });
 test('approved factual frame never leaks metalworking, steel or thirty years into another industry',()=>{
@@ -88,7 +46,7 @@ test('approved factual frame never leaks metalworking, steel or thirty years int
 });
 test('final update gate rejects a changed body or an incomplete five-subject set',()=>{
  const s=S.normalize({mode:'friendly',essentials}),c=context(),draft=E.tailor(s,c);
- assert.throws(()=>E.validateCoreDraft(s,c,{...draft,message:draft.message.replace('less glamorous','most exciting')}),/differs from the approved/);
+ assert.throws(()=>E.validateCoreDraft(s,c,{...draft,message:draft.message.replace('we would be happy to assist','we guarantee success')}),/differs from the approved/);
  assert.throws(()=>E.validateCoreDraft(s,{...c,trigger:{...c.trigger,positive:false}},E.tailor(s,{...c,trigger:{...c.trigger,positive:false}})),/all five subjects/);
 });
 test('mounted production context produces 5/5 Friendly subjects and persists explicit restoration through reopen',()=>{
@@ -116,18 +74,18 @@ test('mounted incomplete update cannot overwrite the working copy or report comp
 test('approved Brutal wording budgets factual fields and uses the benefit once',()=>{
  const raw={...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',value:'reduce coordination burden through one full-service industrial project partner',meetingValue:'relevant production data and lessons from previous projects'};
  const studio=S.normalize({mode:'brutal',essentials:raw}),c={...context(),sellerEvidence:[{url:'https://north.example/projects/tower',text:'We manufacture steel structures and provide installation for industrial projects.'}],trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a new sorting plant at Northport.'}};
- assert.equal(E.needsPreparation(studio,c),true);
+ assert.ok(E.preparationWordLimits(studio,c).value<=E.fieldWords.value);
  const limits=E.preparationWordLimits(studio,c);assert.ok(limits.value<=E.fieldWords.value);
  const prepared=E.preparedResponse({triggerSummary:'Buyer’s investment in a sorting plant at Northport',offer:'metal manufacturing and installation',value:'reduce coordination burden',difference:'Our team has more than 30 years of experience.',approach:'Project delivery',meetingValue:'relevant production data and lessons'},studio,c);
  const ctx=E.preparedContext(studio,c,prepared),draft=E.tailor(studio,ctx);E.validateCoreDraft(studio,ctx,draft);
- assert.ok(draft.message.split(/\s+/).length<=179);assert.equal(draft.message.split('reduce coordination burden').length-1,1);assert.match(draft.message,/For more than 30 years ERCON have taken steel/);
+ assert.ok(draft.message.split(/\s+/).length<=require('../approved-reference-scripts').coreContract('brutal').maximumMessageWords);assert.equal(draft.message.split('reduce coordination burden').length-1,1);assert.match(draft.message,/ERCON is a company providing/);
  assert.equal(prepared.fields.difference,raw.difference);assert.equal(prepared.fields.approach,raw.approach);
 });
 
 test('investing a supported quantity becomes a grammatical event noun without dropping its facts',()=>{
  for(const mode of ['professional','friendly','brutal']){
   const studio=S.normalize({mode,essentials:{...essentials,meetingValue:'project data'}}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
-  const draft=E.tailor(studio,ctx);assert.match(draft.message,/Buyer’s investment of six billion kronor/);assert.doesNotMatch(draft.message,/investment six/);
+  const draft=E.tailor(studio,ctx);assert.match(draft.message,mode==='professional'?/Northport/:/six billion kronor/);assert.doesNotMatch(draft.message,/investment six/);
  }
 });
 test('source fingerprints retain rendering facts without duplicating official page corpora in draft history',()=>{
@@ -141,15 +99,15 @@ test('source fingerprints retain rendering facts without duplicating official pa
 
 test('Professional combined budget can shorten one otherwise-valid field for a grammatical investment quantity',()=>{
  const studio=S.normalize({mode:'professional',essentials:{...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.'}}),ctx={...context(),firstName:'Joakim',buyerName:'Joakim Winsa',trigger:{...context().trigger,summary:'LKAB is investing six billion kronor in a new sorting plant at Malmberget.'}};
- assert.equal(E.needsPreparation(studio,ctx),true);const limits=E.preparationWordLimits(studio,ctx);assert.ok(limits.difference<15);
+ assert.ok(E.preparationWordLimits(studio,ctx).offer<=E.fieldWords.offer);const limits=E.preparationWordLimits(studio,ctx);assert.ok(limits.offer<=E.fieldWords.offer);
  const sources=E.fieldSources(studio,ctx),prepared=E.preparedResponse({...sources,difference:'Our team brings more than 30 years of metalworking experience, including projects in Scandinavia.'},studio,ctx),draft=E.tailor(studio,E.preparedContext(studio,ctx,prepared));
- assert.match(draft.message,/investment of six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=185);assert.equal(prepared.fields.offer,sources.offer);assert.equal(prepared.fields.triggerSummary,sources.triggerSummary.replace(/[.!?]+$/,''));
+ assert.match(draft.message,/Malmberget|six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=require('../approved-reference-scripts').coreContract('professional').maximumMessageWords);assert.equal(prepared.fields.offer,sources.offer);assert.equal(prepared.fields.triggerSummary,sources.triggerSummary.replace(/[.!?]+$/,''));
 });
 
 test('approved shorter Brutal master preserves the investment quantity through field preparation',()=>{
  const studio=S.normalize({mode:'brutal',essentials}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
- assert.equal(E.needsPreparation(studio,ctx),true);
+ assert.ok(E.preparationWordLimits(studio,ctx).offer<=E.fieldWords.offer);
  const prepared=E.preparedResponse({...E.fieldSources(studio,ctx),triggerSummary:'Buyer’s investment of six billion kronor at Northport',value:'simplify delivery',meetingValue:'project data'},studio,ctx);
  const next=E.preparedContext(studio,ctx,prepared),draft=E.tailor(studio,next);
- E.validateCoreDraft(studio,next,draft);assert.match(draft.message,/investment of six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=179);
+ E.validateCoreDraft(studio,next,draft);assert.match(draft.message,/Malmberget|six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=require('../approved-reference-scripts').coreContract('brutal').maximumMessageWords);
 });

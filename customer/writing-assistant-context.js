@@ -30,7 +30,7 @@
   if(existing.some(link=>!proposed.includes(link)))throw Error('Writing Assistant omitted an existing link. Your message is preserved.');
   if(proposed.some(link=>!allowed.has(link)))throw Error('Writing Assistant added an unapproved link. Your message is preserved.');
   const sender=context.seller?.sender;if(sender&&!(context.mode==='inmail'&&(context.inmailStage==='calendar'||context.inmailStage==='followup'&&!prior.includes(sender)))&&!draft.message.includes(sender))throw Error('Writing Assistant omitted the sender identity. Your message is preserved.');
-  if(/20[ -]minute/i.test(prior)&&!/20[ -]minute/i.test(draft.message))throw Error('Writing Assistant changed the meeting duration. Your message is preserved.');
+  if(/20[ -]minutes?/i.test(prior)&&!/20[ -]minutes?/i.test(draft.message))throw Error('Writing Assistant changed the meeting duration. Your message is preserved.');
   return draft;
  }
  const api={captureWritingContext,validateWritingDraft,maximumWritingWords};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelWritingAssistantContext=api;

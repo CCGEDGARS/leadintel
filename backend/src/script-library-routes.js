@@ -23,7 +23,18 @@ export function validateScript(input,{core=false}={}){
  }
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
-export async function coreScripts(db){const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));for(const row of result.results||[]){const saved=JSON.parse(row.payload_json),master=rows.get(row.id);if(master?.channel==='email'&&master.masterVersion==='20261015'&&saved.masterVersion!=='20261015'){rows.set(row.id,{...master,id:row.id,revision:row.revision,builtin:false,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision}].slice(-30)});}else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:false});}return [...rows.values()];}
+export async function coreScripts(db){
+ const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));
+ for(const row of result.results||[]){
+  const saved=JSON.parse(row.payload_json),master=rows.get(row.id);
+  // Upgrade obsolete built-in copies, never an owner's separately edited master
+  // or a deletion tombstone. Retain every replaced original in revision history.
+  const obsolete=master?.channel==='email'&&saved.masterVersion!==master.masterVersion&&(!saved.masterVersion||master.previousBuiltinBodies?.includes(saved.body));
+  if(obsolete&&!saved.deleted)rows.set(row.id,{...master,id:row.id,revision:row.revision,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision}].slice(-30)});
+  else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:!saved.deleted&&saved.body===master?.body&&saved.subject===master?.subject});
+ }
+ return [...rows.values()];
+}
 async function cas(db,table,keys,values,payload,expected,extra={}){
  if(!Number.isSafeInteger(expected)||expected<0)fail('Expected revision is required');
  const names=Object.keys(extra),args=Object.values(extra),where=keys.map(k=>k+'=?').join(' AND ');let result;
