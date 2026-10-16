@@ -2659,6 +2659,40 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "local-workspace-storage-codec",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "leadintel-local-section-lzw-v1:",
+        "const raw=originalGet.call(this,key);",
+        "Free space occupied by older expanded records",
+        "prepareLocalStorageCodec"
+      ]
+    },
+    {
+      "id": "early-local-workspace-decoder",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "<script src=\"state-budget.js?",
+        "local-storage=20261016-v1",
+        "src=\"account-cache.js?"
+      ]
+    },
+    {
+      "id": "local-workspace-storage-fence",
+      "contains": [
+        "prepareLocalStorageCodec",
+        "li1:",
+        "set(storage,CONTEXT_KEY,nextTicket);context=next;ticket=nextTicket;"
+      ],
+      "url": "/customer/account-cache.js",
+      "type": "text",
+      "status": 200
     }
   ],
   "retry": {

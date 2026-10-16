@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const MAIN='leadintel_customer_v2_state',WS='leadintel_customer_v2_workspace',SNAP='leadintel_customer_v2_workspace_saved_snapshot_v1';
 const modulePath=require.resolve('../server-bridge.js').replace('server-bridge.js','account-cache.js');
-function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl,indexedDB,localQuota=Infinity}={}){
+function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl,indexedDB,localQuota=Infinity,stateBudget=false}={}){
  const session=new Map(),events=[],timers=new Map(),attrs=new Map();let timer=0;
  class Storage{constructor(map){this.values=map;}get length(){return this.values.size;}key(i){return [...this.values.keys()][i]??null;}getItem(k){return this.values.get(String(k))??null;}setItem(k,v){if(failArchive&&String(k).startsWith('leadintel_account_cache_v1:'))throw Error('Quota exceeded');const next=new Map(this.values);next.set(String(k),String(v));if(this.values===values&&[...next].reduce((size,[key,value])=>size+2*(key.length+value.length),0)>localQuota)throw Object.assign(Error('Browser storage quota exceeded'),{name:'QuotaExceededError'});this.values.set(String(k),String(v));}removeItem(k){this.values.delete(String(k));}clear(){this.values.clear();}}
  Storage.prototype.__leadintelServerPatched=true;
@@ -9,6 +9,7 @@ function load(values=new Map(),{account='b',workspace='wb',search='',failArchive
  const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:'loading',documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn,ms){if(ms===350||ms===700)queueMicrotask(fn);else timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
  root.indexedDB=indexedDB;root.window=root;root.globalThis=root;
  if(fs.existsSync(modulePath))vm.runInNewContext(fs.readFileSync(modulePath,'utf8'),root);
+ if(stateBudget){Object.assign(root,{TextEncoder,TextDecoder,Buffer});vm.runInNewContext(fs.readFileSync(require.resolve('../state-budget.js'),'utf8'),root);}
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../server-bridge.js'),'utf8').replace('root.LeadIntelServerBridge=bridge;','root.__init=init;root.LeadIntelServerBridge=bridge;'),root);
@@ -71,6 +72,29 @@ function startupSeed(){
  for(const key of ['leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1'])snapshot.data[key]=values.get(key);
  values.set(SNAP,JSON.stringify(snapshot));values.set('leadintel_customer_v2_server_versions',JSON.stringify({wa:3}));return values;
 }
+test('large compressed cloud outreach hydrates and reopens without exceeding local storage or leaking accounts',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),budget=require('../state-budget.js'),indexedDB=new IDBFactory(),values=startupSeed();
+ const priorSnapshot=JSON.parse(values.get(SNAP));
+ for(const key of ['leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1']){values.delete(key);delete priorSnapshot.data[key];}
+ values.set(SNAP,JSON.stringify(priorSnapshot));
+ const outreach={messages:Array.from({length:50},(_,i)=>({id:'message-'+i,body:'Approved message and verified research. '.repeat(1700),approved:i%2===0}))};
+ const payload={main:{website:'https://ccgroup.lv'},discovery:{},outreach,delivery:{},meta:{discovery:{}}};
+ const packed=budget.prepareForSync(payload,{allowCompressionPacking:true}).payload;
+ const backend=async input=>new URL(input).pathname==='/api/customer/state'?new Response(JSON.stringify({version:4,payload:packed})):startupBackend()(input);
+ const first=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:5*1024*1024,stateBudget:true,fetchImpl:backend});await first.root.__init();
+ assert.notEqual(first.attrs.get('data-account-check'),'error');assert.ok(first.events.includes('reload'));
+ const reopened=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:5*1024*1024,stateBudget:true,fetchImpl:backend});
+ reopened.session.set('leadintel_customer_v2_server_hydration','wa:4');await reopened.root.__init();
+ assert.equal(reopened.root.LeadIntelServerBridge.ready,true);assert.equal(reopened.attrs.has('data-account-check'),false);
+ assert.deepEqual(JSON.parse(reopened.storage.getItem('leadintel_customer_v2_outreach')),outreach);
+ assert.equal(reopened.root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ assert.equal(first.requests.concat(reopened.requests).some(request=>request.options.method==='PUT'),false);
+ await reopened.root.LeadIntelServerBridge.signOut();
+ const other=load(values,{indexedDB,account:'b',workspace:'wb',localQuota:5*1024*1024,stateBudget:true});await other.root.__init();
+ assert.equal(other.storage.getItem('leadintel_customer_v2_outreach'),null);
+ const back=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:5*1024*1024,stateBudget:true,fetchImpl:backend});await back.root.__init();
+ assert.deepEqual(JSON.parse(back.storage.getItem('leadintel_customer_v2_outreach')),outreach);
+});
 function startupBackend({failPath='',failures=1,malformedSession=false}={}){
  let failed=0;
  return async input=>{
@@ -290,4 +314,36 @@ test('restoring an old workspace cannot overwrite the current login provider',as
  await runtime.root.LeadIntelAccountCache.detach();values.set('leadintel_auth_provider','microsoft');
  await runtime.root.LeadIntelAccountCache.activate({workspaceId:'wa',userId:'a'});
  assert.equal(values.get('leadintel_auth_provider'),'microsoft');
+});
+
+test('storage-format migration fences previous-version tabs before replacing shared JSON',async()=>{
+ const values=seed(),old=load(values,{account:'a',workspace:'wa'});await old.root.__init();
+ const key='leadintel_customer_v2_outreach',value=JSON.stringify({body:'Approved script. '.repeat(10000)});values.set(key,value);
+ const upgraded=load(values,{account:'a',workspace:'wa',stateBudget:true});
+ assert.equal(upgraded.storage.getItem(key),value);assert.notEqual(values.get(key),value);
+ assert.throws(()=>old.storage.getItem(key),/account changed/);
+ assert.throws(()=>old.storage.setItem(key,'{}'),/account changed/);
+ await assert.rejects(old.root.fetch('https://leadintel.ccgroup.lv/api/customer/state?workspace_id=wa',{method:'PUT'}),/account changed/);
+ const ticket=values.get('leadintel_account_context_v1');
+ const another=load(values,{account:'a',workspace:'wa',stateBudget:true});
+ assert.equal(values.get('leadintel_account_context_v1'),ticket);assert.equal(upgraded.storage.getItem(key),value);
+ another.storage.setItem(key,value+' ');assert.equal(upgraded.storage.getItem(key),value+' ');
+});
+
+test('codec fence failure keeps the legacy section and account ticket usable',()=>{
+ const values=seed(),key='leadintel_customer_v2_outreach',value=JSON.stringify({body:'Exact saved draft. '.repeat(10000)});values.set(key,value);
+ const oldTicket=JSON.stringify({workspaceId:'wa',userId:'a'});values.set('leadintel_account_context_v1',oldTicket);
+ const r=load(values,{stateBudget:true,localQuota:quotaFor(values)-64});
+ assert.equal(values.get(key),value);assert.equal(values.get('leadintel_account_context_v1'),oldTicket);
+ assert.equal(r.storage.getItem(key),value);assert.equal(r.root.LeadIntelAccountCache.current(),true);
+ assert.throws(()=>r.storage.setItem(key,value+' '),{name:'QuotaExceededError'});assert.equal(values.get(key),value);
+});
+test('a codec fence fits a completely full UUID context and survives account transitions',async()=>{
+ const values=seed(),context='leadintel_account_context_v1',ticket=JSON.stringify({workspaceId:'wa',userId:'a',epoch:'12345678-1234-1234-1234-123456789abc'});values.set(context,ticket);
+ const r=load(values,{stateBudget:true,localQuota:quotaFor(values)-64});
+ r.root.LeadIntelAccountCache.prepareLocalStorageCodec();assert.equal(values.get(context).length,ticket.length);
+ assert.match(JSON.parse(values.get(context)).epoch,/^li1:/);
+ const {IDBFactory}=require('fake-indexeddb');r.root.indexedDB=new IDBFactory();
+ await r.root.LeadIntelAccountCache.detach();assert.match(JSON.parse(values.get(context)).epoch,/^li1:/);
+ await r.root.LeadIntelAccountCache.activate({workspaceId:'wa',userId:'a'});assert.match(JSON.parse(values.get(context)).epoch,/^li1:/);
 });

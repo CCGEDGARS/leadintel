@@ -86,7 +86,8 @@ test('server hydration restores packed buyer decisions before writing local appl
  assert.deepEqual(JSON.parse(storage.get('discovery')).buyerDiscovery.resultDiagnostics,rows);
  assert.equal(JSON.parse(storage.get('meta')).scriptBuyer.personId,'buyer-9');
  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
- assert.ok(html.indexOf('<script defer src="state-budget.js?')<html.indexOf('<script defer src="server-bridge.js?'));
+ assert.ok(html.indexOf('<script src="state-budget.js?')>0);
+ assert.ok(html.indexOf('<script src="state-budget.js?')<html.indexOf('<script defer src="server-bridge.js?'));
 });
 test('repeated buyer pools and contact evidence share one lossless sync copy',()=>{
  const people=Array.from({length:30},(_,i)=>({id:'buyer-'+i,name:'Anna Buyer '+i,buyerQualification:{total:80,breakdown:{role:{points:35,max:35,basis:'Matches role'},source:{points:6,max:10,basis:'https://example.com/'+i}}},hunterChecks:Array.from({length:10},(_,j)=>({email:'anna'+i+j+'@example.com',status:'undeliverable',checkedAt:'2026-10-04T11:00:00.000Z'}))}));
