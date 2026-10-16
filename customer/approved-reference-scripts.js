@@ -1,100 +1,99 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelApprovedReferences=api;})(typeof globalThis==='object'?globalThis:this,function(){
  'use strict';
- // Source of truth: LeadIntel_Verbatim_Approved_Reference_Scripts(1).docx, uploaded 2026-10-08.
- // These are example originals, NOT verified facts about a future buyer.
+ // Source of truth: four owner-approved email DOCX documents uploaded 2026-10-15.
+ // Examples contain unverified factual placeholders that must NOT become asserted facts.
  const records={
- professional:{
-  subject:'',
-  paragraphs:[
-   'Hi Joakim,',
-   'I noticed LKAB’s investment in the new sorting plant in Malmberget. Keeping a project of that scale running smoothly can take considerable time and effort. ',
-   'Does your role involve finding trusted partners and managing suppliers for this project?',
-   "By the way, I'm (First name Second name) from ERCON. ",
-   'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia. We provide drawing development, metal manufacturing, installation and qualified workforce solutions.',
-   'ERCON focus is straightforward: consistent quality, controlled costs and reliable delivery. ',
-   'Here are some of the projects we are proud of: [link].',
-   'If this is relevant for the Malmberget project, would you be open to a 20-minute Zoom call?',
-   'The goal is to explore whether our approach could help your team reduce costs, simplify project management and keep production plans on track.',
-   'I’d like to share relevant production data and lessons from previous projects, then compare your requirements with what we can offer. Together, we can identify where our cooperation could bring the most value to your team.',
-   'Please choose a suitable time here: [Calendly link].',
-   'Best regards,\nEdgars'
-  ],
-  // Explicit user correction, 2026-10-09. Body paragraphs remain verbatim.
-  subjects:['Steel and installation for Malmberget','Edgars Untals. Ercon','Room for one more steel supplier?','Malmberget steel – who should I ask?','Malmberget: EXC2 or EXC3?']
- },
- curiosity:{
-  subject:'Malmberget 2028: the steel behind the schedule',
-  paragraphs:[
-   'Hi Joakim,',
-   'As we know, foundation work in Malmberget is under way. The new sorting plant has to be running in 2028. And between those two dates, every steel structure has to arrive on time and fit the first time. Right?',
-   "I'm (First name Second name) from ERCON. ",
-   'And by the way, this is not another sales pitch but an open invitation to a long-term partnership.',
-   'For more than 30 years our team has taken steel from drawing to installed structure: drawing development, manufacturing, installation and the qualified people to do it. That means one reliable partner, consistent quality and controlled costs.',
-   "I'm not suggesting you change anything that works. Simply compare your current workflow with the opportunities we can provide.",
-   'As you look through our approved project references here [ https://www.ercon.lv ], you may notice how close some of them are to what you are building now.',
-   "My proposal: let's meet for a 20-minute Zoom call and see whether there is a fit.",
-   'I bring our latest production data and lessons from comparable projects, you bring your requirements, and you will be ready to decide whether it is worth continuing.',
-   'Would you be open to a 20-minute Zoom conversation this week or next? ',
-   'Please choose a suitable time here: [Calendly link].',
-   'Best regards,\nEdgars',
-   'Link to Linkedin profile'
-  ],
-  subjects:['{{projectMilestone}}: {{deliveryAngle}}','Keep what works. Compare what’s possible.','{{sender}}. {{company}}','If everything is on track, why talk?','{{projectMilestone}}: another success story?']
- },
- friendly:{
-  subject:'A friendly hello about Malmberget',
-  paragraphs:[
-   'Hi Joakim,',
-   "Congratulations on the start of foundation work in Malmberget. One of the largest buildings in LKAB's history, north of the Arctic Circle, ready by 2028: that is no small job.",
-   "I'm Edgars from ERCON ( https://www.ercon.lv ).",
-   'We are a metalworking team that has spent more than 30 years on the less glamorous part of projects like yours: turning drawings into steel that shows up on time and fits.',
-   "I don't know yet whether you need us. You may be fully covered, and if so, good. But if an extra pair of reliable hands for drawings, manufacturing, installation or qualified workforce would make the next two years calmer and help protect your margins, I'd enjoy a conversation.",
-   'Here are some of the projects we are proud of: [link].',
-   "Have a look when you have a coffee in hand. If something catches your eye, I'd enjoy a 20-minute Zoom conversation.",
-   "I'll bring real numbers and a few lessons we learned the hard way, and you can share what your team needs. No slides, no pressure.",
-   'Choose a suitable time here: [Calendly].',
-   "And if steelwork sits with someone else, I'd appreciate a pointer in the right direction.",
-   'Warm regards,\nEdgars'
-  ],
-  subjects:['A friendly hello about {{verifiedProject}}','{{company}}. A long-term partnership?','{{sender}}. {{company}}','What could we build together?','Congratulations on {{verifiedMilestone}}']
- },
- brutal:{
-  subject:'LeadIntel. On behalf of Edgars',
-  paragraphs:[
-   'Hi Joakim,',
-   'I should say this first: I’m LeadIntel, an AI-powered system. ',
-   '( First name Second name ) asked me to research potential business partners for ERCON and write to relevant people on his behalf.',
-   'My research led me to LKAB’s new sorting plant in Malmberget. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could help keep the project running smoothly, this may be worth a conversation.',
-   'For more than 30 years ERCON have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. https://www.ercon.lv/',
-   'Here are some projects they are proud of: [reference link].',
-   'If something catches your eye, would you be open to a 20-minute Zoom conversation with Edgars?',
-   'He’ll bring relevant production data and lessons from previous projects. You can share your requirements and assess whether ERCON is the right partner.',
-   'I’m writing the introduction. Edgars will be there for the conversation.',
-   'Choose a suitable time here: [Calendly link].',
-   'Warm regards,\nLeadIntel. On behalf of Edgars. ',
-   '(Edgars linkedin profile)'
-  ],
-  subjects:['LeadIntel. On behalf of Edgars']
- }
- };
+  "brutal": {
+    "subject": "",
+    "paragraphs": [
+      "I should say this first: I’m LeadIntel, an AI-powered system. Edgars Untals at ERCON asked me to find projects where their work could be genuinely useful, and to write to the people behind them.",
+      "Malmberget’s new sorting plant came up. Foundation work is under way, the plant is due to run in 2028, and a lot of steel has to arrive on time and fit before then.",
+      "ERCON is a Latvian steel fabrication and installation company with more than 30 years in steel, specialising in the Scandinavian market.",
+      "[Real reference: “Most recently, X for Y in Norway.”]",
+      "I don’t know whether you need them. You may be fully covered. If not, here are three values ERCON stands for: reliable partnership, consistent quality and controlled costs.",
+      "If it makes sense, let’s schedule 20 minutes on Zoom with Edgars.",
+      "He’ll bring production data and lessons from comparable projects, and you can share your requirements. [Calendly link]",
+      "I wrote the introduction. The conversation would be with a real human.",
+      "LeadIntel, on behalf of Edgars Untals ERCON www.ercon.lv | linkedin.com/in/edgarsuntals",
+      "P.S. If steelwork isn’t on your desk, a pointer to the right person would be much appreciated. Edgars will follow up personally."
+    ],
+    "subjects": [
+      "LeadIntel. On behalf of Edgars"
+    ]
+  },
+  "friendly": {
+    "subject": "",
+    "paragraphs": [
+      "Hi Joakim,",
+      "Congratulations on getting the foundation work started in Malmberget. One of the largest buildings in LKAB’s history, north of the Arctic Circle, ready by 2028: impressive job.",
+      "I’m Edgars from ERCON, a Latvian steel company. For more than 30 years we’ve worked on the less glamorous part of projects like yours: turning drawings into steel that arrives on time and fits.",
+      "[Real reference: “Most recently, X for Y in Norway.”]",
+      "I don’t know whether you need us. You may be fully covered, and if so, good. But if an extra pair of reliable hands for fabrication or installation would make your next two years a little calmer, we would be happy to assist.",
+      "Would you be open to a 20-minute chat on Zoom?",
+      "I’ll bring real numbers and a few lessons we learned the hard way, and you can share what your team needs. No slides. [Calendly link]",
+      "Warm regards, Edgars Untals ERCON www.ercon.lv | linkedin.com/in/edgarsuntals",
+      "P.S. If steelwork sits with someone else, I’d be grateful for a pointer in the right direction."
+    ],
+    "subjects": [
+      "A friendly hello about {{verifiedProject}}",
+      "{{company}}. A long-term partnership?",
+      "{{sender}}. {{company}}",
+      "What could we build together?",
+      "Congratulations on {{verifiedMilestone}}"
+    ]
+  },
+  "professional": {
+    "subject": "",
+    "paragraphs": [
+      "Hi Joakim,",
+      "I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company specialising in the Scandinavian market. [Real reference: “Recently we delivered X for Y in Norway.”]",
+      "We would like to be considered as a bidder for steel structures, platforms or installation work on the Malmberget sorting plant, either with LKAB directly or through NCC.",
+      "You may already be fully covered. If not, here is why we could be useful:",
+      "Reliable: [all X Scandinavian projects delivered on schedule] Quality: [certified to EN 1090 EXC3 / ISO 3834] Cost: [Baltic production rates with our own installation crews]",
+      "If this is relevant, I’d be glad to discuss your requirements and where we could fit on a short 20-minute Zoom call [Calendly link].",
+      "Best regards, Edgars Untals ERCON www.ercon.lv | linkedin.com/in/edgarsuntals",
+      "P.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person."
+    ],
+    "subjects": [
+      "Steel and installation for Malmberget",
+      "Edgars Untals. Ercon",
+      "Room for one more steel supplier?",
+      "Malmberget steel – who should I ask?",
+      "Malmberget: EXC2 or EXC3?"
+    ]
+  },
+  "curiosity": {
+    "subject": "",
+    "paragraphs": [
+      "Hi Joakim,",
+      "Foundation work in Malmberget is under way. The new sorting plant is due to run in 2028. And somewhere between those two dates, every steel structure has to arrive on time, fit the first time and stay within budget.",
+      "This is what we stand for. I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company with more than 30 years in steel, specialising in the Scandinavian market.",
+      "[Real reference: “Recently we delivered X for Y in Norway.”]",
+      "You may already be fully covered, and I’m not suggesting you change anything that works. Many project teams simply like to have one more qualified option ready before the steel packages go out, and that is what we would like to be.",
+      "If it makes sense, let’s take 20 minutes on Zoom.",
+      "You bring your requirements, I bring our production data and lessons from comparable projects, and you can judge for yourself whether there is a fit. [Calendly link]",
+      "Best regards, Edgars Untals ERCON www.ercon.lv | linkedin.com/in/edgarsuntals",
+      "P.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person."
+    ],
+    "subjects": [
+      "{{projectMilestone}}: {{deliveryAngle}}",
+      "Keep what works. Compare what’s possible.",
+      "{{sender}}. {{company}}",
+      "If everything is on track, why talk?",
+      "{{projectMilestone}}: another success story?"
+    ]
+  }
+};
  for(const item of Object.values(records)){Object.freeze(item.paragraphs);Object.freeze(item.subjects);Object.freeze(item);}
  // Professional wording has one source; only these factual slots may vary.
- function professionalPattern(){
-  let body=records.professional.paragraphs.join('\n\n');
-  const slots=[['Hi Joakim,','Hi {{firstName}},'],['LKAB’s investment in the new sorting plant in Malmberget','{{development}}'],['(First name Second name)','{{sender}}'],['ERCON','{{company}}'],['Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.','{{difference}}'],['drawing development, metal manufacturing, installation and qualified workforce solutions','{{offer}}'],['the Malmberget project','the {{subjectProject}} project'],['production plans','{{planType}} plans'],['production data','{{meetingData}} data'],['[link]','{{referenceUrl}}'],['[Calendly link]','{{calendly}}'],['Best regards,\nEdgars','Best regards,\n{{senderFirstName}}']];
-  for(const [from,to] of slots){if(!body.includes(from))throw Error('Approved Professional factual slot changed');body=body.split(from).join(to);}
-  return body;
- }
+ function approvedPattern(style){const record=records[style];if(!record)return '';let body=record.paragraphs.join('\n\n');for(const [from,to] of Object.entries(patternSlots[style]||{})){body=body.split(from).join(to);}return body;}
+ const patternSlots={"professional":{"Hi Joakim,":"Hi {{firstName}},","Edgars Untals":"{{sender}}","ERCON":"{{company}}","Malmberget":"{{subjectProject}}","[Real reference: “Recently we delivered X for Y in Norway.”]":"{{proof}}","[all X Scandinavian projects delivered on schedule]":"{{reliabilityProof}}","[certified to EN 1090 EXC3 / ISO 3834]":"{{qualityProof}}","[Baltic production rates with our own installation crews]":"{{costProof}}","[Calendly link]":"{{calendly}}","www.ercon.lv":"{{sellerWebsite}}","linkedin.com/in/edgarsuntals":"{{senderLinkedInUrl}}"},"curiosity":{"Hi Joakim,":"Hi {{firstName}},","Edgars Untals":"{{sender}}","ERCON":"{{company}}","Malmberget":"{{subjectProject}}","[Real reference: “Recently we delivered X for Y in Norway.”]":"{{proof}}","[Calendly link]":"{{calendly}}","www.ercon.lv":"{{sellerWebsite}}","linkedin.com/in/edgarsuntals":"{{senderLinkedInUrl}}"},"friendly":{"Hi Joakim,":"Hi {{firstName}},","I’m Edgars from ERCON":"I’m {{sender}} from {{company}}","Edgars Untals":"{{sender}}","ERCON":"{{company}}","Malmberget":"{{subjectProject}}","[Real reference: “Most recently, X for Y in Norway.”]":"{{proof}}","[Calendly link]":"{{calendly}}","www.ercon.lv":"{{sellerWebsite}}","linkedin.com/in/edgarsuntals":"{{senderLinkedInUrl}}"},"brutal":{"Hi Joakim,":"Hi {{firstName}},","Edgars Untals":"{{sender}}","Edgars":"{{senderFirstName}}","ERCON":"{{company}}","Malmberget":"{{subjectProject}}","[Real reference: “Most recently, X for Y in Norway.”]":"{{proof}}","[Calendly link]":"{{calendly}}","www.ercon.lv":"{{sellerWebsite}}","linkedin.com/in/edgarsuntals":"{{senderLinkedInUrl}}"}};
+ function professionalPattern(){return approvedPattern('professional');}
  function originalText(style){const item=records[style];return item?(item.subject?'Subject: '+item.subject+'\n':'')+item.paragraphs.join('\n\n'):'';}
  // Policy metadata is separate from the verbatim source. Never edit source wording to fit policy.
- const paragraphRoles={
-  professional:['greeting','verified observation','role question','sender introduction','experience and offer','quality/cost/delivery focus','project references','meeting invitation','meeting goal','meeting material and comparison','booking action','signature'],
-  curiosity:['greeting','verified development and execution context','sender introduction','partnership invitation','experience/offer/outcome','keep-what-works comparison','project references','meeting proposal','meeting material and decision','final meeting invitation','booking action','signature','sender LinkedIn profile'],
-  friendly:['greeting','verified milestone','sender introduction and website','experience','buyer-may-be-covered acknowledgment and conditional benefit','project references','coffee and meeting invitation','meeting material and format','booking action','conditional referral','signature'],
-  brutal:['greeting','LeadIntel AI disclosure','sender commission','researched development and buyer-may-be-covered acknowledgment','experience and offer','project references','meeting invitation with human sender','meeting material and conditional value','AI introduction and human handoff','booking action','LeadIntel/on-behalf-of signature','sender LinkedIn profile']
- };
+ const paragraphRoles={"brutal":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9","source paragraph 10"],"friendly":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"],"professional":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8"],"curiosity":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"]};
  const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
-  version:style==='brutal'?'core-template-rules-v2-brutal-20261013':'core-template-rules-v1',style,channel:'email',aiAuthority:'designated-fields-only',
+  version:'email-master-20261015',style,channel:'email',aiAuthority:'designated-fields-only',
   paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
   maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
   literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
@@ -103,5 +102,5 @@
   rewritePolicy:'explicit alternative preview; never modify the master or first tailored original'
  })])));
  function coreContract(style){return coreContracts[style]||null;}
- return Object.freeze({records:Object.freeze(records),originalText,professionalPattern,coreContract});
+ return Object.freeze({records:Object.freeze(records),originalText,approvedPattern,professionalPattern,coreContract});
 });
