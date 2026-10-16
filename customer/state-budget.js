@@ -322,14 +322,18 @@
       if(raw===null){cache.delete(key);return null;}
       const previous=cache.get(key);if(previous?.raw===raw)return previous.value;
       if(!raw.startsWith(prefix)){cache.delete(key);return raw;}
+      root.LeadIntelStartupTrace?.("storage decode:start "+key);
       const value=decompressText(JSON.parse(raw.slice(prefix.length)),MAX_RESTORED_SECTION_BYTES,MAX_RESTORED_SECTION_BYTES);
+      root.LeadIntelStartupTrace?.("storage decode:complete "+key);
       cache.set(key,{raw,value});return value;
     };
     root.Storage.prototype.setItem=function(key,value){
       const next=this===root.localStorage&&key===MAIN_STORAGE_KEY?compactMainStorageValue(value):value;
       if(this!==root.localStorage||!sectionKeys.has(key))return originalSet.call(this,key,next);
+      root.LeadIntelStartupTrace?.("storage encode:start "+key);
       const text=String(next),previous=cache.get(key);
       const encoded=previous?.value===text&&originalGet.call(this,key)===previous.raw?previous.raw:encodeLocal(text);
+      root.LeadIntelStartupTrace?.("storage encode:complete "+key);
       prepareWrite(encoded);
       const result=originalSet.call(this,key,encoded);
       // Only a successful durable write may replace the cached working value.
