@@ -11,7 +11,7 @@ test('workspace persistence boundary initializes before app state is loaded',()=
   const importMatch=app.match(/^import ['"]\.\/workspace-persistence\.js\?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1['"];?/m);
   assert.ok(importMatch,'app.js must import the persistence boundary directly');
   const importIndex=app.indexOf(importMatch[0]);
-  const stateIndex=app.indexOf('let state=loadState()');
+  const stateIndex=app.indexOf('state=loadState()',app.lastIndexOf('function init()'));
   assert.ok(importIndex>=0&&stateIndex>importIndex,'persistence must initialize before app state is loaded');
 });
 

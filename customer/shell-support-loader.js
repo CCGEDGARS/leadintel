@@ -1,7 +1,9 @@
+// The pure CRM mapper is needed by the bridge's post-verification migration.
+import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2';
+
 const SUPPORT_MODULES=[
   './website-input-sync.js?v=20261006-sender-identity-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
-  './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
   './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1&optional-verification=20261014-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
@@ -39,4 +41,6 @@ async function loadSupportModules(){
   window.dispatchEvent(new CustomEvent('leadintel:support-modules-ready',{detail:{loaded:results.length-failed.length,failed:failed.length}}));
 }
 
-window.addEventListener('load',()=>{void loadSupportModules();},{once:true});
+window.addEventListener('load',()=>{
+  if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(loadSupportModules);else void loadSupportModules();
+},{once:true});

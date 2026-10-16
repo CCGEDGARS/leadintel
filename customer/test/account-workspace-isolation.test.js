@@ -1,19 +1,19 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const MAIN='leadintel_customer_v2_state',WS='leadintel_customer_v2_workspace',SNAP='leadintel_customer_v2_workspace_saved_snapshot_v1';
 const modulePath=require.resolve('../server-bridge.js').replace('server-bridge.js','account-cache.js');
-function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl,indexedDB,localQuota=Infinity,stateBudget=false}={}){
- const session=new Map(),events=[],timers=new Map(),attrs=new Map();let timer=0;
+function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl,indexedDB,localQuota=Infinity,stateBudget=false,documentReadyState='loading',parserDeferred=false}={}){
+ const session=new Map(),events=[],timers=new Map(),attrs=new Map(),domListeners=new Map();let timer=0;
  class Storage{constructor(map){this.values=map;}get length(){return this.values.size;}key(i){return [...this.values.keys()][i]??null;}getItem(k){return this.values.get(String(k))??null;}setItem(k,v){if(failArchive&&String(k).startsWith('leadintel_account_cache_v1:'))throw Error('Quota exceeded');const next=new Map(this.values);next.set(String(k),String(v));if(this.values===values&&[...next].reduce((size,[key,value])=>size+2*(key.length+value.length),0)>localQuota)throw Object.assign(Error('Browser storage quota exceeded'),{name:'QuotaExceededError'});this.values.set(String(k),String(v));}removeItem(k){this.values.delete(String(k));}clear(){this.values.clear();}}
  Storage.prototype.__leadintelServerPatched=true;
  const storage=new Storage(values),sessionStorage=new Storage(session),requests=[],listeners=new Map();
- const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:'loading',documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn,ms){if(ms===350||ms===700)queueMicrotask(fn);else timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
+ const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:documentReadyState,currentScript:{defer:parserDeferred},documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(name,fn){domListeners.set(name,fn);}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn,ms){if(ms===350||ms===700)queueMicrotask(fn);else timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
  root.indexedDB=indexedDB;root.window=root;root.globalThis=root;
  if(fs.existsSync(modulePath))vm.runInNewContext(fs.readFileSync(modulePath,'utf8'),root);
  if(stateBudget){Object.assign(root,{TextEncoder,TextDecoder,Buffer});vm.runInNewContext(fs.readFileSync(require.resolve('../state-budget.js'),'utf8'),root);}
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../server-bridge.js'),'utf8').replace('root.LeadIntelServerBridge=bridge;','root.__init=init;root.LeadIntelServerBridge=bridge;'),root);
- return {root,storage,values,session,events,attrs,requests,listeners};
+ return {root,storage,values,session,events,attrs,requests,listeners,domListeners};
 }
 function seed(){const main=JSON.stringify({website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}});return new Map([[WS,'wa'],[MAIN,main],['leadintel_customer_v2_workspace_explicit_save_v1','1'],[SNAP,JSON.stringify({server_synced:true,workspace_id:'wa',server_version:3,data:{[MAIN]:main}})],['leadintel_customer_v2_legacy_local_cleanup_20260901_v2','done'],['leadintel_customer_v2_website_activation_v1','CCGROUP activation'],['leadintel_customer_v2_research_meta_v1','CCGROUP research'],['leadintel_customer_v2_background_tasks_v1','CCGROUP tasks']]);}
 test('a second account with an empty server workspace never inherits the first saved profile or snapshot',async()=>{
@@ -364,4 +364,53 @@ test('the snapshot body fix versions both its entrypoint and imported persistenc
  const html=fs.readFileSync(require.resolve('../index.html'),'utf8'),app=fs.readFileSync(require.resolve('../app.js'),'utf8');
  assert.match(html,/<script type="module" src="app\.js[^"\n]*snapshot-body=20261016-v1/);
  assert.match(app,/import '\.\/workspace-persistence\.js[^'\n]*snapshot-body=20261016-v1/);
+});
+
+function interruptedBody(name='AbortError'){
+ return new Response(new ReadableStream({start(controller){controller.error(Object.assign(Error('Response body interrupted'),{name}));}}),{headers:{'Content-Type':'application/json'}});
+}
+test('all mandatory startup reads retry interrupted response bodies rather than treating them as empty data',async()=>{
+ for(const name of ['AbortError','TimeoutError','TypeError'])for(const failPath of ['/api/session','/api/workspaces','/api/customer/state']){
+  let attempts=0;const backend=startupBackend(),r=load(startupSeed(),{fetchImpl:input=>new URL(input).pathname===failPath&&attempts++<2?interruptedBody(name):backend(input)});
+  r.session.set('leadintel_customer_v2_server_hydration','wa:3');await r.root.__init();
+  assert.equal(r.root.LeadIntelServerBridge.ready,true,name+' '+failPath);
+  assert.equal(r.attrs.has('data-account-check'),false);assert.equal(attempts,3);
+  assert.equal(r.requests.some(x=>x.options.method==='PUT'),false);
+  assert.equal(JSON.parse(r.storage.getItem(MAIN)).website,'https://ccgroup.lv');
+ }
+});
+test('exhausted interrupted startup bodies preserve local records and keep workspace requests closed',async()=>{
+ let attempts=0;const r=load(startupSeed(),{fetchImpl:input=>new URL(input).pathname==='/api/workspaces'?(attempts++,interruptedBody()):startupBackend()(input)});
+ await r.root.__init();assert.equal(attempts,3);assert.equal(r.root.LeadIntelServerBridge.ready,false);assert.equal(r.attrs.get('data-account-check'),'error');
+ assert.equal(JSON.parse(r.storage.getItem(MAIN)).website,'https://ccgroup.lv');
+ await assert.rejects(r.root.fetch('https://leadintel.ccgroup.lv/api/customer/state?workspace_id=wa',{method:'PUT',leadintelSaveIntent:true,body:'{"payload":{}}'}),/Verify the signed-in account/);
+});
+
+test('startup retries a real deadline abort while the workspace-list body is still streaming',async()=>{
+ let attempts=0,deadline;const backend=startupBackend();
+ const r=load(startupSeed(),{fetchImpl:(input,options)=>{
+  if(new URL(input).pathname==='/api/workspaces'&&attempts++<2){
+   const body=new ReadableStream({start(controller){options.signal.addEventListener('abort',()=>controller.error(options.signal.reason),{once:true});}});
+   queueMicrotask(()=>deadline());return new Response(body);
+  }return backend(input);
+ }});
+ Object.assign(r.root,{AbortController,DOMException});
+ const schedule=r.root.setTimeout;r.root.setTimeout=(fn,ms)=>ms===15000?(deadline=fn,999):schedule(fn,ms);
+ r.session.set('leadintel_customer_v2_server_hydration','wa:3');await r.root.__init();
+ assert.equal(attempts,3);assert.equal(r.root.LeadIntelServerBridge.ready,true);
+ assert.equal(r.attrs.has('data-account-check'),false);
+});
+test('a failed write response body never automatically repeats the write or detaches saved records',async()=>{
+ let writes=0;const backend=startupBackend(),r=load(startupSeed(),{fetchImpl:(input,options)=>new URL(input).pathname==='/api/logout'?(writes++,interruptedBody()):backend(input)});
+ r.session.set('leadintel_customer_v2_server_hydration','wa:3');await r.root.__init();
+ await r.root.LeadIntelServerBridge.signOut();assert.equal(writes,1);
+ assert.equal(JSON.parse(r.storage.getItem(MAIN)).website,'https://ccgroup.lv');assert.equal(r.events.includes('reload'),false);
+});
+
+test('parser-deferred bridge waits for the module bootstrap before starting verification',async()=>{
+ const r=load(startupSeed(),{documentReadyState:'interactive',parserDeferred:true,fetchImpl:startupBackend()});
+ assert.equal(r.requests.length,0,'the parser marks deferred scripts interactive before module dependencies are ready');
+ assert.equal(typeof r.domListeners.get('DOMContentLoaded'),'function');
+ r.session.set('leadintel_customer_v2_server_hydration','wa:3');await r.domListeners.get('DOMContentLoaded')();
+ assert.equal(r.root.LeadIntelServerBridge.ready,true);
 });
