@@ -4,7 +4,7 @@ const A=require('../approved-reference-scripts.js'),E=require('../message-editor
 const essentials={sender:'Alex Lane',company:'SellerCo',offer:'manufacturing',value:'simplify delivery',difference:'Our team has manufacturing experience.',approach:'We support installation.',meetingValue:'project data',calendly:'https://calendly.com/alex/intro',language:'en'};
 const context={channel:'email',buyerCompany:'BuyerCo',buyerName:'Robin',firstName:'Robin',trigger:{summary:'BuyerCo’s plant expansion',url:'https://buyer.test/news',verification:'source_verified'}};
 test('all approved master paragraphs and subjects retain the exact recorded text',()=>{
- const fixture=require('./fixtures/approved-core-masters-2026-10-15.json');for(const [style,r] of Object.entries(fixture))assert.deepEqual(A.records[style].paragraphs,r.paragraphs);
+ const fixture=require('./fixtures/approved-core-masters-2026-10-17.json');for(const [style,r] of Object.entries(fixture))assert.deepEqual(A.records[style].paragraphs,r.paragraphs);
 });
 test('approved Brutal correction also reaches the default working pattern',()=>{
  const body=S.defaults.find(row=>row.id==='brutal').body;
@@ -15,11 +15,11 @@ test('approved Brutal correction also reaches the default working pattern',()=>{
 test('the approved master revision invalidates all four styles factual preparation',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const studio=S.normalize({mode,essentials}),prepared=E.preparedResponse(E.fieldSources(studio,context),studio,context),stamp=JSON.parse(prepared.source);
-  assert.equal(stamp.masterVersion,'email-master-20261015-v4');
+  assert.equal(stamp.masterVersion,mode==='professional'?'email-master-20261017-professional-v1':'email-master-20261015-v4');
  }
 });
 test('each core contract publishes its own immutable sequence and measured body ceiling',()=>{
- for(const [style,counts] of Object.entries(Object.fromEntries(Object.entries(require('./fixtures/approved-core-masters-2026-10-15.json')).map(([style,r])=>[style,[r.paragraphs.length,r.paragraphs.join(' ').split(/\s+/).length]])))){
+ for(const [style,counts] of Object.entries(Object.fromEntries(Object.entries(require('./fixtures/approved-core-masters-2026-10-17.json')).map(([style,r])=>[style,[r.paragraphs.length,r.paragraphs.join(' ').split(/\s+/).length]])))){
   const c=A.coreContract(style);assert.equal(c.paragraphRoles.length,counts[0]);assert.equal(c.maximumMessageWords,counts[1]);
   assert.equal(c.paragraphSeparator,'\n\n');assert.equal(c.meetingMinutes,20);assert.equal(c.aiAuthority,'designated-fields-only');
   assert.ok(Object.isFrozen(c));assert.ok(Object.isFrozen(c.paragraphRoles));assert.throws(()=>{c.paragraphRoles.reverse();});

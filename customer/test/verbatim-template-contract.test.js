@@ -4,7 +4,7 @@ const essentials={sender:'Alex Lane',company:'SellerCo',offer:'manufacturing and
 const context={channel:'email',firstName:'Robin',buyerName:'Robin',buyerCompany:'BuyerCo',trigger:{url:'https://buyer.test/news',verification:'source_verified',summary:'BuyerCo’s new sorting plant'}};
 test('Professional uses the precise approved wording with factual substitutions only',()=>{
  const s=S.normalize({mode:'professional',essentials}),draft=E.tailor(s,context);
- assert.equal(draft.message,"Hi Robin,\n\nI’m Alex Lane from SellerCo, a manufacturing and installation company. [link]\n\nWe would like to be considered as a bidder for manufacturing and installation on [Add verified project].\n\nYou may already be fully covered. If not, here is why we could be useful:\n\nReliable: [Add verified reliability proof]\nQuality: [Add verified quality proof]\nCost: [Add verified cost proof]\n\nIf this is relevant, I’d be glad to discuss your requirements and where we could fit on a short 20-minute Zoom call https://calendly.com/alex/intro.\n\nBest regards,\nAlex Lane\nSellerCo\n\nP.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person.");
+ assert.equal(draft.message,"Hi Robin,\n\nI’m Alex Lane from SellerCo, a manufacturing and installation company.\n\nWe would like to be considered as a bidder for manufacturing and installation on your project.\n\nSure, you may already be fully covered. If not, here is why we could be useful:\n\nCost: [Add verified cost basis]\n\nIf this is relevant, I’d be glad to discuss your requirements and where we could contribute to the project.\n\nHow about a short 20-minute Zoom call?\n\nhttps://calendly.com/alex/intro.\n\nBest regards,\nAlex Lane. SellerCo\n\nP.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person.");
 });
 test('every core style stays within its approved original word frame and keeps twenty minutes',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
@@ -18,7 +18,7 @@ test('every core style stays within its approved original word frame and keeps t
 test('research proof prose and certification lists cannot spill into the protected script',()=>{
  const s=S.normalize({mode:'professional',essentials:{...essentials,proof:'Company reports 30 years. ISO 9001:2015. Here is evidence https://seller.test/projects'}});
  const d=E.tailor(s,context);assert.match(d.message,/https:\/\/seller.test\/projects/);
- assert.doesNotMatch(d.message,/Company reports|30 years/);assert.match(d.message,/Quality: ISO 9001:2015/);
+ assert.doesNotMatch(d.message,/Company reports|30 years/);assert.doesNotMatch(d.message,/Quality: ISO 9001:2015/);
 });
 test('factual field word limits reject expansion and cached facts are scoped to the style',()=>{
  const s=S.normalize({mode:'professional',essentials}),fields={triggerSummary:context.trigger.summary,offer:essentials.offer,value:essentials.value,difference:essentials.difference,approach:essentials.approach,meetingValue:essentials.meetingValue};
@@ -37,18 +37,18 @@ test('the user-pasted Professional master is exact after identity and link subst
  const e={...essentials,sender:'Edgars Untāls',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',proof:'https://seller.test/approved-projects',value:'A long unrelated value proposition '.repeat(20),meetingValue:'A long repeated meeting purpose '.repeat(20),approach:'Another long irrelevant delivery list '.repeat(20),calendly:'https://calendly.com/edgars-7go/strategy-call'};
  const ctx={...context,firstName:'Joakim',buyerName:'Joakim Winsa',buyerCompany:'LKAB',trigger:{...context.trigger,summary:'LKAB’s investment in the new sorting plant in Malmberget'}};
  const studio=S.normalize({mode:'professional',essentials:e});assert.equal(E.needsPreparation(studio,ctx),false);
- const confirmed=require('./fixtures/approved-core-masters-2026-10-15.json').professional.paragraphs.join('\n\n');assert.equal(A.originalText('professional'),confirmed);
+ const confirmed=require('./fixtures/approved-core-masters-2026-10-17.json').professional.paragraphs.join('\n\n');assert.equal(A.originalText('professional'),confirmed);
  const draft=E.tailor(studio,ctx);assert.match(draft.message,/I’m Edgars Untāls from ERCON/);assert.match(draft.message,/We would like to be considered as a bidder/);assert.equal(S.defaults.find(t=>t.id==='professional').body,A.professionalPattern());E.validateFrame(draft.message,'professional');
  assert.doesNotMatch(draft.message,/ISO|integrated offering|unrelated|repeated|irrelevant/);
 });
 test('Professional goal, focus and meeting purpose cannot be replaced by prepared profile content',()=>{
  const studio=S.normalize({mode:'professional',essentials});const prepared=E.parsePrepared({triggerSummary:context.trigger.summary,offer:essentials.offer,difference:essentials.difference,value:'simplify delivery',approach:'Extra capabilities.',meetingValue:'a repeated purpose'},studio,context);
- const draft=E.tailor(studio,E.preparedContext(studio,context,prepared));assert.match(draft.message,/You may already be fully covered/);assert.match(draft.message,/discuss your requirements and where we could fit/);assert.doesNotMatch(draft.message,/Extra capabilities|a repeated purpose/);
+ const draft=E.tailor(studio,E.preparedContext(studio,context,prepared));assert.match(draft.message,/Sure, you may already be fully covered/);assert.match(draft.message,/discuss your requirements and where we could contribute to the project/);assert.doesNotMatch(draft.message,/Extra capabilities|a repeated purpose/);
 });
 
 test('missing project references retain the approved reference line without invented links',()=>{
  const studio=S.normalize({mode:'professional',essentials:{...essentials,proof:''}}),draft=E.tailor(studio,context);
- assert.match(draft.message,/\[link\]/);
+ assert.doesNotMatch(draft.message,/\[link\]|ercon\.lv/);
  assert.doesNotMatch(draft.message,/ercon\.lv|invented/);
 });
 

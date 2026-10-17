@@ -1,13 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const S=require('../message-studio'),E=require('../message-editor'),A=require('../approved-reference-scripts');
-const source=require('./fixtures/approved-core-masters-2026-10-15.json');
+const source=require('./fixtures/approved-core-masters-2026-10-17.json');
 const seller='A Latvian steel fabrication and installation company specialising in the Scandinavian market. More than 30 years in steel. We turn drawings into steel structures and platforms. Reliable partnership, consistent quality and controlled costs.';
 const essentials={sender:'Edgars Untals',company:'ERCON',offer:'steel fabrication and installation',difference:'More than 30 years in steel.',value:'reliable partnership, consistent quality and controlled costs',meetingValue:'production data and lessons from comparable projects',proof:'https://seller.example/projects',calendly:'https://calendly.com/seller/intro'};
 const context={channel:'email',firstName:'Joakim',buyerName:'Joakim Winsa',buyerCompany:'LKAB',sellerWebsite:'https://seller.example/',sellerEvidence:[{url:'https://seller.example/about',text:seller,extracted:true}],trigger:{verification:'source_verified',url:'https://buyer.example/plant',summary:'Foundation work in Malmberget is under way.',excerpt:source.curiosity.paragraphs[1]+' '+source.friendly.paragraphs[1]+' LKAB directly or through NCC.',positive:true}};
 test('Professional emitted body preserves the approved introduction and bid request rather than substituting Profile prose',()=>{
  const draft=E.tailor(S.normalize({mode:'professional',essentials}),context);
- assert.match(draft.message,/I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company specialising in the Scandinavian market\./);
- assert.match(draft.message,/bidder for steel structures, platforms or installation work on the Malmberget sorting plant, either with LKAB directly or through NCC\./);
+ assert.match(draft.message,/I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company\./);
+ assert.match(draft.message,/bidder for steel structures, platforms or installation work on your new Malmberget plant\./);
  assert.doesNotMatch(draft.message,/a company providing|the Malmberget project/);
 });
 test('NLP uses the supplied master event frame when all facts are verified',()=>{

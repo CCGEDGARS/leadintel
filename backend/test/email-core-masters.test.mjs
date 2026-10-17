@@ -15,7 +15,7 @@ test('four protected email sources use October 15 approved masters',()=>{
  const rows=coreScriptSeeds.filter(row=>row.channel==='email');
  assert.equal(rows.length,4);
  for(const row of rows){
-  assert.equal(row.masterVersion,'20261015-v4');
+  assert.equal(row.masterVersion,row.style==='professional'?'20261017-professional-v1':'20261015-v4');
   assert.ok(row.original.includes(fixtures[row.style]),row.style);
   assert.ok(row.body.includes({professional:'We would like to be considered as a bidder',curiosity:'Many project teams simply like to have one more qualified option',friendly:'we would be happy to assist',brutal:'I wrote the introduction. The conversation would be with a real human.'}[row.style]),row.style);
   assert.match(row.body,/{{firstName}}/);
@@ -49,3 +49,5 @@ test('an owner-edited new-version master can remain primary',async()=>{
  assert.equal(item.body,'Approved revision');
  assert.equal(item.revision,4);
 });
+
+test('October 17 Professional replaces an old builtin with history, preserving owner revisions',async()=>{const seed=coreScriptSeeds.find(r=>r.id==='email:professional');const old={...seed,body:seed.previousBuiltinBodies.at(-1),masterVersion:'20261015-v4'};const db={prepare(){return {all:async()=>({results:[{id:seed.id,payload_json:JSON.stringify(old),revision:5}]})};}};const updated=(await coreScripts(db)).find(r=>r.id===seed.id);assert.equal(updated.masterVersion,'20261017-professional-v1');assert.match(updated.original,/Safety: ISO 45001:2018 certified/);assert.ok(updated.history.some(h=>h.body===old.body));old.body='Owner separately approved custom Professional';const kept=(await coreScripts(db)).find(r=>r.id===seed.id);assert.equal(kept.body,old.body);});

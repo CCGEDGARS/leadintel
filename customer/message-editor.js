@@ -45,7 +45,7 @@
  function coreFactGaps(studio,context={}){
   if(context.channel==='linkedin'||studio.mode==='original'||studio.personalStyles?.[studio.mode]?.active||studio.templates?.find(t=>t.id===studio.mode)?.isPersonal)return [];
   const values=factualValues(studio,context),slots=[...referencePattern(studio.mode).matchAll(/{{(\w+)}}/g)].map(m=>m[1]);
-  return [...new Set(slots.filter(key=>typeof values[key]==='string'&&values[key].startsWith('[Add verified ')))];
+  return [...new Set(slots.filter(key=>!(studio.mode==='professional'&&key==='costProof')&&typeof values[key]==='string'&&values[key].startsWith('[Add verified ')))];
  }
  // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
  function sourceVoiceValues(style,e,raw,context,values){
@@ -70,12 +70,25 @@
   const foundation=clauses.some(v=>/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:is under way|is underway|has (?:already )?(?:started|begun)|started|begun)\b|\bgetting the foundation work started\b|\b(?:is(?: now)? laying|has begun laying|has started laying) the foundations?\b(?=[^.!?]{0,100}\b(?:plant|factory|building|warehouse|facility)\b)/i.test(v));
   const year=positiveEvent.match(/\b(?:due to (?:run|open|start)(?: in)?|scheduled to (?:open|start|run)(?: in)?|ready (?:in|by)|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
   Object.assign(values,{subjectProject:project||missing('project'),milestoneWork:foundation?'Foundation work':missing('milestone'),friendlyMilestoneWork:foundation?'the foundation work':missing('milestone'),projectType:kind?kind[0].toLowerCase():missing('project-type'),projectNoun:kind?kind[2].split(' ').at(-1).toLowerCase():missing('project-type'),openingYear:year||missing('opening-year'),deliveryItem:facts.steel?'steel structure':missing('deliverable'),deliveryMaterial:facts.steel?'steel':missing('delivery-material'),experienceDuration:duration||missing('experience-duration'),experienceOutcome:facts.steel&&manufacturing&&duration&&/\bdrawings?\b/i.test(seller)?'turning drawings into steel that arrives on time and fits':missing('experience-outcome'),friendlyScale:''});
+  if(style==='professional')values.sellerDescription=['a',origin,discipline,'company'].filter(Boolean).join(' ');
   if(project&&kind)values.projectDescription='the '+project+' '+kind[2].toLowerCase();
   const contractor=positiveEvent.match(/\bthrough\s+([A-Z][A-Za-z&-]*(?:\s+[A-Z][A-Za-z&-]*){0,2})(?=[.,;]|$)/)?.[1];
   if(contractor&&context.buyerCompany&&positiveEvent.includes(context.buyerCompany+' directly'))values.deliveryRoute=', either with '+context.buyerCompany+' directly or through '+contractor;
   if(style==='professional'&&facts.steel&&manufacturing){
    const platforms=/\bplatforms?\b/i.test(seller);
    values.offer='steel structures'+(platforms?', platforms':'')+(facts.installation?' or installation work':'');
+  }
+  if(style==='professional'){
+   values.projectTarget=project&&kind?'your '+(positiveEvent.toLowerCase().includes('new '+kind[2].toLowerCase())?'new ':'')+project+' '+kind[2].split(' ').at(-1).toLowerCase():'your project';
+   const proof=statements.find(v=>v.length<260&&!/\[|\]|\bX\b/.test(v)&&/\bdelivered\b[^.!?]{0,150}\bon (?:time|schedule)\b/i.test(v));
+   values.reliabilityProof=proof?line(proof):'';
+   const eligible=statements.filter(v=>! /\b(?:plan|plans|planned|planning|pending|seek|seeking|aim|will|would|could|may|might|target|expired|formerly|previously|partners?|subcontractors?|customers?|clients?|suppliers?)\b/i.test(v));
+   const cert=eligible.find(v=>/\bEN\s*1090(?:-1)?\b/i.test(v)&&/\bcertif(?:ied|ication)\b/i.test(v)&&!/[\[\]]/.test(v));
+   const standard=cert?.match(/\bEN\s*1090(?:-1)?\b/i)?.[0].replace(/\s+/g,' '),execution=cert?.match(/\bEXC\s*([234])\b/i)?.[1];
+   values.qualityProof=standard?standard+' certified'+(execution?', execution class EXC'+execution:''):'';
+   const safety=eligible.find(v=>/\bISO\s*45001(?::2018)?\b/i.test(v)&&/\bcertif(?:ied|ication)\b/i.test(v)&&!/[\[\]]/.test(v));
+   values.safetyProof=safety?(safety.match(/\bISO\s*45001(?::2018)?\b/i)[0].replace(/\s+/g,' ')+' certified'):'';
+   values.costProof=line(statements.find(v=>v.length<200&&!/[\[\]]/.test(v)&&/\b(?:production rates|own installation crews|hourly rate|cost basis|fixed[- ]price|production costs)\b/i.test(v))||'')||missing('cost basis');
   }
   if(style==='friendly'){
    if(manufacturing&&facts.installation)values.offer='fabrication or installation';
@@ -112,6 +125,7 @@
   if(!reviewed||style==='friendly'&&!context.trigger?.positive){const openingIndex=style==='brutal'?2:1;if(style!=='professional')body=body.split('\n\n').filter((p,i)=>i!==openingIndex).join('\n\n');}
   if(! /\bNo slides\b/i.test(raw.meetingValue||''))body=body.replace(' No slides.','');
   if(!values.proof)body=body.split('\n\n').filter(p=>p!=='{{proof}}').join('\n\n');
+  if(style==='professional')body=body.split('\n').filter(row=>!/^Reliable: \{\{reliabilityProof\}\}$/.test(row)||values.reliabilityProof).filter(row=>!/^Quality: \{\{qualityProof\}\}$/.test(row)||values.qualityProof).filter(row=>!/^Safety: \{\{safetyProof\}\}$/.test(row)||values.safetyProof).join('\n');
   body=body.replace('{{sellerWebsite}} | {{senderLinkedInUrl}}',[values.sellerWebsite,values.senderLinkedInUrl].filter(Boolean).join(' | '));
   body=body.replace(/{{(\w+)}}/g,(_,key)=>String(values[key]??''));
   // Preserve source signature/proof line breaks; only normalize horizontal space.

@@ -45,7 +45,7 @@ test('official milestone wording fills factual atoms without composing a new par
  // LKAB press release 2026-08-25: /en/press/milestone-lkab-lays-the-foundation-for-gallivares-future/
  const excerpt='LKAB is now laying the foundation for the new sorting plant at the mine in Malmberget, Gällivare – marking an important milestone in securing the company’s continued operations. When it becomes operational in 2028, it will be one of the largest facilities in LKAB’s history.';
  const message=rendered('curiosity',{...context,trigger:{...context.trigger,excerpt}});
- assert.equal(message.split('\n\n')[1],require('./fixtures/approved-core-masters-2026-10-15.json').curiosity.paragraphs[1]);
+ assert.equal(message.split('\n\n')[1],require('./fixtures/approved-core-masters-2026-10-17.json').curiosity.paragraphs[1]);
 });
 test('the separate opening-only action cannot bypass the native core frame',()=>{
  const h=mounted({selected:'curiosity'});try{h.q('message-generate').click();const before=h.q('outreach-email-body').value;h.w.updateMessageOpening();assert.equal(h.q('outreach-email-body').value,before);assert.match(h.q('message-fact-status').textContent,/Use Update message.*approved core opening/);}finally{h.w.close();}

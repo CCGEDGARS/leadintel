@@ -5,7 +5,7 @@ const filename=path.join(root,'backend/src/core-script-seeds.js'),source=fs.read
 const records=JSON.parse(source.slice(source.indexOf('['),source.lastIndexOf(']')+1));
 for(const row of records.filter(row=>row.channel==='email')){
  const oldBody=row.body;
- row.body=A.approvedPattern(row.style);row.original=A.originalText(row.style);row.masterVersion='20261015-v4';
+ row.body=A.approvedPattern(row.style);row.original=A.originalText(row.style);row.masterVersion=row.style==='professional'?'20261017-professional-v1':'20261015-v4';
  row.previousBuiltinBodies=[...new Set([...(row.previousBuiltinBodies||[]),oldBody])].filter(body=>body!==row.body);
 }
 fs.writeFileSync(filename,'// Generated email rows: node scripts/sync-email-core-masters.cjs\nexport const coreScriptSeeds = '+JSON.stringify(records,null,2)+';\n');

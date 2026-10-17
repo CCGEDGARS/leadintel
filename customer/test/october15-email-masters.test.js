@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const A=require('../approved-reference-scripts'),S=require('../message-studio'),E=require('../message-editor');
-const source=require('./fixtures/approved-core-masters-2026-10-15.json');
+const source=require('./fixtures/approved-core-masters-2026-10-17.json');
 const essentials={sender:'Alex Lane',company:'North Works',offer:'steel fabrication and installation',value:'reliable partnership, consistent quality and controlled costs',difference:'Our team has 30 years of steel fabrication experience.',meetingValue:'production data and lessons from comparable projects',proof:'https://north.example/projects',calendly:'https://calendly.com/north/intro',language:'en'};
 const context={channel:'email',firstName:'Robin',buyerName:'Robin Buyer',buyerCompany:'Buyer',sellerWebsite:'https://north.example/',senderLinkedInUrl:'https://www.linkedin.com/in/alexlane/',trigger:{verification:'source_verified',url:'https://buyer.example/news',summary:'Buyer is investing in a sorting plant at Northport.',positive:true}};
 test('all four October 15 originals preserve every paragraph and internal line break',()=>{
@@ -9,7 +9,7 @@ test('all four October 15 originals preserve every paragraph and internal line b
 test('four style generators use their October 15 pattern without legacy replacement errors',()=>{
  for(const mode of Object.keys(source)){
   const studio=S.normalize({mode,essentials}),draft=E.tailor(studio,context);
-  assert.match(draft.message,/^Hi Robin,\n\n/);assert.match(draft.message,/Alex Lane\nNorth Works\nhttps:\/\/north\.example\//);
+  assert.match(draft.message,/^Hi Robin,\n\n/);if(mode==='professional')assert.match(draft.message,/Alex Lane\. North Works\nhttps:\/\/www\.linkedin\.com\/in\/alexlane\//);else assert.match(draft.message,/Alex Lane\nNorth Works\nhttps:\/\/north\.example\//);
   assert.doesNotMatch(draft.message,/ERCON|Edgars|Malmberget|LKAB|NCC|2028|Latvian|Scandinavian|Arctic/);
   assert.ok(draft.message.includes(essentials.calendly));
  }

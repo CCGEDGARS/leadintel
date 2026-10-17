@@ -44,25 +44,26 @@
     ]
   },
   "professional": {
-    "subject": "",
     "paragraphs": [
-      "Hi Joakim,",
-      "I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company specialising in the Scandinavian market. [Real reference: “Recently we delivered X for Y in Norway.”]",
-      "We would like to be considered as a bidder for steel structures, platforms or installation work on the Malmberget sorting plant, either with LKAB directly or through NCC.",
-      "You may already be fully covered. If not, here is why we could be useful:",
-      "Reliable: [all X Scandinavian projects delivered on schedule]\nQuality: [certified to EN 1090 EXC3 / ISO 3834]\nCost: [Baltic production rates with our own installation crews]",
-      "If this is relevant, I’d be glad to discuss your requirements and where we could fit on a short 20-minute Zoom call [Calendly link].",
-      "Best regards,\nEdgars Untals\nERCON\nwww.ercon.lv | linkedin.com/in/edgarsuntals",
-      "P.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person."
+        "Hi Joakim,",
+        "I’m Edgars Untals from ERCON, a Latvian steel fabrication and installation company. https://www.ercon.lv/projects-manufacturing",
+        "We would like to be considered as a bidder for steel structures, platforms or installation work on your new  Malmberget plant.",
+        "Sure, you may already be fully covered. If not, here is why we could be useful:",
+        "Reliable: [real proof, or delete this line]\nQuality: EN 1090-1 certified, execution class [EXC2/EXC3]\nSafety: ISO 45001:2018 certified\nCost: [your cost basis, e.g. Baltic production rates with our own installation crews]",
+        "If this is relevant, I’d be glad to discuss your requirements and where we could contribute to the project.",
+        "How about a short 20-minute Zoom call?",
+        "https://calendly.com/edgars-7go/strategy-call.",
+        "Best regards,\nEdgars Untals. ERCON\nhttps://www.linkedin.com/in/edgarsuntals",
+        "P.S. If this isn’t on your desk, I’d be grateful if you could point me to the right person."
     ],
     "subjects": [
-      "Steel and installation for Malmberget",
-      "Edgars Untals. Ercon",
-      "Room for one more steel supplier?",
-      "Malmberget steel – who should I ask?",
-      "Malmberget: EXC2 or EXC3?"
+        "Steel and installation for Malmberget",
+        "Edgars Untals. Ercon",
+        "Room for one more steel supplier?",
+        "Malmberget steel – who should I ask?",
+        "Malmberget: EXC2 or EXC3?"
     ]
-  },
+},
   "curiosity": {
     "subject": "",
     "paragraphs": [
@@ -90,21 +91,20 @@
  function approvedPattern(style){const record=records[style];if(!record)return '';let body=record.paragraphs.join('\n\n');for(const [from,to] of Object.entries(patternSlots[style]||{}).sort((a,b)=>b[0].length-a[0].length)){if(!body.includes(from))throw Error('Approved factual span is missing: '+style);body=body.split(from).join(to);}return body;}
  const patternSlots={
   "professional": {
-    "a Latvian steel fabrication and installation company specialising in the Scandinavian market": "{{sellerDescription}}",
-    "[Real reference: “Recently we delivered X for Y in Norway.”]": "{{proof}}",
+    "a Latvian steel fabrication and installation company": "{{sellerDescription}}",
+    "https://www.ercon.lv/projects-manufacturing": "{{referenceUrl}}",
     "steel structures, platforms or installation work": "{{offer}}",
-    "the Malmberget sorting plant": "{{projectDescription}}",
-    ", either with LKAB directly or through NCC": "{{deliveryRoute}}",
-    "[all X Scandinavian projects delivered on schedule]": "{{reliabilityProof}}",
-    "[certified to EN 1090 EXC3 / ISO 3834]": "{{qualityProof}}",
-    "[Baltic production rates with our own installation crews]": "{{costProof}}",
+    "your new  Malmberget plant": "{{projectTarget}}",
+    "[real proof, or delete this line]": "{{reliabilityProof}}",
+    "EN 1090-1 certified, execution class [EXC2/EXC3]": "{{qualityProof}}",
+    "ISO 45001:2018 certified": "{{safetyProof}}",
+    "[your cost basis, e.g. Baltic production rates with our own installation crews]": "{{costProof}}",
     "Hi Joakim,": "Hi {{firstName}},",
     "Edgars Untals": "{{sender}}",
     "ERCON": "{{company}}",
-    "[Calendly link]": "{{calendly}}",
-    "www.ercon.lv": "{{sellerWebsite}}",
-    "linkedin.com/in/edgarsuntals": "{{senderLinkedInUrl}}"
-  },
+    "https://calendly.com/edgars-7go/strategy-call": "{{calendly}}",
+    "https://www.linkedin.com/in/edgarsuntals": "{{senderLinkedInUrl}}"
+},
   "curiosity": {
     "Foundation work": "{{milestoneWork}}",
     "Malmberget": "{{subjectProject}}",
@@ -168,8 +168,8 @@
  // Policy metadata is separate from the verbatim source. Never edit source wording to fit policy.
  const paragraphRoles={"brutal":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9","source paragraph 10","source paragraph 11"],"friendly":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"],"professional":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8"],"curiosity":["source paragraph 1","source paragraph 2","source paragraph 3","source paragraph 4","source paragraph 5","source paragraph 6","source paragraph 7","source paragraph 8","source paragraph 9"]};
  const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
-  version:'email-master-20261015-v4',style,channel:'email',aiAuthority:'designated-fields-only',
-  paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
+  version:style==='professional'?'email-master-20261017-professional-v1':'email-master-20261015-v4',style,channel:'email',aiAuthority:'designated-fields-only',
+  paragraphRoles:Object.freeze(record.paragraphs.map((_,i)=>'source paragraph '+(i+1))),paragraphSeparator:'\n\n',signatureSeparator:'\n',
   maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
   literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
   aiFields:Object.freeze(['triggerSummary','offer','value','difference','approach','meetingValue']),

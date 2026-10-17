@@ -24,7 +24,8 @@
       "inmail_version": "linkedin-inmail-v1",
       "email_masters_version": "20261015-v4",
       "inmail_masters_version": "inmail-facts-20261016-v2",
-      "phone_masters_version": "phone-20261017-v1"
+      "phone_masters_version": "phone-20261017-v1",
+      "professional_master_version": "20261017-professional-v1"
     }
   },
   "smokeChecks": [
@@ -2864,6 +2865,19 @@
         "saved?'saved':'ready'",
         "message saved",
         "Save your changes."
+      ]
+    },
+    {
+      "id": "professional-approved-october17",
+      "type": "text",
+      "url": "/customer/approved-reference-scripts.js",
+      "status": 200,
+      "contains": [
+        "email-master-20261017-professional-v1",
+        "Sure, you may already be fully covered",
+        "Safety: ISO 45001:2018 certified",
+        "How about a short 20-minute Zoom call?",
+        "execution class [EXC2/EXC3]"
       ]
     }
   ],

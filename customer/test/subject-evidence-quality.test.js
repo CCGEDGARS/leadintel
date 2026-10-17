@@ -75,7 +75,7 @@ test('verified seller project references fill the declared link slot without cha
  const st=studio(),context={...ctx,sellerEvidence:[project],firstName:'Sam',buyerCompany:'Buyer'};
  const draft=E.tailor(st,context);assert.match(draft.message,/https:\/\/seller.example\/project\/industrial-tower/);
  for(const row of [{...project,url:'https://other.example/project/tower'},{...project,text:'We do not manufacture or supply steel structures.'},{...project,url:'https://seller.example/'}]){
-  assert.match(E.tailor(st,{...context,sellerEvidence:[row]}).message,/\[link\]/);
+  assert.doesNotMatch(E.tailor(st,{...context,sellerEvidence:[row]}).message,/industrial-tower|other\.example|\[link\]/);
  }
  const manual=S.normalize({...st,essentials:{...e,proof:'https://seller.example/approved-reference'}});
  assert.match(E.tailor(manual,context).message,/https:\/\/seller.example\/approved-reference/);
