@@ -23,7 +23,7 @@
   for(const row of context.buyerFactEvidence||[]){
    if(S.subjectDomain(row.url)!==host||row.extracted===false||/error|failed|pending/i.test(row.status||''))continue;
    const text=String(row.text||row.excerpt||row.markdown||'');if(!text||/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(text))continue;
-   const sameSource=row.url===t.url,article=String(row.title||'').toLocaleLowerCase().includes(needle)&&new URL(row.url).pathname.replace(/^\/(?:en|sv|lv)?\/?$/,'').length>1;
+   const sameSource=row.url===t.url,article=(String(row.title||'').toLocaleLowerCase().includes(needle)||text.slice(0,900).toLocaleLowerCase().includes(needle))&&new URL(row.url).pathname.replace(/^\/(?:en|sv|lv)?\/?$/,'').length>1;
    const paragraphs=text.split(/\n\s*\n/).filter(v=>v.toLocaleLowerCase().includes(needle));
    if(article){paragraphs.length=0;paragraphs.push(text);}
    for(const paragraph of paragraphs){
@@ -56,7 +56,7 @@
   const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
   // Only affirmative source clauses establish factual atoms. AI triggerSummary
   // never supplies an opening sentence or owns the approved paragraph structure.
-  const event=reviewed?buyerFactText(context):'';
+  const event=reviewed?[buyerFactText(context),context.preparedFields?.fields?.triggerSummary||''].filter(Boolean).join(' '):'';
   const clauses=event.split(/(?<=[.!?])\s+|\n+/).filter(v=>! /\b(?:not|never|no|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(v)),positiveEvent=clauses.join(' '),project=values.subjectProject;
   const kind=positiveEvent.match(/\b(new )?(sorting plant|factory|plant|office|hospital|warehouse|data cent(?:re|er)|distribution cent(?:re|er)|production facilit(?:y|ies))\b/i);
   const foundation=clauses.some(v=>/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:is under way|is underway|has (?:already )?(?:started|begun)|started|begun)\b|\bgetting the foundation work started\b|\b(?:is(?: now)? laying|has begun laying|has started laying) the foundations?\b(?=[^.!?]{0,100}\b(?:plant|factory|building|warehouse|facility)\b)/i.test(v));

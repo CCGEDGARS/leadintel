@@ -2772,7 +2772,7 @@
         "const mandatoryGaps=LeadIntelMessageEditor.coreFactGaps(studio,context)",
         "const completingFacts=",
         "buyerFactEvidence:",
-        "fact-autofill=20261017-v1"
+        "fact-autofill=20261017-v2"
       ]
     }
   ],
