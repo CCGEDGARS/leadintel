@@ -537,3 +537,24 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-rail .wa-launcher h3{margin:0;font-size:14px;line-height:1.4}
 #message-studio .mw-rail .wa-launcher p{margin:6px 0 12px;font-size:12px;line-height:1.6;color:#687c6e}
 #message-studio .mw-rail .wa-launcher button{box-sizing:border-box;width:100%;min-height:40px;padding:10px 12px;font-size:13px;line-height:20px}
+
+/* Compact message toolbar: editing actions together, delivery as the next step. */
+#message-studio .mw-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;min-height:0}
+#message-studio .mw-editor-head>div:first-child{flex:1;min-width:180px}
+#message-studio .mw-editor-head h3{margin:0 0 4px;font-size:19px}
+#message-studio .mw-editor-head #mw-applied-style{margin:0;font-size:12px}
+#message-studio #mw-draft-provenance{display:none}
+#message-studio #mw-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;flex:0 1 auto;min-height:0;width:auto;max-width:100%}
+#message-studio #mw-header-actions .mw-editor-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0;padding:0;border:0}
+#message-studio #mw-header-actions button{min-height:38px;min-width:0;width:auto;margin:0;font-size:12px;padding:9px 12px}
+#message-studio #mw-header-actions #message-generate{background:#fff!important;border:1px solid #b9d0c2!important;color:#285a42!important;box-shadow:none}
+#message-studio #mw-header-actions #mw-save-message:not(:disabled),#message-studio #mw-header-actions #mw-add-flow:not(:disabled){background:#1c4b36!important;color:#fff!important;border-color:#1c4b36!important}
+#message-studio #mw-header-actions #mw-test-email{flex-basis:auto;font-size:11px;padding-inline:8px;background:none}
+#message-studio #mw-update-help{margin:5px 0 0;max-width:42ch;font-size:11px;line-height:1.45}
+#message-studio #mw-update-help[hidden]{display:none}
+#message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{font-weight:400;font-size:16px;line-height:1.75;padding:16px 18px}
+#message-studio .mw-recipient>div{flex:1;min-width:0}
+#message-studio #mw-recipient-detail{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:12px;line-height:1.5}
+#message-studio .mw-editor .outreach-drafts{padding:20px}
+@media(max-width:900px){#message-studio #mw-header-actions{justify-content:flex-start;flex-basis:100%}#message-studio .mw-editor-head{gap:10px}}
+@media(max-width:720px){#message-studio .mw-layout{grid-template-columns:minmax(0,1fr)}#message-studio .mw-editor .outreach-drafts{padding:14px}#message-studio #mw-header-actions{gap:6px}#message-studio #mw-header-actions .mw-editor-actions{flex:1 1 100%}#message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:14px;font-size:16px}}

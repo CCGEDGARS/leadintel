@@ -4,12 +4,12 @@ const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(r=>setImmediate(r));
 const click=(h,style)=>h.w.document.querySelector(`[data-writing-style="${style}"]`).click();
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
-test('header owns green Update and Add to flow with the exact helper; lower actions have no Undo',()=>{
+test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
  const h=mounted({selected:'professional'});try{
- assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Update message','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Update message','Save','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
  assert.equal(h.q('mw-update-help').textContent,'Choose the style and update your message.');
- assert.equal(h.q('mw-update-help').parentElement,h.q('mw-header-actions'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
- assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
+ assert.ok(h.q('mw-update-help').closest('.mw-editor-head'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Update message','Save']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
  }finally{h.w.close();}
 });
 test('opening a new message leaves subject and body empty; only a deliberate style click fills them',()=>{

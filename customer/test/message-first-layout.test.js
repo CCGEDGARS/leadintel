@@ -75,7 +75,7 @@ test('the one Writing Assistant material host retains upload, activation, role a
  const app=mountWritingReferences({root,api});await app.refresh();
  const refs=document.getElementById('mw-writing-references');refs.open=true;
  assert.equal(root.closest('#mw-writing-assistant')?.id,'mw-writing-assistant');assert.equal(document.querySelectorAll('#mw-writing-reference-host').length,1);
- assert.equal(root.querySelectorAll('[data-upload]').length,3);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
+ assert.equal(root.querySelectorAll('.wr-add-source [data-upload]').length,1);assert.equal(root.querySelectorAll('[data-slot]').length,3);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
  const active=root.querySelector('[data-active]');active.checked=true;active.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
  assert.equal(changes[0].active,true);
  const instruction=root.querySelector('[data-instruction]');instruction.value='Use concise questions';instruction.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));

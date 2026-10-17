@@ -461,7 +461,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Your private bookshelf",
+        "Choose one active book",
         "What AI learned",
         "Retry analysis",
         "error.snapshot?.cards"
@@ -751,7 +751,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Script Assistant",
+        "Writing Assistant",
         "My content",
         "Approved originals",
         "Content Library",
@@ -1056,7 +1056,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Script Assistant",
+        "Writing Assistant",
         "Rewrite",
         "Shorten",
         "styleSection.after(launcher)",
@@ -1137,7 +1137,7 @@
       "status": 200,
       "contains": [
         "Choose the style and update your message.",
-        "q('mw-header-actions').append(q('message-generate'))",
+        "editorActions.insertBefore(q('message-generate'),q('mw-save-message'))",
         "q('mw-undo-rewrite').hidden=true",
         "We found two versions of your workspace."
       ]
@@ -1699,7 +1699,7 @@
         "showModal",
         "Load current script",
         "Keep assistant copy",
-        "Manage book"
+        "Customer context connected"
       ]
     },
     {
@@ -2087,7 +2087,7 @@
         "data-wa-attach",
         "data-wa-edit-body",
         "data-wa-load-selected",
-        "Use in current flow",
+        "Use in Messages",
         "Strengthen persuasion"
       ]
     },
@@ -2189,7 +2189,7 @@
       "url": "/customer/writing-assistant-ui.js",
       "status": 200,
       "contains": [
-        "sourcePanel.open=false;panel.append(sourcePanel)",
+        "sourcePanel.classList.add('wa-library-panel')",
         "Apply to message",
         "controller.setInstruction",
         "controller.syncContext?.();render()"
@@ -2201,8 +2201,8 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Your private bookshelf",
-        "Ready \u00b7 Not in use",
+        "Choose one active book",
+        "card.active?'Active':'Ready'",
         "wr-options",
         "[1,2,3].map(slot=>",
         "wr-book-cover",
@@ -2794,6 +2794,29 @@
       "contains": [
         "cachedCalculation('scope'",
         "cachedCalculation('field-limits'"
+      ]
+    },
+    {
+      "id": "writing-workspace-two-column-layout",
+      "type": "text",
+      "url": "/customer/writing-assistant.css",
+      "status": 200,
+      "contains": [
+        ".wa-session.wa-workbench{grid-template-columns:minmax(0,3fr) minmax(340px,2fr)}",
+        ".wa-conversation-stream",
+        "@media(max-width:720px)"
+      ]
+    },
+    {
+      "id": "compact-library-single-uploader",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "wr-add-source",
+        "wr-empty-slot",
+        "function uploadControl",
+        "Delete book"
       ]
     }
   ],
