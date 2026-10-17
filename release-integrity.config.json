@@ -2818,6 +2818,30 @@
         "function uploadControl",
         "Delete book"
       ]
+    },
+    {
+      "id": "quick-named-template-dialog",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "function saveEditedTemplate",
+        "sc-quick-template",
+        "Template name",
+        "Save template",
+        "saveDraft({id,name:value})"
+      ]
+    },
+    {
+      "id": "manual-edit-save-template-handoff",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "library.saveEditedTemplate(draft,{saveDraft})",
+        "personalTemplateName:template.name",
+        "quick-template=20261017-v1"
+      ]
     }
   ],
   "retry": {
