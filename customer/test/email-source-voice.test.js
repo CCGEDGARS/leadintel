@@ -44,3 +44,18 @@ test('changing source voice facts invalidates prepared fields even when capabili
  assert.notEqual(E.preparedResponse(E.fieldSources(studio,context),studio,context).source,E.preparedResponse(E.fieldSources(studio,changed),studio,changed).source);
  assert.notEqual(E.scope('w1',{},studio,context),E.scope('w1',{},studio,changed));
 });
+
+test('template factual slots use the full selected project evidence instead of only its one-sentence trigger',()=>{
+ const short={...context,trigger:{...context.trigger,summary:'LKAB announced an investment in a new sorting plant at Malmberget.',excerpt:'LKAB announced an investment in a new sorting plant at Malmberget.'},buyerDomain:'buyer.example',buyerFactEvidence:[{url:'https://buyer.example/plant',title:'Malmberget sorting plant',text:'LKAB announced an investment in a new sorting plant at Malmberget. Foundation work is under way. The sorting plant is scheduled to open in 2028.',verification:'source_verified'}]};
+ const draft=E.tailor(S.normalize({mode:'curiosity',essentials}),short);
+ assert.match(draft.message,/Foundation work in Malmberget is under way\. The new sorting plant is due to run in 2028\./);
+ assert.doesNotMatch(draft.message,/\[Add verified (milestone|project-type|opening-year)\]/);
+});
+test('missing mandatory atoms remain research gaps rather than being treated as complete subject preparation',()=>{
+ const sparse={...context,trigger:{...context.trigger,summary:'LKAB announced an investment in a new sorting plant at Malmberget.',excerpt:'LKAB announced an investment in a new sorting plant at Malmberget.'}};
+ assert.deepEqual(E.coreFactGaps(S.normalize({mode:'curiosity',essentials}),sparse),['milestoneWork','openingYear']);
+ const unrelated={...sparse,buyerDomain:'buyer.example',buyerFactEvidence:[{url:'https://buyer.example/other',title:'Northport warehouse',text:'Foundation work in Northport is under way. The new warehouse is due to open in 2031.',verification:'source_verified'},{url:'https://unrelated.example/plant',title:'Malmberget',text:'Foundation work in Malmberget is under way. The sorting plant is due to run in 2040.',verification:'source_verified'}]};
+ assert.deepEqual(E.coreFactGaps(S.normalize({mode:'curiosity',essentials}),unrelated),['milestoneWork','openingYear']);
+});
+
+test('an official project article keeps factual detail across separate source paragraphs',()=>{const scoped={...context,buyerDomain:'buyer.example',trigger:{...context.trigger,summary:'LKAB announced an investment in a new sorting plant at Malmberget.',excerpt:'LKAB announced an investment in a new sorting plant at Malmberget.'},buyerFactEvidence:[{url:context.trigger.url,title:'Malmberget sorting plant',text:'LKAB announced an investment in a new sorting plant at Malmberget.\n\nFoundation work is under way.\n\nThe plant is scheduled to open in 2028.'}]};assert.doesNotMatch(E.tailor(S.normalize({mode:'curiosity',essentials}),scoped).message,/\[Add verified (milestone|project-type|opening-year)\]/);});

@@ -11,7 +11,7 @@ test('Update all five replaces only category options and selected subject, and i
 test('category labels remain visible with the actual composer stylesheet',()=>{const h=mounted({selected:'professional'});try{complete(h);const style=h.w.document.createElement('style');style.textContent=require('node:fs').readFileSync(require.resolve('../message-workspace.css'),'utf8');h.w.document.head.append(style);const labels=[...h.w.document.querySelectorAll('.mw-subject-category')];assert.equal(labels.length,5);for(const label of labels)assert.notEqual(h.w.getComputedStyle(label).display,'none');}finally{h.w.close();}});
 
 test('style switching resolves the displayed subject category before updating all five',async()=>{
- const h=mounted({selected:'professional'});try{
+ const h=mounted({selected:'professional',runtimeSetup:`const factStudio=studioState();factStudio.essentials.difference='More than 30 years in steel.';persistStudio(factStudio);const factItem=currentItem();factItem.dossier.evidence[0].text+=' Foundation work is under way. The sorting plant is due to run in 2028.';upsertItem(factItem);`});try{
   complete(h);h.q('message-subject-choice').value='development';h.q('message-subject-choice').dispatchEvent(new h.w.Event('change',{bubbles:true}));
   assert.equal(h.item().messageStudioDraft.subjectSelectedId,'development');
   h.w.document.querySelector('[data-writing-style="curiosity"]').click();

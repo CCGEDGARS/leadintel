@@ -428,7 +428,7 @@
         "function parse(",
         "subjectAudit",
         "subjectResearchPlan",
-        "subject-evidence-v5",
+        "subject-evidence-v6",
         "function subjectReference(",
         "messageEvidenceAudit"
       ]
@@ -2750,6 +2750,29 @@
       "contains": [
         "phone-masters=20261017-v1",
         "return globalThis.LeadIntelChannelWorkspace.usePhone(draft,current.context.style)"
+      ]
+    },
+    {
+      "id": "mandatory-factual-evidence-handoff",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "function buyerFactText(context={})",
+        "function coreFactGaps(studio,context={})",
+        "buyerFactText:buyerFactText(context)"
+      ]
+    },
+    {
+      "id": "mandatory-fact-research-and-working-copy",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "const mandatoryGaps=LeadIntelMessageEditor.coreFactGaps(studio,context)",
+        "const completingFacts=",
+        "buyerFactEvidence:",
+        "fact-autofill=20261017-v1"
       ]
     }
   ],
