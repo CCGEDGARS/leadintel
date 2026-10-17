@@ -261,6 +261,7 @@ async function prepareSubjectEvidence({retry=false}={}){
     if(text.trim().length<40||/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(text))continue;
     // Keep evidence bounded while retaining complete sentences, standards and capability details.
     const excerpt=LeadIntelMessageEvidence.selectExcerpt(text);
+    if(meta.owner==='buyer'&&context.trigger){const project=LeadIntelMessageStudio.projectFact(context).toLocaleLowerCase(),lead=String(row.title||row.metadata?.title||'')+' '+text.slice(0,900),selected=String(context.trigger.summary||'')+' '+String(context.trigger.excerpt||'');if(project&&!lead.toLocaleLowerCase().includes(project))continue;if(/sorting plant|sovringsverk|sorteringsverk/i.test(selected)&&!/sorting plant|sovringsverk|sorteringsverk/i.test(lead))continue;}
     if(excerpt.length>=35)sources.push({owner:meta.owner,url,title:String(row.title||row.metadata?.title||'').slice(0,180),text:excerpt,verification:'source_verified',extractedAt:new Date().toISOString()});
    }
    if(!current())return false;
