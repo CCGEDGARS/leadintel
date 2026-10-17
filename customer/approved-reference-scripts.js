@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelApprovedReferences=api;})(typeof globalThis==='object'?globalThis:this,function(){
  'use strict';
- // Source of truth: four owner-approved email DOCX documents uploaded 2026-10-15.
+ // Source: owner-approved October 15 DOCX originals; Professional replaced by the owner on October 17.
  // Examples contain unverified factual placeholders that must NOT become asserted facts.
  const records={
   "brutal": {
