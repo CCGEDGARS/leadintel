@@ -55,6 +55,8 @@ test('owner can begin Microsoft mailbox consent with PKCE and least-privilege sc
   assert.match(location.searchParams.get('scope'),/Mail\.Send/);
   assert.doesNotMatch(location.searchParams.get('scope'),/Mail\.Read/);
   assert.equal(location.searchParams.get('code_challenge_method'),'S256');
+  assert.equal(location.searchParams.get('prompt'),'select_account');
+  assert.equal(location.searchParams.has('login_hint'),false);
   const state=DB.raw.prepare('SELECT pkce_verifier FROM oauth_states').get();
   assert.match(state.pkce_verifier,/^[A-Za-z0-9_-]{43,128}$/);
   assert.notEqual(state.pkce_verifier,location.searchParams.get('code_challenge'));
@@ -203,4 +205,20 @@ test('manual transport ambiguity retains unresolved status and same-key retry ca
       const retry=await manualSend({env,token,provider});assert.equal(retry.status,200);const duplicate=await retry.json();assert.equal(duplicate.duplicate,true);assert.equal(duplicate.message.status,'sending');assert.equal(submissions,1);assert.equal(DB.raw.prepare("SELECT COUNT(*) count FROM email_activity_events WHERE kind='sent'").get().count,0);
     }finally{globalThis.fetch=originalFetch;}
   }
+});
+
+// Mailbox identity may differ from the signed-in workspace owner.
+test('Gmail connection offers another account without changing workspace ownership',async()=>{
+  const {env,DB,token}=await fixture();
+  const response=await handleSaasRoute(req('/api/integrations/gmail/start?workspace_id=w1',{token}),env,{});
+  assert.equal(response.status,302);
+  const location=new URL(response.headers.get('Location'));
+  assert.equal(location.searchParams.get('prompt'),'select_account consent');
+  assert.equal(location.searchParams.has('login_hint'),false);
+  assert.equal(location.searchParams.get('access_type'),'offline');
+  const state=DB.raw.prepare('SELECT purpose,user_id,workspace_id FROM oauth_states').get();
+  assert.deepEqual({...state},{purpose:'gmail',user_id:'u1',workspace_id:'w1'});
+  assert.equal(DB.raw.prepare('SELECT owner_user_id FROM workspaces').get().owner_user_id,'u1');
+  const denied=await handleSaasRoute(req('/api/integrations/gmail/start?workspace_id=w1'),env,{});
+  assert.equal(denied.status,401);
 });

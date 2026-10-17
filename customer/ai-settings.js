@@ -240,7 +240,7 @@ function gmailMailStatus(row=bridge()?.gmail||{}){
 }
 function gmailMailActions(mail){
   if(!signedIn())return '';
-  if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
+  if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button">Change Gmail account</button><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
   if(mail.connected)return '';
   return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Gmail</button></div>`;
 }
@@ -253,7 +253,7 @@ function microsoftMailStatus(){
 }
 function microsoftMailActions(mail){
   if(!signedIn())return '';
-  if(mail.connected&&mail.role==='owner')return '<div class="microsoft-mail-actions"><button class="ai-settings-btn danger" data-microsoft-mail-action="disconnect" type="button">Disconnect Microsoft</button></div>';
+  if(mail.connected&&mail.role==='owner')return '<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button">Change Microsoft account</button><button class="ai-settings-btn danger" data-microsoft-mail-action="disconnect" type="button">Disconnect Microsoft</button></div>';
   if(mail.connected)return '';
   return `<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Microsoft 365</button></div>`;
 }

@@ -81,3 +81,24 @@ test('Microsoft header does not bypass its guide while Settings is still loading
  w.eval(source.slice(start,end)+'\ninjectAccountUi();');delete w.LeadIntelMicrosoftConnection;w.document.getElementById('server-microsoft-signin').click();assert.deepEqual(calls,[]);assert.match(w.document.getElementById('toast').textContent,/loading/i);
  }finally{w.close();}
 });
+
+test('owner can change Gmail account without disconnecting or signing out first',async()=>{
+ const {w,calls}=await mount({connected:true});try{
+  const button=w.document.querySelector('[data-gmail-action="connect"]');
+  assert.equal(button.textContent,'Change Gmail account');button.click();
+  assert.deepEqual(calls,['gmail-connect']);
+  assert.equal(w.LeadIntelServerBridge.gmail.connected,true);
+  assert.equal(w.LeadIntelServerBridge.session.authenticated,true);
+ }finally{w.close();}
+});
+
+test('owner can choose another Microsoft mailbox without disconnecting first',async()=>{
+ const {w,calls}=await mount({connected:true});try{
+  const button=w.document.querySelector('[data-microsoft-mail-action="connect"]');
+  assert.equal(button.textContent,'Change Microsoft account');button.click();
+  assert.deepEqual(calls,[]);w.document.querySelector('[data-continue-microsoft]').click();
+  assert.deepEqual(calls,['microsoft-connect']);
+  assert.equal(w.LeadIntelServerBridge.microsoftMail.connected,true);
+  assert.equal(w.LeadIntelServerBridge.session.authenticated,true);
+ }finally{w.close();}
+});
