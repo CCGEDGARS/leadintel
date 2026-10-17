@@ -94,6 +94,12 @@ test('a previous workspace recovery copy is never included in another workspace 
  assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,true);
  assert.equal(JSON.parse(values.get(RECOVERY)).workspace_id,'w1');assert.doesNotMatch(values.get(RECOVERY),/Other seller/);
 });
+test('explicit local recovery refetches a missing conflict snapshot instead of leaving a dead button',async()=>{
+ let reads=0,writes=0;const {root,values}=load(async(input,options)=>{if(options.method==='PUT')writes++;else reads++;return new Response(JSON.stringify(options.method==='PUT'?{saved:true,version:10}:{version:9,payload:{main:{website:'server.example'}}}));},{withBridge:true});
+ root.LeadIntelServerBridge.conflictState=null;
+ assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,true);
+ assert.ok(reads>0);assert.equal(writes,1);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.equal(JSON.parse(values.get(RECOVERY)).workspace_id,'w1');
+});
 
 function establishBase(root,values,version=3){
  const payload={main:JSON.parse(values.get(MAIN)),discovery:{},outreach:{},delivery:{},meta:{discovery:{}}};

@@ -67,6 +67,15 @@
   return subjectTranslations[language]?.[subjectTranslationKeys.indexOf(key)]||'';
  }
  function validSubject(subject){return typeof subject==='string'&&Boolean(subject.trim())&&Array.from(subject).length<=60&&!/^[\[{]|[\r\n]|https?:\/\/|\{\{|\}\}|<[^>]*>|^(?:subject|error|exception|undefined|null|traceback)(?:\s*[:{]|\s*$)/i.test(subject)&&!/[\u0000-\u001f\u007f]/.test(subject);}
+ // Bounded content-keyed caches reuse saved research across editor/subject checks.
+ // Keys contain the actual input, so in-place changes and workspace switches miss.
+ const factCaches=new Map();
+ const copyFact=value=>Array.isArray(value)?value.map(copyFact):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,row])=>[key,copyFact(row)])):value;
+ function cachedFact(kind,input,compute){
+  const key=JSON.stringify(input);let cache=factCaches.get(kind);if(!cache){cache=new Map();factCaches.set(kind,cache);}
+  if(!cache.has(key)){const value=compute();if(cache.size>=8)cache.delete(cache.keys().next().value);cache.set(key,value);}
+  return copyFact(cache.get(key));
+ }
  function subjectFact(value,max=30){const text=String(value||'').trim().replace(/[.!?]+$/,'');return !/\b(?:error|exception|traceback|undefined|timeout|unavailable)\b|^\s*[\[{]/i.test(text)&&validSubject(text)&&Array.from(text).length<=max&&text.split(/\s+/).length<=6?text:'';}
  const professionalSubjectLocale={"en":["for","Room for one more","who should I ask","Steel and installation","steel supplier","steel","or"],"lv":["projektam","Vieta vēl vienam","kam jautāt","Tērauds un montāža","tērauda piegādātājam","tērauds","vai"],"sv":["för","Plats för en till","vem ska jag fråga","Stål och installation","stålleverantör","stål","eller"],"de":["für","Platz für einen weiteren","wen soll ich fragen","Stahl und Montage","Stahllieferanten","Stahl","oder"],"et":["jaoks","Ruumi veel ühele","kellelt küsida","Teras ja paigaldus","terasetarnijale","teras","või"],"lt":["projektui","Vieta dar vienam","ko paklausti","Plienas ir montavimas","plieno tiekėjui","plienas","ar"],"fi":["hankkeeseen","Tilaa vielä yhdelle","keneltä kysyn","Teräs ja asennus","terästoimittajalle","teräs","vai"],"no":["for","Plass til en til","hvem bør jeg spørre","Stål og montering","stålleverandør","stål","eller"],"da":["til","Plads til en til","hvem skal jeg spørge","Stål og montering","stålleverandør","stål","eller"],"pl":["dla","Miejsce dla kolejnego","kogo zapytać","Stal i montaż","dostawcy stali","stal","czy"],"fr":["pour","Une place pour un autre","qui contacter","Acier et installation","fournisseur d’acier","acier","ou"],"nl":["voor","Ruimte voor nog een","wie moet ik vragen","Staal en installatie","staalleverancier","staal","of"],"es":["para","Espacio para otro","a quién preguntar","Acero e instalación","proveedor de acero","acero","o"],"it":["per","Spazio per un altro","a chi chiedere","Acciaio e installazione","fornitore di acciaio","acciaio","o"],"pt":["para","Espaço para mais um","a quem perguntar","Aço e instalação","fornecedor de aço","aço","ou"],"cs":["pro","Místo pro dalšího","koho se zeptat","Ocel a montáž","dodavatele oceli","ocel","nebo"],"sk":["pre","Miesto pre ďalšieho","koho sa opýtať","Oceľ a montáž","dodávateľa ocele","oceľ","alebo"],"ro":["pentru","Loc pentru încă un","pe cine să întreb","Oțel și montaj","furnizor de oțel","oțel","sau"],"bg":["за","Място за още един","кого да попитам","Стомана и монтаж","доставчик на стомана","стомана","или"],"hr":["za","Mjesto za još jednog","koga pitati","Čelik i montaža","dobavljača čelika","čelik","ili"],"sl":["za","Prostor za še enega","koga vprašati","Jeklo in montaža","dobavitelja jekla","jeklo","ali"],"hu":["projekthez","Hely még egy","kit kérdezzek","Acél és szerelés","acélszállítónak","acél","vagy"],"el":["για","Χώρος για άλλον έναν","ποιον να ρωτήσω","Χάλυβας και εγκατάσταση","προμηθευτή χάλυβα","χάλυβας","ή"],"uk":["для","Місце для ще одного","кого запитати","Сталь і монтаж","постачальника сталі","сталь","чи"]};
  const professionalSubjectTranslations=Object.fromEntries(Object.entries(professionalSubjectLocale).map(([language,[forWord,room,ask]])=>[language,{relevance:"{{subjectOffer}} "+forWord+" {{subjectProject}}",curiosity:room+" {{supplierType}}?",development:"{{subjectProject}} {{subjectMaterial}} – "+ask+"?",benefit:"{{subjectProject}}: {{technicalQuestion}}?"}]));
@@ -78,7 +87,8 @@
   return (context.sellerEvidence||[]).filter(row=>subjectDomain(row?.url)===domain&&row.extracted!==false&&!/error|failed|pending/i.test(row.status||'')).map(row=>({url:row.url,title:String(row.title||''),text:String(row.text||row.excerpt||'').slice(0,12000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text));
  }
  function subjectStatements(text){return String(text||'').split(/(?<=[.!?])\s+|\n+/).map(value=>value.replace(/[#*]/g,'').trim()).filter(value=>value&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|\b(?:no|not|never|without|cannot|can't|do not|don't)\b/i.test(value));}
- function subjectSellerFacts(context={},e={}){
+ function subjectSellerFacts(context={},e={}){return cachedFact('seller',[context.sellerWebsite,context.sellerEvidence,context.sellerAnswers,context.sellerAnswerStatus,e.offer,e.difference,e.proof,e.approach],()=>computeSubjectSellerFacts(context,e));}
+ function computeSubjectSellerFacts(context={},e={}){
   const approvedSellerFields=['priority_offers','differentiation','proof_points','delivery_approach'].filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers?.[key]);
   const supplied=[e.offer,e.difference,e.proof,e.approach,...approvedSellerFields].filter(Boolean).flatMap(subjectStatements);
   const evidence=subjectEvidenceSources(context).flatMap(row=>subjectStatements(row.text).filter(text=>/\b(?:manufactur\w*|provid\w*|offer\w*|design\w*|install\w*|steel|structures?|constructions?|EN\s*1090|EXC\s*[234])\b/i.test(text)).map(text=>({text,url:row.url})));
@@ -96,6 +106,11 @@
   return {subjectProject,subjectOffer:steel&&installation&&steelWords?steelWords[0]:offer,supplierType:steel&&steelWords?steelWords[1]:language==='en'&&offer?offer.toLowerCase()+' provider':'',subjectMaterial:steel&&steelWords?steelWords[2]:'',technicalQuestion:Evidence.comparison(e,context,language,locale?.[6]||'or').text};
  }
  function subjectAudit(studio,context={},e=studio.essentials||{}){
+  // Meeting-date eligibility depends on the current day in the recipient zone.
+  if(e.meetingDateOne||e.meetingDateTwo)return computeSubjectAudit(studio,context,e);
+  return cachedFact('audit',[studio,context,e],()=>computeSubjectAudit(studio,context,e));
+ }
+ function computeSubjectAudit(studio,context={},e=studio.essentials||{}){
   const language=context.subjectLanguage||e.language||'en',facts={...professionalSubjectFacts(context,e,language),senderFullName:e.sender,senderCompany:e.company};
   const labels={subjectProject:'reviewed project or location',subjectOffer:'confirmed short offer',senderFullName:'sender name',senderCompany:'sender company',supplierType:'confirmed supplier type',subjectMaterial:'confirmed material',technicalQuestion:'a relevant business comparison'};
   const rows=subjectsFor(studio.mode).map(option=>{

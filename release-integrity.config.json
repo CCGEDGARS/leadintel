@@ -2774,6 +2774,27 @@
         "buyerFactEvidence:",
         "fact-autofill=20261017-v2"
       ]
+    },
+    {
+      "id": "message-update-saved-facts-speed",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "message-speed=20261017-v1",
+        "preparedTemplateFieldsByStyle",
+        "for(const cached of caches)"
+      ]
+    },
+    {
+      "id": "message-editor-fact-cache",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "cachedCalculation('scope'",
+        "cachedCalculation('field-limits'"
+      ]
     }
   ],
   "retry": {

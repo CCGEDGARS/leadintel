@@ -238,7 +238,9 @@
     const link=document.createElement('a');link.href=url;link.download='leadintel-sync-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }
   async function resolveSyncConflict(source){
-    if(!bridge.workspace||!bridge.conflictState)return {resolved:false};
+    // A rehydrated conflict may have no in-memory snapshot. Explicit recovery
+    // must fetch the current server version below, never silently become a no-op.
+    if(!bridge.workspace)return {resolved:false};
     const workspaceId=bridge.workspace.id;let latestState=bridge.conflictState;
     clearTimeout(saveTimer);setConflictBusy(true);setStatus('Resolving sync conflict…','saving');
     try{

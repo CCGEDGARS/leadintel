@@ -73,7 +73,8 @@
  }
  const timing=Object.freeze({en:'compare now or later',lv:'salīdzināt tagad vai vēlāk',sv:'jämföra nu eller senare',de:'jetzt oder später vergleichen',et:'võrdleme nüüd või hiljem',lt:'palyginti dabar ar vėliau',fi:'vertailla nyt vai myöhemmin',no:'sammenligne nå eller senere',da:'sammenligne nu eller senere',pl:'porównać teraz czy później',fr:'comparer maintenant ou plus tard',nl:'nu of later vergelijken',es:'comparar ahora o más tarde',it:'confrontare ora o più tardi',pt:'comparar agora ou mais tarde',cs:'porovnat nyní nebo později',sk:'porovnať teraz alebo neskôr',ro:'comparăm acum sau mai târziu',bg:'сравнение сега или по-късно',hr:'usporediti sada ili kasnije',sl:'primerjati zdaj ali pozneje',hu:'összehasonlítás most vagy később',el:'σύγκριση τώρα ή αργότερα',uk:'порівняти зараз чи пізніше'});
  function meetingDates(essentials={},context={},language='en'){
-  const raw=[essentials.meetingDateOne,essentials.meetingDateTwo],now=new Date(context.now||Date.now());if(!Number.isFinite(now.getTime()))return null;
+  const raw=[essentials.meetingDateOne,essentials.meetingDateTwo];if(raw.some(value=>!/^\d{4}-\d{2}-\d{2}$/.test(value||''))||raw[0]===raw[1])return null;
+  const now=new Date(context.now||Date.now());if(!Number.isFinite(now.getTime()))return null;
   const zone=context.timeZone||'UTC';let today;try{today=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);}catch{return null;}
   const dates=raw.map(value=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return null;const d=new Date(value+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value&&value>=today?d:null;});
   if(dates.some(value=>!value)||raw[0]===raw[1])return null;

@@ -8,7 +8,7 @@ import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistan
 import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2&app-dialogs=20261017-v1';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
-import './message-evidence.js?v=20261010-evidence-v3';
+import './message-evidence.js?message-speed=20261017-v1&v=20261010-evidence-v3';
 import './content-materials.js?v=20261009-practical-tools-v1';
 import './approved-reference-scripts.js?email-masters=20261015-v1&v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1';
@@ -19,9 +19,9 @@ import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&co
 import './message-translations.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261011-v1&default-language-shortcut=20261012-v1&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?email-masters=20261015-v1&prompt-budget=20261013-v1&generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2';
+import './message-studio.js?message-speed=20261017-v1&email-masters=20261015-v1&prompt-budget=20261013-v1&generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2';
 import './subject-editor.js?v=20261011-subjects-v1';
-import './message-editor.js?brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2';
+import './message-editor.js?message-speed=20261017-v1&brutal-copy=20261013-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -620,8 +620,8 @@ function seedMandatoryEmail(style,{replace=false,automatic=false,templateUpdate=
  if(automatic&&item.messageStudioDraft?.eventSnapshot)return false;
  const context={...studioMessageContext(item,selectedCandidate()),eventCampaign:null},key=LeadIntelMessageEditor.scope(crmBridge()?.workspace?.id,item,studio,context);
  if(LeadIntelMessageEditor.needsPreparation(studio,context)){
-  const cached=item.messageStudioDraft?.preparedTemplateFields;
-  if(cached){try{if(applyApprovedTemplate(item,studio,LeadIntelMessageEditor.preparedContext(studio,context,cached),key,{automatic,templateUpdate,preserveSubject,repairOriginal}))return true;}catch{/* Changed source must be prepared again. */}}
+  const caches=[item.messageStudioDraft?.preparedTemplateFieldsByStyle?.[studio.mode],item.messageStudioDraft?.preparedTemplateFields].filter(Boolean);
+  for(const cached of caches){try{if(applyApprovedTemplate(item,studio,LeadIntelMessageEditor.preparedContext(studio,context,cached),key,{automatic,templateUpdate,preserveSubject,repairOriginal}))return true;}catch{/* Changed source must be prepared again. */}}
   void prepareApprovedTemplateFields(studio,context,key,{automatic,templateUpdate,preserveSubject,repairOriginal});return true;
  }
  return applyApprovedTemplate(item,studio,context,key,{automatic,templateUpdate,preserveSubject,repairOriginal});
@@ -635,12 +635,19 @@ function applyApprovedTemplate(item,studio,context,key,metadata={}){
  let next=LeadIntelMessageEditor.apply(item,draft,{original:true,key,style:studio.mode,essentials:studio.essentials,triggerUrl:context.trigger?.url||'',origin:'tailored',clearEvent:true,templateUpdate:metadata.templateUpdate,repairOriginal:metadata.repairOriginal,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
  delete next.messageStudioDraft.pendingTemplateUpdate;
  next.messageStudioDraft.preparedTemplateFields=context.preparedFields||null;
+ // Keep only the four approved styles. Each entry still requires exact source validation.
+ const factCache={...item.messageStudioDraft?.preparedTemplateFieldsByStyle};
+ const previous=item.messageStudioDraft?.preparedTemplateFields;let previousStyle='';try{previousStyle=JSON.parse(previous?.source||'{}').style||'';}catch{}
+ if(previous&&LeadIntelMessageStudio.defaults.some(row=>row.id===previousStyle))factCache[previousStyle]=previous;
+ if(context.preparedFields)factCache[studio.mode]=context.preparedFields;
+ next.messageStudioDraft.preparedTemplateFieldsByStyle=Object.fromEntries(LeadIntelMessageStudio.defaults.filter(row=>factCache[row.id]).map(row=>[row.id,factCache[row.id]]));
  next.messageStudioDraft.tailoringVersion=7;
  if(metadata.templateUpdate)next.messageStudioDraft.templateUpdateReceipt=true;
  next.messageStudioDraft.appliedTriggerSnapshot=context.trigger||null;
  next.localizationProvenance={provider:metadata.provider||'approved-template',model:metadata.model||'verbatim-facts-v7',language:'en',selectionSource:'manual'};
  next.campaignScenario={...next.campaignScenario,language:'en',resolvedLanguage:'en',languageSource:'manual'};
- upsertItem(globalThis.LeadIntelMessageTranslations?.generated(next,draft)||next);renderAll();if(metadata.templateUpdate)toast('Template restored with confirmed facts. Review and Save.');return true;
+ upsertItem(globalThis.LeadIntelMessageTranslations?.generated(next,draft)||next);
+ renderAll();if(metadata.templateUpdate)toast('Template restored with confirmed facts. Review and Save.');return true;
  }catch(error){studioGenerationError=true;approvedTemplatePreparationStatus=error.message;q('message-generation-status').textContent=error.message;toast(error.message);renderMessageStudio();return false;}
 }
 async function prepareApprovedTemplateFields(studio,context,key,options={}){
