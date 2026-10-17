@@ -5,17 +5,17 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const fields={triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'};
 function longOffer(h){const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.priorityOffers='steel and installation '.repeat(8);h.w.localStorage.setItem(key,JSON.stringify(main));}
 function blankPreparation(h,name){
- const panel=h.q('mw-preparing-editor');assert.ok(panel,'blank preparation panel exists');assert.equal(panel.hidden,false);
- assert.equal(h.q('mw-subject-options').hidden,true,'previous subjects are not displayed');
- assert.equal(h.q('step-6').querySelector('.outreach-drafts .script-grid').hidden,true,'previous body is not displayed');
+ const panel=h.q('mw-preparing-editor');assert.ok(panel,'blank preparation panel exists');assert.equal(panel.hidden,true);
+ assert.equal(h.q('mw-subject-options').hidden,false,'previous subjects stay visible');
+ assert.equal(h.q('step-6').querySelector('.outreach-drafts .script-grid').hidden,false,'previous body stays visible');
  assert.equal(panel.querySelector('input').value,'');assert.equal(panel.querySelector('textarea').value,'');
  assert.equal(panel.querySelector('input').readOnly,true);assert.equal(panel.querySelector('textarea').readOnly,true);
- assert.equal(h.q('mw-copy-email').hidden,true);assert.equal(h.q('mw-draft-badge').hidden,true);
- assert.equal(h.q('mw-applied-style').textContent,`Preparing ${name}…`);
+ assert.equal(h.q('mw-copy-email').hidden,false);assert.equal(h.q('mw-draft-badge').hidden,false);
+ assert.equal(h.q('mw-updating-notice').textContent,`Applying ${name} style…`);
  assert.deepEqual(Editor.workingDraft(h.item()),h.before,'preparation never persists empty content');
  assert.equal(h.q('mw-save-message').disabled,true);assert.equal(h.q('mw-add-flow').disabled,true);
 }
-for(const [style,name] of [['professional','Professional'],['curiosity','NLP'],['friendly','Friendly'],['brutal','Brutal Honesty']])test(`${name} click displays blank fields until validated content is ready`,async()=>{
+for(const [style,name] of [['professional','Professional'],['curiosity','NLP'],['friendly','Friendly'],['brutal','Brutal Honesty']])test(`${name} click preserves the previous draft until validated content is ready`,async()=>{
  const h=mounted();try{
   longOffer(h);h.w.document.querySelector(`[data-writing-style="${style}"]`).click();blankPreparation(h,name);
   h.w.renderAll();blankPreparation(h,name);
@@ -39,7 +39,7 @@ test('failed AI Generated preparation restores the saved message and shows its f
   assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.deepEqual(Editor.workingDraft(h.item()),h.before);
  }finally{h.w.close();}
 });
-test('a newer style owns the blank editor and an old reply cannot reveal or replace its content',async()=>{
+test('a newer style owns the progress notice and an old reply cannot reveal or replace its content',async()=>{
  const h=mounted();try{
   longOffer(h);h.w.document.querySelector('[data-writing-style="curiosity"]').click();const old=h.requests.find(row=>row.url.includes('/api/ai/generate'));
   h.w.document.querySelector('[data-writing-style="friendly"]').click();const fresh=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(old,fresh);blankPreparation(h,'Friendly');

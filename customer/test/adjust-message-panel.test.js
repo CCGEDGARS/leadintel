@@ -6,7 +6,7 @@ test('original editor retains Update, Edit and Save; the integrated assistant of
  const h=mounted({selected:'professional'});try{
  const panel=h.q('mw-writing-assistant');assert.ok(h.q('mw-writing-assistant-launcher').closest('.mw-rail'));assert.equal(panel.hidden,true);assert.equal(panel.querySelector('h3').textContent,'Writing Assistant');
  assert.deepEqual([...panel.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent),['Shorten','Rewrite','Reset']);
- assert.ok(h.q('message-generate').closest('.mw-header-actions'));assert.equal(h.q('message-generate').textContent,'Update message');
+ assert.ok(h.q('message-generate').closest('#mw-tools-drawer'));assert.equal(h.q('message-generate').textContent,'Restore selected template');
  for(const id of ['mw-edit-message','mw-save-message'])assert.ok(h.q(id).closest('.mw-editor-actions'));
  assert.equal(h.q('mw-message-length'),null);
  }finally{h.w.close();}
@@ -46,6 +46,6 @@ test('a response after the adjustment deadline preserves the draft and releases 
 test('changed source facts reject a stale variation without leaving a spinner',async()=>{
  const h=mounted({selected:'professional'});try{h.q('mw-rewrite-message').click();const request=h.requests.find(r=>r.url.includes('/api/ai/generate'));
  const main=JSON.parse(h.w.localStorage.getItem('leadintel_customer_v2_state'));main.profile.priorityOffers='painting';h.w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
- request.resolve({ok:true,json:async()=>({text:JSON.stringify({message:'Robin Lane proposes a 20-minute Zoom call: https://calendly.com/north/intro'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('mw-updating-notice').hidden,true);for(const id of ['mw-shorten-message','mw-rewrite-message'])assert.equal(h.q(id).disabled,false);
+ request.resolve({ok:true,json:async()=>({text:JSON.stringify({message:'Robin Lane proposes a 20-minute Zoom call: https://calendly.com/north/intro'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.doesNotMatch(h.q('mw-updating-notice').textContent,/Updating|Applying|Rewriting/);for(const id of ['mw-shorten-message','mw-rewrite-message'])assert.equal(h.q(id).disabled,false);
  }finally{h.w.close();}
 });

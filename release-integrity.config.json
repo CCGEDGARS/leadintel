@@ -759,7 +759,7 @@
         "Set as default",
         "Add to flow",
         "mw-browse-templates",
-        "Update message",
+        "Restore selected template",
         "mw-subject-choices",
         "mw-header-actions",
         "Custom style settings",
@@ -966,7 +966,7 @@
         "mw-subject-update-all",
         "Save subject",
         "mw-updating-notice",
-        "Updating to ",
+        "Applying ",
         "mw-subject-actions",
         "Subject line actions",
         "Update with AI"
@@ -1136,8 +1136,8 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Choose the style and update your message.",
-        "editorActions.insertBefore(q('message-generate'),q('mw-save-message'))",
+        "Choose a style to apply it automatically.",
+        "libraryContent.append(q('message-generate')",
         "q('mw-undo-rewrite').hidden=true",
         "We found two versions of your workspace."
       ]
@@ -1380,7 +1380,7 @@
       "status": 200,
       "contains": [
         "mw-preparing-editor",
-        "preparing=Boolean(context.messagePreparing&&!linkedin)",
+        "preparing=Boolean(context.messagePreparing&&!linkedin&&!context.hasDraft)",
         "grid.hidden=preparing"
       ]
     },
@@ -2841,6 +2841,18 @@
         "library.saveEditedTemplate(draft,{saveDraft})",
         "personalTemplateName:template.name",
         "quick-template=20261017-v1"
+      ]
+    },
+    {
+      "id": "persistent-retry-toolbar",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-retry-message",
+        "mw-generate-another",
+        "retry.dataset.needed=String(!retry.disabled)",
+        "Ready to review and save."
       ]
     }
   ],

@@ -558,3 +558,13 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-editor .outreach-drafts{padding:20px}
 @media(max-width:900px){#message-studio #mw-header-actions{justify-content:flex-start;flex-basis:100%}#message-studio .mw-editor-head{gap:10px}}
 @media(max-width:720px){#message-studio .mw-layout{grid-template-columns:minmax(0,1fr)}#message-studio .mw-editor .outreach-drafts{padding:14px}#message-studio #mw-header-actions{gap:6px}#message-studio #mw-header-actions .mw-editor-actions{flex:1 1 100%}#message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:14px;font-size:16px}}
+
+/* Equal toolbar controls, with state conveyed through colour and disabled semantics. */
+#message-studio #mw-header-actions button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 12px!important;border:1px solid #b9d0c2!important;border-radius:9px!important;background:#fff!important;color:#285a42!important;font-size:12px!important;font-weight:600!important;line-height:20px;box-shadow:none!important}
+#message-studio #mw-header-actions #mw-test-email{background:#fff!important;border:1px solid #b9d0c2!important}
+#message-studio #mw-header-actions button:disabled{background:#f1f4f2!important;color:#85928b!important;border-color:#dbe3de!important;cursor:not-allowed}
+#message-studio #mw-header-actions #mw-retry-message:not(:disabled){background:#1c4b36!important;color:#fff!important;border-color:#1c4b36!important}
+#message-studio #mw-header-actions button:not(:disabled):hover{filter:brightness(.96)}
+#message-studio #mw-header-actions button:focus-visible{outline:3px solid #79a590;outline-offset:3px}
+#message-studio #mw-updating-notice[data-state=error]{color:#975327;background:#fff7e8}
+#message-studio #mw-generate-another{margin-top:10px;min-height:40px;width:100%}

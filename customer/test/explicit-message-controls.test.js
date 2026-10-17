@@ -6,10 +6,10 @@ const click=(h,style)=>h.w.document.querySelector(`[data-writing-style="${style}
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
 test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
  const h=mounted({selected:'professional'});try{
- assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Update message','Save','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
- assert.equal(h.q('mw-update-help').textContent,'Choose the style and update your message.');
+ assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save','Retry','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.equal(h.q('mw-update-help').textContent,'Choose a style to apply it automatically.');
  assert.ok(h.q('mw-update-help').closest('.mw-editor-head'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
- assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Update message','Save']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save','Retry']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
  }finally{h.w.close();}
 });
 test('opening a new message leaves subject and body empty; only a deliberate style click fills them',()=>{
@@ -60,7 +60,7 @@ for(const change of ['style','body','facts','sync'])test(`late AI result cannot 
  if(change==='body'){h.w.upsertItem(E.apply(h.item(),{subject:'My subject',message:'My new edit'},{origin:'manual'}));h.w.renderAll();}
  if(change==='facts'){const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.valueProposition='simplify installation';h.w.localStorage.setItem(key,JSON.stringify(main));}
  if(change==='sync'){h.w.LeadIntelServerBridge.conflict=true;h.w.renderAll();}
- const before=E.workingDraft(h.item());request.resolve({ok:true,json:async()=>({text:JSON.stringify(aiDraft)})});await settle();assert.deepEqual(E.workingDraft(h.item()),before);assert.equal(h.q('message-generate').textContent,'Update message');if(change==='style')assert.equal(h.item().messageStudioDraft.mode,'friendly');
+ const before=E.workingDraft(h.item());request.resolve({ok:true,json:async()=>({text:JSON.stringify(aiDraft)})});await settle();assert.deepEqual(E.workingDraft(h.item()),before);assert.equal(h.q('message-generate').textContent,change==='style'?'Restore selected template':'Generate another');if(change==='style')assert.equal(h.item().messageStudioDraft.mode,'friendly');
  }finally{h.w.close();}
 });
 test('a saved draft reopens exactly; a newly confirmed recipient starts with an empty draft',()=>{
@@ -80,7 +80,7 @@ for(const [id,action,label] of [['mw-shorten-message','shorten','Shortening…']
  const h=mounted();try{
  const before=E.workingDraft(h.item());h.q(id).click();const requests=h.requests.filter(r=>r.url.includes('/api/ai/generate'));assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].options.body).editor_action,action);
  assert.equal(h.q(id).textContent,label);assert.equal(h.q(id==='mw-shorten-message'?'mw-rewrite-message':'mw-shorten-message').textContent,id==='mw-shorten-message'?'Rewrite':'Shorten');
- assert.equal(h.q('message-generate').textContent,'Update message');assert.equal(h.q('message-generate').disabled,true);assert.equal(h.q('mw-restore-original').disabled,true);assert.equal(h.q('mw-subject-options').classList.contains('mw-text-updating'),false);assert.deepEqual(E.workingDraft(h.item()),before);
+ assert.equal(h.q('message-generate').textContent,'Restore selected template');assert.equal(h.q('message-generate').disabled,true);assert.equal(h.q('mw-restore-original').disabled,true);assert.equal(h.q('mw-subject-options').classList.contains('mw-text-updating'),false);assert.deepEqual(E.workingDraft(h.item()),before);
  requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.q('message-generate').disabled,false);assert.deepEqual(E.workingDraft(h.item()),before);
  }finally{h.w.close();}
 });
