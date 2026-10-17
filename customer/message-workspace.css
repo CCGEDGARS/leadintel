@@ -568,3 +568,5 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio #mw-header-actions button:focus-visible{outline:3px solid #79a590;outline-offset:3px}
 #message-studio #mw-updating-notice[data-state=error]{color:#975327;background:#fff7e8}
 #message-studio #mw-generate-another{margin-top:10px;min-height:40px;width:100%}
+
+#message-studio #mw-updating-notice[data-state=ready],#message-studio #mw-updating-notice[data-state=saved]{background:#edf7f1;border-color:#bad7c6;color:#285a42}

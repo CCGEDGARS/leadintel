@@ -2854,6 +2854,17 @@
         "retry.dataset.needed=String(!retry.disabled)",
         "Ready to review and save."
       ]
+    },
+    {
+      "id": "message-saved-banner-state",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "saved?'saved':'ready'",
+        "message saved",
+        "Save your changes."
+      ]
     }
   ],
   "retry": {
