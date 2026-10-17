@@ -2,6 +2,7 @@ import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
 import {inmailScriptSeeds} from './inmail-script-seeds.js';
 import {coreScriptSeeds} from './core-script-seeds.js';
+import {phoneScriptSeeds} from './phone-script-seeds.js';
 const channels=['email','linkedin','phone'],styles=['professional','curiosity','friendly','brutal'];
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
@@ -24,7 +25,7 @@ export function validateScript(input,{core=false}={}){
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
 export async function coreScripts(db){
- const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds].map(r=>[r.id,r]));
+ const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds,...phoneScriptSeeds].map(r=>[r.id,r]));
  for(const row of result.results||[]){
   const saved=JSON.parse(row.payload_json),master=rows.get(row.id);
   // Upgrade obsolete built-in copies, never an owner's separately edited master

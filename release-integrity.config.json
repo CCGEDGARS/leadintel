@@ -23,7 +23,8 @@
       "test_email_version": "gmail-test-v1",
       "inmail_version": "linkedin-inmail-v1",
       "email_masters_version": "20261015-v4",
-      "inmail_masters_version": "inmail-facts-20261016-v2"
+      "inmail_masters_version": "inmail-facts-20261016-v2",
+      "phone_masters_version": "phone-20261017-v1"
     }
   },
   "smokeChecks": [
@@ -2728,6 +2729,27 @@
         ".li-confirm-card",
         ".li-confirm-danger",
         "@media(max-width:480px)"
+      ]
+    },
+    {
+      "id": "mandatory-phone-script-context",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "row.builtin&&row.channel!=='phone'",
+        "mandatoryScript:",
+        "rowFor(phone.style,'phone')"
+      ]
+    },
+    {
+      "id": "mandatory-phone-assistant-routing",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "phone-masters=20261017-v1",
+        "return globalThis.LeadIntelChannelWorkspace.usePhone(draft,current.context.style)"
       ]
     }
   ],
