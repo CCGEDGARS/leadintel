@@ -17,7 +17,7 @@ async function mount({hunterPayment=false,connection=false,aiPayment=false,saveE
   if(route==='/api/enrichment-policy')payload={configured:true,usage:{daily:0,monthly:0},policy:{daily_credit_limit:10,monthly_credit_limit:100}};
   if(route.endsWith('/gmail/status'))payload={connected:false,configured:false};
   return {ok:true,json:async()=>payload};};
- w.confirm=()=>true;w.eval(read('personal-linkedin.js'));w.eval(read('tool-account-links.js'));w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,''));
+ w.LeadIntelDialogs={confirm:async ()=>true};w.eval(read('personal-linkedin.js'));w.eval(read('tool-account-links.js'));w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,''));
  w.eval('(function(){'+read('service-settings-extension.js').replace(/^import .*;\s*$/gm,'').replace(/^export .*;\s*$/gm,'window.refreshServicesForTest=refreshServiceStatus;')+'})()');
  w.document.getElementById('open-settings').click();await settle();return {w,recover:()=>{payment=false;}};
 }

@@ -4,7 +4,7 @@ const settle=()=>new Promise(r=>setTimeout(r,30));
 async function mount({connected=false,role='owner',configured=true,authenticated=true}={}){
  const w=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const calls=[];let gmail={configured,connected,email:connected?'mailbox@example.com':'',role},microsoft={...gmail};
- w.confirm=()=>true;w.eval(read('personal-linkedin.js'));w.eval(read('tool-account-links.js'));
+ w.LeadIntelDialogs={confirm:async ()=>true};w.eval(read('personal-linkedin.js'));w.eval(read('tool-account-links.js'));
  w.LeadIntelServerBridge={session:{authenticated,user:{email:'login@example.com'}},workspace:{id:'w1',role},gmail,microsoftMail:microsoft,signIn:provider=>calls.push('signin-'+provider),switchProvider:provider=>calls.push('switch-'+provider),connectGmail:()=>calls.push('gmail-connect'),connectMicrosoftMail:()=>calls.push('microsoft-connect'),disconnectGmail:async()=>{calls.push('gmail-disconnect');gmail={...gmail,connected:false,email:''};w.LeadIntelServerBridge.gmail=gmail;return {ok:true};},disconnectMicrosoftMail:async()=>{calls.push('microsoft-disconnect');w.LeadIntelServerBridge.microsoftMail={...microsoft,connected:false,email:''};return {ok:true};}};
  w.fetch=async input=>({ok:true,json:async()=>new URL(input).pathname.endsWith('/gmail/status')?gmail:{role,providers:[]}});
  w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,''));w.document.getElementById('open-settings').click();await settle();return {w,calls};

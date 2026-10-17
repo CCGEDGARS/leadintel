@@ -574,7 +574,7 @@ test('email button stops at a sourced public work email without calling Apollo',
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:searches===1?[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]:[]})};}
   });
-  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
   assert.equal(apolloCalls,0);
@@ -589,7 +589,7 @@ test('email button offers Apollo only after a completed public search has no per
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),enrichCrmContact:async()=>{apolloCalls++;return {ok:true,contact:{work_email:'jacob@sodra.com'}};}},
     fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:[]})};}
   });
-  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
   assert.equal(searches,8);
@@ -614,7 +614,7 @@ test('qualified company email action uses public evidence before Apollo',async()
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]})})
   });
-  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({candidates:[{company:'Södra',domain:'sodra.com',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'s1'}],evidence:[{url:'https://sodra.com/news',title:'Södra news'}],people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichContact(0,0),true);
   assert.equal(apolloCalls,0);

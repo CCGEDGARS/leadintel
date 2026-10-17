@@ -145,7 +145,7 @@ async function refresh(){
   policy=p;policyWorkspace=workspace;if(s.ok)status=s;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();if(!s.ok)message(s.error||'Live delivery status unavailable; saved preferences loaded.',true);
 }
 async function mutate(next,success){const b=bridge();if(!b?.saveOutreachAutomationPolicy)return;const wasAutomatic=serverPolicy().mode==='automatic'&&serverPolicy().enabled;busy=true;render();const result=await b.saveOutreachAutomationPolicy(next);busy=false;if(!result.ok){render();message(result.error||'Settings were not saved',true);return;}await refresh();if(!wasAutomatic&&next.mode==='automatic'&&next.enabled)await queueApprovedPackages();message(success||'Automation settings saved.');}
-async function save(){const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const ok=window.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.');if(!ok)return;}await mutate(next,'Automation settings saved.');}
+async function save(){const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const ok=(await (window.LeadIntelDialogs?.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.')??false));if(!ok)return;}await mutate(next,'Automation settings saved.');}
 function bind(el){
   el.querySelector('#oa-save')?.addEventListener('click',save);
   el.querySelector('#oa-refresh')?.addEventListener('click',refresh);

@@ -143,7 +143,7 @@ function actionSelector(key, type = 'email') {
 }
 
 function confirmAction(message) {
-  return typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(message) : true;
+  return typeof window !== 'undefined' ? (window.LeadIntelDialogs?.confirm(message)??false) : false;
 }
 
 function style() {
@@ -323,7 +323,7 @@ async function waitForCompletion(key, type = 'email', timeoutMs = 30000) {
 async function runBulk(type) {
   if (bulkRunning || selected.size === 0 || currentMode() !== 'batch') return;
   const keys = [...selected];
-  if (!confirmAction(bulkConfirmationMessage(keys.length, type))) return;
+  if (!await confirmAction(bulkConfirmationMessage(keys.length, type))) return;
   bulkRunning = true;
   const taskCentre=window.LeadIntelTaskCentre;
   const taskId='apollo-enrichment:batch:'+type+':'+Date.now();
@@ -415,11 +415,11 @@ function scheduleAutomatic() {
   }, 350);
 }
 
-function setAutomaticEnabled(enabled) {
+async function setAutomaticEnabled(enabled) {
   const settings = readSettings();
   if (enabled) {
     const credits = estimateApolloCredits(settings.dailyLimit, 'email');
-    const approved = confirmAction('Automatic Apollo email verification may use up to ' + credits + ' credits per day (' + settings.dailyLimit + ' contacts). It runs only while this workspace is open and only for qualified contacts. Enable it?');
+    const approved = await confirmAction('Automatic Apollo email verification may use up to ' + credits + ' credits per day (' + settings.dailyLimit + ' contacts). It runs only while this workspace is open and only for qualified contacts. Enable it?');
     if (!approved) {
       const toggle = document.querySelector('[data-apollo-auto-enabled]');
       if (toggle) toggle.checked = false;

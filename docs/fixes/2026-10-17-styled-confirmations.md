@@ -1,0 +1,9 @@
+# Styled customer confirmations
+
+Native browser confirmation calls produced the browser-owned “site says / OK / Cancel” popup. A shared asynchronous LeadIntel dialog now supplies the same confirmation step with branded styling, readable text, action labels, destructive color, responsive sizing and a Cancel-first keyboard focus.
+
+The migration covers books, working script replacement, InMail sequences, CRM suppression/deletion, Intelligence Sources, AI/service settings, Apollo credit approval, campaign edits, automatic outreach activation and email sends. It preserves the consent step; no action is auto-approved. Existing purpose-built report/search/monitoring dialogs retain their own in-app design. Browser/OS permission prompts are outside this application UI.
+
+The service loads before the application. Missing service fails closed. Confirmation resolves false on Escape, cancellation, workspace/conflict changes, closed parent dialog or detached initiating control. Repeated clicks cannot stack dialogs or reuse another action’s approval. Text is inserted with textContent. Keyboard focus stays in the confirmation and returns to the initiating control while the parent assistant remains open.
+
+All migrated call sites await approval. Existing send freshness, expected revisions, workspace checks and server authorization remain in force. Tests now inject asynchronous dialog decisions where they previously mocked native browser confirmations. The real book-card integration exercises the actual styled Delete book / Cancel controls and checks that cancellation preserves the file and explicit confirmation removes it exactly once. A static runtime regression scan prevents native popup calls from returning. Release smoke checks verify both service and stylesheet. No real outreach is sent and no customer file is deleted during tests.

@@ -150,13 +150,13 @@ async function saveCalendly(button){
   finally{busy='';queueDecorate(true);}
 }
 async function disconnectCalendly(){
-  if(!window.confirm('Disconnect Calendly booking detection from this workspace?'))return;
+  if(!(await (window.LeadIntelDialogs?.confirm('Disconnect Calendly booking detection from this workspace?')??false)))return;
   busy='calendly';queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/calendly/disconnect',{method:'DELETE'});if(!response.ok)throw new Error(payload.error||'Unable to disconnect Calendly');calendlyStatus={role:serviceStatus.role,configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};errors.calendly='';}
   catch(cause){errors.calendly=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
 async function disconnectService(provider){
-  if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`))return;
+  if(!(await (window.LeadIntelDialogs?.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`)??false)))return;
   busy=provider;queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }

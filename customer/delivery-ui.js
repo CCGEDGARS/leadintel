@@ -1,4 +1,4 @@
-import './test-email-ui.js?v=20261015-v1';
+import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -120,5 +120,5 @@ function loadProductionSaas(){
 }
 function initDelivery(){injectDeliveryUI();window.LeadIntelPageQuality?.register('delivery',{read:deliveryQualityContext});bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}
 initDelivery();
-import './content-variants.js?v=20260929-public-first-email-v1';
+import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
 

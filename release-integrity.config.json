@@ -2706,6 +2706,29 @@
       "url": "/customer/account-cache.js",
       "type": "text",
       "status": 200
+    },
+    {
+      "id": "styled-confirmation-service",
+      "type": "text",
+      "url": "/customer/confirmation-dialog.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelDialogs",
+        "li-confirm-title",
+        "cancel.focus()",
+        "leadintel:workspace-changed"
+      ]
+    },
+    {
+      "id": "styled-confirmation-design",
+      "type": "text",
+      "url": "/customer/confirmation-dialog.css",
+      "status": 200,
+      "contains": [
+        ".li-confirm-card",
+        ".li-confirm-danger",
+        "@media(max-width:480px)"
+      ]
     }
   ],
   "retry": {

@@ -56,7 +56,7 @@ async function send(){
   const fingerprint=await digest(JSON.stringify([a.identity,recipient,content]));const storageKey='leadintel:test-email:'+fingerprint;
   let attempt;try{attempt=JSON.parse(sessionStorage.getItem(storageKey)||'null');}catch{}
   if(!attempt||a.fresh)attempt={key:'test-'+root.crypto.randomUUID()};
-  if(!root.confirm('Send a real test email from '+bridge().gmail.email+' to '+recipient+'?\nSubject: '+q('test-email-subject').value)){q('test-email-status').textContent='Test cancelled. Nothing was sent.';return;}
+  if(!(await (root.LeadIntelDialogs?.confirm('Send a real test email from '+bridge().gmail.email+' to '+recipient+'?\nSubject: '+q('test-email-subject').value)??false))){q('test-email-status').textContent='Test cancelled. Nothing was sent.';return;}
   if(!current())throw Error('The workspace or message changed. Close and reopen the test preview.');
   sessionStorage.setItem(storageKey,JSON.stringify(attempt));a.fresh=false;
   q('test-email-status').textContent='Sending test email…';

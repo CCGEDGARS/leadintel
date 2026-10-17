@@ -13,12 +13,12 @@
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
  * import './server-bridge.js?v=20260925-apollo-buyer-search-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
- * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1';
- * import './ai-settings.js?v=20260915-model-choice-v1';
- * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1';
+ * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1&app-dialogs=20261017-v1';
+ * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1';
+ * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
- * import './content-variants.js?v=20260929-public-first-email-v1';
+ * import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
  * import './business-identity.js?v=20260924-workspace-profile-english-v1';
  * import './company-brain.js?v=20260924-workspace-profile-english-v1';
  * import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
@@ -37,9 +37,9 @@
  * import './reference-customer-ai-runtime.js?v=20260927-opportunity-map-durable-v1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1';
  * import './reference-customer-launcher.js?v=20260927-opportunity-map-durable-v1&reference-discovery=5&reference-similarity=20260930-v1';
  * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2';
- * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
+ * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1&app-dialogs=20261017-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
- * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1&qualification=20261003-qualified-v2';
+ * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1&qualification=20261003-qualified-v2&app-dialogs=20261017-v1';
  * import './copilot-loader.js?v=20261011-business-research-v1';
  */
 

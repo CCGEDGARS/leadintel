@@ -35,3 +35,7 @@ LeadIntel is a multi-customer SaaS. Ercon and CCGROUP are test fixtures, never r
 ## Report lifecycle and prevention checks
 
 Apply the recurring-error controls in `docs/project-state/2026-10-01-report-deletion-and-prevention.md`. Authorized fixes require action, not acknowledgement-only responses. For saved artifacts inspect view, save/reload, export/print, individual/bulk deletion, cancellation and empty-state behavior. Deleting snapshots must preserve downstream source evidence and must not be undone by initialization or migration.
+
+## In-app confirmations
+
+Use `LeadIntelDialogs.confirm` for customer confirmations. Never introduce native browser `confirm`, `alert` or `prompt` popups or monkey-patch their synchronous APIs. Await the result before changing data, spending credits, activating automation or sending. Keep Cancel, Escape, focus restoration and context/race guards. Book deletion uses the explicit Delete book action. The runtime regression scan in `customer/test/confirmation-dialog.test.js` protects this standard.

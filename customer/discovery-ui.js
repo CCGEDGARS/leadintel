@@ -1439,7 +1439,7 @@ async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirm
       if(await findPublicCandidateEmail(candidate,person)){showToast(`${person.name} · public work email found · unverified`);return true;}
     }catch(error){showToast(error?.name==='AbortError'?'Public email search timed out':error.message||'Public email search failed');return false;}
     finally{enrichmentPending.delete(key);renderCandidates();}
-    if(!confirmed&&!window.confirm(`${person.name} · no public work email matched. Continue with Apollo verification?`))return false;
+    if(!confirmed&&!(await (window.LeadIntelDialogs?.confirm(`${person.name} · no public work email matched. Continue with Apollo verification?`)??false)))return false;
   }
   return enrichContactWithApollo(companyIndex,personIndex,{phoneLookup});
 }
@@ -2129,7 +2129,7 @@ async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,conf
     }catch(error){showToast(error.message||'Public email search failed');return false;
     }finally{enrichmentPending.delete(key);renderPipeline();}
   }
-  if(!confirmed&&!(phoneLookup&&previous?.request?.status==="pending_phone")&&!window.confirm(`${person.name} · ${phoneLookup?"find a direct phone with Apollo":"no public work email matched; check with Apollo"}. Continue?`))return false;
+  if(!confirmed&&!(phoneLookup&&previous?.request?.status==="pending_phone")&&!(await (window.LeadIntelDialogs?.confirm(`${person.name} · ${phoneLookup?"find a direct phone with Apollo":"no public work email matched; check with Apollo"}. Continue?`)??false)))return false;
   if(phoneLookup&&previous?.request?.status==="pending_phone"){
     const company=crmCompanyByDomain(domain);if(!company)return false;
     const detail=await bridge().getCrmCompany(company.id);if(!detail.ok){showToast(detail.error||"Unable to refresh phone");return false;}
@@ -2151,7 +2151,7 @@ async function enrichSelectedProspectBatch(domain,phoneLookup=false){
   const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));if(!candidate)return false;
   const selected=candidate.people.map((person,index)=>({person,index})).filter(({person})=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person)));
   if(!selected.length)return false;
-  if(!window.confirm(`${selected.length} selected people · ${phoneLookup?"find direct phones":"check work emails"} with Apollo. Continue?`))return false;
+  if(!(await (window.LeadIntelDialogs?.confirm(`${selected.length} selected people · ${phoneLookup?"find direct phones":"check work emails"} with Apollo. Continue?`)??false)))return false;
   for(const {person,index} of selected){await enrichSelectedProspect(domain,index,{phoneLookup,confirmed:true});selectedBuyerEnrichment.delete(selectedBuyerKey(candidate,person));}
   renderPipeline();return true;
 }
@@ -2385,7 +2385,7 @@ function loadOutreachModules(){
   });
   outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}&core-renderer=20261011-v3&sharing-privacy=20261011-v1`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&step6-subject=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&subject-toolbar=20261011-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1&style-selection=20261010-v1&style-recovery=20261010-v1&core-renderer=20261011-v3&writing-assistant=20261012-v1&event-flow=20261012-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&audit-delivery=20261015-v1&assistant-contract=20261015-v2&test-email=20261015-v1&phone-sidebar=20261015-v1&inmail=20261015-v1&startup-order=20261016-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&step6-subject=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&subject-toolbar=20261011-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1&style-selection=20261010-v1&style-recovery=20261010-v1&core-renderer=20261011-v3&writing-assistant=20261012-v1&event-flow=20261012-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&audit-delivery=20261015-v1&assistant-contract=20261015-v2&test-email=20261015-v1&phone-sidebar=20261015-v1&inmail=20261015-v1&startup-order=20261016-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&app-dialogs=20261017-v1`,true))
     .then(()=>{if(!window.LeadIntelOutreachUI?.openBuyerScripts)throw new Error('Messages could not initialize. Your recipient is saved; refresh and retry.');})
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;

@@ -327,7 +327,7 @@ async function handleCommunicationAction(event){
   const mailButton=gmailButton||microsoftButton;if(!mailButton||mailButton.disabled)return;
   const provider=gmailButton?'gmail':'microsoft',action=gmailButton?mailButton.dataset.gmailAction:mailButton.dataset.microsoftMailAction,label=provider==='gmail'?'Gmail':'Microsoft 365 mail';
   if(action==='connect'){if(provider==='gmail')bridge()?.connectGmail?.();else openMicrosoftHelp(mailButton,'mail');return;}
-  if(action!=='disconnect'||!window.confirm(`Disconnect ${label} from this LeadIntel workspace?`))return;
+  if(action!=='disconnect'||!(await (window.LeadIntelDialogs?.confirm(`Disconnect ${label} from this LeadIntel workspace?`)??false)))return;
   const originWorkspace=workspace()?.id;mailButton.disabled=true;
   try{
     const result=provider==='gmail'?await bridge()?.disconnectGmail?.():await bridge()?.disconnectMicrosoftMail?.();
@@ -451,7 +451,7 @@ async function saveProvider(provider){
   const apiKey=String(input?.value||'').trim();const mode=modeInput?.value==='advanced'?'advanced':'recommended';const model=mode==='recommended'?String(config?.model||'').trim():String(modelInput?.value||'').trim();
   if(mode==='advanced'&&!model){toast('Enter the exact model ID');modelInput?.focus();return;}
   if(!apiKey&&!configured){toast('Enter your provider API key first');input?.focus();return;}
-  if(!window.confirm(`Test and save ${config.name} model ${model}? This makes a small paid API request. ${configured?'The saved model changes only if the test succeeds.':'An existing main engine stays selected.'}`))return;
+  if(!(await (window.LeadIntelDialogs?.confirm(`Test and save ${config.name} model ${model}? This makes a small paid API request. ${configured?'The saved model changes only if the test succeeds.':'An existing main engine stays selected.'}`)??false)))return;
   const originWorkspace=workspace()?.id;
   clearProviderError(provider);busy=provider;setProviderSaveBusy(provider,true);
   try{
@@ -471,7 +471,7 @@ async function saveProvider(provider){
 }
 async function activateProvider(provider){
   const current=providerState(provider);if(!current?.configured)return;
-  if(!window.confirm(`Make ${current.name} · ${current.model} the main AI engine? Normal profile, strategy, extraction and writing tasks will use this model. Connected specialists keep their separate research/document roles.`))return;
+  if(!(await (window.LeadIntelDialogs?.confirm(`Make ${current.name} · ${current.model} the main AI engine? Normal profile, strategy, extraction and writing tasks will use this model. Connected specialists keep their separate research/document roles.`)??false)))return;
   const originWorkspace=workspace()?.id;
   busy=provider;render();try{
     const {response,payload}=await api('/api/integrations/ai/activate',{method:'POST',body:JSON.stringify({provider,confirmed_model:current.model})});if(!response.ok)throw new Error(payload.error||'Unable to activate provider');

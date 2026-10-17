@@ -1,11 +1,11 @@
 import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
-import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2';
-import './test-email-ui.js?v=20261015-v1';
-import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2';
+import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1';
+import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
-import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2';
+import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2&app-dialogs=20261017-v1';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
 import './message-evidence.js?v=20261010-evidence-v3';
@@ -509,7 +509,7 @@ function bindOutreach(){
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
   const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function studioState(){return LeadIntelMessageStudio.foundation(outreach.messageStudio||{},mainState(),activeCampaignScenario(),crmBridge()?.session?.user?.name||'');}
@@ -720,7 +720,7 @@ async function sendCurrentApprovedEmail(){
  button.disabled=true;button.textContent='Preparing delivery…';
  try{
   await import('./delivery-engine.js?v=20261009-message-send-v1');
-  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1');
+  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1&app-dialogs=20261017-v1');
   const result=await window.LeadIntelProductionMail.sendApprovedFromMessages({domain:item.domain,recipient,approvedAt:item.approvedAt});
   q('mw-send-status').textContent=result.ok?(result.duplicate?'Already sent; duplicate prevented.':result.crmSynced?'Email sent and CRM record saved.':'Email sent; CRM synchronization needs attention. Do not resend.'):(result.cancelled?'Send cancelled.':result.error||'Email could not be sent.');
   if(result.ok){renderAll();window.LeadIntelJourney?.refresh?.();}
@@ -1215,7 +1215,7 @@ async function translateMessageLanguage(language){
 }
 function initOutreach(){injectOutreachUI();installMessageStudio();window.LeadIntelPageQuality?.register('messages',{read:messageQualityContext,prepare:prepareMessagePageQuality});bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}
 initOutreach();
-import './content-variants.js?v=20260929-public-first-email-v1';
+import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
 
 window.addEventListener('leadintel:commercial-context-changed',()=>{cancelPendingScriptGeneration();outreach=LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));renderAll();});
 

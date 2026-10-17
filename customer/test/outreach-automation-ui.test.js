@@ -16,7 +16,8 @@ test('Outreach Automation panel exposes all safety controls and live status labe
     'Sent today','Queue','Next send','Queue preview','Blocked reason'
   ]) assert.match(ui,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`missing ${text}`);
   assert.match(ui,/approved contacts may be emailed without per-message confirmation/i);
-  assert.match(ui,/window\.confirm/);
+  assert.match(ui,/const ok=\(await \(window\.LeadIntelDialogs\?\.confirm/);
+  assert.match(ui,/if\(!ok\)return/);
 });
 
 test('owner mutation and non-owner read-only behavior are explicit',()=>{
