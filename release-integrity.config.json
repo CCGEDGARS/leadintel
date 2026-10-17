@@ -1700,7 +1700,7 @@
         "showModal",
         "Load current script",
         "Keep assistant copy",
-        "Customer context connected"
+        "Writing with your customer research"
       ]
     },
     {
@@ -2878,6 +2878,41 @@
         "Safety: ISO 45001:2018 certified",
         "How about a short 20-minute Zoom call?",
         "execution class [EXC2/EXC3]"
+      ]
+    },
+    {
+      "id": "writing-mentor-workspace",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "Your writing mentors",
+        "data-wa-books",
+        "Explore this idea",
+        "activateBook(card.id)",
+        "Build your personal writing library"
+      ]
+    },
+    {
+      "id": "writing-mentor-layout",
+      "type": "text",
+      "url": "/customer/writing-assistant.css",
+      "status": 200,
+      "contains": [
+        ".wa-books{display:grid",
+        ".wa-book.is-selected",
+        "#mw-writing-references:not([open]){display:none}"
+      ]
+    },
+    {
+      "id": "writing-mentor-source-selection",
+      "type": "text",
+      "url": "/customer/writing-references-loader.js",
+      "status": 200,
+      "contains": [
+        "activate:async id",
+        "instance.setActive(id,true)",
+        "techniques:c.techniques"
       ]
     }
   ],

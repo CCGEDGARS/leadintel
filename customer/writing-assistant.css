@@ -90,3 +90,43 @@
 @media(prefers-reduced-motion:reduce){.wa-dialog *{scroll-behavior:auto!important}}
 .wa-conversation-stream:has(.wa-empty):not(:has(.wa-preview:not([hidden]))){display:flex;align-items:center}
 .wa-conversation-stream .wa-transcript{width:100%}
+/* The source shelf is the assistant's starting point, visible before a question. */
+.wa-dialog{width:min(1540px,calc(100vw - 48px));background:#f4f7f4}
+.wa-session.wa-workbench{grid-template-columns:minmax(0,1.18fr) minmax(400px,1fr)}
+.wa-conversation-heading{padding-bottom:12px}
+.wa-conversation-heading h3{font-size:19px;letter-spacing:-.5px}
+.wa-conversation-heading>p{margin:3px 0 8px;color:var(--wa-muted);font-size:12px}
+.wa-conversation-stream:has(.wa-empty):not(:has(.wa-preview:not([hidden]))){display:block}
+.wa-conversation-stream{padding-top:12px;background:linear-gradient(#f6f9f5,#fff 420px)}
+.wa-mentor-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;font-size:11px;color:var(--wa-muted)}
+.wa-mentor-heading button{min-height:30px;padding:5px 9px;font-size:11px}
+.wa-books{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
+.wa-dialog .wa-book{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;padding:12px 8px 10px;border:1px solid #d9e2d8;border-radius:11px;background:#fff;text-align:center;box-shadow:0 3px 9px #173c2910}
+.wa-book>strong{font-size:11px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.wa-book>small{font-size:10px;line-height:1.4;color:var(--wa-muted);margin-top:auto}
+.wa-book-cover{display:flex;flex-direction:column;justify-content:space-between;position:relative;box-sizing:border-box;width:78px;max-width:100%;height:106px;padding:12px 9px 12px 13px;border-radius:2px 6px 6px 2px;color:#fff;background:linear-gradient(90deg,#173c31 0 5px,#316853 5px);box-shadow:3px 4px 0 #dedfd3,6px 7px 10px #173c2920;text-align:left;overflow:hidden}
+.wa-book-2 .wa-book-cover{background:linear-gradient(90deg,#573e2d 0 5px,#a17c4e 5px)}
+.wa-book-3 .wa-book-cover{background:linear-gradient(90deg,#2b3d54 0 5px,#5d7594 5px)}
+.wa-book-cover small{font-size:6px;letter-spacing:.8px;line-height:1.5;opacity:.75}
+.wa-book-cover strong{font:600 11px/1.4 Georgia,serif;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.wa-book-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#f6f2e9}
+.wa-dialog .wa-book.is-selected{border-color:#367551;background:#eef6ee;box-shadow:0 0 0 1px #367551}
+.wa-book.is-selected>small{font-weight:700;color:#28613e}
+.wa-book.is-empty .wa-book-cover{opacity:.65}
+.wa-book.is-empty .wa-book-cover strong{font:300 32px/1 sans-serif;align-self:center;margin-bottom:14px}
+.wa-book-guidance{margin:16px 0;padding:14px;border:1px solid #d9e5db;border-radius:10px;background:#f0f6ef;font-size:12px;line-height:1.65}
+.wa-book-guidance>strong{font-size:13px}
+.wa-book-guidance p{margin:5px 0 10px;color:#536958}
+.wa-mentor-note{display:block;border-top:1px solid #d5e2d4;padding-top:10px;color:#62765f;font-size:10px;line-height:1.6}
+.wa-mentor-note[role=alert]{color:#a43a30}
+.wa-idea{padding:10px 0;border-top:1px solid #d5e2d4}
+.wa-idea strong{font-size:12px}
+.wa-idea small{display:block;font-size:10px;color:var(--wa-muted)}
+.wa-idea button{margin-top:7px;min-height:30px;padding:5px 9px;font-size:11px}
+.wa-empty{padding:10px 12px;font-size:11px;border-style:solid;background:#fff}
+.wa-dialog #mw-writing-references:not([open]){display:none}
+.wa-question [data-wa-attach]{display:none}
+@media(max-width:1050px){.wa-session.wa-workbench{grid-template-columns:minmax(0,1.1fr) minmax(340px,1fr)}.wa-books{gap:7px}.wa-book-cover{width:66px;height:94px}.wa-dialog .wa-book{padding:10px 5px}.wa-conversation-stream{padding:12px}}
+@media(max-width:720px){.wa-session.wa-workbench{display:flex}.wa-conversation{min-height:640px;height:85dvh}.wa-book-cover{width:72px;height:100px}.wa-workspace{min-height:520px}.wa-book>strong{font-size:12px}}
+@media(max-height:740px) and (min-width:721px){.wa-book-cover{height:78px;width:58px;padding:8px}.wa-dialog .wa-book{padding:8px 5px;gap:5px}.wa-conversation-heading{padding-top:12px;padding-bottom:8px}.wa-book-guidance{margin:10px 0;padding:10px}.wa-question{padding-top:10px;padding-bottom:10px}.wa-question textarea{min-height:66px}}
+.wa-idea p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
