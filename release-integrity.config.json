@@ -1585,7 +1585,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "ai-settings.js?v=20261014-microsoft-all-entrypoints-v5&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
+        "ai-settings.js?v=20261017-gmail-account-choice-v1&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
         "attention-centre.js?v=20261003-workspace-status-v1&optional-hunter=20261004-v1&workspace-activity=20261011-v1&storage=20261012-v1",
         "api-transport.js?v=20261004-first-party-session-v1&storage=20261012-v1"
       ]
@@ -2913,6 +2913,16 @@
         "activate:async id",
         "instance.setActive(id,true)",
         "techniques:c.techniques"
+      ]
+    },
+    {
+      "id": "mailbox-account-choice-controls",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "Change Gmail account",
+        "Change Microsoft account"
       ]
     }
   ],
