@@ -47,3 +47,10 @@ test('evidence page cap retains independent corroboration alongside official pag
  const [c]=D.buildPotentialCompanyCandidates([...official,independent],{},{});
  assert.ok(c.evidence.some(e=>e.url===independent.url));assert.ok(c.evidence.some(e=>e.url.startsWith('https://nordic.se/')));assert.ok(c.evidence.length<=5);
 });
+test('logo file extensions and URL tokens cannot become technology buying signals',()=>{
+ const signals=[{name:'AI transformation',keywords:'ai',active:true,weight:10}];
+ const source={url:'https://nordic.se/media',date:new Date().toISOString().slice(0,10),text:'Here you will find our company logos in .png, .pdf and .ai formats. Our files follow the brand guidelines.'};
+ assert.equal(D.matchedSignalsForEvidence(signals,[source],'Sweden','Nordic').length,0);
+ const real={...source,url:'https://nordic.se/news/technology',text:'Nordic announces AI adoption to improve industrial production in Sweden.'};
+ assert.equal(D.matchedSignalsForEvidence(signals,[real],'Sweden','Nordic').length,1);
+});

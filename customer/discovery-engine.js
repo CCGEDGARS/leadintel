@@ -801,7 +801,8 @@
         if(!date&&explicitYear&&Number(explicitYear[0])<new Date().getFullYear()-1)continue;
         const sentences=[source.title,source.description,source.text].flatMap(value=>cleanEvidenceText(value).split(/(?<=[.!?])\s+|\n+/));
         for(const sentence of sentences){
-          const matched=terms.filter(term=>evidenceContainsTerm(sentence,term));
+          const semanticText=sentence.replace(/https?:\/\/[^\s)]+/gi,' ').replace(/\.(?:ai|crm|erp)\b/gi,' ');
+          const matched=terms.filter(term=>evidenceContainsTerm(semanticText,term));
           if(!matched.length||EvidencePolicy.isDisclaimer(sentence))continue;
           const requested=marketRule(market);
           const foreignEvent=MARKET_RULES.find(rule=>requested&&rule.code!==requested.code&&rule.aliases.some(alias=>new RegExp('\\b(?:in|at|near|i)\\s+'+alias+'\\b','i').test(sentence)));
