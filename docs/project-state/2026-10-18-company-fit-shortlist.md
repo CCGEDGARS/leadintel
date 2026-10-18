@@ -15,3 +15,8 @@ Regression coverage exercises evidence acquisition/attribution, source-diverse p
 
 ## Prevention
 Always check whether an empty company list represents an actual commercial mismatch, missing evidence, extraction/provider failure, or a stricter opportunity timing gate. Source requirements must have a corresponding acquisition path and survive evidence caps and persistence. Never fill a requested count with fabricated facts or lower thresholds silently.
+
+## Authenticated first acceptance run
+Release f9cf14c9059697062c69b83e579770d7e5745cac passed exact-SHA production proof with 260 smoke checks. The signed-in Latvia workspace rechecked seven retained companies and returned Latvijas Finieris (85 company fit, four source families) and Orkla Latvija (81, three source families). Orkla qualified with no verified timing signal, demonstrating the intended fit/timing separation in real customer data. A subsequent five-company discovery was started with those results preserved.
+
+The live audit also exposed a false technology signal: the media page phrase '.ai formats' matched AI, and generic 'will/files' language satisfied the action detector. Added a failing regression, excluded URL tokens and .ai/.crm/.erp extensions from signal term matching, and verified genuine announced AI adoption still matches. Cards and CRM/Buyers handoffs now use freshly assessed signals, preventing stale stored signal matches from reappearing after the policy fix. Recheck scope no longer claims settings changed merely because seven saved companies were checked while the discovery amount was five. Further authenticated completion is recorded in the task verification evidence, separately from release proof.
