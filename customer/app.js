@@ -1547,6 +1547,7 @@ function bind(){
   });
   window.addEventListener("leadintel:company-research-updated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
+    setStep(state.step||2);
   });
   window.addEventListener("leadintel:reference-customers-updated",()=>{
     state=loadState();

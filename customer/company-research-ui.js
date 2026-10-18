@@ -11,7 +11,8 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20261014-profile-research-status-v2';
+const RELEASE='20261018-research-lifecycle-v1';
+let activeProgress=null;
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -68,6 +69,8 @@ function ensureResearchUi(){
 }
 
 function setProgress(title,detail,{done=false}={}){
+  activeProgress=done?null:{title,detail};
+  renderResearchReview();
   const box=$('company-research-progress');if(!box)return;box.hidden=false;box.classList.toggle('done',done);
   if($('company-research-title'))$('company-research-title').textContent=title;
   if($('company-research-detail'))$('company-research-detail').textContent=detail;
@@ -113,11 +116,13 @@ function researchReviewDetails(state,meta,map){
   return gapNote+fieldLinks+evidence;
 }
 function renderResearchReview(){
-  const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
+  const state=readState();const meta=metaForCurrentState();if(!running)repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
-    if(summary.dataset)summary.dataset.researchState=meta.generatedAt?'complete':meta.failureAt?'failed':'ready';
+    if(summary.dataset)summary.dataset.researchState=running?'running':meta.generatedAt?'complete':meta.failureAt?'failed':'ready';
     summary.classList.remove('research-summary-failed');
-    if(meta.generatedAt){
+    if(running){
+      summary.innerHTML=`<div class="research-summary-main"><div class="company-research-spinner" aria-hidden="true"></div><div><strong>${esc(activeProgress?.title||'Researching company…')}</strong><small>${esc(activeProgress?.detail||'Preparing your company evidence.')}</small></div></div><div class="research-summary-actions"><span class="research-mode">In progress</span><button class="research-rerun research-primary" id="rerun-company-research" type="button" disabled>Researching company…</button></div>`;
+    }else if(meta.generatedAt){
       const aiAvailable=meta.mode==='ai';
       const recovery=synthesisRecovery(meta.reason);
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
@@ -193,8 +198,8 @@ function requestError(error,label){return error?.name==='AbortError'?new Error(l
 async function scrapeSource(url,type,pageCategory='',parentSignal=null){
   const request=requestSignal(parentSignal);
   try{
-    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:true,timeout:30000}),signal:request.signal});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
+    const response=await settleBeforeAbort(fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:true,timeout:30000}),signal:request.signal}),request.signal);
+    const payload=await settleBeforeAbort(response.json().catch(()=>({})),request.signal);if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
     const data=payload.data||payload;const text=String(data.markdown||data.content||'').slice(0,30000);if(!text.trim())throw new Error('No readable page content returned');
     return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,links:data.links||[],status:'ready',pageCategory};
   }catch(error){throw requestError(error,'Company source request');}
@@ -203,8 +208,8 @@ async function scrapeSource(url,type,pageCategory='',parentSignal=null){
 async function searchPublic(queryMeta,parentSignal=null){
   const request=requestSignal(parentSignal);
   try{
-    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:queryMeta.query,limit:MAX_RESULTS_PER_QUERY,scrapeOptions:{formats:['markdown']}}),signal:request.signal});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Search returned ${response.status}`);return engine().normalizeSearchResults(payload,queryMeta);
+    const response=await settleBeforeAbort(fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:queryMeta.query,limit:MAX_RESULTS_PER_QUERY,scrapeOptions:{formats:['markdown']}}),signal:request.signal}),request.signal);
+    const payload=await settleBeforeAbort(response.json().catch(()=>({})),request.signal);if(!response.ok)throw new Error(payload.error||`Search returned ${response.status}`);return engine().normalizeSearchResults(payload,queryMeta);
   }catch(error){throw requestError(error,'Company search request');}
   finally{request.dispose();}
 }
@@ -220,12 +225,21 @@ async function waitForServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener('leadintel:server-ready',finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener('leadintel:server-ready',finish,{once:true});setTimeout(finish,timeout);});
 }
+function settleBeforeAbort(operation,signal){
+  if(!signal)return operation;
+  return new Promise((resolve,reject)=>{
+    const abort=()=>{const error=new Error('Request timed out');error.name='AbortError';reject(error);};
+    Promise.resolve(operation).then(value=>{signal.removeEventListener('abort',abort);resolve(value);},error=>{signal.removeEventListener('abort',abort);reject(error);});
+    if(signal.aborted){abort();return;}
+    signal.addEventListener('abort',abort,{once:true});
+  });
+}
 async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage},parentSignal=null){
   const bridge=await waitForServerBridge();const workspace=bridge?.workspace;if(!bridge?.session?.authenticated||!workspace?.id)return {draft:null,mode:'evidence',reason:'Sign in to use workspace AI enrichment.'};
   const prompt=engine().buildAiPrompt({website,targetMarkets,sources,documents,uiLanguage});
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200}),signal:parentSignal});
-    const payload=await response.json().catch(()=>({}));
+    const response=await settleBeforeAbort(fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200}),signal:parentSignal}),parentSignal);
+    const payload=await settleBeforeAbort(response.json().catch(()=>({})),parentSignal);
     if(!response.ok)return {draft:null,mode:'evidence',reason:response.status===409?'No active AI provider configured.':payload.error||`AI unavailable (${response.status})`};
     const docIds=(documents||[]).filter(doc=>String(doc?.text||'').trim()).slice(0,5).map((_,index)=>`D${index+1}`);const validIds=[...sources.map(source=>source.id),...docIds];const draft=engine().parseAiDraft(payload.text,validIds,uiLanguage);
     if(!Object.values(draft).some(row=>String(row?.value||'').trim()))return {draft:null,mode:'evidence',reason:'AI returned no additional evidence-backed fields.'};
@@ -272,12 +286,12 @@ async function runAiSynthesis(){
     const reason=controller.signal.aborted?'AI synthesis stopped after 60 seconds.':(error.message||'AI synthesis is temporarily unavailable.');
     const latestMeta=metaForCurrentState();if(researchContextCurrent(context)&&normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesisFailed:true}}));renderResearchReview();}
     toast(reason);return false;
-  }finally{clearTimeout(timer);running=false;}
+  }finally{clearTimeout(timer);running=false;activeProgress=null;renderResearchReview();}
 }
 
 async function runCompanyResearch({rerun=false}={}){
   if(running)return;const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return;}
-  const state=readState();const context=captureResearchContext(state);const researchLanguage='en';const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
+  const state=readState();let context=captureResearchContext(state);const researchLanguage='en';const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
   const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);const taskId=`company-research:${Date.now()}`;const taskCentre=window.LeadIntelTaskCentre;
@@ -312,6 +326,11 @@ async function runCompanyResearch({rerun=false}={}){
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
     taskCentre?.update(taskId,{stage:'Building evidence-backed context',completed:3,resultCount:sources.length});
+    // Persist verified evidence before the independent, potentially slow AI stage.
+    const checkpoint=readState();assertResearchContext(context,checkpoint);
+    checkpoint.scrapedSources=sources.map(source=>({...source,status:'ready'}));writeState(checkpoint);
+    writeMeta({website,generatedAt:new Date().toISOString(),mode:'evidence',sourceCount:sources.length,quality,failures,reason:'AI profile preparation has not completed.',fields:readMeta().fields||{}});
+    context=captureResearchContext(readState());
     const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();assertResearchContext(context,latest);
     const next={...latest};next.uiLanguage='en';next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
@@ -327,7 +346,7 @@ async function runCompanyResearch({rerun=false}={}){
     setProgress(completionStage,completionDetail,{done:true});
     taskCentre?.complete(taskId,{stage:completionStage,resultCount:sources.length});
     await saveWorkspaceBestEffort();
-    setTimeout(()=>location.reload(),180);
+    renderResearchReview();
   }catch(error){
     const message=runController.signal.aborted?'Company research stopped after 60 seconds.':(error.message||'Public research is temporarily unavailable.');
     setProgress('Research could not complete',message);toast('Company research stopped safely. Your existing workspace data is safe.');
@@ -336,10 +355,10 @@ async function runCompanyResearch({rerun=false}={}){
     if(researchContextCurrent(context,latest)&&normalizeUrl(latest.website||'')===website){
       const now=new Date().toISOString();const existing=readMeta();const previous=normalizeUrl(existing.website)===website?existing:{};
       writeMeta(previous.generatedAt?{...previous,lastFailureAt:now,lastFailure:message}:{...previous,website,failureAt:now,error:message,generatedAt:'',mode:'failed',fields:previous.fields||{}});
-      latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);setTimeout(()=>location.reload(),180);
+      latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
     }
   }
-  finally{clearTimeout(runTimer);running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
+  finally{clearTimeout(runTimer);running=false;activeProgress=null;renderResearchReview();}
 }
 
 function needsInitialCompanyResearch(){
@@ -355,8 +374,7 @@ function prepareProfileAnswers(event){
 function bind(){
   ensureResearchUi();
   document.addEventListener('click',prepareProfileAnswers,{capture:true});
-  // The support bundle may finish loading after the customer already opened Profile.
-  if(Number(readState().step)===2&&needsInitialCompanyResearch())void runCompanyResearch();
+  // Restoring Profile must never start another paid research run automatically.
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
   window.addEventListener('leadintel:website-activated',renderResearchReview);
   window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2){renderResearchReview();}});
