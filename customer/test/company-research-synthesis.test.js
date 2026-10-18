@@ -192,3 +192,11 @@ test('successful AI preparation keeps evidence accessible and removes the recove
   assert.match(runtime.summary.innerHTML,/Review saved sources/);
   assert.doesNotMatch(runtime.summary.innerHTML,/Retry AI profile preparation|Open AI settings/);
 });
+
+test('workspace refresh cannot replace running status with Ready or enable a duplicate request',async()=>{
+  const {JSDOM}=require('jsdom');const dom=new JSDOM('<div id="research-summary"></div>');let finish;
+  const runtime=createRuntime({dom,fetchImpl:()=>new Promise(resolve=>{finish=()=>resolve({ok:false,status:503,json:async()=>({error:'Try later'})});})});
+  const pending=runtime.hooks.runAiSynthesis();for(let i=0;i<10&&!finish;i++)await Promise.resolve();
+  runtime.hooks.renderResearchReview();assert.equal(runtime.summary.dataset.researchState,'running');assert.match(runtime.summary.textContent,/In progress/);assert.doesNotMatch(runtime.summary.textContent,/Ready to research/);assert.equal(runtime.summary.querySelector('#rerun-company-research').disabled,true);
+  finish();await pending;assert.equal(runtime.summary.dataset.researchState,'complete');assert.equal(runtime.summary.querySelector('#synthesize-company-research').disabled,false);dom.window.close();
+});
