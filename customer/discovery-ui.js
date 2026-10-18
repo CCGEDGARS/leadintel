@@ -713,6 +713,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
     });
   }
   if(fatalError){
+    const meta=loadMeta();saveMeta({...meta,autonomousDiscovery:{...meta.autonomousDiscovery,active:false}});
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,fatalError,{canRetry:true,resultCount:discovery.latestRunCandidateCount});
     activeDiscoveryTaskId="";
     showToast("Discovery stopped safely · "+fatalError.message);

@@ -735,12 +735,14 @@ test('an aborted resolution stage does not start company verification', async ()
     fail(){},complete(){}
   };
 
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({autonomousDiscovery:{active:true}}));
   await context.__runDiscovery();
 
   assert.ok(phases.includes('Resolving official company domains'));
   assert.equal(phases.includes('Verifying company websites'),false);
   assert.equal(context.__discoveryState().status,'partial');assert.equal(context.__discoveryState().searchFailures.length,0);
   assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).lastCompanyRun.canceled,true);
+  assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).autonomousDiscovery.active,false);
 });
 
 test('an errored search is not presented as a confirmed no-match and offers retry', () => {
