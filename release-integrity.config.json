@@ -2924,6 +2924,43 @@
         "Change Gmail account",
         "Change Microsoft account"
       ]
+    },
+    {
+      "id": "website-scanning-ui",
+      "type": "text",
+      "url": "/customer/website-scanning-ui.js",
+      "status": 200,
+      "contains": [
+        "website-scanning-card",
+        "Find companies &amp; decision-makers",
+        "Monitor websites",
+        "Delete canceled because",
+        "signal:controller.signal"
+      ]
+    },
+    {
+      "id": "website-scanning-grounding",
+      "type": "text",
+      "url": "/customer/website-scanning.js",
+      "status": 200,
+      "contains": [
+        "MAX_COMPANIES=50",
+        "sourceBackedWebsite",
+        "Maximum ",
+        "brandDomain",
+        "assessIdentity"
+      ]
+    },
+    {
+      "id": "website-scanning-campaign-entry",
+      "type": "text",
+      "url": "/customer/email-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelEmailCampaignUI.openCompanyList",
+        "assertHandoff",
+        "Scanned company list saved"
+      ]
     }
   ],
   "retry": {
