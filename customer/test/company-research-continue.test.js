@@ -51,3 +51,12 @@ test('a late result cannot write into another workspace researching the same web
  test('collected evidence is checkpointed before a stalled AI request',async()=>{const r=runtime({hangAi:true});r.click();await flush();assert.ok(r.calls.some(url=>url.includes('/api/ai/generate')));assert.equal(r.state().scrapedSources.length,1);assert.ok(JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')).generatedAt);});
  test('AI deadline settles even when a provider ignores abort and never reloads',async()=>{const r=runtime({hangAi:true});r.click();await flush();for(const timer of [...r.timers].filter(t=>t.ms>=60000))timer.fn();await flush();const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')||'{}');assert.equal(meta.mode,'evidence');assert.match(meta.reason,/60 seconds|timed out/i);for(const timer of r.timers.filter(t=>t.ms===180))timer.fn();assert.equal(r.reloads,0);});
  test('successful research updates the page without reloading',async()=>{const r=runtime();r.click();await flush();for(const timer of r.timers.filter(t=>t.ms===180))timer.fn();assert.equal(r.reloads,0);});
+
+test('background market normalization does not discard valid company research',async()=>{
+  const r=runtime();r.click();const next=r.state();next.market={researchResults:[],status:'idle',updatedAt:'background-refresh'};r.storage.set('leadintel_customer_v2_state',JSON.stringify(next));await flush();
+  assert.equal(r.state().answers.delivery_approach,'Online onboarding');assert.ok(JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')||'{}').generatedAt);
+});
+
+test('background answer-status normalization does not discard unchanged answer content',async()=>{
+  const r=runtime();r.click();const next=r.state();next.answerStatus={priority_offers:'user'};r.storage.set('leadintel_customer_v2_state',JSON.stringify(next));await flush();assert.equal(r.state().answers.delivery_approach,'Online onboarding');
+});

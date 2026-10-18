@@ -30,14 +30,14 @@ function captureResearchContext(state){return {
   workspaceId:window.LeadIntelServerBridge?.workspace?.id||'',
   inputs:researchInputs(state),meta:localStorage.getItem(RESEARCH_META_KEY)
 };}
-function researchInputs(state){return JSON.stringify([state.website,state.targetMarkets||[],state.additionalLinks||[],state.documents||[],state.scrapedSources||[],state.answers||{},state.answerStatus||{},state.profile||null,Boolean(state.approved),state.market||{}]);}
+function researchInputs(state){return JSON.stringify([state.website,state.targetMarkets||[],state.additionalLinks||[],state.documents||[],state.scrapedSources||[],state.answers||{},state.profile||null,Boolean(state.approved)]);}
 function researchContextCurrent(context,state=readState()){
   return (!window.LeadIntelAccountCache||window.LeadIntelAccountCache.current())&&
     context.account===localStorage.getItem('leadintel_account_context_v1')&&
     context.workspaceId===(window.LeadIntelServerBridge?.workspace?.id||'')&&
     context.inputs===researchInputs(state)&&context.meta===localStorage.getItem(RESEARCH_META_KEY);
 }
-function assertResearchContext(context,state){if(!researchContextCurrent(context,state))throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');}
+function assertResearchContext(context,state){if(!researchContextCurrent(context,state)){const keys=['website','target markets','additional links','documents','source evidence','answers','profile','profile approval'];const before=JSON.parse(context.inputs),after=JSON.parse(researchInputs(state));const changed=keys.filter((_,index)=>JSON.stringify(before[index])!==JSON.stringify(after[index]));throw new Error(`Workspace changed during research${changed.length?': '+changed.join(', '):' (account or research metadata)'}. Your edits were preserved; rerun when ready.`);}}
 
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
