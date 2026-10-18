@@ -60,3 +60,7 @@ test('background market normalization does not discard valid company research',a
 test('background answer-status normalization does not discard unchanged answer content',async()=>{
   const r=runtime();r.click();const next=r.state();next.answerStatus={priority_offers:'user'};r.storage.set('leadintel_customer_v2_state',JSON.stringify(next));await flush();assert.equal(r.state().answers.delivery_approach,'Online onboarding');
 });
+
+test('metadata-only synchronization does not discard unchanged company evidence and answers',async()=>{
+ const r=runtime();r.click();r.storage.set('leadintel_customer_v2_research_meta_v1',JSON.stringify({fields:{},reason:'Background status refreshed'}));await flush();assert.equal(r.state().answers.delivery_approach,'Online onboarding');
+});
