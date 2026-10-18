@@ -1481,7 +1481,7 @@
   }
 
   function safeSearchFailure(failure={}){
-    const phase=["searching","following","resolving","verifying","buyer-fit"].includes(clean(failure.phase))?clean(failure.phase):"searching";
+    const phase=["searching","following","resolving","verifying","extracting","buyer-fit"].includes(clean(failure.phase))?clean(failure.phase):"searching";
     const query=failure.queryMeta&&typeof failure.queryMeta==="object"?failure.queryMeta:{};
     const queryMeta={
       id:clean(query.id).slice(0,100),market:clean(query.market).slice(0,100),query:clean(query.query).slice(0,1000),

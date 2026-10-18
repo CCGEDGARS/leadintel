@@ -593,3 +593,5 @@
 .buyer-review-dialog label:has([data-scope-review-reason]){display:grid;gap:12px;margin-top:24px}
 .buyer-review-dialog [data-scope-review-reason]{min-height:112px;line-height:1.6;padding:14px;resize:vertical}
 .buyer-review-dialog [data-scope-review]{margin-top:16px}
+
+#discovery-selection-breakdown[hidden],#cancel-company-discovery[hidden]{display:none!important}
