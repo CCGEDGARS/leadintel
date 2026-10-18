@@ -433,7 +433,7 @@ async function openModule(step){
 function icpActivationRequirement(icp={}){
   if(icp.type==="opportunity-led"){
     const available=(state.market.opportunities||[]).some(item=>item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0);
-    return {available,reason:"Run Market Research in Profile, then select an opportunity with a public evidence source.",action:"Go to Market Research",target:"run-market-research"};
+    return {available,reason:"Run Market Research in Profile, then select an opportunity with a public evidence source.",action:"Research & activate",target:"run-market-research"};
   }
   if(icp.type==="lookalike"||icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
     // Reference Customers saves independently of this module's in-memory state.
@@ -501,10 +501,10 @@ function renderIcps(){
     const requested=typeof icp.requestedActive==="boolean"?icp.requestedActive:icp.active!==false;
     const status=!requirement.available?"blocked":icp.active?"active":"off";
     const statusTitle=!requirement.available?(requested?"Temporarily unavailable":"Setup required"):icp.active?"Active":"Off";
-    const statusMessage=!requirement.available?(requested?"Your On choice is saved. This profile is excluded until its required evidence is available. ":"")+requirement.reason:icp.active?"This profile is used to find and qualify companies.":"This profile won’t be used to find or qualify companies. Turn it on to use it.";
+    const statusMessage=!requirement.available?(requested?"Your On choice is saved. This profile will activate automatically when qualifying evidence is available. ":"")+requirement.reason:icp.active?"This profile is used to find and qualify companies.":"This profile won’t be used to find or qualify companies. Turn it on to use it.";
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
-    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${requested?"checked":""} ${requirement.available||requested?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
-    <div class="strategy-setting-status icp-state-notice ${status==="blocked"?"icp-unlock-hint":""}" data-state="${status}" role="status"><strong>${statusTitle}</strong><span>${esc(statusMessage)}</span>${requirement.available?"":`<button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button>`}</div>
+    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${requested?"checked":""} ><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
+    <div class="strategy-setting-status icp-state-notice ${status==="blocked"?"icp-unlock-hint":""}" data-state="${status}" role="status"><strong>${statusTitle}</strong><span>${esc(statusMessage)}</span>${requirement.available?"":`<button type="button" data-icp-id="${esc(icp.id)}" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button>`}</div>
     <fieldset class="icp-edit-fields" ${icp.active?"":"disabled"}><legend class="sr-only">${esc(icp.name)} settings</legend><label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
@@ -513,6 +513,20 @@ function renderIcps(){
   </article>`;
   });
   $("icp-list").innerHTML=cards.join("");
+}
+function requestIcpActivation(id){
+  readMarketEdits(false);
+  const icp=state.market.icps.find(item=>item.id===id);if(!icp)return;
+  const requirement=icpActivationRequirement(icp);
+  icp.requestedActive=true;icp.active=requirement.available;
+  state.market.strategyApproved=false;state.market.strategyApprovedAt="";
+  saveState();renderIcps();
+  if(requirement.available)return;
+  if(requirement.target==="run-market-research"){void window.LeadIntelProfileMarket?.open?.();return;}
+  if(requirement.target==="reference-customers"){
+    window.dispatchEvent(new CustomEvent("leadintel:open-module",{detail:{step:2,journeyStage:2}}));
+    setTimeout(()=>document.querySelector("[data-reference-customers-manage]")?.click(),80);
+  }
 }
 function renderSignalDesigner(){
   const undo=$("signal-removal-undo");if(undo){undo.hidden=!state.market.lastRemovedSignal;$("signal-removal-label").textContent=state.market.lastRemovedSignal?`${state.market.lastRemovedSignal.signal.name} removed.`:"";}
@@ -1524,14 +1538,15 @@ function bind(){
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("undo-remove-signal")?.addEventListener("click",undoRemoveSignal);
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
-  [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>{readMarketEdits();renderIcps();renderMarketOpportunities();renderMonitoringControls();});});
+  [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",event=>{
+    const toggle=event.target.closest('[data-icp-field="active"]');
+    const icp=toggle&&state.market.icps[Number(toggle.dataset.index)];
+    if(icp&&toggle.checked&&!icpActivationRequirement(icp).available){requestIcpActivation(icp.id);return;}
+    readMarketEdits();renderIcps();renderMarketOpportunities();renderMonitoringControls();
+  });});
   $("icp-list").addEventListener("click",event=>{
     const button=event.target.closest("[data-icp-unlock]");if(!button)return;
-    if(button.dataset.icpUnlock==="run-market-research"){void window.LeadIntelProfileMarket?.open?.();return;}
-    if(button.dataset.icpUnlock==="reference-customers"){
-      window.dispatchEvent(new CustomEvent("leadintel:open-module",{detail:{step:2,journeyStage:2}}));
-      setTimeout(()=>document.querySelector("[data-reference-customers-manage]")?.click(),80);
-    }
+    requestIcpActivation(button.dataset.icpId);
   });
   $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",openResetCenter);
