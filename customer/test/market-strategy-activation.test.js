@@ -53,7 +53,7 @@ test("pre-flight blocks zero signals and explains partial research without imply
 
 test("recommended tender signals are not silently disabled by research-source settings", () => {
   assert.doesNotMatch(app, /!tendersAllowed[\s\S]{0,180}active:false/);
-  assert.match(app, /LeadIntelMarket\.normalizeSignals\(generatedSignals,state\.market\.signals\)/);
+  assert.match(app, /LeadIntelMarket\.normalizeSignals\(generatedSignals,state\.market\.signals,state\.market\.deletedSignalIds\)/);
 });
 
 test("activation waits for the canonical Discovery API and recovers visibly on timeout", () => {

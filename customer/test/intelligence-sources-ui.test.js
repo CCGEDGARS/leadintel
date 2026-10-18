@@ -45,7 +45,7 @@ test('process map loads Preferred Sources with a versioned runtime',()=>{
   assert.match(processMap,/intelligence-sources-ui\.js\?v=20260915-preferred-sources-v1/);
 });
 
-test('Preferred Sources is prominent and placed immediately before Step 1 research',()=>{
+test('Preferred Sources preserves its management and recommendation controls',()=>{
   assert.match(ui,/Preferred sources/);
   assert.match(ui,/Which websites should LeadIntel monitor\?/);
   assert.match(ui,/Add your own preferred source/);
@@ -53,8 +53,7 @@ test('Preferred Sources is prominent and placed immediately before Step 1 resear
   assert.match(ui,/Research &amp; recommend sources/);
   assert.match(ui,/You review every recommendation before anything is saved/);
   assert.match(ui,/0 monitoring/);
-  assert.match(ui,/step\.insertBefore\(panel,researchPanel\)/);
-  assert.match(ui,/const researchPanel=step\.querySelector\('\.research-panel'\)/);
+  assert.match(ui,/host\.append\(panel\)/);
 });
 
 test('assistant recommendations reuse verified live discovery and require selection before saving',()=>{
@@ -65,4 +64,21 @@ test('assistant recommendations reuse verified live discovery and require select
   assert.match(ui,/Add selected sources/);
   assert.match(ui,/test access before monitoring/);
   assert.doesNotMatch(ui,/monitoring_enabled:true/);
+});
+
+test('preferred sources live inside Website Scanning monitoring, with no duplicate Strategy section',()=>{
+  const {JSDOM}=require('jsdom'),vm=require('node:vm');
+  const document=new JSDOM('<section id="step-4"><section class="research-panel"></section></section><div id="website-scanning-monitor"></div>').window.document;
+  const code=ui.slice(ui.indexOf('  function ensurePanel()'),ui.indexOf('  function ensureModal()'));
+  const context=vm.createContext({document});vm.runInContext(code+';ensurePanel()',context);
+  const panel=document.querySelector('[data-intelligence-sources-panel]');
+  assert.equal(panel.parentElement.id,'website-scanning-monitor');assert.equal(document.querySelector('#step-4 [data-intelligence-sources-panel]'),null);
+  assert.equal(panel.querySelector('summary').textContent,'Preferred sources');
+  vm.runInContext('ensurePanel()',context);assert.equal(document.querySelectorAll('[data-intelligence-sources-panel]').length,1);
+  assert.ok(panel.querySelector('#preferred-source-url'));assert.ok(panel.querySelector('[data-open-intelligence-sources]'));
+});
+test('preferred sources wait for the monitoring host rather than attaching to Strategy during startup',()=>{
+  const {JSDOM}=require('jsdom'),vm=require('node:vm');const document=new JSDOM('<section id="step-4"></section>').window.document;
+  const code=ui.slice(ui.indexOf('  function ensurePanel()'),ui.indexOf('  function ensureModal()'));
+  vm.runInNewContext(code+';ensurePanel()',{document});assert.equal(document.querySelector('[data-intelligence-sources-panel]'),null);
 });
