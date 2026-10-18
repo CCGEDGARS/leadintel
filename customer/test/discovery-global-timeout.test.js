@@ -272,7 +272,7 @@ test('unqualified research checks do not expose automatic buyer actions',()=>{
   assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,0);
   assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,0);
   assert.match(html,/Needs more evidence|Not qualified/);
-  assert.match(html,/No recent verified buying signal/);
+  assert.match(html,/Verify a specific purchasing application|Verify company identity/);
   assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
 });
 
@@ -900,7 +900,7 @@ test('saved failed official-domain lookups reuse discovered names and market evi
       if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
       const query=JSON.parse(options.body).query;
       requests.push({url,query});
-      if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.startsWith('site:')
+      if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.includes('-site:')?{url:'https://independent.example/northstar',title:'Northstar company profile',text:'Northstar is an industrial manufacturer in Latvia.'}:query.startsWith('site:')
         ?{date:new Date().toISOString().slice(0,10),url:'https://northstar.com/news/new-factory',title:'Northstar invests in a new factory',description:'Northstar invests in a new factory in Latvia for industrial automation.'}
         :{url:'https://northstar.com/',title:'Northstar official site',description:'Northstar is an industrial automation manufacturer in Latvia.'}
       ]})};
@@ -916,11 +916,11 @@ test('saved failed official-domain lookups reuse discovered names and market evi
   });
   await context.__retryFailedDiscoveryChecks();
   const state=context.__discoveryState();
-  assert.equal(requests.length,5,'one direct website read plus official-domain and evidence searches should call the existing providers');
+  assert.equal(requests.length,7,'website read, resolution, official evidence and independent corroboration use the existing providers');
   assert.ok(requests.every(item=>!String(item.query||'').includes('discover-')));
   assert.equal(state.funnel.marketSearchesCompleted,4);
   assert.equal(state.funnel.officialDomainsResolved,1);
-  assert.equal(state.funnel.openAiFallbackSearches,2);
+  assert.equal(state.funnel.openAiFallbackSearches,3);
   assert.equal(state.searchFailures.length,0);
 });
 
