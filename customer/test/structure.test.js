@@ -133,7 +133,7 @@ test('customer shell owns Stage 5 while discovery UI injects its workspace contr
 
 test('company discovery UI exposes the agreed buyer fit and signal breakdown',()=>{
   const ui=read('discovery-ui.js');
-  for(const label of ['Buyer fit','Buying signals'])assert.match(ui,new RegExp(`"${label}"`));
+  for(const label of ['Company fit','Buying signals'])assert.match(ui,new RegExp(`"${label}"`));
 });
 
 test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>{

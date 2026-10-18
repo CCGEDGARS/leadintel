@@ -129,7 +129,7 @@ test('buildCandidateVerificationQueries creates bounded company-domain checks an
 
   const checks=Discovery.buildCandidateVerificationQueries(raw,profile,market,3);
 
-  assert.equal(checks.length,1);
+  assert.equal(checks.length,2);
   assert.equal(checks[0].domain,'nordicfood.se');
   assert.match(checks[0].query,/site:nordicfood\.se/i);
   assert.match(checks[0].query,/new factory/i);
@@ -140,7 +140,7 @@ test('saved targets receive website checks without configured buying signals',()
   const checks=Discovery.buildCandidateVerificationQueries([
     {url:'https://boliden.com/',domain:'boliden.com',company:'Boliden',market:'Sweden',title:'Boliden'}
   ],{website:'https://ercon.lv/'},{signals:[]},5);
-  assert.equal(checks.length,1);
+  assert.equal(checks.length,2);
   assert.match(checks[0].query,/site:boliden\.com/);
   assert.match(checks[0].query,/investment/);
 });
@@ -601,5 +601,5 @@ test('company card presents one assessed reference score and buyer-research read
   assert.doesNotMatch(weak.explanation,/Old Reference|Men faktum|Close/);
   const strong=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'both',lookalikeScore:85,referenceMatch:{referenceCompany:'Verified Reference'},matchedSignals:[{name:'Factory investment'}]});
   assert.equal(strong.routeLabel,'Lookalike + Signals');assert.equal(strong.referenceScore,85);assert.equal(strong.referenceCompany,'Verified Reference');
-  const paused=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'signal',lookalikeScore:null,matchedSignals:[]});assert.equal(paused.referenceScore,null);assert.equal(paused.routeLabel,'Signals');
+  const paused=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'signal',lookalikeScore:null,matchedSignals:[]});assert.equal(paused.referenceScore,null);assert.equal(paused.routeLabel,'Company fit · timing unconfirmed');
 });

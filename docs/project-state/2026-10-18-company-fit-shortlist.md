@@ -1,0 +1,17 @@
+# Company shortlist qualification — 18 October 2026
+
+## Observed customer failure
+A five-company Latvia search retained seven research-review records and no actionable shortlist. Latvijas Finieris displayed only the missing second-source blocker; several other companies lacked signals, fit or identity evidence. Provider failures and a canceled run also affected completeness. Zero qualified opportunities was being presented as zero useful company matches.
+
+## Root causes and changes
+1. Manual company discovery reused automatic opportunity eligibility: buyer fit was capped at 70 while the default threshold was 80 and a recent signal was mandatory. Added a separate company assessment based on verified commercial fit /100. Balanced discovery can shortlist companies with unconfirmed timing. Explicit Signals priority still requires a recent verified signal; Lookalike still requires a verified reference match. All identity, market, exclusions, lifecycle, freshness, purchasing-application and two-source gates remain. Automatic workflow opportunity eligibility is unchanged.
+2. Verification searched only official domains despite requiring independent corroboration. Added one company-attributed external query per checked company. External results retain the target company identity and actual source domain; unrelated pages and official-domain results cannot masquerade as independent corroboration. Limited legacy Saving Mode retains its original call budget.
+3. The five-page cap could discard independent evidence after retaining multiple official pages. Evidence retention now reserves official identity evidence and source diversity before filling remaining slots.
+4. Save/reload and selected-company normalization required a signal. Verified manual company assessments now survive the same state boundary without fabricating a signal. CRM stores company fit separately and does not map it to an opportunity score.
+5. Cards label Company fit /100 and timing unconfirmed; incomplete research opens when no qualified shortlist exists. Qualification settings explain the company/opportunity distinction.
+
+## Verification
+Regression coverage exercises evidence acquisition/attribution, source-diverse page caps, cross-industry and seller-name invariance, thresholds, explicit discovery priorities, suppression, changed seller offers, missing purchasing evidence, save/reload and CRM score separation. Existing automatic qualification tests remain unchanged. Full suite, build and exact-SHA release proof must pass before production claims. Authenticated customer acceptance is recorded separately below after execution; test/build success alone is not a usable customer shortlist.
+
+## Prevention
+Always check whether an empty company list represents an actual commercial mismatch, missing evidence, extraction/provider failure, or a stricter opportunity timing gate. Source requirements must have a corresponding acquisition path and survive evidence caps and persistence. Never fill a requested count with fabricated facts or lower thresholds silently.

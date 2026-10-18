@@ -19,7 +19,7 @@ test('Discovery stops after bounded autonomous research rather than lowering qua
 });
 
 test('Qualified cards distinguish score, evidence confidence and buying intent',()=>{
-  assert.match(ui,/Qualification score \/100/);
+  assert.match(ui,/Company fit \/100/);
   assert.match(ui,/Evidence confidence/);
   assert.match(ui,/Buying intent<\/strong> Unconfirmed/);
   assert.match(ui,/Independent source families/);
