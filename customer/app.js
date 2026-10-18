@@ -68,6 +68,7 @@ function saveState(){
   // Keep the modal's latest lists and activation when an older in-memory app state saves.
   try{
     const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    if(current.websiteScans&&typeof current.websiteScans==="object")state.websiteScans=current.websiteScans;
     if(current.eventCampaigns&&typeof current.eventCampaigns==="object")state.eventCampaigns=current.eventCampaigns;
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;

@@ -2,6 +2,7 @@
 import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2';
 
 const SUPPORT_MODULES=[
+  './website-scanning-ui.js?v=20261018-v1',
   './website-input-sync.js?v=20261006-sender-identity-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',

@@ -1,0 +1,15 @@
+# Website scanning
+
+User-approved design: place Website Scanning directly below Companies & Market Intelligence and above Events / Email Campaigns. Card: Turn websites into companies, decision-makers and opportunities. Action: Scan websites. Modes: Find companies & decision-makers (default), Monitor websites (existing behavior retained).
+
+A pasted public URL can be a company site, ranked list, directory or article about entrepreneurs. Extract company candidates from actual readable page evidence, retain quotes/source links, deduplicate, and do not infer that the list host is a listed company. Person names require evidenced company associations. Resolve official websites with public search and page checks; unresolved rows remain visible, editable and ineligible for import. Never claim exhaustive extraction without source coverage. Scan up to 50 companies, with clear bounds and shortfalls. All listed companies versus targeting-fit filter: customer fit is an evidence-based assessment, not buying intent. Matching and exclusions derive from active seller context.
+
+Review/select rows, verify websites, save selected identities to existing workspace CRM or prepare a saved company-list campaign. Reuse existing company research and buyer discovery for decision-makers and email enrichment. Preserve source provenance in CRM activity. No automatic messages, queueing or sending. Existing approval and suppression gates remain in force.
+
+Use existing authenticated Firecrawl service endpoints and AI generation. No provider secrets in browser code. Bound requests, concurrent identity checks (3), user cancel, explicit retry; do not auto-start paid work on load. Protect account/workspace/input races. Persist compact scan snapshots inside main workspace state; preserve through app normalization and refresh. Deleting scan history must not remove CRM records. Show extracted / website-checked / decision-makers-found as separate states; scanning alone never claims contacts found.
+
+Keep monitoring's existing controls and scheduling behavior, moving its existing DOM into the second mode with a clear return action. Preserve all listener IDs and server integrations. Accessible buttons, focus, responsive table overflow, no native popups.
+
+Validation: pure engine tests for grounding, unsafe URLs, deduplication, directory hosts, fit uncertainty, single company and named-person company evidence; provider/deadline/cancel/race tests; UI placement, selection, edit, persisted reload and handoff tests; existing suite/build; exact-SHA CI and release proof; authenticated live scan, review and saved CRM/campaign handoff without sending.
+
+Review resolution: CRM supports dedicated company.website_scanned activities; frontend checks non-throwing ok:false failures. Domains suggested by AI require source backing or search. Website identity checks use root pages, company/title/content evidence and brand-domain evidence, reject directory-profile cues, and leave uncertain matches unresolved. Cancel and delete guard account/scope across every async boundary. The saved campaign selector updates immediately.

@@ -141,3 +141,10 @@ sqliteTest('generic Apollo-labelled imports cannot promote case variants into co
     assert.equal(response.status,200);assert.equal((await response.json()).contacts[0].email_status,'public_unverified');
   }
 });
+
+sqliteTest('website-scanned activity retains source evidence under its dedicated type',async()=>{
+ const {env,token}=await fixture();let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company_name:'Alpha Tools',domain:'alpha.example',source:'website_scan'}}),env,{});assert.equal(response.status,201);const {company}=await payload(response);
+ const metadata={sourceUrl:'https://ranking.example/top',sourceQuote:'Alpha Tools makes equipment.',identityUrl:'https://alpha.example/'};
+ response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/activities?workspace_id=w1`,{method:'POST',token,body:{type:'company.website_scanned',summary:'Public listing source',metadata}}),env,{});assert.equal(response.status,200);
+ response=await handleCrmRoute(req(`/api/crm/companies/${company.id}?workspace_id=w1`,{token}),env,{});const activity=(await payload(response)).activities.find(a=>a.activity_type==='company.website_scanned');assert.deepEqual(JSON.parse(activity.metadata_json),metadata);
+});

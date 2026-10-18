@@ -391,6 +391,7 @@
       profile,
       approved:Boolean(value.approved),
       ...(value.eventCampaigns&&typeof value.eventCampaigns==="object"&&!Array.isArray(value.eventCampaigns)?{eventCampaigns:value.eventCampaigns}:{}),
+      ...(value.websiteScans&&typeof value.websiteScans==="object"&&!Array.isArray(value.websiteScans)?{websiteScans:value.websiteScans}:{}),
       ...(value.campaignStudio&&typeof value.campaignStudio==="object"&&!Array.isArray(value.campaignStudio)?{campaignStudio:value.campaignStudio}:{}),
       ...(value.referenceCustomers&&typeof value.referenceCustomers==="object"?{referenceCustomers:value.referenceCustomers}:{}),
       ...(Array.isArray(value.targetCompanies)?{targetCompanies:value.targetCompanies.slice(0,50)}:{}),

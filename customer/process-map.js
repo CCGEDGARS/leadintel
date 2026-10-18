@@ -54,12 +54,12 @@ let expandedSidebarStage=0;
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
 function ensureReferenceCustomerTool(){
-  const step=document.getElementById("step-2");if(!step)return;const existing=step.querySelector("[data-reference-intelligence-card]"),home=document.getElementById("campaign-planning-host");if(existing){if(home&&home.parentNode===step&&existing.nextElementSibling!==home)home.before(existing);return;}
+  const step=document.getElementById("step-2");if(!step)return;const existing=step.querySelector("[data-reference-intelligence-card]"),home=document.getElementById("campaign-planning-host");if(existing){const next=document.getElementById("website-scanning-card")||home;if(next&&next.parentNode===step&&existing.nextElementSibling!==next)next.before(existing);return;}
   const actions=step.querySelector(".step-actions");if(!actions)return;
   const card=document.createElement("section");card.className="panel brand-identity-panel reference-customer-core-card planning-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
   card.classList.add('feature-focus','reference-feature');
   card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><div class="planning-card-label"><span class="eyebrow">Companies &amp; Market Intelligence</span><span class="planning-optional">Optional</span></div><h3>Find more companies like your best customers.</h3><p class="reference-value-lead">Use customer examples and market research to improve your targeting. Find similar companies and spot relevant sales opportunities.</p></div><button class="brand-identity-toggle lookalike-build-btn planning-card-action" type="button" data-reference-customers-manage aria-haspopup="dialog" aria-controls="reference-customer-modal"><span>Explore companies &amp; market</span><span aria-hidden="true">→</span></button></div>';
-  actions.parentNode.insertBefore(card,home&&home.parentNode===step?home:actions);
+  const scan=document.getElementById("website-scanning-card");actions.parentNode.insertBefore(card,scan&&scan.parentNode===step?scan:home&&home.parentNode===step?home:actions);
 }
 function patchMarketLookalikeIsolation(){
   const market=window.LeadIntelMarket;if(!market||market.__salesMotionIsolationPatched||typeof market.buildIcpCandidates!=="function")return;
