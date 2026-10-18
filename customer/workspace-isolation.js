@@ -46,7 +46,7 @@
     const fingerprint=parse(meta.fingerprint,null);
     return canonicalDomain(fingerprint?.website||"");
   }
-  function hasMeaningfulDerivedData(storage){
+  function hasMeaningfulDerivedData(storage,{includeResearch=true}={}){
     const discovery=read(storage,DISCOVERY_KEY);
     const outreach=read(storage,OUTREACH_KEY);
     const delivery=read(storage,DELIVERY_KEY);
@@ -59,14 +59,15 @@
     ].some(([value,key])=>hasArray(value,key)))return true;
     if(clean(outreach.selectedDomain))return true;
     if(Object.keys(meta).some(key=>!['fingerprint','visibleStep','website','sourceWebsite','pipelineWebsite'].includes(key)))return true;
-    if(Object.keys(research).length>0)return true;
+    if(includeResearch&&Object.keys(research).length>0)return true;
     return false;
   }
-  function clearDerivedWorkspaceData(storage){
+  function clearDerivedWorkspaceData(storage,{preserveResearch=false}={}){
     if(!storage)return 0;
     const originals=read(storage,OUTREACH_KEY).messageStudio?.originalScripts;
     let removed=0;
     for(const key of DERIVED_KEYS){
+      if(preserveResearch&&key===RESEARCH_META_KEY)continue;
       if(storage.getItem(key)!==null){storage.removeItem(key);removed++;}
     }
     if(originals&&Object.keys(originals).length)storage.setItem(OUTREACH_KEY,JSON.stringify({messageStudio:{originalScripts:originals}}));
@@ -78,10 +79,12 @@
     const meta=read(storage,DISCOVERY_META_KEY);
     const previous=websiteFromMeta(meta);
     const hasData=hasMeaningfulDerivedData(storage);
+    const researchCurrent=websiteFromMeta(read(storage,RESEARCH_META_KEY))===current;
+    const hasOtherData=hasMeaningfulDerivedData(storage,{includeResearch:false});
     const changed=Boolean(hasData&&previous&&previous!==current);
-    const legacy=Boolean(hasData&&!previous);
+    const legacy=Boolean(!previous&&(hasOtherData||(hasData&&!researchCurrent)));
     if(!changed&&!legacy)return {cleared:false,reason:"same-website",website:current,previousWebsite:previous,removedKeys:0};
-    const removedKeys=clearDerivedWorkspaceData(storage);
+    const removedKeys=clearDerivedWorkspaceData(storage,{preserveResearch:researchCurrent});
     return {cleared:removedKeys>0,reason:changed?"website-changed":"legacy-unscoped",website:current,previousWebsite:previous,removedKeys};
   }
   function normalizedStep(value){
