@@ -24,6 +24,7 @@ function mount(){const step=$('step-2');if(!step)return;if(!$('website-scanning-
  }
  const card=$('website-scanning-card'),ref=step.querySelector('[data-reference-intelligence-card]'),home=$('campaign-planning-host');if(ref&&ref.nextElementSibling!==card)ref.after(card);else if(!ref&&home&&card.nextElementSibling!==home)home.before(card);
  const monitoring=$('monitoring-panel');if(monitoring&&monitoring.parentElement!==$('website-scanning-monitor'))$('website-scanning-monitor').append(monitoring);
+ root.LeadIntelIntelligenceSources?.mount?.();
  if(!d.querySelector('link[data-website-scanning-css]')){const link=d.createElement('link');link.rel='stylesheet';link.href='website-scanning.css?v=20261018-v1';link.dataset.websiteScanningCss='true';d.head.append(link);}render();
 }
 function close(){$('website-scanning-workspace').hidden=true;$('website-scanning-open').setAttribute('aria-expanded','false');$('website-scanning-open').focus();}

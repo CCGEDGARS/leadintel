@@ -251,7 +251,7 @@ function readAnswers(){
     for(const id of changed)state.answerStatus[id]='accepted';
     if(state.profile&&globalThis.LeadIntelCompanyBrain?.classifyCompany)state.profile.companyClassification=LeadIntelCompanyBrain.classifyCompany(state);
     try{const key='leadintel_customer_v2_outreach',data=JSON.parse(localStorage.getItem(key)||'{}');data.items=(data.items||[]).map(item=>({...item,approved:false,approvedAt:'',contextNeedsRefresh:true}));localStorage.setItem(key,JSON.stringify(data));}catch{}
-    if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,[]);}
+    if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,[],state.market.deletedSignalIds);}
     try{const key='leadintel_customer_v2_discovery',data=JSON.parse(localStorage.getItem(key)||'{}');data.needsRefresh=true;localStorage.setItem(key,JSON.stringify(data));}catch{}
   }
   saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));
@@ -373,7 +373,7 @@ function seedMarketStrategy(){
   for(const saved of previous.icps||[])if(!icps.some(item=>item.id===saved.id))icps.push(saved);
   const previousSignals=previous.signals||[];
   const recommendations=(state.profile.recommendedSignals||[]).map(item=>previousSignals.length&&!previousSignals.some(old=>old.id===item.id)?{...item,active:false}:item);
-  const signals=LeadIntelMarket.normalizeSignals(recommendations,previousSignals);
+  const signals=LeadIntelMarket.normalizeSignals(recommendations,previousSignals,previous.deletedSignalIds);
   const opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,icps,signals,[],language);
   state.market=LeadIntelMarket.normalizeMarketState({...previous,icps,signals,opportunities:previous.researchResults?.length?LeadIntelMarket.buildMarketOpportunities(state.profile,icps,signals,previous.researchResults,language):opportunities,researchStatus:previous.researchStatus||"idle",strategyApproved:false,contentLanguage:language});
 }
@@ -406,7 +406,7 @@ function ensureMarketStrategySeeded(){
     state.market.strategyApproved=false;
     state.market.strategyApprovedAt='';
   }
-  state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals);
+  state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals,state.market.deletedSignalIds);
   if(!state.market.opportunities.length)state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,state.market.icps,state.market.signals,state.market.researchResults||[],language);
   state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,language);
   saveState();
@@ -515,6 +515,7 @@ function renderIcps(){
   $("icp-list").innerHTML=cards.join("");
 }
 function renderSignalDesigner(){
+  const undo=$("signal-removal-undo");if(undo){undo.hidden=!state.market.lastRemovedSignal;$("signal-removal-label").textContent=state.market.lastRemovedSignal?`${state.market.lastRemovedSignal.signal.name} removed.`:"";}
   $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">
     <label class="market-toggle"><input type="checkbox" data-signal-field="active" data-index="${index}" aria-label="Use ${esc(signal.name)}" ${signal.active?"checked":""}><span></span></label>
     <div class="signal-config-main"><small class="strategy-setting-status" role="status">${signal.active?"Active — used in research and matching":"Off — excluded from research and matching"}</small><input class="signal-name-input" data-signal-field="name" ${signal.active?"":"disabled"} data-index="${index}" value="${esc(signal.name)}"><input class="signal-keywords-input" data-signal-field="keywords" ${signal.active?"":"disabled"} data-index="${index}" value="${esc(signal.keywords)}" placeholder="keywords; phrases"></div>
@@ -529,7 +530,15 @@ function addCustomSignal(){
   if(!result.added){showToast(result.error||"Could not add signal");return;}
   state.market.signals=result.signals;state.market.strategyApproved=false;saveState();$("custom-signal-name").value="";$("custom-signal-keywords").value="";renderMarketStrategy();showToast("Custom signal added");
 }
-function removeSignal(index){readMarketEdits();state.market.signals.splice(index,1);state.market.strategyApproved=false;saveState();renderMarketStrategy();showToast("Signal removed");}
+function removeSignal(index){
+  readMarketEdits();const id=state.market.signals[index]?.id;if(!id)return;
+  state.market=LeadIntelMarket.removeSignal(state.market,id);syncResearchSourcesToSignals();
+  saveState();renderMarketStrategy();showToast("Signal removed. Undo is available below the signal list.");
+}
+function undoRemoveSignal(){
+  readMarketEdits();if(state.market.signals.length>=20){showToast("Remove a signal before restoring another.");return;}
+  state.market=LeadIntelMarket.restoreRemovedSignal(state.market);saveState();renderMarketStrategy();showToast("Signal restored");
+}
 
 async function waitForMarketServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
@@ -1317,7 +1326,7 @@ function retrySignalRecommendationsFromHandoff(){
   const unique=[];const seen=new Set();
   for(const signal of candidates){const id=String(signal?.id||"").trim();if(!id||seen.has(id))continue;seen.add(id);unique.push(signal);if(unique.length===5)break;}
   state.profile.recommendedSignals=unique;
-  state.market.signals=LeadIntelMarket.normalizeSignals(unique,state.market.signals);
+  state.market.signals=LeadIntelMarket.normalizeSignals(unique,state.market.signals,state.market.deletedSignalIds);
   state.market.strategyApproved=false;state.market.strategyApprovedAt="";
   saveState();renderMarketStrategy();renderStrategyHandoff();
   showToast(`${state.market.signals.length} buying signal recommendations are ready for review`);
@@ -1513,6 +1522,7 @@ function bind(){
   $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
+  $("undo-remove-signal")?.addEventListener("click",undoRemoveSignal);
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>{readMarketEdits();renderIcps();renderMarketOpportunities();renderMonitoringControls();});});
   $("icp-list").addEventListener("click",event=>{
