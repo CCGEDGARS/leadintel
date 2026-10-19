@@ -599,3 +599,10 @@
 .buyer-review-dialog [data-scope-review]{margin-top:16px}
 
 #discovery-selection-breakdown[hidden],#cancel-company-discovery[hidden]{display:none!important}
+
+/* Step 4: reserve visual priority for company search, progress and shortlist. */
+.company-search-advanced{margin:12px 0 16px;border:1px solid var(--border,#dce5e1);border-radius:12px;padding:0 14px;background:transparent}
+.company-search-advanced>summary{cursor:pointer;padding:13px 0;font-weight:650;color:var(--text,#163e36);list-style-position:inside}
+.company-search-advanced:not([open])>summary{border:0}
+.company-search-advanced>.company-workflow-actions{display:flex;flex-wrap:wrap;gap:9px;margin:2px 0 12px}
+.company-search-advanced .discovery-funnel{margin:10px 0 16px}
