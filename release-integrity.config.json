@@ -25,7 +25,8 @@
       "email_masters_version": "20261015-v4",
       "inmail_masters_version": "inmail-facts-20261016-v2",
       "phone_masters_version": "phone-20261017-v1",
-      "professional_master_version": "20261017-professional-v1"
+      "professional_master_version": "20261017-professional-v1",
+      "additional_contact_services_version": "qualified-email-v1"
     }
   },
   "smokeChecks": [
@@ -3014,6 +3015,40 @@
         "typeof response.text==='function'?response.text()",
         "Optional evidence review unavailable; individual source checks are retained",
         "timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)"
+      ]
+    },
+    {
+      "id": "additional-contact-preferences",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "id=\"additional-contact-preferences\"",
+        "Use additional services automatically when no confirmed public work email is found.",
+        "additional-contact-services.js?v=20261019-v1"
+      ]
+    },
+    {
+      "id": "additional-contact-qualified-gate",
+      "type": "text",
+      "url": "/customer/additional-contact-policy.js",
+      "status": 200,
+      "contains": [
+        "Complete company qualification first.",
+        "Complete qualification and public research for four buyers first.",
+        "max-ready"
+      ]
+    },
+    {
+      "id": "additional-contact-approved-copy",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "Strong match. No confirmed public work email found.",
+        "Find email with additional services",
+        "/api/additional-contact-services/email",
+        "Verify email with Hunter"
       ]
     }
   ],

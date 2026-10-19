@@ -1,0 +1,119 @@
+import '../../customer/discovery-engine.js';
+import '../../customer/contact-confirmation-policy.js';
+import '../../customer/additional-contact-policy.js';
+import {getCrmCompany} from './crm.js';
+import {enrichCrmContact} from './crm-routes.js';
+import {confirmPublicWorkEmail} from './public-email-confirmation.js';
+import {withWorkspaceServiceCredentials} from './service-integrations.js';
+import {sha256,cookieValue} from './security.js';
+import {APOLLO_PEOPLE_SEARCH_URL} from './enrichment.js';
+import {loadConfirmationLevel} from './contact-confirmation-policy.js';
+const D=globalThis.LeadIntelDiscovery,P=globalThis.LeadIntelAdditionalContactPolicy,C=globalThis.LeadIntelContactPolicy;
+const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
+const fail=(message,status=409,code='ADDITIONAL_CONTACT_HOLD')=>Object.assign(new Error(message),{status,code});
+export async function readAdditionalContactPolicy(env,workspaceId){
+  const row=await env.DB.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').bind(workspaceId).first();
+  return {enabled:row?.enabled===1,dailyLimit:row?.daily_limit??3,monthlyLimit:row?.monthly_limit??30,maxPerCompany:row?.max_per_company??2,updatedAt:row?.updated_at||null};
+}
+export async function saveAdditionalContactPolicy(env,context,input){
+  if(context.role!=='owner')throw fail('Only the workspace owner can approve additional services',403);
+  if(typeof input?.enabled!=='boolean'||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>50||!Number.isInteger(input.monthlyLimit)||input.monthlyLimit<input.dailyLimit||input.monthlyLimit>1000||![1,2].includes(input.maxPerCompany))throw fail('Choose valid daily/monthly limits and one or two buyers per company',400);
+  await env.DB.prepare(`INSERT INTO additional_contact_policies(workspace_id,enabled,daily_limit,monthly_limit,max_per_company,approved_by) VALUES(?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET enabled=excluded.enabled,daily_limit=excluded.daily_limit,monthly_limit=excluded.monthly_limit,max_per_company=excluded.max_per_company,approved_by=excluded.approved_by,updated_at=CURRENT_TIMESTAMP`).bind(context.workspaceId,Number(input.enabled),input.dailyLimit,input.monthlyLimit,input.maxPerCompany,context.userId).run();
+  return readAdditionalContactPolicy(env,context.workspaceId);
+}
+function fromSnapshot(detail){
+  const s=detail.intelligence?.research_snapshot||{},r=s.buyerResearch||{};
+  return {company:detail.company.company_name,domain:detail.company.normalized_domain,market:s.market,lifecycle_status:detail.company.lifecycle_status,qualification:s.qualification,buyerFit:s.buyerFit,publicResearch:r.publicResearch,buyerDiscovery:r.discovery,people:r.buyers||[]};
+}
+function reuseAttempt(attempt,detail,person,confirmationLevel){
+  const result=JSON.parse(attempt.result_json||'{}');
+  if(result.contact){
+    const current=detail.contacts?.find(c=>c.id===result.contact.id&&String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()&&C.accepted(c,detail.company.normalized_domain,confirmationLevel));
+    if(!current)return {cached:true,request:{status:'needs_review'},reason:'The previous contact is no longer active or confirmed. Review it in CRM.'};
+    return {...result,contact:current,cached:true,request:{status:attempt.status}};
+  }
+  return {...result,cached:true,request:{status:attempt.status}};
+}
+async function resolvePerson(env,candidate,person){
+  if(!String(person.id).startsWith('public-')&&!String(person.id).startsWith('person-'))return person;
+  const response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','X-Api-Key':env.APOLLO_API_KEY},body:JSON.stringify(D.buildApolloPeopleSearchPayload(candidate,{decisionMakers:person.title})),signal:AbortSignal.timeout(25000)});
+  if(!response.ok)throw fail('Apollo identity search is unavailable',502);
+  const people=D.normalizeApolloPeople(await response.json()),name=String(person.publicName||person.name).toLowerCase().trim();
+  const profile=D.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+  const matches=people.filter(p=>profile&&D.normalizeLinkedInUrl(p.linkedin_url)===profile||String(p.name).toLowerCase().trim()===name);
+  if(matches.length!==1)throw fail('No unique provider identity matched this qualified buyer');
+  return {...person,id:matches[0].id};
+}
+export async function lookupAdditionalEmail(env,context,companyId,input={},deps={}){
+  if(!['owner','researcher','sales'].includes(context.role))throw fail('Workspace role is not permitted',403);
+  const policy=await readAdditionalContactPolicy(env,context.workspaceId);
+  if(input.automatic===true?!policy.enabled:input.approved!==true)throw fail('Paid email research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
+  const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=fromSnapshot(detail);
+  const person=candidate.people.find(p=>String(p.id)===String(input.person_id));
+  if(!person)throw fail('Qualified buyer is missing from the saved company research');
+  const readiness=P.readiness(candidate,person);if(!readiness.eligible)throw fail(readiness.reason);
+  const confirmationLevel=await loadConfirmationLevel(env,context.workspaceId);
+  const existing=detail.contacts?.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()).find(c=>C.accepted(c,candidate.domain,confirmationLevel));
+  if(existing)return {contact:existing,cached:true,request:{status:'already_confirmed',credits_used:0}};
+  if(input.automatic===true){
+    const targets=P.targets(candidate,{maxPerCompany:policy.maxPerCompany,confirmedEmail:p=>detail.contacts?.some(c=>String(c.external_person_id)===String(p.id)&&String(c.name).trim().toLowerCase()===String(p.publicName||p.name).trim().toLowerCase()&&C.accepted(c,candidate.domain,confirmationLevel))});
+    if(!targets.some(p=>String(p.id)===String(person.id)))throw fail('Only the strongest missing-email buyers are approved for automatic lookup');
+  }
+  // An official published address must finish its no-reveal confirmation before buying data.
+  if(person.publicEmail&&person.publicEmailUrl&&C.publicSource(person.publicEmail,person.publicName||person.name,person.publicEmailUrl,candidate.domain)){
+    try{
+      const contact=await (deps.confirmPublic||confirmPublicWorkEmail)(env,context,companyId,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:person.publicEmail,source_url:person.publicEmailUrl});
+      if(confirmationLevel==='public_confirmed')return {contact,cached:true,request:{status:'public_confirmed',credits_used:0}};
+    }catch(error){if(error.code!=='PUBLIC_EMAIL_NOT_ATTRIBUTED')throw error;}
+  }
+  const provider=await env.DB.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider='apollo'").bind(context.workspaceId).first();
+  let capabilities={};try{capabilities=JSON.parse(provider?.metadata_json||'{}');}catch{}
+  if(!env.APOLLO_API_KEY||capabilities.email_enrichment_enabled!==true)throw fail('Connect Apollo and enable email enrichment in Settings to use additional services',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
+  const month=new Date().toISOString().slice(0,7),args=[context.workspaceId,companyId,String(person.id),month];
+  const cached=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=?').bind(...args).first();
+  if(cached){
+    if(cached.status==='retryable'&&input.automatic!==true&&input.approved===true)await env.DB.prepare("DELETE FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND status='retryable'").bind(...args).run();
+    else return reuseAttempt(cached,detail,person,confirmationLevel);
+  }
+  // A single SQLite statement reserves all three limits and the identity key atomically.
+  const reserved=await env.DB.prepare(`INSERT OR IGNORE INTO additional_contact_attempts(workspace_id,company_id,person_id,month) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND status!='retryable' AND created_at>=date('now'))<COALESCE((SELECT daily_limit FROM additional_contact_policies WHERE workspace_id=?),3) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND status!='retryable' AND month=?)<COALESCE((SELECT monthly_limit FROM additional_contact_policies WHERE workspace_id=?),30) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND status!='retryable' AND month=?)<COALESCE((SELECT max_per_company FROM additional_contact_policies WHERE workspace_id=?),2) AND (?=0 OR EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND enabled=1))`).bind(...args,context.workspaceId,context.workspaceId,context.workspaceId,month,context.workspaceId,context.workspaceId,companyId,month,context.workspaceId,Number(input.automatic===true),context.workspaceId).run();
+  if(!reserved?.meta?.changes){const duplicate=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=?').bind(...args).first();if(duplicate)return reuseAttempt(duplicate,detail,person,confirmationLevel);throw fail('Additional-services lookup limit reached or approval was revoked',429,'ADDITIONAL_CONTACT_LIMIT');}
+  let providerStarted=false;
+  try{
+    const resolved=await (deps.resolvePerson||((p)=>resolvePerson(env,candidate,p)))(person);
+    const request=new Request('https://leadintel.internal/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,allow_personal_email:false,phone_lookup:false})});
+    providerStarted=true;
+    const response=await (deps.enrich||enrichCrmContact)(request,env,{}, {context},companyId),result=await response.json();
+    if(!response.ok)throw fail(result.error||'Additional services are unavailable',response.status,result.code);
+    if(result.contact&&(!C.accepted(result.contact,candidate.domain,'provider_verified')||String(result.contact.name).trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase()))throw fail('Provider result did not confirm this exact buyer and company email');
+    if(result.contact?.id&&String(resolved.id)!==String(person.id)){
+      await env.DB.prepare('UPDATE crm_contacts SET external_person_id=? WHERE id=? AND workspace_id=?').bind(String(person.id),result.contact.id,context.workspaceId).run();
+      result.contact.external_person_id=String(person.id);
+    }
+    const status=result.contact?'verified':'not_found';
+    await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=?').bind(status,JSON.stringify(result),...args).run();return result;
+  }catch(error){
+    const retryable=!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
+    await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code}),...args).run();throw error;
+  }
+}
+export async function handleAdditionalContactRoute(request,env,cors={}){
+  const url=new URL(request.url);if(!url.pathname.startsWith('/api/additional-contact-services/'))return null;
+  try{
+    const workspaceId=url.searchParams.get('workspace_id');if(!workspaceId)throw fail('workspace_id is required',400);
+    const token=cookieValue(request,'leadintel_session'),hash=token?await sha256(token):'';
+    const user=hash?await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>datetime('now')").bind(hash).first():null;
+    if(!user)throw fail('Authentication required',401);
+    const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,user.user_id).first();if(!member)throw fail('Workspace access denied',403);
+    const context={workspaceId,userId:user.user_id,role:member.role};
+    if(url.pathname.endsWith('/policy')){
+      if(request.method==='GET')return json({policy:await readAdditionalContactPolicy(env,workspaceId),role:member.role},200,cors);
+      if(request.method==='PUT')return json({policy:await saveAdditionalContactPolicy(env,context,await request.json())},200,cors);
+    }
+    if(url.pathname.endsWith('/email')&&request.method==='POST'){
+      const input=await request.json(),runtime=await withWorkspaceServiceCredentials(request,env);
+      return json(await lookupAdditionalEmail(runtime,context,String(input.company_id||''),input),200,cors);
+    }
+    throw fail('Method not allowed',405);
+  }catch(error){return json({error:error.message,code:error.code||'ADDITIONAL_CONTACT_HOLD'},error.status||500,cors);}
+}

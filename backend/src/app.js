@@ -11,6 +11,7 @@ import core from './index.js';
 import {allowedOrigin,corsHeaders} from './security.js';
 import {handleAiRoute} from './ai-routes.js';
 import {handleServiceIntegrationRoute,withWorkspaceServiceCredentials} from './service-integrations.js';
+import {handleAdditionalContactRoute} from './additional-contact-services.js';
 import {handleScraplingRoute} from './scrapling-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
 import {handleOutreachAutomationRoute} from './outreach-automation-routes.js';
@@ -75,6 +76,7 @@ export default {
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
       const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
+      const additionalContacts=await handleAdditionalContactRoute(request,env,cors);if(additionalContacts)return additionalContacts;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
       const calendly=await handleCalendlyIntegrationRoute(request,env,cors);if(calendly)return calendly;
       const sources=await handleIntelligenceSourceRoute(request,env,cors);if(sources)return sources;

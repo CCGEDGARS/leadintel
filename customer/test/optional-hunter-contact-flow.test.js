@@ -32,3 +32,8 @@ test('qualification holds block both paid providers',async()=>{
  const f=flow({enabled:true});f.ctx.LeadIntelDiscovery.qualifyBuyer=()=>({eligible:false,gaps:['Employer mismatch']});
  assert.equal(await f.run(),false);assert.equal(f.calls.length,0);
 });
+test('additional email services do not intercept an explicitly approved phone lookup',async()=>{
+ const f=flow();f.ctx.window.LeadIntelAdditionalContacts={};
+ await f.ctx.confirmBuyerContact({domain:'example.com',people:[f.person]},0,{kind:'phone'});
+ assert.equal(f.calls.includes('apollo'),true);assert.equal(f.calls.includes('credit-approval'),true);
+});
