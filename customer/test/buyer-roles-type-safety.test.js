@@ -11,6 +11,7 @@ test('buyer role helpers accept the stored string form and the array form',()=>{
  assert.deepEqual(plain(context.candidateBuyerRoles({buyerRoles:'CEO; CTO'})),['CEO','CTO']);
  assert.deepEqual(plain(context.candidateBuyerRoles({buyerRoles:'CEO',buyerDiscovery:{opportunityRoles:['Plant Manager']}})),['Plant Manager']);
  assert.deepEqual(plain(context.candidateBuyerRoles({buyerRoles:'CEO',buyerDiscovery:{opportunityRoles:'Plant Manager; COO'}})),['Plant Manager','COO']);
+ assert.deepEqual(plain(context.candidateBuyerRoles({buyerRoles:'CEO',buyerRolesChanged:true,buyerDiscovery:{opportunityRoles:['Plant Manager']}})),['CEO']);
  assert.deepEqual(plain(context.candidateBuyerRoles({})),[]);
 });
 test('no template or qualification path calls join on the string buyerRoles field',()=>{
@@ -34,4 +35,13 @@ test('a buyer search left in loading state is reset when discovery state loads',
  const [stuck,done]=state.selectedProspects;
  assert.equal(stuck.peopleStatus,'idle');assert.equal(stuck.buyerResearchProgress,undefined);
  assert.equal(done.peopleStatus,'complete');
+});
+
+test('reloading an unchanged role selection preserves the researched buyer list',()=>{
+ const main={profile:{priorityOffers:'industrial automation',decisionMakers:'COO'},market:{icps:[{id:'icp-core',active:true,buyerRoles:'COO; Team Leadership'}]}};
+ const storage=JSON.stringify({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:D.buyerSelectionRoles({decisionMakers:'COO; Team Leadership'}),buyerRolesChanged:false,people:[{id:'p1',name:'Anna Andersson',title:'COO',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+ const ctx={LeadIntelDiscovery:D,localStorage:{getItem:()=>storage},MAIN_STORAGE_KEY:'main',DISCOVERY_STORAGE_KEY:'discovery',recoveredInterruptedRun:false,mainState:()=>main,window:{}};
+ vm.createContext(ctx);vm.runInContext(slice('function loadDiscovery(','function saveDiscovery('),ctx);
+ const candidate=ctx.loadDiscovery().selectedProspects[0];
+ assert.equal(candidate.buyerRolesChanged,false);assert.equal(candidate.people[0].name,'Anna Andersson');
 });
