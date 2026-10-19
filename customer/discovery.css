@@ -606,3 +606,16 @@
 .company-search-advanced:not([open])>summary{border:0}
 .company-search-advanced>.company-workflow-actions{display:flex;flex-wrap:wrap;gap:9px;margin:2px 0 12px}
 .company-search-advanced .discovery-funnel{margin:10px 0 16px}
+
+/* Additional contact research remains optional and scoped to qualified buyers. */
+.additional-contact-note{margin:0 0 12px;padding:12px 14px;border:1px solid #c7dfd4;border-radius:12px;background:#f2f8f5;color:#234c3b;font-size:13px;line-height:1.5}
+.additional-contact-note strong,.additional-contact-note span{display:block}
+.additional-contact-preferences-panel>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.additional-contact-preferences-panel[open]>summary{margin-bottom:16px}
+#additional-contact-preferences{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+#additional-contact-preferences>label:first-child,#additional-contact-preferences>.field-help{grid-column:1/-1}
+#additional-contact-preferences>label:first-child{display:flex;align-items:flex-start;gap:10px}
+#additional-contact-preferences input[type=checkbox]{width:18px;flex:0 0 18px;margin-top:3px}
+#additional-contact-preferences select{width:100%;padding:11px;border:1px solid #dce3e8;border-radius:10px;background:white;font:inherit}
+.buyer-four-actions button{white-space:normal}
+@media(max-width:640px){#additional-contact-preferences{grid-template-columns:1fr}}

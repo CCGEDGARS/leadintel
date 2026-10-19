@@ -178,9 +178,21 @@ function restoreNewerBuyerResearch(candidate,detail){
   const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
   const stamp=Date.parse(saved?.checkedAt||'');
   const localStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0;
+  if(!Number.isFinite(stamp)||stamp>Date.now()||!saved?.buyers?.length||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return false;
+  if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
+  // Contact verification may be newer while the underlying public research is unchanged.
+  let paidEvidenceRestored=false;
+  for(const row of saved.buyers){
+    const person=(candidate.people||[]).find(p=>String(p.id)===String(row.id)&&String(p.publicName||p.name).trim().toLowerCase()===String(row.publicName||row.name).trim().toLowerCase()&&p.title===row.title);
+    if(!person)continue;
+    for(const [email,check] of Object.entries(row.hunterChecks||{})){
+      const time=Date.parse(check?.checked_at||''),prior=Date.parse(person.hunterChecks?.[email]?.checked_at||'')||0;
+      if(email.endsWith('@'+canonicalDomain(candidate.domain))&&check.status==='valid'&&check.deliverability==='deliverable'&&Number.isFinite(time)&&time<=Date.now()&&Date.now()-time<=30*86400000&&time>prior){person.hunterChecks={...(person.hunterChecks||{}),[email]:check};paidEvidenceRestored=true;}
+    }
+  }
   const obsoletePending=candidate.buyerDiscovery?.pool?.some(p=>p.identityStatus==='pending'&&!p.kept&&!(saved?.unresolved||[]).some(row=>String(row.id)===String(p.id)));
   const legacyRepair=stamp===localStamp&&saved?.version!==2&&(!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot')||obsoletePending||!candidate.buyerDiscovery?.providerStatus);
-  if(!Number.isFinite(stamp)||(stamp<=localStamp&&!legacyRepair)||stamp>Date.now()||!saved?.buyers?.length||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return false;
+  if(stamp<=localStamp&&!legacyRepair)return paidEvidenceRestored;
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   const previous=candidate.people||[];
   candidate.people=saved.buyers.map(row=>{
@@ -985,7 +997,7 @@ function peopleHtml(candidate,candidateIndex){
     const emailLabel=pending?"Checking public sources…":hasEmail?"Email verified ✓":person.publicEmail?"Public email found ✓":crmAuthenticated()?"Find work email":"Sign in to find email";
     const phoneAction=phonePending?"refresh-phone":"find-phone";
     const phoneLabel=hasPhone?"Phone found ✓":phonePending?"Refresh phone":"Find phone with Apollo";
-    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}</div><div class="person-actions"><p class="people-note">Verify this contact’s email before continuing to content creation. Phone verification is optional.</p><button class="secondary-btn small" type="button" data-action="keep-buyer" data-domain="${esc(candidate.domain)}" data-person-index="${personIndex}" aria-pressed="${person.kept===true}" ${pending?"disabled":""}>${person.kept?"Saved ✓ · Unsave":"Keep candidate"}</button>${buyerNextAction(candidate,person,personIndex,"company")}<strong class="contact-confirm-heading">Clarify data</strong><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="enrich-contact" aria-label="Confirm company email" title="Confirm with Apollo; Hunter runs only when enabled in Settings" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasEmail?"disabled":""}>${pending?"Confirming…":hasEmail?"Email confirmed ✓":"Confirm email"}</button></div><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?"Phone confirmed ✓":"Confirm phone"}</button></div></div></div>`;
+    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}</div><div class="person-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}<p class="people-note">Verify this contact’s email before continuing to content creation. Phone verification is optional.</p><button class="secondary-btn small" type="button" data-action="keep-buyer" data-domain="${esc(candidate.domain)}" data-person-index="${personIndex}" aria-pressed="${person.kept===true}" ${pending?"disabled":""}>${person.kept?"Saved ✓ · Unsave":"Keep candidate"}</button>${buyerNextAction(candidate,person,personIndex,"company")}<strong class="contact-confirm-heading">Clarify data</strong><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="enrich-contact" aria-label="Confirm company email" title="Confirm with Apollo; Hunter runs only when enabled in Settings" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasEmail?"disabled":""}>${pending?"Confirming…":hasEmail?"Email confirmed ✓":window.LeadIntelAdditionalContacts?.label?.(candidate,person)||"Confirm email"}</button></div><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?"Phone confirmed ✓":"Confirm phone"}</button></div></div></div>`;
   }).join("")}</div>`;
 }
 function candidateCrmMeta(candidate){const company=crmCompanyByDomain(candidate.domain||candidate.website);const inPipeline=currentWorkspaceCrmPipeline().some(item=>canonicalDomain(item.normalized_domain||item.website)===canonicalDomain(candidate.domain||candidate.website));return {company,suppressed:company?.lifecycle_status==="suppressed",inPipeline};}
@@ -1425,8 +1437,9 @@ async function resolveApolloBuyer(candidate,person){
   }
   return apolloPerson;
 }
-async function confirmBuyerContact(candidate,index,{scope='selected',kind='email',both=false,automatic=false}={}){
+async function confirmBuyerContact(candidate,index,{scope='selected',kind='email',both=false,automatic=false,additionalHandled=false}={}){
   const person=candidate?.people?.[index];if(!person||!crmAuthenticated())return false;
+  if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,freeConfirm:()=>confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true})});
   const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
   const workspaceId=bridge()?.workspace?.id;if(!workspaceId)return false;
   const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
@@ -1440,6 +1453,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
     try{
     // Free-first: automation approval is not permission to spend provider credits.
     // Require a separate, immediate user confirmation for each paid-provider lookup.
+    if(!phoneLookup&&window.LeadIntelAdditionalContacts){issues.push('Complete qualification and public research, then use additional services to find this email.');return;}
     if(automatic){issues.push('Apollo enrichment requires manual credit approval; free-source research remains available');return;}
     const approved=await (window.LeadIntelDialogs?.confirm(`Apollo ${phoneLookup?'phone':'email'} lookup may consume provider credits. Approve this individual lookup?`)??Promise.resolve(false));
     if(!approved){issues.push('Apollo credit lookup skipped — not approved');return;}
@@ -1476,7 +1490,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
       if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true}))await apollo(false);
       let hunterReady=false;
       try{const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const payload=await status.json();const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{}
-      if(hunterReady&&!automatic&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){
+      if(hunterReady&&!automatic&&!window.LeadIntelAdditionalContacts&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){
         const hunterApproved=await (window.LeadIntelDialogs?.confirm('Hunter email finding/verification may consume provider credits. Approve Hunter checks for this contact?')??Promise.resolve(false));
         if(!hunterApproved){issues.push('Hunter credit checks skipped — not approved');}
         if(hunterApproved){
@@ -1541,6 +1555,7 @@ function toggleBuyerContactFlow(box){
   if(box.checked&&candidate.publicContactStatus!=='loading')void runBuyerContactFlow(candidate,index,scope);
 }
 async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirmed=false}={}){
+  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact(discovery.candidates[companyIndex],personIndex,{scope:'company'});
   const candidate=discovery.candidates[companyIndex],person=candidate?.people?.[personIndex];
   if(!candidate||!person)return false;
   if(!phoneLookup){
@@ -1862,7 +1877,7 @@ function prospectContactControls(candidate,person){
   const selecting=buyerSelectionPending.has(key),syncConflict=bridge()?.conflict===true;
   const active=loadMeta().selectedEmailBuyer,selected=active?.workspaceId===bridge()?.workspace?.id&&active?.domain===canonicalDomain(candidate.domain)&&String(active?.personId)===String(person.id);
   const ready=verified&&crmAuthenticated()&&!pending&&!buyerSelectionPending.size&&!hold&&!syncConflict;
-  return `<div class="selected-prospect-contact-actions">${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)}</p><button class="secondary-btn small" type="button" data-recheck-public-email="${esc(candidate.domain)}" data-person-index="${index}">Recheck public source</button>`:''}<p class="people-note">${syncConflict?(verified?'Company email is ready. Resolve the synchronization conflict above before saving your selection.':'Synchronization conflict: resolve the workspace versions above.'):selecting?'Saving selected recipient…':hold?esc(hold):pending?'Checking contact details…':verified?'Company email meets your sending requirements.':automatic?'Automatic email verification is required.':'Confirm email before continuing to content creation.'} Phone is optional. LinkedIn messages are created inside Confirm LinkedIn.</p><div class="buyer-four-actions"><button class="secondary-btn small${!verified&&!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${verified}" title="Recheck saved and public evidence first; Apollo and enabled Hunter are fallbacks within your credit limits" ${automatic||verified||!crmAuthenticated()||pending||hold?'disabled':''}>${pending?'Checking…':verified?'Confirm email ✓':'Confirm email'}</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Confirm phone ✓':pending?'Checking…':'Confirm phone'}</button><button class="secondary-btn small" type="button" data-review-linkedin="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${linkedinReady?'Confirm LinkedIn ✓':'Confirm LinkedIn'}</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Select this buyer and proceed to Messages':'Confirm email to continue'}" ${!ready?'disabled':''}>Select &amp; proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
+  return `<div class="selected-prospect-contact-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)}</p><button class="secondary-btn small" type="button" data-recheck-public-email="${esc(candidate.domain)}" data-person-index="${index}">Recheck public source</button>`:''}<p class="people-note">${syncConflict?(verified?'Company email is ready. Resolve the synchronization conflict above before saving your selection.':'Synchronization conflict: resolve the workspace versions above.'):selecting?'Saving selected recipient…':hold?esc(hold):pending?'Checking contact details…':verified?'Company email meets your sending requirements.':automatic?'Automatic email verification is required.':'Confirm email before continuing to content creation.'} Phone is optional. LinkedIn messages are created inside Confirm LinkedIn.</p><div class="buyer-four-actions"><button class="secondary-btn small${!verified&&!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${verified}" title="Recheck saved and public evidence first; Apollo and enabled Hunter are fallbacks within your credit limits" ${(automatic&&!window.LeadIntelAdditionalContacts?.label?.(candidate,person))||verified||!crmAuthenticated()||pending||hold?'disabled':''}>${pending?'Checking…':verified?'Confirm email ✓':window.LeadIntelAdditionalContacts?.label?.(candidate,person)||'Confirm email'}</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Confirm phone ✓':pending?'Checking…':'Confirm phone'}</button><button class="secondary-btn small" type="button" data-review-linkedin="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${linkedinReady?'Confirm LinkedIn ✓':'Confirm LinkedIn'}</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Select this buyer and proceed to Messages':'Confirm email to continue'}" ${!ready?'disabled':''}>Select &amp; proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
 }
 async function findPublicProspectContacts(domain,options={}){
   const key=canonicalDomain(domain);
@@ -2262,6 +2277,7 @@ function scheduleSavedBuyerPublicChecks(){
   }
 }
 async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,confirmed=false}={}){
+  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact((discovery.selectedProspects||[]).find(c=>canonicalDomain(c.domain)===canonicalDomain(domain)),personIndex);
   const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=candidate?.people?.[personIndex];
   if(!person?.id||String(person.id).startsWith("person-")||!crmAuthenticated())return false;
   const key=selectedBuyerKey(candidate,person);if(enrichmentPending.has(key))return false;
@@ -2400,6 +2416,7 @@ async function findExecutiveBuyer(domain){
 function renderSelectedProspects(prospects){
   if(!prospects.length)return "";
   const cards=prospects.map(candidate=>{
+    if(window.LeadIntelAdditionalContacts)queueMicrotask(()=>void window.LeadIntelAdditionalContacts.auto(candidate));
     const domain=canonicalDomain(candidate.domain);
     let people=(Array.isArray(candidate.people)?candidate.people:[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending');
     const ranked=LeadIntelDiscovery.rankedBuyerShortlist(people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);
@@ -2616,4 +2633,38 @@ function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;for(const p
 function initDiscoveryWhenReady(attempt=0){if(window.LeadIntelAccountCache&&(window.LeadIntelServerBridge?.ready!==true||!window.LeadIntelAccountCache.current())){window.LeadIntelAccountCache.afterVerification(()=>initDiscoveryWhenReady(attempt));return;}if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
 // Campaigns reuse the existing lazy workspace without selecting or replacing a buyer draft.
 window.LeadIntelCampaignModuleLoader=async step=>{await loadOutreachModules();if(Number(step)===7&&!document.getElementById('step-7'))await new Promise((resolve,reject)=>{const observer=new MutationObserver(()=>{if(document.getElementById('step-7')){clearTimeout(timer);observer.disconnect();resolve();}});const timer=setTimeout(()=>{observer.disconnect();reject(Error('Delivery could not load. Your campaign is saved; retry.'));},15000);observer.observe(document.body,{childList:true,subtree:true});if(document.getElementById('step-7')){clearTimeout(timer);observer.disconnect();resolve();}});};
+window.LeadIntelAdditionalContacts?.register({
+  rows:()=>[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])],
+  assessment:c=>qualificationAssessment(c),
+  email:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{}),
+  publicSource:(c,p)=>publicBuyerSource(c,p),
+  baseEmail:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{},{skipAdditional:true}),
+  saveHunter:async(c,p,email,check)=>{
+    const workspaceId=bridge()?.workspace?.id,personId=p.id;
+    const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c)&&c.people?.some(row=>String(row.id)===String(personId));
+    if(!same())throw Error('Workspace or buyer context changed.');
+    // Paid evidence must survive transient synchronization errors; never buy it twice.
+    p.hunterChecks={...(p.hunterChecks||{}),[email]:check};saveDiscovery();
+    const saved=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});
+    if(!same())throw Error('Workspace or buyer context changed.');
+    if(!saved?.ok)throw Error(saved?.error||'Hunter verification is retained locally; CRM synchronization needs retry.');
+    const synced=await bridge().saveNow({saveIntent:true,explicitSave:true});
+    if(!same())throw Error('Workspace or buyer context changed.');
+    if(!synced?.saved)showToast('Hunter verification saved. Workspace synchronization needs retry.');
+  },
+  pending:(c,p,value)=>{const key=personKey(c,p);if(value)enrichmentPending.add(key);else enrichmentPending.delete(key);},
+  render:()=>{if(discoveryMounted)renderAll();},toast:showToast,
+  prepare:async c=>{
+    const workspaceId=bridge()?.workspace?.id;
+    const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c);
+    if(!same())throw Error('Workspace or company context changed.');
+    c.qualification=qualificationAssessment(c);if(!c.qualification.eligible)throw Error('Company qualification needs review.');
+    const company=await ensureCrmCompany(c);
+    if(!same())throw Error('Workspace or company context changed.');
+    const saved=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});
+    if(!same())throw Error('Workspace or company context changed.');
+    if(!saved?.ok)throw Error(saved?.error||'Qualified buyer research could not be saved.');return company;
+  },
+  accept:async(c,p,result)=>{enrichmentResults.set(personKey(c,p),result);p.contactVerification={status:result.contact.email_status==='public_confirmed'?'public_confirmed':'verified',checkedAt:new Date().toISOString(),issues:[]};saveDiscovery();await refreshCrmState({render:false});window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:result.contact.company_id,contact_id:result.contact.id}}));}
+});
 initDiscoveryWhenReady();
