@@ -33,3 +33,13 @@ test('Research review has compact status and action styling',()=>{
   assert.match(css,/\.research-review-actions/);
   assert.match(css,/\.research-review-bulk/);
 });
+
+test('missing purchasing proof and low unverified buyer fit remain research gaps, not hard rejections',()=>{
+ const classification=ui.match(/function researchReviewStatus\(candidate\)\{([\s\S]*?)\n \}/);
+ assert.ok(classification,'research review classifier exists');
+ const fn=classification[1];
+ assert.doesNotMatch(fn,/buyer fit below\|/i,'a low score alone must never prove disqualification');
+ assert.match(fn,/seller or reference customer cannot be a new prospect/);
+ assert.match(fn,/company offers the same service rather than the required buyer profile/);
+ assert.match(fn,/needs-evidence/);
+});
