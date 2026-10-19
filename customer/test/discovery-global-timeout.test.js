@@ -1396,3 +1396,20 @@ test('finished shortfall does not promise a background search that is no longer 
  assert.match(context.__elements.get('company-candidates').innerHTML,/is broadening the search automatically/);
 });
 test('campaign discovery discards async work when the account changes before evidence returns',async()=>{const b={session:{authenticated:true,user:{id:'u1'}},workspace:{id:'w1'}};let context,changed=false;context=loadDiscoveryRunner({requestTimeout:40,scaleProductionRunTimeout:1000,bridgeImpl:b,fetchImpl:async()=>{if(!changed){changed=true;b.workspace.id='w2';context.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify({sentinel:'new-workspace'}));}return {ok:true,json:async()=>({success:true,data:[]})};}});await context.__runDiscovery({campaignPlan:{targetCount:1,researchDepth:'quick'},savingMode:true});assert.equal(changed,true);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')).sentinel,'new-workspace');});
+
+test('purchasing-fit retry reuses saved evidence and retains the existing shortlist and Buyers selection',async()=>{
+ const researchedAt=new Date().toISOString(),calls=[];
+ const evidence=[{url:'https://northstar.com/about',verifiedAt:researchedAt,text:'Northstar manufactures industrial equipment in Latvia and uses industrial automation for its own manufacturing and production assembly operations.'},{url:'https://journal.example/northstar',text:'Northstar manufactures industrial equipment in Latvia for local and international business customers.'}];
+ const ctx=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  calls.push(url);assert.match(url,/api\/ai\/generate/);return {ok:true,json:async()=>({text:JSON.stringify({companies:[{domain:'northstar.com',fit:90,purchase:'industrial automation',reason:'Manufacturing assembly uses automation equipment.',buyerRole:'industrial manufacturer',evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]})})};
+ }});
+ ctx.__setDiscovery({lastRunAt:researchedAt,status:'partial',potentialMatches:[{company:'Northstar',domain:'northstar.com',market:'Latvia',evidence,qualificationGaps:['Purchasing application unverified']}],selectedProspects:[{company:'Kept',domain:'kept.example',buyerSearchMode:'user_selected_target'}],searchFailures:[{phase:'buyer-fit',domain:'northstar.com',company:'Northstar',reason:'timeout',status:408}]});
+ await ctx.__retryFailedDiscoveryChecks();
+ const state=ctx.__discoveryState();assert.equal(calls.length,1);assert.equal(state.candidates.find(c=>c.domain==='northstar.com')?.qualification.eligible,true);assert.equal(state.searchFailures.length,0);assert.equal(state.selectedProspects[0].domain,'kept.example');
+});
+test('purchasing-fit recovery cannot apply an old workspace result after an account switch',async()=>{
+ const bridge={session:{authenticated:true},workspace:{id:'old'}},at=new Date().toISOString();
+ const ctx=loadDiscoveryRunner({renderNodes:true,bridgeImpl:bridge,fetchImpl:async()=>{bridge.workspace.id='new';return {ok:true,json:async()=>({text:'{"companies":[]}'})};}});
+ ctx.__setDiscovery({status:'partial',lastRunAt:at,potentialMatches:[{company:'Northstar',domain:'northstar.com',market:'Latvia',evidence:[{url:'https://northstar.com/about',verifiedAt:at,text:'Northstar manufactures industrial equipment in Latvia with industrial automation.'}],qualificationGaps:['Purchasing application unverified']}],searchFailures:[{phase:'buyer-fit',domain:'northstar.com',reason:'timeout'}]});
+ assert.equal(await ctx.__retryFailedDiscoveryChecks(),false);assert.equal(ctx.__discoveryState().candidates.length,0);assert.notEqual(ctx.__discoveryState().status,'running');
+});

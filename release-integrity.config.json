@@ -703,7 +703,7 @@
       "url": "/customer/discovery-engine.js",
       "status": 200,
       "contains": [
-        "async function researchBuyerFit(candidates=[],profile={},generate,{signal,onProgress,onFailure,concurrency=2}={})",
+        "async function researchBuyerFit(candidates=[],profile={},generate,",
         "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined}))"
       ]
     },
