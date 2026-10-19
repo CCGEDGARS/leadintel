@@ -108,7 +108,17 @@
   function extractPublicContacts(results=[],companyDomain=""){
     const domain=canonicalDomain(companyDomain),seen=new Set(),contacts=[];
     if(!domain)return contacts;
-    for(const result of (Array.isArray(results)?results:[]).slice(0,20)){
+    // Search a wider bounded evidence set and prioritize official team/contact and
+    // press pages. A small arbitrary page window can hide published decision-maker
+    // emails even when they were already retrieved by the free research providers.
+    const pages=(Array.isArray(results)?results:[]).filter(row=>{
+      const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
+      return url&&canonicalDomain(url)===domain;
+    }).sort((a,b)=>{
+      const priority=row=>/\/(?:contact|contacts|team|people|management|leadership|press|news|investor-relations)(?:[\/?#-]|$)/i.test(normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url))?1:0;
+      return priority(b)-priority(a);
+    }).slice(0,60);
+    for(const result of pages){
       const url=normalizeUrl(result?.url||result?.metadata?.sourceURL||result?.metadata?.url);
       if(!url||canonicalDomain(url)!==domain)continue;
       const text=publicPageText(result);
@@ -119,7 +129,7 @@
         if(kind==="email"&&!value.toLowerCase().endsWith(`@${domain}`))continue;
         if(kind==="phone"&&(value.replace(/\D/g,"").length<9||value.replace(/\D/g,"").length>15||!/[+\s()-]/.test(value)||/\b(?:19|20)\d{2}[-./ ]\d{1,2}[-./ ]\d{1,2}\b/.test(value)))continue;
         const key=publicContactKey({kind,value});if(seen.has(key))continue;seen.add(key);
-        contacts.push({kind,value,url,status:"public_unverified"});if(contacts.length>=8)return contacts;
+        contacts.push({kind,value,url,status:"public_unverified"});if(contacts.length>=40)return contacts;
       }
     }
     return contacts;
