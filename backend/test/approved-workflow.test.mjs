@@ -156,3 +156,18 @@ test('automatic contact research discovers official name-linked email and phone 
  await researchBuyerContacts(candidate,async query=>{queries.push(query);return query==='site:legal.example "Anna Lind"'?[{url:'https://legal.example/team',markdown:'Managing Director Anna Lind: anna.lind@legal.example, +46 70 235 51 61.'}]:[];},async()=>{});
  assert.equal(queries[0],'site:legal.example "Anna Lind"');assert.equal(candidate.people[0].publicEmail,'anna.lind@legal.example');assert.equal(candidate.people[0].publicPhone,'+46 70 235 51 61');assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].emailResearch.searches,4);
 });
+
+test('automatic messaging quarantines only invalid company drafts and retains valid candidates',async()=>{
+ const env=await fixture();
+ const context=approvedContext(main);
+ const base={company:'Nordic Machines',domain:'nordicmachines.se',contact:{id:'buyer1',name:'Alex Example',first_name:'Alex',email:'alex@nordicmachines.se'},evidence:[{url:'https://nordicmachines.se/news',date:new Date().toISOString()}]};
+ const valid={...base};
+ const invalid={...base,company:'Missing Evidence AB',domain:'missingevidence.se',contact:{id:'buyer2',name:'Sam Example',first_name:'Sam',email:'sam@missingevidence.se'},evidence:[]};
+ const outcome=await executeWorkflowStage('messages',{env,row:{workspace_id:'w1'},run:{id:'r1'},result:{candidates:[valid,invalid]},context:{...context,outreachDefault:null},config,guard:async()=>{}});
+ assert.equal(outcome.candidates.length,1);
+ assert.equal(outcome.candidates[0].domain,'nordicmachines.se');
+ assert.equal(outcome.reviewMessages.length,1);
+ assert.equal(outcome.reviewMessages[0].domain,'missingevidence.se');
+ assert.equal(outcome.reviewMessages[0].code,'MESSAGE_REVIEW_REQUIRED');
+ assert.match(outcome.reviewMessages[0].reason,/Missing message value: evidenceUrl/);
+});
