@@ -17,12 +17,13 @@ test('buyer titles are concise without altering original source text',()=>{
 });
 const fs=require('node:fs'),vm=require('node:vm'),ui=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function contactRuntime(){const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,emailPatternCandidates:D.rankedEmailGuesses};vm.runInNewContext(ui.slice(ui.indexOf('function buyerContactRows('),ui.indexOf('function emailPatternCandidates('))+';globalThis.render=buyerContactRows;',ctx);return ctx;}
-test('candidate company emails and Gmail appear directly with accurate evidence labels and isolated statuses',()=>{
+test('unverified company patterns are collapsed and Gmail is displayed only with a published source',()=>{
  const ctx=contactRuntime(),p={...person,gmailCandidates:D.gmailGuessCandidates(person),contactResearch:{channels:{gmail:{status:'complete'},phone:{status:'partial',reason:'Phone request timed out'},company:{status:'partial',reason:'Email source timed out'}}}};
  const html=ctx.render(p,company);
- assert.match(html,/<strong>Company email<\/strong><span><span[^>]*>anna.smith@example.com · Likely email · ownership unconfirmed/);
- assert.match(html,/<strong>Gmail<\/strong><span><span[^>]*>anna.smith@gmail.com · Likely email · ownership unconfirmed/);
- assert.match(html,/Phone request timed out/);assert.match(html,/Verified automatically/);
+ assert.match(html,/<details class="buyer-email-patterns"><summary>Unverified email patterns/);
+ assert.match(html,/anna.smith@example.com · Unverified pattern/);
+ assert.doesNotMatch(html,/anna.smith@gmail.com/);
+ assert.match(html,/Phone request timed out/);assert.match(html,/Profile matched automatically/);
  assert.doesNotMatch(html,/<strong>Gmail[\s\S]*Additional checks incomplete/);
  const invalid=ctx.render({...p,hunterChecks:{'anna.smith@example.com':{status:'invalid',deliverability:'undeliverable'}}},company);
  assert.doesNotMatch(invalid,/anna.smith@example.com/);
