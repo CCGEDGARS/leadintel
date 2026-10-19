@@ -72,7 +72,7 @@ test('automatic buyers research a public pool and prioritize kept verified buyer
  const payload=capacityFixture();payload.main={...payload.main,...main};payload.discovery.selectedProspects[0]={...payload.discovery.selectedProspects[0],domain:'example.com',people:[{name:'Saved Buyer',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/saved',kept:true}]};
  env.DB.raw.prepare('UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id=?').run(JSON.stringify(budget.prepareForSync(payload,{allowBundlePacking:true,allowCompressionPacking:true}).payload),'w1');
  const oldFetch=globalThis.fetch;let apollo=0,publicSearches=0;
- globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`}))}),{status:200});};
+ globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:[...Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`})),{url:'https://example.com/team',title:'Team',markdown:'Saved Buyer — COO at Example. Current company leadership.'}]}),{status:200});};
  try{
   const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
   assert.equal(result.candidates[0].contact.name,'Saved Buyer');assert.equal(result.candidates[0].buyerDiscovery.pool.length,20);assert.equal(result.candidates[0].people.length,6);assert.equal(apollo,0);assert.ok(publicSearches>0);
@@ -85,6 +85,18 @@ test('automatic buyers retain public suggestions for review without approved enr
   const manualConfig=normalizeWorkflowConfig({...config,buyers:{roles:['COO'],enrich:false}});
   const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config:manualConfig,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
   assert.equal(result.candidates.length,0);assert.equal(result.reviewBuyers.length,1);assert.equal(result.reviewBuyers[0].people[0].name,'Anna Buyer');assert.equal(apollo,0);
+ }finally{globalThis.fetch=oldFetch;}
+});
+test('a verified CRM recipient cannot bypass a retained role hold outside the visible shortlist',async()=>{
+ const env=await fixture(),oldFetch=globalThis.fetch;
+ env.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('c1','w1','example.com','Example','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source,created_at,updated_at) VALUES('paul','w1','c1','Paul Pepper','Managing Director','paul.pepper@example.com','paul.pepper@example.com','verified','apollo',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+ const hold={id:'paul',name:'Paul Pepper',title:'Managing Director',organization:'Example',publicNameUrl:'https://linkedin.com/in/paul-pepper',publicLinkedinUrl:'https://linkedin.com/in/paul-pepper',roleReview:{version:1,status:'unconfirmed',reason:'Current executive role uncorroborated',checkedAt:new Date().toISOString(),sources:[]}};
+ env.DB.raw.prepare('UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id=?').run(JSON.stringify({main,discovery:{selectedProspects:[{company:'Example',domain:'example.com',people:[hold],buyerDiscovery:{pool:[hold]}}]}}),'w1');
+ globalThis.fetch=async()=>new Response(JSON.stringify({data:['Anna Andersson','Bertil Berg','Carl Carlson','Dora Dahl','Erik Eriksson','Fredrik Fjell','Gustav Gustafsson'].map(name=>({url:'https://example.com/team/'+name.toLowerCase().replaceAll(' ','-'),title:name+' | COO | Example',markdown:name+' COO Example. Current company leadership.'}))}),{status:200});
+ try{
+  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:false,confirmPhone:false}}),result:{candidates:[{company:'Example',domain:'example.com',market:'Sweden'}]},guard:async()=>{}});
+  assert.equal(result.candidates.length,0);assert.equal(result.reviewBuyers.length,1);
+  assert.equal(result.reviewBuyers[0].buyerDiscovery.pool.find(person=>person.name==='Paul Pepper')?.roleReview?.status,'unconfirmed');
  }finally{globalThis.fetch=oldFetch;}
 });
 
@@ -129,7 +141,7 @@ test('automatic Buyers combine directory discovery with four public buyers and r
 
 test('automatic buyer confirmation uses approved Apollo reveal within workspace limits',async()=>{
  const env=await fixture();env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES('w1','apollo',?,'test','{\"discovery_enabled\":true,\"email_enrichment_enabled\":true,\"phone_enrichment_enabled\":true}')").run(await encryptSecret('test-apollo',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY)));
- const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response(JSON.stringify(String(url).includes('api_search')?{people:[{id:'anna',name:'Anna Andersson',title:'COO',organization:{name:'Example'}}]}:String(url).includes('people/match')?{person:{id:'anna',name:'Anna Andersson',title:'COO',email:'anna@example.com',email_status:'verified',organization:{name:'Example',primary_domain:'example.com'}}}:{data:[]}));};
+ const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response(JSON.stringify(String(url).includes('api_search')?{people:[{id:'anna',name:'Anna Andersson',title:'COO',organization:{name:'Example'}}]}:String(url).includes('people/match')?{person:{id:'anna',name:'Anna Andersson',title:'COO',email:'anna@example.com',email_status:'verified',organization:{name:'Example',primary_domain:'example.com'}}}:{data:[{url:'https://example.com/team',title:'Team',markdown:'Anna Andersson — COO at Example. Current company leadership.'}]}));};
  try{const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:true}}),guard:async()=>{}});assert.equal(output.candidates[0].contact.email,'anna@example.com');assert.equal(requests.some(url=>url.includes('people/match')),true);assert.equal(requests.some(url=>url.includes('hunter.io')),false);}finally{globalThis.fetch=oldFetch;}
 });
 test('workflow activation and stage approval work without any Hunter integration',async()=>{
