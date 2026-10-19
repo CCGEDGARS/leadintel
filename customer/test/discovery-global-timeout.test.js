@@ -376,6 +376,70 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal(context.__elements.get('discovery-status').textContent,'1 selected company');
 });
 
+test('changed buyer roles keep saved names visible while preventing message handoff',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ const people=[{id:'p1',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://northstar.com/team'}];
+ context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people}]});
+ const candidate=context.__discoveryState().selectedProspects[0];
+ const html=context.__renderSelectedProspects([candidate]);
+ assert.match(html,/Mika Example/);assert.doesNotMatch(html,/Previous buyer suggestions are hidden/);
+ assert.equal(Discovery.qualifyBuyer(candidate.people[0],{decisionMakers:'Procurement Director'},candidate).eligible,false);
+ assert.doesNotMatch(html,/Recommended · researched match/);
+ assert.doesNotMatch(html,/data-research-executive/);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(JSON.stringify(context.__discoveryState()))).selectedProspects[0];
+ assert.match(context.__renderSelectedProspects([restored]),/Mika Example/);
+ assert.equal(restored.buyerRolesChanged,true);
+ candidate.peopleStatus='loading';
+ const loading=context.__renderSelectedProspects([candidate]);
+ assert.match(loading,/Mika Example/);assert.match(loading,/buyer-research-progress/);
+});
+
+test('the first successful search after a role change produces a buyer shortlist',async()=>{
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url)=>({ok:true,json:async()=>String(url).includes('scrape')?{data:{markdown:'Northstar industrial manufacturing company.',metadata:{sourceURL:'https://northstar.com/'}}}:{data:[{url:'https://linkedin.com/in/mika-example',title:'Mika Example – Procurement Director at Northstar'}]}})});
+ context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people:[{id:'old',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://linkedin.com/in/mika-example',publicLinkedinUrl:'https://linkedin.com/in/mika-example'}]}]});
+ assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
+ const candidate=context.__discoveryState().selectedProspects[0];
+ assert.ok(candidate.people.some(person=>person.name==='Mika Example'));
+ assert.equal(candidate.buyerRolesChanged,false);
+ assert.match(context.__renderSelectedProspects([candidate]),/Mika Example/);
+});
+
+test('unavailable buyer sources preserve the saved list and pending role review',async()=>{
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{throw new Error('Provider unavailable');}});
+ context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people:[{id:'old',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://linkedin.com/in/mika-example',publicLinkedinUrl:'https://linkedin.com/in/mika-example'}]}]});
+ await context.__findPotentialDecisionMakers('northstar.com');
+ const candidate=context.__discoveryState().selectedProspects[0];
+ assert.equal(candidate.buyerRolesChanged,true);assert.equal(candidate.people[0]?.name,'Mika Example');
+ assert.match(context.__renderSelectedProspects([candidate]),/Mika Example/);
+ assert.equal(Discovery.qualifyBuyer(candidate.people[0],{decisionMakers:'Procurement Director'},candidate).eligible,false);
+});
+
+test('editing buyer roles during a search keeps the newer selection pending',async()=>{
+ let context,edited=false;
+ context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async()=>{
+  if(!edited){edited=true;const candidate=context.__discoveryState().selectedProspects[0];candidate.buyerRoles='Engineering Director';candidate.buyerRolesChanged=true;}
+  return {ok:true,json:async()=>({data:[{url:'https://linkedin.com/in/mika-example',title:'Mika Example – Procurement Director at Northstar'}]})};
+ }});
+ context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people:[{id:'old',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://linkedin.com/in/mika-example',publicLinkedinUrl:'https://linkedin.com/in/mika-example'}]}]});
+ await context.__findPotentialDecisionMakers('northstar.com');
+ const candidate=context.__discoveryState().selectedProspects[0];
+ assert.equal(candidate.buyerRoles,'Engineering Director');assert.equal(candidate.buyerRolesChanged,true);
+ assert.match(context.__renderSelectedProspects([candidate]),/value="Engineering Director"/);
+});
+
+test('editing buyer roles during company verification cannot be overwritten by the search plan',async()=>{
+ let finishVerification;
+ const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://linkedin.com/in/mika-example',title:'Mika Example – Procurement Director at Northstar'}]})})});
+ context.LeadIntelFirstPartyResearch.collectWebsiteEvidence=()=>new Promise(resolve=>{finishVerification=resolve;});
+ context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people:[{id:'old',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://linkedin.com/in/mika-example',publicLinkedinUrl:'https://linkedin.com/in/mika-example'}]}]});
+ const search=context.__findPotentialDecisionMakers('northstar.com');
+ const candidate=context.__discoveryState().selectedProspects[0];candidate.buyerRoles='Engineering Director';candidate.buyerRolesChanged=true;
+ finishVerification({pages:[{url:'https://northstar.com/',text:'Northstar operates an industrial manufacturing facility with production and engineering capabilities.',fetchedAt:new Date().toISOString()}]});
+ assert.equal(await search,false);
+ assert.equal(candidate.buyerRoles,'Engineering Director');assert.equal(candidate.buyerRolesChanged,true);
+ assert.equal(candidate.people[0].name,'Mika Example');
+});
+
 test('unapproved automatic confirmation holds paid enrichment and never invokes optional Hunter',async()=>{
   const calls=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
