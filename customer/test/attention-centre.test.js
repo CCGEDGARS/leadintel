@@ -199,3 +199,22 @@ test('workspace health renders the saved credit failure, opens billing and clear
 
 test('billing alone is red; transient failures and unfinished work are yellow',()=>{const items=Attention.buildAttentionItems({tasks:[{id:'timeout',status:'error',error:'HTTP 429 rate limit'}],runtimeErrors:[{message:'Unexpected failure'}],unsaved:true,providerIssues:[{provider:'firecrawl',name:'Firecrawl',source:'customer'}]});assert.equal(items.filter(i=>i.severity==='error').length,1);assert.match(items[0].id,/provider-firecrawl/);assert.equal(Attention.healthSummary(items).status,'error');const rest=items.filter(i=>i.severity!=='error');assert.equal(Attention.healthSummary(rest).status,'recommendation');assert.doesNotMatch(Attention.healthSummary(rest).text,/errors?/);assert.equal(Attention.healthSummary([]).status,'healthy');});
 test('optional missing tools stay neutral, configured broken tools need attention, and managed billing is detected',()=>{assert.deepEqual(Attention.providerConnectionIssues({services:{providers:[{provider:'apollo',configured:false,state:'bad',source:'none'}]}}),[]);assert.equal(Attention.providerConnectionIssues({requiredProviders:['hunter'],services:{providers:[{provider:'hunter',configured:false,source:'none',state:'neutral'}]}})[0].severity,'recommendation');assert.equal(Attention.providerConnectionIssues({services:{providers:[{provider:'hunter',configured:true,state:'bad',metadata:{error:'Expired credential'}}]}})[0].severity,'recommendation');assert.equal(Attention.providerCreditIssues({services:{providers:[{provider:'firecrawl',configured:false,source:'managed',credit_issue:{code:'credits_exhausted',source:'managed'}}]}}).length,1);});
+
+test('runtime errors are shown once with a customer-facing message, not the exception text',()=>{
+  const items=Attention.buildAttentionItems({workspaceStarted:true,runtimeErrors:[{id:'1',message:'TypeError: x.join is not a function'},{id:'2',message:'TypeError: x.join is not a function'},{id:'3',message:'ReferenceError: y is not defined'}]});
+  const runtime=items.filter(item=>item.target?.type==='runtime');
+  assert.equal(runtime.length,2);
+  for(const item of runtime){assert.doesNotMatch(item.detail,/TypeError|ReferenceError|is not a function/);assert.match(item.detail,/Reload the workspace/);assert.match(item.technical,/Error/);}
+});
+test('research provider notice names the missing research tools before a paid run',()=>{
+  const status=providers=>({ai:{providers:providers.filter(p=>['openai','anthropic','gemini'].includes(p.provider))},services:{providers:providers.filter(p=>['firecrawl','apollo','hunter'].includes(p.provider))}});
+  const row=(provider,configured=true)=>({provider,configured});
+  assert.equal(Attention.researchProviderNotice(status([row('openai'),row('gemini'),row('firecrawl')])),'');
+  assert.match(Attention.researchProviderNotice(status([row('anthropic'),row('firecrawl')])),/OpenAI and Google Gemini are not connected.*Firecrawl search only/);
+  assert.match(Attention.researchProviderNotice(status([row('gemini'),row('firecrawl')])),/OpenAI is not connected.*Gemini grounding/);
+  assert.match(Attention.researchProviderNotice(status([row('openai'),row('firecrawl')])),/Gemini is not connected/);
+  assert.match(Attention.researchProviderNotice(status([row('openai'),row('gemini'),row('firecrawl',false)])),/Firecrawl is not connected/);
+  assert.equal(Attention.researchProviderNotice({}),'');
+  assert.equal(Attention.providerConnected(status([row('apollo',false),row('firecrawl')]),'apollo'),false);
+  assert.equal(Attention.providerConnected({services:{providers:[{provider:'apollo',source:'managed'}]}},'apollo'),true);
+});

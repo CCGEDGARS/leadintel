@@ -1001,12 +1001,18 @@ function potentialBuyerResultsHtml(candidate,savedProspect){
   const status=savedProspect?'<strong>Saved in CRM as a prospect ✓</strong> Buyer names need identity and role checks. No buying signal is confirmed; this company is outside Pipeline.':'These names are in this search result. Select the company for Buyers and save your workspace to keep the work.';
   return `<section class="potential-match-people" aria-label="Suggested decision-makers"><h5>Suggested decision-makers · ${candidate.people.length}</h5><div class="potential-match-person-list">${cards}</div><p class="potential-match-user-selection">${status}</p></section>`;
 }
-function researchReviewKey(candidate){const domain=canonicalDomain(candidate.domain||candidate.website);return domain||`name:${String(candidate.company||candidate.companyName||'').trim().toLowerCase()}`;}
-function researchReviewRows(){
-  const rows=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates.filter(c=>!qualificationAssessment(c).eligible));
+// One review row per company: careers., jobs., corporate. and similar hosts belong to the same company (EvidencePolicy.companyDomain).
+function researchReviewKey(candidate){const source=candidate.domain||candidate.website;const domain=LeadIntelDiscovery.companyIdentityDomain?.(source)||canonicalDomain(source);return domain||`name:${String(candidate.company||candidate.companyName||'').trim().toLowerCase()}`;}
+function dedupeResearchReview(rows=[]){
   const byKey=new Map();
-  for(const candidate of rows){const key=researchReviewKey(candidate);if(!key)continue;const previous=byKey.get(key);if(!previous||(candidate.evidence?.length||0)>(previous.evidence?.length||0))byKey.set(key,candidate);}
+  for(const candidate of rows){const key=researchReviewKey(candidate);if(!key)continue;const previous=byKey.get(key);if(!previous){byKey.set(key,candidate);continue;}
+    const evidence=candidate.evidence?.length||0,previousEvidence=previous.evidence?.length||0;
+    const shorter=String(candidate.domain||'').length<String(previous.domain||'').length;
+    if(evidence>previousEvidence||(evidence===previousEvidence&&shorter))byKey.set(key,candidate);}
   return [...byKey.values()];
+}
+function researchReviewRows(){
+  return dedupeResearchReview(mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates.filter(c=>!qualificationAssessment(c).eligible)));
 }
 function researchReviewStatus(candidate){
   const q=qualificationAssessment(candidate);

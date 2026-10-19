@@ -2,7 +2,7 @@
   'use strict';
   if(!root?.document)return;
   const document=root.document;
-  let runtimeErrors=[];
+  let runtimeErrors=[],lastProviderStatus=null;
   let refreshTimer=0;
   let lastItems=[];
   let providerIssues=[];
@@ -41,7 +41,7 @@
       const url=path=>`${API_BASE}${path}?workspace_id=${encodeURIComponent(workspaceId)}`;
       const [aiResponse,serviceResponse]=await Promise.all([root.fetch(url('/api/integrations/ai/status'),{credentials:'include'}),root.fetch(url('/api/integrations/services/status')+(force?'&verify=1':''),{credentials:'include'})]);
       if(!aiResponse.ok||!serviceResponse.ok)throw new Error('Provider status unavailable');
-      const [ai,services]=await Promise.all([aiResponse.json(),serviceResponse.json()]);
+      const [ai,services]=await Promise.all([aiResponse.json(),serviceResponse.json()]);lastProviderStatus={ai,services,checkedAt:Date.now()};
       if(root.LeadIntelServerBridge?.workspace?.id!==workspaceId)return;
       providerIssues=root.LeadIntelAttentionModel?.providerCreditIssues?.({ai,services})||[];connectionIssues=root.LeadIntelAttentionModel?.providerConnectionIssues?.({ai,services,requiredProviders:services?.providers?.find(row=>row.provider==='hunter')?.metadata?.additional_verification_enabled===true?['hunter']:[]})||[];lastProviderCheck=Date.now();render();
     }catch{if(root.LeadIntelServerBridge?.workspace?.id===workspaceId){providerStatusError='Tool status could not be checked. The last confirmed billing alerts are retained.';render();}}
@@ -72,7 +72,7 @@
     root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];providerIssues=[];connectionIssues=[];providerStatusError='';checkedWorkspace='';lastProviderCheck=0;root.LeadIntelJourney?.refresh?.();render();});
     root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.message||event.error?.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason?.message||event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
-    render();void refreshProviderCredits();root.setInterval(()=>{render();void refreshProviderCredits();},30000);root.LeadIntelAttention={refresh:render,recheck:()=>refreshProviderCredits({force:true}),list:()=>lastItems.slice(),open};
+    render();void refreshProviderCredits();root.setInterval(()=>{render();void refreshProviderCredits();},30000);root.LeadIntelAttention={refresh:render,recheck:()=>refreshProviderCredits({force:true}),list:()=>lastItems.slice(),open,providerStatus:()=>lastProviderStatus};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })(typeof window!=='undefined'?window:null);

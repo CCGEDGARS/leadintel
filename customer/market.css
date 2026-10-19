@@ -413,3 +413,6 @@
 .strategy-research-findings>summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent2)}
 .strategy-research-findings[open]>summary{margin-bottom:16px}
 @media(max-width:680px){.strategy-research-location{align-items:flex-start;flex-direction:column}.strategy-research-location .secondary-btn{width:100%}}
+
+/* Pre-flight: research tools that are not connected, shown on the plan screen before a paid run. */
+.research-preview-providers{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:#fff4df;color:#7a4b00;font-size:13px;line-height:1.45}

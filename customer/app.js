@@ -687,6 +687,8 @@ function openResearchPreview(mode){
   $("research-preview-sources").textContent=labels.join(", ")||"No source categories selected";
   $("research-preview-method").textContent=modeUi.method;
   $("research-preview-discovery-note").textContent=modeUi.discoveryNote;
+  const providerNotice=globalThis.LeadIntelAttentionModel?.researchProviderNotice?.(globalThis.LeadIntelAttention?.providerStatus?.()||{})||"";
+  const providerNode=$("research-preview-providers");if(providerNode){providerNode.textContent=providerNotice;providerNode.hidden=!providerNotice;}
   const suggestions=LeadIntelMarket.buildSuggestedSources(profile,state.market.signals,state.market.researchSourceTypes,language);const added=new Set(state.market.researchCustomSources||[]);
   $("research-suggested-sources").innerHTML=suggestions.length?suggestions.map((item,index)=>`<label><input type="checkbox" data-suggested-source value="${esc(item.url)}" ${added.has(item.url)?"checked disabled":""}><span><strong>${esc(item.name)}</strong><small>${esc(item.reason)}</small><code>${esc(item.url)}</code></span></label>`).join(""):"<p>No specific site recommendations are available for the selected market and source categories. You can still add any public URL manually.</p>";
   $("add-suggested-sources").hidden=!suggestions.length;$("add-suggested-sources").disabled=!suggestions.some(item=>!added.has(item.url));
@@ -1040,7 +1042,8 @@ function renderResearchStatus(){
       renderRunningResearchStatus(statusNode,view);
     }else if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Retrying OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="secondary-btn research-recovery-action" disabled>Working…</button>`;}
     else if(completedWithEvidence){
-      const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?"OpenAI discovery was unavailable. Saved evidence is preserved.":"Some research checks were unavailable. Saved results are preserved."):"";
+      const openAiNotConnected=(state.market.researchErrors||[]).some(item=>/not connected|Connect OpenAI/i.test(String(item?.reason||item?.message||"")));
+      const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?(openAiNotConnected?"OpenAI is not connected. Saved evidence is preserved; connect OpenAI in Settings for page discovery.":"OpenAI discovery was unavailable. Saved evidence is preserved."):"Some research checks were unavailable. Saved results are preserved."):"";
       const providerSummary=status==="complete"?`Public-source research checks completed${["deep","intelligence"].includes(state.market.researchMode)&&sources.gemini==="complete"?" · Gemini verification completed":""}.`:"";
       const retry=status==="partial"&&(["partial","error","unavailable"].includes(sources.openai)||state.market.researchQuality?.passed===false)?`<button type="button" class="secondary-btn research-recovery-action" data-extend-openai>Retry incomplete checks</button>`:"";
       statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">${status==="partial"?"!":"✓"}</span><span class="research-status-copy"><strong>${esc(modeLabel)} ${status==="partial"?"partially complete":"complete"} · ${count} source${count===1?"":"s"} saved</strong><small>${providerSummary?`<span>${esc(providerSummary)}</span>`:""}${warning?`<em>${esc(warning)}</em>`:""}</small></span>${retry}<button type="button" class="secondary-btn research-report-action" data-research-view-report>View report</button>`;
@@ -1279,6 +1282,11 @@ function strategyHandoffModel(){
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   if(incompleteResearch)warnings.push(`Some research checks were unavailable; your ${evidence.length} saved sources will still be used.`);
   if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time company search will still run normally. Turn on monitoring later to track new buying signals over time.");
+  const providerStatus=globalThis.LeadIntelAttention?.providerStatus?.()||null;const providerConnected=provider=>Boolean(globalThis.LeadIntelAttentionModel?.providerConnected?.(providerStatus,provider));
+  if(providerStatus){
+    if(!providerConnected("apollo"))warnings.push("Apollo is not connected. Buyer identities will come from public sources only; connect Apollo in Settings for decision-maker search.");
+    if(!providerConnected("openai")&&!providerConnected("gemini"))warnings.push("OpenAI and Google Gemini are not connected. Company discovery will rely on Firecrawl search only.");
+  }
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];

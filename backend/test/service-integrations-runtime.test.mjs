@@ -134,7 +134,7 @@ sqliteTest('Apollo buyer search uses the authenticated workspace key and returns
 sqliteTest('Apollo buyer search fails clearly when no workspace or managed key is available',async()=>{
   const {env,token}=await fixture('owner');delete env.APOLLO_API_KEY;
   const response=await handleServiceIntegrationRoute(req('/api/integrations/services/apollo/people-search?workspace_id=w1',{method:'POST',token,body:{q_organization_domains_list:['example.com'],person_titles:['CEO']}}),env,{});
-  assert.equal(response.status,503);const result=await payload(response);
+  assert.equal(response.status,409);const result=await payload(response);
   assert.equal(result.code,'SERVICE_APOLLO_NOT_CONFIGURED');
   assert.match(result.error,/Apollo.*workspace/i);
 });

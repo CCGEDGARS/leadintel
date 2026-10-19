@@ -29,7 +29,9 @@
       const savedNote=sourceCount?`Your ${sourceCount} saved company research sources are safe.`:'Your saved company research is safe.';
       items.push({id:'ai-openai-credit-balance',severity:'error',title:'OpenAI API credits exhausted',detail:`OpenAI reports that the API credit balance for the connected organization is exhausted. Check that organization and add credits in OpenAI billing, then retry synthesis. ${savedNote}`,target:{type:'ai-billing'}});
     }
-    runtimeErrors.slice(-3).forEach(error=>items.push({id:`runtime-${clean(error?.id||items.length+1,80)}`,severity:'recommendation',title:'Workspace needs attention',detail:clean(error?.message||'A workspace component stopped unexpectedly.'),target:{type:'runtime'}}));
+    // Customers never see raw exception text; identical errors collapse into one item. The technical message stays on the item for support.
+    const seenRuntime=new Set();
+    runtimeErrors.filter(error=>{const text=clean(error?.message||'');if(!text||seenRuntime.has(text))return false;seenRuntime.add(text);return true;}).slice(-3).forEach(error=>items.push({id:`runtime-${clean(error?.id||items.length+1,80)}`,severity:'recommendation',title:'Workspace needs attention',detail:'A page component stopped unexpectedly. Reload the workspace to recover; your saved data is not affected.',technical:clean(error?.message||''),target:{type:'runtime'}}));
     tasks.forEach(task=>{
       const id=clean(task?.id,120);if(!id)return;
       if(FAILED.has(task.status))items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task needs attention',120),detail:clean(task.error||task.stage||'The task did not finish.'),target:{type:'tasks'}});
@@ -40,5 +42,16 @@
     if(unsaved)items.push({id:'unsaved-workspace',severity:'recommendation',title:'Workspace changes are not saved',detail:'Save the workspace so these changes are available next time.',target:{type:'save'}});
     return items.sort((a,b)=>(a.severity==='error'?0:1)-(b.severity==='error'?0:1)).filter((item,index,array)=>array.findIndex(candidate=>candidate.id===item.id)===index).slice(0,10);
   }
-  return {aiProviderIssueFromResearch,providerCreditIssues,providerConnectionIssues,healthSummary,buildAttentionItems};
+  function providerConnected({ai={},services={}}={},provider){return [...(ai?.providers||[]),...(services?.providers||[])].some(row=>row?.provider===provider&&Boolean(row.configured||row.source==='managed'));}
+  // Pre-flight text for the market-research plan: which research tools are missing before a paid run starts.
+  function researchProviderNotice(status={}){
+    if(!status||(!status.ai&&!status.services))return '';
+    const has=provider=>providerConnected(status,provider);const parts=[];
+    if(!has('firecrawl'))parts.push('Firecrawl is not connected: no evidence can be extracted. Connect it in Settings before starting.');
+    if(!has('openai')&&!has('gemini'))parts.push('OpenAI and Google Gemini are not connected: page discovery will run on Firecrawl search only.');
+    else if(!has('openai'))parts.push('OpenAI is not connected: page discovery will use Google Gemini grounding only.');
+    else if(!has('gemini'))parts.push('Google Gemini is not connected: independent evidence verification is off.');
+    return parts.join(' ');
+  }
+  return {aiProviderIssueFromResearch,providerCreditIssues,providerConnectionIssues,healthSummary,buildAttentionItems,providerConnected,researchProviderNotice};
 });

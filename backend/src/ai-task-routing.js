@@ -39,6 +39,8 @@ export async function observeSpecialist(env,workspaceId,credential,task,run){
 }
 export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch}){
  const openai=await workspaceCredential(env,workspaceId,'openai');
+ // Customer-only billing: a missing search provider must fail with 409 before any paid call is made.
+ if(!openai&&!(await workspaceCredential(env,workspaceId,'gemini')))throw Object.assign(Error('Connect OpenAI or Google Gemini in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
  return routeResearchSearch({signal,primary:openai?()=>observeSpecialist(env,workspaceId,openai,'primary_web_search',()=>searchWeb({...openai,query,maxResults,purpose,signal,fetchImpl})):null,specialist:async()=>{const gemini=await workspaceCredential(env,workspaceId,'gemini');if(!gemini)throw Error('Gemini research specialist is not connected');return observeSpecialist(env,workspaceId,gemini,'grounded_search_fallback',()=>searchGeminiWeb({...gemini,query,maxResults,purpose,signal,fetchImpl}));}});
 }
 export async function extractGeminiPdf({bytes,pages,apiKey,model,signal,fetchImpl=fetch}){

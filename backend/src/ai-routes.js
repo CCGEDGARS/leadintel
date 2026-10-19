@@ -157,7 +157,7 @@ export async function handleAiRoute(request,env,cors={}){
       const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:result.provider,metadata:{model:result.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,result_count:result.results.length,routing:result.routing||null}});
       return json(result,200,cors);
-    }catch(cause){return error(String(cause?.message||'Web search failed').slice(0,180),502,cors);}
+    }catch(cause){return error(String(cause?.message||'Web search failed').slice(0,180),cause?.status===409?409:502,cors,cause?.code?{code:cause.code}:{});}
   }
 
   if(path==='/api/ai/research-verification'&&request.method==='POST'){

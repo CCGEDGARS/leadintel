@@ -266,7 +266,7 @@ async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
   const normalized=normalizeApolloPeopleSearch(body);if(normalized.error)return error(normalized.error,400,cors,'SERVICE_APOLLO_DOMAIN_INVALID');
   if(!(await apolloCapabilities(env,workspaceId)).discovery)return error('Apollo people discovery is disabled in Settings',409,cors,'SERVICE_APOLLO_DISCOVERY_DISABLED');
   const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
-  if(!credential.configured||!credential.apiKey)return error('Apollo is not connected for this workspace. Connect it in Settings.',503,cors,'SERVICE_APOLLO_NOT_CONFIGURED');
+  if(!credential.configured||!credential.apiKey)return error('Apollo is not connected for this workspace. Connect it in Settings.',409,cors,'SERVICE_APOLLO_NOT_CONFIGURED');
   let response;
   try{response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':credential.apiKey},body:JSON.stringify(normalized.payload),signal:request.signal});}
   catch{return error('Apollo buyer search is temporarily unavailable. Try again.',502,cors,'SERVICE_APOLLO_UNAVAILABLE');}
@@ -358,7 +358,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     if(!/^[a-z0-9][a-z0-9._%+-]{0,63}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,}$/i.test(email)||email.includes('..'))return error('A valid email address is required',400,cors);
     if(!(await hunterVerificationPolicy(env,workspaceId)).enabled)return error('Hunter is optional and disabled. Enable additional verification in Settings to use credits.',409,cors,'SERVICE_HUNTER_DISABLED');
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
-    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before checking an email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
+    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before checking an email',409,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
     let response;try{response=await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
     if(response.status===451)return error('Hunter cannot process this address',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');
     if(response.status===202||response.status===222)return json({email,status:'unknown',deliverability:'inconclusive',identity_confirmed:false,provider:'Hunter',pending:response.status===202},200,cors);
@@ -380,7 +380,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     if(!DNS_DOMAIN.test(domain)||!first||!last||!/^[-\p{L}'’ ]{2,80}$/u.test(first)||!/^[-\p{L}'’ ]{2,80}$/u.test(last))return error('Company domain and full name are required',400,cors);
     if(!(await hunterVerificationPolicy(env,workspaceId)).enabled)return error('Hunter is optional and disabled. Enable additional verification in Settings to use credits.',409,cors,'SERVICE_HUNTER_DISABLED');
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
-    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before confirming email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
+    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before confirming email',409,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
     const params=new URLSearchParams({domain,first_name:first,last_name:last});
     let response;try{response=await fetch(`https://api.hunter.io/v2/email-finder?${params}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
     if(response.status===451)return error('Hunter cannot process this person',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');

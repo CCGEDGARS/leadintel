@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelEvidencePolicy=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
-  const SUPPORT_SUBDOMAINS=new Set(['www','media','investors','investor','newsroom','news','press','ir','en','sv','se','fi','de','fr','lv','lt','ee','pl','es','it']);
+  const SUPPORT_SUBDOMAINS=new Set(['www','media','investors','investor','newsroom','news','press','ir','en','sv','se','fi','de','fr','lv','lt','ee','pl','es','it','careers','career','jobs','job','corporate','corp','company','about','group','global','blog','shop','store','support','help','docs']);
   const SHARED_HOSTS=new Set(['github.io','wordpress.com','webflow.io','wixsite.com','notion.site','blogspot.com','azurewebsites.net','pages.dev','vercel.app']);
   function host(value){try{const raw=clean(value);if(!raw||/\s/.test(raw))return '';const url=new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(url.protocol)?url.hostname.toLowerCase().replace(/\.$/,'').replace(/^www\./,''):'';}catch{return '';}}
   function companyDomain(value){let domain=host(value),parts=domain.split('.');while(parts.length>2&&SUPPORT_SUBDOMAINS.has(parts[0])&&![...SHARED_HOSTS].some(shared=>domain===shared||domain.endsWith('.'+shared))){parts.shift();domain=parts.join('.');}return domain;}
