@@ -180,10 +180,20 @@ function markUserInput(id,value){
   const state=readState();const meta=metaForCurrentState();if(!meta.generatedAt)return;
   meta.fields=meta.fields||{};meta.fields[id]={origin:String(value||'').trim()?'user':'needs-input',confidence:'',sourceIds:[],rationale:String(value||'').trim()?'Customer edited this field.':'Customer input recommended.',reviewed:Boolean(String(value||'').trim())};writeMeta(meta);renderResearchReview();
 }
+// Accepting a research draft must also mark the answer as accepted in the main workspace state:
+// approval (step2-brief-schema confirmationMissing) and page checks (page-quality-ui) read answerStatus,
+// not research metadata. Without this the Profile can never be approved after accepting drafts.
+function acceptAnswerStatus(id){
+  const state=readState();if(!state||typeof state!=='object')return;
+  if(!String(state.answers?.[id]??'').trim())return;
+  const current=state.answerStatus?.[id];if(current==='user'||current==='accepted')return;
+  state.answerStatus={...(state.answerStatus||{}),[id]:'accepted'};writeState(state);
+  window.dispatchEvent?.(new CustomEvent('leadintel:company-research-updated',{detail:{website:state.website,acceptedAnswer:id}}));
+}
 function handleReviewAction(event){
   const accept=event.target.closest('[data-research-accept]');const clear=event.target.closest('[data-research-clear]');if(!accept&&!clear)return;
   const id=(accept||clear).dataset.researchAccept||(accept||clear).dataset.researchClear;const textarea=document.querySelector(`[data-question="${id}"]`);const meta=metaForCurrentState();meta.fields=meta.fields||{};
-  if(accept){meta.fields[id]={...(meta.fields[id]||{}),reviewed:true};writeMeta(meta);renderResearchReview();return;}
+  if(accept){meta.fields[id]={...(meta.fields[id]||{}),reviewed:true};writeMeta(meta);acceptAnswerStatus(id);renderResearchReview();return;}
   if(clear&&textarea){textarea.value='';textarea.dispatchEvent(new Event('input',{bubbles:true}));meta.fields[id]={origin:'needs-input',confidence:'',sourceIds:[],rationale:'Cleared by customer; add input or rerun research.',reviewed:true};writeMeta(meta);renderResearchReview();}
 }
 
@@ -366,7 +376,9 @@ function needsInitialCompanyResearch(){
   return !state.profile&&companyResearchReady(state)&&Boolean(window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive?.(state.website))&&!meta.generatedAt&&!meta.failureAt;
 }
 function prepareProfileAnswers(event){
-  const target=event.target?.closest?.('#to-questionnaire,[data-step-marker="2"],[data-process-step="2"]');
+  // Only the explicit Continue button may start paid research. Stage markers and sidebar items are
+  // navigation, not consent (docs/project-state/2026-10-18-company-research-lifecycle.md).
+  const target=event.target?.closest?.('#to-questionnaire');
   if(!target||!needsInitialCompanyResearch())return;
   event.preventDefault();event.stopImmediatePropagation();
   void runCompanyResearch();
