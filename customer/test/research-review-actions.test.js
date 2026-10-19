@@ -43,3 +43,9 @@ test('missing purchasing proof and low unverified buyer fit remain research gaps
  assert.match(fn,/company offers the same service rather than the required buyer profile/);
  assert.match(fn,/needs-evidence/);
 });
+
+test('Step 4 exposes reference similarity independently of company qualification',()=>{
+ assert.match(ui,/Reference similarity \$\{q\.lookalikeScore\}\/100/);
+ assert.match(ui,/Reference similarity \$\{assessment\.lookalikeScore\}\/100/);
+ assert.match(ui,/Number\.isFinite\(q\.lookalikeScore\)/);
+});
