@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {researchBuyerContacts} from '../src/approved-workflow-runner.js';
+test('automatic contact research reads the discovered source and retains the direct phone without a paid reveal',async()=>{
+ const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO',organization:'Example'}]},reads=[];
+ await researchBuyerContacts(candidate,async()=>[{url:'https://example.com/team',description:'Anna Andersson — COO — Example anna.andersson@example.com'}],async()=>{},async url=>{reads.push(url);return {markdown:'Anna Andersson — COO — Example anna.andersson@example.com +46 70 111 2233',metadata:{sourceURL:url}};});
+ assert.deepEqual(reads,['https://example.com/team']);assert.equal(candidate.people[0].publicPhone,'+46 70 111 2233');assert.equal(candidate.people[0].publicPhoneEvidence.version,2);
+});
+test('an explicit page read supersedes incomplete search markdown for phone attribution',async()=>{
+ const candidate={company:'Example',domain:'example.com',people:[{name:'Johan Menckel',title:'CEO and President',organization:'Example'}]};
+ await researchBuyerContacts(candidate,async()=>[{url:'https://example.com/team',markdown:'Johan Menckel, CEO and President, +46 70 309 81 63.'}],async()=>{},async()=>({markdown:'Johan Menckel, CEO and President. Interviews: Mikko Viitala, Press Chief, +46 70 309 81 63.'}));
+ assert.equal(candidate.people[0].publicPhone||'','');
+});
+test('an empty source extraction remains incomplete',async()=>{
+ const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO',organization:'Example'}]};
+ await researchBuyerContacts(candidate,async()=>[{url:'https://example.com/team',description:'Anna Andersson, COO at Example'}],async()=>{},async()=>({markdown:''}));
+ assert.equal(candidate.people[0].emailResearch.status,'partial');assert.equal(candidate.people[0].emailResearch.failed,1);
+});
 test('automatic buyer research searches full name, company email and Gmail without paid reveal',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'}]},queries=[];
  await researchBuyerContacts(candidate,async query=>{queries.push(query);return [{url:'https://example.com/team',title:'Anna Andersson | COO | Example',markdown:'Anna Andersson COO Example anna.andersson@example.com'}];},async()=>{});
