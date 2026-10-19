@@ -1,5 +1,25 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const researchedAt=new Date().toISOString();
+test('a fresh website read replaces the earlier unverified snippet for the same URL in research review',()=>{
+ const snippet={company:'Nordic',domain:'nordic.se',market:'Sweden',url:'https://nordic.se/',title:'Nordic manufacturer',text:'Nordic manufactures industrial equipment in Sweden.'};
+ const fresh={...snippet,verifiedAt:researchedAt,text:'Nordic manufactures industrial equipment in Sweden. Our production facilities assemble machinery for industrial customers and use welded frames supplied by specialist partners.'};
+ const [candidate]=D.buildPotentialCompanyCandidates([snippet,fresh,{...snippet,url:'https://journal.example/nordic',text:'Nordic is a manufacturer of machinery and equipment in Sweden.'}],{},{});
+ const official=candidate.evidence.find(e=>e.url===fresh.url);
+ assert.equal(official.verifiedAt,researchedAt,'verification freshness must survive the snippet-to-page merge');
+ assert.equal(official.text,fresh.text,'the full page supplies the purchasing evidence');
+ const restored=D.normalizeDiscoveryState({qualityVersion:D.DISCOVERY_QUALITY_VERSION,potentialMatches:[candidate]}).potentialMatches[0];
+ assert.equal(restored.evidence.find(e=>e.url===fresh.url).verifiedAt,researchedAt);
+});
+test('tracking parameters cannot make an old snippet discard the freshly verified canonical page',()=>{
+ const base={company:'Nordic',domain:'nordic.se',market:'Sweden',title:'Nordic manufacturer',text:'Nordic manufactures industrial equipment in Sweden.'};
+ const fresh={...base,url:'https://nordic.se/',verifiedAt:researchedAt,text:'Nordic manufactures industrial equipment in Sweden. Our production facilities assemble machinery for industrial customers and use welded frames supplied by specialist partners.'};
+ for(const rows of [[{...base,url:'https://nordic.se/?utm_source=search'},fresh],[fresh,{...base,url:'https://nordic.se/?utm_source=search'}]]){
+ const [candidate]=D.buildPotentialCompanyCandidates(rows,{},{});
+ assert.equal(candidate.evidence.length,1);
+ assert.equal(candidate.evidence[0].url,fresh.url);
+ assert.equal(candidate.evidence[0].verifiedAt,researchedAt);
+ }
+});
 function fixture(offer='welded frames',name='Nordic'){
  const profile={website:'seller.example',priorityOffers:offer,idealCustomer:'equipment manufacturers'};
  const domain='nordic.se',evidence=[{url:`https://${domain}/products`,verifiedAt:researchedAt,text:`${name} manufactures equipment in Sweden and purchases ${offer} for its industrial production. Our specialist partners supply these products for assembly.`},{url:'https://journal.example/company',text:`${name} manufactures industrial equipment in Sweden and supplies business customers.`}];
