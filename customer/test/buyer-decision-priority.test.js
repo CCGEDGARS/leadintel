@@ -17,11 +17,12 @@ test('unresearched, failed, stale and future-dated buyers remain visible without
  assert.equal(result.people.length,4);assert.deepEqual(result.recommendedIds,['done']);
  assert.equal(D.buyerResearchAssessment(rows[1]).status,'not_researched');assert.equal(D.buyerResearchAssessment(rows[2]).status,'incomplete');assert.equal(D.buyerResearchAssessment(rows[3]).status,'review_required');
 });
-test('the ten highest priority buyers retain their score order without reserving lower-ranked functions',()=>{
+test('the ten-person shortlist retains score order and includes researched functional alternatives',()=>{
  const projects=Array.from({length:15},(_,i)=>buyer(String(i),'Project Director',{emailResearch:null}));
  const head=buyer('head','Head of Procurement'),eng=buyer('eng','Engineering Manager');
  const result=D.rankedBuyerShortlist([...projects,head,eng],profile,company);
- assert.equal(result.people.length,10);assert.deepEqual(result.recommendedIds,['head']);assert.ok(!result.people.some(p=>p.id==='eng'));
+ assert.equal(result.people.length,10);assert.deepEqual(result.recommendedIds,['head','eng']);assert.ok(result.people.some(p=>p.id==='eng'));
+ assert.ok(result.people.every((p,i)=>!i||result.people[i-1].buyerQualification.total>=p.buyerQualification.total));
 });
 test('decision role, score version and research evidence survive normalization and CRM snapshot',()=>{
  const person=buyer('head','Head of Procurement');person.buyerQualification=D.qualifyBuyer(person,profile,company);
@@ -70,14 +71,14 @@ test('four recommendations protect an operational buyer even below purchasing sc
  const rows=[...Array.from({length:4},(_,i)=>buyer('head'+i,'Head of Procurement')),buyer('manager','Engineering Manager')];
  assert.deepEqual(D.rankedBuyerShortlist(rows,profile,company).recommendedIds,['head0','head1','head2','manager']);
 });
-test('partial contact refresh keeps the four highest-priority identities visible ahead of completed weaker buyers',()=>{
+test('partial contact refresh preserves high-score people while recommending every completed eligible alternative',()=>{
  const leaders=[buyer('chief','Chief Procurement Officer'),buyer('head','Head of Procurement'),buyer('director','Project Director'),buyer('manager','Project Manager')];
  const rows=[...leaders,buyer('easy1','Project Manager'),buyer('easy2','Project Manager')];
  for(const person of leaders.slice(0,3))person.emailResearch={status:'partial',searches:4,failed:1,checkedAt:now};
  const result=D.rankedBuyerShortlist(rows,profile,company);
  assert.deepEqual(result.people.slice(0,4).map(p=>p.id),leaders.map(p=>p.id));
- assert.deepEqual(result.priorityIds,leaders.map(p=>p.id));
- assert.deepEqual(result.recommendedIds,['manager']);
+ assert.ok(result.people.some(p=>p.id==='chief'&&p.emailResearch.status==='partial'));
+ assert.deepEqual(result.recommendedIds,['manager','easy1','easy2']);
 });
 test('Gmail guesses persist as candidates, without becoming public contact evidence',()=>{
  const p=buyer('anna','Head of Procurement',{name:'Anna Smith',publicName:'Anna Smith',gmailCandidates:D.gmailGuessCandidates({name:'Anna Smith'})});
