@@ -251,7 +251,7 @@ function readAnswers(){
     for(const id of changed)state.answerStatus[id]='accepted';
     if(state.profile&&globalThis.LeadIntelCompanyBrain?.classifyCompany)state.profile.companyClassification=LeadIntelCompanyBrain.classifyCompany(state);
     try{const key='leadintel_customer_v2_outreach',data=JSON.parse(localStorage.getItem(key)||'{}');data.items=(data.items||[]).map(item=>({...item,approved:false,approvedAt:'',contextNeedsRefresh:true}));localStorage.setItem(key,JSON.stringify(data));}catch{}
-    if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,[],state.market.deletedSignalIds);}
+    if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market.signals||[],state.market.deletedSignalIds);/* keep customer-defined (custom-*) signals when triggers change */}
     try{const key='leadintel_customer_v2_discovery',data=JSON.parse(localStorage.getItem(key)||'{}');data.needsRefresh=true;localStorage.setItem(key,JSON.stringify(data));}catch{}
   }
   saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));
