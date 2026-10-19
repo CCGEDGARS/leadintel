@@ -632,7 +632,7 @@ test('buyer confirmation requires explicit Apollo and Hunter credit permission',
   const confirm=source.slice(start,end);
   assert.match(confirm,/if\(automatic\)\{issues\.push\('Apollo enrichment requires manual credit approval/);
   assert.match(confirm,/LeadIntelDialogs\?\.confirm\(`Apollo /);
-  assert.match(confirm,/if\(hunterReady&&!automatic\)/);
+  assert.match(confirm,/if\(hunterReady&&!automatic&&!verifiedBuyerEmail/);
   assert.match(confirm,/LeadIntelDialogs\?\.confirm\('Hunter email finding\/verification may consume provider credits/);
   assert.match(confirm,/if\(hunterApproved\)\{/);
 });
