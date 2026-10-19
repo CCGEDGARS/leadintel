@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v19-independent-checks";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v20-attributed-sources";
 const BUYER_RESEARCH_VERSION="20261005-committee-2plus2-v1";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v11-optional-hunter";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -192,7 +192,7 @@ function restoreNewerBuyerResearch(candidate,detail){
   });
   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),found:saved.discovery?.found||0,providerStatus:saved.discovery?.providerStatus||{firecrawl:{status:'unavailable'},grounded:{status:'unavailable'},identity:{status:'unavailable'}},resultDiagnostics:saved.discovery?.resultDiagnostics||[],checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,executiveResearch:saved.discovery?.executiveResearch,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool((candidate.buyerDiscovery?.pool||[]).filter(p=>p.kept),[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
   candidate.publicResearch=saved.publicResearch||{checkedAt:saved.checkedAt,firecrawl:'unavailable',openai:'unavailable',gemini:'unavailable',patternSearches:candidate.people.reduce((n,p)=>n+(p.emailResearch?.searches||0),0),sources:[...new Set(candidate.people.flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(Boolean))],issues:['Aggregate provider activity was not retained in this legacy CRM snapshot']};
-  candidate.peopleStatus='complete';candidate.publicContactStatus='complete';candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
+  candidate.peopleStatus='complete';candidate.publicContactStatus='complete';candidate.publicContactVersion=saved.publicResearch?.evidenceVersion===2?PUBLIC_NAME_CHECK_VERSION:'';
   candidate.people=candidate.people.map(p=>({...p,buyerQualification:LeadIntelDiscovery.qualifyBuyer(p,{decisionMakers:candidate.buyerDiscovery.opportunityRoles||candidate.buyerRoles},candidate)}));
   return true;
 }
@@ -911,7 +911,7 @@ function linkedInPersonHtml(person={},candidate={}){
 function buyerContactRows(person={},candidate={},result={}){
   const contact=result?.contact||{},profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
   const verification=LeadIntelDiscovery.linkedInVerification?.(person,candidate);
-  const linkedInLabel=verification?.status==='automatic'?'Verified automatically':profile&&profile===person.linkedinConfirmedUrl?'Manually reviewed':profile?'Review required':'Not found';
+  const linkedInLabel=verification?.status==='automatic'?'Profile matched automatically':verification?.status==='manual'?'Manually reviewed':profile?'Review required':'Not found';
   const source=url=>url?` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'';
   const found=[...(person.patternFindings||[])];
   if(person.publicEmail&&!found.some(row=>row.email===person.publicEmail.toLowerCase()))found.unshift({email:person.publicEmail.toLowerCase(),url:person.publicEmailUrl});
@@ -919,9 +919,11 @@ function buyerContactRows(person={},candidate={},result={}){
   const statusText=channel=>{const row=state(channel);return row.status==='complete'?'No '+(channel==='company'?'company email':channel==='gmail'?'Gmail address':'direct phone')+' found in completed searches':row.status==='running'?'Searching…':['partial','unavailable'].includes(row.status)?'Checks incomplete'+(row.reason?' · '+row.reason:''):'Not searched yet';};
   const renderEmails=type=>{
     const domain=type==='gmail'?'gmail.com':canonicalDomain(candidate.domain);
-    const guesses=type==='gmail'?(person.gmailCandidates?.length?person.gmailCandidates:LeadIntelDiscovery.gmailGuessCandidates?.(person)||[]):emailPatternCandidates(person,candidate.domain,candidate.people||[]);
-    const addresses=[...new Set([...(type==='company'?[contact.work_email,person.hunterFound]:[]),...found.map(row=>row.email),...guesses.map(row=>row.email)].filter(email=>email&&String(email).toLowerCase().endsWith('@'+domain)))].filter(email=>person.hunterChecks?.[email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[email]?.status!=='invalid');
-    if(!addresses.length)return statusText(type);
+    const guesses=type==='company'?emailPatternCandidates(person,candidate.domain,candidate.people||[]):[];
+    const addresses=[...new Set([...(type==='company'?[contact.work_email,person.hunterFound]:[]),...found.map(row=>row.email)].filter(email=>email&&String(email).toLowerCase().endsWith('@'+domain)))].filter(email=>person.hunterChecks?.[email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[email]?.status!=='invalid');
+    const patterns=guesses.filter(row=>!addresses.includes(row.email)&&person.hunterChecks?.[row.email]?.deliverability!=='undeliverable'&&person.hunterChecks?.[row.email]?.status!=='invalid');
+    const patternHtml=patterns.length?`<details class="buyer-email-patterns"><summary>Unverified email patterns (${patterns.length})</summary><p>Name-based research suggestions · no published person–email association.</p>${patterns.slice(0,4).map(row=>`<span class="buyer-email-result">${esc(row.email)} · Unverified pattern</span>`).join('')}</details>`:'';
+    if(!addresses.length)return esc(statusText(type))+patternHtml;
     const rows=addresses.map(email=>{
       const check=person.hunterChecks?.[email],publicRow=found.find(row=>row.email===email),provider=[contact.verification_provider,contact.source].find(value=>['apollo','hunter'].includes(String(value||'').toLowerCase()));
       const label=contact.work_email===email?contact.email_status==='public_confirmed'?'Publicly confirmed · mailbox unverified':provider&&contact.email_status==='verified'?'Verified email · '+provider:'Saved email · provider evidence missing':publicRow?'Publicly listed · unverified':check?.deliverability==='deliverable'?'Mailbox checked · ownership unconfirmed':'Likely email · ownership unconfirmed';
@@ -929,10 +931,11 @@ function buyerContactRows(person={},candidate={},result={}){
     });
     const extra=rows.length>1?`<details><summary>${rows.length-1} alternative candidate${rows.length>2?'s':''}</summary>${rows.slice(1,4).join('')}</details>`:'';
     const incomplete=['partial','unavailable'].includes(state(type).status)?`<small>${esc('Additional checks incomplete'+(state(type).reason?' · '+state(type).reason:''))}</small>`:'';
-    return rows[0]+extra+incomplete+(state(type).status==='complete'?'<small>Search completed · ownership confirmation separate</small>':'');
+    return rows[0]+extra+incomplete+patternHtml+(state(type).status==='complete'?'<small>Search completed · ownership confirmation separate</small>':'');
   };
-  const phone=contact.phone_number?`${esc(contact.phone_number)} · ${contact.phone_status==='Verified'?'Apollo verified':'Provider listing · unverified'}`:person.publicPhone?`${esc(person.publicPhone)} · Publicly listed · unverified${source(person.publicPhoneUrl)}`:esc(statusText('phone'));
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${esc(linkedInLabel)}</span></div><div><strong>Phone</strong><span>${phone}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Likely addresses pass name and format filters; ownership remains unconfirmed. Automatic sending requires an accepted verified company email.</small></div>`;
+  const phoneEvidence=person.publicPhoneEvidence?.version===2&&person.publicPhoneEvidence.url===person.publicPhoneUrl;
+  const phone=contact.phone_number?`${esc(contact.phone_number)} · ${contact.phone_status==='Verified'?'Provider verified · Apollo':'Provider listing · unverified'}`:person.publicPhone&&phoneEvidence?`${esc(person.publicPhone)} · ${person.publicPhoneEvidence.sourceKind==='official'?'Official company listing':'Public business listing'} · reachability unverified${source(person.publicPhoneUrl)}`:person.publicPhone?'Phone source needs rechecking':esc(statusText('phone'));
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${esc(linkedInLabel)}</span></div><div><strong>Phone</strong><span>${phone}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Published details retain their source. Mailbox delivery, phone reachability and purchasing authority require separate evidence.</small></div>`;
 }
 function emailPatternCandidates(person={},domain='',people=[]){
   return LeadIntelDiscovery.rankedEmailGuesses(person,domain,people);
@@ -1633,7 +1636,7 @@ function buyerAutomaticMode(){
 }
 function buyerLinkedInStatus(person,candidate={}){
   const status=LeadIntelDiscovery.linkedInVerification(person,candidate);
-  return status.status==='automatic'?'Verified automatically':status.status==='manual'?'Manually reviewed':status.url?'Public match':'Needs confirmation';
+  return status.status==='automatic'?'Profile matched automatically':status.status==='manual'?'Manually reviewed':status.url?'Public match':'Needs confirmation';
 }
 function buyerReviewDialog(title,body){
   document.getElementById('buyer-review-dialog')?.remove();
@@ -1882,7 +1885,7 @@ async function searchBuyerPublicPages(query,limit,signal){
 function patternListings(person,domain,rows,company=''){
   return LeadIntelDiscovery.sourcedBuyerEmails(person,domain,rows,company);
 }
-async function recheckBuyerEmailSources(person,candidate,signal,cache=new Map()){
+async function recheckBuyerEmailSources(person,candidate,signal,cache=new Map(),onEvidence){
   const existing=[...(person.patternFindings||[]),...(person.publicEmail&&person.publicEmailUrl?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
   const checks=[];
   for(const url of [...new Set(existing.map(row=>row.url).filter(Boolean))].slice(0,12)){
@@ -1892,9 +1895,11 @@ async function recheckBuyerEmailSources(person,candidate,signal,cache=new Map())
         if(!response.ok)throw new Error('Source extraction unavailable');
         const payload=await response.json(),page=payload.data||payload;
         if(payload.success===false||!page.markdown&&!page.content)throw new Error('Source text unavailable');
-        return {url:page.metadata?.sourceURL||url,markdown:page.markdown||page.content};
+        return {url:page.metadata?.sourceURL||url,markdown:page.markdown||page.content,sourceRead:true};
       })());
       const page=await cache.get(url),findings=patternListings(person,candidate.domain,[page],candidate.company);
+      onEvidence?.([page]);
+      if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],[page],candidate.domain,candidate.company)[0]);
       const confirmed=new Set(findings.map(row=>row.email));
       const rejected=[...new Set(existing.filter(row=>row.url===url&&!confirmed.has(row.email.toLowerCase())).map(row=>row.email))];
       person.patternFindings=[...(person.patternFindings||[]).filter(row=>row.url!==url),...findings];
@@ -1908,15 +1913,15 @@ async function recheckBuyerEmailSources(person,candidate,signal,cache=new Map())
   return checks;
 }
 async function searchBuyerEmailPatterns(candidate,existingRows,signal,{force=false,onProgress}={}){
-  let searches=0,failed=0;const people=candidate.people||[],sourceCache=new Map();
+  let searches=0,failed=0;const people=candidate.people||[],sourceCache=new Map(),evidence=[];
   await Promise.all(people.map(async person=>{
     const name=String(person.publicName||person.name||'').trim(),identityKey=[canonicalDomain(candidate.domain),candidate.company,name,person.title].join('|').toLowerCase();
     const prior=person.contactResearch;
     const recent=prior&&Object.values(prior.checks||{}).some(row=>row.checkedAt&&Date.now()-Date.parse(row.checkedAt)<30*86400000);
-    const research=!force&&recent&&prior.identityKey===identityKey?prior:{version:1,identityKey,checks:{},channels:{}};
+    const research=!force&&recent&&prior.identityKey===identityKey&&prior.evidenceVersion===2?prior:{version:1,evidenceVersion:2,identityKey,checks:{},channels:{}};
     person.contactResearch=research;
     let sourceRechecks=person.emailResearch?.sourceRechecks||[];
-    const channelKeys={company:['sources','official','patterns','focused','grounded'],gmail:['gmail'],phone:['official','phone'],linkedin:['linkedin']};
+    const channelKeys={company:['sources','official','public','pages','patterns','focused','grounded'],gmail:['gmail'],phone:['official','public','pages','phone'],linkedin:['linkedin']};
     const update=()=>{
       const checkedAt=new Date().toISOString();
       for(const [channel,keys] of Object.entries(channelKeys)){
@@ -1932,24 +1937,27 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal,{force=fal
     const run=async(key,fn)=>{
       const old=research.checks[key];if(['complete','not_needed'].includes(old?.status))return [];
       research.checks[key]={status:'running',attempts:(old?.attempts||0)+1,reason:'',checkedAt:''};update();searches++;
-      try{const value=await fn();research.checks[key]={...research.checks[key],status:'complete',checkedAt:new Date().toISOString()};return value;}
+      try{const value=await fn();research.checks[key]={...research.checks[key],status:value===null?'not_needed':'complete',checkedAt:new Date().toISOString()};if(value===null)searches--;return value||[];}
       catch(error){failed++;research.checks[key]={...research.checks[key],status:'partial',reason:String(error.message||'Source unavailable').slice(0,220),checkedAt:new Date().toISOString()};if(signal?.aborted)throw error;return [];}
       finally{update();}
     };
     const notNeeded=key=>{research.checks[key]={status:'not_needed',attempts:0,reason:'',checkedAt:new Date().toISOString()};update();};
+    const sourceRows=[];
     const collect=rows=>{
-      if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0]);
+      sourceRows.push(...rows);evidence.push(...rows);
+      if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],rows,candidate.domain,candidate.company)[0]);
       if(LeadIntelDiscovery.matchBuyerDecisionEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerDecisionEvidence(person,rows,candidate));
       person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(row=>[row.email,row])).values()];
     };
     try{
       collect(existingRows);
-      if(person.patternFindings?.length||person.publicEmailUrl){await run('sources',async()=>{sourceRechecks=await recheckBuyerEmailSources(person,candidate,signal,sourceCache);const unavailable=sourceRechecks.find(row=>row.status==='unavailable');if(unavailable)throw new Error('Published email source could not be rechecked'+(unavailable.reason?' · '+unavailable.reason:''));return [];});}else notNeeded('sources');
+      if(person.patternFindings?.length||person.publicEmailUrl){await run('sources',async()=>{sourceRechecks=await recheckBuyerEmailSources(person,candidate,signal,sourceCache,collect);const unavailable=sourceRechecks.find(row=>row.status==='unavailable');if(unavailable)throw new Error('Published email source could not be rechecked'+(unavailable.reason?' · '+unavailable.reason:''));return [];});}else notNeeded('sources');
       const patterns=emailPatternCandidates(person,candidate.domain,people);person.gmailCandidates=LeadIntelDiscovery.gmailGuessCandidates(person);
-      if(!patterns.length){for(const key of ['official','patterns','focused','grounded','gmail','phone','linkedin'])notNeeded(key);return;}
+      if(!patterns.length){for(const key of ['official','public','pages','patterns','focused','grounded','gmail','phone','linkedin'])notNeeded(key);return;}
       collect(await run('official',()=>searchBuyerPublicPages(`site:${canonicalDomain(candidate.domain)} "${name}"`,5,signal)));
       const identityRows=await run('linkedin',()=>searchBuyerPublicPages(`site:linkedin.com/in/ "${name}" "${candidate.company}"`,5,signal));
       collect(identityRows);if(LeadIntelDiscovery.matchBuyerScopeEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerScopeEvidence(person,identityRows,candidate));
+      collect(await run('public',()=>searchBuyerPublicPages(`"${name}" "${candidate.company}" (contact OR email OR phone OR kontakt)`,5,signal)));
       collect(await run('patterns',()=>searchBuyerPublicPages(patterns.map(row=>`"${row.email}"`).join(' OR '),5,signal)));
       collect(await run('gmail',()=>searchBuyerPublicPages(`"${name}" "${candidate.company}" ("@gmail.com" OR ${person.gmailCandidates.map(row=>`"${row.email}"`).join(' OR ')})`,5,signal)));
       collect(await run('phone',()=>searchBuyerPublicPages(`site:${canonicalDomain(candidate.domain)} "${name}" (phone OR telephone OR tel OR telefon OR mobil)`,5,signal)));
@@ -1967,13 +1975,38 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal,{force=fal
               if(!pageResponse.ok)throw new Error('Source extraction unavailable');
               const value=await pageResponse.json(),page=value.data||value;
               if(value.success===false||!page.markdown&&!page.content)throw new Error('Source text unavailable');
-              extracted.push({url:page.metadata?.sourceURL||row.url,markdown:page.markdown||page.content});
+              extracted.push({url:page.metadata?.sourceURL||row.url,markdown:page.markdown||page.content,sourceRead:true});
             }return extracted;
           }));
         }else notNeeded('grounded');
       }else{notNeeded('focused');notNeeded('grounded');}
+      collect(await run('pages',async()=>{
+        const saved=[person.publicPhoneUrl,person.publicEmailUrl,person.publicNameUrl].filter(Boolean).map(url=>({url,title:name}));
+        const pages=[...new Map([...saved,...sourceRows].filter(row=>{
+          try{const url=new URL(row.url||row.metadata?.sourceURL);if(!['http:','https:'].includes(url.protocol)||url.username||url.password||/(^|\.)linkedin\.com$/i.test(url.hostname))return false;
+            const official=canonicalDomain(url.href)===canonicalDomain(candidate.domain),text=[row.title,row.description,row.markdown,row.content].join(' ').toLowerCase();
+            return official||text.includes(name.toLowerCase())&&(text.includes(String(candidate.company).toLowerCase())||text.includes('@'+canonicalDomain(candidate.domain)));
+          }catch{return false;}
+          }).map(row=>[row.url||row.metadata?.sourceURL,row])).values()].filter(row=>row.sourceRead!==true).sort((a,b)=>Number(canonicalDomain(b.url)===canonicalDomain(candidate.domain))-Number(canonicalDomain(a.url)===canonicalDomain(candidate.domain))).slice(0,3);
+        if(!pages.length)return null;
+        const completed=await Promise.allSettled(pages.map(async row=>{
+          const url=row.url||row.metadata?.sourceURL;
+          if(!sourceCache.has(url))sourceCache.set(url,(async()=>{
+            const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false},{signal});
+            if(!response.ok)throw new Error('Contact source page could not be read');
+            const payload=await response.json(),page=payload.data||payload;
+            if(payload.success===false||!page.markdown&&!page.content)throw new Error('Contact source text unavailable');
+            return {url:page.metadata?.sourceURL||url,title:page.metadata?.title||row.title||'',markdown:page.markdown||page.content,sourceRead:true};
+          })());
+          return sourceCache.get(url);
+        }));
+        const extracted=completed.filter(row=>row.status==='fulfilled').map(row=>row.value);collect(extracted);
+        if(completed.some(row=>row.status==='rejected'))throw new Error('Some contact source pages could not be read; published evidence is preserved');
+        return [];
+      }));
+      if(LeadIntelDiscovery.matchBuyerRoleEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerRoleEvidence(person,sourceRows,candidate,{complete:true}));
     }finally{update();}
-  }));return {searches,failed};
+  }));return {searches,failed,evidence:[...new Map(evidence.sort((a,b)=>Number(a.sourceRead===true)-Number(b.sourceRead===true)).map(row=>[row.url||row.metadata?.sourceURL,row])).values()].slice(0,28)};
 }
 async function groundedBuyerFollowUp(candidate,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id)return {status:'unavailable',rows:[],reason:'Sign in to enable grounded follow-up'};
@@ -2016,12 +2049,12 @@ async function scrapeOfficialContactPage(url,domain,signal){
   if(!response.ok)return null;
   const payload=await response.json(),page=payload.data||payload,source=page.metadata?.sourceURL||url;
   if(canonicalDomain(source)!==domain||!page.markdown&&!page.content)return null;
-  return {url:source,title:page.metadata?.title||page.title||'',markdown:page.markdown||page.content};
+  return {url:source,title:page.metadata?.title||page.title||'',markdown:page.markdown||page.content,sourceRead:true};
 }
 async function reviewBuyerPublicEvidence(candidate,rows,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id||!rows.length)return {status:'unavailable',conflicts:[]};
   try{
-    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title})),evidence:rows.slice(0,12).map(row=>({url:row.url,title:row.title,excerpt:String(row.description||row.markdown||row.content||'').slice(0,600)}))}),signal});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title})),evidence:rows.slice(0,16).map(row=>({url:row.url,title:row.title,excerpt:LeadIntelDiscovery.buyerEvidenceExcerpt(row,candidate.people)}))}),signal});
     return response.ok?await response.json():{status:'unavailable',conflicts:[]};
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',conflicts:[]};}
 }
@@ -2033,7 +2066,8 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false}={
   const researchWorkspace=bridge()?.workspace?.id;
   const chosenIds=new Set(chosen.map(person=>String(person.id)));
   const candidate={...owner,people:chosen.map(person=>({...person})),publicResearch:{...(owner.publicResearch||{})}};
-  const resumingChecks=chosen.every(person=>person.contactResearch?.version===1);
+  const resumingChecks=owner.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&chosen.every(person=>person.contactResearch?.evidenceVersion===2);
+  const priorResearch=owner.publicResearch||{};
   const previousConflicts=(owner.publicResearch?.conflicts||[]).filter(row=>!chosenIds.has(String(row.person_id)));
   const commit=()=>{
     if(researchWorkspace!==bridge()?.workspace?.id)return;
@@ -2048,7 +2082,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false}={
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*9);
   const cancel=()=>controller.abort();if(signal?.aborted)cancel();else signal?.addEventListener('abort',cancel,{once:true});
   try{
-    const research={firecrawl:'complete',openai:'unavailable',gemini:'unavailable',geminiSearch:'unavailable',officialPages:0,profileResults:0,openaiResults:0,geminiResults:0,checkedAt:'',issues:[],conflicts:[],sources:[]};
+    const research={evidenceVersion:2,firecrawl:'complete',openai:'unavailable',gemini:resumingChecks?priorResearch.gemini||'unavailable':'unavailable',geminiSearch:'unavailable',officialPages:0,profileResults:0,openaiResults:0,geminiResults:0,checkedAt:'',issues:[],conflicts:(priorResearch.conflicts||[]).filter(row=>chosenIds.has(String(row.person_id))),sources:[]};
     candidate.publicResearch=research;
     let patternResearch=null;
     // Known identities get person-first contact evidence before broad company
@@ -2079,7 +2113,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false}={
         candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
       }
     }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.issues.push('Official homepage unavailable');}
-    candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
+    candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain,candidate.company);
     if(!patternResearch&&candidate.people.length&&candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)))patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal,{force});
     const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
     let profileIssue='';
@@ -2128,24 +2162,27 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false}={
     if(groundedProfiles.length)candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,groundedProfiles,candidate.company);
     for(const row of uniqueGrounded.filter(row=>canonicalDomain(row.url)===domain&&!results.some(item=>item.url===row.url)).slice(0,3)){
       try{
-        const response=await fetchFirecrawlBuyerResearch('scrape',{url:row.url,formats:['markdown'],onlyMainContent:true},{signal:controller.signal});
+        const response=await fetchFirecrawlBuyerResearch('scrape',{url:row.url,formats:['markdown'],onlyMainContent:false},{signal:controller.signal});
         if(!response.ok)continue;
         const payload=await response.json();const page=payload.data||payload;
         if(!page?.markdown&&!page?.content)continue;
-        results.push({url:row.url,title:page.title||row.title,markdown:page.markdown||page.content});research.officialPages++;
+        results.push({url:page.metadata?.sourceURL||row.url,title:page.title||row.title,markdown:page.markdown||page.content,sourceRead:true});research.officialPages++;
       }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;}
     }
-    candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
+    candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],[...results,...(patternResearch.evidence||[])],domain,candidate.company);
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
 
-    const review=await reviewBuyerPublicEvidence(candidate,[...results,...groundedProfiles],controller.signal);
-    research.gemini=review.status==='complete'?'complete':'unavailable';research.conflicts=(review.conflicts||[]).slice(0,4);
-    research.sources=[...new Set(results.filter(row=>canonicalDomain(row.url)===domain&&(row.markdown||row.content)).map(row=>row.url))].slice(0,8);
+    const reviewRows=[...new Map([...results,...(patternResearch.evidence||[]),...groundedProfiles].sort((a,b)=>Number(a.sourceRead===true)-Number(b.sourceRead===true)).map(row=>[row.url,row])).values()];
+    candidate.people=candidate.people.map(person=>LeadIntelDiscovery.matchBuyerRoleEvidence(person,reviewRows,candidate,{complete:true}));
+    const review=await reviewBuyerPublicEvidence(candidate,reviewRows,controller.signal);
+    research.gemini=review.status==='complete'?'complete':'unavailable';if(review.status==='complete')research.conflicts=(review.conflicts||[]).slice(0,4);
+    research.officialPages=new Set(reviewRows.filter(row=>canonicalDomain(row.url)===domain&&(row.markdown||row.content)).map(row=>row.url)).size;
+    research.sources=[...new Set(reviewRows.filter(row=>row.markdown||row.content).map(row=>row.url))].slice(0,12);
     if(!candidate.people.some(person=>person.publicLinkedinUrl||person.linkedin_url))research.issues.push('No direct LinkedIn profile matched');
     if(!candidate.publicContacts.length)research.issues.push('No official company contacts extracted');
     research.checkedAt=new Date().toISOString();candidate.publicResearch=research;
     const totalNamed=candidate.people.filter(person=>person.publicNameUrl).length;
-    candidate.publicContactStatus=candidate.publicContacts.length||totalNamed||candidate.people.some(person=>person.patternFindings?.length)?"complete":"empty";
+    candidate.publicContactStatus=patternResearch.failed?'error':candidate.publicContacts.length||totalNamed||candidate.people.some(person=>person.patternFindings?.length)?"complete":"empty";
     candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
     candidate.people=candidate.people.map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
     showToast(profileIssue|| (totalNamed?`${totalNamed} public full name${totalNamed===1?"":"s"} found · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
@@ -2182,7 +2219,7 @@ function scheduleSavedBuyerPublicChecks(){
     if(!domain||automaticPublicChecks.has(domain)||!candidate.people?.length)continue;
     // A completed or failed lookup is a real attempt. Do not spend requests on every visit.
     if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')continue;
-    if(candidate.publicContactStatus==='error'&&candidate.people.some(person=>(person.emailResearch?.searches||0)>0))continue;
+    if(candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&candidate.publicContactStatus==='error'&&candidate.people.some(person=>(person.emailResearch?.searches||0)>0))continue;
     if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle'&&candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&!LeadIntelDiscovery.topFourResearchCandidates(candidate.people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate).some(person=>!person.emailResearch||person.emailResearch.status==='not_searched'))continue;
     automaticPublicChecks.add(domain);
     if(crmAuthenticated()&&candidate.buyerDiscovery?.checkedAt&&candidate.buyerDiscovery.researchVersion!==BUYER_RESEARCH_VERSION&&candidate.peopleStatus!=='loading'){
@@ -2244,8 +2281,8 @@ function publicResearchOutcome(candidate){
   const named=people.filter(person=>person.publicName&&person.publicNameUrl).length;
   const profiles=people.filter(person=>LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url||person.publicLinkedinUrl)).length;
   const emails=people.reduce((count,person)=>count+new Set([person.publicEmail,...(person.patternFindings||[]).map(item=>item.email)].filter(Boolean)).size,0);
-  const phones=people.filter(person=>person.publicPhone&&person.publicPhoneUrl).length;
-  return `${people.length} people suggested · ${named} public full names · ${profiles} direct profiles · ${emails} public email listings · ${phones} phone listings near names. Company contacts below are general routes, not personal contacts.`;
+  const phones=people.filter(person=>person.publicPhone&&person.publicPhoneEvidence?.version===2&&person.publicPhoneUrl===person.publicPhoneEvidence.url).length;
+  return `${people.length} people suggested · ${named} public full names · ${profiles} direct profiles · ${emails} public email listings · ${phones} source-attributed phone listings. Company contacts below are general routes, not personal contacts.`;
 }
 function buyerResearchIncomplete(status){return !status||Object.values(status).some(row=>!['complete','not_needed'].includes(row?.status));}
 function buyerProviderFailure(error={},query=''){return {status:Number(error.status)||0,code:String(error.code||error.name||'').slice(0,80),message:String(error.message||error.error||'Provider failed').slice(0,300),query:String(query).slice(0,600)};}
@@ -2262,7 +2299,7 @@ function buyerQualificationHtml(candidate,person){
   const qualification=LeadIntelDiscovery.qualifyBuyer(person,profile,candidate);
   const ready=verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{});
   const research=LeadIntelDiscovery.buyerResearchAssessment(person);
-  return `<p class="buyer-authority"><strong>${esc(qualification.decisionRole)}</strong> · purchasing authority unconfirmed</p><p class="buyer-research-status" role="status"><strong>Research: ${esc(research.status.replaceAll("_"," "))}</strong> · ${esc(research.reason)}</p><details class="buyer-qualification"><summary>Priority ${qualification.total==null?'Unqualified':`${qualification.total}/100`} · ${ready?'Accepted company email':['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status)?'LinkedIn ready':'Contact review required'}</summary><p>Source title: ${esc(person.title)}</p><p>Evidence-based priority, not a probability of purchase. Model v4 weighs role fit, seniority, purchasing responsibility, and dated evidence linking this person to this opportunity. Equal scores mean equal supported evidence, not equal buying power. Contact verification is a separate gate.</p><ul>${Object.entries(qualification.breakdown).map(([key,row])=>`<li><strong>${esc(key[0].toUpperCase()+key.slice(1))} ${row.points}/${row.max}</strong> · ${esc(row.basis)}</li>`).join('')}</ul><p><strong>Still unknown:</strong> ${esc(qualification.gaps.join(' · ')||'No recorded gaps')}</p>${LeadIntelDiscovery.buyerDecisionEvidence(person,candidate).length?`<ul>${LeadIntelDiscovery.buyerDecisionEvidence(person,candidate).map(row=>`<li><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Responsibility source ↗</a> · ${esc(row.date)}<p>${esc(row.quote)}</p></li>`).join('')}</ul>`:''}${person.contactVerification?`<p>Contact check: ${esc(person.contactVerification.status)} · ${esc(person.contactVerification.checkedAt)}${person.contactVerification.issues?.length?' · '+esc(person.contactVerification.issues.join(' · ')):''}</p>`:''}</details>`;
+  return `${person.roleReview?`<p class="buyer-role-evidence"><strong>Role ${person.roleReview.status==='supported'?'source supported':'needs review'}</strong> · ${esc(person.roleReview.reason)}</p>`:''}<p class="buyer-authority"><strong>${esc(qualification.decisionRole)}</strong> · purchasing authority unconfirmed</p><p class="buyer-research-status" role="status"><strong>Research: ${esc(research.status.replaceAll("_"," "))}</strong> · ${esc(research.reason)}</p><details class="buyer-qualification"><summary>Priority ${qualification.total==null?'Unqualified':`${qualification.total}/100`} · ${ready?'Accepted company email':['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status)?'LinkedIn ready':'Contact review required'}</summary><p>Source title: ${esc(person.title)}</p><p>Evidence-based priority, not a probability of purchase. Model v4 weighs role fit, seniority, purchasing responsibility, and dated evidence linking this person to this opportunity. Equal scores mean equal supported evidence, not equal buying power. Contact verification is a separate gate.</p><ul>${Object.entries(qualification.breakdown).map(([key,row])=>`<li><strong>${esc(key[0].toUpperCase()+key.slice(1))} ${row.points}/${row.max}</strong> · ${esc(row.basis)}</li>`).join('')}</ul><p><strong>Still unknown:</strong> ${esc(qualification.gaps.join(' · ')||'No recorded gaps')}</p>${LeadIntelDiscovery.buyerDecisionEvidence(person,candidate).length?`<ul>${LeadIntelDiscovery.buyerDecisionEvidence(person,candidate).map(row=>`<li><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Responsibility source ↗</a> · ${esc(row.date)}<p>${esc(row.quote)}</p></li>`).join('')}</ul>`:''}${person.contactVerification?`<p>Contact check: ${esc(person.contactVerification.status)} · ${esc(person.contactVerification.checkedAt)}${person.contactVerification.issues?.length?' · '+esc(person.contactVerification.issues.join(' · ')):''}</p>`:''}</details>`;
 }
 
 function buyerProviderStatusHtml(candidate){
