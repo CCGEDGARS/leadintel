@@ -1,3 +1,4 @@
+const {weakBuyerFitResponse}=require('./helpers/buyer-fit-fixtures.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -133,7 +134,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     const target = String(url);
     const body = JSON.parse(options?.body || '{}');
     if (target.includes('/api/integrations/services/contact-policy')) return { ok: true, json: async () => ({ confirmationLevel: 'provider_verified' }) };
-    if (target.includes('/api/ai/generate')) { calls.other += 1; return { ok: true, json: async () => ({ text: '{"companies":[]}' }) }; }
+    if (target.includes('/api/ai/generate')) { calls.other += 1; return { ok: true, json: async () => ({ text: weakBuyerFitResponse(body.prompt) }) }; }
     if (target.includes('/firecrawl-scrape')) {
       calls.scrape += 1;
       return { ok: true, json: async () => ({ data: { markdown: 'Official company website. We operate an industrial manufacturing business in Latvia with production facilities, engineering capabilities and a management team planning a new factory.', links: [], metadata: { sourceURL: body.url, title: 'Official site' } } }) };

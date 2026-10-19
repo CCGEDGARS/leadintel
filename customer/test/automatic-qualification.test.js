@@ -8,6 +8,56 @@ const raw={company:'Nordic',domain:'nordic.se',market:'Sweden',evidence,matchedS
 function withFit(c=raw,p=profile,fit=100){return D.parseBuyerFit(JSON.stringify({companies:[{domain:c.domain,fit,purchase:'welded frames',reason:'Equipment assembly uses purchased frames.',buyerRole:'equipment manufacturer',relevantSignalUrls:[evidence[1].url,evidence[2].url],evidence:[{url:c.evidence[0].url,quote:c.evidence[0].text}]}]}),[c],p)[0];}
 const candidate=withFit();
 const assess=(c=candidate,priority='balanced',minimumScore=80,p=profile)=>D.assessAutomaticQualification(c,p,market,{researchPriority:priority,minimumScore,maxEvidenceAgeDays:90,researchedAt},now);
+test('purchasing-fit prompt offers only official source choices and stable confirmed offer identifiers',()=>{
+ const prompt=D.buyerFitPrompt([raw],profile);
+ const seller=JSON.parse(prompt.split('. Seller: ')[1].split('. Companies: ')[0]);
+ const companies=JSON.parse(prompt.split('. Companies: ')[1]);
+ assert.deepEqual(seller.offerOptions,[{offerId:'offer-0',offer:'welded frames'},{offerId:'offer-1',offer:'modular components'}]);
+ assert.ok(companies[0].evidence.length);
+ assert.ok(companies[0].evidence.every(e=>e.url.startsWith('https://nordic.se/')&&e.sourceId));
+ assert.match(prompt,/first-party/i);
+});
+test('stable offer and source choices resolve to exact approved offers and quoted official evidence',()=>{
+ const p={...profile,priorityOffers:'drawing development, metal manufacturing, installation and qualified workforce solutions.'};
+ const [c]=D.parseBuyerFit(JSON.stringify({companies:[{domain:raw.domain,fit:90,offerId:'offer-2',reason:'Factory installation is a specific application.',buyerRole:'industrial operator',evidence:[{sourceId:'source-0',quote:evidence[0].text}]}]}),[raw],p);
+ assert.equal(c.buyerFit?.purchase,'installation and qualified workforce solutions.');
+ assert.equal(c.buyerFit?.evidence[0].url,evidence[0].url);
+ assert.equal(D.verifiedBuyerFit(c,p)?.fit,90);
+});
+test('rejected purchasing-fit responses retain a specific reason instead of silently erasing the assessment',()=>{
+ const response={domain:raw.domain,fit:90,purchase:'welded frames',reason:'Assembly application.',buyerRole:'manufacturer',evidence:[{url:evidence[2].url,quote:evidence[2].text}]};
+ const [external]=D.parseBuyerFit(JSON.stringify({companies:[response]}),[raw],profile);
+ assert.equal(external.buyerFit,undefined);
+ assert.match(external.buyerFitIssue,/official.*quote|first-party/i);
+ const [badOffer]=D.parseBuyerFit(JSON.stringify({companies:[{...response,offerId:'offer-99',evidence:[{sourceId:'source-0',quote:evidence[0].text}]}]}),[raw],profile);
+ assert.equal(badOffer.buyerFit,undefined);assert.match(badOffer.buyerFitIssue,/confirmed offer/i);
+ const restored=D.normalizeDiscoveryState({qualityVersion:D.DISCOVERY_QUALITY_VERSION,potentialMatches:[{...external,qualificationGaps:['Verify purchasing application']}]}).potentialMatches[0];
+ assert.equal(restored.buyerFitIssue,external.buyerFitIssue);
+});
+test('an unverified assessment is reported as an incomplete check while valid companies in its batch survive',async()=>{
+ const second={...raw,domain:'other.se',evidence:[{...evidence[0],url:'https://other.se/products'}]},failures=[];
+ const results=await D.researchBuyerFit([raw,second],profile,async()=>JSON.stringify({companies:[
+  {domain:raw.domain,fit:90,offerId:'offer-0',reason:'Assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:evidence[0].text}]},
+  {domain:second.domain,fit:90,offerId:'offer-0',reason:'Assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-99',quote:evidence[0].text}]}
+ ]}),{onFailure:(error,batch)=>failures.push({code:error.code,domains:batch.map(c=>c.domain)})});
+ assert.equal(results[0].buyerFit.fit,90);assert.equal(results[1].buyerFit,undefined);
+ assert.deepEqual(failures,[{code:'BUYER_FIT_EVIDENCE_REJECTED',domains:['other.se']}]);
+});
+test('fit score normalization accepts numeric JSON text and rejects nonnumeric or out-of-range values',()=>{
+ const response={domain:raw.domain,fit:'90',offerId:'offer-0',reason:'Assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:evidence[0].text}]};
+ assert.equal(D.parseBuyerFit(JSON.stringify({companies:[response]}),[raw],profile)[0].buyerFit?.fit,90);
+ for(const fit of ['',null,true,'90%',-1,101])assert.equal(D.parseBuyerFit(JSON.stringify({companies:[{...response,fit}]}),[raw],profile)[0].buyerFit,undefined);
+});
+test('a provider failure on retry clears an old semantic rejection instead of reporting it twice',async()=>{
+ const failures=[];
+ const [result]=await D.researchBuyerFit([{...raw,buyerFitIssue:'Old unverified quote'}],profile,async()=>{throw Object.assign(new Error('Provider unavailable'),{status:502});},{onFailure:error=>failures.push(error.status)});
+ assert.deepEqual(failures,[502]);assert.equal(result.buyerFitIssue,undefined);
+});
+test('a malformed sibling row cannot discard a valid company assessment',async()=>{
+ const second={...raw,domain:'other.se'},failures=[];
+ const results=await D.researchBuyerFit([raw,second],profile,async()=>JSON.stringify({companies:[{domain:raw.domain,fit:90,offerId:'offer-0',reason:'Assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:evidence[0].text}]},null]}),{onFailure:(error,batch)=>failures.push(batch.map(c=>c.domain))});
+ assert.equal(results[0].buyerFit?.fit,90);assert.deepEqual(failures,[['other.se']]);
+});
 test('70 fit without signals stays a monitored lookalike; signals complete qualification',()=>{
  const c={...candidate,evidence:[evidence[0],{...evidence[2],date:'',text:'Nordic operates equipment assembly for renewable energy machines in Sweden.'}]};
  const result=assess(c,'lookalike');assert.equal(result.buyerFitPoints,70);assert.equal(result.signalPoints,0);assert.equal(result.score,70);assert.equal(result.eligible,false);

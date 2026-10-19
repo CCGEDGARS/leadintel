@@ -716,7 +716,10 @@
       "status": 200,
       "contains": [
         "async function researchBuyerFit(candidates=[],profile={},generate,",
-        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined}))"
+        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined,buyerFitIssue:undefined}))",
+        "BUYER_FIT_EVIDENCE_REJECTED",
+        "offerOptions:splitList(profile.priorityOffers)",
+        "function buyerFitSources(candidate={})"
       ]
     },
     {
