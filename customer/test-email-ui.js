@@ -4,6 +4,9 @@ const q=id=>document.getElementById(id);
 const bridge=()=>root.LeadIntelServerBridge;
 const identity=()=>JSON.stringify([bridge()?.session?.user?.id,bridge()?.workspace?.id,bridge()?.gmail?.email]);
 let active=null,busy=false;
+const validRecipient=value=>/^[^\s@<>,;:"\\]+@[^\s@<>,;:"\\]+\.[^\s@<>,;:"\\]+$/.test(String(value||'').trim().toLowerCase());
+// The launch button is live only when a complete email draft exists; the reason is shown as its tooltip.
+function readiness(getContext){try{snapshot(getContext());return '';}catch(e){return e.message;}}
 function snapshot(context){
  if(!context?.item||context.channel!=='email')throw Error('Choose an email message first.');
  const {item,draft,brand}=context;
@@ -29,7 +32,8 @@ function ensureDialog(){
  dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
  dialog.addEventListener('close',()=>{active=null;});
  q('test-email-form').addEventListener('submit',e=>{e.preventDefault();void send();});
- q('test-email-another').onclick=()=>{if(!active||busy)return;active.fresh=true;active.completed=false;q('test-email-submit').disabled=false;q('test-email-another').hidden=true;q('test-email-recipient').disabled=false;q('test-email-status').textContent='Ready for a new test. Confirm the address before sending.';};
+ q('test-email-recipient').addEventListener('input',()=>{if(!active||busy||active.completed)return;q('test-email-submit').disabled=!validRecipient(q('test-email-recipient').value);});
+ q('test-email-another').onclick=()=>{if(!active||busy)return;active.fresh=true;active.completed=false;q('test-email-submit').disabled=!validRecipient(q('test-email-recipient').value);q('test-email-another').hidden=true;q('test-email-recipient').disabled=false;q('test-email-status').textContent='Ready for a new test. Confirm the address before sending.';};
  return dialog;
 }
 function open(getContext){
@@ -39,7 +43,7 @@ function open(getContext){
   if(!bridge()?.gmail?.connected)throw Error('Connect Gmail in Settings before sending a test.');
   const email=snapshot(getContext());active={getContext,email,identity:identity(),workspace:bridge().workspace.id,fresh:false};
   q('test-email-from').textContent=bridge().gmail.email;q('test-email-subject').value='[TEST] '+email.subject.replace(/^\[TEST\]\s*/i,'');q('test-email-preview').textContent=email.body;
-  q('test-email-recipient').value='';q('test-email-recipient').disabled=false;q('test-email-submit').disabled=false;q('test-email-another').hidden=true;q('test-email-status').textContent='Review the preview, then enter your test address.';
+  q('test-email-recipient').value='';q('test-email-recipient').disabled=false;q('test-email-submit').disabled=true;q('test-email-another').hidden=true;q('test-email-status').textContent='Review the preview, then enter your test address.';
  }catch(e){active=null;q('test-email-from').textContent=bridge()?.gmail?.email||'Gmail not connected';q('test-email-subject').value='';q('test-email-preview').textContent='';q('test-email-recipient').value='';q('test-email-submit').disabled=true;q('test-email-another').hidden=true;q('test-email-status').textContent=e.message;}
  if(!dialog.open)dialog.showModal();q('test-email-recipient').focus();
 }
@@ -47,7 +51,7 @@ async function digest(value){const bytes=await root.crypto.subtle.digest('SHA-25
 async function send(){
  if(busy||!active)return;
  const a=active,recipient=q('test-email-recipient').value.trim().toLowerCase();
- if(!/^[^\s@<>,;:"\\]+@[^\s@<>,;:"\\]+\.[^\s@<>,;:"\\]+$/.test(recipient)){q('test-email-status').textContent='Enter one valid test email address.';return;}
+ if(!validRecipient(recipient)){q('test-email-status').textContent='Enter one valid test email address.';return;}
  const current=()=>a===active&&a.identity===identity()&&bridge()?.gmail?.connected&&JSON.stringify(snapshot(a.getContext()))===JSON.stringify(a.email);
  busy=true;q('test-email-submit').disabled=true;q('test-email-recipient').disabled=true;q('test-email-close').disabled=true;q('test-email-cancel').disabled=true;
  try{
@@ -71,12 +75,13 @@ async function send(){
    q('test-email-status').textContent='Delivery is unconfirmed. Check Gmail Sent. Retry checks the same request and will not send another copy.';
   }else throw Error(result.error||'Test email could not be sent.');
  }catch(e){if(a===active)q('test-email-status').textContent=e.message+' If delivery is uncertain, check Gmail Sent before retrying.';}
- finally{busy=false;if(a===active){q('test-email-submit').disabled=Boolean(a.completed);q('test-email-recipient').disabled=Boolean(a.completed);q('test-email-close').disabled=false;q('test-email-cancel').disabled=false;}}
+ finally{busy=false;if(a===active){q('test-email-submit').disabled=Boolean(a.completed)||!validRecipient(q('test-email-recipient').value);q('test-email-recipient').disabled=Boolean(a.completed);q('test-email-close').disabled=false;q('test-email-cancel').disabled=false;}}
 }
 function mount(container,id,getContext){
  if(!container)return;let button=q(id);
  if(!button){button=document.createElement('button');button.id=id;button.type='button';button.className='secondary-btn small';button.textContent='Send test email';container.appendChild(button);}
  button.onclick=()=>open(getContext);const context=getContext();button.hidden=context?.channel!=='email';
+ const reason=button.hidden?'':readiness(()=>context);button.disabled=Boolean(reason);button.title=reason;
 }
 root.LeadIntelTestEmail={mount,open,snapshot};
 if(typeof module!=='undefined'&&module.exports)module.exports=root.LeadIntelTestEmail;

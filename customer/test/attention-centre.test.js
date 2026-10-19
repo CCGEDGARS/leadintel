@@ -218,3 +218,32 @@ test('research provider notice names the missing research tools before a paid ru
   assert.equal(Attention.providerConnected(status([row('apollo',false),row('firecrawl')]),'apollo'),false);
   assert.equal(Attention.providerConnected({services:{providers:[{provider:'apollo',source:'managed'}]}},'apollo'),true);
 });
+
+test('attention warns before the 500 KB sync ceiling and explains the fix when it is exceeded',()=>{
+  const near=Attention.buildAttentionItems({syncBudget:{bytes:430*1024,limit:500*1024,exceeded:false}}).find(item=>item.id==='workspace-sync-budget');
+  assert.ok(near,'a workspace at 86 % of the ceiling gets a notice');
+  assert.equal(near.severity,'recommendation');
+  assert.match(near.detail,/430 KB of the 500 KB sync limit/);
+  assert.match(near.detail,/Clear older company search results/);
+  assert.deepEqual(near.target,{type:'stage',id:'companies'});
+  assert.equal(Attention.buildAttentionItems({syncBudget:{bytes:100*1024,limit:500*1024,exceeded:false}}).some(item=>item.id==='workspace-sync-budget'),false,'a small workspace gets no notice');
+  assert.equal(Attention.buildAttentionItems({}).some(item=>item.id==='workspace-sync-budget'),false,'no measurement, no notice');
+  const over=Attention.syncBudgetNotice({bytes:null,limit:500*1024,exceeded:true});
+  assert.match(over.title,/over the sync limit/);
+  assert.match(over.detail,/cloud saves fail/);
+  assert.equal(Attention.syncBudgetNotice(null),null);
+});
+
+test('workspace persistence measures the compacted sync payload for the attention centre',()=>{
+  const persistence=fs.readFileSync(path.join(root,'workspace-persistence.js'),'utf8');
+  assert.match(persistence,/lastSyncBudget=\{bytes:Number\(prepared\.bytes\)\|\|0,limit,exceeded:false/);
+  assert.match(persistence,/lastSyncBudget=\{bytes:null,limit,exceeded:\/500 KB\|sync limit\/i\.test/);
+  assert.match(persistence,/handleResetClick,syncBudget\}/);
+  const centre=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  assert.match(centre,/syncBudget:persistence\?\.syncBudget\?\.\(\)\|\|null/);
+  assert.match(centre,/Clear older company search results in Companies to bring the workspace under the 500 KB sync limit/);
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.match(html,/attention-centre-model\.js\?v=[^"]*sync-budget=20261019-v1/);
+  assert.match(html,/attention-centre\.js\?v=[^"]*sync-budget=20261019-v1/);
+  for(const file of ['app.js','process-map.js'])assert.match(fs.readFileSync(path.join(root,file),'utf8'),/workspace-persistence\.js\?v=[^"'`\s]*sync-budget=20261019-v1/,file+' reloads persistence');
+});

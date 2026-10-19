@@ -98,6 +98,10 @@
   font-size:10px;
   line-height:1.35;
 }
+.discovery-panel .discovery-cost-estimate{
+  display:block;
+  color:var(--muted);
+}
 .discovery-panel .discovery-run-btn{
   width:100%;
   min-width:0;

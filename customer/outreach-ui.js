@@ -1,7 +1,7 @@
 import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4';
 import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1';
-import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1';
+import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=20261019-v1';
 import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2';

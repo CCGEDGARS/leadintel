@@ -31,6 +31,7 @@
   let saveBusy=false;
   let autoSaveTimer=null;
   let saveError="";
+  let lastSyncBudget=null;
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
@@ -199,7 +200,12 @@
         const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
-        if(root.LeadIntelStateBudget?.prepareForSync)next.payload=root.LeadIntelStateBudget.prepareForSync(next.payload,{allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:root.LeadIntelServerBridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:root.LeadIntelServerBridge?.workspaceCompressionCodec==='workspace-lzw-v2'}).payload;
+        if(root.LeadIntelStateBudget?.prepareForSync){
+          // Remember how close the compacted payload is to the 500 KB ceiling so the workspace can warn before a save fails.
+          const limit=Number(root.LeadIntelStateBudget.MAX_SYNC_BYTES)||500*1024;
+          try{const prepared=root.LeadIntelStateBudget.prepareForSync(next.payload,{allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:root.LeadIntelServerBridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:root.LeadIntelServerBridge?.workspaceCompressionCodec==='workspace-lzw-v2'});lastSyncBudget={bytes:Number(prepared.bytes)||0,limit,exceeded:false,checkedAt:Date.now()};next.payload=prepared.payload;}
+          catch(error){lastSyncBudget={bytes:null,limit,exceeded:/500 KB|sync limit/i.test(String(error?.message||"")),checkedAt:Date.now()};throw error;}
+        }
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;
@@ -253,5 +259,6 @@
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  function syncBudget(){return lastSyncBudget;}
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget};
 })(typeof globalThis!=="undefined"?globalThis:this);

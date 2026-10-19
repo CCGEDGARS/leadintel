@@ -19,7 +19,7 @@
   const MAX_DISCOVERY_TARGET=50;
   const DISCOVERY_QUALITY_VERSION=6;
   const MINIMUM_DISCOVERY_FIT_SCORE=10;
-  const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0,firecrawlSearchCalls:0});
+  const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0,firecrawlSearchCalls:0,firecrawlPageReads:0,firecrawlCallLimit:0,budgetSkippedChecks:0});
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",savingMode:false,queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],providerFallbacks:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],selectedProspects:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
   const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
   const MAX_DISCOVERY_COMPANY_CHECKS=30;
@@ -406,6 +406,16 @@
     return /[a-zåäöāčēģīķļņšūž]/i.test(name);
   }
   function normalizedIdentity(value){return clean(value).toLowerCase().normalize('NFKD').replace(/\p{M}/gu,'').replace(/ß/g,'ss').replace(/ø/g,'o').replace(/[^a-z0-9]+/g,'');}
+  // Legal-form tokens distinguish nothing: "Nasdaq, Inc.", "NASDAQ Inc" and "Nasdaq" are one company and must cost one resolution check.
+  // Distinct brands stay apart: "Nasdaq Baltic" keeps its own key.
+  const LEGAL_FORM_TOKENS=new Set(["the","inc","incorporated","corp","corporation","co","company","ltd","limited","llc","plc","gmbh","ag","sa","nv","bv","oy","oyj","ab","as","asa","aps","uab","sia","ou","kft","srl","sro","spa","se","kg","mbh","pte","pty","llp","lp"]);
+  function companyMentionKey(value){
+    const base=clean(value).toLowerCase().normalize("NFKD").replace(/\p{M}/gu,"").replace(/ß/g,"ss").replace(/ø/g,"o").replace(/\ba\/s\b/g,"as").replace(/(?<=[a-z])\.(?=[a-z])/g,"").replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+    const tokens=base.split(" ").filter(Boolean);
+    while(tokens.length>1&&LEGAL_FORM_TOKENS.has(tokens[tokens.length-1]))tokens.pop();
+    while(tokens.length>1&&LEGAL_FORM_TOKENS.has(tokens[0]))tokens.shift();
+    return tokens.join(" ")||base;
+  }
   function domainMatchesCompany(domain,company){
     const parts=canonicalDomain(domain).split('.');
     const root=normalizedIdentity(parts.at(-2)==='co'||parts.at(-2)==='com'?parts.at(-3):parts.at(-2));
@@ -425,7 +435,7 @@
       const sourceUrl=normalizeUrl(item?.url);if(!sourceUrl)continue;
       const market=clean(item?.market);const text=[clean(item?.description),clean(item?.title),clean(item?.text).slice(0,5000)].join("\n");
       for(const match of text.matchAll(pattern)){
-        const company=cleanCompanyName(match[1]);const key=company.toLowerCase();
+        const company=cleanCompanyName(match[1]);const key=companyMentionKey(company);
         if(!validCompanyName(company)||seen.has(key))continue;
         seen.add(key);mentions.push({company,market,sourceUrl});
         if(mentions.length>=limit)return mentions;
@@ -444,7 +454,7 @@
     const rows=Array.isArray(parsed)?parsed:Array.isArray(parsed?.companies)?parsed.companies:[];
     const seen=new Set();const output=[];
     for(const row of rows){
-      const company=cleanCompanyName(row?.company||row?.companyName);const sourceUrl=normalizeUrl(row?.sourceUrl||row?.source_url);const key=company.toLowerCase();
+      const company=cleanCompanyName(row?.company||row?.companyName);const sourceUrl=normalizeUrl(row?.sourceUrl||row?.source_url);const key=companyMentionKey(company);
       const source=(evidence||[]).find(item=>normalizeUrl(item?.url)===sourceUrl);const sourceIdentity=normalizedIdentity([source?.title,source?.description,source?.text].join(" "));
       if(!validCompanyName(company)||!sourceUrls.has(sourceUrl)||!sourceIdentity.includes(normalizedIdentity(company))||seen.has(key))continue;
       seen.add(key);output.push({company,market:clean(row?.market)||clean((evidence||[]).find(item=>normalizeUrl(item?.url)===sourceUrl)?.market),sourceUrl});
@@ -474,8 +484,8 @@
     const limit=Math.max(1,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,Number(maxCompanies)||10));const own=canonicalDomain(profile.website||profile.companyWebsite||"");
     const seen=new Set();const queries=[];
     for(const mention of mentions||[]){
-      const company=cleanCompanyName(mention?.company);const key=company.toLowerCase();if(!validCompanyName(company)||seen.has(key))continue;
-      if(own&&key===displayFromDomain(own).toLowerCase())continue;
+      const company=cleanCompanyName(mention?.company);const key=companyMentionKey(company);if(!validCompanyName(company)||seen.has(key))continue;
+      if(own&&key===companyMentionKey(displayFromDomain(own)))continue;
       seen.add(key);const market=clean(mention?.market);
       queries.push({id:`resolve-${slug(company)}`,kind:"resolution",company,market,sourceUrl:normalizeUrl(mention?.sourceUrl),offer:"",query:`"${company.replace(/"/g,"")}" ${marketSearchNames(market)} official company website`});
       if(queries.length>=limit)break;
@@ -551,6 +561,34 @@
     const queryCount=target<=10?6:target<=25?8:10;
     return {targetCount:target,queryCount,resultsPerQuery:8};
   }
+  // Firecrawl cost model for one company search request, in calls (one search or one page read each).
+  // Credits per call depend on the customer's Firecrawl plan, so the portal promises a call budget, not a price.
+  const DISCOVERY_COST_MODEL=Object.freeze({targetEvidenceQueries:5,hypothesisQueries:2,followUpQueries:4,mentionsPerTarget:3,verificationSearchesPerCompany:2,pagesPerCompany:3,savingSearchLimit:10,savingCompanyChecks:3,savingPagesPerCompany:1});
+  function estimateDiscoveryCalls({targetCount=DEFAULT_DISCOVERY_TARGET,targetPoolCount=0,savingMode=false,targetOnly=false,recheckOnly=false}={}){
+    const model=DISCOVERY_COST_MODEL;
+    const limits=discoveryLimits(targetCount);
+    const targets=Math.max(0,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,Math.floor(Number(targetPoolCount)||0)));
+    const round=value=>Math.ceil(value/10)*10;
+    if(savingMode){
+      const pages=model.savingCompanyChecks*model.savingPagesPerCompany;
+      return {targetCount:limits.targetCount,savingMode:true,searches:model.savingSearchLimit,pages,total:model.savingSearchLimit+pages,cap:model.savingSearchLimit+pages,stages:{market:0,resolution:0,verification:0,followUp:0}};
+    }
+    if(targetOnly||recheckOnly){
+      const companies=Math.max(1,Math.min(recheckOnly?MAX_DISCOVERY_COMPANY_CHECKS:model.targetEvidenceQueries,targets||1));
+      const searches=companies+companies*model.verificationSearchesPerCompany;
+      const pages=companies*model.pagesPerCompany;
+      return {targetCount:limits.targetCount,savingMode:false,searches,pages,total:searches+pages,cap:round(searches+pages),stages:{market:companies,resolution:0,verification:companies*model.verificationSearchesPerCompany,followUp:0}};
+    }
+    const market=limits.queryCount+Math.min(targets,model.targetEvidenceQueries)+model.hypothesisQueries;
+    const firstMentions=Math.min(MAX_DISCOVERY_COMPANY_CHECKS,limits.targetCount*model.mentionsPerTarget);
+    const followUpMentions=Math.max(0,MAX_DISCOVERY_COMPANY_CHECKS-firstMentions);
+    const followUp=followUpMentions>0?model.followUpQueries+followUpMentions+followUpMentions*model.verificationSearchesPerCompany:0;
+    const resolution=firstMentions,verification=firstMentions*model.verificationSearchesPerCompany;
+    const searches=market+resolution+verification+followUp;
+    const pages=(firstMentions+followUpMentions)*model.pagesPerCompany;
+    return {targetCount:limits.targetCount,savingMode:false,searches,pages,total:searches+pages,cap:round(searches+pages),stages:{market,resolution,verification,followUp:followUp+followUpMentions*model.pagesPerCompany}};
+  }
+  function discoveryCallBudget(options={}){return estimateDiscoveryCalls(options).cap;}
 
   function buildDiscoveryQueries(profile={},marketState={},maxQueries=4,previousQueries=[]){
     if(marketState.icps?.length&&!marketState.icps.some(item=>item.active!==false))return [];
@@ -638,11 +676,12 @@
     return output;
   }
 
-  function buildCandidateVerificationQueries(results=[],profile={},marketState={},maxCandidates=10,{includeIndependent=true}={}){
+  function buildCandidateVerificationQueries(results=[],profile={},marketState={},maxCandidates=10,{includeIndependent=true,excludeDomains=[]}={}){
     const limit=Math.max(1,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,Number(maxCandidates)||10));
     const signals=activeSignals(marketState).filter(signal=>allowTenderDiscovery(marketState)||!isTenderSignal(signal)).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0));
     const own=canonicalDomain(profile.website||profile.companyWebsite||"");
-    const seen=new Set();
+    // Domains verified earlier in the same run are never paid for twice.
+    const seen=new Set((Array.isArray(excludeDomains)?excludeDomains:[]).map(value=>companyIdentityDomain(value)).filter(Boolean));
     const checks=[];let checkedCompanies=0;
     for(const item of results||[]){
       const domain=companyIdentityDomain(item?.domain||item?.url);
@@ -1586,7 +1625,7 @@
   function normalizeDiscoveryFunnel(value={}){
     const input=value&&typeof value==="object"?value:{};
     const count=key=>clamp(Math.floor(Number(input[key])||0),0,1000000,0);
-    return {marketSearchesCompleted:count("marketSearchesCompleted"),marketSearchesTotal:count("marketSearchesTotal"),evidencePages:count("evidencePages"),companiesIdentified:count("companiesIdentified"),officialDomainsResolved:count("officialDomainsResolved"),companySitesChecked:count("companySitesChecked"),verifiedCompanies:count("verifiedCompanies"),qualifiedCompanies:count("qualifiedCompanies"),adaptiveFollowUpSearches:count("adaptiveFollowUpSearches"),openAiFallbackSearches:count("openAiFallbackSearches"),firecrawlSearchCalls:count("firecrawlSearchCalls")};
+    return {marketSearchesCompleted:count("marketSearchesCompleted"),marketSearchesTotal:count("marketSearchesTotal"),evidencePages:count("evidencePages"),companiesIdentified:count("companiesIdentified"),officialDomainsResolved:count("officialDomainsResolved"),companySitesChecked:count("companySitesChecked"),verifiedCompanies:count("verifiedCompanies"),qualifiedCompanies:count("qualifiedCompanies"),adaptiveFollowUpSearches:count("adaptiveFollowUpSearches"),openAiFallbackSearches:count("openAiFallbackSearches"),firecrawlSearchCalls:count("firecrawlSearchCalls"),firecrawlPageReads:count("firecrawlPageReads"),firecrawlCallLimit:count("firecrawlCallLimit"),budgetSkippedChecks:count("budgetSkippedChecks")};
   }
 
   function normalizeDiscoveryState(value={}){
@@ -1769,5 +1808,5 @@
     const q=assessAutomaticQualification(candidate,profile,marketState,settings,now);
     return {...q,qualificationKind:'company',opportunityEligible:q.eligible,opportunityGaps:q.gaps,eligible:q.companyEligible,gaps:q.companyGaps,score:q.companyScore};
   }
-  return {effectiveTargetingProfile:Market.effectiveTargetingProfile,matchBuyerDecisionEvidence,buyerDecisionEvidence,isExecutiveBuyer,buyerSelectionRoles,linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,assessCompanyQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {effectiveTargetingProfile:Market.effectiveTargetingProfile,matchBuyerDecisionEvidence,buyerDecisionEvidence,isExecutiveBuyer,buyerSelectionRoles,linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,assessCompanyQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,estimateDiscoveryCalls,discoveryCallBudget,DISCOVERY_COST_MODEL,companyMentionKey,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
