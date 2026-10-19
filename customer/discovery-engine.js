@@ -1355,7 +1355,7 @@
   }
   function recommendedBuyers(pool=[],profile={}){
     const ranked=selectDecisionMakers(pool.filter(person=>person.identityStatus!=='pending'&&clean(person.publicName||person.name).split(/\s+/).length>=2),profile,20);
-    const selected=ranked.filter(person=>person.kept).slice(0,6),remaining=ranked.filter(person=>!person.kept);
+    const selected=ranked.filter(person=>person.kept).slice(0,10),remaining=ranked.filter(person=>!person.kept);
     const family=person=>{
       const role=clean(person.matchedBuyerRole||person.title).toLowerCase();
       if(/procure|purchas|sourcing|inköp/.test(role))return 'procurement';
@@ -1365,8 +1365,8 @@
       return role;
     };
     const covered=new Set(selected.map(family));
-    for(const person of remaining)if(selected.length<6&&!covered.has(family(person))){selected.push(person);covered.add(family(person));}
-    for(const person of remaining)if(selected.length<6&&!selected.includes(person))selected.push(person);
+    for(const person of remaining)if(selected.length<10&&!covered.has(family(person))){selected.push(person);covered.add(family(person));}
+    for(const person of remaining)if(selected.length<10&&!selected.includes(person))selected.push(person);
     return selected;
   }
   function rankedBuyerShortlist(pool=[],profile={},candidate={}){
