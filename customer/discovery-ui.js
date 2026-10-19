@@ -1040,7 +1040,9 @@ function researchReviewRows(){
 function researchReviewStatus(candidate){
   const q=qualificationAssessment(candidate);
   const gaps=(q.gaps||[]).filter(Boolean);
-  const hardFailure=gaps.some(reason=>/buyer fit below|outside (?:the )?target market|excluded|suppressed|wrong market|does not match (?:the )?target|not (?:a )?target/i.test(reason));
+  const hardFailure=gaps.some(reason=>/company offers the same service rather than the required buyer profile|seller or reference customer cannot be a new prospect|crm lifecycle blocks automatic prospecting|(?:explicit|verified) exclusion|excluded by approved|company is suppressed/i.test(reason));
+   // Missing attributable commercial evidence can yield buyer-fit points below 50/70.
+   // That is research uncertainty, not proof the company is commercially unsuitable.
   return {q,gaps,status:hardFailure?'not-qualified':'needs-evidence'};
 }
 function removeResearchReviewCompany(key){
