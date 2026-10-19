@@ -1428,6 +1428,11 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
   };
   const apollo=async phoneLookup=>{
     try{
+    // Free-first: automation approval is not permission to spend provider credits.
+    // Require a separate, immediate user confirmation for each paid-provider lookup.
+    if(automatic){issues.push('Apollo enrichment requires manual credit approval; free-source research remains available');return;}
+    const approved=await (window.LeadIntelDialogs?.confirm(`Apollo ${phoneLookup?'phone':'email'} lookup may consume provider credits. Approve this individual lookup?`)??Promise.resolve(false));
+    if(!approved){issues.push('Apollo credit lookup skipped — not approved');return;}
     if(automatic){
       const response=await fetch(`${LEADINTEL_API}/api/approved-workflow?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const approved=await response.json().catch(()=>({}));
       if(!response.ok||approved.status!=='automatic'||(phoneLookup?approved.config?.buyers?.confirmPhone!==true:approved.config?.buyers?.confirmContacts!==true)){issues.push('Approve automatic contact confirmation in Workflow automation');return;}
@@ -1461,7 +1466,10 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
       if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true}))await apollo(false);
       let hunterReady=false;
       try{const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const payload=await status.json();const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{}
-      if(hunterReady){
+      if(hunterReady&&!automatic){
+        const hunterApproved=await (window.LeadIntelDialogs?.confirm('Hunter email finding/verification may consume provider credits. Approve Hunter checks for this contact?')??Promise.resolve(false));
+        if(!hunterApproved){issues.push('Hunter credit checks skipped — not approved');}
+        if(hunterApproved){
         const name=String(person.publicName||person.name||'').trim().split(/\s+/);
         const contact=enrichmentResults.get(key)?.contact||{};
         let found=contact.work_email||contact.normalized_email||person.publicEmail||'';
@@ -1476,6 +1484,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
               const company=await ensureCrmCompany(candidate);const mapped=window.LeadIntelCrm.mapContacts([person])[0];const saved=await bridge().saveCrmContacts(company.id,[{...mapped,work_email:found,email_status:'verified',source:'hunter'}]);if(!saved?.ok)throw new Error(saved?.error||'Verified email could not be saved');enrichmentResults.set(key,{contact:{...contact,name:person.publicName||person.name,work_email:found,email_status:'verified',source:'hunter'}});
             }else issues.push('Additional Hunter check did not confirm an attributable company email');
           }catch(error){issues.push(`Hunter check: ${error.message}`);}
+        }
         }
       }
 
