@@ -9,7 +9,7 @@ Observed:
 Changes:
 
 - `backend/src/login-throttle.js` + migration `0040_login_attempts.sql`: after 10 failed attempts for the same client (CF-Connecting-IP) and e-mail within 15 minutes, `/api/login` answers `429` with `Retry-After` for 15 minutes; a successful sign-in clears the record; stale rows are pruned on write. Every storage error fails open so the real owner can never be locked out by infrastructure.
-- The check runs before the credential compare; failures are recorded after the audit event.
+- Reserve-then-verify: the attempt is counted in one atomic `INSERT … ON CONFLICT DO UPDATE … RETURNING` statement before the credential compare, so concurrent attempts cannot bypass the limit (found by the automated security review of the first version, which read the counter and wrote it back in two statements).
 
 Verification: `backend/test/login-throttle.test.mjs` (SQLite fixture through the real migration) and the full backend suite.
 

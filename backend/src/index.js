@@ -2,7 +2,7 @@ import {storageErrorResponse} from './workspace-storage.js';
 import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
-import {loginThrottleKey,checkLoginThrottle,recordLoginFailure,clearLoginThrottle} from "./login-throttle.js";
+import {loginThrottleKey,reserveLoginAttempt,clearLoginThrottle} from "./login-throttle.js";
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 import {assessCandidate,compileQueries} from "./quality.js";
 import {listRuns,policyFor,recordRunEvent,runBudgetState,validDispatchUrl} from "./runs.js";
@@ -37,11 +37,10 @@ async function router(request,env) {
   if(url.pathname==="/api/login"&&request.method==="POST") {
     const body=await request.json().catch(()=>({}));
     const throttleKey=await loginThrottleKey(request,body.email);
-    const throttle=await checkLoginThrottle(env,throttleKey);
+    const throttle=await reserveLoginAttempt(env,throttleKey);// counted before the compare: concurrent attempts cannot bypass the limit
     if(!throttle.allowed)return error("Too many sign-in attempts. Try again later.",429,{...cors,"Retry-After":String(throttle.retryAfterSeconds)});
     if(!constantTimeEqual(body.email||"",env.ADMIN_EMAIL||"")||!constantTimeEqual(body.password||"",env.ADMIN_PASSWORD||"")) {
       await audit(env,{type:"auth.login_failed",metadata:{email:String(body.email||"").slice(0,120)}});
-      await recordLoginFailure(env,throttleKey);
       return error("Invalid email or password",401,cors);
     }
     const user=await env.DB.prepare("SELECT * FROM users WHERE email=? COLLATE NOCASE").bind(env.ADMIN_EMAIL).first();
