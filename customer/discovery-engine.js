@@ -919,7 +919,13 @@
   function evidenceDate(source={}){return EvidencePolicy.publication(source).date;}
   function currentSignals(signals=[]){return signals.filter(signal=>(signal.evidence||[]).some(source=>EvidencePolicy.recency(source).status==='recent'));}
   function dedupeCompanyEvidence(evidence=[]){
-    const seen=new Set();return evidence.filter(source=>{
+    const versions=new Map();
+    for(const source of evidence){
+      const normalized=normalizeUrl(source.url);if(!normalized)continue;const url=new URL(normalized);url.search='';url.hash='';
+      const key=url.href.replace(/\/$/,''),previous=versions.get(key);
+      if(!previous||Date.parse(source.verifiedAt)>(Date.parse(previous.verifiedAt)||0))versions.set(key,source);
+    }
+    const seen=new Set();return [...versions.values()].filter(source=>{
       const normalized=normalizeUrl(source.url);if(!normalized)return false;const url=new URL(normalized);url.search='';url.hash='';
       const title=normalizedIdentity(source.title);const content=normalizedIdentity(source.text||source.description).slice(0,600);
       const keys=[`url:${url.href.replace(/\/$/,'')}`,...(title.length>=30?[`title:${title}`]:[]),...(content.length>=80?[`body:${content}`]:[])];
@@ -1094,6 +1100,10 @@
       if(qualifiedDomains.has(domain)||isExcludedDiscoverySource(item,profile,marketState))continue;
       const candidate=grouped.get(domain)||{domain,company,market:clean(item?.market),website:`https://${domain}/`,previousNames:item.previousNames||[],evidence:[]};
       if(!candidate.market&&item.market)candidate.market=clean(item.market);
+      // Resolution snippets precede the website reads. Keep the newer verified page,
+      // including its text and timestamp, rather than freezing the first URL hit.
+      const staleIndex=candidate.evidence.findIndex(e=>normalizeUrl(e.url)===normalizeUrl(item.url));
+      if(staleIndex>=0&&Date.parse(item.verifiedAt)>(Date.parse(candidate.evidence[staleIndex].verifiedAt)||0))candidate.evidence.splice(staleIndex,1);
       if(!candidate.evidence.some(evidence=>normalizeUrl(evidence.url)===normalizeUrl(item.url))){
         const external=canonicalDomain(item.url)!==domain&&!canonicalDomain(item.url).endsWith(`.${domain}`);
         const attributed=external?[company,...(item.previousNames||[])].map(name=>attributedCompanyEvidence(item,name)).find(Boolean)||'':'';

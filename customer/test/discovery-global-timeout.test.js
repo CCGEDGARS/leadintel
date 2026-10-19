@@ -235,6 +235,67 @@ test('a successful first pass with no qualified companies gets one bounded follo
   assert.equal(result.funnel.adaptiveFollowUpSearches,4);
 });
 
+test('an isolated verification outage does not prevent qualifying readable companies and broadening the search',async()=>{
+  let marketRequests=0;
+  const names=['North Steel','Polar Engineering'];
+  const slug=name=>name.toLowerCase().replace(/[^a-z]/g,'');
+  const text=name=>`${name} manufactures mining machinery in Latvia. Its production facilities assemble industrial equipment. The company plans a new factory to expand manufacturing capacity.`;
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async(url,options)=>{
+    const body=JSON.parse(options.body||'{}');
+    if(body.task==='buyer-fit'){
+      const supplied=JSON.parse(body.prompt.split('. Companies: ')[1]);
+      return {ok:true,json:async()=>({text:JSON.stringify({companies:supplied.map(c=>({domain:c.domain,fit:90,purchase:'industrial automation',reason:'Automation equipment supports the evidenced machinery assembly operations.',buyerRole:'industrial manufacturer',evidence:[{url:c.evidence.find(e=>e.url.includes(c.domain)).url,quote:text(c.company)}]}))})})};
+    }
+    if(String(url).includes('/firecrawl-scrape')){
+      const name=names.find(n=>body.url.includes(slug(n)))||names[0];
+      return {ok:true,json:async()=>({data:{markdown:text(name),metadata:{sourceURL:body.url,title:name}}})};
+    }
+    const query=body.query||'';
+    if(query.startsWith('site:northsteel.lv'))return {ok:false,status:502,json:async()=>({})};
+    const name=query.includes('Polar Engineering')||query.includes('polarengineering.lv')?names[1]:query.includes('North Steel')||query.includes('northsteel.lv')?names[0]:names[marketRequests++<6?0:1];
+    const official=query.startsWith('site:')||query.startsWith('"')&&!query.includes('-site:');
+    return {ok:true,json:async()=>({success:true,data:[{url:official?`https://${slug(name)}.lv/`:`https://industrynews.lv/${slug(name)}`,title:`${name} plans a new factory`,description:text(name),markdown:text(name)}]})};
+  }});
+  await context.__runDiscovery();
+  const state=context.__discoveryState();
+  assert.ok(state.searchFailures.some(f=>f.status===502),'the source failure remains visible');
+  assert.equal(state.funnel.adaptiveFollowUpSearches,4,'healthy evidence still drives the bounded follow-up');
+  assert.ok(state.candidates.some(c=>c.domain==='polarengineering.lv'&&c.qualification.eligible),JSON.stringify({candidates:state.candidates.map(c=>c.domain),review:state.potentialMatches.map(c=>({domain:c.domain,gaps:c.qualificationGaps,buyerFit:c.buyerFit})),failures:state.searchFailures}));
+});
+
+test('a single-company recheck spends calls only on the requested review company',async()=>{
+  const queries=[];
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async(_url,options)=>{
+    const body=JSON.parse(options.body||'{}');if(body.query)queries.push(body.query);
+    return {ok:true,json:async()=>body.task?{text:'{"companies":[]}'}:{success:true,data:[]}};
+  }});
+  context.__setDiscovery({potentialMatches:[{company:'North Steel',domain:'northsteel.lv',market:'Latvia',qualificationGaps:['Verify company evidence'],evidence:[{url:'https://northsteel.lv/',text:'North Steel manufactures industrial equipment in Latvia.'}]},{company:'Polar Engineering',domain:'polarengineering.lv',market:'Latvia',qualificationGaps:['Verify company evidence'],evidence:[{url:'https://polarengineering.lv/',text:'Polar Engineering manufactures industrial equipment in Latvia.'}]}]});
+  await context.__runDiscovery({recheckOnly:true,targetDomain:'northsteel.lv'});
+  assert.ok(queries.length>0);
+  assert.ok(queries.every(query=>!query.includes('Polar Engineering')&&!query.includes('polarengineering.lv')),'a row recheck must not run the bulk list');
+});
+
+test('retrying failed websites preserves the verification timestamp of retained review evidence',async()=>{
+  const at=new Date().toISOString();
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>({ok:true,json:async()=>({data:[],text:'{"companies":[]}'})})});
+  context.__setDiscovery({status:'error',lastRunAt:at,potentialMatches:[{company:'North Steel',domain:'northsteel.lv',market:'Latvia',qualificationGaps:['Verify purchasing application'],evidence:[{url:'https://northsteel.lv/',verifiedAt:at,text:'North Steel manufactures industrial equipment in Latvia. Our production facilities assemble mining machinery for international industrial customers.'}]}],searchFailures:[{phase:'verifying',status:502,domain:'polarengineering.lv',queryMeta:{id:'verify-polar',kind:'verification',domain:'polarengineering.lv',company:'Polar Engineering',market:'Latvia',query:'site:polarengineering.lv manufacturing'}}]});
+  await context.__retryFailedDiscoveryChecks();
+  const retained=context.__discoveryState().potentialMatches.find(c=>c.domain==='northsteel.lv');
+  assert.equal(retained.evidence[0].verifiedAt,at);
+});
+
+test('a row recheck can reach a company beyond the bulk thirty-company check limit',async()=>{
+  const queries=[];
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async(_url,options)=>{
+    const body=JSON.parse(options.body||'{}');if(body.query)queries.push(body.query);
+    return {ok:true,json:async()=>body.task?{text:'{"companies":[]}'}:{success:true,data:[]}};
+  }});
+  context.__setDiscovery({potentialMatches:Array.from({length:35},(_,i)=>({company:`Factory ${i}`,domain:`factory${i}.lv`,market:'Latvia',qualificationGaps:['Verify company evidence'],evidence:[{url:`https://factory${i}.lv/`,text:`Factory ${i} manufactures industrial equipment in Latvia.`}]}))});
+  await context.__runDiscovery({recheckOnly:true,targetDomain:'factory34.lv'});
+  assert.ok(queries.length>0,'the clicked company is researched even when it lies beyond the bulk cap');
+  assert.ok(queries.every(query=>query.includes('factory34.lv')));
+});
+
 test('a completed zero-result run renders the search funnel and unqualified matches separately',()=>{
   const context=loadDiscoveryRunner({renderNodes:true,researchMode:'quick'});
   context.__setDiscovery({
