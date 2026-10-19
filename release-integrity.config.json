@@ -263,17 +263,25 @@
       ]
     },
     {
-      "id": "top-four-selective-research",
+      "id": "full-roster-contact-research",
       "type": "text",
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "topFourResearchCandidates",
+        "buyerResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
         "Unverified email patterns",
         "Profile matched automatically",
-        "Phone source needs rechecking"
+        "Phone source needs rechecking",
+        "automatic contact research for all retained people",
+        "top 4 ranked recommendations",
+        "Contact checks complete:",
+        "const passages=candidate.people.slice(0,10)"
+      ],
+      "notContains": [
+        "top 4 researched by default",
+        "Other candidates are researched only when requested"
       ]
     },
     {
@@ -308,7 +316,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "buyer-contacts-v20-attributed-sources",
+        "buyer-contacts-v21-full-roster",
         "Resume incomplete checks",
         "Identity discovery"
       ]
@@ -2979,6 +2987,28 @@
       "notContains": [
         "let people=candidate.buyerRolesChanged?[]",
         "Previous buyer suggestions are hidden;"
+      ]
+    },
+    {
+      "id": "full-roster-research-engine",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerResearchCandidates(",
+        "target:10,shortfall",
+        "function buyerReviewEvidence("
+      ]
+    },
+    {
+      "id": "bounded-buyer-response-body",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "typeof response.text==='function'?response.text()",
+        "Optional evidence review unavailable; individual source checks are retained",
+        "timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)"
       ]
     }
   ],

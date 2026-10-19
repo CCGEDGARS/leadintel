@@ -86,12 +86,14 @@ const boundedDiscoveryRuntime = [
   'Research incomplete',
   'Buyer research saved locally',
   'Company website verification:',
-  'buyer-contacts-v20-attributed-sources Resume incomplete checks Identity discovery',
+  'buyer-contacts-v21-full-roster Resume incomplete checks Identity discovery',
+  'function buyerResearchCandidates( function buyerReviewEvidence( target:10,shortfall',
+  "typeof response.text==='function'?response.text() Optional evidence review unavailable; individual source checks are retained timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)",
   'const rolesRefreshBlocked= Saved people remain visible for review. candidate.people=rolesRefreshBlocked?candidate.people||[]:shortlist.people;',
   'Buying committee coverage incomplete 2 + 2 buying committee represented data-research-executive 20261005-committee-2plus2-v1',
   'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
-  'topFourResearchCandidates data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
+  'const passages=candidate.people.slice(0,10) buyerResearchCandidates automatic contact research for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
 

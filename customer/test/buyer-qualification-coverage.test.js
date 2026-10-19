@@ -22,8 +22,8 @@ test('adaptive coverage targets missing functions with diverse sources and does 
  assert.deepEqual(plan.missing,['Executive','Procurement / sourcing','Engineering','Operations']);
  assert.ok(plan.queries.some(q=>q.includes('site:example.com')&&q.includes('Teknisk chef')));
  assert.ok(plan.queries.some(q=>q.includes('linkedin.com/in/')));assert.ok(plan.queries.length<=8);
- const complete=D.buyerCoveragePlan([buyer({title:'CEO'}),buyer(),buyer({title:'Strategisk inköpare'}),buyer({title:'Teknisk chef'}),buyer({title:'Driftchef'})],profile,company);
- assert.deepEqual(complete.missing,[]);assert.deepEqual(complete.queries,[]);
+ const complete=D.buyerCoveragePlan([buyer({title:'CEO'}),buyer(),buyer({title:'Strategisk inköpare'}),buyer({title:'Teknisk chef'}),buyer({title:'Driftchef'})].map((p,i)=>({...p,id:String(i),name:'Anna Buyer'+i})),profile,company);
+ assert.deepEqual(complete.missing,[]);assert.equal(complete.shortfall,5);assert.ok(complete.queries.length>0);assert.ok(complete.queries.length<=8);
 });
 test('pending identities are not duplicated into the full-name pool or lost when saving a buyer in a twenty-person pool',()=>{
  const pool=Array.from({length:20},(_,i)=>buyer({id:String(i),name:`Anna Buyer${i}`}));

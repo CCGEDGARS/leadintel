@@ -30,7 +30,7 @@ test('refresh merges twenty candidates, keeps pinned buyers and never erases sou
  incoming.push({name:'Anna Buyer',title:'Procurement Director',publicLinkedinUrl:'https://linkedin.com/in/anna',publicEmail:''});
  const pool=D.mergeBuyerPool(prior,incoming,profile);
  assert.equal(pool.length,20);assert.equal(pool[0].id,'original');assert.equal(pool[0].publicEmail,'anna@example.com');assert.equal(pool[0].patternFindings[0].email,'anna@gmail.com');
- const visible=D.recommendedBuyers(pool,profile);assert.equal(visible.length,6);assert.equal(visible[0].kept,true);
+ const visible=D.recommendedBuyers(pool,profile);assert.equal(visible.length,10);assert.equal(visible[0].kept,true);
  const saved=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:visible,buyerDiscovery:{pool,found:20}}]}).selectedProspects[0];
  assert.equal(saved.people[0].kept,true);assert.equal(saved.buyerDiscovery.pool[0].publicEmail,'anna@example.com');assert.equal(saved.buyerDiscovery.pool[0].patternFindings[0].email,'anna@gmail.com');
 });
