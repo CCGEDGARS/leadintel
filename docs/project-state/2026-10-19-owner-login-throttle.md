@@ -16,3 +16,9 @@ Verification: `backend/test/login-throttle.test.mjs` (SQLite fixture through the
 Action for the repository owner: rotate the Firecrawl key that appears in history; consider purging it from history as well, since rotation alone leaves a dead key visible.
 
 Prevention: new credential-bearing endpoints get a throttle with a fail-open store; keys never enter the repository (Worker secrets only).
+
+## Release Integrity double run (same day, follow-up)
+
+Observed: every push that touches `backend/` starts two Release Integrity runs — one when Customer V2 CI completes, one when Backend Deploy completes. The run that starts first looks up the other required run, finds no *completed* run for the SHA (`status == "completed"` filter) and fails with `BLOCKED_CI · Required CI did not succeed`, sending a failure e-mail; the second run then proves the release. Seen for `bdba0c29`, `9f929752`, `1444c212`, `9f1432be` and `a6dfc98b` on 19 October.
+
+Change: in "Resolve automatic CI and deployment evidence", when no completed sibling run exists but one for the same SHA is still queued or in progress, the step outputs `deferred=true`; the proof step is skipped with a `DEFERRED` log line instead of failing, and the sibling's completion triggers the proof as before. A missing sibling run (not merely pending) still fails as today, and the 15-minute scheduled proof is unchanged.
