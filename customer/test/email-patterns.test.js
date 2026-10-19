@@ -78,6 +78,7 @@ test('source failures preserve evidence and are reported as unavailable, never a
 test('focused grounded search can recover a name and address from a public association PDF',async()=>{
   const candidates=[];
   const focusedContext={...context,crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'workspace-1'}}),LEADINTEL_API:'https://api.test',
+    fetchFirecrawlBuyerResearch:async()=>({ok:true,json:async()=>({data:{markdown:'Lotta Lyrå · E-mail: lotta.lyra@sodra.com · Board member'}})}),
     searchBuyerPublicPages:async query=>{candidates.push(query);return [];},
     fetch:async(_url,options)=>{const body=JSON.parse(options.body);assert.match(body.query,/"lotta.lyra@sodra.com" "Lotta Lyrå"/);return {ok:true,json:async()=>({results:[{url:'https://association.test/annual-report.pdf',description:'Lotta Lyrå · E-mail: lotta.lyra@sodra.com · Board member'}]})};}};
   focusedContext.fetchBuyerResearch=focusedContext.fetch;
@@ -85,11 +86,11 @@ test('focused grounded search can recover a name and address from a public assoc
   vm.runInNewContext(`${source.slice(searchStart,searchEnd)};globalThis.search=searchBuyerEmailPatterns;`,focusedContext);
   const candidate={domain:'sodra.com',people:[{publicName:'Lotta Lyrå'}]};
   const research=await focusedContext.search(candidate,[],new AbortController().signal);
-  assert.equal(research.searches,7);
+  assert.equal(research.searches,9);
   assert.equal(research.failed,0);
   assert.equal(candidate.people[0].patternFindings[0].email,'lotta.lyra@sodra.com');
   assert.equal(candidate.people[0].patternFindings[0].url,'https://association.test/annual-report.pdf');
-  assert.match(candidates[5],/lotta.lyra@sodra.com/);
+  assert.match(candidates[6],/lotta.lyra@sodra.com/);
 });
 test('Gmail discovery searches full name and company and accepts a sourced non-pattern address',async()=>{
  const queries=[];
@@ -111,7 +112,7 @@ test('Gmail display uses Not found and never displays guessed Hunter addresses',
  assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Publicly listed · unverified/);
 });
 test('person-first official research recovers a published email and phone even when guesses return nothing',async()=>{
- const queries=[],ctx={...context,crmAuthenticated:()=>false,searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};
+ const queries=[],ctx={...context,crmAuthenticated:()=>false,fetchFirecrawlBuyerResearch:async()=>({ok:true,json:async()=>({data:{markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}})}),searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};
  const start=source.indexOf('async function searchBuyerEmailPatterns('),end=source.indexOf('async function groundedBuyerFollowUp(',start);
  vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
  const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina',title:'Engineering Manager'}]};

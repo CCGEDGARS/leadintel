@@ -271,7 +271,9 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email \u00b7 ownership unconfirmed"
+        "Unverified email patterns",
+        "Profile matched automatically",
+        "Phone source needs rechecking"
       ]
     },
     {
@@ -306,7 +308,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "buyer-contacts-v19-independent-checks",
+        "buyer-contacts-v20-attributed-sources",
         "Resume incomplete checks",
         "Identity discovery"
       ]
@@ -318,7 +320,9 @@
       "status": 200,
       "contains": [
         "function linkedInVerification(",
-        "function buyerDisplayTitle("
+        "function buyerDisplayTitle(",
+        "function matchBuyerRoleEvidence(",
+        "publicPhoneSourceCheck"
       ]
     },
     {

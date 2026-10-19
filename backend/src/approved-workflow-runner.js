@@ -6,7 +6,7 @@ import '../../customer/discovery-engine.js';
 import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage,renderDefaultWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
-import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities} from './service-integrations.js';
+import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities,fetchDirectPublicPage} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
 import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
@@ -53,7 +53,7 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard){
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard){
+export async function researchBuyerContacts(candidate,search,guard,readPage){
   for(let offset=0;offset<candidate.people.length;offset+=2){
     await guard();
     await Promise.all(candidate.people.slice(offset,offset+2).map(async person=>{
@@ -64,10 +64,16 @@ export async function researchBuyerContacts(candidate,search,guard){
       const queries=[`site:${candidate.domain} "${name}"`,`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" (${emailTerms})`,`"${name}" "${candidate.company}" "@gmail.com"`];
       const settled=await Promise.allSettled(queries.map(query=>search(query)));
       const rows=settled.flatMap(row=>row.status==='fulfilled'?row.value:[]),failed=settled.filter(row=>row.status==='rejected').length;
-      const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0];Object.assign(person,matched,discovery.matchBuyerScopeEvidence(matched,rows,candidate));
+      let extractionFailed=0;
+      if(readPage){
+        const sources=[...new Set([person.publicPhoneUrl,...rows.filter(row=>{try{const url=new URL(row.url);return ['http:','https:'].includes(url.protocol)&&!/(^|\.)linkedin\.com$/i.test(url.hostname);}catch{return false;}}).map(row=>row.url)].filter(Boolean))].slice(0,3);
+        for(const url of sources)try{await guard();const page=await readPage(url),markdown=page.markdown||page.content||page.text||'';if(!String(markdown).trim())throw new Error('Contact source text unavailable');rows.push({url:page.metadata?.sourceURL||url,markdown,sourceRead:true});}catch{extractionFailed++;}
+      }
+      const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain,candidate.company)[0];Object.assign(person,matched,discovery.matchBuyerScopeEvidence(matched,rows,candidate));
+      Object.assign(person,discovery.matchBuyerRoleEvidence(person,rows,candidate,{complete:true}));
       const findings=discovery.sourcedBuyerEmails(person,candidate.domain,rows,candidate.company);
       if(findings.length)person.patternFindings=[...new Map([...(person.patternFindings||[]),...findings].map(item=>[item.email,item])).values()];
-      person.emailResearch={status:failed===queries.length?'unavailable':failed?'partial':'complete',searches:queries.length,failed,checkedAt:new Date().toISOString()};
+      person.emailResearch={status:failed===queries.length?'unavailable':failed||extractionFailed?'partial':'complete',searches:queries.length,failed:failed+extractionFailed,checkedAt:new Date().toISOString()};
     }));
     await guard();
   }
@@ -77,10 +83,11 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   if(company&&company.lifecycle_status!=='prospect')return null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
   const saved=stateBudget.restoreFromSync(parse(state?.payload_json)).discovery||{};
-  const prior=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].find(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
+  const priorRecords=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].filter(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
+  const priorPeople=priorRecords.flatMap(item=>[...(item.buyerDiscovery?.pool||[]),...(item.people||[])]);
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard);
   const profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
-  let pool=discovery.mergeBuyerPool([...(prior?.buyerDiscovery?.pool||[]),...(prior?.people||[])],research.people,profile);
+  let pool=discovery.mergeBuyerPool(priorPeople,research.people,profile);
   candidate.buyerDiscovery={researchVersion:"20261004-research-state-v1",target:20,found:pool.length,pool,providerStatus:research.providerStatus,resultDiagnostics:research.resultDiagnostics,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
@@ -106,7 +113,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard);
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>(await fetchDirectPublicPage(url)).data);
   candidate.publicResearch={checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
   pool=discovery.mergeBuyerPool(pool,candidate.people,profile);candidate.buyerDiscovery.pool=pool;
@@ -114,7 +121,9 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
   const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
-  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel)&&!candidate.people.some(person=>String(person.name||'').toLowerCase()===String(p.name||'').toLowerCase()&&(person.opportunityScope?.status==='review_required'||discovery.qualifyBuyer(person,profile,candidate).gaps.some(gap=>gap.startsWith('Buyer country differs')))));
+  const buyerName=person=>String(person.publicName||person.name||'').trim().toLowerCase();
+  const knownPeople=[...priorPeople.filter(person=>!pool.some(current=>buyerName(current)===buyerName(person))),...pool];
+  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel)&&!knownPeople.some(person=>buyerName(person)===buyerName(p)&&!discovery.qualifyBuyer(person,profile,candidate).eligible));
   const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   const crmContext={workspaceId,userId,role:'owner'};
@@ -132,6 +141,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
     for(const person of candidate.people.slice(0,6)){
       await guard();
+      if(!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
       const findings=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
       const source=findings.find(item=>globalThis.LeadIntelContactPolicy.publicSource(item.email,person.publicName||person.name,item.url,candidate.domain));if(!source)continue;
       try{const contact=await confirmPublicWorkEmail(env,crmContext,target.id,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url});await guard();if(globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel))return complete(contact);}catch(error){candidate.buyerDiscovery.issues.push(error.message);}
@@ -148,7 +158,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
       const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
       for(const person of candidate.people.slice(0,6)){
         await guard();
-        if(person.identityStatus==='pending'||!discovery.hasFullBuyerName(person.publicName||person.name))continue;
+        if(person.identityStatus==='pending'||!discovery.hasFullBuyerName(person.publicName||person.name)||!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
         // Public-derived IDs cannot be sent to Apollo. Resolve an attributable
         // directory identity first using the existing identity trace.
         const matches=directoryPeople.filter(item=>String(item.publicName||item.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()||Boolean(person.publicLinkedinUrl&&item.linkedin_url===person.publicLinkedinUrl));

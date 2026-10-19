@@ -86,11 +86,11 @@ const boundedDiscoveryRuntime = [
   'Research incomplete',
   'Buyer research saved locally',
   'Company website verification:',
-  'buyer-contacts-v19-independent-checks Resume incomplete checks Identity discovery',
+  'buyer-contacts-v20-attributed-sources Resume incomplete checks Identity discovery',
   'Buying committee coverage incomplete 2 + 2 buying committee represented data-research-executive 20261005-committee-2plus2-v1',
   'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
-  'topFourResearchCandidates data-research-buyer data-research-remaining Likely email · ownership unconfirmed',
+  'topFourResearchCandidates data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
 
