@@ -2965,6 +2965,21 @@
         "assertHandoff",
         "Scanned company list saved"
       ]
+    },
+    {
+      "id": "buyer-role-refresh-list",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const rolesRefreshBlocked=",
+        "Saved people remain visible for review.",
+        "candidate.people=rolesRefreshBlocked?candidate.people||[]:shortlist.people;"
+      ],
+      "notContains": [
+        "let people=candidate.buyerRolesChanged?[]",
+        "Previous buyer suggestions are hidden;"
+      ]
     }
   ],
   "retry": {
