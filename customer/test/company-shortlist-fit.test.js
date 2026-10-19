@@ -106,3 +106,8 @@ test('logo file extensions and URL tokens cannot become technology buying signal
  const real={...source,url:'https://nordic.se/news/technology',text:'Nordic announces AI adoption to improve industrial production in Sweden.'};
  assert.equal(D.matchedSignalsForEvidence(signals,[real],'Sweden','Nordic').length,1);
 });
+
+test('checked low-fit presentation keeps the score without claiming commercial fit',()=>{
+ const value=D.companyQualificationPresentation({company:'Policy Office',market:'Sweden'},{eligible:true,score:0,automaticEligible:false,matchedSignals:[]});
+ assert.match(value.explanation,/Company fit 0\/100/);assert.doesNotMatch(value.explanation,/verified commercial fit/);
+});

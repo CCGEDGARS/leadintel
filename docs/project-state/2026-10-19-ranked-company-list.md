@@ -28,3 +28,5 @@ Independent review found and verified fixes for unattended execution accepting o
 ## Prevention lesson
 
 Agree on the product outcome before debugging implementation details. List membership, score ranking, automatic company advancement and confirmed contact readiness are separate decisions. One successful company and green technical checks do not establish the requested company-count outcome.
+
+Authenticated acceptance exposed a newly reachable presentation error: checked 0/100 companies still received the old generic “verified commercial fit” sentence. The neutral explanation now prints the actual score and asks the user to review the commercial assessment. A failing zero-score regression proves the old claim and its correction. No qualification or scoring rules change.

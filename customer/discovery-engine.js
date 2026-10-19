@@ -641,7 +641,8 @@
     const referenceCompany=clean(assessment.referenceMatch?.referenceCompany||candidate.lookalikeMatch?.referenceCompany);
     const routeLabel=!signals.length?(strongReference?'Lookalike · timing unconfirmed':'Company fit · timing unconfirmed'):assessment.route==='signal'||!strongReference?'Signals':'Lookalike + Signals';
     const market=clean(candidate.market)||'Target-market';
-    const explanation=`${market} presence and verified commercial fit${signals.length?`, supported by ${signals.map(signal=>clean(signal.name)).filter(Boolean).join('; ')}`:''}. Confirm the relevant buyer and supplier need before outreach; buying intent is unconfirmed.`;
+    const fit=Number.isFinite(assessment.score)?`Company fit ${assessment.score}/100. `:'';
+    const explanation=`${fit}${market} presence checked${signals.length?`; verified signals: ${signals.map(signal=>clean(signal.name)).filter(Boolean).join('; ')}`:''}. Review the score and commercial assessment, then confirm the relevant buyer and supplier need before outreach; buying intent is unconfirmed.`;
     return {routeLabel,referenceScore,referenceCompany,readiness:assessment.eligible?'Company qualified · Ready for buyer research':'Needs verification',explanation};
   }
 
