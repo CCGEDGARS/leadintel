@@ -93,7 +93,7 @@ const boundedDiscoveryRuntime = [
   'Buying committee coverage incomplete 2 + 2 buying committee represented data-research-executive 20261005-committee-2plus2-v1',
   'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
-  'const passages=candidate.people.slice(0,10) buyerResearchCandidates contact research attempted for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
+  'const passages=candidate.people.slice(0,10) buyerResearchCandidates automatic contact research for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
 
