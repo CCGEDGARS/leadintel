@@ -709,7 +709,10 @@
         "maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2",
         "Completed evidence was kept.",
         "company-verification=20261019-v3",
-        "discovery.lastSuccessfulRunAt=discovery.lastRunAt;"
+        "discovery.lastSuccessfulRunAt=discovery.lastRunAt;",
+        "company-ranked-list=20261019-v1",
+        "function restoreCheckedCompanyResearch()",
+        "Checked · Manual review"
       ]
     },
     {
@@ -722,7 +725,9 @@
         "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined,buyerFitIssue:undefined}))",
         "BUYER_FIT_EVIDENCE_REJECTED",
         "offerOptions:splitList(profile.priorityOffers)",
-        "function buyerFitSources(candidate={})"
+        "function buyerFitSources(candidate={})",
+        "function assessAutomaticCompanyQualification(",
+        "Company fit below automatic-flow minimum 80/100"
       ]
     },
     {

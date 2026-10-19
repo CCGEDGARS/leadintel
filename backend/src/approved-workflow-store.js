@@ -1,6 +1,6 @@
 import {savedFlowAuthorized,savedFlowRow} from './saved-flow-store.js';
 import stateBudget from '../../customer/state-budget.js';
-import {approvedContext,fingerprint} from './approved-workflow-engine.js';
+import {approvedContext,approvalStatus,normalizeWorkflowConfig,fingerprint} from './approved-workflow-engine.js';
 export const parse=(s,f={})=>{try{return JSON.parse(s||'')??f;}catch{return f;}};
 export async function workflowMain(env,workspaceId){const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();const payload=stateBudget.restoreFromSync(parse(state?.payload_json));return {...payload.main,messageStudio:payload.outreach?.messageStudio};}
 export async function workflowRow(env,workspaceId){return env.DB.prepare('SELECT * FROM approved_workflows WHERE workspace_id=?').bind(workspaceId).first();}
@@ -8,8 +8,9 @@ export async function workflowAuthorized(env,workspaceId,revision,flowId=null){
   if(flowId)return savedFlowAuthorized(env,workspaceId,revision,flowId);
   const row=await workflowRow(env,workspaceId);if(!row||row.status!=='automatic'||Number(row.revision)!==Number(revision)||!row.approved_by)return false;
   const member=await env.DB.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?").bind(workspaceId,row.approved_by).first();if(member?.role!=='owner')return false;
-  const hash=await fingerprint(approvedContext(await workflowMain(env,workspaceId)));
-  if(hash!==row.context_hash){await env.DB.prepare("UPDATE approved_workflows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic'").bind(workspaceId,revision).run();return false;}return true;
+  const context=approvedContext(await workflowMain(env,workspaceId)),hash=await fingerprint(context);
+  let stagesApproved=false;try{stagesApproved=(await approvalStatus(context,normalizeWorkflowConfig(parse(row.config_json),context),parse(row.approvals_json))).every(stage=>stage.approved);}catch{}
+  if(hash!==row.context_hash||!stagesApproved){await env.DB.prepare("UPDATE approved_workflows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic'").bind(workspaceId,revision).run();return false;}return true;
 }
 export async function workflowDeliveryAuthorized(env,sequence){
   if(!sequence.workflow_run_id)return true;

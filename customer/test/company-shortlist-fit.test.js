@@ -1,5 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const researchedAt=new Date().toISOString();
+test('company extraction cannot join the title and body into a repeated invented company name',()=>{
+ const rows=D.extractCompanyMentions([{url:'https://journal.example/nordic',market:'Sweden',title:'Nordic Machines',text:'Nordic Machines manufactures industrial machinery in Sweden for international business customers.'}],5);
+ assert.deepEqual(rows.map(c=>c.company),['Nordic Machines']);
+});
 test('a fresh website read replaces the earlier unverified snippet for the same URL in research review',()=>{
  const snippet={company:'Nordic',domain:'nordic.se',market:'Sweden',url:'https://nordic.se/',title:'Nordic manufacturer',text:'Nordic manufactures industrial equipment in Sweden.'};
  const fresh={...snippet,verifiedAt:researchedAt,text:'Nordic manufactures industrial equipment in Sweden. Our production facilities assemble machinery for industrial customers and use welded frames supplied by specialist partners.'};
@@ -20,13 +24,41 @@ test('tracking parameters cannot make an old snippet discard the freshly verifie
  assert.equal(candidate.evidence[0].verifiedAt,researchedAt);
  }
 });
-function fixture(offer='welded frames',name='Nordic'){
+function fixture(offer='welded frames',name='Nordic',fit=90,domain='nordic.se'){
  const profile={website:'seller.example',priorityOffers:offer,idealCustomer:'equipment manufacturers'};
- const domain='nordic.se',evidence=[{url:`https://${domain}/products`,verifiedAt:researchedAt,text:`${name} manufactures equipment in Sweden and purchases ${offer} for its industrial production. Our specialist partners supply these products for assembly.`},{url:'https://journal.example/company',text:`${name} manufactures industrial equipment in Sweden and supplies business customers.`}];
+ const evidence=[{url:`https://${domain}/products`,verifiedAt:researchedAt,text:`${name} manufactures equipment in Sweden and purchases ${offer} for its industrial production. Our specialist partners supply these products for assembly.`},{url:'https://journal.example/company',text:`${name} manufactures industrial equipment in Sweden and supplies business customers.`}];
  const raw={company:name,domain,market:'Sweden',evidence};
- const candidate=D.parseBuyerFit(JSON.stringify({companies:[{domain,fit:90,purchase:offer,reason:'Production requires purchased supplies.',buyerRole:'equipment manufacturer',evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]}),[raw],profile)[0];
+ const candidate=D.parseBuyerFit(JSON.stringify({companies:[{domain,fit,purchase:offer,reason:'Production requires purchased supplies.',buyerRole:'equipment manufacturer',evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]}),[raw],profile)[0];
  return {candidate,profile};
 }
+test('checked companies remain ranked at different scores while only 80+ passes the automatic company gate',()=>{
+ for(const offer of ['welded frames','financial reporting']){
+ const rows=[95,81,79,63,45].map((score,index)=>{
+  const {candidate,profile}=fixture(offer,`Nordic${index}`,score,`nordic${index}.se`);
+  const qualification=D.assessCompanyQualification(candidate,profile,{}, {minimumScore:80,researchedAt});
+  assert.equal(qualification.eligible,true,`checked ${score}/100 must remain on the manual list`);
+  assert.equal(qualification.score,score);
+  return {...candidate,qualification,qualified:true,marketVerified:true,buyerVerified:true};
+ });
+ assert.deepEqual(D.rankQualifiedCompanies(rows).map(c=>c.qualification.score),[95,81,79,63,45]);
+ assert.deepEqual(rows.map(c=>c.qualification.automaticEligible),[true,true,false,false,false]);
+ const restored=D.recoverInterruptedDiscoveryState({status:'running',qualityVersion:D.DISCOVERY_QUALITY_VERSION,lastRunAt:researchedAt,candidates:rows});
+ assert.equal(restored.candidates.length,5);
+ assert.deepEqual(restored.candidates.map(c=>c.qualification.score),[95,81,79,63,45]);
+ }
+});
+test('automatic company flow uses the checked company score at the 80 boundary, independently of event timing',()=>{
+ assert.equal(typeof D.assessAutomaticCompanyQualification,'function');
+ for(const score of [45,79,80,81,100]){
+  const {candidate,profile}=fixture('welded frames','Nordic',score);
+  const q=D.assessAutomaticCompanyQualification(candidate,profile,{}, {minimumScore:70,researchedAt});
+  assert.equal(q.eligible,score>=80);assert.equal(q.score,score);
+ }
+ const {candidate,profile}=fixture();
+ for(const c of [{...candidate,evidence:[candidate.evidence[0]]},{...candidate,buyerFit:undefined},{...candidate,lifecycle_status:'suppressed'},{...candidate,evidence:candidate.evidence.map(e=>({...e,verifiedAt:''}))}]){
+  assert.equal(D.assessAutomaticCompanyQualification(c,profile,{}, {researchedAt}).eligible,false);
+ }
+});
 test('verified company fit can enter the manual shortlist without claiming a buying opportunity',()=>{
  for(const offer of ['welded frames','financial reporting']){
  const {candidate,profile}=fixture(offer);const q=D.assessCompanyQualification(candidate,profile,{}, {minimumScore:80,researchedAt});
@@ -37,15 +69,15 @@ test('verified company fit can enter the manual shortlist without claiming a buy
  assert.equal(D.assessCompanyQualification(candidate,{...profile,companyName:'Unrelated Seller'},{},{minimumScore:80,researchedAt}).eligible,true);
  }
 });
-test('manual shortlist preserves evidence, lifecycle, seller context and explicit signal priority gates',()=>{
+test('manual shortlist preserves evidence, lifecycle and seller context while research modes do not hide checked results',()=>{
  const {candidate,profile}=fixture(),check=(c,p=profile,settings={})=>D.assessCompanyQualification(c,p,{}, {minimumScore:80,researchedAt,...settings});
  assert.equal(check({...candidate,evidence:[candidate.evidence[0]]}).eligible,false);
  assert.equal(check({...candidate,lifecycle_status:'suppressed'}).eligible,false);
  assert.equal(check({...candidate,buyerFit:undefined}).eligible,false);
  assert.equal(check(candidate,{...profile,priorityOffers:'legal representation'}).eligible,false);
- assert.equal(check(candidate,profile,{researchPriority:'signals'}).eligible,false);
+ assert.equal(check(candidate,profile,{researchPriority:'signals'}).eligible,true);
  assert.equal(check(candidate,profile,{minimumScore:90}).eligible,true);
- assert.equal(check(candidate,profile,{researchPriority:'lookalike'}).eligible,false);
+ assert.equal(check(candidate,profile,{researchPriority:'lookalike'}).eligible,true);
 });
 test('company verification deliberately obtains independent company-attributed evidence',()=>{
  const queries=D.buildCandidateVerificationQueries([{company:'Nordic',domain:'nordic.se',market:'Sweden'}],{}, {},1);
