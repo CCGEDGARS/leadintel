@@ -39,3 +39,8 @@ test('changing the amount refreshes the progress guide immediately',()=>{
  let saved,refreshes=0;const c={$:()=>({value:'5'}),selectedDiscoveryTarget:()=>5,loadMeta:()=>({}),saveMeta:v=>saved=v,window:{LeadIntelJourney:{refresh:()=>refreshes++}}};
  vm.runInNewContext(part('function persistDiscoveryTarget(){','function resetLocalDownstreamState(){')+';persistDiscoveryTarget()',c);assert.equal(saved.targetCount,5);assert.equal(refreshes,1);
 });
+test('commercial assessment keeps its dedicated deadline while recovery can select a bounded deadline',async()=>{
+ const timeouts=[],c={COMPANY_EXTRACTION_TIMEOUT_MS:47000,DISCOVERY_REQUEST_TIMEOUT_MS:25000,withDiscoveryDeadline:async(_operation,_signal,timeout)=>timeouts.push(timeout)};
+ vm.runInNewContext(part('async function generateDiscoveryBuyerFit(','async function runCompanyDiscovery('),c);
+ await c.generateDiscoveryBuyerFit('Evidence');await c.generateDiscoveryBuyerFit('Evidence',undefined,40000);assert.deepEqual(timeouts,[47000,40000]);
+});
