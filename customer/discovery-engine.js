@@ -1668,9 +1668,10 @@
       return {...candidate,buyerFit:{version:2,fit:Math.round(row.fit),purchase:offer,reason:clean(row.reason).slice(0,700),buyerRole:clean(row.buyerRole).slice(0,120),relevantSignalUrls:(Array.isArray(row.relevantSignalUrls)?row.relevantSignalUrls:[]).filter(url=>(candidate.matchedSignals||[]).some(s=>(s.evidence||[]).some(e=>e.url===url))).slice(0,12),needStatus:row.needStatus==='evidenced'?'evidenced':'inferred',evidence:quotes,context:buyerFitContext(profile)}};
     });
   }
-  async function researchBuyerFit(candidates=[],profile={},generate,{signal,onProgress,onFailure,concurrency=2}={}){
+  async function researchBuyerFit(candidates=[],profile={},generate,{signal,onProgress,onFailure,concurrency=2,batchSize=4}={}){
     if(typeof generate!=='function')throw new Error('Commercial buyer research is unavailable');
-    const batches=Array.from({length:Math.ceil(candidates.length/4)},(_,i)=>candidates.slice(i*4,i*4+4)),out=Array(batches.length);let next=0,completed=0;
+    const size=Math.max(1,Math.min(4,Math.floor(Number(batchSize)||4)));
+    const batches=Array.from({length:Math.ceil(candidates.length/size)},(_,i)=>candidates.slice(i*size,i*size+size)),out=Array(batches.length);let next=0,completed=0;
     await Promise.all(Array.from({length:Math.min(batches.length,Math.max(1,Math.min(2,Number(concurrency)||2)))},async()=>{
       while(next<batches.length){
         if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
