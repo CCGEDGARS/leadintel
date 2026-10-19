@@ -9,6 +9,35 @@ test('ten qualified buyers contain the four highest-score recommendations',()=>{
  assert.ok(result.recommendedIds.every(id=>result.people.some(p=>p.id===id)));
  assert.deepEqual(new Set(result.people.slice(0,4).map(p=>p.id)),new Set(['buying','ops','0','1']));
 });
+test('research selection includes all ten candidates while recommendations stay limited to four',()=>{
+ const people=Array.from({length:10},(_,i)=>buyer(String(i)));
+ people[9].roleReview={status:'unconfirmed',reason:'Role requires source review'};
+ const selected=D.buyerResearchCandidates(people,profile,{company:'Example'});
+ assert.equal(selected.length,10);assert.equal(new Set(selected.map(p=>p.id)).size,10);
+ assert.ok(selected.some(p=>p.id==='9'));assert.equal(D.rankedBuyerShortlist(selected,profile,{company:'Example'}).recommendedIds.length,4);
+ assert.equal(D.buyerResearchCandidates([...people,...people],profile,{company:'Example'}).length,10);
+});
+test('contradiction review for every retained person survives save and reload',()=>{
+ const people=Array.from({length:10},(_,i)=>buyer(String(i)));
+ const conflicts=people.map(p=>({person_id:p.id,reason:'Current role contradicted'}));
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people,publicResearch:{conflicts}}]}).selectedProspects[0];
+ assert.equal(saved.publicResearch.conflicts.length,10);assert.ok(saved.publicResearch.conflicts.some(p=>p.person_id==='9'));
+});
+test('an incomplete high-score candidate cannot displace the fourth researched recommendation',()=>{
+ const people=Array.from({length:10},(_,i)=>buyer(String(i),'Procurement Director'));
+ people[0].emailResearch={status:'partial',searches:8,failed:1,checkedAt:new Date().toISOString()};
+ const result=D.rankedBuyerShortlist(people,{decisionMakers:'Procurement Director'},{company:'Example'});
+ assert.deepEqual(result.recommendedIds,['1','2','3','4']);assert.equal(result.people.length,10);
+ assert.ok(result.people.some(p=>p.id==='0'&&p.emailResearch.status==='partial'));
+});
+test('research readiness does not bypass executive source support or exceed two leadership places',()=>{
+ const people=[buyer('ceo','CEO'),buyer('coo','COO'),buyer('owner','Owner'),buyer('purchasing','Procurement Director')];
+ let result=D.rankedBuyerShortlist(people,{decisionMakers:'Procurement Director'},{company:'Example',domain:'example.com'});
+ assert.equal(result.priorityIds.filter(id=>['ceo','coo','owner'].includes(id)).length,2);
+ const unsupported=buyer('outside','CEO',{publicNameUrl:'https://news.example/old-profile'});
+ result=D.rankedBuyerShortlist([unsupported,buyer('p1','Procurement Director')],{decisionMakers:'Procurement Director'},{company:'Example',domain:'example.com'});
+ assert.ok(!result.priorityIds.includes('outside'));
+});
 test('unresolved, wrong employer, former, unsourced and irrelevant pinned buyers cannot fill the ten',()=>{
  const pool=[buyer('good'),buyer('pending','Project Manager',{identityStatus:'pending'}),buyer('one','Project Manager',{name:'Anna'}),buyer('wrong','Project Manager',{organization:'Other'}),buyer('former','Former Project Manager'),buyer('unsourced','Project Manager',{publicNameUrl:''}),buyer('creative','Content Production Manager',{kept:true})];
  const result=D.rankedBuyerShortlist(pool,profile,{company:'Example'});
