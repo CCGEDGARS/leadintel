@@ -1,3 +1,4 @@
+const {weakBuyerFitResponse}=require('./helpers/buyer-fit-fixtures.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -135,7 +136,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
     requestTimeout: 1000,
     scaleProductionRunTimeout: 1000,
     fetchImpl: async (_url, options) => {
-      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(JSON.parse(options.body).prompt)})};
       const query = JSON.parse(options.body).query;
       await new Promise(resolve => setTimeout(resolve, 8));
       if (query.startsWith('site:')) {
@@ -197,7 +198,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
     requestTimeout:1000,
     scaleProductionRunTimeout:1000,
     fetchImpl:async (_url,options)=>{
-      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(JSON.parse(options.body).prompt)})};
       const query=JSON.parse(options.body).query;
       if(query.startsWith('site:'))return {ok:true,json:async()=>({success:true,data:[{
         date:new Date().toISOString().slice(0,10),url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
@@ -773,7 +774,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
     if(url.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:'Södra is a Swedish manufacturer expanding its new factory and investing in industrial automation. The company produces industrial materials for manufacturing customers.',metadata:{sourceURL:'https://sodra.com/',title:'Södra expansion in Sweden'}}})};
     if(url.includes('/firecrawl-search')&&requests.filter(item=>item.url.includes('/firecrawl-search')).length===1)return {ok:true,json:async()=>({data:[{url:'https://sodra.com/',title:'Södra',description:'Södra is a Swedish manufacturer.'}]})};
     if(url.includes('/firecrawl-search'))throw new TypeError('Connection failed');
-    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
+    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(JSON.parse(options.body).prompt)})};
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
@@ -791,7 +792,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
 test('retry of a failed saved-target lookup uses the known domain and preserves Saving Mode',async()=>{
   const requests=[];
   const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
-    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
+    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(JSON.parse(options.body).prompt)})};
     requests.push({url,body:JSON.parse(options.body)});
     if(url.includes('/firecrawl-search'))return {ok:true,json:async()=>({data:[{url:'https://sodra.com/news/new-factory',title:'Södra new factory',description:'Södra expands production in Sweden with a new factory.'}]})};
     throw new Error('Unexpected request');
@@ -1022,7 +1023,7 @@ test('saved failed official-domain lookups reuse discovered names and market evi
     renderNodes:true,requestTimeout:100,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
     fetchImpl:async(url,options)=>{
-      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(JSON.parse(options.body).prompt)})};
       const query=JSON.parse(options.body).query;
       requests.push({url,query});
       if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.includes('-site:')?{url:'https://independent.example/northstar',title:'Northstar company profile',text:'Northstar is an industrial manufacturer in Latvia.'}:query.startsWith('site:')

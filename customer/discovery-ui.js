@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&company-verification=20261019-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&company-verification=20261019-v2";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -289,8 +289,8 @@ async function withDiscoveryDeadline(operation,parentSignal,timeoutMs=COMPANY_EX
 }
 function throwIfDiscoveryRunAborted(signal){if(signal?.leadIntelScopeValid&&!signal.leadIntelScopeValid()){const error=new Error('Workspace changed. Company research stopped.');error.name='AbortError';throw error;}if(!signal?.aborted)return;const reason=signal.reason;if(reason instanceof Error)throw reason;const error=new Error("Company discovery was canceled");error.name="AbortError";throw error;}
 function discoveryFailureReason(error={}){const status=Number(error?.status)||0;if(error?.code==="DISCOVERY_SEARCH_TIMEOUT"||error?.name==="AbortError"||status===408)return "timeout";if(status===429)return "rate_limit";if(status===402)return "quota_exhausted";if(status>=500)return "provider_unavailable";if(status===401||status===403)return "auth_error";if(status>=400)return "request_rejected";if(error?.name==="TypeError")return "network_error";return "unknown_error";}
-function discoveryFailureLabel(failure={}){if(failure.phase==="buyer-fit"){if(Number(failure.status)===402)return "AI provider credits or billing limit reached (HTTP 402)";return discoveryFailureLabel({...failure,phase:"searching"}).replace(/Search provider/g,"Purchasing-fit provider").replace(/search provider/g,"purchasing-fit provider");}const status=Number(failure.status)||0;if(status===402)return "Firecrawl credits or billing limit reached (HTTP 402)";switch(failure.reason){case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
-function discoverySearchFailure(error,queryMeta={},phase="searching"){const reason=discoveryFailureReason(error);return {id:`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:queryMeta.company||"",domain:queryMeta.domain||"",reason,status:Number(error?.status)||(reason==="timeout"?408:0)};}
+function discoveryFailureLabel(failure={}){if(failure.phase==="buyer-fit"){if(failure.code==="BUYER_FIT_EVIDENCE_REJECTED")return "AI assessment did not verify against the supplied official evidence";if(Number(failure.status)===402)return "AI provider credits or billing limit reached (HTTP 402)";return discoveryFailureLabel({...failure,phase:"searching"}).replace(/Search provider/g,"Purchasing-fit provider").replace(/search provider/g,"purchasing-fit provider");}const status=Number(failure.status)||0;if(status===402)return "Firecrawl credits or billing limit reached (HTTP 402)";switch(failure.reason){case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
+function discoverySearchFailure(error,queryMeta={},phase="searching"){const reason=discoveryFailureReason(error);return {id:`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:queryMeta.company||"",domain:queryMeta.domain||"",...(error?.code==='BUYER_FIT_EVIDENCE_REJECTED'?{code:error.code}:{}),reason,status:Number(error?.status)||(reason==="timeout"?408:0)};}
 function waitForDiscoveryRetry(signal){return new Promise(resolve=>{const finish=()=>{clearTimeout(timer);signal?.removeEventListener?.("abort",finish);resolve();};const timer=setTimeout(finish,DISCOVERY_RETRY_DELAY_MS);signal?.addEventListener?.("abort",finish,{once:true});});}
 function retryableDiscoveryFailure(error){const reason=discoveryFailureReason(error);return ["timeout","rate_limit","provider_unavailable","network_error"].includes(reason);}
 async function openAiCompanySearch(queryMeta,runSignal){
@@ -532,7 +532,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         return LeadIntelDiscovery.rankQualifiedCompanies(pool.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,market,settings);return {...c,qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified===true,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};}));
       };
       const researchPool=async input=>{
-        let pool=[...new Map(input.map(c=>[canonicalDomain(c.domain),c])).values()].map(c=>cachedFit(c)?{...c,buyerFit:cachedFit(c).buyerFit}:c);
+        let pool=[...new Map(input.map(c=>[canonicalDomain(c.domain),c])).values()].map(c=>cachedFit(c)?{...c,buyerFit:cachedFit(c).buyerFit,buyerFitIssue:cachedFit(c).buyerFitIssue}:c);
         const pending=pool.filter(c=>!cachedFit(c));
         if(!pending.length)return assessPool(pool);
         discoveryProgress={phase:'buyer-fit',completed:0,total:Math.ceil(pending.length/4)};
@@ -550,8 +550,8 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
             taskCentre?.update(taskId,{stage:'Checking purchasing fit',completed,total,resultCount:runCandidates.length});renderDiscoverySafely();
           }
         });
-        for(const candidate of researched)fitCache.set(candidate.domain,{key:fitEvidenceKey(candidate),buyerFit:candidate.buyerFit});
-        pool=pool.map(c=>({...c,buyerFit:cachedFit(c)?.buyerFit}));
+        for(const candidate of researched)fitCache.set(candidate.domain,{key:fitEvidenceKey(candidate),buyerFit:candidate.buyerFit,buyerFitIssue:candidate.buyerFitIssue});
+        pool=pool.map(c=>({...c,buyerFit:cachedFit(c)?.buyerFit,buyerFitIssue:cachedFit(c)?.buyerFitIssue}));
         return assessPool(pool);
       };
       const collectResolutionAndVerification=async(mentions,remainingLimit)=>{
@@ -1040,6 +1040,7 @@ function researchReviewRows(){
 function researchReviewStatus(candidate){
   const q=qualificationAssessment(candidate);
   const gaps=(q.gaps||[]).filter(Boolean);
+  if(candidate.buyerFitIssue&&!q.commercial)gaps.unshift('Purchasing-fit assessment incomplete: '+candidate.buyerFitIssue);
   const hardFailure=gaps.some(reason=>/company offers the same service rather than the required buyer profile|seller or reference customer cannot be a new prospect|crm lifecycle blocks automatic prospecting|(?:explicit|verified) exclusion|excluded by approved|company is suppressed/i.test(reason));
    // Missing attributable commercial evidence can yield buyer-fit points below 50/70.
    // That is research uncertainty, not proof the company is commercially unsuitable.
