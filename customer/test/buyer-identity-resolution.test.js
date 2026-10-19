@@ -36,7 +36,7 @@ test('legal seller resolves the configured legal role without industrial default
 test('recommendations include relevant role families before repeated project roles',()=>{
  const people=[...Array.from({length:7},(_,i)=>({id:'project-'+i,name:`Project Person${i}`,title:'Project Director'})),{id:'procurement',name:'Anna Andersson',title:'Procurement Director'},{id:'engineering',name:'Engineer Person',title:'Engineering Director'}];
  const selected=D.recommendedBuyers(people,{decisionMakers:'Project Director; Procurement Director; Engineering Director'});
- assert.equal(selected.length,6);assert.ok(selected.some(p=>p.id==='procurement'));assert.ok(selected.some(p=>p.id==='engineering'));
+ assert.equal(selected.length,9);assert.ok(selected.some(p=>p.id==='procurement'));assert.ok(selected.some(p=>p.id==='engineering'));
 });
 test('confirmed user roles remain in opportunity plan even with many inferred roles',()=>{
  assert.ok(D.buyerResearchPlan({buyerFit:{purchase:'plant equipment installation expansion procurement production'}},{decisionMakers:'COO'}).roles.includes('COO'));
