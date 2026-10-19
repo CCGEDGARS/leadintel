@@ -274,7 +274,7 @@
         "Unverified email patterns",
         "Profile matched automatically",
         "Phone source needs rechecking",
-        "contact research attempted for all retained people",
+        "automatic contact research for all retained people",
         "top 4 ranked recommendations",
         "Contact checks complete:",
         "const passages=candidate.people.slice(0,10)"
