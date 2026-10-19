@@ -25,9 +25,9 @@
     if(!budget||typeof budget!=='object')return null;
     const limit=Math.max(1,Number(budget.limit)||500*1024),bytes=Number(budget.bytes);
     const kb=value=>Math.ceil(value/1024);
-    if(budget.exceeded===true)return {id:'workspace-sync-budget',severity:'recommendation',title:'Workspace is over the sync limit',detail:`Saved research exceeds the ${kb(limit)} KB sync limit even after compaction, so cloud saves fail. Clear older company search results in Companies, then save again.`,target:{type:'stage',id:'companies'}};
+    if(budget.exceeded===true)return {id:'workspace-sync-budget',severity:'recommendation',title:'Workspace is over the sync limit',detail:`Saved research exceeds the ${kb(limit)} KB sync limit even after compaction, so cloud saves fail. Clear older company search results in Companies, then save again.`,target:{type:'stage',id:4}};
     if(!Number.isFinite(bytes)||bytes<limit*0.8)return null;
-    return {id:'workspace-sync-budget',severity:'recommendation',title:'Workspace is close to the sync limit',detail:`Saved research is ${kb(bytes)} KB of the ${kb(limit)} KB sync limit after compaction. Clear older company search results in Companies before a larger research run so saving keeps working.`,target:{type:'stage',id:'companies'}};
+    return {id:'workspace-sync-budget',severity:'recommendation',title:'Workspace is close to the sync limit',detail:`Saved research is ${kb(bytes)} KB of the ${kb(limit)} KB sync limit after compaction. Clear older company search results in Companies before a larger research run so saving keeps working.`,target:{type:'stage',id:4}};
   }
   function buildAttentionItems({connectionIssues=[],model=[],tasks=[],unsaved=false,runtimeErrors=[],aiProviderIssue=null,providerIssues=[],workspaceStarted=true,syncBudget=null,now=Date.now()}={}){
     const items=[...connectionIssues];

@@ -225,7 +225,7 @@ test('attention warns before the 500 KB sync ceiling and explains the fix when i
   assert.equal(near.severity,'recommendation');
   assert.match(near.detail,/430 KB of the 500 KB sync limit/);
   assert.match(near.detail,/Clear older company search results/);
-  assert.deepEqual(near.target,{type:'stage',id:'companies'});
+  assert.deepEqual(near.target,{type:'stage',id:4},'Companies is journey stage 4; LeadIntelJourney.open() takes the number');
   assert.equal(Attention.buildAttentionItems({syncBudget:{bytes:100*1024,limit:500*1024,exceeded:false}}).some(item=>item.id==='workspace-sync-budget'),false,'a small workspace gets no notice');
   assert.equal(Attention.buildAttentionItems({}).some(item=>item.id==='workspace-sync-budget'),false,'no measurement, no notice');
   const over=Attention.syncBudgetNotice({bytes:null,limit:500*1024,exceeded:true});
@@ -243,7 +243,7 @@ test('workspace persistence measures the compacted sync payload for the attentio
   assert.match(centre,/syncBudget:persistence\?\.syncBudget\?\.\(\)\|\|null/);
   assert.match(centre,/Clear older company search results in Companies to bring the workspace under the 500 KB sync limit/);
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  assert.match(html,/attention-centre-model\.js\?v=[^"]*sync-budget=20261019-v1/);
-  assert.match(html,/attention-centre\.js\?v=[^"]*sync-budget=20261019-v1/);
+  assert.match(html,/attention-centre-model\.js\?v=[^"]*sync-budget=20261019-v2/);
+  assert.match(html,/attention-centre\.js\?v=[^"]*sync-budget=20261019-v2/);
   for(const file of ['app.js','process-map.js'])assert.match(fs.readFileSync(path.join(root,file),'utf8'),/workspace-persistence\.js\?v=[^"'`\s]*sync-budget=20261019-v1/,file+' reloads persistence');
 });
