@@ -27,7 +27,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__withDiscoveryDeadline = withDiscoveryDeadline;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__syncStrategyFingerprint=syncStrategyFingerprint;globalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__withDiscoveryDeadline = withDiscoveryDeadline;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -190,7 +190,7 @@ test('the run deadline covers the worst-case bounded search stages at each suppo
   assert.equal(context.__discoveryRunTimeoutMs(50,10),1458);
 });
 
-test('a successful first pass with no qualified companies gets one bounded follow-up pass',async()=>{
+test('an empty first pass gets one bounded follow-up and retains a checked low-score company',async()=>{
   let marketRequests=0;
   let initialResults=0;
   let followUpResults=0;
@@ -224,15 +224,16 @@ test('a successful first pass with no qualified companies gets one bounded follo
   const result=context.__discoveryState();
   assert.equal(initialResults,6);
   assert.equal(followUpResults,4,'the second pass has a strict four-search cap');
-  assert.equal(result.status,'no_results');
-  assert.equal(result.candidates.length,0,'without commercial application research the company remains unqualified');
+  assert.equal(result.status,'complete');
+  assert.equal(result.candidates.length,1,'completed low-score research remains on the manual list');
+  assert.equal(result.candidates[0].qualification.automaticEligible,false);
   assert.equal(result.funnel.marketSearchesCompleted,10);
   assert.equal(result.funnel.marketSearchesTotal,10);
   assert.equal(result.funnel.evidencePages,3,'repeated URLs count once in the funnel');
   assert.equal(result.funnel.companiesIdentified,1);
   assert.equal(result.funnel.officialDomainsResolved,1);
   assert.equal(result.funnel.companySitesChecked,1);
-  assert.equal(result.funnel.qualifiedCompanies,0);
+  assert.equal(result.funnel.qualifiedCompanies,1);
   assert.equal(result.funnel.adaptiveFollowUpSearches,4);
 });
 
@@ -1543,6 +1544,58 @@ test('a qualified first pass checks purchasing fit before broadening and does no
   assert.ok(checkpoint.lastRunAt);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
   assert.equal(restored.candidates[0].domain,candidate.domain);assert.ok(Discovery.verifiedBuyerFit(restored.candidates[0],{...JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')).profile,...Targeting.profileFields(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')))}));
+});
+
+test('five requested companies keep their different checked scores through rendering and reload',async()=>{
+ const scores=[94,82,79,68,55,44],at=new Date().toISOString();
+ const pool=scores.map((score,i)=>({company:`North${i}`,domain:`north${i}.lv`,market:'Latvia',evidence:[{url:`https://north${i}.lv/products`,verifiedAt:at,text:`North${i} manufactures industrial equipment in Latvia and purchases industrial automation for its production lines. Specialist partners provide engineering equipment for this manufacturing process.`},{url:`https://journal.lv/north${i}`,text:`North${i} operates industrial manufacturing facilities in Latvia and supplies business customers.`}]}));
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(_,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.task==='buyer-fit'){
+   const companies=JSON.parse(body.prompt.split('. Companies: ')[1]);
+   return {ok:true,json:async()=>({text:JSON.stringify({companies:companies.map(c=>({domain:c.domain,fit:scores[Number(c.domain.match(/north(\d+)/)[1])],offerId:'offer-0',reason:'Production uses purchased automation.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:c.evidence[0].text}]}))})})};
+  }
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>pool,buildPotentialCompanyCandidates:()=>[]};
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:5,activeJourneyStage:4}));
+ await context.__runDiscovery({autoPass:3});
+ const state=context.__discoveryState();
+ assert.equal(state.candidates.length,5);
+ assert.deepEqual(Array.from(state.candidates,c=>c.qualification.score),scores.slice(0,5));
+ assert.equal(state.candidates.filter(c=>c.qualification.automaticEligible).length,2);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(restored.candidates.length,5);assert.equal(restored.candidates[4].qualification.score,55);
+ context.__setDiscovery({...state,candidates:[...state.candidates,{...state.candidates[4],company:'Retained Sixth',domain:'sixth.lv'}]});
+ context.__renderCandidates();
+ const html=context.__elements.get('company-candidates').innerHTML;
+ assert.equal((html.match(/<h4>/g)||[]).length,5,'the requested amount caps the visible ranked list while retaining other research');
+ assert.match(html,/Manual review/);assert.match(html,/80\+ company score/);
+});
+test('saved checked low-score research returns to the ranked list without another provider call',()=>{
+ let calls=0;const context=loadDiscoveryRunner({fetchImpl:()=>{calls++;throw new Error('No new research authorized by reopening');}});
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ const profile={...main.profile,...Targeting.profileFields(main),exclusions:main.answers.exclusions};
+ const at=new Date().toISOString(),quote='North Steel manufactures equipment in Latvia and purchases industrial automation from specialist partners for use in its factory production lines.';
+ const raw={company:'North Steel',domain:'northsteel.lv',market:'Latvia',evidence:[{url:'https://northsteel.lv/products',text:quote,verifiedAt:at},{url:'https://journal.lv/northsteel',text:'North Steel operates manufacturing facilities in Latvia and produces industrial equipment for international business customers.'}]};
+ const [candidate]=Discovery.parseBuyerFit(JSON.stringify({companies:[{domain:raw.domain,fit:65,offerId:'offer-0',reason:'Production needs purchased equipment.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote}]}]}),[raw],profile);
+ context.__setDiscovery({lastRunAt:at,potentialMatches:[{...candidate,qualificationGaps:['Buyer fit below the mandatory 50/70 minimum']}]});
+ context.__syncStrategyFingerprint();
+ assert.equal(context.__discoveryState().candidates.length,1);
+ assert.equal(context.__discoveryState().candidates[0].qualification.score,65);
+ assert.equal(context.__discoveryState().potentialMatches.length,0);assert.equal(calls,0);
+ const saved=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(saved.candidates[0].qualification.automaticEligible,false);
+ context.__setDiscovery({lastRunAt:at,potentialMatches:[{...candidate,evidence:candidate.evidence.map(e=>({...e,verifiedAt:''})),qualificationGaps:['Refresh company verification']}]});
+ context.__syncStrategyFingerprint();assert.equal(context.__discoveryState().candidates.length,0);
+ const full=Array.from({length:50},(_,i)=>({...saved.candidates[0],company:`Retained ${i}`,domain:`retained${i}.lv`}));
+ context.__setDiscovery({lastRunAt:at,candidates:full,potentialMatches:[{...candidate,qualificationGaps:['Buyer fit below the old minimum']}]});
+ context.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify(context.__discoveryState()));
+ context.__syncStrategyFingerprint();
+ assert.equal(context.__discoveryState().candidates.length,50);
+ assert.equal(context.__discoveryState().potentialMatches[0]?.domain,candidate.domain,'checked overflow must remain in review rather than disappear at the shortlist cap');
+ const overflow=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')||JSON.stringify(context.__discoveryState())));
+ assert.ok(overflow.potentialMatches.some(c=>c.domain===candidate.domain));
 });
 
 test('zero-result search clearly retains selected companies for Buyers without claiming a new match',()=>{

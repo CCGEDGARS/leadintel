@@ -12,10 +12,10 @@ test('Discovery autonomously broadens search when the requested qualified count 
   assert.match(ui,/LeadIntel is broadening the search automatically/);
 });
 
-test('Discovery stops after bounded autonomous research rather than lowering qualification',()=>{
+test('Discovery stops after bounded research and preserves completed checks and scores',()=>{
   assert.match(ui,/Research budget exhausted/);
   assert.match(ui,/exhausted/);
-  assert.match(ui,/It will not lower the qualification threshold just to fill the list/);
+  assert.match(ui,/Completed checks and scores are preserved; incomplete research stays in Research review/);
 });
 
 test('Qualified cards distinguish score, evidence confidence and buying intent',()=>{

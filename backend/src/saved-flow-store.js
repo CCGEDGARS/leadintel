@@ -30,8 +30,9 @@ export async function savedFlowView(env,row){
 export async function savedFlowAuthorized(env,workspaceId,revision,id){
  const row=await savedFlowRow(env,workspaceId,id);if(!row||row.status!=='automatic'||row.revision!==Number(revision)||!row.approved_by||parse(row.review_json,[]).length)return false;
  const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,row.approved_by).first();if(member?.role!=='owner')return false;
- const payload=await savedFlowPayload(env,row),hash=await fingerprint(approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}));
- if(hash!==row.context_hash||(row.shared_hash||await sharedHash(decode(row)))!==await sharedHash(await currentPayload(env,workspaceId))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic'").bind(workspaceId,id,revision).run();return false;}
+ const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}),hash=await fingerprint(context);
+ let stagesApproved=false;try{stagesApproved=(await approvalStatus(context,normalizeWorkflowConfig(parse(row.config_json),context),parse(row.approvals_json))).every(stage=>stage.approved);}catch{}
+ if(hash!==row.context_hash||!stagesApproved||(row.shared_hash||await sharedHash(decode(row)))!==await sharedHash(await currentPayload(env,workspaceId))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic'").bind(workspaceId,id,revision).run();return false;}
  return true;
 }
 // Include projection writes in the customer-state CAS transaction. Progress alone never invalidates approval.

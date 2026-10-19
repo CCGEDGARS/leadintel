@@ -50,7 +50,7 @@ test('qualification priority and selectable thresholds persist and invalidate co
  assert.throws(()=>normalizeWorkflowConfig({...next,companies:{...next.companies,researchPriority:'unknown'}}),/Lookalike/);
 });
 
-test('Lookalike without buying signals stays outside automatic buyer and message flow',async()=>{
+test('checked 80+ Lookalike company fit can advance without inventing a buying signal',async()=>{
  const env=await fixture(),guard=async()=>{};
  const model={active:true,dna:{active:true,referenceProfiles:[{rowId:'r',companyName:'Reference',dimensions:[{key:'industry',values:['renewable energy']},{key:'productionModel',values:['modular components']},{key:'capabilities',values:['steel structures']}]}]}};
  model.dna.referenceProfiles[0].sourceEvidence=model.dna.referenceProfiles[0].dimensions.map(d=>({field:d.key,url:'https://reference.example/about',quote:'Reference manufactures '+d.values[0]+' for customers.'}));
@@ -60,11 +60,51 @@ test('Lookalike without buying signals stays outside automatic buyer and message
  const independent={url:'https://industry.example/nordic',title:'Nordic renewable energy equipment',markdown:'Nordic manufactures modular components and steel structures for renewable energy projects in Sweden, according to its industry association listing. The company supplies wind energy manufacturers.'};
  const original=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({data:[official,independent]}),{status:200});
  try{
-  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},context,config,result:{},guard,generateResearch});
-  assert.equal(result.candidates.length,0);assert.ok(result.reviewCompanies.length);assert.equal(result.shortfall,1);
-  assert.ok(result.reviewCompanies.every(c=>!c.qualification.eligible));
-  assert.ok(result.reviewCompanies.some(c=>c.qualification.gaps.includes('No recent verified buying signal')));
+  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'lookalike-fit'},context,config,result:{},guard,generateResearch});
+  assert.equal(result.candidates.length,1);assert.equal(result.shortfall,0);
+  assert.equal(result.candidates[0].qualification.score,100);
+  assert.equal(result.candidates[0].qualification.signalPoints,0);
  }finally{globalThis.fetch=original;}
+});
+test('automatic company stage admits checked 80+ fit without a current event and holds 79 for manual review',async()=>{
+ const original=globalThis.fetch;
+ globalThis.fetch=async()=>new Response(JSON.stringify({data:[
+  {url:'https://nordicmachines.se/products',title:'Nordic Machines',markdown:'Nordic Machines operates manufacturing facilities in Sweden. Its production lines use industrial automation and custom machinery purchased from specialist engineering partners for internal factory operations.'},
+  {url:'https://industrialjournal.se/nordic',title:'Nordic Machines',markdown:'Nordic Machines manufactures industrial machinery in Sweden for international business customers, with several engineering teams and a long history of mechanical production for export markets.'}
+ ]}),{status:200});
+ try{for(const score of [79,80]){
+  const env=await fixture();
+  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:`score-${score}`},context:approvedContext(main),config,result:{},guard:async()=>{},generateResearch:async(e,w,prompt)=>{
+   const value=JSON.parse(await generateResearch(e,w,prompt));if(value.companies)for(const c of value.companies)c.fit=score;return JSON.stringify(value);
+  }});
+  assert.equal(result.candidates.length,score>=80?1:0,JSON.stringify(result));
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM crm_companies').get().n,score>=80?1:0);
+ }}finally{globalThis.fetch=original;}
+});
+test('the ranked-list contract invalidates old company and downstream automatic approvals',async()=>{
+ const context=approvedContext(main),old={...config,qualificationVersion:3};
+ const approvals=Object.fromEntries((await approvalStatus(context,old)).map(s=>[s.stage,{hash:s.hash}]));
+ const updated=normalizeWorkflowConfig(config),stages=await approvalStatus(context,updated,approvals);
+ assert.equal(updated.qualificationVersion,4);
+ assert.ok(stages.slice(0,2).every(s=>s.approved));assert.ok(stages.slice(2).every(s=>!s.approved));
+});
+test('generic automatic messages can cite a currently checked official source without a buying event',async()=>{
+ const env=await fixture(),at=new Date().toISOString(),candidate={company:'Nordic Machines',domain:'nordicmachines.se',contact:{id:'c1',name:'Anna Buyer'},qualification:{route:'signal',score:80},evidence:[{url:'https://nordicmachines.se/products',verifiedAt:at,text:'Nordic Machines operates manufacturing facilities in Sweden.'}]};
+ const run=async(c)=>executeWorkflowStage('messages',{env,row:{workspace_id:'w1'},context:approvedContext(main),config,result:{candidates:[c]},guard:async()=>{}});
+ const value=await run(candidate);assert.equal(value.candidates.length,1);assert.match(value.candidates[0].message.body,/https:\/\/nordicmachines.se\/products/);
+ const stale=await run({...candidate,evidence:candidate.evidence.map(e=>({...e,verifiedAt:'2020-01-01T00:00:00Z'}))});
+ assert.equal(stale.candidates.length,0);assert.equal(stale.reviewMessages.length,1);
+});
+test('unattended execution rejects old contract approvals before research or delivery without opening the UI',async()=>{
+ const env=await fixture();await approve(env);
+ const context=approvedContext(main),old={...config,qualificationVersion:3};
+ const approvals=Object.fromEntries((await approvalStatus(context,old)).map(s=>[s.stage,{hash:s.hash,at:new Date().toISOString(),by:'u1'}]));
+ env.DB.raw.prepare('UPDATE approved_workflows SET config_json=?,approvals_json=?').run(JSON.stringify(old),JSON.stringify(approvals));
+ let executed=0;await runApprovedWorkflows(env,{execute:async()=>{executed++;return {};}});
+ assert.equal(executed,0,'a contract change must not start research or outreach under old approval');
+ assert.equal(env.DB.raw.prepare('SELECT status FROM approved_workflows').get().status,'needs_review');
+ env.DB.raw.exec("INSERT INTO approved_workflow_runs(id,workspace_id,revision,status,stage_index) VALUES('old-approved-delivery','w1',1,'completed',8)");
+ assert.equal(await workflowDeliveryAuthorized(env,{workspace_id:'w1',workflow_run_id:'old-approved-delivery',workflow_revision:1}),false);
 });
 test('automatic buyers research a public pool and prioritize kept verified buyers in the same workspace',async()=>{
  const env=await fixture();
