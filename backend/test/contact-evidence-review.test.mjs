@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {contactReviewInput,parseContactReview,reviewContactEvidence} from '../src/contact-evidence-review.js';
 
+test('contact review keeps the supplied named evidence after a long source preamble',()=>{
+ const excerpt='Company navigation and project background. '.repeat(24)+'Tony Bogdanoff, production manager, tony.bogdanoff@lkab.com';
+ const input=contactReviewInput({company:'LKAB',people:[{id:'tony',name:'Tony Bogdanoff',role:'Produktionschef'}],evidence:[{url:'https://lkab.com/jobs',excerpt}]});
+ assert.ok(input.evidence[0].excerpt.includes('tony.bogdanoff@lkab.com'));
+});
+
 test('Gemini contact review stays within supplied people and evidence',async()=>{
   const body={company:'Södra',people:[{id:'jacob',name:'Jacob Jonstoij',role:'Team Leader'}],evidence:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij',excerpt:'Team Leader at Södra'},{url:'javascript:bad',title:'bad'}]};
   const input=contactReviewInput(body);
