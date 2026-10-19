@@ -603,3 +603,20 @@ test('company card presents one assessed reference score and buyer-research read
   assert.equal(strong.routeLabel,'Lookalike + Signals');assert.equal(strong.referenceScore,85);assert.equal(strong.referenceCompany,'Verified Reference');
   const paused=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'signal',lookalikeScore:null,matchedSignals:[]});assert.equal(paused.referenceScore,null);assert.equal(paused.routeLabel,'Company fit · timing unconfirmed');
 });
+
+
+test('free-first official source scan prioritizes contact pages beyond the old twenty-page limit',()=>{
+  const filler=Array.from({length:25},(_,i)=>({url:`https://bomill.com/archive/page-${i}`,markdown:'Ordinary archive page without contacts'}));
+  const directory={url:'https://bomill.com/about-us/team',markdown:'Denis Boissau, Regional Sales Manager — denis.boissau@bomill.com'};
+  const matches=Discovery.extractPublicContacts([...filler,directory],'bomill.com');
+  assert.ok(matches.some(row=>row.value==='denis.boissau@bomill.com'&&row.url===directory.url));
+  assert.ok(matches.every(row=>row.status==='public_unverified'),'Source publication is not mailbox verification');
+});
+
+test('free-first contact scan preserves more than eight distinct published company emails',()=>{
+  const page={url:'https://bomill.com/contact',markdown:Array.from({length:12},(_,i)=>`person${i}@bomill.com`).join(' ')};
+  const matches=Discovery.extractPublicContacts([page],'bomill.com').filter(row=>row.kind==='email');
+  assert.equal(matches.length,12);
+  assert.ok(matches.every(row=>row.url===page.url&&row.status==='public_unverified'));
+  assert.equal(Discovery.extractPublicContacts([{url:'https://unrelated.example/team',markdown:'fake@bomill.com'}],'bomill.com').length,0);
+});
