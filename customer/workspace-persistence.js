@@ -206,9 +206,11 @@
           try{const prepared=root.LeadIntelStateBudget.prepareForSync(next.payload,{allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:root.LeadIntelServerBridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:root.LeadIntelServerBridge?.workspaceCompressionCodec==='workspace-lzw-v2'});lastSyncBudget={bytes:Number(prepared.bytes)||0,limit,exceeded:false,checkedAt:Date.now()};next.payload=prepared.payload;}
           catch(error){lastSyncBudget={bytes:null,limit,exceeded:/500 KB|sync limit/i.test(String(error?.message||"")),checkedAt:Date.now()};throw error;}
         }
-        const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
+        const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(error=>{if(response.ok)throw error;return {};});const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
-        return response;
+        // The server acknowledgement is already parsed. Snapshot work can
+        // outlast the request deadline and invalidate the original stream.
+        return jsonResponse(result,response.status);
       }
       return nativeFetch(input,requestInit);
     };

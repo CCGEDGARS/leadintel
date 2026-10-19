@@ -1564,6 +1564,8 @@ test('five requested companies keep their different checked scores through rende
  assert.equal(state.candidates.length,5);
  assert.deepEqual(Array.from(state.candidates,c=>c.qualification.score),scores.slice(0,5));
  assert.equal(state.candidates.filter(c=>c.qualification.automaticEligible).length,2);
+ context.__setDiscovery({...state,status:'partial',latestRunCandidateCount:2});context.__renderStatus();
+ assert.match(context.__elements.get('company-discovery-status').textContent,/5 checked companies/,'partial status must count the checked list instead of the last restored batch');
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.candidates.length,5);assert.equal(restored.candidates[4].qualification.score,55);
  context.__setDiscovery({...state,candidates:[...state.candidates,{...state.candidates[4],company:'Retained Sixth',domain:'sixth.lv'}]});

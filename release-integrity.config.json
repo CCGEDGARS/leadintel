@@ -426,7 +426,8 @@
       "contains": [
         "server_payload:serverPayload",
         "previous.server_version>options.version",
-        "Workspace is still loading; retry save"
+        "Workspace is still loading; retry save",
+        "return jsonResponse(result,response.status);"
       ]
     },
     {
