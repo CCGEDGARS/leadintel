@@ -87,6 +87,7 @@ const boundedDiscoveryRuntime = [
   'Buyer research saved locally',
   'Company website verification:',
   'buyer-contacts-v20-attributed-sources Resume incomplete checks Identity discovery',
+  'const rolesRefreshBlocked= Saved people remain visible for review. candidate.people=rolesRefreshBlocked?candidate.people||[]:shortlist.people;',
   'Buying committee coverage incomplete 2 + 2 buying committee represented data-research-executive 20261005-committee-2plus2-v1',
   'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
