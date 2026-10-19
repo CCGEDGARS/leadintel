@@ -139,7 +139,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   if(eligible[0])return complete(eligible[0]);
   if(config.buyers.confirmationLevel==='public_confirmed'){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
-    for(const person of candidate.people.slice(0,6)){
+    for(const person of candidate.people.slice(0,10)){
       await guard();
       if(!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
       const findings=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
@@ -156,7 +156,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
       const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
       await env.DB.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').bind(workspaceId).run();
       const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
-      for(const person of candidate.people.slice(0,6)){
+      for(const person of candidate.people.slice(0,10)){
         await guard();
         if(person.identityStatus==='pending'||!discovery.hasFullBuyerName(person.publicName||person.name)||!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
         // Public-derived IDs cannot be sent to Apollo. Resolve an attributable
