@@ -1466,7 +1466,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
       if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true}))await apollo(false);
       let hunterReady=false;
       try{const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const payload=await status.json();const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{}
-      if(hunterReady&&!automatic){
+      if(hunterReady&&!automatic&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){
         const hunterApproved=await (window.LeadIntelDialogs?.confirm('Hunter email finding/verification may consume provider credits. Approve Hunter checks for this contact?')??Promise.resolve(false));
         if(!hunterApproved){issues.push('Hunter credit checks skipped — not approved');}
         if(hunterApproved){
