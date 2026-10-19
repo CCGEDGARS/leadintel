@@ -706,7 +706,9 @@
         "const fitCache=new Map();",
         "Checking purchasing fit",
         "maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2",
-        "Completed evidence was kept."
+        "Completed evidence was kept.",
+        "company-verification=20261019-v3",
+        "discovery.lastSuccessfulRunAt=discovery.lastRunAt;"
       ]
     },
     {

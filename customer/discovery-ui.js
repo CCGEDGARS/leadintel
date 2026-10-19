@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&company-verification=20261019-v2";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&company-verification=20261019-v3";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -547,6 +547,12 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
             if(campaignPlan)campaignPlan.results=runCandidates;
   discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);discovery.latestRunCandidateCount=runCandidates.length;
             discovery.funnel.qualifiedCompanies=runCandidates.length;
+            // A tab can close during later research waves. Commit each completed
+            // fit batch through the normal workspace save before showing it.
+            discovery.lastRunAt=new Date().toISOString();
+            discovery.retainedLastSuccessfulResults=runCandidates.length===0&&previousCandidates.length>0;
+            if(runCandidates.length)discovery.lastSuccessfulRunAt=discovery.lastRunAt;
+            saveDiscovery();
             taskCentre?.update(taskId,{stage:'Checking purchasing fit',completed,total,resultCount:runCandidates.length});renderDiscoverySafely();
           }
         });

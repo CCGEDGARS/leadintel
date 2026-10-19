@@ -1518,7 +1518,7 @@ test('purchasing-fit progress and failures survive rendering and reload without 
 });
 
 test('a qualified first pass checks purchasing fit before broadening and does not repeat completed fit batches',async()=>{
-  let marketCalls=0,fitCalls=0;
+  let marketCalls=0,fitCalls=0,checkpoint;
   const text='North Steel manufactures industrial equipment in Latvia and purchases industrial automation for its production lines. The company operates a new factory with automated manufacturing equipment.';
   const date=new Date().toISOString().slice(0,10),verifiedAt=new Date().toISOString();
   const candidate={company:'North Steel',domain:'northsteel.lv',market:'Latvia',evidence:[{url:'https://northsteel.lv/products',text,verifiedAt},{url:'https://northsteel.lv/news/new-factory',text,date,verifiedAt},{url:'https://industrynews.lv/north-steel',text,date,verifiedAt}],matchedSignals:[{id:'expansion',name:'Expansion',matchedTerms:['new factory'],evidence:[{url:'https://northsteel.lv/news/new-factory'},{url:'https://industrynews.lv/north-steel'}]}]};
@@ -1528,11 +1528,19 @@ test('a qualified first pass checks purchasing fit before broadening and does no
     marketCalls++;return {ok:true,json:async()=>({data:[]})};
   }});
   context.LeadIntelQualificationSettings={get:()=>({researchPriority:'signals',minimumScore:80})};
-  context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>[candidate],buildPotentialCompanyCandidates:()=>[]};
+  context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>[candidate],buildPotentialCompanyCandidates:()=>[],researchBuyerFit:(pool,profile,generate,options)=>Discovery.researchBuyerFit(pool,profile,generate,{...options,onProgress:progress=>{
+    options.onProgress(progress);
+    checkpoint=Discovery.recoverInterruptedDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+  }})};
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:1}));
   await context.__runDiscovery({autoPass:3});
   const result=context.__discoveryState();
   assert.equal(result.funnel.qualifiedCompanies,1);assert.equal(result.funnel.adaptiveFollowUpSearches,0);assert.equal(fitCalls,1);assert.equal(marketCalls,6);
+  assert.equal(checkpoint.status,'partial');
+  assert.equal(checkpoint.latestRunCandidateCount,1);
+  assert.equal(checkpoint.candidates[0]?.domain,candidate.domain,'a completed fit batch must survive closing the tab before the run finishes');
+  assert.equal(checkpoint.retainedLastSuccessfulResults,false);
+  assert.ok(checkpoint.lastRunAt);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
   assert.equal(restored.candidates[0].domain,candidate.domain);assert.ok(Discovery.verifiedBuyerFit(restored.candidates[0],{...JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')).profile,...Targeting.profileFields(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')))}));
 });

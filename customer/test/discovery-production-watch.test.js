@@ -74,7 +74,7 @@ const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
   'function discoveryRunTimeoutMs(',
-  'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept.',
+  'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept. company-verification=20261019-v3 discovery.lastSuccessfulRunAt=discovery.lastRunAt;',
   'function ensureDiscoveryMounted(){}',
   'id="clear-company-results">Clear search results',
   'function clearCompanySearchResults(){}',
