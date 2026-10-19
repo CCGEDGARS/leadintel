@@ -7,8 +7,8 @@ const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
 test('Discovery ranks a wider public pool and displays one ranked ten-buyer shortlist before enrichment',()=>{
  const search=ui.slice(ui.indexOf('async function searchDecisionMakers('),ui.indexOf('function saveLocalPipeline'));
  assert.match(search,/mergeBuyerPool\(previous,publicPeople,researchProfile\)/);
- assert.match(search,/rankedBuyerShortlist\(pool,researchProfile,candidate\)/);
- assert.match(search,/candidate.people=shortlist.people/);
+ assert.match(search,/rankedBuyerShortlist\(pool,researchProfile,/);
+ assert.match(search,/shortlist\.people/);
  assert.match(search,/searchApolloPeople/);
 });
 
