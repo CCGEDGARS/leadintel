@@ -79,6 +79,35 @@ test('recovery download appears during conflict and hides after resolution witho
  assert.ok(visibility.includes(false),'recovery remains available while conflicting');
  assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer','backup remains intact');
 });
+test('a committed PUT remains acknowledged when its durable browser snapshot outlasts the network deadline',async()=>{
+ let committed=false;
+ const ack={saved:true,version:4};
+ const {root,values}=load(async(input,options)=>{
+  committed=true;
+  return {ok:true,status:200,headers:new Headers({'Content-Type':'application/json'}),clone:()=>({json:async()=>ack}),json:async()=>{if(options.signal?.aborted)throw new DOMException('Aborted','AbortError');return ack;}};
+ },{withBridge:true});
+ root.AbortController=AbortController;root.DOMException=DOMException;
+ const bridge=root.LeadIntelServerBridge;bridge.conflict=false;bridge.conflictState=null;
+ let expire;const schedule=root.setTimeout;root.setTimeout=(fn,ms)=>{if(ms===15000)expire=fn;return schedule(fn,ms);};
+ let release,started;const writing=new Promise(resolve=>{started=resolve;}),durable=new Promise(resolve=>{release=resolve;});
+ root.LeadIntelAccountCache={saveRecoverySnapshot:async()=>{started();await durable;return 'committed-snapshot';}};
+ const originalSet=root.localStorage.setItem;root.localStorage.setItem=function(key,value){if(key==='leadintel_customer_v2_workspace_saved_snapshot_v1'&&!String(value).includes('leadintel-indexed-workspace-snapshot-v1'))throw Object.assign(new Error('Quota exceeded'),{name:'QuotaExceededError'});return originalSet.call(this,key,value);};
+ const saving=bridge.saveNow({saveIntent:true,explicitSave:true}).then(result=>({result}),error=>({error}));
+ try{await writing;assert.equal(committed,true);assert.equal(typeof expire,'function');expire();}
+ finally{release();}
+ const outcome=await saving;assert.ifError(outcome.error);assert.equal(outcome.result.saved,true);
+ assert.equal(bridge.stateVersion,4);assert.equal(bridge.conflict,false);
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,4);
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+});
+test('PUT acknowledgement preserves HTTP status and rejects an invalid successful response',async()=>{
+ const {root}=load(async()=>new Response(JSON.stringify({saved:true,version:4}),{status:201}));
+ const response=await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:3,payload:{main:{website:'seller.example'}}}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ assert.equal(response.status,201);assert.equal((await response.json()).saved,true);
+ const broken=load(async()=>new Response('not JSON'),{withBridge:true});broken.root.LeadIntelServerBridge.conflict=false;
+ await assert.rejects(()=>broken.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));
+ assert.equal(broken.root.LeadIntelServerBridge.stateVersion,3);assert.equal(broken.root.LeadIntelWorkspacePersistence.isExplicitlySaved(),false);
+});
 test('recovery storage failure prevents an overwrite and allows a safe retry',async()=>{
  let writes=0;const {root,values}=load(async(input,options)=>{if(options.method==='PUT')writes++;return new Response(JSON.stringify({version:9,payload:{main:{website:'server.example'}}}));},{withBridge:true,quota:true});
  assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,false);assert.equal(writes,0);assert.equal(root.LeadIntelServerBridge.conflict,true);assert.equal(root.LeadIntelServerBridge.conflictState.version,3);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');
