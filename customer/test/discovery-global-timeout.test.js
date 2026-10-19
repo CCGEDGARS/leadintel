@@ -459,7 +459,7 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.deepEqual(calls,['approval']); // Unqualified email holds before enrichment; phone still checks approval.
+  assert.deepEqual(calls,[]); // Free-first automation never initiates a provider credit request.
   assert.equal(Object.keys(candidate.people[0].hunterChecks||{}).length,0);
   assert.equal(candidate.people[0].flowEmailCompletedFor,'');
   assert.equal(candidate.people[0].flowPhoneCompletedFor,'');

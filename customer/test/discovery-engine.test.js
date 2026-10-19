@@ -620,3 +620,19 @@ test('free-first contact scan preserves more than eight distinct published compa
   assert.ok(matches.every(row=>row.url===page.url&&row.status==='public_unverified'));
   assert.equal(Discovery.extractPublicContacts([{url:'https://unrelated.example/team',markdown:'fake@bomill.com'}],'bomill.com').length,0);
 });
+
+
+test('buyer confirmation requires explicit Apollo and Hunter credit permission',()=>{
+  const fs=require('node:fs');
+  const path=require('node:path');
+  const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  const start=source.indexOf('async function confirmBuyerContact(');
+  const end=source.indexOf('const contactFlowPromises=',start);
+  assert.ok(start>0&&end>start);
+  const confirm=source.slice(start,end);
+  assert.match(confirm,/if\(automatic\)\{issues\.push\('Apollo enrichment requires manual credit approval/);
+  assert.match(confirm,/LeadIntelDialogs\?\.confirm\(`Apollo /);
+  assert.match(confirm,/if\(hunterReady&&!automatic&&!verifiedBuyerEmail/);
+  assert.match(confirm,/LeadIntelDialogs\?\.confirm\('Hunter email finding\/verification may consume provider credits/);
+  assert.match(confirm,/if\(hunterApproved\)\{/);
+});
