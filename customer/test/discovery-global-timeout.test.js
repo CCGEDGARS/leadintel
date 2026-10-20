@@ -1630,11 +1630,21 @@ test('purchasing-fit retry reuses saved evidence and retains the existing shortl
  const researchedAt=new Date().toISOString(),calls=[];
  const evidence=[{url:'https://northstar.com/about',verifiedAt:researchedAt,text:'Northstar manufactures industrial equipment in Latvia and uses industrial automation for its own manufacturing and production assembly operations.'},{url:'https://journal.example/northstar',text:'Northstar manufactures industrial equipment in Latvia for local and international business customers.'}];
  const ctx=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
-  calls.push(url);assert.match(url,/api\/ai\/generate/);return {ok:true,json:async()=>({text:JSON.stringify({companies:[{domain:'northstar.com',fit:90,purchase:'industrial automation',reason:'Manufacturing assembly uses automation equipment.',buyerRole:'industrial manufacturer',evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]})})};
+  calls.push(url);assert.match(url,/api\/ai\/generate/);assert.equal(JSON.parse(options.body).fallback_provider,'gemini');return {ok:true,json:async()=>({text:JSON.stringify({companies:[{domain:'northstar.com',fit:90,purchase:'industrial automation',reason:'Manufacturing assembly uses automation equipment.',buyerRole:'industrial manufacturer',evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]})})};
  }});
  ctx.__setDiscovery({lastRunAt:researchedAt,status:'partial',potentialMatches:[{company:'Northstar',domain:'northstar.com',market:'Latvia',evidence,qualificationGaps:['Purchasing application unverified']}],selectedProspects:[{company:'Kept',domain:'kept.example',buyerSearchMode:'user_selected_target'}],searchFailures:[{phase:'buyer-fit',domain:'northstar.com',company:'Northstar',reason:'timeout',status:408}]});
  await ctx.__retryFailedDiscoveryChecks();
  const state=ctx.__discoveryState();assert.equal(calls.length,1);assert.equal(state.candidates.find(c=>c.domain==='northstar.com')?.qualification.eligible,true);assert.equal(state.searchFailures.length,0);assert.equal(state.selectedProspects[0].domain,'kept.example');
+});
+test('purchasing-fit retry reserves time for every bounded batch and single-company recovery',async()=>{
+ const at=new Date().toISOString(),timers=[];
+ const ctx=loadDiscoveryRunner({scaleProductionRunTimeout:0,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async()=>({ok:true,json:async()=>({text:'{"companies":[]}'})})});
+ ctx.setTimeout=(fn,ms)=>{timers.push(ms);return setTimeout(fn,ms);};
+ const companies=Array.from({length:10},(_,i)=>({company:`Company ${i}`,domain:`company${i}.com`,market:'Latvia',qualificationGaps:['Purchasing application unverified'],evidence:[{url:`https://company${i}.com/about`,verifiedAt:at,text:'We manufacture industrial equipment in Latvia using industrial automation.'}]}));
+ ctx.__setDiscovery({status:'partial',lastRunAt:at,potentialMatches:companies,searchFailures:companies.map(c=>({phase:'buyer-fit',domain:c.domain,reason:'timeout'}))});
+ await ctx.__retryFailedDiscoveryChecks();
+ assert.ok(Math.max(...timers)>=3*3*47000,`three concurrency waves need one batch request plus two single-company recoveries each: ${JSON.stringify(timers)}`);
+ assert.ok(timers.includes(47000)&&!timers.includes(40000),'each request permits the server primary and fallback envelope');
 });
 test('purchasing-fit recovery cannot apply an old workspace result after an account switch',async()=>{
  const bridge={session:{authenticated:true},workspace:{id:'old'}},at=new Date().toISOString();

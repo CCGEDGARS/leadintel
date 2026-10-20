@@ -221,9 +221,9 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('AI generation payload is required',400,cors);
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!assistant&&(!prompt||prompt.length>80000||system.length>20000))return error('AI generation prompt is invalid or too large',400,cors);
-    const companyExtraction=!assistant&&body.task==='company-extraction';
+    const boundedResearch=!assistant&&['company-extraction','buyer-fit'].includes(body.task);
     const integration=await activeIntegration(env,workspaceId);
-    if(!integration)return error('No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'main',fallback:{status:'not_used',used:false}}:{});
+    if(!integration)return error('No active AI provider is configured for this workspace',409,cors,boundedResearch?{provider:'main',fallback:{status:'not_used',used:false}}:{});
     try{
       const preparedAssistant=assistant?await prepareAssistantRequest(env,{workspaceId,userId:access.user.id},body):null;
       const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
@@ -232,7 +232,7 @@ export async function handleAiRoute(request,env,cors={}){
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
-        if(assistant||body.task==='company-extraction'){
+        if(assistant||boundedResearch){
           if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
           controller=new AbortController();signal=controller.signal;
           onRequestAbort=()=>controller.abort(request.signal.reason);
@@ -259,8 +259,8 @@ export async function handleAiRoute(request,env,cors={}){
         getFallbackIntegration:()=>geminiIntegration(env,workspaceId),request:extractionRequest,runProvider
       });
       if(!attempt.ok){
-        const message=attempt.fallback.status==='failed'?'Main-engine extraction failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
-        const metadata=body.task==='company-extraction'?{provider:integration.provider,fallback:attempt.fallback}:{};
+        const message=attempt.fallback.status==='failed'?'Main-engine research failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
+        const metadata=boundedResearch?{provider:integration.provider,fallback:attempt.fallback}:{};
         return error(message,502,cors,metadata);
       }
       if(assistant)await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
@@ -271,7 +271,7 @@ export async function handleAiRoute(request,env,cors={}){
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
       if(assistant)return json(assistantReply,200,cors);
-      return json(body.task==='company-extraction'?{...result,fallback:attempt.fallback}:result,200,cors);
+      return json(boundedResearch?{...result,fallback:attempt.fallback}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
   }
 
