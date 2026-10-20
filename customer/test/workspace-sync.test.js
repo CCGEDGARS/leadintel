@@ -1,5 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict'),Sync=require('../workspace-sync.js');
 const base=()=>({main:{website:'seller.example',answers:{offer:'Original',market:'Sweden'}},discovery:{people:[{id:'a',email:'a@buyer.example',source:'https://buyer.example/team'}]},outreach:{},delivery:{},meta:{discovery:{stage:4}}});
+test('regenerated profile clocks cannot block otherwise identical workspace research',()=>{
+ const b=base();b.main.profile={generatedAt:'2026-10-01T00:00:00Z',canonical:{generatedAt:'2026-10-01T00:00:00Z',fields:{marketFocus:{value:'Sweden',updatedAt:'2026-10-01T00:00:00Z'}}}};
+ const l=structuredClone(b),r=structuredClone(b);
+ for(const [row,time] of [[l,'2026-10-20T07:00:00Z'],[r,'2026-10-20T08:00:00Z']]){row.main.profile.generatedAt=time;row.main.profile.canonical.generatedAt=time;row.main.profile.canonical.fields.marketFocus.updatedAt=time;}
+ r.discovery.people.push({id:'new',name:'Researched buyer'});
+ const result=Sync.merge(b,l,r);assert.equal(result.safe,true);assert.equal(result.payload.discovery.people.length,2);assert.equal(result.payload.main.profile.generatedAt,r.main.profile.generatedAt);
+ l.main.profile.canonical.fields.marketFocus.value='Latvia';r.main.profile.canonical.fields.marketFocus.value='Germany';
+ assert.equal(Sync.merge(b,l,r).safe,false,'real competing field edits still require review');
+});
 test('two tabs navigating to different stages do not create a business-data conflict',()=>{
  const b=base();b.main.step=4;Object.assign(b.meta.discovery,{activeJourneyStage:3,visibleStep:4});
  const l=structuredClone(b),r=structuredClone(b);

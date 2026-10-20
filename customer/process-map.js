@@ -124,8 +124,10 @@ function currentProcessStep(){
   return window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,state.step)||Number(state.step)||1;
 }
 function readJourneyState(){
+  const discovery=readStageJson(DISCOVERY_STORAGE_KEY),assess=window.LeadIntelDiscoveryUI?.assessCompany;
+  discovery.candidates=typeof assess==='function'?(discovery.candidates||[]).map(candidate=>({...candidate,qualification:assess(candidate,{researchedAt:discovery.lastRunAt})})):[];
   return {
-    main:readProcessState(),discovery:readStageJson(DISCOVERY_STORAGE_KEY),discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
+    main:readProcessState(),discovery,discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
   };
 }
 function websiteActivated(main){

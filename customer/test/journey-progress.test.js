@@ -5,6 +5,33 @@ const path=require('node:path');
 
 const modulePath=path.join(__dirname,'..','journey-progress.js');
 const Journey=fs.existsSync(modulePath)?require(modulePath):{};
+test('journey can assess retained companies before Companies mounts and uses the saved research timestamp',()=>{
+ const D=require('../discovery-engine.js'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+ const assess=vm.runInNewContext(source.slice(source.indexOf('function qualificationAssessment('),source.indexOf('function qualificationHtml('))+';qualificationAssessment',{
+  discovery:null,mainState:()=>({}),companyQualificationProfile:()=>({website:'seller.example',priorityOffers:'assembly services',idealCustomer:'equipment operators'}),crmCompanyByDomain:()=>null,LeadIntelDiscovery:D,window:{}
+ });
+ const researchedAt='2026-10-20T08:00:00Z';let q;
+ assert.doesNotThrow(()=>{q=assess({company:'Nordic',domain:'nordic.se'},{researchedAt});});
+ assert.equal(q.researchedAt,researchedAt);
+});
+test('journey uses the current card assessment instead of a stale saved eligibility flag',()=>{
+ const D=require('../discovery-engine.js'),vm=require('node:vm');
+ const candidate={company:'Nordic',domain:'nordic.se',qualification:{eligible:true,score:90},evidence:[{url:'https://nordic.se/',text:'We use cookies. Accept all cookies.',verifiedAt:new Date().toISOString()}]};
+ const source=fs.readFileSync(require.resolve('../process-map.js'),'utf8');
+ const read=vm.runInNewContext(source.slice(source.indexOf('function readJourneyState(){'),source.indexOf('function websiteActivated('))+';readJourneyState',{
+  DISCOVERY_STORAGE_KEY:'discovery',OUTREACH_STORAGE_KEY:'outreach',DELIVERY_STORAGE_KEY:'delivery',readProcessState:()=>({}),readStageJson:key=>key==='discovery'?{status:'partial',candidates:[candidate]}:{},
+  window:{LeadIntelDiscoveryUI:{assessCompany:c=>D.assessCompanyQualification(c,{website:'seller.example',priorityOffers:'assembly services',idealCustomer:'equipment operators'},{},{researchedAt:new Date().toISOString()})}}
+ });
+ assert.equal(Journey.buildJourneyModel({...read(),currentStep:5,availability:{5:true}})[3].steps.find(s=>s.id==='companies').complete,false);
+});
+test('retained unscored company records cannot complete the company stage',()=>{
+ const stage=Journey.buildJourneyModel({currentStep:5,discovery:{status:'partial',candidates:[{company:'Legacy',domain:'legacy.example'}],pipeline:[{domain:'saved.example'}]},discoveryMeta:{targetCount:5},availability:{5:true}})[3];
+ assert.equal(stage.steps.find(s=>s.id==='companies').complete,false);assert.equal(stage.steps.find(s=>s.id==='review').complete,false);assert.notEqual(stage.nextAction,'Stage complete');
+});
+test('one checked company cannot complete a requested five-company result',()=>{
+ const stage=Journey.buildJourneyModel({currentStep:5,discovery:{status:'partial',candidates:[{company:'Buyer',domain:'buyer.example',qualification:{eligible:true,score:70}}],pipeline:[{domain:'buyer.example'}]},discoveryMeta:{targetCount:5},availability:{5:true}})[3];
+ assert.equal(stage.steps.find(s=>s.id==='companies').complete,false);assert.notEqual(stage.nextAction,'Stage complete');
+});
 
 test('zero-score or incomplete company research cannot mark Companies found and reviewed complete',()=>{
  for(const candidate of [{company:'Unverified',domain:'unknown.example',buyerFit:{fit:0}},{company:'Incomplete',domain:'unknown.example',qualification:{eligible:false}},{company:'Stale',domain:'unknown.example',needsRecheck:true}]){
@@ -32,7 +59,7 @@ test('commercial journey derives completed substeps from real workspace outcomes
     campaignStudio:{coreScenario:{status:'approved'}}
   };
   main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
-  const discovery={status:'complete',candidates:[{company:'Buyer AB',domain:'buyer.example',people:[{name:'Buyer'}]}],pipeline:[{domain:'buyer.example'}]};
+  const discovery={status:'complete',candidates:[{company:'Buyer AB',domain:'buyer.example',qualification:{eligible:true,score:85},people:[{name:'Buyer'}]}],pipeline:[{domain:'buyer.example'}]};
   const outreach={selectedDomain:'buyer.example',items:[{domain:'buyer.example',dossier:{company:'Buyer'},drafts:{emailSubject:'Subject',emailBody:'Body'},localizationStatus:'complete',approved:true}]};
   const delivery={selectedDomain:'buyer.example',activity:[{type:'message.sent'},{type:'reply.received'},{type:'outcome.recorded'}],opportunities:[{domain:'buyer.example',sentAt:'2026-09-17T00:00:00Z',replies:[{text:'Yes'}],outcomeStage:'Meeting'}]};
   const availability=Object.fromEntries([1,2,3,4,5,6,7].map(step=>[step,true]));
