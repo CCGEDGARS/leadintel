@@ -7,6 +7,22 @@
   const STALL_MS=180000;
   const FAILED=new Set(['error','interrupted','partial']);
   function clean(value,max=240){return String(value??'').replace(/(?:api[_ -]?key|token|authorization|secret)\s*[=:]\s*\S+/gi,'[protected]').replace(/\s+/g,' ').trim().slice(0,max);}
+  function taskDomain(value){
+    const domain=String(value||'').toLowerCase();
+    if(domain.length>253||!domain.includes('.')||!domain.split('.').every(label=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))||!/[a-z]/.test(domain.split('.').at(-1)))return '';
+    return domain.replace(/^www\./,'');
+  }
+  function buyerTaskScope(task,workspaceId){
+    const meta=task.metadata||{},explicit=meta.domain||meta.companyDomain,domain=taskDomain(explicit);
+    const legacy=String(task.id||'').match(/^decision-maker-search:([^:]+):([1-9]\d{12})$/),legacyDomain=legacy?taskDomain(legacy[1]):'';
+    if(explicit&&!domain||domain&&legacyDomain&&domain!==legacyDomain)return task.id;
+    // Metadata-free records came from this account-scoped task store. Only a
+    // verified current workspace and the generated domain/timestamp ID can
+    // connect them to a later attempt; arbitrary company labels stay unknown.
+    if(!domain&&(!workspaceId||meta.workspaceId&&meta.workspaceId!==workspaceId||!legacyDomain))return task.id;
+    const scopedWorkspace=meta.workspaceId||workspaceId;if(!scopedWorkspace)return task.id;
+    return JSON.stringify([task.type,scopedWorkspace,meta.flowId||'',domain||legacyDomain,meta.contactId||'']);
+  }
   function canonicalWebsite(value){try{const url=new URL(String(value??'').trim());if(!['http:','https:'].includes(url.protocol))return '';url.hostname=url.hostname.toLowerCase();url.hash='';url.pathname=url.pathname.replace(/\/+$/,'')||'/';return url.href;}catch{return '';}}
   function aiProviderIssueFromResearch({state={},researchMeta={}}={}){
     const currentWebsite=canonicalWebsite(state?.website),researchWebsite=canonicalWebsite(researchMeta?.website);
@@ -29,7 +45,7 @@
     if(!Number.isFinite(bytes)||bytes<limit*0.8)return null;
     return {id:'workspace-sync-budget',severity:'recommendation',title:'Workspace is close to the sync limit',detail:`Saved research is ${kb(bytes)} KB of the ${kb(limit)} KB sync limit after compaction. Clear older company search results in Companies before a larger research run so saving keeps working.`,target:{type:'stage',id:4}};
   }
-  function buildAttentionItems({connectionIssues=[],model=[],tasks=[],unsaved=false,runtimeErrors=[],aiProviderIssue=null,providerIssues=[],workspaceStarted=true,syncBudget=null,now=Date.now()}={}){
+  function buildAttentionItems({connectionIssues=[],model=[],tasks=[],workspaceId='',unsaved=false,runtimeErrors=[],aiProviderIssue=null,providerIssues=[],workspaceStarted=true,syncBudget=null,now=Date.now()}={}){
     const items=[...connectionIssues];
     const creditProviders=new Set(providerIssues.map(issue=>issue.provider));
     providerIssues.forEach(issue=>items.push({id:`provider-${issue.provider}-credits`,severity:'error',title:`${clean(issue.name,60)} credit or billing issue`,detail:issue.source==='managed'?`LeadIntel manages ${issue.name} billing and must restore service. Your account does not need a top-up.`:issue.source==='unknown'?`${issue.name} returned HTTP 402 during the latest company search. Open AI & Tools to check which account supplies it.`:`${issue.name} reported exhausted credits or a billing limit during a real request. Check its balance and spending limit, then retry.`,target:{type:'settings'}}));
@@ -45,7 +61,7 @@
     // research scope describes its present health, regardless of history order.
     const latestTasks=new Map();
     for(const task of tasks){
-      const meta=task.metadata||{},scope=task.type==='company-discovery'?[task.type,meta.workspaceId||'',meta.flowId||''].join('|'):meta.domain||meta.companyDomain||meta.contactId?[task.type,meta.workspaceId||'',meta.flowId||'',meta.domain||meta.companyDomain||'',meta.contactId||'',task.title||''].join('|'):task.id;
+      const meta=task.metadata||{},scope=task.type==='decision-maker-search'?buyerTaskScope(task,workspaceId):task.type==='company-discovery'?[task.type,meta.workspaceId||'',meta.flowId||''].join('|'):meta.domain||meta.companyDomain||meta.contactId?[task.type,meta.workspaceId||'',meta.flowId||'',meta.domain||meta.companyDomain||'',meta.contactId||'',task.title||''].join('|'):task.id;
       const previous=latestTasks.get(scope);
       if(!previous||Number(task.startedAt||task.updatedAt||0)>Number(previous.startedAt||previous.updatedAt||0))latestTasks.set(scope,task);
     }
