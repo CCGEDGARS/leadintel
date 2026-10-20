@@ -200,6 +200,30 @@ async function extractionFallback(env,url,access,workspaceId,credential,status,s
   await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status}});
   return direct;
 }
+export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal}={}){
+  if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
+  const researchTrace=[],unused=provider=>researchTrace.push({provider,operation:'extract',status:'skipped',results:0,reason:'Earlier extractor succeeded'});
+  const check=()=>{if(signal.aborted)throw Object.assign(new Error('Public extraction canceled'),{status:499,researchTrace});};
+  const valid=page=>{const text=String(page?.markdown||page?.content||'').trim();return text.length>=40&&!(/just a moment|access denied|verify you are human|cloudflare ray id/i.test(text)&&text.length<1600);};
+  check();
+  try{const result=await fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});if(!valid(result.data))throw new Error('Blocked or empty page');researchTrace.push({provider:'direct',operation:'extract',status:'succeeded',results:1});unused('firecrawl');unused('scrapling');return {...result,researchTrace};}
+  catch{check();researchTrace.push({provider:'direct',operation:'extract',status:'failed',results:0,reason:'Direct page unavailable or blocked'});}
+  let credential;
+  try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch{researchTrace.push({provider:'firecrawl',operation:'extract',status:'skipped',results:0,reason:'Workspace Firecrawl credential unavailable'});}
+  if(credential){
+    check();try{
+      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false}),signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
+      const payload=await response.json(),data=payload.data||payload;if(!response.ok||payload.success===false||!valid(data))throw new Error(response.ok?'Blocked or empty page':`HTTP ${response.status}`);
+      researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
+      if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();
+      return {success:true,data:{...data,metadata:{...data.metadata,source:'firecrawl'}},researchTrace};
+    }catch(cause){check();researchTrace.push({provider:'firecrawl',operation:'extract',status:'failed',results:0,reason:/^HTTP \d+$/.test(cause.message)?cause.message:'Extraction unavailable or blocked'});}
+  }
+  check();
+  if(scraplingConfigured(env))try{const result=await fetchWithScrapling(env,url,{signal});if(!valid(result.data))throw new Error('Blocked or empty page');researchTrace.push({provider:'scrapling',operation:'extract',status:'succeeded',results:1});return {...result,researchTrace};}catch{check();researchTrace.push({provider:'scrapling',operation:'extract',status:'failed',results:0,reason:'Configured fallback unavailable or blocked'});}
+  else researchTrace.push({provider:'scrapling',operation:'extract',status:'skipped',results:0,reason:'Fallback not configured'});
+  throw Object.assign(new Error('Public source extraction unavailable'),{status:502,researchTrace});
+}
 async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
@@ -219,9 +243,8 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   }
   if(kind==='scrape'&&body.publicFirst===true){
     if(request.signal.aborted)return cancelledResponse(request.signal,cors);
-    const signal=providerSignal(request,15000);
-    try{const direct=await fetchDirectPublicPage(researchUrl.href,{signal});if(/^(?:just a moment|access denied|verify you are human)|cloudflare ray id/i.test(direct.data.markdown)&&direct.data.markdown.length<1600)throw new Error('Public page blocked');await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:direct.data.metadata.source,provider_credits:0}});return json(direct,200,cors);}catch(cause){if(request.signal.aborted)return cancelledResponse(request.signal,cors);}
-    if(scraplingConfigured(env))try{const extracted=await fetchWithScrapling(env,researchUrl.href,{signal:request.signal});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:'scrapling-fallback',provider_credits:0}});return json(extracted,200,cors);}catch{}
+    try{const extracted=await readPublicBuyerPage(env,workspaceId,researchUrl.href,{signal:providerSignal(request,55000)});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:extracted.data.metadata?.source,researchTrace:extracted.researchTrace}});return json(extracted,200,cors);}
+    catch(cause){return json({error:cause.message,code:'PUBLIC_EXTRACTION_UNAVAILABLE',researchTrace:cause.researchTrace||[]},cause.status||502,cors);}
   }
   let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;

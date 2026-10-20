@@ -50,6 +50,15 @@ async function connectFirecrawl(env){
  const encrypted=await encryptSecret('fc-customer-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
  env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(encrypted);
 }
+sqliteTest('public extraction reports actual direct use and skips unused extractors',async()=>{
+ const {env,token}=await fixture(),old=globalThis.fetch;globalThis.fetch=async()=>new Response('<h1>Company team</h1><p>Anna Andersson, Head of Procurement. '+('Company professional contact information. '.repeat(5))+'</p>',{headers:{'Content-Type':'text/html'}});
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/team',publicFirst:true}}),env,{}),p=await r.json();assert.equal(r.status,200);assert.equal(p.researchTrace.find(e=>e.provider==='direct').status,'succeeded');for(const provider of ['firecrawl','scrapling'])assert.equal(p.researchTrace.find(e=>e.provider===provider).status,'skipped');}finally{globalThis.fetch=old;}
+});
+sqliteTest('public extraction records direct and Firecrawl failures before successful configured Scrapling fallback',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env);env.SCRAPLING_SERVICE_URL='https://scrapling.example/api/scrapling';env.SCRAPLING_SERVICE_TOKEN='service-test';const old=globalThis.fetch,calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));if(String(url).includes('api.firecrawl.dev'))return new Response(JSON.stringify({error:'Temporary failure'}),{status:503});if(String(url).includes('scrapling.example'))return new Response(JSON.stringify({success:true,data:{markdown:'Anna Andersson — Head of Procurement — Company. '+('Public team contact details. '.repeat(8)),metadata:{source:'scrapling-fallback',sourceURL:'https://company.example/team'}}}));return new Response('Access denied',{status:503});};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/team',publicFirst:true}}),env,{}),p=await r.json();assert.equal(r.status,200);assert.deepEqual(p.researchTrace.map(e=>[e.provider,e.status]),[['direct','failed'],['firecrawl','failed'],['scrapling','succeeded']]);assert.equal(calls.length,3);}finally{globalThis.fetch=old;}
+});
 sqliteTest('public-first extraction reads company staff without any provider key or credit call',async()=>{
  const {env,token}=await fixture();const old=globalThis.fetch,calls=[];
  globalThis.fetch=async url=>{calls.push(String(url));return new Response('<html><title>Company contact</title><h3>Personal</h3><p><strong>Anna Andersson</strong> CEO</p><p>anna@company.example</p><a href="/team">Team</a></html>',{headers:{'Content-Type':'text/html'}});};

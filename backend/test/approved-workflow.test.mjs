@@ -115,7 +115,7 @@ test('automatic buyers research a public pool and prioritize kept verified buyer
  globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:[...Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`})),{url:'https://example.com/team',title:'Team',markdown:'Saved Buyer — COO at Example. Current company leadership.'}]}),{status:200});};
  try{
   const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
-  assert.equal(result.candidates[0].contact.name,'Saved Buyer');assert.equal(result.candidates[0].buyerDiscovery.pool.length,20);assert.equal(result.candidates[0].people.length,10);assert.ok(result.candidates[0].people.every(p=>p.emailResearch.searches===4));assert.equal(apollo,0);assert.ok(publicSearches>0);
+  assert.equal(result.candidates[0].contact.name,'Saved Buyer');assert.equal(result.candidates[0].buyerDiscovery.pool.length,20);assert.equal(result.candidates[0].people.length,10);assert.equal(result.candidates[0].people.filter(p=>p.contactResearch.checks.deep?.status==='complete').length,4);assert.ok(result.candidates[0].people.every(p=>p.emailResearch.searches>=4&&p.emailResearch.searches<=6));assert.equal(apollo,0);assert.ok(publicSearches>0);
  }finally{globalThis.fetch=oldFetch;}
 });
 test('automatic buyers retain public suggestions for review without approved enrichment or verified emails',async()=>{

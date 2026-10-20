@@ -24,7 +24,7 @@ test('automatic buyer research searches full name, company email and Gmail witho
 test('automatic contact research records failures and never presents guesses as found',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'},{name:'Anna',identityStatus:'pending'}]};
  await researchBuyerContacts(candidate,async()=>{throw new Error('timeout');},async()=>{});
- assert.equal(candidate.people[0].emailResearch.status,'unavailable');assert.equal(candidate.people[0].emailResearch.failed,4);assert.equal(candidate.people[0].patternFindings,undefined);assert.equal(candidate.people[1].emailResearch.status,'not_searched');
+ assert.equal(candidate.people[0].emailResearch.status,'unavailable');assert.equal(candidate.people[0].emailResearch.failed,6);assert.equal(candidate.people[0].patternFindings,undefined);assert.equal(candidate.people[1].emailResearch.status,'not_searched');
 });
 test('automatic research uses observed company formats and rejects generic or unattributed addresses',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'},{name:'Bob Smith',publicEmail:'bsmith@example.com',publicEmailUrl:'https://example.com/team'}]},queries=[];

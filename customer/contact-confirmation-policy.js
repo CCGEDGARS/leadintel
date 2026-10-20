@@ -8,7 +8,7 @@
     const email=String(contact.normalized_email||contact.work_email||contact.email||'').toLowerCase();
     if(!publicSource(email,contact.name,'https://'+domain(companyDomain),companyDomain)||contact.archived_at)return false;
     if(String(contact.email_status).toLowerCase()==='verified')return [contact.verification_provider,contact.source].some(value=>['apollo','hunter'].includes(String(value||'').toLowerCase()));
-    const age=now-Date.parse(contact.verified_at||'');
+    const stamp=String(contact.verified_at||''),age=now-Date.parse(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(stamp)?stamp.replace(' ','T')+'Z':stamp);
     return level(confirmationLevel)==='public_confirmed'&&contact.email_status==='public_confirmed'&&contact.verification_provider==='Public source'&&publicSource(email,contact.name,contact.public_email_url,companyDomain)&&age>=0&&age<30*86400000;
   }
   return {level,publicSource,accepted};
