@@ -8,13 +8,15 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 
 test('workspace persistence boundary initializes before app state is loaded',()=>{
-  const importMatch=app.match(/^import ['"]\.\/workspace-persistence\.js\?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1['"];?/m);
+  const importMatch=app.match(/^import ['"]\.\/workspace-persistence\.js\?[^'"\s]+['"];?/m);
   assert.ok(importMatch,'app.js must import the persistence boundary directly');
+  assert.match(importMatch[0],/workspace-save=20261020-v1/);
   const importIndex=app.indexOf(importMatch[0]);
   const stateIndex=app.indexOf('state=loadState()',app.lastIndexOf('function init()'));
   assert.ok(importIndex>=0&&stateIndex>importIndex,'persistence must initialize before app state is loaded');
 });
 
 test('process map reuses the same startup-order persistence module URL',()=>{
-  assert.match(processMap,/import ['"]\.\/workspace-persistence\.js\?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1['"]/);
+  const signature=app.match(/^import ['"]\.\/workspace-persistence\.js\?[^'"\s]+['"];?/m)?.[0];
+  assert.ok(signature);assert.ok(processMap.includes(signature),'both entry points must use one persistence module identity');
 });

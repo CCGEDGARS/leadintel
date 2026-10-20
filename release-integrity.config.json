@@ -3325,6 +3325,59 @@
       "contains": [
         "roleSelectionContext:candidate.buyerDiscovery?.roleSelectionContext"
       ]
+    },
+    {
+      "id": "workspace-background-codec",
+      "type": "text",
+      "url": "/customer/workspace-codec-worker.js",
+      "status": 200,
+      "contains": [
+        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1')",
+        "'prepareForSync','packWorkspaceSnapshot','packRecoveryRecord'",
+        "self.postMessage({id,result})"
+      ]
+    },
+    {
+      "id": "workspace-async-save-preparation",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "function runCodec(operation,value,options)",
+        "function prepareSyncPayload(",
+        "workspace-codec-worker.js?v=20261020-v1",
+        "if(!leadintelPreparedSync)next.payload=await prepareSyncPayload"
+      ]
+    },
+    {
+      "id": "workspace-save-lock-deadline",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "reason:'workspace_busy'",
+        "leadintelPreparedSync:Boolean(prepare)",
+        "await preserveSyncRecovery"
+      ]
+    },
+    {
+      "id": "workspace-coverage-clock-sync",
+      "type": "text",
+      "url": "/customer/workspace-sync.js",
+      "status": 200,
+      "contains": [
+        "This clock describes a coverage search",
+        "source freshness. Real coverage fields"
+      ]
+    },
+    {
+      "id": "workspace-save-repair-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "workspace-save=20261020-v1"
+      ]
     }
   ],
   "retry": {
