@@ -116,7 +116,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v2"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
@@ -131,7 +131,7 @@ test('production proof rejects the old stage back handler and a cached entry', a
     const proof = await verifyRelease({
       config, expectedSha: SHA, ciConclusion: 'success', ciRunId: 'navigation',
       fetchImpl: productionFetch({
-        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v1'}"></script>`,
+        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v2'}"></script>`,
         discoveryUi: stale === 'runtime' ? boundedDiscoveryRuntime.replace('$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)', '$("back-to-strategy")?.addEventListener("click",showStrategyStep)') : boundedDiscoveryRuntime
       }),
       nonce: `stale-stage-back-${stale}`
