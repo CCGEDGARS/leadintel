@@ -28,6 +28,7 @@ permissions:
 
 jobs:
   prove-production:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -81,7 +82,7 @@ jobs:
           fi
 
           if [ "${EVENT_WORKFLOW}" = "Customer V2 CI" ] && [ "${backend_required}" = "true" ]; then
-            row="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/backend-deploy.yml/runs?branch=main&per_page=100" 2>/dev/null | jq -r --arg sha "${EXPECTED_SHA}" '.workflow_runs[] | select(.head_sha == $sha and .status == "completed") | [.id,.head_sha,.conclusion] | @tsv' | head -n 1)"
+            row="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/backend-deploy.yml/runs?branch=main&per_page=100" 2>/dev/null | jq -r --arg sha "${EXPECTED_SHA}" '.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion != "skipped") | [.id,.head_sha,.conclusion] | @tsv' | head -n 1)"
             if [ -n "${row}" ]; then
               IFS=$'\t' read -r backend_run_id backend_sha backend_conclusion <<< "${row}"
             else
