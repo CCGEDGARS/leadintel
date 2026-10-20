@@ -1483,6 +1483,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     taskCentre?.update(taskId,{stage:'Verifying company before buyer search'});
     try{
       const verified=await waitForRun(()=>window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal}));
+      rows.push(...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,sourceRead:true,buyerSource:'official',date:page.date,verifiedAt:page.fetchedAt})));
       candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
       discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
     }catch(error){
@@ -1495,6 +1496,15 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     researchProfile={...buyerProfile,decisionMakers:plan.roles.join("; "),companyDomain:candidate.domain};
     providerStatus={firecrawl:{status:"pending",results:0,queries:plan.queries.length},grounded:{status:"pending",results:0},identity:{status:"pending",results:0}};
     candidate.buyerRoles=plan.roles;candidate.buyerRoleAliases=plan.expandedRoles;candidate.buyerOpportunityTerms=plan.opportunityTerms;
+    const officialTrace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,researchProfile);
+    if(officialTrace.people.length){
+      const officialPool=LeadIntelDiscovery.mergeBuyerPool([...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])],officialTrace.people,researchProfile);
+      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:officialPool,opportunityRoles:plan.roles,resultDiagnostics:officialTrace.diagnostics};
+      candidate.people=LeadIntelDiscovery.rankedBuyerShortlist(officialPool,researchProfile,candidate).people;
+      candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:`${candidate.people.length} source-backed contacts found on the company website`};
+      persist();renderAll();
+    }
+
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
     taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     let firecrawlSuccess=0,firecrawlFailed=0;
