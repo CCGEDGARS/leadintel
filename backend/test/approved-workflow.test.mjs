@@ -211,3 +211,21 @@ test('automatic messaging quarantines only invalid company drafts and retains va
  assert.equal(outcome.reviewMessages[0].code,'MESSAGE_REVIEW_REQUIRED');
  assert.match(outcome.reviewMessages[0].reason,/Missing message value: evidenceUrl/);
 });
+
+test('automatic company discovery reuses scoped search feedback and geographic settings without changing stored research',async()=>{
+ const env=await fixture(),context=approvedContext(main),market={icps:context.icps,signals:context.signals};
+ const profile=globalThis.LeadIntelDiscovery.effectiveTargetingProfile({...context.profile,website:context.website},market);
+ const searchFeedback=globalThis.LeadIntelDiscovery.recordSearchFeedback([],{domain:'north.se',company:'North'},'poor_fit',profile);
+ const stored={main,discovery:{searchFeedback,candidates:[{domain:'kept.se',score:{total:68}}]}};
+ const before=JSON.stringify(stored);env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id='w1'").run(before);
+ const calls=[],original=globalThis.fetch;
+ globalThis.fetch=async(url,options)=>{calls.push(JSON.parse(options.body));return new Response(JSON.stringify({data:[{url:'https://journal.se/north',title:'North operates manufacturing facilities',markdown:'North operates industrial manufacturing facilities in Sweden. The company produces machinery and equipment for industrial customers and invests in its production processes.'}]}));};
+ try{
+  await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'feedback'},context,config,result:{},guard:async()=>{},generateResearch});
+  const marketCalls=calls.filter(c=>!c.query.startsWith('"')&&!c.query.startsWith('site:'));
+  assert.ok(marketCalls.length>0);assert.ok(marketCalls.every(c=>c.query.includes('-site:north.se')),'negative example affects future automatic discovery');
+  assert.ok(marketCalls.every(c=>c.location==='Sweden'),'actual upstream requests retain market localization');
+  assert.ok(calls.every(c=>!c.query.startsWith('"North"')),'a rejected name does not consume paid company verification');
+  assert.equal(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json,before,'acquisition feedback does not rewrite saved research');
+ }finally{globalThis.fetch=original;}
+});

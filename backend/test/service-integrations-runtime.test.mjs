@@ -346,3 +346,14 @@ test('direct website fallback bounds streamed bytes before buffering a complete 
  try{await assert.rejects(fetchDirectPublicPage('https://example.com/'),/too large/);assert.equal(cancelled,true);assert.ok(read<=5,'must stop the stream promptly');}
  finally{globalThis.fetch=original;}
 });
+
+sqliteTest('Firecrawl forwards validated geographic search settings with the customer credential',async()=>{
+ const {env,token}=await fixture(),original=globalThis.fetch,calls=[];await connectFirecrawl(env);
+ globalThis.fetch=async(url,options)=>{calls.push(JSON.parse(options.body));return new Response(JSON.stringify({web:[]}));};
+ try{
+  const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'insurance companies sales teams',location:'Latvia',country:'lv',limit:4}}),env,{});
+  assert.equal(response.status,200);assert.equal(calls[0].location,'Latvia');assert.equal(calls[0].country,'LV');
+  await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'insurance companies',location:{invalid:true},country:'INVALID',limit:4}}),env,{});
+  assert.equal(calls[1].location,undefined);assert.equal(calls[1].country,undefined);
+ }finally{globalThis.fetch=original;}
+});
