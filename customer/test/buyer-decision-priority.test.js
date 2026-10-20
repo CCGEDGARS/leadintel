@@ -137,3 +137,14 @@ test('purchasing responsibility belonging to a different person cannot increase 
  assert.equal(D.qualifyBuyer(linked,profile,candidate).breakdown.opportunity.points,12);
  assert.doesNotMatch(linked.decisionEvidence[0].quote,/Other Buyer/);
 });
+
+test('a qualified official-email contact is visible in its buying function instead of hidden behind unreachable alternatives',()=>{
+ const leaders=[buyer('ceo','CEO'),buyer('division','Senior Vice President, Business Area Iron Ore')];
+ const unavailable=buyer('head','Head of Procurement');
+ const reachable=buyer('reachable','Procurement contact',{publicEmail:'anna.buyerreachable@example.com',publicEmailUrl:'https://example.com/purchasing',publicEmailSourceCheck:{status:'confirmed',email:'anna.buyerreachable@example.com',url:'https://example.com/purchasing',checkedAt:now}});
+ const operational=buyer('plant','Operations Director');
+ const rows=[...leaders,unavailable,reachable,operational];
+ assert.ok(D.rankedBuyerShortlist(rows,profile,company).priorityIds.includes('reachable'));
+ assert.equal(D.rankedBuyerShortlist(rows.map(p=>p.id==='reachable'?{...p,opportunityScope:{status:'review_required',reason:'Wrong project'}}:p),profile,company).priorityIds.includes('reachable'),false);
+ assert.equal(D.rankedBuyerShortlist(rows.map(p=>p.id==='reachable'?{...p,publicEmailSourceCheck:{...p.publicEmailSourceCheck,checkedAt:'2020-01-01'}}:p),profile,company).priorityIds.includes('reachable'),false);
+});

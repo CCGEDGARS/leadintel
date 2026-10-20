@@ -113,3 +113,17 @@ test('message style and viewed-company choices remain local while actual drafts 
  l.outreach.messageStudio.defaultTemplates.email='friendly';r.outreach.messageStudio.defaultTemplates.email='curiosity';
  assert.equal(Sync.merge(b,l,r).safe,false,'a saved default is a business setting, not temporary navigation');
 });
+
+test('concurrent buyer progress labels do not block merging contact research and navigation',()=>{
+ const b=base();b.discovery.selectedProspects=[{id:'company-example',domain:'example.com',buyerResearchProgress:{phase:'roles',label:'Searching',step:2,total:5},people:[{id:'anna',name:'Anna Buyer'}]}];
+ const l=structuredClone(b),r=structuredClone(b);
+ l.discovery.selectedProspects[0].buyerResearchProgress={phase:'people',label:'Ranking buyers',step:3,total:5};
+ r.discovery.selectedProspects[0].buyerResearchProgress={phase:'complete',label:'Buyers researched',step:5,total:5};
+ r.discovery.selectedProspects[0].people[0].publicEmail='anna.buyer@example.com';
+ l.meta.discovery.activeJourneyStage=5;
+ const result=Sync.merge(b,l,r);
+ assert.equal(result.safe,true);assert.equal(result.payload.discovery.selectedProspects[0].people[0].publicEmail,'anna.buyer@example.com');
+ assert.equal(result.payload.discovery.selectedProspects[0].buyerResearchProgress,undefined,'ephemeral progress must be recomputed from persisted results');
+ l.discovery.selectedProspects[0].people[0].name='Different Buyer';r.discovery.selectedProspects[0].people[0].name='Another Buyer';
+ assert.equal(Sync.merge(b,l,r).safe,false,'buyer identity conflicts still require review');
+});

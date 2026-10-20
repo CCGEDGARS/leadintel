@@ -320,7 +320,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "buyer-contacts-v21-full-roster",
+        "buyer-contacts-v22-public-confirmation",
         "Resume incomplete checks",
         "Identity discovery"
       ]
@@ -3206,6 +3206,39 @@
       "status": 200,
       "contains": [
         "stage-back=20261020-v1"
+      ]
+    },
+    {
+      "id": "buyer-public-source-confirmation",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "buyer-contacts-v22-public-confirmation",
+        "async function confirmResearchedPublicEmails",
+        "await confirmResearchedPublicEmails(candidate,controller.signal)",
+        "retry public email confirmation"
+      ]
+    },
+    {
+      "id": "buyer-progress-sync-isolation",
+      "type": "text",
+      "url": "/customer/workspace-sync.js",
+      "status": 200,
+      "contains": [
+        "A progress caption is local activity",
+        "buyerResearchProgress"
+      ]
+    },
+    {
+      "id": "published-email-address-decoding",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function decodePublishedEmailText",
+        "const confirmedEmail=person=>",
+        "confirmedEmail(b)"
       ]
     }
   ],

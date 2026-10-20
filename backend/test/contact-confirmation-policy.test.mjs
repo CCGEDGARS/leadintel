@@ -55,3 +55,10 @@ test('a removed official page cannot be promoted from a provider cached copy',as
  globalThis.fetch=async(url)=>{calls.push(String(url));assert.equal(String(url),input.source_url);return new Response('Not found',{status:404,headers:{'Content-Type':'text/html'}});};
  try{await assert.rejects(confirmPublicWorkEmail(env,context,company.id,input),error=>error.status===409&&/no longer available/.test(error.message));assert.deepEqual(calls,[input.source_url]);assert.equal((await getCrmCompany(env.DB,context,company.id)).contacts.length,0);}finally{globalThis.fetch=original;}
 });
+
+test('an exact official address published with at/dot notation is confirmed without guessing or paid enrichment',async()=>{
+ const {env,company}=await fixture();
+ const contact=await confirmPublicWorkEmail(env,context,company.id,input,{loadPage:async()=>({markdown:'Anna Andersson\nProcurement Director\nanna.andersson(at)example(dot)com'})});
+ assert.equal(contact.work_email,input.email);assert.equal(contact.email_status,'public_confirmed');assert.equal(contact.verification_provider,'Public source');
+ assert.equal(P.accepted(contact,'example.com','public_confirmed'),true);
+});
