@@ -33,7 +33,7 @@ test('completed public query batches and grounded cross-check report real task p
  assert.match(grounded.card.label,/grounded/i);
  assert.equal(grounded.task.total,5);
  assert.equal(grounded.task.completed,1);
- assert.equal(centre.list()[0].status,'complete');
+ assert.equal(centre.list()[0].status,'partial');assert.equal(candidate.publicResearch.accountability.status,'partial');
 });
 
 test('the buyer run deadline remains active during contact evidence and preserves researched identities on cancellation',async()=>{
@@ -218,21 +218,17 @@ test('canceling a shared contact lookup allows immediate retry and old completio
 });
 
 test('standalone public contact deadline settles an ignored await and its late runner cannot overwrite a successful retry',async()=>{
- const {context,owner,calls}=publicCrmRuntime();const timers=new Map(),runs=[];let id=0,releaseOld;
- context.setTimeout=(fn,delay)=>{timers.set(++id,{fn,delay});return id;};context.clearTimeout=id=>timers.delete(id);
- context.publicContactPromises=new Map();
- const actual=context.run;
- context.runPublicProspectContacts=(...args)=>{const run=actual(...args);runs.push(run);return run;};
- context.searchBuyerEmailPatterns=async candidate=>{candidate.people[0].attempt='old';return new Promise(resolve=>{releaseOld=resolve;});};
+ const {context,owner,calls}=publicCrmRuntime();const timers=new Map(),runs=[];let id=0,releaseOld,entered;
+ owner.people[0].publicNameUrl='https://example.com/team';const began=new Promise(resolve=>{entered=resolve;});
+ context.setTimeout=(fn,delay)=>{timers.set(++id,{fn,delay});return id;};context.clearTimeout=id=>timers.delete(id);context.publicContactPromises=new Map();
+ const actual=context.run;context.runPublicProspectContacts=(...args)=>{const run=actual(...args);runs.push(run);return run;};
+ context.fetchFirecrawlBuyerResearch=async()=>{entered();return new Promise(resolve=>{releaseOld=resolve;});};
  vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.find=findPublicProspectContacts;',context);
- const old=context.find(owner.domain);[...timers.values()].find(timer=>timer.delay===225000).fn();
- assert.equal(await Promise.race([old,new Promise(resolve=>setTimeout(()=>resolve('hung'),50))]),false);
- assert.equal(owner.publicContactStatus,'error');assert.equal(context.publicContactPromises.size,0);
- context.searchBuyerEmailPatterns=async candidate=>{candidate.people[0].attempt='new';return {searches:0,failed:0,evidence:[]};};
- assert.equal(await context.find(owner.domain),true);assert.equal(owner.people[0].attempt,'new');
- releaseOld({searches:0,failed:0,evidence:[]});assert.equal(await runs[0],false);
- assert.equal(owner.people[0].attempt,'new');assert.equal(calls.length,2);
- assert.equal(context.publicContactPromises.size,0);assert.equal(timers.size,0);
+ const old=context.find(owner.domain);await began;[...timers.values()].find(timer=>timer.delay===180000).fn();
+ assert.equal(await Promise.race([old,new Promise(resolve=>setTimeout(()=>resolve('hung'),50))]),false);assert.equal(owner.publicContactStatus,'error');assert.equal(context.publicContactPromises.size,0);
+ context.fetchFirecrawlBuyerResearch=async()=>({ok:true,json:async()=>({data:{markdown:'Ada Andersson — Procurement Director — Old company. Published company team information.'}})});
+ assert.equal(await context.find(owner.domain),true);assert.equal(owner.people[0].emailResearch.status,'complete');const saved=JSON.stringify(owner);
+ releaseOld({ok:true,json:async()=>({data:{markdown:'Old late result'}})});assert.equal(await runs[0],false);assert.equal(JSON.stringify(owner),saved);assert.equal(calls.length,2);assert.equal(context.publicContactPromises.size,0);assert.equal(timers.size,0);
 });
 
 test('canceling a new subscriber detaches an older shared contact lookup so retry can start immediately',async()=>{
@@ -246,6 +242,7 @@ test('canceling a new subscriber detaches an older shared contact lookup so retr
 
 for(const shadowList of ['', 'selectedProspects', 'candidates'])test(`pipeline contact evidence and reload state survive ${shadowList||'no'} duplicate owner`,async()=>{
  const {context,candidate,centre}=runtime();candidate.saved=true;
+ context.window.LeadIntelFirstPartyResearch.collectWebsiteEvidence=async()=>({pages:[{url:'https://example.com/team',text:'**Ada Andersson**\nInköpschef\nExample Mining company team and public procurement contact information.',fetchedAt:new Date().toISOString()}]});
  context.discovery={pipeline:[candidate],selectedProspects:[]};context.publicContactPromises=new Map();context.URL=URL;context.renderPipeline=()=>{};context.renderCandidates=()=>{};
  if(shadowList)context.discovery[shadowList]=[{...candidate,people:[]}];
  context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company,linkedin_url:'https://linkedin.com/in/ada-andersson'}]})});
@@ -254,12 +251,12 @@ for(const shadowList of ['', 'selectedProspects', 'candidates'])test(`pipeline c
  vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+source.slice(source.indexOf('async function runPublicProspectContacts('),source.indexOf('function scheduleSavedBuyerPublicChecks(')),context);
  assert.equal(await context.run(candidate,{pipeline:true,allowCrmSync:false}),true);
  const saved=context.discovery.pipeline[0];
- assert.equal(saved.people[0].emailResearch.status,'complete');assert.equal(saved.people[0].emailResearch.searches,7);
+ assert.equal(saved.people[0].emailResearch.status,'complete');assert.equal(saved.people[0].emailResearch.searches,6);
  assert.equal(saved.buyerDiscovery.pool[0].emailResearch.status,'complete');
  assert.equal(saved.publicContactVersion,'test');assert.notEqual(saved.publicContactStatus,'loading');
  assert.equal(centre.list()[0].status,'complete');
  const restored=D.normalizeDiscoveryState({pipeline:[saved]}).pipeline[0];
- assert.equal(restored.people[0].emailResearch.status,'complete');assert.equal(restored.buyerDiscovery.pool[0].emailResearch.searches,7);
+ assert.equal(restored.people[0].emailResearch.status,'complete');assert.equal(restored.buyerDiscovery.pool[0].emailResearch.searches,6);
  if(shadowList)assert.equal(context.discovery[shadowList][0].people.length,0);
 });
 

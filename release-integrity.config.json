@@ -3489,6 +3489,39 @@
         "function isSelectedCompanyContact(",
         "function officialStaffEmailClaim("
       ]
+    },
+    {
+      "id": "mandatory-buyer-depth-policy",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "20261020-adaptive-depth-v1",
+        "async function runMandatoryBuyerResearch(",
+        "function recordBuyerResearchTool(",
+        "function safeBuyerResearchAccountability("
+      ]
+    },
+    {
+      "id": "buyer-research-accountability-ui",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function buyerResearchAccountabilityHtml(",
+        "Mandatory depth: Adaptive deep",
+        "researchTrace",
+        "runMandatoryBuyerResearch(candidate,"
+      ]
+    },
+    {
+      "id": "buyer-research-policy-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-research-policy=20261020-v1"
+      ]
     }
   ],
   "retry": {
