@@ -1652,7 +1652,12 @@
       person.emailResearch={...(person.emailResearch||{}),status:checks.every(row=>row?.status==='complete')?'complete':!successfulSearches&&failed?'unavailable':'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
       onProgress?.({label:`Verifying public contact evidence · ${people.filter(p=>p.emailResearch?.status==='complete').length}/${people.length} people checked`});
     };
-    try{for(let i=0;i<people.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(people.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
+    try{
+      // External profile identities and empty search indexes still have a known company website.
+      if(readPage&&people.length&&!sourceRows.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain))&&!people.some(person=>companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain))){
+        try{await extract(people[0],[{url:`https://${companyIdentityDomain(candidate.domain)}/`}]);}catch(error){if(error.code||signal?.aborted)throw error;}
+      }
+      for(let i=0;i<people.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(people.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
     catch(error){report.stopReason=signal?.aborted||error.code==='CANCELED'?'canceled':error.code==='TIME_BUDGET'?'time_budget':'provider_unavailable';report.gaps.push(clean(error.message).slice(0,220));}
     report.officialPages=new Set(sourceRows.filter(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)).map(row=>row.url)).size;
     const finished=person=>person.contactResearch?.policyVersion===policy.version&&policy.requiredChecks.every(key=>person.contactResearch.checks[key]?.status==='complete')&&(!priorities.includes(person)||attributable(person)||person.contactResearch.checks.deep?.status==='complete');

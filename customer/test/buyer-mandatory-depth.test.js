@@ -29,6 +29,11 @@ test('mandatory research caps concurrent person searches at two',async()=>{
  const c=company();c.people=['Anna Andersson','Bob Smith','Chris Brown','Diana Jones','Erika Green'].map(buyer);let active=0,maximum=0;
  await D.runMandatoryBuyerResearch(c,{search:async()=>{active++;maximum=Math.max(maximum,active);await new Promise(resolve=>setTimeout(resolve,1));active--;return [];}});assert.equal(maximum,2);assert.equal(c.publicResearch.accountability.checkedPeople,5);
 });
+test('a zero-result search still reads the known official website when identities came from external profiles',async()=>{
+ const c=company();c.people[0].publicNameUrl='https://linkedin.com/in/anna-andersson';const reads=[];
+ await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async url=>{reads.push(url);return {markdown:'Example company official business website and contact information.',metadata:{sourceURL:url,source:'direct-fallback'}};}});
+ assert.deepEqual(reads,['https://example.com/']);assert.equal(c.publicResearch.accountability.officialPages,1);assert.equal(c.publicResearch.accountability.status,'complete');assert.equal(c.people[0].publicEmail,undefined);
+});
 test('an interrupted forced refresh cannot retain an earlier completed-check claim',async()=>{
  const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async url=>({markdown:'Anna Andersson — Head of Procurement — Example anna.andersson@example.com',metadata:{sourceURL:url,source:'direct-fallback'}})});assert.equal(c.people[0].emailResearch.status,'complete');
  await D.runMandatoryBuyerResearch(c,{force:true,maxDurationMs:10,search:()=>new Promise(()=>{})});assert.equal(c.people[0].emailResearch.status,'partial');assert.equal(c.publicResearch.accountability.checkedPeople,0);

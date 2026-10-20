@@ -4,7 +4,7 @@ import {researchBuyerContacts} from '../src/approved-workflow-runner.js';
 test('automatic contact research reads the discovered source and retains the direct phone without a paid reveal',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO',organization:'Example'}]},reads=[];
  await researchBuyerContacts(candidate,async()=>[{url:'https://example.com/team',description:'Anna Andersson — COO — Example anna.andersson@example.com'}],async()=>{},async url=>{reads.push(url);return {markdown:'Anna Andersson — COO — Example anna.andersson@example.com +46 70 111 2233',metadata:{sourceURL:url}};});
- assert.deepEqual(reads,['https://example.com/team']);assert.equal(candidate.people[0].publicPhone,'+46 70 111 2233');assert.equal(candidate.people[0].publicPhoneEvidence.version,2);
+ assert.deepEqual(reads,['https://example.com/','https://example.com/team']);assert.equal(candidate.people[0].publicPhone,'+46 70 111 2233');assert.equal(candidate.people[0].publicPhoneEvidence.version,2);
 });
 test('an explicit page read supersedes incomplete search markdown for phone attribution',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Johan Menckel',title:'CEO and President',organization:'Example'}]};
