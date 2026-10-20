@@ -3416,7 +3416,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "qualification-context=20261020-v1"
+        "qualification-context=20261020-v2"
       ]
     }
   ],

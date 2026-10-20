@@ -26,3 +26,16 @@ customer timing claim. Live opening/navigation/save acceptance remains a
 separate release check.
 
 No saved workspace data, scoring policy or research evidence is removed.
+
+## Follow-up from authenticated acceptance
+
+The first release still spent 21.3 seconds between app mount and verified UI
+completion. Context preparation alone was insufficient. Repeated presentation
+assessments also need deduplication: Companies status, candidate cards, review
+rows and journey progress ask for the same assessment in one synchronous update.
+A bounded presentation-only map now shares results within the current event-loop
+turn, then clears them. Candidate content, current rules, CRM lifecycle and
+context changes invalidate entries. Action calls remain fresh, and returned
+presentation values are detached from cached results. Optional startup tracing
+reports restore/context boundaries and Companies render duration so acceptance
+can distinguish scoring from persistence costs.

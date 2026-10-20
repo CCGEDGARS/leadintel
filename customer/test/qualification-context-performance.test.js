@@ -34,3 +34,16 @@ test('qualification context follows saved edits, workspace changes and late-load
   vm.runInContext("crmCompanies=[{normalized_domain:'buyer.example',lifecycle_status:'suppressed'}]",r.c);
   assert.equal(r.assess().lifecycle,'suppressed');
 });
+
+test('one presentation pass checks each unchanged company once; actions still check afresh',()=>{
+  const r=runtime();
+  r.c.withQualificationPresentation(()=>{for(let i=0;i<40;i++)r.assess();});
+  assert.equal(r.checks(),1);
+  r.assess();assert.equal(r.checks(),2,'an action must not reuse presentation eligibility');
+  r.c.withQualificationPresentation(()=>{
+    r.c.qualificationAssessment({domain:'buyer.example',researchedAt:'2026-10-20',evidence:[{text:'Changed evidence'}]});
+    r.c.LeadIntelQualificationSettings.get=()=>({minimumScore:95});
+    assert.equal(r.assess().minimum,95);
+  });
+  assert.equal(r.checks(),4,'evidence and rule changes invalidate presentation results');
+});
