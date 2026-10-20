@@ -1,0 +1,19 @@
+# Requested company shortlist — 20 October 2026
+
+## Behavior
+
+The selected amount controls the visible ranked shortlist. Choosing five shows the five highest-scoring checked companies, including checked scores below 80; choosing ten shows ten when those checks exist. Each card retains its score, evidence, feedback and Select for Buyers action. The user can choose a company and continue to decision-maker research through the existing Buyers handoff. This display does not auto-select or replace previously selected companies.
+
+A single collapsed Show other companies disclosure contains all additional checked cards plus Research review for incomplete or disqualified companies. It opens and closes through the native accessible details control, retains its open state during rerendering, and starts closed after reload. Changing the amount repartitions existing results immediately without provider calls. No disclosure is shown when there are no additional results. A genuine research shortfall remains explicit; missing companies are never invented to fill the number.
+
+## Root causes and preservation
+
+The previous renderer sliced to the requested amount without rendering overflow anywhere. Research review opened automatically when the main shortlist was empty. Acquisition also sliced each completed assessment batch to the display amount, dropping extra completed checks. The change retains all completed assessments within existing 30-company research and 50-record storage limits, then applies the requested amount only at display time. Search stopping rules, spending limits, evidence policy and automatic 80+ qualification remain unchanged. New cards share the existing renderer and retain original storage indices, so sorting cannot select the wrong company. Duplicate checked identities are excluded from the review display; saved records are preserved. Companies needing recheck stay accessible in the collapsed review.
+
+CRM remains durable and workspace-scoped as required by the approved Master CRM design. This change only reuses the existing Save in CRM and explicit Buyers selection actions. It performs no automatic contact reveal, paid service activation, outreach activation or send.
+
+## Verification
+
+Baseline main: d26f4d7c (3,079 customer tests passed). RED/GREEN integration coverage uses real qualification and DOM controls: five-of-seven score ordering; one collapsed disclosure for checked overflow plus unfinished research; native open/close and rerender; immediate five-to-ten repartition; correct original-index Buyers selection and persisted reload; empty/shortfall behavior; checked identity deduplication; stale research retention; and actual runner retention of a sixth completed assessment when only five were requested. Independent review identified stale-row Remove/Clear behavior, campaign result overflow and extra reference-similarity AI batches. Each was reproduced RED and corrected: explicit review cleanup removes stale current-research rows while preserving checked cards and Buyers; campaign handoff remains capped at the requested amount; optional paid reference comparison receives only the requested checked subset plus its existing review inputs. All completed checks remain saved. Final full checks and exact-SHA release evidence are recorded after execution. Runtime asset versions and mandatory production smoke checks cover the display change. Real-world search yield is outside this display verification.
+
+Final local verification: all 3,088 customer tests and 717 backend tests (TZ=UTC) pass; JavaScript syntax, production build and git diff --check pass. Independent final review ran ten targeted regressions and reported no remaining Critical, Important or Minor findings. Production is a separate exact-SHA gate; no paid live search or customer-data mutation was performed during these checks.
