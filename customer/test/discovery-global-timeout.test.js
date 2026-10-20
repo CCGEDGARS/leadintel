@@ -1767,6 +1767,7 @@ function companyShortlistDisplayFixture({amount=5,scores=[55,94,44,79,90,68,82],
  context.__setDiscovery({status:'complete',lastRunAt:at,candidates,potentialMatches:review?[{company:'Unfinished Research',domain:'unfinished.lv',website:'https://unfinished.lv/',market:'Latvia',evidence:[{url:'https://unfinished.lv/about',text:'Unfinished Research operates a company in Latvia.'}],qualificationGaps:['Purchasing fit unverified']}]:[]});
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:amount}));
  const dom=new JSDOM(`<section id="company-candidates"></section><section id="discovery-potential-matches"></section><select id="discovery-target-count"><option value="5">5</option><option value="10">10</option><option value="custom">Custom</option></select>`);
+ context.document.body=dom.window.document.body;
  for(const node of dom.window.document.querySelectorAll('[id]'))context.__elements.set(node.id,node);
  const control=dom.window.document.getElementById('discovery-target-count');control.value=String(amount);
  const render=()=>{context.__renderCandidates();context.__renderPotentialMatches();};
@@ -1861,4 +1862,133 @@ test('retaining checked overflow does not add paid reference-similarity comparis
  assert.equal(context.__discoveryState().candidates.length,12);
  assert.equal(similarityRequests.length,1,'five requested checked candidates use one existing eight-company AI batch');
  assert.equal(JSON.parse(similarityRequests[0].prompt.split('. Prospects: ')[1]).length,5);
+});
+
+function pendingCompanyBatchFixture({count=12,amount=5,successful=false,waitFor=null,bridgeImpl=null,onFetch=null,providerStatus=null}={}){
+ const calls=[];const at=new Date().toISOString();
+ const evidenceFor=(i,independent=false)=>({url:independent?`https://industry.lv/pending${i}`:`https://pending${i}.lv/products`,title:`Pending${i} industrial equipment`,verifiedAt:independent?'':at,text:`Pending${i} manufactures industrial equipment in Latvia and purchases industrial automation from specialist partners for use in its production and assembly facilities. Its engineering team designs and manufactures machines for business customers.`});
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,scaleProductionRunTimeout:100,bridgeImpl,fetchImpl:async(url,options)=>{
+  const body=JSON.parse(options.body);calls.push({url,body});onFetch?.(context,url,body);if(waitFor)await waitFor;
+  if(providerStatus)return {ok:false,status:providerStatus,json:async()=>({error:'Provider unavailable'})};
+  if(!successful)return {ok:true,json:async()=>({data:[]})};
+  if(body.task==='buyer-fit'){
+   const rows=JSON.parse(body.prompt.split('. Companies: ')[1]);
+   return {ok:true,json:async()=>({text:JSON.stringify({companies:rows.map(row=>({domain:row.domain,fit:[65,95,78,84,53][Number(row.domain.match(/pending(\d+)/)?.[1]||0)%5],offerId:'offer-0',reason:'Production uses purchased industrial automation.',buyerRole:'industrial manufacturer',evidence:[{sourceId:'source-0',quote:row.evidence[0].text}]}))})})};
+  }
+  const i=Number(String(body.query||body.url||'').match(/pending(\d+)/i)?.[1]||0),independent=String(body.query||'').includes('-site:');
+  const evidence=evidenceFor(i,independent);
+  return {ok:true,json:async()=>body.url?({data:{markdown:evidence.text,metadata:{sourceURL:body.url}}}):({data:[{...evidence,description:evidence.text}]})};
+ }});
+ const rows=Array.from({length:count},(_,i)=>({company:`Pending${i}`,domain:`pending${i}.lv`,website:`https://pending${i}.lv/`,market:'Latvia',evidence:[evidenceFor(i),evidenceFor(i,true)],qualificationGaps:['Purchasing-fit assessment incomplete']}));
+ context.__setDiscovery({status:'partial',lastRunAt:at,potentialMatches:rows,selectedProspects:[{company:'Saved Buyer',domain:'savedbuyer.lv',buyerSearchMode:'user_selected_target',people:[{name:'Saved Person'}]}]});
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:amount}));
+ const {JSDOM}=require('jsdom'),dom=new JSDOM(`<section id="company-review-batch"></section><section id="company-candidates"></section><section id="discovery-potential-matches"></section><select id="discovery-target-count"><option value="5">5</option><option value="10">10</option><option value="custom">Custom</option></select>`);
+ context.document.body=dom.window.document.body;
+ for(const node of dom.window.document.querySelectorAll('[id]'))context.__elements.set(node.id,node);
+ dom.window.document.getElementById('discovery-target-count').value=[5,10].includes(amount)?String(amount):'custom';
+ if(![5,10].includes(amount)){context.document.getElementById('discovery-target-custom').value=String(amount);}
+ const render=()=>{assert.equal(typeof context.renderCompanyReviewBatch,'function');context.renderCompanyReviewBatch();};
+ const review=options=>{assert.equal(typeof context.reviewNextCompanyBatch,'function');return context.reviewNextCompanyBatch(options);};
+ const plan=()=>{assert.equal(typeof context.companyReviewBatchPlan,'function');return context.companyReviewBatchPlan();};
+ return {context,dom,calls,rows,render,review,plan};
+}
+test('the visible batch-review control explains the pending count and selected batch size',()=>{
+ const {context,dom,render,calls}=pendingCompanyBatchFixture();render();
+ const panel=dom.window.document.getElementById('company-review-batch');assert.equal(panel.hidden,false);assert.match(panel.textContent,/12 companies.*review/i);
+ assert.equal(panel.querySelector('button').textContent,'Review next 5 companies');assert.equal(panel.querySelector('button').disabled,false);assert.equal(calls.length,0);
+ context.document.getElementById('discovery-target-count').value='10';render();assert.equal(panel.querySelector('button').textContent,'Review next 10 companies');
+});
+test('successive clicks rotate through incomplete companies and keep the queue after reload',async()=>{
+ const {context,review,plan}=pendingCompanyBatchFixture();
+ assert.deepEqual(Array.from(plan().domains),Array.from({length:5},(_,i)=>`pending${i}.lv`));await review();
+ assert.deepEqual(Array.from(plan().domains),Array.from({length:5},(_,i)=>`pending${i+5}.lv`));
+ const saved=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'));context.__setDiscovery(Discovery.normalizeDiscoveryState(saved));
+ await review();assert.deepEqual(Array.from(plan().domains),['pending10.lv','pending11.lv','pending0.lv','pending1.lv','pending2.lv']);
+ assert.equal(context.__discoveryState().potentialMatches.length,12);assert.equal(context.__discoveryState().selectedProspects[0].people[0].name,'Saved Person');
+});
+test('reviewing a saved batch updates real scores, reranks the shortlist and preserves other research',async()=>{
+ const {context,dom,calls,render,review}=pendingCompanyBatchFixture({successful:true});render();context.__bindDiscovery();
+ await review();context.__renderCandidates();render();
+ const state=context.__discoveryState();assert.equal(state.candidates.length,5);assert.deepEqual(Array.from(state.candidates,c=>c.qualification.score),[95,84,78,65,53]);assert.equal(state.potentialMatches.length,7);
+ assert.deepEqual([...dom.window.document.querySelectorAll('#company-candidates .company-total strong')].map(n=>Number(n.textContent)),[95,84,78,65,53]);
+ assert.equal(dom.window.document.querySelector('#company-review-batch button').textContent,'Review next 5 companies');
+ assert.match(dom.window.document.getElementById('company-review-batch').textContent,/5.*finished/i);assert.equal(state.selectedProspects[0].domain,'savedbuyer.lv');
+ const searched=new Set(calls.filter(c=>c.body.query).flatMap(c=>c.body.query.match(/pending\d+/gi)||[]).map(x=>x.toLowerCase()));assert.deepEqual([...searched].sort(),['pending0','pending1','pending2','pending3','pending4']);
+ assert.ok(calls.every(c=>!c.body.query||/pending\d+/i.test(c.body.query)),'batch review must not open broad market discovery');
+});
+test('batch review prevents overlapping clicks and exposes a running state',async()=>{
+ let release;const waitFor=new Promise(resolve=>release=resolve);const {context,dom,render,review}=pendingCompanyBatchFixture({count:3,waitFor});render();
+ const running=review();render();assert.equal(context.__discoveryState().status,'running');assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);
+ assert.equal(await review(),false);release();await running;render();assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,false);
+});
+test('a rejected profile gate does not advance the pending-review queue',async()=>{
+ const {context,calls,review,plan}=pendingCompanyBatchFixture();const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));delete main.targetingConfirmation;context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ context.document.createElement=tag=>new (require('jsdom').JSDOM)().window.document.createElement(tag);
+ const before=Array.from(plan().domains);assert.equal(await review(),false);assert.equal(calls.length,0);assert.deepEqual(Array.from(plan().domains),before);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue,undefined);
+});
+
+test('canceled batch reviews preserve work and resume unfinished companies first',async()=>{
+ let release,actions;const waitFor=new Promise(resolve=>release=resolve);const {context,review,plan,dom}=pendingCompanyBatchFixture({waitFor});
+ context.LeadIntelTaskCentre={start(){},registerActions(_id,value){actions=value;},update(){},get(){return {status:'canceled'};},fail(){},complete(){}};
+ const running=review();assert.ok(actions);actions.cancel();release();await running;
+ assert.deepEqual(Array.from(plan().domains),Array.from({length:5},(_,i)=>`pending${i}.lv`));assert.equal(context.__discoveryState().potentialMatches.length,12);
+ assert.match(dom.window.document.getElementById('company-review-batch').textContent,/canceled.*0 finished; 5 still need evidence/i);
+});
+test('an interrupted reload resumes the unfinished reserved batch',async()=>{
+ let release;const waitFor=new Promise(resolve=>release=resolve);const {context,review,plan,render,dom}=pendingCompanyBatchFixture({waitFor});
+ const running=review(),interrupted=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta'));release();await running;
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify(interrupted));context.__setDiscovery({...context.__discoveryState(),status:'partial'});render();
+ assert.deepEqual(Array.from(plan().domains),Array.from({length:5},(_,i)=>`pending${i}.lv`));assert.match(dom.window.document.getElementById('company-review-batch').textContent,/interrupted.*continue/i);
+});
+test('batch selection reaches retained companies beyond the existing thirty-company recheck cap',async()=>{
+ const {context,review,plan,render,dom}=pendingCompanyBatchFixture({count:35,amount:50});render();
+ assert.equal(plan().domains.length,30);assert.equal(dom.window.document.querySelector('button').textContent,'Review next 30 companies');await review();
+ assert.deepEqual(Array.from(plan().domains).slice(0,5),Array.from({length:5},(_,i)=>`pending${i+30}.lv`));
+ assert.deepEqual(Array.from(context.__existingCompanyResearchTargets(undefined,['pending34.lv']),c=>c.domain),['pending34.lv']);
+});
+test('a changed offer resets review ordering and cannot inherit another offer attempts',async()=>{
+ const {context,review,plan}=pendingCompanyBatchFixture();await review();assert.equal(plan().domains[0],'pending5.lv');
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.answers.priority_offers='factory maintenance';main.targetingConfirmation=Targeting.confirm(main);context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ assert.equal(plan().domains[0],'pending0.lv');
+});
+test('workspace switches during review preserve the destination workspace state and metadata',async()=>{
+ const bridge={workspace:{id:'workspace-a'},session:{authenticated:false,user:{id:'user-a'}}};let changed=false;
+ const {context,review}=pendingCompanyBatchFixture({bridgeImpl:bridge,onFetch(ctx){if(changed)return;changed=true;bridge.workspace.id='workspace-b';ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({sentinel:'workspace-b'}));ctx.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify({sentinel:'workspace-b'}));}});
+ assert.equal(await review(),false);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).sentinel,'workspace-b');assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue,undefined);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')).sentinel,'workspace-b');
+});
+test('changing strategy while a batch starts cannot reserve attempts for the old strategy',async()=>{
+ let changed=false;const {context,review}=pendingCompanyBatchFixture({onFetch(ctx){if(changed)return;changed=true;const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state'));main.market.signals=[{id:'new',name:'New projects',active:true,keywords:['project']}];ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));}});
+ assert.equal(await review(),false);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue,undefined);
+});
+test('removing review results during a batch cannot erase or reintroduce in-flight work',async()=>{
+ let release;const waitFor=new Promise(resolve=>release=resolve);const {context,review}=pendingCompanyBatchFixture({waitFor});const running=review();
+ assert.equal(context.removeResearchReviewCompany('pending0.lv'),false);assert.equal(context.clearResearchReview(),false);assert.equal(context.__discoveryState().potentialMatches.length,12);release();await running;
+});
+
+test('the batch button dispatches saved-company research and does not start on render',async()=>{
+ let release;const waitFor=new Promise(resolve=>release=resolve);const {context,dom,calls,render}=pendingCompanyBatchFixture({waitFor});render();context.__bindDiscovery();assert.equal(calls.length,0);
+ dom.window.document.querySelector('#company-review-batch button').click();assert.equal(context.__discoveryState().status,'running');assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);release();
+ for(let i=0;i<100&&!JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue?.lastBatch?.finishedAt;i++)await new Promise(resolve=>setTimeout(resolve,5));
+ assert.ok(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue.lastBatch.finishedAt);assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,false);
+});
+test('finishing the saved queue shows completion and clear results removes its history',async()=>{
+ const {context,dom,review,plan,render}=pendingCompanyBatchFixture({count:5,successful:true});await review();render();assert.equal(plan().pendingCount,0);assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);assert.match(dom.window.document.getElementById('company-review-batch').textContent,/All saved companies reviewed/);
+ assert.equal(await review(),false);context.__clearCompanySearchResults();render();assert.equal(dom.window.document.getElementById('company-review-batch').hidden,true);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).companyReviewQueue,undefined);
+});
+test('batch review excludes verified seller identities while retaining uncertain company scores',()=>{
+ const {context,rows,plan}=pendingCompanyBatchFixture();context.__setDiscovery({...context.__discoveryState(),potentialMatches:[{...rows[0],company:'Acme',domain:'acme.example',website:'https://acme.example/'},...rows.slice(1)]});
+ assert.equal(plan().pendingCount,11);assert.equal(plan().domains.includes('acme.example'),false);assert.equal(plan().domains[0],'pending1.lv');
+});
+
+test('the visible failed-check retry keeps the original saved batch instead of opening broad discovery',async()=>{
+ const {context,review,calls}=pendingCompanyBatchFixture({count:7,providerStatus:402});await review();assert.ok(context.__discoveryState().searchFailures.some(f=>f.phase==='searching'));calls.length=0;
+ await context.__retryFailedDiscoveryChecks();const meta=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta'));
+ assert.equal(meta.lastCompanyRun.scope,'recheck');assert.equal(meta.lastCompanyRun.requestedCount,5);assert.ok(calls.some(c=>c.body.query));
+ assert.ok(calls.every(c=>!c.body.query||/pending[0-4]/i.test(c.body.query)),'retry must keep the same five saved company identities');
+});
+test('batch execution reviews untouched companies before older retries at queue wraparound',async()=>{
+ const {context,review,plan,calls}=pendingCompanyBatchFixture();await review();await review();
+ const expected=Array.from(plan().domains);assert.deepEqual(expected,['pending10.lv','pending11.lv','pending0.lv','pending1.lv','pending2.lv']);
+ assert.deepEqual(Array.from(context.__existingCompanyResearchTargets(undefined,expected),c=>c.domain),expected);
+ calls.length=0;await review();const initial=calls.filter(c=>c.body.query?.startsWith('"Pending')).slice(0,5).map(c=>`pending${c.body.query.match(/Pending(\d+)/)[1]}.lv`);assert.deepEqual(initial,expected);
 });

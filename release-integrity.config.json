@@ -3115,7 +3115,8 @@
       "status": 200,
       "contains": [
         "search-relevance=20261020-v1",
-        "shortlist-display=20261020-v1"
+        "shortlist-display=20261020-v1",
+        "batch-review=20261020-v1"
       ]
     },
     {
@@ -3171,6 +3172,20 @@
         "company-other-results",
         "Show other companies \u00b7",
         "shortlist-display=20261020-v1"
+      ]
+    },
+    {
+      "id": "company-pending-batch-review",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function companyReviewBatchPlan(",
+        "async function reviewNextCompanyBatch(",
+        "function renderCompanyReviewBatch(",
+        "review-next-companies",
+        "awaiting review",
+        "batch-review=20261020-v1"
       ]
     }
   ],

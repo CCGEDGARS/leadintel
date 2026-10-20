@@ -26,5 +26,9 @@ test('research review shows one row per company and keeps the apex domain on equ
  assert.equal(context.researchReviewKey({company:'Only Name'}),'name:only name');
 });
 test('removing a review row removes every host of that company',()=>{
- assert.match(source,/function removeResearchReviewCompany\(key\)\{\s*const keep=item=>researchReviewKey\(item\)!==key;/);
+ const checked={company:'Checked',domain:'checked.lv'},people=[{name:'Saved Buyer'}];let saved=0;
+ const context={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,discovery:{status:'partial',potentialMatches:[{domain:'jobs.example.lv'},{domain:'example.lv'},{domain:'other.lv'}],candidates:[checked,{domain:'corporate.example.lv',needsRecheck:true}],selectedProspects:[{domain:'example.lv',people}]},qualificationAssessment:c=>({eligible:c===checked}),saveDiscovery(){saved++;},renderAll(){},showToast(){}};
+ vm.createContext(context);vm.runInContext(slice('function researchReviewKey(','function researchReviewRows(')+slice('function removeResearchReviewCompany(','function clearResearchReview('),context);
+ assert.equal(context.removeResearchReviewCompany('example.lv'),true);assert.equal(saved,1);
+ assert.deepEqual(Array.from(context.discovery.potentialMatches,c=>c.domain),['other.lv']);assert.deepEqual(Array.from(context.discovery.candidates,c=>c.domain),['checked.lv']);assert.equal(context.discovery.selectedProspects[0].people,people);
 });

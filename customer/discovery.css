@@ -631,3 +631,13 @@
 .company-additional-checked>p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
 .company-other-results .company-research-review{margin-top:18px}
 .company-other-results>summary{flex-wrap:wrap;padding-top:12px;padding-bottom:12px}
+
+/* A deliberate next batch stays visible above the ranked company shortlist. */
+.company-review-batch{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:22px 0;padding:20px;border:1px solid #d8e6dd;border-radius:12px;background:#f4f8f5}
+.company-review-batch[hidden]{display:none}
+.company-review-batch h3{margin:0 0 6px;font-size:17px}
+.company-review-batch p{margin:0;color:#476158;font-size:14px;line-height:1.6}
+.company-review-batch small{display:block;margin-top:8px;color:#53665f;line-height:1.5}
+.company-review-batch button{flex:0 0 auto;white-space:nowrap}
+.company-review-batch button:disabled{opacity:.6;cursor:not-allowed}
+@media(max-width:680px){.company-review-batch{align-items:stretch;flex-direction:column}.company-review-batch button{width:100%;white-space:normal}}
