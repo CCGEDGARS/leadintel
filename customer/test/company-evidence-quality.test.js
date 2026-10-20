@@ -8,6 +8,13 @@ const operating='Nordic operates equipment assembly facilities in Sweden. Our pr
 const cookies='We use cookies to improve your browsing experience. Accept all cookies. Manage cookie preferences. Your consent can be withdrawn at any time.';
 function company(text=operating){return {company:'Nordic',domain:'nordic.se',market:'Sweden',evidence:[{url:'https://nordic.se/about',text,verifiedAt:now},{url:'https://journal.example/nordic',text:'Nordic operates industrial equipment assembly facilities in Sweden.',verifiedAt:now}]};}
 function assessed(c,fit=85,extra={}){return D.parseBuyerFit(JSON.stringify({companies:[{domain:c.domain,fit,offerId:'offer-0',reason:'Assembly facilities provide a specific application for assembly services.',buyerRole:'equipment operator',evidence:[{url:c.evidence[0].url,quote:c.evidence[0].text}],...extra}]}),[c],profile)[0];}
+test('a current official operating source supports manual review while automatic flow still requires independent corroboration',()=>{
+ const one=company();one.evidence=one.evidence.slice(0,1);const candidate=assessed(one,85,{relationship:'buyer',evidenceStatus:'sufficient'});
+ const manual=D.assessCompanyQualification(candidate,profile,{}, {researchedAt:now});
+ assert.equal(manual.eligible,true);assert.equal(manual.score,85);assert.equal(manual.confidence,'Medium');assert.equal(manual.automaticEligible,false);
+ const automatic=D.assessAutomaticCompanyQualification(candidate,profile,{}, {researchedAt:now});assert.equal(automatic.eligible,false);assert.ok(automatic.gaps.includes('Obtain two independent credible source families'));
+ assert.equal(D.assessCompanyQualification({...candidate,evidence:[company().evidence[1]]},profile,{}, {researchedAt:now}).eligible,false,'independent commentary cannot replace official operating evidence');
+});
 test('cookie consent cannot verify purchasing fit even with an exact official quote and a high score',()=>{
  const c=assessed(company(cookies),95);
  assert.equal(D.verifiedBuyerFit(c,profile),null);
