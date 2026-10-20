@@ -15,6 +15,35 @@ function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,wit
  return {root,values,events,timers};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
+test('one explicit bridge save prepares its transfer payload once',async()=>{
+ let requests=0;const {root}=load(async()=>{requests++;return new Response(JSON.stringify({saved:true,version:4}));},{withBridge:true,withBudget:true});
+ const budget=root.LeadIntelStateBudget;let preparations=0;
+ root.LeadIntelStateBudget={...budget,prepareForSync(...args){preparations++;return budget.prepareForSync(...args);}};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(requests,1);assert.equal(preparations,1,'packing twice can exhaust the HTTP deadline before a request starts');
+});
+test('conflict-free recovery packs its backup off the page before applying the merged research',async()=>{
+ let writes=0,server;const {root,values}=load(async()=>++writes===1?Response.json({current:server},{status:409}):Response.json({saved:true,version:5}),{withBridge:true,withBudget:true});
+ const base=establishBase(root,values);server={version:4,payload:{...base,discovery:{people:[{id:'remote',name:'Researched buyer'}]}}};values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Local edited offer'}}));
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});const budget=root.LeadIntelStateBudget,jobs=[];
+ root.Worker=class{postMessage(job){jobs.push(job.operation);setImmediate(()=>this.onmessage({data:{id:job.id,result:budget[job.operation](job.value,job.options)}}));}terminate(){}};
+ root.LeadIntelStateBudget={...budget,packRecoveryRecord(){throw new Error('Recovery packing blocked the page');}};
+ const saved=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(saved.saved,true);assert.ok(jobs.includes('packRecoveryRecord'));assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local edited offer');assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).people[0].name,'Researched buyer');
+ assert.ok(values.get(RECOVERY),'both versions are backed up before the merge');
+});
+test('an edit while background transfer preparation runs remains unsaved after the old payload is acknowledged',async()=>{
+ let wire,release,started;const preparing=new Promise(resolve=>started=resolve);
+ const {root,values}=load(async(input,options)=>{wire=JSON.parse(options.body).payload;return Response.json({saved:true,version:4});},{withBridge:true,withBudget:true});
+ establishBase(root,values);Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});const budget=root.LeadIntelStateBudget;
+ root.Worker=class{postMessage(job){if(job.operation==='prepareForSync'){release=()=>this.onmessage({data:{id:job.id,result:budget.prepareForSync(job.value,job.options)}});started();}else setImmediate(()=>this.onmessage({data:{id:job.id,result:budget[job.operation](job.value,job.options)}}));}terminate(){}};
+ const saving=root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await preparing;
+ values.set(MAIN,JSON.stringify({website:'seller.example',answers:{offer:'Edited during background packing'}}));release();
+ const result=await saving;assert.equal(result.saved,true);assert.equal(result.dirty,true);assert.notEqual(wire.main.answers.offer,'Edited during background packing');
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true,'the new edit was not in the acknowledged transfer');
+ assert.notEqual(root.LeadIntelWorkspacePersistence.syncedBase('w1').localPayload.main.answers.offer,'Edited during background packing');
+});
 test('first-party saves update the baseline and do not repeatedly autosave an unsaved draft',async()=>{
  let put;const {root}=load(async(input,options)=>{put=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:4}));});
  const payload={main:{website:'https://seller.example'},discovery:{},outreach:{},delivery:{},meta:{}};
@@ -344,13 +373,26 @@ test('same-origin tabs serialize saves and the waiting tab uses the acknowledged
  const fetch=async(input,options)=>{puts.push(JSON.parse(options.body));if(puts.length===1){started();await firstResponse;}return new Response(JSON.stringify({saved:true,version:puts.length+3}));};
  const first=load(fetch,{withBridge:true}),second=load(fetch,{withBridge:true,sharedValues:first.values});
  establishBase(first.root,first.values);let tail=Promise.resolve();
- const locks={request(name,callback){names.push(name);const run=tail.then(callback);tail=run.catch(()=>{});return run;}};
+ const locks={request(name,options,callback){names.push(name);const run=tail.then(callback);tail=run.catch(()=>{});return run;}};
+ first.root.AbortController=second.root.AbortController=AbortController;
  for(const runtime of [first,second]){runtime.root.navigator={locks};Object.assign(runtime.root.LeadIntelServerBridge,{conflict:false,conflictState:null});}
  first.values.set(MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Edited offer'}}));
  const a=first.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await firstStarted;
  const b=second.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await new Promise(resolve=>setImmediate(resolve));
  const beforeRelease=puts.length;releaseFirst();assert.equal((await a).saved,true);assert.equal((await b).saved,true);
  assert.equal(beforeRelease,1,'second tab waits for the first cloud write');assert.deepEqual(puts.map(p=>p.version),[3,4]);assert.deepEqual(names,['leadintel:workspace-save:w1','leadintel:workspace-save:w1']);
+});
+
+test('a stalled save lock yields a retryable result and does not block the next save',async()=>{
+ let writes=0,expire;const {root,values}=load(async()=>{writes++;return Response.json({saved:true,version:4});},{withBridge:true});
+ establishBase(root,values);Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});root.AbortController=AbortController;
+ root.navigator={locks:{request(name,options){return new Promise((resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(options.signal.reason),{once:true}));}}};
+ const schedule=root.setTimeout;root.setTimeout=(fn,ms)=>{if(ms===15000)expire=fn;return schedule(fn,ms);};
+ const saving=root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(typeof expire,'function','waiting for another tab must have a deadline');expire();
+ const result=await saving;assert.equal(result.saved,false);assert.equal(result.retryable,true);assert.equal(result.reason,'workspace_busy');assert.equal(writes,0);
+ root.navigator.locks.request=(name,options,callback)=>callback();
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).saved,true);assert.equal(writes,1);
 });
 test('safe contention remains pending and persistence schedules its next automatic save',async()=>{
  const {root,values,timers}=load(async()=>new Response('{}'));establishBase(root,values);let calls=0;

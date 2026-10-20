@@ -37,6 +37,10 @@
       // Reload reconstructs its state from the retained research results.
       if(/^discovery\.(?:selectedProspects|candidates|pipeline|potentialMatches)\[[^\]]+\]\.buyerResearchProgress$/.test(path))return undefined;
       if(equal(l,r))return l;
+      // This clock describes a coverage search, not contact verification or
+      // source freshness. Real coverage fields and buyer evidence still merge
+      // independently and retain their conflict gates.
+      if(/^discovery\.(?:selectedProspects|candidates|pipeline|potentialMatches)\[[^\]]+\]\.buyerDiscovery\.coverageFollowUp\.checkedAt$/.test(path)&&[l,r].every(value=>value===undefined||typeof value==='string'&&Number.isFinite(Date.parse(value))))return Date.parse(r)>Date.parse(l)||l===undefined?r:l;
       // Rebuilding an unchanged profile in two tabs advances these clocks.
       // They describe generation, not competing edits to the field values.
       if(/^main\.profile\.(?:generatedAt|canonical\.generatedAt|canonical\.fields\.[^.]+\.updatedAt)$/.test(path)&&[l,r].every(value=>value===undefined||typeof value==='string'&&Number.isFinite(Date.parse(value))))return Date.parse(r)>Date.parse(l)||l===undefined?r:l;
