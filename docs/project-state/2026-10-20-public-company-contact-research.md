@@ -33,3 +33,6 @@ Authenticated acceptance exposed two service-page headings in the whole-company 
 
 ### CRM remediation
 The first authenticated run had persisted two invalid page-title contacts before the parser correction. Exposed the existing workspace-scoped soft-archive endpoint through writer-only CRM contact actions, with in-app confirmation and company/workspace guards across the asynchronous confirmation. Archiving retains company and activity history, and archived identities cannot silently reappear. Regression covers action visibility, exact contact targeting, cancel and workspace switch.
+
+### Executive identity reload gate
+Selected-target normalization previously allowed company and LinkedIn identity sources but stripped the CEO registry source after reload, leaving an unqualified buyer card despite the intact corporate evidence. Accept only exact company/title/name/URL-matching retained registry role evidence, and repair identity fields from that evidence when an earlier normalization stripped them. The company-record and buyer-card reload regression now asserts executive eligibility and priority; unrelated-company registry evidence remains rejected.
