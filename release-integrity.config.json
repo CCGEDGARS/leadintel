@@ -3114,7 +3114,8 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "search-relevance=20261020-v1"
+        "search-relevance=20261020-v1",
+        "shortlist-display=20261020-v1"
       ]
     },
     {
@@ -3157,6 +3158,19 @@
       "contains": [
         "MAX_RECORD_SYNC_BYTES=8*1024*1024",
         "syncLimit(options)>MAX_SYNC_BYTES"
+      ]
+    },
+    {
+      "id": "company-shortlist-display",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function rankedCheckedCompanies(){",
+        "function companyCandidateCardHtml(",
+        "company-other-results",
+        "Show other companies \u00b7",
+        "shortlist-display=20261020-v1"
       ]
     }
   ],

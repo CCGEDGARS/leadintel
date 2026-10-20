@@ -1563,18 +1563,19 @@ test('five requested companies keep their different checked scores through rende
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:5,activeJourneyStage:4}));
  await context.__runDiscovery({autoPass:3});
  const state=context.__discoveryState();
- assert.equal(state.candidates.length,5);
- assert.deepEqual(Array.from(state.candidates,c=>c.qualification.score),scores.slice(0,5));
+ assert.equal(state.candidates.length,6,'all completed checks must be retained, including those beyond the display amount');
+ assert.deepEqual(Array.from(state.candidates,c=>c.qualification.score),scores);
  assert.equal(state.candidates.filter(c=>c.qualification.automaticEligible).length,2);
  context.__setDiscovery({...state,status:'partial',latestRunCandidateCount:2});context.__renderStatus();
- assert.match(context.__elements.get('company-discovery-status').textContent,/5 checked companies/,'partial status must count the checked list instead of the last restored batch');
+ assert.match(context.__elements.get('company-discovery-status').textContent,/6 checked companies/,'partial status must count the checked list instead of the last restored batch');
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
- assert.equal(restored.candidates.length,5);assert.equal(restored.candidates[4].qualification.score,55);
- context.__setDiscovery({...state,candidates:[...state.candidates,{...state.candidates[4],company:'Retained Sixth',domain:'sixth.lv'}]});
+ assert.equal(restored.candidates.length,6);assert.equal(restored.candidates[5].qualification.score,44);
+ context.__setDiscovery(state);
  context.__renderCandidates();
  const html=context.__elements.get('company-candidates').innerHTML;
  assert.equal((html.match(/<h4>/g)||[]).length,5,'the requested amount caps the visible ranked list while retaining other research');
  assert.match(html,/Manual review/);assert.match(html,/80\+ company score/);
+ context.__renderPotentialMatches();assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/<strong>44<\/strong>/,'completed overflow remains available behind the disclosure');
 });
 test('saved checked low-score research returns to the ranked list without another provider call',()=>{
  let calls=0;const context=loadDiscoveryRunner({fetchImpl:()=>{calls++;throw new Error('No new research authorized by reopening');}});
@@ -1737,4 +1738,117 @@ test('a confirmed operational buyer profile can search without references or buy
  let calls=0;const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>{calls++;return {ok:true,json:async()=>({data:[]})};}});
  const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.market.signals=[];main.referenceCustomers={rows:[]};main.targetCompanies=[];context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
  assert.equal(await context.__runDiscovery({autoPass:3}),true);assert.ok(calls>0);assert.notEqual(context.__discoveryState().status,'running');
+});
+
+function companyShortlistDisplayFixture({amount=5,scores=[55,94,44,79,90,68,82],review=true}={}){
+ const {JSDOM}=require('jsdom');let providerCalls=0;
+ const context=loadDiscoveryRunner({renderNodes:true,fetchImpl:async()=>{providerCalls++;throw new Error('Displaying retained companies must not spend research credits');}});
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ const profile={...main.profile,...Targeting.profileFields(main),exclusions:main.answers.exclusions};
+ const at=new Date().toISOString();
+ const candidates=scores.map((fit,index)=>{
+  const domain=`ranked${index}.lv`,company=`Ranked${index}`;
+  const quote=`${company} manufactures industrial equipment in Latvia and purchases industrial automation from specialist partners for use in its production assembly lines.`;
+  const evidence=[{url:`https://${domain}/products`,verifiedAt:at,text:quote},{url:`https://journal.lv/ranked${index}`,text:`${company} operates manufacturing facilities in Latvia and supplies industrial equipment to business customers.`}];
+  const candidate=Discovery.parseBuyerFit(JSON.stringify({companies:[{domain,fit,offerId:'offer-0',reason:'Production uses purchased automation equipment.',buyerRole:'industrial manufacturer',evidence:[{sourceId:'source-0',quote}]}]}),[{company,domain,website:`https://${domain}/`,market:'Latvia',evidence}],profile)[0];
+  const qualification=Discovery.assessCompanyQualification(candidate,profile,main.market,{researchedAt:at});assert.equal(qualification.eligible,true,JSON.stringify(qualification));
+  return {...candidate,qualified:true,marketVerified:true,buyerVerified:true,qualification};
+ });
+ context.__setDiscovery({status:'complete',lastRunAt:at,candidates,potentialMatches:review?[{company:'Unfinished Research',domain:'unfinished.lv',website:'https://unfinished.lv/',market:'Latvia',evidence:[{url:'https://unfinished.lv/about',text:'Unfinished Research operates a company in Latvia.'}],qualificationGaps:['Purchasing fit unverified']}]:[]});
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:amount}));
+ const dom=new JSDOM(`<section id="company-candidates"></section><section id="discovery-potential-matches"></section><select id="discovery-target-count"><option value="5">5</option><option value="10">10</option><option value="custom">Custom</option></select>`);
+ for(const node of dom.window.document.querySelectorAll('[id]'))context.__elements.set(node.id,node);
+ const control=dom.window.document.getElementById('discovery-target-count');control.value=String(amount);
+ const render=()=>{context.__renderCandidates();context.__renderPotentialMatches();};
+ return {context,dom,candidates,control,render,providerCalls:()=>providerCalls};
+}
+test('five requested companies show the highest five scores while all other research is collapsed and retained',()=>{
+ const {context,dom,render,providerCalls}=companyShortlistDisplayFixture();
+ const before=JSON.stringify(context.__discoveryState());render();
+ const primary=dom.window.document.getElementById('company-candidates'),others=dom.window.document.getElementById('discovery-potential-matches');
+ assert.deepEqual([...primary.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[94,90,82,79,68]);
+ assert.equal(primary.querySelectorAll('[data-action="select-qualified-buyers"]:not([disabled])').length,5);
+ const disclosure=others.querySelector('details.company-other-results');assert.ok(disclosure,'additional checked companies must remain accessible');
+ assert.equal(disclosure.open,false);assert.match(disclosure.querySelector('summary').textContent,/Show other companies.*3/);
+ assert.deepEqual([...others.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[55,44]);
+ assert.match(others.textContent,/Unfinished Research/);assert.equal(others.querySelector('[data-review-action="buyers"]').textContent,'Move to Buyers');
+ disclosure.querySelector('summary').click();assert.equal(disclosure.open,true);render();
+ assert.equal(others.querySelector('details.company-other-results').open,true,'rerendering must not close an opened disclosure');
+ others.querySelector('details.company-other-results > summary').click();assert.equal(others.querySelector('details.company-other-results').open,false);
+ assert.equal(JSON.stringify(context.__discoveryState()),before,'hiding and showing results must preserve all evidence, scores and selections');assert.equal(providerCalls(),0);
+ const saved=Discovery.normalizeDiscoveryState(JSON.parse(before));context.__setDiscovery(saved);render();
+ assert.equal(primary.querySelectorAll('.company-card').length,5);assert.equal(others.querySelectorAll('.company-card').length,2);
+});
+test('changing the requested amount repartitions saved companies immediately without a new search',()=>{
+ const {context,dom,control,render,providerCalls}=companyShortlistDisplayFixture({scores:[94,90,86,82,79,75,68,64,60,55,49,44],review:false});render();context.__bindDiscovery();
+ control.value='10';control.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+ assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,10);
+ assert.equal(dom.window.document.querySelectorAll('#discovery-potential-matches .company-card').length,2);
+ assert.equal(context.__discoveryState().candidates.length,12);assert.equal(providerCalls(),0);
+});
+test('an additional checked company retains its original index when selected for Buyers',async()=>{
+ const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture();render();context.__bindDiscovery();
+ const disclosure=dom.window.document.querySelector('details.company-other-results');assert.ok(disclosure);disclosure.querySelector('summary').click();
+ const button=disclosure.querySelector('[data-action="select-qualified-buyers"]');assert.ok(button);
+ assert.equal(button.dataset.companyIndex,'0','the sixth ranked company is the first stored company');button.click();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(context.__discoveryState().selectedProspects.length,1);assert.equal(context.__discoveryState().selectedProspects[0].domain,candidates[0].domain);
+ const persisted=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(persisted.selectedProspects[0].domain,candidates[0].domain);assert.equal(persisted.candidates.length,7);assert.equal(providerCalls(),0);
+});
+test('Research review starts collapsed even when no company has completed the checks',()=>{
+ const {dom,render}=companyShortlistDisplayFixture({scores:[]});render();
+ const disclosure=dom.window.document.querySelector('#discovery-potential-matches details');assert.ok(disclosure);assert.equal(disclosure.open,false);
+ assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,0);assert.match(disclosure.textContent,/Unfinished Research/);
+});
+test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
+ const {dom,render}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});render();
+ assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,3);assert.match(dom.window.document.getElementById('company-candidates').textContent,/3 of 5 checked companies available/);
+ assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
+});
+test('additional results deduplicate checked identities and retain companies awaiting recheck',()=>{
+ const {context,dom,render}=companyShortlistDisplayFixture();const state=context.__discoveryState();
+ const pending={...state.candidates[2],needsRecheck:true};
+ context.__setDiscovery({...state,candidates:state.candidates.map((row,i)=>i===2?pending:row),potentialMatches:[...state.potentialMatches,{...state.candidates[1],qualificationGaps:['Earlier incomplete check']}]});render();
+ const primary=dom.window.document.getElementById('company-candidates'),others=dom.window.document.getElementById('discovery-potential-matches');
+ assert.equal(primary.querySelectorAll('.company-card').length,5);assert.equal(others.querySelectorAll('.company-card').length,1);
+ const pendingRow=[...others.querySelectorAll('.research-check-row')].find(n=>n.textContent.includes(pending.company));assert.ok(pendingRow,'retained stale evidence must remain available for recheck');
+ assert.match(pendingRow.textContent,/recheck/i);assert.equal(others.querySelectorAll('.research-check-row').length,2,'an already checked company must not appear a second time in review');
+ assert.equal(context.__discoveryState().candidates.length,7);
+});
+test('Remove and Clear review work for retained recheck rows while preserving checked cards and Buyers',()=>{
+ const {context,dom,render,providerCalls}=companyShortlistDisplayFixture();const state=context.__discoveryState();
+ context.__setDiscovery({...state,candidates:state.candidates.map((row,i)=>i===2?{...row,needsRecheck:true}:row),selectedProspects:[{company:'Saved',domain:'saved.lv',buyerSearchMode:'user_selected_target'}]});render();context.__bindDiscovery();
+ let disclosure=dom.window.document.querySelector('details.company-other-results');disclosure.querySelector('summary').click();
+ const remove=disclosure.querySelector('[data-review-action="remove"][data-review-key="ranked2.lv"]');assert.ok(remove);remove.click();
+ assert.equal(context.__discoveryState().candidates.length,6,'Remove must remove the stale review row from current research');
+ assert.ok(!context.__discoveryState().candidates.some(c=>c.domain==='ranked2.lv'));
+ const retained=context.__discoveryState();context.__setDiscovery({...retained,candidates:retained.candidates.map((row,i)=>i===0?{...row,needsRecheck:true}:row)});render();
+ disclosure=dom.window.document.querySelector('details.company-other-results');if(!disclosure.open)disclosure.querySelector('summary').click();disclosure.querySelector('[data-review-action="clear"]').click();
+ assert.equal(context.__discoveryState().candidates.length,5);assert.equal(context.__discoveryState().potentialMatches.length,0);assert.equal(context.__discoveryState().selectedProspects[0].domain,'saved.lv');assert.equal(providerCalls(),0);
+});
+async function runCheckedOverflowResearch({campaign=false,compareReferences=false}={}){
+ const {candidates}=companyShortlistDisplayFixture({scores:Array.from({length:12},(_,i)=>95-i),review:false});const similarityRequests=[];
+ const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,bridgeImpl:{session:{authenticated:false},workspace:{id:'workspace'}},fetchImpl:async(_url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(body.prompt)})};
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ const Lookalike=require('../lookalike-discovery.js');
+ context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>candidates,buildPotentialCompanyCandidates:()=>[],researchEvidenceSimilarity:args=>Lookalike.researchEvidenceSimilarity({...args,fetchImpl:async(_url,options)=>{similarityRequests.push(JSON.parse(options.body));return {ok:true,json:async()=>({text:JSON.stringify({matches:[]})})};}})};
+ if(compareReferences)context.LeadIntelReferenceCustomers={getActiveReferenceModel:()=>({active:true,dna:{referenceProfiles:[{rowId:'reference',companyName:'Reference',dimensions:[{key:'industry',values:['industrial equipment']}]}]}})};
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:5}));const plan=campaign?{targetCount:5}:null;
+ await context.__runDiscovery({autoPass:3,...(plan?{campaignPlan:plan}:{})});
+ return {context,plan,similarityRequests};
+}
+test('retained company overflow cannot expand a campaign beyond its requested company count',async()=>{
+ const {context,plan}=await runCheckedOverflowResearch({campaign:true});
+ assert.equal(context.__discoveryState().candidates.length,12,'all completed checks remain available manually');
+ assert.equal(plan.results.length,5,'campaign CRM handoff is limited to the requested five companies');
+ assert.deepEqual(Array.from(plan.results,c=>c.domain),Array.from(context.__discoveryState().candidates.slice(0,5),c=>c.domain));
+});
+test('retaining checked overflow does not add paid reference-similarity comparison batches',async()=>{
+ const {context,similarityRequests}=await runCheckedOverflowResearch({compareReferences:true});
+ assert.equal(context.__discoveryState().candidates.length,12);
+ assert.equal(similarityRequests.length,1,'five requested checked candidates use one existing eight-company AI batch');
+ assert.equal(JSON.parse(similarityRequests[0].prompt.split('. Prospects: ')[1]).length,5);
 });
