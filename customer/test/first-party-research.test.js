@@ -77,3 +77,13 @@ test('a bounded website check retains its readable home when an internal page ne
  }});
  assert.equal(result.pages.length,1);assert.equal(result.pages[0].url,'https://company.se/');assert.equal(result.coverage.partial,true);assert.equal(seen.length,2);
 });
+
+test('buyer evidence reads public pages first and checkpoints each page before completing the crawl',async()=>{
+ const checkpoints=[],requests=[];
+ const result=await R.collectWebsiteEvidence({website:'https://company.example/',purpose:'buyers',maxPages:3,onPage:page=>checkpoints.push(page.url),fetchImpl:async(_,options)=>{const body=JSON.parse(options.body);requests.push(body);assert.equal(body.publicFirst,true);if(body.url.endsWith('/team'))assert.equal(checkpoints.length,1);return {ok:true,json:async()=>({data:{markdown:evidence,links:body.url.endsWith('.example/')?['/team']:[],metadata:{sourceURL:body.url}}})};}});
+ assert.equal(result.pages.length,2);assert.deepEqual(checkpoints,['https://company.example/','https://company.example/team']);
+});
+test('buyer link planning prioritizes a discovered sitemap above unrelated product pages',()=>{
+ const page={links:['/products','/sitemap.xml','/contact','/about']};
+ assert.deepEqual(R.selectInternalLinks(page,'https://company.example/','buyers',4),['https://company.example/about','https://company.example/contact','https://company.example/sitemap.xml','https://company.example/products']);
+});

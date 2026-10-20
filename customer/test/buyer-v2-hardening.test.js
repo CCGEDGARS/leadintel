@@ -10,7 +10,7 @@ test('Buyer V2 records explicit provider outcomes instead of silent zero results
  assert.match(ui,/Identity-provider discovery is not connected/);
  assert.match(ui,/Identity-provider discovery failed/);
  assert.match(ui,/Research coverage/);
- assert.match(ui,/Public web \/ Firecrawl/);
+ assert.match(ui,/Public web discovery/);
  assert.match(ui,/Grounded web research/);
  assert.match(ui,/Identity directory discovery/);
 });

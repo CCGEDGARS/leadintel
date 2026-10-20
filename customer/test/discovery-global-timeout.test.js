@@ -558,7 +558,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
   await context.__findPublicProspectContacts('boliden.com');
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,9); // Includes an independent public business-contact query.
+  assert.equal(publicSearches,7); // Known published work email skips redundant pattern and Gmail requests.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Publicly listed · unverified/);
@@ -607,7 +607,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   const finishedRequests=requests;
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v22-public-confirmation');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v23-company-record');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Profile matched automatically/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -1269,6 +1269,7 @@ test('optional contact-review timeout preserves a completed core contact pass an
 
 test('a failed personal phone query keeps the overall contact pass incomplete despite a known identity',async()=>{
  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  if(String(url).includes('/ai/web-search')&&JSON.parse(options.body).query.includes('(phone OR'))return {ok:false,status:503,json:async()=>({error:'Phone source unavailable'})};
   if(String(url).includes('/ai/'))return {ok:true,json:async()=>({status:'complete',results:[],conflicts:[]})};
   if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Anna Buyer — Head of Procurement at Example. anna.buyer@example.com'}})};
   if(JSON.parse(options.body).query.includes('(phone OR'))throw new Error('Phone source unavailable');
@@ -1375,7 +1376,7 @@ test('a company-level completed check does not conceal an unresearched individua
  let requests=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
-  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v22-public-confirmation',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v23-company-record',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:4}));
  context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0);
@@ -1447,6 +1448,7 @@ test('default contact research attempts all ten, retains four recommendations an
 test('one failed contact source does not prevent research for the other nine and retry skips completed checks',async()=>{
  let fail=true;const queries=[];
  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  if(String(url).includes('/ai/web-search')&&fail&&JSON.parse(options.body).query.includes('Anna Juliet')&&JSON.parse(options.body).query.includes('(phone OR'))return {ok:false,status:503,json:async()=>({error:'Phone source unavailable'})};
   if(String(url).includes('/ai/'))return {ok:true,json:async()=>({status:'complete',results:[],conflicts:[]})};
   if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Official Example leadership team.'}})};
   const query=JSON.parse(options.body).query;queries.push(query);
@@ -1484,7 +1486,7 @@ test('evidence-disqualified top pick is replaced by the next researched buyer, w
 test('targeted executive search fills the reserved place and retains completed existing contact checks',async()=>{
  const context=loadDiscoveryRunner({requestTimeout:1000,renderNodes:true,fetchImpl:async url=>({ok:true,json:async()=>/firecrawl(?:-scrape|\/scrape)/.test(String(url))?{data:{markdown:'Anna Executive is CEO at Example'}}:{data:[{url:'https://example.com/team/anna-executive',title:'Anna Executive | CEO | Example',description:'Anna Executive is CEO at Example'}]}}),bridgeImpl:{session:{authenticated:true},workspace:{id:'test'},saveNow:async()=>({saved:true})}});
  const people=Array.from({length:5},(_,i)=>({id:'p'+i,name:'Person Buyer'+i,title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()},contactResearch:{version:1,identityKey:'existing',checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}},channels:{gmail:{status:'complete'}}}}));
- context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',publicContactVersion:'buyer-contacts-v22-public-confirmation',buyerSearchMode:'user_selected_target'}]});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',publicContactVersion:'buyer-contacts-v23-company-record',buyerSearchMode:'user_selected_target'}]});
  assert.equal(await context.__findExecutiveBuyer('example.com'),true);
  const candidate=context.__discoveryState().selectedProspects[0],ranked=Discovery.rankedBuyerShortlist(candidate.people,{decisionMakers:candidate.buyerRoles},candidate);
  assert.equal(ranked.committeeCoverage.executives,1);assert.equal(ranked.executiveCoverage.status,'incomplete');assert.ok(candidate.buyerDiscovery.executiveResearch.queries>=3&&candidate.buyerDiscovery.executiveResearch.queries<=8);

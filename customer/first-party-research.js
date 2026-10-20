@@ -19,14 +19,14 @@
       const people=/contact|kontakt|team|people|leadership|management|ledning|organisation|organization|about|om-oss/i.test(label);
       const locale=/^\/(?:en(?:[-_][a-z]{2})?|english)(?:\/|$)/i.test(path);
       const commercial=/product|capabilit|manufactur|production|produkt|tillverk/i.test(label);
-      const score=(purpose==='buyers'?people?10:company?2:0:purpose==='verification'?/contact|kontakt/i.test(label)?11:company?10:people?3:0:commercial?16:company?12:locale?10:people?1:0);
+      const score=(purpose==='buyers'?people?10:/sitemap|sajtkarta/i.test(label)?8:company?2:0:purpose==='verification'?/contact|kontakt/i.test(label)?11:company?10:people?3:0:commercial?16:company?12:locale?10:people?1:0);
       const evidenceArea=/project|case|reference|referens|portfolio/i.test(label)?'reference':/quality|standard|certific|specification|kvalit|sertifik/i.test(label)?'technical':commercial?'offer':'';
       if(score)urls.set(normalized,{url:url.href,score,area:evidenceArea});
     }
     const ranked=[...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)),coverage=purpose==='company'?['offer','reference','technical'].map(area=>ranked.find(row=>row.area===area)).filter(Boolean):[];
     return [...coverage,...ranked.filter(row=>!coverage.includes(row))].slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
   }
-  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0,seedUrls=[],skipHome=false}={}){
+  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0,seedUrls=[],skipHome=false,onPage}={}){
     const domain=host(website);if(!domain)throw new Error('A company website is required');if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
     const parentSignal=signal,budgetController=new AbortController();
     const abortParent=()=>budgetController.abort(parentSignal.reason);if(parentSignal?.aborted)abortParent();else parentSignal?.addEventListener('abort',abortParent,{once:true});
@@ -39,7 +39,7 @@
       if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
       const timer=setTimeout(()=>controller.abort(),25000);let stop;const cancelled=new Promise((_,reject)=>{stop=()=>reject(controller.signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'}));if(controller.signal.aborted)stop();else controller.signal.addEventListener('abort',stop,{once:true});});
       try{
-        const response=await Promise.race([fetchImpl(`${PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:purpose!=='buyers',timeout:25000}),signal:controller.signal}),cancelled]);
+        const response=await Promise.race([fetchImpl(`${PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:purpose!=='buyers',...(purpose==='buyers'?{publicFirst:true}:{}),timeout:25000}),signal:controller.signal}),cancelled]);
         const payload=await Promise.race([response.json().catch(()=>({})),cancelled]);if(!response.ok)throw Object.assign(new Error(`Website extraction failed (${response.status})`),{status:response.status});
         const data=payload.data||payload,actual=data.metadata?.sourceURL||data.metadata?.url||url;
         if(host(actual)!==domain)throw new Error('Website redirected outside the company domain');
@@ -49,7 +49,7 @@
       }finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);signal?.removeEventListener('abort',abort);}
     }
     let home,homeError;
-    if(!skipHome)try{home=await read(website);pages.push(home);}catch(error){if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED')throw error;homeError=error;issues.push({url:website,reason:clean(error.message)});}
+    if(!skipHome)try{home=await read(website);pages.push(home);await onPage?.(home);}catch(error){if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED')throw error;homeError=error;issues.push({url:website,reason:clean(error.message)});}
     const pageLimit=Math.max(1,Math.min(8,Number(maxPages)||5));
     const seeds=seedUrls.filter(value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&host(url.href)===domain&&!BINARY_ASSET.test(url.pathname)&&!/privacy|cookie|terms|login|signin/i.test(url.pathname);}catch{return false;}}).slice(0,6);
     const visited=new Set([String(home?.url||website).replace(/\/$/,'')]),queue=[...seeds,...(home?selectInternalLinks(home,home.url,purpose,6):[])].map(url=>({url,depth:1}));
@@ -57,7 +57,7 @@
     while(queue.length&&pages.length<pageLimit&&visited.size<pageLimit+3){
       if(signal?.aborted)break;
       const next=queue.shift(),key=next.url.replace(/\/$/,'');if(visited.has(key))continue;visited.add(key);
-      try{const page=await read(next.url);pages.push(page);
+      try{const page=await read(next.url);pages.push(page);await onPage?.(page);
         if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue.unshift(...links.map(url=>({url,depth:next.depth+1})));}
       }catch(error){issues.push({url:next.url,reason:clean(error.message)});if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED'){if(!pages.length)throw error;terminalStatus=Number(error.status)||0;break;}}
     }

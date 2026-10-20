@@ -651,3 +651,11 @@
 #company-search-context{margin-top:24px}
 #company-search-context:empty{display:none}
 .company-search-advanced>summary:focus-visible,.company-research-details>summary:focus-visible{outline:3px solid #8cc8b4;outline-offset:3px}
+
+.company-contact-dossier{margin-top:18px;border-top:1px solid #dce8e1;padding-top:16px;overflow-wrap:anywhere}
+.company-contact-dossier>summary{cursor:pointer;font-size:15px;font-weight:650;color:#20362e;padding:8px 0}
+.company-contact-dossier>ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:0}
+.company-contact-dossier li{padding:14px 0;border-top:1px solid #e7ede9}
+.company-contact-dossier li small{display:block;margin-top:5px;color:#63746b}
+.company-contact-dossier li p{margin:7px 0;line-height:1.5}
+.company-contact-dossier a{color:#0d6453}
