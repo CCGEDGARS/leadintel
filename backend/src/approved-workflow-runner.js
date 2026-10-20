@@ -184,7 +184,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
     const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(row.workspace_id).first();
-    const savedDiscovery=stateBudget.restoreFromSync(parse(state?.payload_json)).discovery||{};
+    const savedDiscovery=(await readOwnedPayload(env,row.workspace_id,state)).payload.discovery||{};
     profile.searchFeedback=discovery.searchFeedbackForProfile(savedDiscovery.searchFeedback,discovery.effectiveTargetingProfile(profile,market));await guard();
     if(config.companies.researchPriority==='signals')profile.referenceSimilarityModel=null;
     const baseQueries=discovery.buildDiscoveryQueries(profile,market,config.companies.queries);
