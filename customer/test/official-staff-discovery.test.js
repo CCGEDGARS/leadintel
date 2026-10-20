@@ -23,3 +23,12 @@ test('contact-page testimonials and former staff cannot become current employees
  const body='# Contact\n## Customer testimonials\nAnna Buyer\nCEO\n## Former staff\nErik Former\nPlant Manager\n';
  assert.equal(D.tracePublicBuyers([{...row,markdown:body}],candidate.company,{companyDomain:candidate.domain,decisionMakers:'CEO; Plant Manager'}).people.length,0);
 });
+test('real staff markdown retains inline titles and phones separated into paragraphs',()=>{
+ const markdown='### Personal\n\n**Arad Beck**\n\nOrdermottagare/konstruktör\n\nTel. [08-761 76 70](tel:+468-761 76 70)\n\n**Lars Olausson** Ordermottagare/konstruktör\n\nTel. [08 50 10 37 28](tel:+468 50 10 37 28)\n\n**Rikard Lejåker**\n\nOrdermottagare/konstruktör\n\nTel. [08 50 10 37 23](tel:+468 50 10 37 23)\n\n**Christer Larsson** Platschef\n\nTel. [08 50 10 37 25](tel:+468 50 10 37 25)\n\n### Contact\nPhone 08 999 999 99';
+ const source={...row,markdown};const people=D.tracePublicBuyers([source],candidate.company,profile()).people;
+ assert.equal(people.length,4);
+ const matched=D.matchPublicBuyerDetails(people,[source],candidate.domain,candidate.company);
+ for(const [name,digits] of [['Arad Beck','087617670'],['Lars Olausson','0850103728'],['Rikard Lejåker','0850103723'],['Christer Larsson','0850103725']])assert.equal(matched.find(p=>p.name===name).publicPhone?.replace(/\D/g,''),digits);
+ const missing={...source,markdown:markdown.replace('Tel. [08 50 10 37 28](tel:+468 50 10 37 28)','')};
+ assert.equal(D.matchPublicBuyerDetails(people,[missing],candidate.domain,candidate.company).find(p=>p.name==='Lars Olausson').publicPhone||'','');
+});

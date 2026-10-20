@@ -267,7 +267,7 @@
   }
   function namedBuyerRoleQuote(text,at,name,aliases){
     const allowed=new Set(aliases.join(' ').toLowerCase().split(/[^\p{L}]+/u));
-    const others=value=>[...value.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})\s+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)].filter(match=>![match[1],match[2]].every(word=>allowed.has(word.toLowerCase())));
+    const others=value=>[...value.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})[ \t]+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)].filter(match=>![match[1],match[2]].every(word=>allowed.has(word.toLowerCase())));
     let before=text.slice(Math.max(0,at-100),at).split(/\n\s*\n|[.!?;]/).at(-1),after=text.slice(at+name.length,at+name.length+180).split(/\n\s*\n|[.!?;]/)[0];
     if(others(before).length)before='';
     const next=others(after)[0];if(next)after=after.slice(0,next.index);
@@ -306,7 +306,7 @@
   function directPhonePassage(text,nameAt,name,person,personalEmail){
     let after=text.slice(nameAt+name.length,nameAt+name.length+260).split(/\n\s*\n|\n[-*#]|\b(?:Fackliga|Unionen|SACO|Ledarna)\b|\b(?:interviews?\s*:|for interviews|book (?:an? )?interview|press office|media enquiries|press enquiries|presskontakt|presschef)\b/i)[0];
     const allowed=new Set(clean(person.title).toLowerCase().split(/[^\p{L}]+/u));
-    for(const match of after.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})\s+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)){
+    for(const match of after.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})[ \t]+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)){
       if([match[1],match[2]].every(word=>allowed.has(word.toLowerCase())))continue;
       after=after.slice(0,match.index);break;
     }
@@ -342,7 +342,16 @@
           const roleSupported=roleWords.some(word=>new RegExp('(?:^|[^\\p{L}])'+word+'(?:$|[^\\p{L}])','iu').test(nearby));
           const contactPassage=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+260));
           const personal=sourcedBuyerEmails({name},domain,[{url,content:contactPassage}])[0]?.email;
-          const passage=directPhonePassage(text,match.index,name,person,personal);
+          let passage=directPhonePassage(text,match.index,name,person,personal);
+          // Staff cards often put the role and labelled phone in separate
+          // markdown paragraphs. Bridge only that exact named role/phone block;
+          // ordinary prose, the next employee and general contact sections stay bounded.
+          if(!passage.phone&&official&&row.sourceRead===true){
+            const blocks=text.slice(match.index+name.length,match.index+name.length+400).replace(/^\*{1,2}/,'').trimStart().split(/\n\s*\n/);
+            const role=clean(blocks[0]).replace(/[*_]/g,''),labelled=blocks[1]||'';
+            const aliases=localBuyerRoleAliases(person.title);
+            if(role&&role.length<120&&(clean(person.title).toLowerCase().includes(role.toLowerCase())||aliases.some(alias=>alias.toLowerCase()===role.toLowerCase()))&&/^(?:Tel(?:efon)?\.?|Phone)\s*[:.]?\s*(?:\[)?[+\d]/i.test(labelled))passage=directPhonePassage(name+'\n'+role+'\n'+labelled,0,name,person,personal);
+          }
           if(person.publicPhoneSourceCheck?.version===2&&person.publicPhoneSourceCheck.url===url&&!row.sourceRead)passage.phone='';
           if(!roleSupported&&!personal)continue;
           matches.push({name,url,date:evidenceDate(row),roleSupported,email:personal||"",emailQuote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
@@ -1657,7 +1666,11 @@
         if(!line)continue;
         if(/^(?:(?:our|meet (?:our|the)|vårt|våra)\s+)?(?:personal|team|staff|people|management|leadership|ledning|komanda|darbinieki|vadība)\s*[:.]?$/iu.test(line)){staffSection=true;continue;}
         if(/^\s*#{1,6}\s/.test(rawLine)&&(!hasFullBuyerName(line)||/customer|client|testimonial|partner|kunder|former|previous|tidigare|kontakta|contact|öppettider|opening|visit/i.test(line))){staffSection=false;continue;}
-        if(staffSection)lines.push(line);
+        if(staffSection){
+          const inline=rawLine.trim().match(/^\*\*([^*]+)\*\*\s+(.+)$/u);
+          if(inline&&hasFullBuyerName(inline[1])&&roleRelevance({title:inline[2]},buyerSelectionRoles(profile)))lines.push(inline[1].trim(),inline[2].trim());
+          else lines.push(line);
+        }
       }
       for(let i=0;i+1<lines.length;i++){
         const name=lines[i],role=lines[i+1];
