@@ -1,0 +1,7 @@
+# Buyers focuses the explicitly selected company
+
+Selecting a company appended it to `discovery.selectedProspects`. Buyers rendered that insertion order. Consequently an older LKAB selection appeared before the newly selected Wernedal, even though Wernedal was correctly retained. No active company focus was saved. Re-selecting a qualified company also replaced its saved selection with the search-card copy, potentially losing buyer research held only on the selection.
+
+Explicit company selection now saves `activeBuyerCompanyDomain` in the existing workspace-scoped discovery metadata. The validated Buyers list places that selected company first while preserving the relative order and research of all other eligible selections. Existing saves without the field use their last eligible selection, matching the former append-on-selection behavior. Unknown or suppressed domains cannot enter the list through focus metadata. Re-selecting an existing qualified company retains its saved research owner and contacts. No new research, provider credits or outreach is triggered by ordering.
+
+Regression tests reproduce the old-first order and the reselection problem before the fix. They check selection, re-selection, persisted reload, background order changes, unknown focus, suppression and retention of saved buyer confirmation. Generic company names/domains make the behavior customer-independent. Full customer tests, build and authenticated exact-release verification are required before completion.
