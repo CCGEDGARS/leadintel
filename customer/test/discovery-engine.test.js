@@ -53,7 +53,7 @@ test('adaptive discovery follow-ups add bounded, relevant queries without repeat
   assert.ok(followUps.every(item=>item.market&&item.query));
   assert.ok(followUps.every(item=>!initial.some(query=>query.query===item.query)));
   assert.ok(followUps.some(item=>/Sweden/i.test(item.query)));
-  assert.ok(followUps.some(item=>/factory|facility|capacity|modernization|investment/i.test(item.query)));
+  assert.ok(followUps.every(item=>/manufacturers|downtime|capacity|modernization|investment/i.test(item.query)),'follow-up stays grounded in the buyer profile, pain or selected signals');
   assert.ok(followUps.every(item=>!/industrial automation/i.test(item.query)), 'the seller offer must not bias the prospect search');
   assert.deepEqual(Discovery.buildDiscoveryFollowUpQueries({},market,[],4),[]);
 });

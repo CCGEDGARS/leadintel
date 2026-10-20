@@ -619,3 +619,9 @@
 #additional-contact-preferences select{width:100%;padding:11px;border:1px solid #dce3e8;border-radius:10px;background:white;font:inherit}
 .buyer-four-actions button{white-space:normal}
 @media(max-width:640px){#additional-contact-preferences{grid-template-columns:1fr}}
+
+.company-search-feedback{margin:12px 0;padding:10px 12px;border:1px solid var(--border,#dce4ee);border-radius:10px;background:var(--surface,#fff);font-size:13px}
+.company-search-feedback summary{cursor:pointer;font-weight:600;color:var(--muted,#526176)}
+.company-search-feedback label{display:grid;gap:6px;margin-top:10px;font-weight:600}
+.company-search-feedback select{width:100%;max-width:360px;padding:8px 10px;border:1px solid var(--border,#dce4ee);border-radius:8px;background:var(--surface,#fff);color:inherit;font:inherit}
+.company-search-feedback small{display:block;margin-top:7px;color:var(--muted,#526176);line-height:1.5}

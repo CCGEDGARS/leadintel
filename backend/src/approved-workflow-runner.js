@@ -21,7 +21,7 @@ async function search(env,workspaceId,query,guard){
   await guard();const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
   const url='https://api.firecrawl.dev/v2/search';
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-  const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,scrapeOptions:{formats:['markdown']}})});await guard();
+  const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,...(query.kind==='market'&&query.market&&query.market!=='priority market'?{location:discovery.searchLocation(query.market)}:{}),scrapeOptions:{formats:['markdown']}})});await guard();
   // Snippets without an extracted page are insufficient for automatic qualification.
   const raw=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
   return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query).map(item=>({...item,verifiedAt:new Date().toISOString()}));
@@ -180,9 +180,12 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   return null;
 }
 export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch}){
-  await guard();const profile={...context.profile,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
+  await guard();const profile={...context.profile,website:context.website||context.profile?.website,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
+    const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(row.workspace_id).first();
+    const savedDiscovery=stateBudget.restoreFromSync(parse(state?.payload_json)).discovery||{};
+    profile.searchFeedback=discovery.searchFeedbackForProfile(savedDiscovery.searchFeedback,discovery.effectiveTargetingProfile(profile,market));await guard();
     if(config.companies.researchPriority==='signals')profile.referenceSimilarityModel=null;
     const baseQueries=discovery.buildDiscoveryQueries(profile,market,config.companies.queries);
     const customSources=(context.researchCustomSources||[]).map(item=>{try{return new URL(typeof item==='string'?item:item.url).hostname;}catch{return '';}}).filter(Boolean).slice(0,3);
@@ -191,7 +194,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     const results=(context.knownEvidence||[]).flatMap(item=>discovery.normalizeCompanySearchResults({data:[item]},{id:'approved-research',market:item.market||profile.targetMarkets.split(/[,;]/)[0]}));if(!queries.length)throw new Error('Approved targeting did not produce research queries');
     for(const query of queries)results.push(...await search(env,row.workspace_id,query,guard));
     // Follow up at company level before the automatic evidence/fit gate.
-    const mentions=results.flatMap(item=>discovery.extractCompanyMentions([item],2)).slice(0,30);
+    const mentions=discovery.prioritizeCompanyMentions(discovery.extractCompanyMentions(results,60),results,profile,30);
     const resolutions=[];
     for(const query of discovery.buildCompanyResolutionQueries(mentions,profile,Math.min(10,config.companies.limit*2)))resolutions.push(...await search(env,row.workspace_id,query,guard));
     const linked=discovery.attachSourceEvidenceToResolvedCompanies(resolutions,mentions,results);results.unshift(...linked);
@@ -201,15 +204,18 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     // Research additional candidates when the first pass cannot meet the requested qualified count.
     const firstPass=discovery.mergeCompanyCandidates(results,profile,market,30);
     if(firstPass.filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:new Date().toISOString()}).eligible).length<config.companies.limit){
-      const adaptive=discovery.buildDiscoveryFollowUpQueries(profile,market,queries,4);queries.push(...adaptive);
+      const adaptive=discovery.buildDiscoveryFollowUpQueries({...profile,discoveryResearchOutcome:{checkedDomains:resolutions.map(r=>r.domain),matchedCount:0}},market,queries,4);queries.push(...adaptive);
       const extra=[];for(const query of adaptive)extra.push(...await search(env,row.workspace_id,query,guard));
-      const names=extra.flatMap(item=>discovery.extractCompanyMentions([item],2)).slice(0,10),resolved=[];
+      const known=new Set(mentions.map(item=>discovery.companyMentionKey(item.company)));
+      const names=discovery.prioritizeCompanyMentions(discovery.extractCompanyMentions(extra,60),extra,profile,10).filter(item=>!known.has(discovery.companyMentionKey(item.company))),resolved=[];
       for(const query of discovery.buildCompanyResolutionQueries(names,profile,10))resolved.push(...await search(env,row.workspace_id,query,guard));
       results.push(...discovery.attachSourceEvidenceToResolvedCompanies(resolved,names,extra),...extra);
-      for(const query of discovery.buildCandidateVerificationQueries(resolved,profile,market,10))results.push(...await search(env,row.workspace_id,query,guard));
+      for(const query of discovery.buildCandidateVerificationQueries(resolved,profile,market,10,{excludeDomains:provisional.map(r=>r.domain)}))results.push(...await search(env,row.workspace_id,query,guard));
     }
     const signalCandidates=discovery.mergeCompanyCandidates(results,profile,market,30);
     let pool=[...signalCandidates,...discovery.buildPotentialCompanyCandidates(results,profile,market,signalCandidates,30)];
+    const rejected=new Set(profile.searchFeedback.filter(row=>row.decision!=='good_fit').map(row=>row.domain));
+    pool=pool.filter(candidate=>!rejected.has(discovery.companyIdentityDomain(candidate.domain)));
     if(profile.referenceSimilarityModel)pool=await discovery.researchEvidenceSimilarity({candidates:pool,model:profile.referenceSimilarityModel,workspaceId:row.workspace_id,fetchImpl:async(url,options)=>{await guard();const body=JSON.parse(options.body),text=await generateResearch(env,row.workspace_id,body.prompt);await guard();return {ok:true,json:async()=>({text})};}});
     pool=await discovery.researchBuyerFit(pool,profile,async prompt=>{await guard();const text=await generateResearch(env,row.workspace_id,prompt);await guard();return text;});
     const researchedAt=new Date().toISOString();

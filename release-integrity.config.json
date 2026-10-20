@@ -27,6 +27,7 @@
       "phone_masters_version": "phone-20261017-v1",
       "professional_master_version": "20261017-professional-v1",
       "additional_contact_services_version": "qualified-email-v1",
+      "company_search_version": "20261020-buyer-context-v1",
       "workspace_records_version": "workspace-records-v1",
       "research_recovery_version": "company-recovery-v1"
     }
@@ -3057,6 +3058,73 @@
         "Find email with additional services",
         "/api/additional-contact-services/email",
         "Verify email with Hunter"
+      ]
+    },
+    {
+      "id": "company-search-context-planning",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function discoverySearchContext(",
+        "function prioritizeCompanyMentions(",
+        "searchPlanningVersion:2",
+        "function recordSearchFeedback(",
+        "function searchFeedbackForProfile("
+      ]
+    },
+    {
+      "id": "company-search-runtime-feedback",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const deferredMentions=",
+        "const followUpProfile=",
+        "function renderSearchPreferences()",
+        "company-search-preferences",
+        "profileForQueries.searchFeedback=",
+        "search-relevance=20261020-v1"
+      ]
+    },
+    {
+      "id": "company-search-planner-routes",
+      "type": "text",
+      "url": "/customer/first-party-research.js",
+      "status": 200,
+      "contains": [
+        "purchasing relationship",
+        "operational need",
+        "selectionFeedback",
+        "need or lookalike or signal"
+      ]
+    },
+    {
+      "id": "company-search-reference-integration",
+      "type": "text",
+      "url": "/customer/lookalike-discovery.js",
+      "status": 200,
+      "contains": [
+        "if(Discovery.searchPlanningVersion>=2)return originalQueries(profile,marketState,maxQueries,previousQueries);"
+      ]
+    },
+    {
+      "id": "company-search-entry-version",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "search-relevance=20261020-v1"
+      ]
+    },
+    {
+      "id": "company-search-idempotent-targeting",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "result.exclusions=[...new Map(",
+        ".map(value=>[value.toLowerCase(),value])"
       ]
     },
     {

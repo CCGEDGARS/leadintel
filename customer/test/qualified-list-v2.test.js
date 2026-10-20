@@ -8,7 +8,7 @@ test('strict discovery modes never leak the other discovery route',()=>{
  assert.equal(queries.length,5);
  if(mode==='signals')assert.ok(queries.every(q=>!q.lookalike));
  if(mode==='lookalike')assert.ok(queries.every(q=>q.lookalike));
- if(mode==='balanced')assert.equal(queries.filter(q=>q.lookalike).length,3);
+ if(mode==='balanced')for(const route of ['need','lookalike','signal'])assert.ok(queries.some(q=>q.discoveryRoute===route),'balanced discovery covers '+route);
  }
 });
 test('commercial assessment rejects invented quotes and unconfirmed offers',()=>{
