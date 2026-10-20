@@ -3378,6 +3378,17 @@
       "contains": [
         "workspace-save=20261020-v1"
       ]
+    },
+    {
+      "id": "crm-refresh-scoped-recovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "CRM refresh",
+        "request_timeout",
+        "crm-refresh:"
+      ]
     }
   ],
   "retry": {

@@ -232,11 +232,27 @@ function restoreNewerBuyerResearch(candidate,detail){
   return true;
 }
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
-async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const b=bridge(),workspaceId=b.workspace.id;crmRefreshing=true;try{const [allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);if(b.workspace?.id!==workspaceId)return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}crmAvailable=true;crmCompanies=Array.isArray(allResult.companies)?allResult.companies:[];crmPipeline=Array.isArray(pipelineResult.companies)?pipelineResult.companies:[];hydrateLocalPipelineFromCrm();
+async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const b=bridge(),workspaceId=b.workspace.id,refreshTaskId=`crm-refresh:${workspaceId}`;crmRefreshing=true;try{
+  let allResult,pipelineResult;
+  try{[allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);}
+  catch(error){
+    // A bounded CRM read can fail while the workspace and its saved evidence
+    // remain usable. Handle that transport result here; programming errors in
+    // this refresh, hydration or rendering must still reach runtime reporting.
+    if(error?.transient!==true||!['request_timeout','response_body_failed'].includes(error?.code)||error?.requestPath!=='/api/crm/companies')throw error;
+    if(b.workspace?.id!==workspaceId||bridge()?.workspace?.id!==workspaceId)return false;
+    crmAvailable=false;
+    const tasks=window.LeadIntelTaskCentre;
+    tasks?.start?.({id:refreshTaskId,type:'crm-refresh',title:'CRM connection needs attention',stage:'CRM refresh did not finish',total:1,completed:0,canRetry:true,metadata:{workspaceId,code:error.code,requestPath:error.requestPath}});
+    tasks?.registerActions?.(refreshTaskId,{retry:()=>bridge()?.workspace?.id===workspaceId&&crmAuthenticated()?refreshCrmState():false});
+    tasks?.fail?.(refreshTaskId,`${error.code==='request_timeout'?'CRM refresh timed out':'CRM connection was interrupted'}. Retry the CRM connection; saved companies and buyer evidence are kept in this browser.`,{canRetry:true});
+    if(render)renderAll();return false;
+  }
+  if(b.workspace?.id!==workspaceId||bridge()?.workspace?.id!==workspaceId)return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}crmAvailable=true;crmCompanies=Array.isArray(allResult.companies)?allResult.companies:[];crmPipeline=Array.isArray(pipelineResult.companies)?pipelineResult.companies:[];hydrateLocalPipelineFromCrm();
   const selected=(discovery.selectedProspects||[]).filter(item=>crmCompanyByDomain(item.domain)).slice(0,10);
   await Promise.all(selected.map(async candidate=>{
     const company=crmCompanyByDomain(candidate.domain);
-    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||b.workspace?.id!==workspaceId)return;
+    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||b.workspace?.id!==workspaceId||bridge()?.workspace?.id!==workspaceId)return;
       if(restoreNewerBuyerResearch(candidate,detail))saveDiscovery();
       let recoveredProfiles=false;
       for(const person of candidate.people){const contact=(detail.contacts||[]).find(row=>String(row.external_person_id||"")===String(person.id));if(!contact)continue;
@@ -248,6 +264,8 @@ async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefres
       if(recoveredProfiles)saveDiscovery();
     }catch{ /* CRM history remains available even if this display refresh fails. */ }
   }));
+  if(b.workspace?.id!==workspaceId||bridge()?.workspace?.id!==workspaceId)return false;
+  if(window.LeadIntelTaskCentre?.get?.(refreshTaskId))window.LeadIntelTaskCentre.complete(refreshTaskId,{stage:'CRM connection refreshed',resultCount:crmCompanies.length});
   if(render)renderAll();return true;}finally{crmRefreshing=false;scheduleSavedBuyerPublicChecks();}}
 
 function injectDiscoveryUI(){
