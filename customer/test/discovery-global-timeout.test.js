@@ -1702,6 +1702,23 @@ test('the real search runner prioritizes names from buyer evidence before paid d
  assert.equal(resolutions[0],'Insurance One');
 });
 
+test('an interrupted purchasing-fit wave retains every official evidence record for retry after reload',async()=>{
+ const context=loadDiscoveryRunner({requestTimeout:10,fetchImpl:async()=>({ok:true,json:async()=>({data:[]})})});
+ const at=new Date().toISOString(),rows=['Completed Buyer','Pending Buyer'].map((company,i)=>({company,domain:`buyer${i}.lv`,market:'Latvia',evidence:[{url:`https://buyer${i}.lv/about`,verifiedAt:at,text:`${company} operates equipment production facilities in Latvia and integrates industrial automation supplied by specialist partners.`}]}));
+ context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>rows,buildPotentialCompanyCandidates:()=>[],researchBuyerFit:async(pool,profile,generate,{signal,onProgress})=>{
+   onProgress({completed:1,total:2,candidates:[{...pool[0],buyerFitIssue:'Purchasing application requires review'}]});
+   await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));throw signal.reason;
+ }};
+ await context.__runDiscovery({autoPass:3});
+ const saved=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'));
+ const restored=Discovery.recoverInterruptedDiscoveryState(saved);
+ assert.notEqual(restored.status,'running');
+ assert.deepEqual(restored.potentialMatches.map(c=>c.domain).sort(),['buyer0.lv','buyer1.lv']);
+ assert.equal(restored.potentialMatches[0].evidence[0].text,rows[0].evidence[0].text);
+ assert.match(restored.potentialMatches[0].buyerFitIssue,/requires review/);
+ assert.equal(restored.candidates.length,0,'pending evidence must not claim qualification');
+});
+
 test('one failed purchasing assessment does not block healthy adaptive discovery',async()=>{
  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>({ok:true,json:async()=>({data:[]})})});
  const candidate={company:'North Steel',domain:'northsteel.lv',market:'Latvia',evidence:[{url:'https://northsteel.lv/',text:'North Steel operates an industrial equipment manufacturing business in Latvia.'}]};
