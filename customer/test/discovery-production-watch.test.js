@@ -70,6 +70,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
 const storageEntries=['account-cache.js','ai-settings.js','attention-centre.js','api-transport.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[0]).join('\n');
 const shell = 'id="additional-contact-preferences" Use additional services automatically when no confirmed public work email is found. additional-contact-services.js?v=20261019-v1 '+fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/<script src="state-budget\.js[^"]*"><\/script>/)[0]+'\n'+'audit-monitoring=20261015-v1 audit-delivery=20261015-v1 email-campaign-ui.js?v=20261014-v1 email-campaigns.css?v=20261014-v1 email-campaigns=20261014-v1\nassistant-window=20261015-v3 content-library=20261015-v2 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
+  'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
   'A new search does not replace your saved selections. This search has finished.',
   'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1',
@@ -110,13 +111,30 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
   });
 
   assert.equal(proof.verdict, VERDICTS.PROVEN, proof.failures.join('\n'));
+});
+
+test('production proof rejects the old stage back handler and a cached entry', async () => {
+  const { verifyRelease, VERDICTS } = await loadCore();
+  for (const stale of ['runtime', 'entry']) {
+    const proof = await verifyRelease({
+      config, expectedSha: SHA, ciConclusion: 'success', ciRunId: 'navigation',
+      fetchImpl: productionFetch({
+        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1'}"></script>`,
+        discoveryUi: stale === 'runtime' ? boundedDiscoveryRuntime.replace('$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)', '$("back-to-strategy")?.addEventListener("click",showStrategyStep)') : boundedDiscoveryRuntime
+      }),
+      nonce: `stale-stage-back-${stale}`
+    });
+    assert.equal(proof.verdict, VERDICTS.BLOCKED_SMOKE_CHECK);
+    const gate = stale === 'runtime' ? 'company-stage-back-navigation' : 'company-stage-back-entry';
+    assert.equal(proof.smokeChecks.find(check => check.id === gate).passed, false);
+  }
 });
 
 test('production proof rejects anonymous access to private settings and workspace state',async()=>{
