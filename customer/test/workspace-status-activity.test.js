@@ -57,3 +57,14 @@ test('task alert stays in combined panel; registered retry/cancel work; reload p
     }finally{w2.close();}
   }finally{w.close();}
 });
+test('legacy buyer history is superseded only after the current account and workspace are verified',()=>{
+  const start=Date.now()-600000,old={id:`decision-maker-search:buyer.example:${start}`,type:'decision-maker-search',title:'Buyer search · Buyer',status:'interrupted',stage:'Interrupted',startedAt:start,updatedAt:start},recent={...old,id:`decision-maker-search:buyer.example:${start+300000}`,status:'complete',startedAt:start+300000,updatedAt:start+300000,metadata:{domain:'buyer.example',workspaceId:'one'}};
+  const w=setup(undefined,{leadintel_customer_v2_background_tasks_v1:[recent,old]});try{
+    assert.ok(w.LeadIntelAttention.list().some(item=>item.id==='task-'+old.id));
+    w.LeadIntelServerBridge.ready=true;w.LeadIntelAccountCache={current:()=>true,hasWorkspace:()=>true};w.LeadIntelAttention.refresh();
+    assert.equal(w.LeadIntelAttention.list().some(item=>item.id==='task-'+old.id),false);
+    assert.equal(w.LeadIntelTaskCentre.list().length,2,'superseded history stays reviewable');
+    w.LeadIntelAccountCache.current=()=>false;w.LeadIntelAttention.refresh();
+    assert.ok(w.LeadIntelAttention.list().some(item=>item.id==='task-'+old.id),'an invalidated account cannot establish legacy ownership');
+  }finally{w.close();}
+});

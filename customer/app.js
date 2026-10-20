@@ -347,6 +347,11 @@ function fieldValue(profile,key){const value=profile?.[key];return Array.isArray
 function renderProfile(){
   const p=state.profile;if(!p)return;
   $("profile-company-name").textContent=p.companyName||"Company";$("profile-mission").textContent=p.mission;$("profile-completeness").textContent=`${p.completeness}%`;
+  // The canonical renderer owns its editor, review gaps and compact evidence layout.
+  // Its layout retires the legacy gaps panel, and may contain an unfinished edit.
+  if(p.canonical?.fields&&globalThis.LeadIntelIntelligenceProfileRuntime){
+    globalThis.LeadIntelIntelligenceProfileRuntime.apply();updateApprovalUI();return;
+  }
   $("profile-editor").innerHTML=profileFields.map(([key,label,wide])=>`<div class="profile-field ${wide?"wide":""}"><label for="profile-${key}">${esc(label)}</label><textarea id="profile-${key}" data-profile-field="${key}" rows="${wide?3:2}" ${editMode?"":"readonly"}>${esc(fieldValue(p,key))}</textarea></div>`).join("");
   $("recommended-signals").innerHTML=(p.recommendedSignals||[]).map((signal,index)=>`<label class="signal-item"><input type="checkbox" data-signal-index="${index}" ${signal.active===false?"":"checked"}><div><strong>${esc(signal.name)}</strong><small>${esc(signal.reason)}</small></div><span class="priority">${esc(signal.priority)}</span></label>`).join("");
   const sourceSummary=p.sourceSummary||{website:0,additionalLinks:0,documents:0,total:0};
@@ -356,10 +361,36 @@ function renderProfile(){
   updateApprovalUI();
 }
 function saveProfileEdits(){
+  const canonicalRuntime=globalThis.LeadIntelIntelligenceProfileRuntime;
+  if(state.profile?.canonical?.fields&&canonicalRuntime?.profileIsEditing?.()){canonicalRuntime.saveCanonicalEdits();return;}
   document.querySelectorAll("textarea[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;const previous=fieldValue(state.profile,key);const next=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();state.profile[key]=next;if(key==="customerPainPoints"&&String(next)!==String(previous))state.profile.customerPainPointsStatus="Customer-confirmed";});
   state.profile.researchMarkets=LeadIntelProfile.expandTargetMarkets(state.profile.targetMarkets);
   document.querySelectorAll("[data-signal-index]").forEach(el=>{if(state.profile.recommendedSignals[Number(el.dataset.signalIndex)])state.profile.recommendedSignals[Number(el.dataset.signalIndex)].active=el.checked;});
   state.approved=false;saveState();
+}
+function acceptCanonicalProfileEdits(event){
+  if(event.detail?.source!=="canonical-profile-edit"||!state?.profile?.canonical?.fields)return;
+  let saved;try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");}catch{return;}
+  if(saved.website!==state.website||!saved.profile?.canonical?.fields)return;
+  const fields=globalThis.LeadIntelIntelligenceProfileUI?.CORE_FIELDS;
+  if(!fields?.length||fields.some(key=>!saved.profile.canonical.fields[key]))return;
+  // The Profile editor writes these fields directly. Adopt only its edit surface;
+  // an active research run and unrelated in-memory workspace data retain ownership.
+  for(const key of fields){
+    const record=saved.profile.canonical.fields[key];
+    state.profile[key]=saved.profile[key];state.profile.canonical.fields[key]={...record};
+    const answerKey=globalThis.LeadIntelCanonicalIntelligence?.FIELD_MAP?.[key];
+    if(key==="commercialObjective")state.workspaceGoals={...(state.workspaceGoals||{}),successOutcome:saved.workspaceGoals?.successOutcome||""};
+    else if(answerKey){
+      state.answers[answerKey]=saved.answers?.[answerKey]||"";state.answerStatus[answerKey]=saved.answerStatus?.[answerKey]||"missing";
+      const input=document.querySelector(`[data-question="${answerKey}"]`);if(input)input.value=state.answers[answerKey];
+    }
+    if(key==="targetMarkets")state.targetMarkets=LeadIntelProfile.normalizeTargetMarkets(saved.targetMarkets);
+  }
+  globalThis.LeadIntelCanonicalIntelligence?.finalizeProfileQuality?.(state.profile,state);
+  state.profile.researchMarkets=LeadIntelProfile.expandTargetMarkets(state.profile.targetMarkets);
+  state.approved=false;state.market.strategyApproved=false;state.market.strategyApprovedAt="";
+  renderTargetMarkets();saveState();updateApprovalUI();
 }
 function toggleEdit(){
   if(editMode){saveProfileEdits();editMode=false;$("edit-profile").textContent="Edit profile";showToast("Profile edits saved");}else{editMode=true;$("edit-profile").textContent="Save edits";}
@@ -1508,6 +1539,7 @@ async function factoryResetLeadIntel(){
 }
 
 function bind(){
+  window.addEventListener("leadintel:workspace-changed",acceptCanonicalProfileEdits);
   $("company-website").addEventListener("input",()=>{
     // Editing an existing website is tentative until the field is committed. A partial
     // domain typed mid-edit must never erase approved strategy or discovery results.
