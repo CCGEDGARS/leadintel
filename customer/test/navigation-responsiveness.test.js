@@ -42,3 +42,10 @@ test('reading selected Buyers validates selected company evidence without rescor
  assert.equal(r.c.buyerSelectionRows().length,1);assert.equal(checks,1,'unselected search results must not block navigation with synchronous qualification');
  vm.runInContext('discovery.selectedProspects=[]',r.c);checks=0;assert.equal(r.c.buyerSelectionRows().length,0);assert.equal(checks,0);
 });
+test('Companies opening refreshes once when shared navigation dispatches module-opened',()=>{
+ const fn=source.slice(source.indexOf('function showDiscoveryStep('),source.indexOf('function showStrategyStep('));let renders=0,crm=0,checks=0;
+ const c={moduleReady:()=>true,ensureDiscoveryMounted(){},loadMeta:()=>({}),saveMeta(){},setJourneyFocus(){},syncStrategyFingerprint(){},renderAll:()=>renders++,renderDiscoveryFocus(){},crmAuthenticated:()=>true,refreshCrmState:()=>crm++,scheduleSavedBuyerPublicChecks:()=>checks++,showToast(){},setTimeout(){},window:{scrollTo(){},dispatchEvent(){}},CustomEvent:class{}};
+ vm.createContext(c);vm.runInContext('let discoveryStageOpenRevision=0;'+fn,c);
+ c.persistMainStep=()=>vm.runInContext('discoveryStageOpenRevision++;renderAll();refreshCrmState();scheduleSavedBuyerPublicChecks()',c);
+ c.showDiscoveryStep();assert.equal(renders,1);assert.equal(crm,1);assert.equal(checks,1);
+});

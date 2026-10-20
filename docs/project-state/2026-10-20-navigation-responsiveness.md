@@ -14,3 +14,8 @@ Verification: regression tests failed before changes on oversized page-check inp
 ## Authenticated follow-up: selection reads scored the full pool
 
 The first release passed exact-SHA checks but live navigation still exceeded the browser's three-second input deadline. Startup tracing put Companies rendering at 14–136 ms, pointing outside card rendering. `buyerSelectionRows`, called repeatedly by focus/navigation/readiness, synchronously qualified all candidates merely to decide whether the selected companies still belonged in Buyers. A regression reproduced 50 checks for one selected company. Selection reads now filter by selected domains before qualification and return immediately for no selections. Selected companies still undergo current qualification, stale-evidence and CRM suppression checks. Unselected search results cannot affect the selected Buyers list. This keeps the membership policy while removing redundant synchronous scoring from navigation.
+
+
+## Run each navigation transition once
+
+The authenticated follow-up still exceeded the input deadline. `showDiscoveryStep` rendered focus, refreshed journey, reconciled strategy and rendered cards, while `persistMainStep` synchronously dispatched `module-opened` and ran those same checks/rendering plus CRM refresh again. The opening function now saves the desired focus before entering shared navigation. Its module-opened listener owns the refresh; a revision counter detects standalone mounts that still need a fallback. The redundant deferred Buyers focus reset is removed, so an old navigation callback cannot override a newer Companies click. A regression reproduced two renders/CRM refreshes/public-check schedules for one transition and requires exactly one.
