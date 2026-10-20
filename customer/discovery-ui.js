@@ -91,7 +91,7 @@ function opportunityHypothesisQueries(main,market){
 }
 function bridge(){return window.LeadIntelServerBridge||null;}
 function crmAuthenticated(){const b=bridge();return Boolean(b?.session?.authenticated&&b?.workspace);}
-function persistMainStep(step){if(window.LeadIntelCustomerNavigation?.setStep){window.LeadIntelCustomerNavigation.setStep(step);return;}const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
+function persistMainStep(step){if(window.LeadIntelCustomerNavigation?.setStep){window.LeadIntelCustomerNavigation.setStep(step,{review:step===5});return;}const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
 function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscoveryState(JSON.parse(localStorage.getItem(DISCOVERY_STORAGE_KEY)||"{}"));const recovered=LeadIntelDiscovery.recoverInterruptedDiscoveryState?LeadIntelDiscovery.recoverInterruptedDiscoveryState(normalized):normalized;recoveredInterruptedRun=normalized.status==="running"&&recovered.status!=="running";for(const candidate of recovered.selectedProspects||[]){
       if(candidate.publicContactStatus==="loading")candidate.publicContactStatus="idle";
       // A buyer search persisted as "loading" with no run in flight (page reload or a crash) must not block the stage forever.
@@ -1811,6 +1811,15 @@ function buyerSelectionRows(){
   return [...byDomain.values()];
 }
 function currentJourneyFocus(){return Number(loadMeta().activeJourneyStage)===5?"buyers":"companies";}
+// Page receipts need a change detector, not copies of every seller document.
+// Comparing the exact stored string retains evidence/context race protection.
+let qualityMainRaw=null,qualityMainScope='',qualityMainRevision=0;
+function discoveryQualityMainRevision(){
+ const raw=localStorage.getItem(MAIN_STORAGE_KEY)||'{}';
+ const scope=JSON.stringify([bridge()?.workspace?.id,bridge()?.session?.user?.id]);
+ if(raw!==qualityMainRaw||scope!==qualityMainScope){qualityMainRaw=raw;qualityMainScope=scope;qualityMainRevision++;}
+ return qualityMainRevision;
+}
 function discoveryQualityContext(page){
  const Q=window.LeadIntelPageQuality,make=Q.check,main=mainState(),market=main.market||{},state=discovery||loadDiscovery(),meta=loadMeta(),selected=buyerSelectionRows(),missing=window.LeadIntelStep2Brief?.confirmationMissing?.(main,'research');
  const checks=[
@@ -1826,7 +1835,7 @@ function discoveryQualityContext(page){
   const people=selected.flatMap(candidate=>candidate.people||[]);checks.push(make('buyer-coverage','Relevant buyer identities available',people.some(person=>person.id&&person.name),'Find and verify the decision-makers for your selected company.',{actions:['advance'],target:{step:5,id:'discovery-buyers-guide'}}));
   checks.push(make('buyer-confirmation','Saved recipient confirmed for Messages',Boolean(meta.scriptBuyer?.workspaceId===bridge()?.workspace?.id&&meta.scriptBuyer?.personId&&selected.some(candidate=>candidate.domain===meta.scriptBuyer.domain&&candidate.people?.some(person=>person.id===meta.scriptBuyer.personId&&person.kept))),'Confirm a saved buyer and contact channel before Messages.',{actions:['advance'],target:{step:5,id:'discovery-buyers-guide'}}));
  }
- return {loaded:discoveryMounted,busy:page==='companies'?state.status==='running':selected.some(candidate=>candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'),busyMessage:page==='companies'?'Company research is in progress. Existing results are preserved.':'Buyer checks are in progress. Saved contacts are preserved.',inputs:{workspace:bridge()?.workspace?.id,main,meta,candidates:state.candidates,selected,status:state.status,market},checks};
+ return {loaded:discoveryMounted,busy:page==='companies'?state.status==='running':selected.some(candidate=>candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'),busyMessage:page==='companies'?'Company research is in progress. Existing results are preserved.':'Buyer checks are in progress. Saved contacts are preserved.',inputs:{workspace:bridge()?.workspace?.id,mainRevision:discoveryQualityMainRevision(),meta,candidates:state.candidates,selected,status:state.status},checks};
 }
 function readyBuyerCount(rows=buyerSelectionRows()){
   return rows.filter(candidate=>(candidate.people||[]).some(person=>person.kept&&(verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{})||LeadIntelDiscovery.confirmedLinkedInBuyer(person,candidate,{domain:canonicalDomain(candidate.domain),personId:person.id,workspaceId:bridge()?.workspace?.id,linkedinUrl:person.publicLinkedinUrl||person.linkedin_url},bridge()?.workspace?.id)))).length;
