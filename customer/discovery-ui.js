@@ -1796,8 +1796,10 @@ function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(cr
 function selectedProspects(){return (discovery.selectedProspects||[]).filter(item=>{const company=crmCompanyByDomain(item.domain);const inLocalPipeline=(discovery.pipeline||[]).some(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(item.domain));return !inLocalPipeline&&company?.lifecycle_status!=="suppressed"&&(item.buyerSearchMode==="user_selected_target"||item.buyerSearchMode==="user_selected_qualified"||item.buyerSearchMode==="user_selected_without_signal"||!crmAvailable||Boolean(company&&!company.pipeline_stage));});}
 function buyerSelectionRows(){
   const byDomain=new Map();
+  const selectedDomains=new Set((discovery.selectedProspects||[]).map(item=>canonicalDomain(item.domain||item.website)).filter(Boolean));
+  if(!selectedDomains.size)return [];
   const currentDomains=new Set([
-    ...(discovery.candidates||[]).filter(candidate=>qualificationAssessment(candidate).eligible&&!candidate.needsRecheck).map(item=>canonicalDomain(item.domain||item.website)),
+    ...(discovery.candidates||[]).filter(candidate=>selectedDomains.has(canonicalDomain(candidate.domain||candidate.website))&&qualificationAssessment(candidate).eligible&&!candidate.needsRecheck).map(item=>canonicalDomain(item.domain||item.website)),
     ...selectedTargets().map(item=>canonicalDomain(item.domain||item.website)),
     ...(discovery.selectedProspects||[]).filter(item=>item.buyerSearchMode!=="user_selected_qualified").map(item=>canonicalDomain(item.domain||item.website))
   ].filter(Boolean));
