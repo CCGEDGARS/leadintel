@@ -1388,14 +1388,15 @@ async function selectTargetForBuyers(domain){
   if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
   if(crmAuthenticated()){try{if(!await ensureCrmCompany(candidate)){showToast('Unable to save target to CRM; your target remains available');return false;}}catch(error){showToast(error?.message||'Unable to save target to CRM; try again');return false;}}
   discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain)!==canonicalDomain(domain)),candidate];
-  saveDiscovery();renderAll();
+  focusBuyerCompany(candidate);saveDiscovery();renderAll();
   showToast(`${candidate.company} selected for Buyers · opportunity unverified`);
   return true;
 }
 async function selectQualifiedForBuyers(index){
   const stored=discovery.candidates[index];if(!stored||!candidateIsActionable(stored))return false;const qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
   if(crmAuthenticated()){try{if(!await saveCandidate(index,{pipeline:false}))return false;}catch(error){showToast(error?.message||'Unable to save company to CRM; try again');return false;}}
-  rememberSelectedProspect({...candidate,buyerSearchMode:'user_selected_qualified'});renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);return true;
+  const existing=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(candidate.domain||candidate.website));
+  rememberSelectedProspect(existing||{...candidate,buyerSearchMode:'user_selected_qualified'});renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);return true;
 }
 async function savePotentialProspect(domain){
   const candidate=discovery.potentialMatches.find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
@@ -1416,7 +1417,8 @@ async function savePotentialProspect(domain){
   showToast(`${candidate.company} selected · continue to Buyers when ready`);
   return true;
 }
-function rememberSelectedProspect(candidate){const domain=canonicalDomain(candidate.domain);discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain)!==domain),candidate];saveDiscovery();}
+function focusBuyerCompany(candidate){const domain=canonicalDomain(candidate?.domain||candidate?.website);if(domain)saveMeta({...loadMeta(),activeBuyerCompanyDomain:domain});}
+function rememberSelectedProspect(candidate){focusBuyerCompany(candidate);const domain=canonicalDomain(candidate.domain);discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain)!==domain),candidate];saveDiscovery();}
 function findPipelineDecisionMakers(index){
   const selected=pipelineRows()[Number(index)];if(!selected)return false;
   const domain=canonicalDomain(selected.domain||selected.website);if(!domain){showToast("A verified company domain is required");return false;}
@@ -1826,7 +1828,11 @@ function buyerSelectionRows(){
     const company=crmCompanyByDomain(domain);if(company?.lifecycle_status==="suppressed")continue;
     byDomain.set(domain,item);
   }
-  return [...byDomain.values()];
+  const rows=[...byDomain.values()];
+  // Legacy saves appended new selections. New saves retain explicit focus so
+  // background updates cannot send the user back to a previously chosen company.
+  const focused=canonicalDomain(loadMeta().activeBuyerCompanyDomain||rows.at(-1)?.domain||rows.at(-1)?.website);
+  return rows.sort((a,b)=>Number(canonicalDomain(b.domain||b.website)===focused)-Number(canonicalDomain(a.domain||a.website)===focused));
 }
 function currentJourneyFocus(){return Number(loadMeta().activeJourneyStage)===5?"buyers":"companies";}
 // Page receipts need a change detector, not copies of every seller document.
