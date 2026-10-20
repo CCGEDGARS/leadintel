@@ -1911,6 +1911,15 @@ test('the visible batch-review control explains the pending count and selected b
  assert.equal(panel.querySelector('button').textContent,'Review next 5 companies');assert.equal(panel.querySelector('button').disabled,false);assert.equal(calls.length,0);
  context.document.getElementById('discovery-target-count').value='10';render();assert.equal(panel.querySelector('button').textContent,'Review next 10 companies');
 });
+test('a normal company search with pending companies and no previous review batch can render and start providers',async()=>{
+ const {context,calls,render,dom}=pendingCompanyBatchFixture();
+ context.__setDiscovery({...context.__discoveryState(),status:'running'});
+ assert.doesNotThrow(render);
+ assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);
+ context.__setDiscovery({...context.__discoveryState(),status:'partial'});
+ await context.__runDiscovery();
+ assert.ok(calls.some(call=>call.body.query),'ordinary discovery must reach its first provider query');
+});
 test('successive clicks rotate through incomplete companies and keep the queue after reload',async()=>{
  const {context,review,plan}=pendingCompanyBatchFixture();
  assert.deepEqual(Array.from(plan().domains),Array.from({length:5},(_,i)=>`pending${i}.lv`));await review();
