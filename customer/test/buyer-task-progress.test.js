@@ -298,3 +298,57 @@ test('an explicit detached or wrong-domain contact owner cannot fall back to ano
   assert.deepEqual(calls,[]);assert.equal(owner.publicContactStatus,undefined);
  }
 });
+
+test('completed industrial buyer research keeps approved Team Leadership roles valid after normalization and reload',async()=>{
+ const {context,candidate}=runtime();
+ const roles=['CEO/Owner','Team Leadership','Project Director','Operations','Production','Procurement','Engineering Director'];
+ const main={profile:{priorityOffers:'Drawing development, metal manufacturing, installation and qualified workforce',decisionMakers:roles.join('; ')},market:{icps:[{id:'icp-core',type:'core',active:true,buyerRoles:roles.join('; ')}]}};
+ context.mainState=()=>main;candidate.buyerRoles=roles.join('; ');candidate.buyerFit={purchase:'procurement contracts'};
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
+ context.findPublicProspectContacts=async()=>{candidate.people[0].emailResearch={status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()};candidate.publicContactStatus='complete';};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ assert.equal(candidate.buyerRolesChanged,false);assert.equal(candidate.buyerRoles.length,12);
+ const stored=JSON.stringify(D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]}));
+ const restored={LeadIntelDiscovery:D,localStorage:{getItem:()=>stored},DISCOVERY_STORAGE_KEY:'discovery',MAIN_STORAGE_KEY:'main',recoveredInterruptedRun:false,mainState:()=>main,window:{}};
+ vm.createContext(restored);vm.runInContext(source.slice(source.indexOf('function loadDiscovery('),source.indexOf('function saveDiscovery(')),restored);
+ const loaded=restored.loadDiscovery().selectedProspects[0];
+ assert.equal(loaded.buyerRolesChanged,false);assert.equal(loaded.people[0].name,'Ada Andersson');
+ assert.equal(D.buyerSelectionRoles({decisionMakers:loaded.buyerRoles}).length,12);
+});
+
+test('a researched company-specific role edit remains selected after its hold clears and the workspace reloads',async()=>{
+ const {context,candidate}=runtime();
+ const main={profile:{priorityOffers:'Industrial installation and qualified workforce',decisionMakers:'Project Director; Procurement Director'},market:{icps:[{id:'icp-core',type:'core',active:true,buyerRoles:'Project Director; Procurement Director'}]}};
+ context.mainState=()=>main;candidate.buyerRoles='HR Director; Procurement Director';candidate.buyerRolesChanged=true;candidate.buyerFit={purchase:'procurement contracts'};
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
+ context.findPublicProspectContacts=async()=>{candidate.people[0].emailResearch={status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()};candidate.publicContactStatus='complete';};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);assert.equal(candidate.buyerRolesChanged,false);
+ const snapshot=require('../crm-engine.js').mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch;
+ assert.equal(snapshot.discovery.roleSelectionContext,D.buyerRoleSelectionContext(main));
+ const fromCrm=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target',people:snapshot.buyers,buyerDiscovery:{...snapshot.discovery,checkedAt:snapshot.checkedAt}}]}).selectedProspects[0];
+ assert.equal(fromCrm.buyerDiscovery.roleSelectionContext,D.buyerRoleSelectionContext(main));
+ assert.ok(D.buyerRolesForTarget(main,fromCrm).includes('HR Director'));
+ const stored=JSON.stringify(D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]}));
+ const restored={LeadIntelDiscovery:D,localStorage:{getItem:()=>stored},DISCOVERY_STORAGE_KEY:'discovery',MAIN_STORAGE_KEY:'main',recoveredInterruptedRun:false,mainState:()=>main,window:{}};
+ vm.createContext(restored);vm.runInContext(source.slice(source.indexOf('function loadDiscovery('),source.indexOf('function saveDiscovery(')),restored);
+ const loaded=restored.loadDiscovery().selectedProspects[0];
+ assert.equal(loaded.buyerRolesChanged,false);assert.ok(loaded.buyerRoles.includes('HR Director'));
+});
+
+test('researched roles are invalidated by a real core role edit after save and reload',async()=>{
+ const {context,candidate}=runtime();
+ const roles=['CEO/Owner','Team Leadership','Project Director','Operations','Production','Procurement','Engineering Director'];
+ const main={profile:{priorityOffers:'Metal manufacturing and installation',decisionMakers:roles.join('; ')},market:{icps:[{id:'icp-core',type:'core',active:true,buyerRoles:roles.join('; ')}]}};
+ context.mainState=()=>main;candidate.buyerRoles=roles.join('; ');candidate.buyerFit={purchase:'procurement contracts'};
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
+ context.findPublicProspectContacts=async()=>{candidate.people[0].emailResearch={status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()};candidate.publicContactStatus='complete';};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);assert.equal(candidate.buyerRolesChanged,false);
+ const stored=JSON.stringify(D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]}));
+ for(const changed of [roles.filter(role=>role!=='Team Leadership').concat('Maintenance Director'),roles.filter(role=>role!=='Engineering Director').concat('Maintenance Director')]){
+  const updated=JSON.parse(JSON.stringify(main));updated.profile.decisionMakers=changed;updated.market.icps[0].buyerRoles=changed;
+  const restored={LeadIntelDiscovery:D,localStorage:{getItem:()=>stored},DISCOVERY_STORAGE_KEY:'discovery',MAIN_STORAGE_KEY:'main',recoveredInterruptedRun:false,mainState:()=>updated,window:{}};
+  vm.createContext(restored);vm.runInContext(source.slice(source.indexOf('function loadDiscovery('),source.indexOf('function saveDiscovery(')),restored);
+  const loaded=restored.loadDiscovery().selectedProspects[0];
+  assert.equal(loaded.buyerRolesChanged,true);assert.ok(loaded.buyerRoles.includes('Maintenance Director'));
+ }
+});

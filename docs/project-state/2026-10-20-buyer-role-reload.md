@@ -1,0 +1,9 @@
+# Buyer role selection survives research and reload — 20 October 2026
+
+Signed-in acceptance of the buyer runtime repair exposed a separate reload defect. The customer selected industrial buying functions including Team Leadership. Research expanded those functions into a twelve-role saved selection. On reload, a legacy heuristic treated the approved Team Leadership entry as unrelated to an industrial seller, replaced the researched selection with the shorter core list, and marked every saved buyer as awaiting a real role edit.
+
+The repair distinguishes approved core functions and an explicitly edited or researched company selection from unrelated legacy seller roles. Research records a normalized role-context fingerprint for core/profile/event roles and seller offers, retained through workspace normalization and CRM snapshots. A real context change invalidates that proof. The repair preserves real pending edits and their hold. It does not automatically clear existing holds or relax identity, role, current-employer, contact-source, or sending requirements. A new completed research attempt must validate a genuinely changed selection.
+
+Regression coverage uses the actual research, normalization, and reload functions and checks preservation of explicit company-specific role edits. The changed engine and UI entry points have a new cache version, and the release proof requires the role-preservation code.
+
+All 404 affected checks passed, and independent review found no remaining findings after verifying unchanged context, real core edits, explicit company edits, CRM round trips, and the original runtime integrity checks. Completion additionally requires the full customer suite, build, exact-SHA production proof, and signed-in refresh/save/reload acceptance. This checkpoint records the source repair; production and customer evidence must be assessed for the final release.
