@@ -13,6 +13,21 @@ function load(values,nativeFetch,{snapshotLimit=Infinity}={}){
 function localValues(payload){return new Map(Object.entries(KEYS).map(([key,storageKey])=>[storageKey,JSON.stringify(key==='meta'?payload.meta.discovery:payload[key]||{})]));}
 const endpoint='https://leadintel-api.edgars-7e7.workers.dev/api/customer/state?workspace_id=w1';
 
+test('large recovery packing leaves the page thread free and preserves exact saved data',async()=>{
+ const payload={main:{website:'seller.example'},discovery:{notes:'Exact published evidence. '.repeat(5000)},outreach:{items:[{id:'draft',body:'Exact approved text'}]},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>new Response('{}'));const jobs=[];
+ root.Worker=class{
+  postMessage(job){jobs.push(job);setImmediate(()=>this.onmessage({data:{id:job.id,result:budget[job.operation](job.value,job.options)}}));}
+  terminate(){}
+ };
+ root.LeadIntelStateBudget={...budget,packWorkspaceSnapshot(){throw new Error('Packing blocked the page thread');}};
+ const saving=root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ assert.equal(jobs.length,1,'large snapshot packing must be delegated before blocking the page');
+ assert.equal(typeof saving?.then,'function');await saving;
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ assert.deepEqual(JSON.parse(JSON.stringify(root.LeadIntelWorkspacePersistence.syncedBase('w1').payload)),payload);
+});
+
 for(const compression of [false,true,'shared'])test(`${compression?'text compression':'bundle sharing'} survives real explicit Save and fresh-browser hydration`,async()=>{
  const payload=require(compression==='shared'?'./helpers/workspace-shared-compression.js':compression?'./helpers/workspace-distinct-capacity.js':'./helpers/workspace-capacity.js')(),values=localValues(payload);let wire;
  const root=load(values,async(input,options)=>{wire=JSON.parse(options.body).payload;return new Response(JSON.stringify({saved:true,version:8}));});
@@ -50,9 +65,10 @@ test('real save boundary compacts research and keeps a stable clean local baseli
 
 test('edits made while a research save is in flight remain unsaved and are never overwritten',async()=>{
  const payload={main:{website:'https://seller.example'},discovery:{candidates:[]},outreach:{},delivery:{},meta:{discovery:{}}};
- const values=localValues(payload);let finish;
- const root=load(values,()=>new Promise(resolve=>finish=()=>resolve(new Response(JSON.stringify({saved:true,version:8}),{status:200}))));
+ const values=localValues(payload);let finish,started;const sending=new Promise(resolve=>started=resolve);
+ const root=load(values,()=>new Promise(resolve=>{finish=()=>resolve(new Response(JSON.stringify({saved:true,version:8}),{status:200}));started();}));
  const saving=root.fetch(endpoint,{method:'PUT',body:JSON.stringify({schema_version:1,version:7,payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ await sending;
  values.set(KEYS.main,JSON.stringify({website:'https://seller.example',answers:{priority_offers:'New offer'}}));finish();await saving;
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
  assert.equal(JSON.parse(values.get(KEYS.main)).answers.priority_offers,'New offer');
@@ -137,4 +153,51 @@ test('an edit during a delayed durable snapshot commit stays unsaved and does no
  assert.equal(typeof release,'function');values.set(KEYS.main,JSON.stringify({...payload.main,website:'edited.example'}));release('leadintel_workspace_snapshot_v1:w1:test');await saving;
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
  assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').payload.main.website,'seller.example');assert.equal(JSON.parse(values.get(KEYS.main)).website,'edited.example');
+});
+
+test('the real worker saves and reopens a large research workspace without page-thread encoding',async()=>{
+ const {Worker}=require('node:worker_threads'),workers=[];
+ const payload={main:{website:'seller.example'},discovery:{notes:'Published project evidence. '.repeat(65000)},outreach:{items:[{id:'m1',drafts:{emailBody:'Exact saved wording — tērauds'}}]},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload);let wire;
+ const root=load(values,async(input,options)=>{wire=JSON.parse(options.body).payload;return Response.json({saved:true,version:8});});
+ root.LeadIntelServerBridge.workspaceCompressionCodec='workspace-lzw-v2';
+ root.Worker=class{
+  constructor(url){
+   assert.match(String(url),/\/customer\/workspace-codec-worker\.js\?v=20261020-v1$/);
+   this.thread=new Worker(`const {parentPort,workerData}=require('node:worker_threads');global.self=global;global.importScripts=()=>{self.LeadIntelStateBudget=require(workerData.codec);};self.postMessage=data=>parentPort.postMessage(data);require(workerData.worker);parentPort.on('message',data=>self.onmessage({data}));`,{eval:true,workerData:{codec:require.resolve('../state-budget.js'),worker:require.resolve('../workspace-codec-worker.js')}});
+   workers.push(this.thread);this.thread.on('message',data=>this.onmessage?.({data}));this.thread.on('error',error=>this.onerror?.(error));
+  }
+  postMessage(job){this.thread.postMessage(job);}
+  terminate(){this.thread.terminate();}
+ };
+ root.LeadIntelStateBudget={...budget,prepareForSync(){throw new Error('Transfer packing blocked the page');},packWorkspaceSnapshot(){throw new Error('Snapshot packing blocked the page');}};
+ try{
+  await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:7,payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);assert.deepEqual(budget.restoreFromSync(wire).discovery,payload.discovery);
+  const freshValues=new Map(),fresh=load(freshValues,async()=>Response.json({version:8,payload:wire}));await fresh.fetch(endpoint);fresh.LeadIntelWorkspacePersistence.prepareForLoad();
+  assert.equal(freshValues.get(KEYS.discovery),values.get(KEYS.discovery));assert.equal(freshValues.get(KEYS.outreach),values.get(KEYS.outreach));
+ }finally{await Promise.all(workers.map(worker=>worker.terminate()));}
+});
+
+test('an encoding timeout preserves the acknowledged baseline and a later retry can save',async()=>{
+ const payload={main:{website:'seller.example'},discovery:{notes:'Source evidence. '.repeat(6000)},outreach:{},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>Response.json({saved:true,version:9}));
+ await root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ const stored=values.get('leadintel_customer_v2_workspace_saved_snapshot_v1');values.set(KEYS.main,JSON.stringify({website:'edited.example'}));
+ let expire,terminated=false;const schedule=root.setTimeout;root.setTimeout=(fn,ms)=>{if(ms===30000)expire=fn;return schedule(fn,ms);};
+ root.Worker=class{postMessage(){}terminate(){terminated=true;}};
+ const saving=root.LeadIntelWorkspacePersistence.prepareSyncPayload(payload);expire();await assert.rejects(saving,/encoding timed out/);
+ assert.equal(terminated,true);assert.equal(values.get('leadintel_customer_v2_workspace_saved_snapshot_v1'),stored);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
+ root.Worker=undefined;
+ await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:8,payload:{...payload,main:{website:'edited.example'}}}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,9);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+});
+
+test('a background snapshot cannot install the previous workspace baseline after a workspace switch',async()=>{
+ const payload={main:{website:'seller.example'},discovery:{notes:'Retained evidence. '.repeat(5000)},outreach:{},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>Response.json({}));let release;
+ root.Worker=class{postMessage(job){release=()=>this.onmessage({data:{id:job.id,result:budget[job.operation](job.value,job.options)}});}terminate(){}};
+ const saving=root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8});
+ root.LeadIntelServerBridge.workspace={id:'w2'};values.set(KEYS.main,JSON.stringify({website:'other-seller.example'}));release();
+ await assert.rejects(saving,/workspace changed/i);assert.equal(values.has('leadintel_customer_v2_workspace_saved_snapshot_v1'),false);assert.equal(JSON.parse(values.get(KEYS.main)).website,'other-seller.example');
 });

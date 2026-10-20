@@ -127,3 +127,24 @@ test('concurrent buyer progress labels do not block merging contact research and
  l.discovery.selectedProspects[0].people[0].name='Different Buyer';r.discovery.selectedProspects[0].people[0].name='Another Buyer';
  assert.equal(Sync.merge(b,l,r).safe,false,'buyer identity conflicts still require review');
 });
+
+test('coverage follow-up clocks merge without blocking unrelated retained buyer evidence',()=>{
+ const b=base();b.discovery.selectedProspects=[{id:'company-example',domain:'example.com',buyerDiscovery:{coverageFollowUp:{status:'complete',queries:3,results:8,checkedAt:'2026-10-20T10:00:00Z'}},people:[{id:'anna',name:'Anna Buyer'}]}];
+ const l=structuredClone(b),r=structuredClone(b);
+ l.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.checkedAt='2026-10-20T12:00:00Z';
+ r.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.checkedAt='2026-10-20T11:00:00Z';
+ r.discovery.selectedProspects[0].people[0].publicEmail='anna@example.com';
+ const result=Sync.merge(b,l,r);assert.equal(result.safe,true);assert.equal(result.payload.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.checkedAt,'2026-10-20T12:00:00Z');
+ assert.equal(result.payload.discovery.selectedProspects[0].people[0].publicEmail,'anna@example.com');
+ l.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.results=9;r.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.results=10;
+ assert.equal(Sync.merge(b,l,r).safe,false,'competing actual research results still need review');
+});
+
+test('invalid coverage dates and competing source confirmation dates still require review',()=>{
+ const b=base();b.discovery.selectedProspects=[{id:'company-example',buyerDiscovery:{coverageFollowUp:{checkedAt:'2026-10-20T10:00:00Z'}}}];
+ const l=structuredClone(b),r=structuredClone(b);l.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.checkedAt='invalid';r.discovery.selectedProspects[0].buyerDiscovery.coverageFollowUp.checkedAt='2026-10-20T12:00:00Z';
+ assert.equal(Sync.merge(b,l,r).safe,false);
+ Object.assign(b.discovery.people[0],{publicEmail:'a@buyer.example',publicEmailSourceCheck:{status:'confirmed',checkedAt:'2026-10-20T10:00:00Z'}});
+ const left=structuredClone(b),right=structuredClone(b);left.discovery.people[0].publicEmailSourceCheck.checkedAt='2026-10-20T11:00:00Z';right.discovery.people[0].publicEmailSourceCheck.checkedAt='2026-10-20T12:00:00Z';
+ assert.equal(Sync.merge(b,left,right).safe,false,'email freshness remains part of its atomic evidence record');
+});

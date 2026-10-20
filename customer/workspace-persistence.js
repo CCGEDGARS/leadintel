@@ -32,6 +32,25 @@
   let autoSaveTimer=null;
   let saveError="";
   let lastSyncBudget=null;
+  let codecWorker=null,codecJobId=0;
+  const codecJobs=new Map();
+
+  function runCodec(operation,value,options){
+    if(typeof root.Worker!=='function')return root.LeadIntelStateBudget?.[operation]?.(value,options)||value;
+    if(!codecWorker){
+      codecWorker=new root.Worker(new URL('workspace-codec-worker.js?v=20261020-v1',root.location.href));
+      codecWorker.onmessage=event=>{const job=codecJobs.get(event.data?.id);if(!job)return;codecJobs.delete(event.data.id);root.clearTimeout(job.timer);if(event.data.error)job.reject(new Error(event.data.error));else job.resolve(event.data.result);};
+      codecWorker.onerror=()=>failCodec(new Error('Workspace encoding failed; your local data was preserved'));
+      codecWorker.onmessageerror=()=>failCodec(new Error('Workspace encoding response could not be read'));
+    }
+    return new Promise((resolve,reject)=>{
+      const id=++codecJobId,timer=root.setTimeout(()=>failCodec(new Error('Workspace encoding timed out')),30000);
+      codecJobs.set(id,{resolve,reject,timer});
+      try{codecWorker.postMessage({id,operation,value,options});}catch(cause){failCodec(cause);}
+    });
+  }
+  function failCodec(cause){codecWorker?.terminate();codecWorker=null;for(const job of codecJobs.values()){root.clearTimeout(job.timer);job.reject(cause);}codecJobs.clear();}
+  function encodeRecoveryRecord(record){return runCodec('packRecoveryRecord',record);}
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
@@ -45,7 +64,17 @@
     if(root.localStorage?.getItem(SNAPSHOT_KEY)===raw){snapshotEncoded=raw;snapshotDecoded=snapshot;}
   }
   function persistSnapshot(snapshot){
-    try{root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));return snapshot;}
+    // Large snapshots contain both the local draft and the acknowledged cloud
+    // baseline. Encoding them synchronously freezes the page during autosave.
+    const large=Object.values(snapshot.data||{}).some(value=>typeof value==='string'&&value.length>=65536);
+    const packed=large?runCodec('packWorkspaceSnapshot',snapshot):root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot;
+    return packed&&typeof packed.then==='function'?packed.then(value=>storeSnapshot(snapshot,value)):storeSnapshot(snapshot,packed);
+  }
+  function storeSnapshot(snapshot,packed){
+    const activeWorkspace=root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY);
+    if(activeWorkspace&&snapshot.workspace_id!==activeWorkspace)throw new Error('Workspace changed during snapshot encoding; local data was preserved');
+    const previous=readSnapshot();if(previous?.server_synced&&previous.workspace_id===snapshot.workspace_id&&previous.server_version>snapshot.server_version)return previous;
+    try{const encoded=JSON.stringify(packed);root.localStorage?.setItem(SNAPSHOT_KEY,encoded);snapshotEncoded=encoded;snapshotDecoded=snapshot;return snapshot;}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
       return root.LeadIntelAccountCache.saveRecoverySnapshot(snapshot).then(key=>{
@@ -157,6 +186,15 @@
   function customerStateUrl(input){try{const raw=typeof input==="string"?input:input?.url;const url=new URL(raw,root.location?.href||API_BASE);const siteOrigin=new URL(root.location?.href||API_BASE).origin;return (url.origin===API_BASE||url.origin===siteOrigin)&&url.pathname==="/api/customer/state"?url:null;}catch{return null;}}
   function requestMethod(input,init={}){return String(init?.method||(typeof Request!=="undefined"&&input instanceof Request?input.method:"GET")||"GET").toUpperCase();}
   function withPersistenceMetadata(body,explicitSaved){const next=isObject(body)?{...body}:{};const payload=isObject(next.payload)?{...next.payload}:{};const meta=isObject(payload.meta)?{...payload.meta}:{};meta.persistence={explicit_saved:Boolean(explicitSaved)};payload.meta=meta;next.payload=payload;return next;}
+  function prepareSyncPayload(payload,{explicitSaved=isExplicitlySaved()}={}){
+    const next=withPersistenceMetadata({payload},explicitSaved).payload;
+    if(!root.LeadIntelStateBudget?.prepareForSync)return next;
+    const bridge=root.LeadIntelServerBridge,limit=bridge?.workspaceRecordCodec==='workspace-records-v1'?Number(bridge.workspaceMaxSyncBytes)||8*1024*1024:Number(root.LeadIntelStateBudget.MAX_SYNC_BYTES)||500*1024;
+    const options={maxSyncBytes:limit,allowSectionPacking:bridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:bridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:bridge?.workspaceCompressionCodec==='workspace-lzw-v2'};
+    const finish=prepared=>{lastSyncBudget={bytes:Number(prepared.bytes)||0,limit,exceeded:false,checkedAt:Date.now()};return prepared.payload;};
+    const failed=error=>{lastSyncBudget={bytes:null,limit,exceeded:/500 KB|sync limit|transfer limit/i.test(String(error?.message||'')),checkedAt:Date.now()};throw error;};
+    try{const prepared=runCodec('prepareForSync',next,options);return prepared&&typeof prepared.then==='function'?prepared.then(finish,failed):finish(prepared);}catch(error){return failed(error);}
+  }
   function blankServerPayload(originalScripts={}){return {main:{},discovery:{},outreach:Object.keys(originalScripts).length?{messageStudio:{originalScripts}}:{},delivery:{},meta:{discovery:{},persistence:{explicit_saved:false}}};}
   function readResetIntent(){const raw=root.localStorage?.getItem(RESET_PENDING_KEY);if(!raw)return null;if(raw==="1")return {workspace_id:""};const parsed=safeJson(raw,null);return isObject(parsed)?parsed:null;}
   function resetIntentMatchesUrl(url){const intent=readResetIntent();if(!intent)return false;const intended=String(intent.workspace_id||"");const actual=String(url?.searchParams?.get?.("workspace_id")||"");return !intended||!actual||intended===actual;}
@@ -177,7 +215,7 @@
   function installFetchBoundary(){
     if(!root.fetch||root.__leadintelPersistenceFetchInstalled)return;root.__leadintelPersistenceFetchInstalled=true;nativeFetch=root.fetch.bind(root);
     root.fetch=async function(input,init={}){
-      const {leadintelSaveIntent=false,leadintelExplicitSave=false,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
+      const {leadintelSaveIntent=false,leadintelExplicitSave=false,leadintelPreparedSync=false,leadintelLocalDataAtSaveStart,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
       if(method==="GET"){
         // Reuse the parsed body after snapshot work: its original network stream
         // may expire while a large recovery baseline is being prepared.
@@ -197,15 +235,10 @@
         return jsonResponse({...body,payload:{}},response.status);
       }
       if(method==="PUT"){
-        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
+        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=leadintelLocalDataAtSaveStart||currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
-        if(root.LeadIntelStateBudget?.prepareForSync){
-          // Use the negotiated transfer budget; large research is saved in separate durable records.
-          const limit=root.LeadIntelServerBridge?.workspaceRecordCodec==='workspace-records-v1'?Number(root.LeadIntelServerBridge.workspaceMaxSyncBytes)||8*1024*1024:Number(root.LeadIntelStateBudget.MAX_SYNC_BYTES)||500*1024;
-          try{const prepared=root.LeadIntelStateBudget.prepareForSync(next.payload,{maxSyncBytes:limit,allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:root.LeadIntelServerBridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:root.LeadIntelServerBridge?.workspaceCompressionCodec==='workspace-lzw-v2'});lastSyncBudget={bytes:Number(prepared.bytes)||0,limit,exceeded:false,checkedAt:Date.now()};next.payload=prepared.payload;}
-          catch(error){lastSyncBudget={bytes:null,limit,exceeded:/500 KB|sync limit|transfer limit/i.test(String(error?.message||"")),checkedAt:Date.now()};throw error;}
-        }
+        if(!leadintelPreparedSync)next.payload=await prepareSyncPayload(next.payload,{explicitSaved:!forceReset&&(explicitSave||isExplicitlySaved())});
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(error=>{if(response.ok)throw error;return {};});const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         // The server acknowledgement is already parsed. Snapshot work can
@@ -262,5 +295,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);

@@ -238,7 +238,7 @@ test('workspace persistence measures the compacted sync payload for the attentio
   const persistence=fs.readFileSync(path.join(root,'workspace-persistence.js'),'utf8');
   assert.match(persistence,/lastSyncBudget=\{bytes:Number\(prepared\.bytes\)\|\|0,limit,exceeded:false/);
   assert.match(persistence,/lastSyncBudget=\{bytes:null,limit,exceeded:\/500 KB\|sync limit\|transfer limit\/i\.test/);
-  assert.match(persistence,/handleResetClick,syncBudget\}/);
+  assert.match(persistence,/handleResetClick,syncBudget(?:,|\})/);
   const centre=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
   assert.match(centre,/syncBudget:persistence\?\.syncBudget\?\.\(\)\|\|null/);
   assert.match(centre,/Clear older company search results in Companies to bring the workspace under the 500 KB sync limit/);
