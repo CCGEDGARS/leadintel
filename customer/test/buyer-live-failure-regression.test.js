@@ -13,7 +13,7 @@ function runtime({identity,firecrawlError=true,groundedError=true,websiteError=f
 test('failed providers still trace all ten identity rows and report incomplete without losing pending buyers',async()=>{
  const identity={ok:true,people:Array.from({length:10},(_,i)=>({id:'apollo-'+i,name:'Anna',title:'Inköpschef',organization_name:'LKAB'}))};
  const {context,candidate}=runtime({identity});assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
- assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures.length,26);
+ assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures.length,14);
  assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures[0].status,502);
  assert.equal(candidate.buyerDiscovery.coverageFollowUp.queries,8);assert.equal(candidate.buyerDiscovery.coverageFollowUp.status,'partial');
  assert.equal(candidate.buyerDiscovery.providerStatus.grounded.status,'timeout');
@@ -68,7 +68,7 @@ test('four public names no longer skip directory discovery',async()=>{
  const {context,candidate}=runtime({firecrawlError:false,groundedError:false,identity:{ok:true,people:[]}});let calls=0;
  context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>{calls++;return {ok:true,people:[]};}});
  context.searchBuyerPublicPages=async()=>['Anna Andersson','Bertil Berg','Carl Carlson','Dora Dahl'].map(name=>({title:`${name} | Inköpschef | LKAB`,url:'https://linkedin.com/in/'+name.replace(/ /g,'-')}));
- assert.equal(await context.run(candidate,{allowCrmSync:false}),true);assert.equal(calls,1);assert.equal(candidate.people.length,4);assert.equal(candidate.buyerDiscovery.providerStatus.identity.status,'complete');
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);assert.equal(calls,2);assert.equal(candidate.people.length,4);assert.equal(candidate.buyerDiscovery.providerStatus.identity.status,'complete');
 });
 test('previous pending identities are researched even with a populated public shortlist and survive reload resolved',async()=>{
  const {context,candidate}=runtime({firecrawlError:false,groundedError:false,identity:{ok:true,people:[]}});
@@ -93,4 +93,17 @@ test('fresh official staff pages survive unavailable search providers and publis
  assert.equal(candidate.people.length,4);assert.equal(candidate.buyerDiscovery.pool.length,4);
  assert.ok(candidate.buyerDiscovery.resultDiagnostics.some(row=>row.accepted&&row.parsedName==='Christer Larsson'));
  assert.equal(candidate.buyerDiscovery.researchIncomplete,true,'provider gaps remain explicit even with source-backed contacts');
+});
+test('the full company contact dossier is checkpointed before optional searches and keeps registry leadership',async()=>{
+ const {company,staff,registry}=require('./fixtures/company-contact-reference.cjs');
+ const {context,candidate}=runtime({firecrawlError:false,groundedError:false,websitePages:[{url:staff.url,title:'Contact',text:staff.markdown}]});Object.assign(candidate,company);
+ let firstSearchContacts=0,directoryBeforeSearch=false;
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>{directoryBeforeSearch=true;return {ok:true,people:[]};}});
+ context.searchBuyerPublicPages=async()=>{firstSearchContacts ||= candidate.buyerDiscovery?.companyContacts?.length||0;assert.equal(directoryBeforeSearch,true);return [registry];};
+ context.fetchFirecrawlBuyerResearch=async()=>({ok:true,json:async()=>({data:{markdown:registry.markdown,metadata:{sourceURL:registry.url}}})});
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ assert.equal(firstSearchContacts,6);assert.equal(candidate.buyerDiscovery.companyContacts.length,7);
+ assert.ok(candidate.people.some(p=>p.name==='Nils Bo Lennart Larsson'));
+ assert.ok(candidate.buyerDiscovery.companyContacts.some(p=>p.publicEmail==='johnny@wernedal-co.se'));
+ assert.equal(candidate.__leadIntelBuyerSources,undefined,'completed searches release raw page bodies');
 });

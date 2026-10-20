@@ -245,13 +245,13 @@ test('Saving Mode zero-result guidance reports the limited website sample',()=>{
   assert.ok(result.steps.some(step=>/Full research/.test(step)));
 });
 
-test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
+test('buildApolloPeopleSearchPayload uses exact domain and broad bounded identity discovery',()=>{
   const payload=Discovery.buildApolloPeopleSearchPayload({domain:'nordicmachines.se'},profile);
   assert.deepEqual(payload.q_organization_domains_list,['nordicmachines.se']);
-  assert.ok(payload.person_titles.includes('COO'));
+  assert.deepEqual(payload.person_titles,[]);
   assert.equal(payload.include_similar_titles,true);
-  assert.deepEqual(payload.person_seniorities,['owner','founder','c_suite','partner','vp','head','director','manager']);
-  assert.equal(payload.per_page,10);
+  assert.deepEqual(payload.person_seniorities,[]);
+  assert.equal(payload.per_page,25);
   assert.equal(payload.page,1);
 });
 

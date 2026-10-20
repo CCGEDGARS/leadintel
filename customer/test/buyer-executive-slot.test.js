@@ -19,7 +19,7 @@ test('executive discovery is planned first, across industries, with official and
   const plan=D.buyerResearchPlan({...company,buyerFit:{purchase:offer}},profile);
   assert.match(plan.queries[0],/site:example.com/);assert.match(plan.queries[0],/CEO|Chief Executive/);assert.ok(plan.roles.includes('Executive leadership'));
   assert.ok(D.localBuyerRoleAliases('Executive leadership','Sweden').includes('Verkställande direktör'));
-  assert.equal(D.buildApolloPeopleSearchPayload(company,profile).person_titles.includes('CEO'),true);
+  assert.deepEqual(D.buildApolloPeopleSearchPayload(company,profile).person_titles,[]); // Broad acquisition; executive ranking remains mandatory.
  }
 });
 test('two executives are reserved with functional fallback and name-invariant ranking',()=>{

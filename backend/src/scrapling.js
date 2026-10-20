@@ -5,7 +5,8 @@ export function scraplingConfigured(env={}){
   try{const url=new URL(raw);return url.protocol==='https:'&&Boolean(url.hostname);}catch{return false;}
 }
 
-export async function fetchWithScrapling(env={},targetUrl){
+export async function fetchWithScrapling(env={},targetUrl,{signal}={}){
+  signal?.throwIfAborted();
   if(!scraplingConfigured(env))throw new Error('Scrapling service is not configured');
   const serviceUrl=new URL(clean(env.SCRAPLING_SERVICE_URL,500));
   const target=new URL(String(targetUrl||''));
@@ -14,7 +15,7 @@ export async function fetchWithScrapling(env={},targetUrl){
   const token=String(env.SCRAPLING_SERVICE_TOKEN||'').trim();if(token)headers.Authorization=`Bearer ${token}`;
   let response;
   try{
-    response=await fetch(serviceUrl.href,{method:'POST',headers,body:JSON.stringify({url:target.href}),signal:AbortSignal.timeout(35000)});
+    response=await fetch(serviceUrl.href,{method:'POST',headers,body:JSON.stringify({url:target.href}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(35000)]):AbortSignal.timeout(35000)});
   }catch(cause){throw new Error(`Scrapling request failed: ${String(cause?.message||cause).slice(0,160)}`);}
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new Error(clean(payload?.detail||payload?.error||`Scrapling returned ${response.status}`,180));

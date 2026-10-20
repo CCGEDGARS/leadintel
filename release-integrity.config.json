@@ -320,7 +320,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "buyer-contacts-v22-public-confirmation",
+        "buyer-contacts-v23-company-record",
         "Resume incomplete checks",
         "Identity discovery"
       ]
@@ -367,7 +367,7 @@
         "Buying committee coverage incomplete",
         "2 + 2 buying committee represented",
         "data-research-executive",
-        "20261005-committee-2plus2-v1"
+        "20261020-public-company-record-v1"
       ]
     },
     {
@@ -3277,7 +3277,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "buyer-contacts-v22-public-confirmation",
+        "buyer-contacts-v23-company-record",
         "async function confirmResearchedPublicEmails",
         "await confirmResearchedPublicEmails(candidate,controller.signal)",
         "retry public email confirmation"

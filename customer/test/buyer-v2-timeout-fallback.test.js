@@ -10,7 +10,7 @@ test('Buyer V2 does not execute its multilingual query plan serially',()=>{
  const block=ui.slice(start,end);
  assert.match(block,/Promise\.allSettled/);
  assert.match(block,/offset\+=4/);
- assert.match(block,/plan\.queries\.slice\(0,18\)/);
+ assert.match(block,/publicQueries=\[\.\.\.new Set\(\[leadership,\.\.\.plan\.queries\]\)\]\.slice\(0,6\)/);
  assert.doesNotMatch(block,/for\(const query of plan\.queries\)/);
 });
 test('zero public results continue to identity fallback instead of failing early',()=>{

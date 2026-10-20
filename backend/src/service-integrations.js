@@ -2,6 +2,7 @@ import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
+import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter']);
@@ -84,9 +85,10 @@ function publicResearchUrl(value,base){
 function decodeHtmlEntities(value){
   return String(value||'').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Math.min(1114111,Number(n)||32))).replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(Math.min(1114111,parseInt(n,16)||32)));
 }
-function htmlText(html){
+function htmlText(html,baseUrl){
   const withoutNoise=String(html||'').replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|template)\b[^>]*>[\s\S]*?<\/\1>/gi,' ');
-  return decodeHtmlEntities(withoutNoise.replace(/<(br|hr)\b[^>]*>/gi,'\n').replace(/<\/(p|div|section|article|main|header|footer|nav|li|h[1-6]|tr)>/gi,'\n').replace(/<[^>]+>/g,' ')).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,MAX_DIRECT_PAGE_CHARS);
+  const semantic=withoutNoise.replace(/<h([1-6])\b[^>]*>/gi,(_,level)=>'\n'+'#'.repeat(Number(level))+' ').replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi,(_,tag,text)=>'**'+clean(text.replace(/<[^>]*>/g,' '))+'** ').replace(/<\/t[dh]>/gi,' | ').replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,(_,href,label)=>{let target;try{target=new URL(decodeHtmlEntities(href),baseUrl);}catch{return label;}return ['http:','https:','mailto:','tel:'].includes(target.protocol)?'['+label+']('+target.href+')':label;});
+  return decodeHtmlEntities(semantic.replace(/<(br|hr)\b[^>]*>/gi,'\n').replace(/<\/(p|div|section|article|main|header|footer|nav|li|h[1-6]|tr)>/gi,'\n').replace(/<[^>]+>/g,' ')).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,MAX_DIRECT_PAGE_CHARS);
 }
 function htmlMeta(html,name){
   const source=String(html||'');
@@ -116,6 +118,7 @@ async function boundedPageText(response,signal){
 export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10000)}={}){
   let current=publicResearchUrl(value);if(!current)throw new Error('A valid public research URL is required');
   for(let redirects=0;redirects<=MAX_DIRECT_REDIRECTS;redirects++){
+    signal?.throwIfAborted();
     const response=await fetch(current.href,{method:'GET',headers:{Accept:'text/html,application/xhtml+xml,text/plain;q=0.8,*/*;q=0.1','User-Agent':'LeadIntel/1.0 (+https://leadintel.ccgroup.lv)'},redirect:'manual',signal});
     if(response.status>=300&&response.status<400){
       const location=response.headers.get('location');if(!location)throw new Error(`Website redirect failed (${response.status})`);
@@ -124,12 +127,14 @@ export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10
     }
     if(!response.ok)throw Object.assign(new Error(`Website returned ${response.status}`),{status:response.status});
     const contentType=(response.headers.get('content-type')||'').toLowerCase();
-    if(contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
+    const sitemap=/\/(?:[^/]*sitemap[^/]*)\.xml$/i.test(current.pathname)&&/xml/i.test(contentType);
+    if(!sitemap&&contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
     const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
     const raw=await boundedPageText(response,signal);
-    const text=contentType.includes('text/plain')?clean(raw,MAX_DIRECT_PAGE_CHARS):htmlText(raw);if(!text)throw new Error('No readable website content was returned');
+    const links=[...raw.matchAll(sitemap?/<loc>\s*([^<]+)\s*<\/loc>/gi:/<a\b[^>]*href=["']([^"']+)["']/gi)].map(match=>publicResearchUrl(decodeHtmlEntities(match[1]),current.href)?.href).filter(Boolean).slice(0,500);
+    const text=sitemap?'# Sitemap\n'+links.map(link=>'['+link+']('+link+')').join('\n'):contentType.includes('text/plain')?clean(raw,MAX_DIRECT_PAGE_CHARS):htmlText(raw,current.href);if(!text)throw new Error('No readable website content was returned');
     const title=contentType.includes('text/plain')?'':htmlMeta(raw,'title');const description=contentType.includes('text/plain')?'':htmlMeta(raw,'description');
-    return {success:true,data:{markdown:text,metadata:{title:title||current.hostname,description,sourceURL:current.href,url:current.href,statusCode:response.status,source:'direct-fallback'}}};
+    return {success:true,data:{markdown:text,links,metadata:{title:sitemap?'Sitemap':title||current.hostname,description,sourceURL:current.href,url:current.href,statusCode:response.status,source:'direct-fallback'}}};
   }
   throw new Error('Website redirected too many times');
 }
@@ -198,7 +203,6 @@ async function extractionFallback(env,url,access,workspaceId,credential,status,s
 async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
-  let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
   let target='',payload={},researchUrl=null;
   if(kind==='scrape'){
     researchUrl=publicResearchUrl(body.url);if(!researchUrl)return error('A valid public research URL is required',400,cors);
@@ -213,6 +217,13 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
     payload={query,limit,...(location?{location}:{}),...(country?{country}:{}),...(wantsMarkdown?{scrapeOptions:{formats:['markdown']}}:{})};
     target='https://api.firecrawl.dev/v2/search';
   }
+  if(kind==='scrape'&&body.publicFirst===true){
+    if(request.signal.aborted)return cancelledResponse(request.signal,cors);
+    const signal=providerSignal(request,15000);
+    try{const direct=await fetchDirectPublicPage(researchUrl.href,{signal});if(/^(?:just a moment|access denied|verify you are human)|cloudflare ray id/i.test(direct.data.markdown)&&direct.data.markdown.length<1600)throw new Error('Public page blocked');await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:direct.data.metadata.source,provider_credits:0}});return json(direct,200,cors);}catch(cause){if(request.signal.aborted)return cancelledResponse(request.signal,cors);}
+    if(scraplingConfigured(env))try{const extracted=await fetchWithScrapling(env,researchUrl.href,{signal:request.signal});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:'scrapling-fallback',provider_credits:0}});return json(extracted,200,cors);}catch{}
+  }
+  let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const signal=providerSignal(request,kind==='scrape'?Math.min(65000,payload.timeout+5000):30000);
   if(signal.aborted)return cancelledResponse(signal,cors);
@@ -249,7 +260,8 @@ function normalizeApolloPeopleSearch(body){
   if(!Array.isArray(rawTitles)||rawTitles.some(value=>typeof value!=='string'))return {error:'Buyer roles must be a list of text values'};
   const seen=new Set();const titles=[];
   for(const raw of rawTitles){const title=clean(raw,120);const key=title.toLowerCase();if(!title||seen.has(key))continue;seen.add(key);titles.push(title);if(titles.length===10)break;}
-  return {payload:{q_organization_domains_list:[domain],person_titles:titles,include_similar_titles:true,person_seniorities:[...APOLLO_PEOPLE_SENIORITIES],page:1,per_page:10},domain,roleCount:titles.length};
+  const broad=body.discovery_scope==='company',keywords=clean(body.q_keywords,180),fallback=broad&&body.companyNameFallback===true&&keywords&&keywords===clean(body.company_name,180);
+  return {payload:{...(fallback?{q_keywords:keywords}:{q_organization_domains_list:[domain]}),person_titles:broad?[]:titles,include_similar_titles:true,person_seniorities:broad?[]:[...APOLLO_PEOPLE_SENIORITIES],page:1,per_page:broad?25:10},domain,roleCount:broad?0:titles.length};
 }
 
 function publicApolloBuyer(person={}){
@@ -281,7 +293,7 @@ async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
   }
   await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'apollo',kind:'recovered',source:credential.source});
   const rawPeople=Array.isArray(upstream?.people)?upstream.people:Array.isArray(upstream?.contacts)?upstream.contacts:Array.isArray(upstream?.data?.people)?upstream.data.people:[];
-  const people=rawPeople.slice(0,10).map(publicApolloBuyer).filter(person=>person.name||person.title);
+  const people=rawPeople.slice(0,normalized.payload.per_page).map(publicApolloBuyer).filter(person=>person.name||person.title);
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='apollo'`).bind(workspaceId).run();
   await audit(env,{workspaceId,userId:access.user.id,type:'service.apollo_people_search',provider:'apollo',metadata:{source:credential.source,domain:normalized.domain,role_count:normalized.roleCount,result_count:people.length}});
   return json({people},200,cors);

@@ -50,6 +50,31 @@ async function connectFirecrawl(env){
  const encrypted=await encryptSecret('fc-customer-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
  env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(encrypted);
 }
+sqliteTest('public-first extraction reads company staff without any provider key or credit call',async()=>{
+ const {env,token}=await fixture();const old=globalThis.fetch,calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));return new Response('<html><title>Company contact</title><h3>Personal</h3><p><strong>Anna Andersson</strong> CEO</p><p>anna@company.example</p><a href="/team">Team</a></html>',{headers:{'Content-Type':'text/html'}});};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/contact',publicFirst:true,formats:['markdown','links']}}),env,{});assert.equal(r.status,200);const p=await r.json();assert.match(p.data.markdown,/### Personal/);assert.match(p.data.markdown,/\*\*Anna Andersson\*\*/);assert.ok(p.data.links.includes('https://company.example/team'));assert.deepEqual(calls,['https://company.example/contact']);assert.equal(p.data.metadata.source,'direct-fallback');}finally{globalThis.fetch=old;}
+});
+sqliteTest('cancelled public-first reads do not start a page or extractor request',async()=>{
+ const {env,token}=await fixture(),controller=new AbortController();controller.abort();const old=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('Unexpected request');};
+ try{const request=new Request(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/contact',publicFirst:true}}),{signal:controller.signal});const r=await handleServiceIntegrationRoute(request,env,{});assert.equal(r.status,499);assert.equal(calls,0);}finally{globalThis.fetch=old;}
+});
+test('direct staff extraction preserves inline names and roles when the source wraps a break inside bold text',async()=>{
+ const old=globalThis.fetch;globalThis.fetch=async()=>new Response('<h3>Personal</h3><p><strong>Lars Olausson<br/></strong>Ordermottagare/konstruktör</p><p>Tel. 08 50 10 37 28</p>',{headers:{'Content-Type':'text/html'}});
+ try{const p=await fetchDirectPublicPage('https://company.example/contact');assert.match(p.data.markdown,/\*\*Lars Olausson\*\* Ordermottagare\/konstruktör/);}finally{globalThis.fetch=old;}
+});
+sqliteTest('a public-first blocker page falls through to configured extraction rather than becoming a completed empty read',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env);const old=globalThis.fetch,calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));if(String(url).includes('api.firecrawl.dev'))return new Response(JSON.stringify({success:true,data:{markdown:'### Team\nAnna Andersson\nCEO\nanna@company.example',metadata:{sourceURL:'https://company.example/contact'}}}),{headers:{'Content-Type':'application/json'}});return new Response('<title>Just a moment</title><p>Verify you are human. Cloudflare ray id.</p>',{headers:{'Content-Type':'text/html'}});};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/contact',publicFirst:true}}),env,{});assert.equal(r.status,200);assert.match((await r.json()).data.markdown,/Anna Andersson/);assert.equal(calls.length,2);}finally{globalThis.fetch=old;}
+});
+sqliteTest('company-wide Apollo identity searches do not force management filters and keyword fallback stays identity-only',async()=>{
+ const {env,token}=await fixture();const encrypted=await encryptSecret('customer-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));env.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','apollo',?,'test')").run(encrypted);
+ const old=globalThis.fetch,bodies=[];globalThis.fetch=async(_,options)=>{bodies.push(JSON.parse(options.body));return new Response(JSON.stringify({people:[{id:'p1',name:'Anna Andersson',title:'Design Engineer',email:'hidden@company.example',organization:{name:'Company AB'}}]}),{headers:{'Content-Type':'application/json'}});};
+ try{for(const fallback of [false,true]){const r=await handleServiceIntegrationRoute(req('/api/integrations/services/apollo/people-search?workspace_id=w1',{method:'POST',token,body:{q_organization_domains_list:['company.example'],discovery_scope:'company',person_titles:[],...(fallback?{companyNameFallback:true,company_name:'Company AB',q_keywords:'Company AB'}:{})}}),env,{});assert.equal(r.status,200);assert.equal('email' in (await r.json()).people[0],false);}
+ assert.deepEqual(bodies[0].person_seniorities,[]);assert.deepEqual(bodies[0].person_titles,[]);assert.deepEqual(bodies[0].q_organization_domains_list,['company.example']);assert.equal(bodies[1].q_keywords,'Company AB');assert.equal('q_organization_domains_list' in bodies[1],false);assert.equal(bodies[1].per_page,25);
+ }finally{globalThis.fetch=old;}
+});
 function req(pathname,{method='GET',token,body}={}){return new Request(`https://api.example.test${pathname}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
 
 sqliteTest('Hunter zero balances flag payment and fresh positive balances clear it without consuming credits',async()=>{
