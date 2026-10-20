@@ -62,3 +62,12 @@ test('merging contact research preserves validated provenance and published deta
  const merged=D.mergeCompanyContacts(contacts,[{...person,companyContactSource:'',publicEmail:''}],company);
  assert.equal(merged.length,7);assert.equal(merged.find(p=>p.name===person.name).companyContactSource,'official_staff');assert.equal(merged.find(p=>p.name===person.name).publicEmail,person.publicEmail);
 });
+test('registered executive identity and priority survive selected-target reload, including repair of stripped source fields',()=>{
+ const contacts=D.discoverCompanyContacts([staff,registry],company),ceo=contacts.find(p=>p.corporateRoleEvidence),profile={decisionMakers:'Executive leadership; Operations; Design Engineer'};
+ for(const person of [ceo,{...ceo,publicName:'',publicNameUrl:''}]){
+  const restored=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[person],buyerDiscovery:{companyContacts:contacts}}]}).selectedProspects[0];
+  assert.equal(restored.people[0].publicNameUrl,registry.url);assert.equal(D.qualifyBuyer(restored.people[0],profile,restored).eligible,true);assert.ok(D.rankedBuyerShortlist(restored.people,profile,restored).priorityIds.includes(ceo.id));
+ }
+ const unrelated={...ceo,corporateRoleEvidence:{...ceo.corporateRoleEvidence,company:'Different Company'}};
+ const restored=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[unrelated]}]}).selectedProspects[0];assert.equal(restored.people[0].publicNameUrl,'');
+});
