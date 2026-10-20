@@ -9,3 +9,8 @@ The receipt now uses a bounded runtime revision of the exact main storage string
 Saved Companies/Buyers navigation explicitly requests review mode. Only module 5 with an existing seller profile/website can use that mode. Normal advancement, Strategy, Messages and research retain targeting approval requirements. Entry script cache markers change for both edited runtimes.
 
 Verification: regression tests failed before changes on oversized page-check inputs and the Profile redirect. They pass afterward and cover saved evidence, in-memory company evidence, workspace switching and the actual review-mode caller. All 3,214 customer tests in the full run pass; the expanded navigation file passes all three tests separately. JavaScript syntax, production build and diff whitespace checks pass. Exact release proof and authenticated post-release navigation are separate acceptance gates.
+
+
+## Authenticated follow-up: selection reads scored the full pool
+
+The first release passed exact-SHA checks but live navigation still exceeded the browser's three-second input deadline. Startup tracing put Companies rendering at 14–136 ms, pointing outside card rendering. `buyerSelectionRows`, called repeatedly by focus/navigation/readiness, synchronously qualified all candidates merely to decide whether the selected companies still belonged in Buyers. A regression reproduced 50 checks for one selected company. Selection reads now filter by selected domains before qualification and return immediately for no selections. Selected companies still undergo current qualification, stale-evidence and CRM suppression checks. Unselected search results cannot affect the selected Buyers list. This keeps the membership policy while removing redundant synchronous scoring from navigation.
