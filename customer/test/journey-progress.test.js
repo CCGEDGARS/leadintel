@@ -6,6 +6,15 @@ const path=require('node:path');
 const modulePath=path.join(__dirname,'..','journey-progress.js');
 const Journey=fs.existsSync(modulePath)?require(modulePath):{};
 
+test('zero-score or incomplete company research cannot mark Companies found and reviewed complete',()=>{
+ for(const candidate of [{company:'Unverified',domain:'unknown.example',buyerFit:{fit:0}},{company:'Incomplete',domain:'unknown.example',qualification:{eligible:false}},{company:'Stale',domain:'unknown.example',needsRecheck:true}]){
+ const model=Journey.buildJourneyModel({currentStep:5,discovery:{status:'partial',candidates:[candidate]},discoveryMeta:{targetCount:5},availability:{5:true}});
+ const companies=model.find(stage=>stage.name==='Companies');
+ assert.equal(companies.steps.find(step=>step.id==='companies').complete,false);
+ assert.equal(companies.steps.find(step=>step.id==='review').complete,false);
+ }
+});
+
 test('commercial journey exposes one canonical seven-stage model',()=>{
   assert.equal(typeof Journey.buildJourneyModel,'function');
   const model=Journey.buildJourneyModel({currentStep:1,availability:{1:true}});
