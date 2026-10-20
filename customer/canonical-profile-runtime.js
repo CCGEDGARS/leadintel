@@ -46,10 +46,21 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     }
     Canonical.finalizeProfileQuality(rebuilt);rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);return rebuilt;
   }
+  function preserveUnchangedClocks(current,rebuilt){
+    const stable=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+    const withoutClock=record=>{const {updatedAt,...fields}=record||{};return fields;};
+    for(const [key,record] of Object.entries(rebuilt.canonical?.fields||{})){
+      const previous=current?.canonical?.fields?.[key];
+      if(previous&&stable(withoutClock(previous))===stable(withoutClock(record)))record.updatedAt=previous.updatedAt;
+    }
+    const business=profile=>{if(!profile)return null;const {generatedAt,canonical,...rest}=profile;const {generatedAt:canonicalClock,...canonicalRest}=canonical||{};return {...rest,canonical:canonicalRest};};
+    if(stable(business(current))===stable(business(rebuilt))){rebuilt.generatedAt=current.generatedAt;rebuilt.canonical.generatedAt=current.canonical.generatedAt;}
+    return rebuilt;
+  }
   function patchedNormalize(value={}){
     const normalized=originalNormalize(value);normalized.answerStatus=value.answerStatus&&typeof value.answerStatus==='object'?{...value.answerStatus}:{};
     if(Refs){let referenceState=value.referenceCustomers||{};if(!referenceState.rows?.length&&!Array.isArray(value.referenceCustomerPortfolio?.lists)&&value.answers?.lookalike_customers){referenceState={rows:Refs.migrateLegacyLookalikes(value.answers.lookalike_customers)};}normalized.referenceCustomers=Refs.normalizeReferenceState(referenceState);}
-    if(normalized.profile&&normalized.website){const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus,researchMeta:readResearchMeta(normalized)});normalized.profile=preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt});}
+    if(normalized.profile&&normalized.website){const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus,researchMeta:readResearchMeta(normalized)});normalized.profile=preserveUnchangedClocks(value.profile,preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt}));}
     const repair=normalized.profile?.canonical?.buyerRoleRepair;
     if(repair){
       normalized.answers.buyer_roles=normalized.profile.decisionMakers;

@@ -34,6 +34,9 @@
     function visit(bl,l,br,r,path){
       if(NAVIGATION_PATHS.has(path))return l;
       if(equal(l,r))return l;
+      // Rebuilding an unchanged profile in two tabs advances these clocks.
+      // They describe generation, not competing edits to the field values.
+      if(/^main\.profile\.(?:generatedAt|canonical\.generatedAt|canonical\.fields\.[^.]+\.updatedAt)$/.test(path)&&[l,r].every(value=>value===undefined||typeof value==='string'&&Number.isFinite(Date.parse(value))))return Date.parse(r)>Date.parse(l)||l===undefined?r:l;
       // Compare each representation to its own acknowledged baseline. A full
       // browser research body and a cloud excerpt are not competing user edits.
       if(equal(r,br))return l;

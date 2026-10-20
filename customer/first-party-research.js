@@ -5,13 +5,14 @@
   const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
   function host(url){try{return new URL(url).hostname.toLowerCase().replace(/^www\./,'');}catch{return '';}}
   function usableText(value){const text=clean(value);return (!EvidencePolicy||EvidencePolicy.usable({text}))&&text.length>=120&&!/^(?:access denied|just a moment|verify you are human|checking your browser|enable javascript and cookies)/i.test(text)&&!(/(?:captcha|cloudflare ray id|verify you are human)/i.test(text)&&text.length<1000);}
+  const BINARY_ASSET=/\.(?:jpe?g|png|gif|svg|webp|avif|ico|bmp|tiff?|woff2?|ttf|otf|eot|zip|mp[34]|webm|pdf|docx?)$/i;
   function selectInternalLinks(page={},website,purpose='company',limit=4){
     const origin=host(website),urls=new Map();
     const matches=[...String(page.text||page.markdown||'').matchAll(/\[([^\]]*)\]\(([^\s)]+)(?:\s+[^)]*)?\)/g)].map(m=>({url:m[2],title:m[1]}));
     for(const item of [...(page.links||[]),...matches]){
       const raw=typeof item==='string'?item:item?.url||item?.href;let url;try{url=new URL(raw,website);}catch{continue;}
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password||host(url.href)!==origin)continue;
-      url.hash='';if(url.search||/\.(?:jpg|jpeg|png|gif|svg|zip|mp4|pdf|docx?)$/i.test(url.pathname)||/privacy|cookie|terms|login|signin|cart|checkout/i.test(url.pathname))continue;
+      url.hash='';if(url.search||BINARY_ASSET.test(url.pathname)||/privacy|cookie|terms|login|signin|cart|checkout/i.test(url.pathname))continue;
       const normalized=url.href.replace(/\/$/,'');if(normalized===String(website).replace(/\/$/,''))continue;
       let path=url.pathname;try{path=decodeURI(path);}catch{}const label=path+' '+clean(item?.title||'');
       const company=/quality|standard|certific|specification|kvalit|sertifik|product|service|capabilit|manufactur|production|solution|project|case|customer|about|produkt|tjänst|tjanst|tillverk|lösning|losning|referens|om-oss/i.test(label);
@@ -50,7 +51,7 @@
     let home,homeError;
     if(!skipHome)try{home=await read(website);pages.push(home);}catch(error){if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED')throw error;homeError=error;issues.push({url:website,reason:clean(error.message)});}
     const pageLimit=Math.max(1,Math.min(8,Number(maxPages)||5));
-    const seeds=seedUrls.filter(value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&host(url.href)===domain&&!/privacy|cookie|terms|login|signin|\.(?:pdf|zip|jpg|png|mp4)(?:$|\?)/i.test(url.pathname);}catch{return false;}}).slice(0,6);
+    const seeds=seedUrls.filter(value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&host(url.href)===domain&&!BINARY_ASSET.test(url.pathname)&&!/privacy|cookie|terms|login|signin/i.test(url.pathname);}catch{return false;}}).slice(0,6);
     const visited=new Set([String(home?.url||website).replace(/\/$/,'')]),queue=[...seeds,...(home?selectInternalLinks(home,home.url,purpose,6):[])].map(url=>({url,depth:1}));
     if(!home&&!queue.length)throw homeError||new Error('Insufficient readable company evidence');
     while(queue.length&&pages.length<pageLimit&&visited.size<pageLimit+3){

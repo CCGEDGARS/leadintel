@@ -20,6 +20,7 @@
   const list=value=>Array.isArray(value)?value:[];
   const activeItems=value=>list(value).filter(item=>item&&item.active!==false);
   const everyField=(source,fields)=>fields.every(field=>filled(source?.[field]));
+  const checkedCompanies=discovery=>list(discovery.candidates).filter(item=>item?.company&&item?.domain&&!item.needsRecheck&&item.qualification?.eligible===true&&Number.isFinite(item.qualification.score)&&item.qualification.score>0);
   const step=(id,label,complete,{optional=false,action=label}={})=>({id,label,complete:Boolean(complete),optional,action});
   const STATUS_LABELS=Object.freeze({current:'In progress',complete:'Complete',available:'Available',locked:'Locked',skipped:'Skipped · optional'});
 
@@ -33,7 +34,8 @@
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
     const campaign=main.campaignStudio&&typeof main.campaignStudio==='object'?main.campaignStudio:{};
-    const candidates=list(discovery.candidates).filter(item=>item&&!item.needsRecheck&&item.qualification?.eligible!==false&&item.buyerFit?.fit!==0&&item.qualification?.score!==0),pipeline=list(discovery.pipeline),prospects=list(discovery.selectedProspects),items=list(outreach.items),opportunities=list(delivery.opportunities);
+    const candidates=checkedCompanies(discovery),pipeline=list(discovery.pipeline),prospects=list(discovery.selectedProspects),items=list(outreach.items),opportunities=list(delivery.opportunities);
+    const requested=Math.max(1,Math.min(50,Number(discoveryMeta.targetCount||discovery.targetCount)||1));
     const selectedItem=items.find(item=>item?.domain===outreach.selectedDomain)||items[0]||null;
     const selectedDelivery=opportunities.find(item=>item?.domain===delivery.selectedDomain)||opportunities[0]||null;
     const drafts=selectedItem?.drafts||{};
@@ -67,7 +69,7 @@
       ],
       5:[
         step('scope','Discovery amount selected',Boolean(discoveryMeta.targetCount||discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
-        step('companies',discovery.status==='no_results'?(retainedCompanies?'No new qualified companies · saved companies retained':'No qualified companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
+        step('companies',discovery.status==='no_results'?(retainedCompanies?'No new qualified companies · saved companies retained':'No qualified companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>=requested,{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
         step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
@@ -95,7 +97,7 @@
     const availability=input.availability&&typeof input.availability==='object'?input.availability:{};
     const internal=stageSteps(input);
     const discovery=input.discovery&&typeof input.discovery==='object'?input.discovery:{};
-    const candidates=list(discovery.candidates).filter(item=>item&&!item.needsRecheck&&item.qualification?.eligible!==false&&item.buyerFit?.fit!==0&&item.qualification?.score!==0),pipeline=list(discovery.pipeline);
+    const candidates=checkedCompanies(discovery),pipeline=list(discovery.pipeline);
     const groups={
       1:internal[1]||[],
       2:[...(internal[2]||[]),...(internal[3]||[])],

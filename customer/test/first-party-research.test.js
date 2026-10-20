@@ -1,6 +1,13 @@
 const path=require('node:path');
 const vm=require('node:vm');
 const test=require('node:test');
+test('operating-page research excludes binary image and font assets from links and recovery seeds',async()=>{
+ const R=require('../first-party-research.js'),seen=[];
+ const urls=['/products/machine.webp','/products/machine.avif','/products/machine.woff2','/products'];
+ assert.deepEqual(R.selectInternalLinks({links:urls},'https://company.se/','company',4),['https://company.se/products']);
+ await R.collectWebsiteEvidence({website:'https://company.se/',skipHome:true,seedUrls:urls.map(p=>'https://company.se'+p),fetchImpl:async(_,init)=>{const url=JSON.parse(init.body).url;seen.push(url);return {ok:true,json:async()=>({data:{markdown:'The company manufactures complete industrial machines in Sweden. Its production teams integrate components for industrial customers.',metadata:{sourceURL:url}}})};}});
+ assert.deepEqual(seen,['https://company.se/products']);
+});
 const assert=require('node:assert/strict');
 const R=require('../first-party-research.js');
 const AI=require('../reference-customer-ai.js');
