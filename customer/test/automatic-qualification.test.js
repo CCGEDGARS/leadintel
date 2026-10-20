@@ -94,9 +94,33 @@ test('independent fit batches preserve successful evidence when another batch fa
     active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;
     if(batch[0].domain==='buyer4.example')throw Object.assign(new Error('Unavailable'),{status:503});
     return JSON.stringify({companies:batch.map(c=>({domain:c.domain,fit:90,purchase:offers,reason:'Supplied operating evidence identifies a purchasing application.',buyerRole:'operating buyer',evidence:[{url:c.evidence[0].url,quote:c.evidence[0].text}]}))});
-   },{onFailure:(error,batch)=>failures.push(...batch),onProgress:p=>progress.push(p.completed)});
+   },{retryAttempts:0,onFailure:(error,batch)=>failures.push(...batch),onProgress:p=>progress.push(p.completed)});
    assert.equal(peak,2);assert.equal(result.length,12);assert.equal(failures.length,4);assert.equal(result.filter(c=>D.verifiedBuyerFit(c,p)).length,8);assert.deepEqual(progress,[1,2,3]);
    for(const c of result.slice(4,8))assert.equal(D.assessAutomaticQualification(c,p,market,{minimumScore:70}).eligible,false);
   }
  }
+});
+
+test('purchasing-fit recovery retries only rejected companies and preserves the successful sibling',async()=>{
+ const second={...raw,domain:'other.se',evidence:[{url:'https://other.se/about',text:'Other assembles renewable energy machinery with purchased welded frames in Sweden.'}]};
+ const batches=[],failures=[];
+ const results=await D.researchBuyerFit([raw,second],profile,async(prompt,batch)=>{
+  batches.push(batch.map(c=>c.domain));
+  return JSON.stringify({companies:batch.map(c=>({domain:c.domain,fit:85,offerId:'offer-0',reason:'Frames are used in equipment assembly.',buyerRole:'equipment manufacturer',evidence:[{sourceId:'source-0',quote:batches.length===1&&c.domain==='other.se'?'Invented quote that must fail.':c.evidence[0].text}]}))});
+ },{onFailure:(e,batch)=>failures.push(...batch)});
+ assert.deepEqual(batches,[['nordic.se','other.se'],['other.se']]);assert.equal(failures.length,0);assert.equal(results.filter(c=>D.verifiedBuyerFit(c,profile)).length,2);
+});
+test('purchasing-fit recovery retries transient provider errors but never billing or authentication failures',async()=>{
+ for(const status of [502,402,401]){
+  let calls=0;const failures=[];
+  const result=await D.researchBuyerFit([raw],profile,async()=>{calls++;if(calls===1)throw Object.assign(new Error('Provider failure'),{status});return JSON.stringify({companies:[{domain:raw.domain,fit:80,offerId:'offer-0',reason:'Assembly needs frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:evidence[0].text}]}]});},{onFailure:e=>failures.push(e)});
+  assert.equal(calls,status===502?2:1);assert.equal(Boolean(result[0].buyerFit),status===502);assert.equal(failures.length,status===502?0:1);
+ }
+});
+test('stable quote identifiers resolve only to supplied official evidence',()=>{
+ const prompt=D.buyerFitPrompt([raw],profile),company=JSON.parse(prompt.split('. Companies: ')[1])[0],source=company.evidence[0];
+ assert.ok(source.quoteOptions?.length);
+ const response={companies:[{domain:raw.domain,fit:85,offerId:'offer-0',reason:'Assembly needs frames.',buyerRole:'manufacturer',evidence:[{sourceId:source.sourceId,quoteId:source.quoteOptions[0].quoteId}]}]};
+ const result=D.parseBuyerFit(JSON.stringify(response),[raw],profile)[0];assert.ok(D.verifiedBuyerFit(result,profile));assert.equal(result.buyerFit.evidence[0].quote,source.quoteOptions[0].quote);
+ response.companies[0].evidence[0].quoteId='invented';assert.equal(D.parseBuyerFit(JSON.stringify(response),[raw],profile)[0].buyerFit,undefined);
 });

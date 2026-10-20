@@ -27,7 +27,9 @@
       "phone_masters_version": "phone-20261017-v1",
       "professional_master_version": "20261017-professional-v1",
       "additional_contact_services_version": "qualified-email-v1",
-      "company_search_version": "20261020-buyer-context-v1"
+      "company_search_version": "20261020-buyer-context-v1",
+      "workspace_records_version": "workspace-records-v1",
+      "research_recovery_version": "company-recovery-v1"
     }
   },
   "smokeChecks": [
@@ -3123,6 +3125,38 @@
       "contains": [
         "result.exclusions=[...new Map(",
         ".map(value=>[value.toLowerCase(),value])"
+      ]
+    },
+    {
+      "id": "durable-research-record-negotiation",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "workspace-records-v1",
+        "workspaceMaxSyncBytes",
+        "reason:'research_in_progress'"
+      ]
+    },
+    {
+      "id": "research-quote-recovery",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "buyerFitQuoteOptions",
+        "retryAttempts=1",
+        "This is a recovery of an incomplete assessment"
+      ]
+    },
+    {
+      "id": "research-record-transport",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "MAX_RECORD_SYNC_BYTES=8*1024*1024",
+        "syncLimit(options)>MAX_SYNC_BYTES"
       ]
     }
   ],

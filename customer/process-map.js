@@ -4,14 +4,14 @@
  * block the journey shell. These import signatures remain documented because
  * release tests audit their versions and ordering.
  * import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
- * import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1';
- * import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1';
+ * import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1';
+ * import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&research-recovery=20261020-v1';
  * import './website-input-sync.js?v=20260901-saved-state-v2';
  * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
  * import './website-activation.js?v=20260916-ercon-context-v1';
  * import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2';
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
- * import './server-bridge.js?v=20260925-apollo-buyer-search-v1';
+ * import './server-bridge.js?v=20260925-apollo-buyer-search-v1&research-recovery=20261020-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1&app-dialogs=20261017-v1';
  * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1';

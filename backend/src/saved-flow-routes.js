@@ -1,3 +1,4 @@
+import {preparePayloadRecord,payloadRecordWrites} from './workspace-record-store.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import FlowState from '../../customer/my-flows.js';
 import {cookieValue,sha256} from './security.js';
@@ -17,7 +18,7 @@ async function metrics(env,row){
 }
 async function list(env,workspaceId,role){
  const current=await currentPayload(env,workspaceId),hash=await sharedHash(current),{results:rows=[]}=await env.DB.prepare('SELECT * FROM saved_flows WHERE workspace_id=? ORDER BY updated_at DESC,id LIMIT 10').bind(workspaceId).all();
- const flows=[];for(const row of rows){const payload=FlowState.composePayload(row.id==='legacy-'+workspaceId&&!current.main?.myFlow?.id?current:decode(row),current,row),sharedChanged=(row.shared_hash||await sharedHash(decode(row)))!==hash;
+ const flows=[];for(const row of rows){const payload=FlowState.composePayload(row.id==='legacy-'+workspaceId&&!current.main?.myFlow?.id?current:await decode(row,env),current,row),sharedChanged=(row.shared_hash||await sharedHash(await decode(row,env)))!==hash;
   if(sharedChanged&&row.status==='automatic'){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic'").bind(workspaceId,row.id,row.revision).run();row.status='needs_review';}
   const review=parse(row.review_json,[]);if(sharedChanged)review.push({id:'business',label:'Shared business settings changed — review affected pages',step:2});
   flows.push({id:row.id,name:row.name,status:row.status==='automatic'&&sharedChanged?'needs_review':row.status,revision:row.revision,stateVersion:row.state_version,review,readiness:review.length?'Review required':row.approved_at?'Approved':'Approval needed',summary:FlowState.summary(payload,parse(row.config_json)),updatedAt:row.updated_at,nextRunAt:row.next_run_at,metrics:await metrics(env,row)});
@@ -61,7 +62,7 @@ export async function handleSavedFlowRoute(request,env,cors={}){
   if(url.pathname==='/api/flows'&&body.action==='create'){
    if(Number(body.workspaceVersion)!==state.version)throw Error('Workspace changed. Save and refresh before creating a flow.');
    const payload=state.payload,context=mainContext(payload),config=normalizeWorkflowConfig(body.config||{},context),newId=crypto.randomUUID();
-   await env.DB.prepare("INSERT INTO saved_flows(id,workspace_id,name,payload_json,shared_hash,config_json,context_hash) VALUES(?,?,?,?,?,?,?)").bind(newId,workspaceId,name(body.name),encode(payload),await sharedHash(payload),JSON.stringify(config),await fingerprint(context)).run();
+   const record=await preparePayloadRecord(encode(payload));await env.DB.batch([env.DB.prepare("INSERT INTO saved_flows(id,workspace_id,name,payload_json,shared_hash,config_json,context_hash) VALUES(?,?,?,?,?,?,?)").bind(newId,workspaceId,name(body.name),record.encoded,await sharedHash(payload),JSON.stringify(config),await fingerprint(context)),...payloadRecordWrites(env,workspaceId,record,'EXISTS(SELECT 1 FROM saved_flows WHERE workspace_id=? AND id=? AND payload_json=?)',[workspaceId,newId,record.encoded])]);
    await audit(env,workspaceId,auth.user.id,'create',newId);return json({id:newId,...await list(env,workspaceId,auth.member.role)},200,cors);
   }
   let row=await savedFlowRow(env,workspaceId,id);if(!row)return json({error:'Flow not found'},404,cors);
@@ -69,14 +70,14 @@ export async function handleSavedFlowRoute(request,env,cors={}){
   const action=body.action;
   if(action==='duplicate'){
    const payload=FlowState.duplicatePayload(await savedFlowPayload(env,row),body.markets),newId=crypto.randomUUID(),context=mainContext(payload),config=normalizeWorkflowConfig(parse(row.config_json),context);
-   await env.DB.prepare("INSERT INTO saved_flows(id,workspace_id,name,payload_json,shared_hash,review_json,config_json,context_hash) VALUES(?,?,?,?,?,?,?,?)").bind(newId,workspaceId,name(body.name),encode(payload),await sharedHash(state.payload),JSON.stringify(FlowState.reviewChecklist(payload)),JSON.stringify(config),await fingerprint(context)).run();
+   const record=await preparePayloadRecord(encode(payload));await env.DB.batch([env.DB.prepare("INSERT INTO saved_flows(id,workspace_id,name,payload_json,shared_hash,review_json,config_json,context_hash) VALUES(?,?,?,?,?,?,?,?)").bind(newId,workspaceId,name(body.name),record.encoded,await sharedHash(state.payload),JSON.stringify(FlowState.reviewChecklist(payload)),JSON.stringify(config),await fingerprint(context)),...payloadRecordWrites(env,workspaceId,record,'EXISTS(SELECT 1 FROM saved_flows WHERE workspace_id=? AND id=? AND payload_json=?)',[workspaceId,newId,record.encoded])]);
    await audit(env,workspaceId,auth.user.id,action,newId);return json({id:newId,...await list(env,workspaceId,auth.member.role)},200,cors);
   }
   if(action==='open'){
    if(Number(body.workspaceVersion)!==state.version)throw Error('Workspace changed. Save and refresh before switching flows.');
    let payload=await savedFlowPayload(env,row);
    if(Number.isInteger(body.step)&&body.step>=1&&body.step<=7){payload.main.step=body.step;payload.main.visibleStep=body.step;payload.main.activeJourneyStage=body.step;}
-   if((row.shared_hash||await sharedHash(decode(row)))!==await sharedHash(state.payload)){payload.main.approved=false;payload.main.targetingConfirmation=null;if(payload.main.market)payload.main.market.strategyApproved=false;}
+   if((row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(state.payload)){payload.main.approved=false;payload.main.targetingConfirmation=null;if(payload.main.market)payload.main.market.strategyApproved=false;}
    const next=await putCustomerState(env,{workspaceId,userId:auth.user.id,expectedVersion:state.version,schemaVersion:1,payload:parse(encode(payload)),role:auth.member.role,allowFlowSwitch:true});if(next.conflict)throw Error('Workspace changed. Save and refresh before switching flows.');
    return json({id:row.id,name:row.name,state:next.state},200,cors);
   }

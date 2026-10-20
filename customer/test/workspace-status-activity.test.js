@@ -41,8 +41,8 @@ test('sync failures take priority over active work and never claim all saved',()
   }finally{w.close();}
 });
 test('task alert stays in combined panel; registered retry/cancel work; reload preserves history',async()=>{
-  const w=setup(),d=w.document;let retries=0,cancels=0;try{
-    const c=w.LeadIntelTaskCentre;c.start({id:'one',title:'Company research',total:3});c.registerActions('one',{retry:()=>{retries++;},cancel:()=>{cancels++;}});c.fail('one','Temporary failure');w.LeadIntelAttention.refresh();
+  const w=setup(),d=w.document;let retries=0,cancels=0,finishRetry;try{
+    const c=w.LeadIntelTaskCentre;c.start({id:'one',title:'Company research',total:3});c.registerActions('one',{retry:()=>{retries++;return new Promise(resolve=>{finishRetry=resolve;});},cancel:()=>{cancels++;finishRetry?.();}});c.fail('one','Temporary failure');w.LeadIntelAttention.refresh();
     d.getElementById('workspace-attention').click();
     Array.from(d.querySelectorAll('.attention-action')).find(b=>b.textContent==='Review task').click();
     assert.equal(d.getElementById('workspace-attention-drawer').hidden,false);
