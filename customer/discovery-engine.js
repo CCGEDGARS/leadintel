@@ -1281,7 +1281,7 @@
     const add=(...values)=>values.forEach(value=>{if(value&&!roles.includes(value))roles.push(value);});
     if(/project|investment|capex|construction|expansion|plant|facility|installation|modern/i.test(context))add('Project Director','Project Manager','CAPEX Manager','Investment Project Manager');
     if(/procure|purchas|supplier|sourcing|equipment|material|contract/i.test(context))add('Procurement Director','Procurement Manager','Strategic Sourcing Manager','Purchasing Manager');
-    if(/engineer|technical|equipment|installation|plant|facility|metal|manufactur/i.test(context))add('Engineering Director','Engineering Manager','Technical Manager');
+    if(/engineer|technical|equipment|installation|plant|facility|metal|manufactur/i.test(context))add('Engineering Director','Engineering Manager','Technical Manager','Design Engineer');
     if(/production|operations|plant|mine|mining|factory|manufactur/i.test(context))add('Operations Director','Plant Manager','Production Manager','Maintenance Manager');
     add(...base);return [...base,...roles.filter(role=>!base.includes(role))].slice(0,16);
   }
@@ -1292,7 +1292,7 @@
     const director=value.match(/^(.+?) director$/i),head=value.match(/^head of (.+)$/i);
     if(director)aliases.push('Head of '+director[1], 'Director of '+director[1], director[1]+' Head', 'Chief '+director[1]+' Officer');
     if(head)aliases.push(head[1]+' Director', 'Director of '+head[1]);
-    if(swedish){const map=[[/procurement director|purchasing director/i,['Inköpschef']],[/procurement manager|purchasing manager/i,['Inköpschef','Inköpsansvarig']],[/^(?:procurement|purchasing)$/i,['Inköpschef','Inköpsansvarig','Inköpare','Strategiskt inköp']],[/strategic sourcing/i,['Strategisk inköpare','Strategiskt inköp']],[/project director/i,['Projektchef']],[/project manager/i,['Projektledare','Projektansvarig']],[/engineering director|technical director/i,['Teknisk chef','Ingenjörschef']],[/engineering manager|technical manager/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/^(?:engineering|technical)$/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/operations|plant/i,['Driftchef','Anläggningschef']],[/production/i,['Produktionschef']],[/maintenance/i,['Underhållschef']],[/capex|investment/i,['Investeringschef','Investeringsprojektledare']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
+    if(swedish){const map=[[/procurement director|purchasing director/i,['Inköpschef']],[/procurement manager|purchasing manager/i,['Inköpschef','Inköpsansvarig']],[/^(?:procurement|purchasing)$/i,['Inköpschef','Inköpsansvarig','Inköpare','Strategiskt inköp']],[/strategic sourcing/i,['Strategisk inköpare','Strategiskt inköp']],[/project director/i,['Projektchef']],[/project manager/i,['Projektledare','Projektansvarig']],[/engineering director|technical director/i,['Teknisk chef','Ingenjörschef']],[/engineering manager|technical manager/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/^(?:engineering|technical)$/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/operations|plant|site manager/i,['Driftchef','Anläggningschef','Platschef','Site Manager']],[/^design engineer$/i,['Konstruktör','Ordermottagare/konstruktör']],[/production/i,['Produktionschef']],[/maintenance/i,['Underhållschef']],[/capex|investment/i,['Investeringschef','Investeringsprojektledare']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
     return [...new Set(aliases)].slice(0,8);
   }
   function buyerOpportunityTerms(candidate={}){
@@ -1598,20 +1598,23 @@
     return {status:'not_researched',reason:'Public contact research not completed; excluded from recommendations'};
   }
   function buyerCoveragePlan(pool=[],profile={},candidate={}){
-    const roles=buyerSelectionRoles(profile),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[];
+    const roles=buyerSelectionRoles(profile),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[],directoryQueries=[];
     for(const family of missing){
       const titles=roles.filter(role=>buyerFunction(role)===family).flatMap(role=>localBuyerRoleAliases(role,candidate.market));
       const aliases=[...new Set(titles)].map(title=>'"'+title+'"').join(' OR '),company='"'+clean(candidate.company)+'"';
       if(candidate.domain)queries.push(`site:${companyIdentityDomain(candidate.domain)} (${aliases}) (contact OR kontakt OR team OR project OR projekt)`);
-      queries.push(`site:linkedin.com/in/ ${company} (${aliases})`);
+      directoryQueries.push(`site:linkedin.com/in/ ${company} (${aliases})`);
     }
+    queries.push(...directoryQueries);
     for(const family of missing){const titles=roles.filter(role=>buyerFunction(role)===family).flatMap(role=>localBuyerRoleAliases(role,candidate.market));queries.push(` "${clean(candidate.company)}" (${[...new Set(titles)].map(title=>'"'+title+'"').join(' OR ')}) (interview OR appointment OR management)`);}
     // Source breadth before optional location refinements. Missing functions get
     // an equal chance; a large number of project profiles is not a stop condition.
     const shortfall=Math.max(0,10-rankedBuyerShortlist(pool,profile,candidate).people.length);
     if(shortfall){
-      const company='"'+clean(candidate.company)+'"',titles=roles.flatMap(role=>localBuyerRoleAliases(role,candidate.market)).map(title=>'"'+title+'"').join(' OR ');
-      const breadth=[`site:${companyIdentityDomain(candidate.domain)} (management OR leadership OR team OR ledning) (${titles})`,`${company} (${titles}) (management OR appointment OR interview OR contact)`];
+      const company='"'+clean(candidate.company)+'"';
+      // Broad source discovery must not concatenate every role and alias: that
+      // exceeds the provider's 600-character search limit before any search runs.
+      const breadth=[`site:${companyIdentityDomain(candidate.domain)} (management OR leadership OR team OR ledning OR kontakt OR personal)`,`${company} (management OR appointment OR interview OR contact OR personal)`];
       // Reserve source breadth for a short roster even when all functions are covered.
       queries.splice(6,queries.length,...breadth);
     }
@@ -1638,6 +1641,30 @@
       const claim=new RegExp("(?:^|[.!?\\n])\\s*([\\p{Lu}][\\p{L}’'-]+(?:\\s+[\\p{Lu}][\\p{L}’'-]+){1,3})\\s+(?:is|är)\\s+([^.!?\\n]{2,100}?)\\s+(?:of|for|at|för|på|av)\\s+"+escaped+"(?=\\s*(?:since|sedan|[,.]|$))",'gu');
       for(const match of text.matchAll(claim))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1].replace(/^(?:(?:Close|Menu|Management|Leadership|Koncernledning|Stäng)\s+)+/u,'')+' | '+match[2].replace(/^the /,'')+' | '+companyText,description:match[0]});
       if(/management|leadership|koncernledning|ledning/i.test(url))for(const match of String(row.markdown||row.content||'').matchAll(/#{2,4}\s+([\p{Lu}][\p{L}’'-]+(?:[ \t]+[\p{Lu}][\p{L}’'-]+){1,3})[ \t]*\n+[ \t]*([^\n]{3,120})/gu))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1]+' | '+match[2]+' | '+companyText,description:match[1]+' is '+match[2]+' at '+companyText});
+    }
+    // Official contact pages commonly publish adjacent name/title blocks, not
+    // LinkedIn-style result titles. Read only target-domain staff evidence; never
+    // infer employment from a third-party page containing the company name.
+    for(const row of rows){
+      const url=normalizeUrl(row.url||row.metadata?.sourceURL);
+      if(row.sourceRead!==true||!profile.companyDomain||companyIdentityDomain(url)!==companyIdentityDomain(profile.companyDomain))continue;
+      const body=String(row.markdown||row.content||'').slice(0,60000);
+      if(!/contact|kontakt|team|staff|people|management|leadership|personal|om-oss|about/i.test(url)&&!/^#{1,4}\s*(?:personal|team|staff|people|management|leadership|ledning)\b/im.test(body))continue;
+      const lines=[];
+      let staffSection=/\/(?:team|staff|people|management|leadership|ledning|personal)(?:\/|$)/i.test(new URL(url).pathname);
+      for(const rawLine of body.split(/\r?\n/)){
+        const line=rawLine.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*#{1,6}\s*|[*_]/g,'').trim();
+        if(!line)continue;
+        if(/^(?:(?:our|meet (?:our|the)|vårt|våra)\s+)?(?:personal|team|staff|people|management|leadership|ledning|komanda|darbinieki|vadība)\s*[:.]?$/iu.test(line)){staffSection=true;continue;}
+        if(/^\s*#{1,6}\s/.test(rawLine)&&(!hasFullBuyerName(line)||/customer|client|testimonial|partner|kunder|former|previous|tidigare|kontakta|contact|öppettider|opening|visit/i.test(line))){staffSection=false;continue;}
+        if(staffSection)lines.push(line);
+      }
+      for(let i=0;i+1<lines.length;i++){
+        const name=lines[i],role=lines[i+1];
+        if(name.length>100||role.length>120||!hasFullBuyerName(name)||!/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(name)||/\b(?:former|previous|retired|tidigare)\b/i.test(role))continue;
+        if(!roleRelevance({title:role},buyerSelectionRoles(profile)))continue;
+        officialClaims.push({...row,title:name+' | '+role+' | '+companyText,description:name+'\n'+role});
+      }
     }
     for(const [index,row] of [...officialClaims,...rows].entries()){
       const rawUrl=normalizeUrl(row.url||row.metadata?.sourceURL),linkedIn=normalizeLinkedInUrl(rawUrl),title=clean(row.title);

@@ -1,12 +1,12 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const D=require('../discovery-engine.js');
 const ui=fs.readFileSync(require('node:path').join(__dirname,'../discovery-ui.js'),'utf8');
-function runtime({identity,firecrawlError=true,groundedError=true,websiteError=false}){
+function runtime({identity,firecrawlError=true,groundedError=true,websiteError=false,websitePages=[]}){
  const start=ui.indexOf('async function searchDecisionMakers('),end=ui.indexOf('function saveLocalPipeline',start);
  const helpers=ui.slice(ui.indexOf('function buyerResearchIncomplete('),ui.indexOf('function buyerProviderStatusHtml('));
  const candidate={company:'LKAB',domain:'lkab.com',website:'https://lkab.com',market:'Sweden',buyerFit:{purchase:'plant equipment installation project procurement'},people:[]};
  const state={profile:{decisionMakers:'CEO'}};
- const context={AbortController,setTimeout,clearTimeout,Date,console,window:{LeadIntelFirstPartyResearch:{collectWebsiteEvidence:async()=>{if(websiteError)throw Object.assign(new Error("website extraction unavailable"),{status:503});return {pages:[]}}}},LeadIntelDiscovery:D,mainState:()=>state,canonicalDomain:D.canonicalDomain,showToast:()=>{},saveDiscovery:()=>{},renderAll:()=>{},discovery:{pipeline:[],selectedProspects:[candidate]},DISCOVERY_REQUEST_TIMEOUT_MS:1,LEADINTEL_API:'https://example.test',crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,bridge:()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>identity}),fetchBuyerResearch:async()=>{if(groundedError)throw Object.assign(new Error('grounded timed out'),{name:'AbortError'});return {ok:true,json:async()=>({results:[]})}},searchBuyerPublicPages:async()=>{if(firecrawlError)throw Object.assign(new Error('upstream unavailable'),{status:502});return []},BUYER_RESEARCH_VERSION:'20261004-research-state-v1',PUBLIC_NAME_CHECK_VERSION:'test',findPublicProspectContacts:async()=>{},refreshCrmState:async()=>{}};
+ const context={AbortController,setTimeout,clearTimeout,Date,console,window:{LeadIntelFirstPartyResearch:{collectWebsiteEvidence:async()=>{if(websiteError)throw Object.assign(new Error("website extraction unavailable"),{status:503});return {pages:websitePages}}}},LeadIntelDiscovery:D,mainState:()=>state,canonicalDomain:D.canonicalDomain,showToast:()=>{},saveDiscovery:()=>{},renderAll:()=>{},discovery:{pipeline:[],selectedProspects:[candidate]},DISCOVERY_REQUEST_TIMEOUT_MS:1,LEADINTEL_API:'https://example.test',crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,bridge:()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>identity}),fetchBuyerResearch:async()=>{if(groundedError)throw Object.assign(new Error('grounded timed out'),{name:'AbortError'});return {ok:true,json:async()=>({results:[]})}},searchBuyerPublicPages:async()=>{if(firecrawlError)throw Object.assign(new Error('upstream unavailable'),{status:502});return []},BUYER_RESEARCH_VERSION:'20261004-research-state-v1',PUBLIC_NAME_CHECK_VERSION:'test',findPublicProspectContacts:async()=>{},refreshCrmState:async()=>{}};
  vm.createContext(context);vm.runInContext(helpers+'\n'+ui.slice(start,end)+'\nthis.run=searchDecisionMakers;',context);
  return {context,candidate};
 }
@@ -79,4 +79,18 @@ test('previous pending identities are researched even with a populated public sh
  assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),false);
  const restored=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]});assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].name,'Markus Andersson');
  assert.equal(restored.selectedProspects[0].buyerDiscovery.resultDiagnostics.find(d=>d.source==='identity_resolution').accepted,true);
+});
+
+
+test('fresh official staff pages survive unavailable search providers and publish before directory work',async()=>{
+ const markdown='# Contact\n### Personal\nArad Beck\nOrdermottagare/konstruktör\nLars Olausson\nOrdermottagare/konstruktör\nRikard Lejåker\nOrdermottagare/konstruktör\nChrister Larsson\nPlatschef';
+ const page={url:'https://wernedal-co.se/kontakta-oss/',title:'Contact Wernedal & CO',text:markdown,fetchedAt:'2026-10-20T00:00:00Z'};
+ const {context,candidate}=runtime({websitePages:[page],identity:{ok:true,people:[]}});
+ Object.assign(candidate,{company:'Wernedal & CO',domain:'wernedal-co.se',website:'https://wernedal-co.se',buyerFit:{purchase:'Metal manufacturing and technical evaluation'}});
+ let firstSearchPeople=null;context.searchBuyerPublicPages=async()=>{if(firstSearchPeople===null)firstSearchPeople=candidate.people.length;throw Object.assign(new Error('Unavailable'),{status:502});};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ assert.equal(firstSearchPeople,4,'official staff must be visible before optional external searches');
+ assert.equal(candidate.people.length,4);assert.equal(candidate.buyerDiscovery.pool.length,4);
+ assert.ok(candidate.buyerDiscovery.resultDiagnostics.some(row=>row.accepted&&row.parsedName==='Christer Larsson'));
+ assert.equal(candidate.buyerDiscovery.researchIncomplete,true,'provider gaps remain explicit even with source-backed contacts');
 });
