@@ -3325,6 +3325,17 @@
       "contains": [
         "roleSelectionContext:candidate.buyerDiscovery?.roleSelectionContext"
       ]
+    },
+    {
+      "id": "crm-refresh-scoped-recovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "CRM refresh",
+        "request_timeout",
+        "crm-refresh:"
+      ]
     }
   ],
   "retry": {
