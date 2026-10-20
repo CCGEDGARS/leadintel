@@ -13,7 +13,7 @@ export async function confirmPublicWorkEmail(env,context,companyId,input={}, {lo
   if(existing&&policy.accepted(existing,company.normalized_domain,'public_confirmed'))return existing;
   const attributable=row=>{
     const actual=row?.metadata?.sourceURL||row?.metadata?.url||source;
-    return policy.publicSource(email,name,actual,company.normalized_domain)&&globalThis.LeadIntelDiscovery.sourcedBuyerEmails({name},company.normalized_domain,[{url:actual,markdown:row?.markdown||row?.content||row?.text}]).some(item=>item.email===email);
+    return policy.publicSource(email,name,actual,company.normalized_domain)&&globalThis.LeadIntelDiscovery.sourcedBuyerEmails({name,title:input.title},company.normalized_domain,[{url:actual,markdown:row?.markdown||row?.content||row?.text,sourceRead:true}],company.company_name).some(item=>item.email===email);
   };
   let row,sourceMethod='public_scrape';
   if(loadPage)row=await loadPage(source);else{

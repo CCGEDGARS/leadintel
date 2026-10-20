@@ -124,7 +124,15 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   const buyerName=person=>String(person.publicName||person.name||'').trim().toLowerCase();
   const knownPeople=[...priorPeople.filter(person=>!pool.some(current=>buyerName(current)===buyerName(person))),...pool];
   const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel)&&!knownPeople.some(person=>buyerName(person)===buyerName(p)&&!discovery.qualifyBuyer(person,profile,candidate).eligible));
-  const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
+  // A user may explicitly select a published company contact as a routing recipient.
+  // Keep the actual role; a confirmed email never invents purchasing authority.
+  const selectedCompanyContacts=priorPeople.filter(person=>discovery.isSelectedCompanyContact(person,candidate));
+  for(const contact of verified){
+    if(!selectedCompanyContacts.some(person=>buyerName(person)===buyerName(contact)&&String(person.publicEmail).toLowerCase()===String(contact.normalized_email||contact.work_email).toLowerCase()))continue;
+    if(!globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel)||eligible.some(row=>row.id===contact.id))continue;
+    eligible.push(contact);
+  }
+  const pinned=new Set([...candidate.people.filter(p=>p.kept),...selectedCompanyContacts].map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   const crmContext={workspaceId,userId,role:'owner'};
   const complete=async contact=>{

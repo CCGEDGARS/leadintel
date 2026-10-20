@@ -229,3 +229,14 @@ test('automatic company discovery reuses scoped search feedback and geographic s
   assert.equal(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json,before,'acquisition feedback does not rewrite saved research');
  }finally{globalThis.fetch=original;}
 });
+test('automatic workflow reuses a user-selected published company contact with its actual role and no paid reveal',async()=>{
+ const {upsertCrmCompany}=await import('../src/crm.js'),{confirmPublicWorkEmail}=await import('../src/public-email-confirmation.js');
+ for(const kept of [true,false]){
+  const env=await fixture(),context={workspaceId:'w1',userId:'u1',role:'owner'},target=(await upsertCrmCompany(env.DB,context,{company_name:'Example',domain:'example.com'})).company;
+  const person={id:'public-catrin',name:'Catrin Haglund',publicName:'Catrin Haglund',title:'Administration',organization:'Example',publicNameUrl:'https://example.com/team',publicEmail:'catrin@example.com',publicEmailUrl:'https://example.com/team',kept,contactPurpose:'company_contact'};
+  await confirmPublicWorkEmail(env,context,target.id,{...person,person_id:person.id,email:person.publicEmail,source_url:person.publicEmailUrl},{loadPage:async()=>({markdown:'**Catrin Haglund**\nAdministration\ncatrin@example.com'})});
+  env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id='w1'").run(JSON.stringify({main,discovery:{selectedProspects:[{company:'Example',domain:'example.com',people:[person]}]}}));
+  const original=globalThis.fetch,calls=[];globalThis.fetch=async(url)=>{calls.push(String(url));return new Response(JSON.stringify({data:[]}));};
+  try{const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:false}}),guard:async()=>{}});if(kept){assert.equal(result.candidates[0].contact.email,'catrin@example.com');assert.equal(result.candidates[0].contact.title,'Administration');}else assert.equal(result.candidates.length,0);assert.equal(calls.some(url=>/people\/match|hunter\.io/.test(url)),false);}finally{globalThis.fetch=original;}
+ }
+});

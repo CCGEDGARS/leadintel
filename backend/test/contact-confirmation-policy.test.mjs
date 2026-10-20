@@ -62,3 +62,10 @@ test('an exact official address published with at/dot notation is confirmed with
  assert.equal(contact.work_email,input.email);assert.equal(contact.email_status,'public_confirmed');assert.equal(contact.verification_provider,'Public source');
  assert.equal(P.accepted(contact,'example.com','public_confirmed'),true);
 });
+test('structured staff cards confirm a published first-name work address for manual and automatic use',async()=>{
+ const {env,company}=await fixture(),person={name:'Johnny Spång',title:'Logistics',email:'johnny@example.com',source_url:'https://example.com/team',person_id:'public-johnny'};
+ const contact=await confirmPublicWorkEmail(env,context,company.id,person,{loadPage:async()=>({markdown:'## Team\n**Johnny Spång**\nLogistics\n\nPhone 123456789\n\njohnny@example.com\n\n**Catrin Haglund**\nAdministration\ncatrin@example.com'})});
+ assert.equal(contact.email_status,'public_confirmed');let calls=0;
+ const ready=await verifyAutomaticEmail(env,'w1',person.email,{companyDomain:'example.com',confirmationLevel:'public_confirmed',readPolicy:async()=>({enabled:true}),resolveCredential:async()=>{calls++;throw Error('No paid approval');},fetcher:async()=>{calls++;throw Error('No paid approval');}});
+ assert.equal(ready.verified,true);assert.equal(ready.provider,'Public source');assert.equal(calls,0);
+});

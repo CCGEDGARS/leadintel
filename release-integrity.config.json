@@ -3449,6 +3449,46 @@
       "contains": [
         "qualification-display.js?v=20261020-v1"
       ]
+    },
+    {
+      "id": "published-company-email-actions",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function publishedCompanyContactsHtml(",
+        "data-use-company-contact",
+        "function hydratePublishedCompanyEmails(",
+        "function confirmPublishedCompanyContacts("
+      ]
+    },
+    {
+      "id": "published-company-email-green-style",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".published-company-contacts .buyer-proceed-ready{background:#0d6453"
+      ]
+    },
+    {
+      "id": "published-company-email-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-contact-record=20261020-v5"
+      ]
+    },
+    {
+      "id": "selected-published-company-contact-policy",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function isSelectedCompanyContact(",
+        "function officialStaffEmailClaim("
+      ]
     }
   ],
   "retry": {
