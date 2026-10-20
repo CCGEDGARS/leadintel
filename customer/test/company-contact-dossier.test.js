@@ -48,3 +48,17 @@ test('software and professional-service staff are retained without manufacturing
  const source={url:'https://advisory.example/team',sourceRead:true,markdown:'## Our team\n**Anna Andersson**\nSenior Consultant\n\n**Bertil Berg**\nPeople Partner\n\n**Clara Clark**\nCEO\n\n**Diana Davis**\nSoftware Engineer'};
  const contacts=D.discoverCompanyContacts([source],target);assert.deepEqual(contacts.map(p=>p.name).sort(),['Anna Andersson','Bertil Berg','Clara Clark','Diana Davis']);assert.ok(contacts.every(p=>p.organization===target.company));
 });
+test('service page titles are never company contacts and old unvalidated dossier entries are removed',()=>{
+ const servicePages=[{url:'https://www.wernedal-co.se/',sourceRead:true,title:'Mekanisk verkstad Stockholm | Wernedal & CO',markdown:'## Svetsning, stansning och legotillverkning\nWernedal & CO erbjuder tillverkning.'},{url:'https://www.wernedal-co.se/cad/',sourceRead:true,title:'CAD Program | 3D CAD ritning | Wernedal & CO',markdown:'Wernedal & CO hjälper med CAD.'}];
+ const stale=[{name:'CAD Program',publicName:'CAD Program',title:'3D CAD ritning',organization:company.company,publicNameUrl:servicePages[1].url}];
+ const contacts=D.discoverCompanyContacts([...servicePages,staff,registry],company,stale);
+ assert.equal(contacts.length,7);assert.ok(contacts.every(p=>p.companyContactSource));
+ const restored=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',buyerDiscovery:{companyContacts:[...contacts,...stale]}}]}).selectedProspects[0];
+ assert.equal(restored.buyerDiscovery.companyContacts.length,7);
+ assert.equal(C.mapDiscoveryCandidateToCrm(restored).contacts.length,7);
+});
+test('merging contact research preserves validated provenance and published details',()=>{
+ const contacts=D.discoverCompanyContacts([staff,registry],company),person=contacts.find(p=>p.name==='Johnny Spång');
+ const merged=D.mergeCompanyContacts(contacts,[{...person,companyContactSource:'',publicEmail:''}],company);
+ assert.equal(merged.length,7);assert.equal(merged.find(p=>p.name===person.name).companyContactSource,'official_staff');assert.equal(merged.find(p=>p.name===person.name).publicEmail,person.publicEmail);
+});
