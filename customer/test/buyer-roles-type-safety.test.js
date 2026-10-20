@@ -45,3 +45,14 @@ test('reloading an unchanged role selection preserves the researched buyer list'
  const candidate=ctx.loadDiscovery().selectedProspects[0];
  assert.equal(candidate.buyerRolesChanged,false);assert.equal(candidate.people[0].name,'Anna Andersson');
 });
+
+test('reload preserves pending company-specific role edits and their hold',()=>{
+ const main={profile:{priorityOffers:'Industrial installation workforce',decisionMakers:'Project Director; Procurement Director'},market:{icps:[{id:'icp-core',type:'core',active:true,buyerRoles:'Project Director; Procurement Director'}]}};
+ const edited='HR Director; Procurement Director';
+ const stored=JSON.stringify({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:edited,buyerRolesChanged:true,people:[{id:'p1',name:'Anna Andersson',title:'HR Director',organization:'Example'}]}]});
+ const context={LeadIntelDiscovery:D,localStorage:{getItem:()=>stored},MAIN_STORAGE_KEY:'main',DISCOVERY_STORAGE_KEY:'discovery',recoveredInterruptedRun:false,mainState:()=>main,window:{}};
+ vm.createContext(context);vm.runInContext(slice('function loadDiscovery(','function saveDiscovery('),context);
+ const candidate=context.loadDiscovery().selectedProspects[0];
+ assert.equal(candidate.buyerRoles,edited);assert.equal(candidate.buyerRolesChanged,true);
+ assert.equal(D.qualifyBuyer(candidate.people[0],{decisionMakers:edited},candidate).eligible,false);
+});

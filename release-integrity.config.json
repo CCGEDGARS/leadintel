@@ -3303,6 +3303,28 @@
         "const confirmedEmail=person=>",
         "confirmedEmail(b)"
       ]
+    },
+    {
+      "id": "buyer-expanded-role-reload-preservation",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "const approvedCoreRoles=new Set",
+        "candidate.buyerRolesChanged===true&&stored",
+        "!approvedCoreRoles.has(role.toLowerCase())",
+        "function buyerRoleSelectionContext(main={})",
+        "research.roleSelectionContext!==buyerRoleSelectionContext(main)"
+      ]
+    },
+    {
+      "id": "buyer-role-crm-provenance",
+      "type": "text",
+      "url": "/customer/crm-engine.js",
+      "status": 200,
+      "contains": [
+        "roleSelectionContext:candidate.buyerDiscovery?.roleSelectionContext"
+      ]
     }
   ],
   "retry": {
