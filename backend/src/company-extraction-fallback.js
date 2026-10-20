@@ -18,7 +18,7 @@ export async function generateCompanyExtraction({
     return {ok:true,result:await runProvider(primaryIntegration,request),fallback:{status:'not_used',used:false}};
   }catch(primaryError){
     const reason=retryReason(primaryError);
-    const isEligible=task==='company-extraction'
+    const isEligible=['company-extraction','buyer-fit'].includes(task)
       &&fallbackProvider==='gemini'
       &&['openai','anthropic'].includes(primaryIntegration?.provider)
       &&Boolean(reason);

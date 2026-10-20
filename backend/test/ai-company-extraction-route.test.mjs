@@ -42,12 +42,42 @@ async function makeEnv(activeProvider='openai'){
   };
 }
 
-function generationRequest(){
+function generationRequest(task='company-extraction',signal){
   return new Request(`https://leadintel-api.example/api/ai/generate?workspace_id=${WORKSPACE}`,{
-    method:'POST',headers:{'Content-Type':'application/json','Cookie':'leadintel_session=test-session'},
-    body:JSON.stringify({task:'company-extraction',fallback_provider:'gemini',system:'Extract named companies from supplied evidence.',prompt:'E1 https://evidence.example/northstar-expansion',max_output_tokens:1800})
+    method:'POST',signal,headers:{'Content-Type':'application/json','Cookie':'leadintel_session=test-session'},
+    body:JSON.stringify({task,fallback_provider:'gemini',system:'Extract named companies from supplied evidence.',prompt:'E1 https://evidence.example/northstar-expansion',max_output_tokens:1800})
   });
 }
+
+test('buyer-fit bounds a stalled primary and reuses the identical evidence with configured Gemini',async()=>{
+  const originalFetch=globalThis.fetch,originalTimeout=globalThis.setTimeout,calls=[];
+  const env=await makeEnv(),controller=new AbortController();
+  const watchdog=originalTimeout(()=>controller.abort(),250);
+  globalThis.setTimeout=(fn,ms,...args)=>originalTimeout(fn,ms===20000?5:ms,...args);
+  globalThis.fetch=async(url,options)=>{
+    calls.push({url:String(url),body:JSON.parse(options.body)});
+    if(String(url).includes('api.openai.com'))return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Timeout','AbortError')),{once:true}));
+    return Response.json({candidates:[{content:{parts:[{text:'{"companies":[{"domain":"northstar.example","fit":20}]}'}]}}]});
+  };
+  try{
+    const response=await handleAiRoute(generationRequest('buyer-fit',controller.signal),env,{}),payload=await response.json();
+    assert.equal(response.status,200,JSON.stringify(payload));
+    assert.equal(payload.provider,'gemini');assert.equal(payload.fallback.reason,'timeout');
+    assert.equal(calls.length,2);assert.equal(calls[0].body.input,calls[1].body.contents[0].parts[0].text);
+    assert.deepEqual(env.DB.lastUsed,['gemini']);
+  }finally{clearTimeout(watchdog);globalThis.fetch=originalFetch;globalThis.setTimeout=originalTimeout;}
+});
+
+test('canceling buyer-fit never starts a fallback provider request',async()=>{
+  const originalFetch=globalThis.fetch,calls=[],controller=new AbortController(),env=await makeEnv();
+  globalThis.fetch=async(url,options)=>{
+    calls.push(String(url));controller.abort();throw new DOMException('Canceled','AbortError');
+  };
+  try{
+    const response=await handleAiRoute(generationRequest('buyer-fit',controller.signal),env,{});
+    assert.equal(response.status,502);assert.equal(calls.length,1);assert.deepEqual(env.DB.lastUsed,[]);
+  }finally{globalThis.fetch=originalFetch;}
+});
 
 test('AI generation retries the same company evidence with configured Gemini after OpenAI quota failure',async()=>{
   const originalFetch=globalThis.fetch;const calls=[];
