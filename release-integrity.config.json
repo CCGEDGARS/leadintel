@@ -3207,6 +3207,69 @@
       "contains": [
         "stage-back=20261020-v1"
       ]
+    },
+    {
+      "id": "canonical-profile-render-ownership",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function acceptCanonicalProfileEdits(event)",
+        "globalThis.LeadIntelIntelligenceProfileRuntime.apply();updateApprovalUI();return;",
+        "event.detail?.source!==\"canonical-profile-edit\""
+      ]
+    },
+    {
+      "id": "buyer-research-bounded-lifecycle",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const waitForRun=async operation=>",
+        "BUYER_RESEARCH_CANCELED",
+        "Cross-checking buyer evidence with grounded web research",
+        "scopeIsCurrent"
+      ]
+    },
+    {
+      "id": "active-research-safe-sync-retry",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "sync.equal(sync.project(base.payload)",
+        "base.version===Number(readDirtyLocalState()?.base_version??bridge.stateVersion)",
+        "Research running \u00b7 changes preserved for sync retry"
+      ]
+    },
+    {
+      "id": "buyer-task-history-workspace-scope",
+      "type": "text",
+      "url": "/customer/attention-centre-model.js",
+      "status": 200,
+      "contains": [
+        "function buyerTaskScope(task,workspaceId)",
+        "task.type==='decision-maker-search'?buyerTaskScope(task,workspaceId)"
+      ]
+    },
+    {
+      "id": "buyer-task-history-account-gate",
+      "type": "text",
+      "url": "/customer/attention-centre.js",
+      "status": 200,
+      "contains": [
+        "root.LeadIntelAccountCache?.current?.()===true",
+        "root.LeadIntelAccountCache?.hasWorkspace?.()===true"
+      ]
+    },
+    {
+      "id": "buyer-runtime-recovery-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-runtime-recovery=20261020-v1"
+      ]
     }
   ],
   "retry": {

@@ -376,3 +376,67 @@ test('a safe sync merge never reloads an active company research task',async()=>
  active=false;assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).saved,true);
  assert.ok(events.includes('reload'),'the merged workspace can load safely after research completes');
 });
+
+test('an active research task saves through an unchanged server revision without replacing its live state',async()=>{
+ const puts=[];let server;const {root,values,events}=load(async(input,options)=>{
+  puts.push(JSON.parse(options.body));
+  return puts.length===1?new Response(JSON.stringify({current:server}),{status:409}):new Response(JSON.stringify({saved:true,version:5}));
+ },{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:structuredClone(base)};
+ const research={selectedProspects:[{domain:'buyer.example',people:[{id:'saved',name:'Selected buyer',identitySource:'https://buyer.example/team'}]}],rawResults:[{url:'https://buyer.example/news',text:'Exact source evidence retained during the active run.'}]};
+ values.set('leadintel_customer_v2_discovery',JSON.stringify(research));
+ root.LeadIntelTaskCentre={list:()=>[{id:'buyer-search',status:'running'}]};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ let applied=0;const setItem=root.localStorage.setItem;root.localStorage.setItem=function(key,value){if(['leadintel_customer_v2_state','leadintel_customer_v2_discovery'].includes(key))applied++;return setItem.call(this,key,value);};
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.deepEqual(puts.map(put=>put.version),[3,4]);
+ assert.deepEqual(puts[1].payload.discovery,research);assert.equal(applied,0,'revision acknowledgement must not replace in-memory research from storage');
+ assert.equal(events.includes('reload'),false);assert.equal(root.LeadIntelServerBridge.conflict,false);
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,5);
+});
+
+test('an active research revision retry defers real remote changes and retains the eventual conflict gate',async()=>{
+ let writes=0,server;const {root,values,events}=load(async()=>{
+  writes++;return new Response(JSON.stringify({current:server}),{status:409});
+ },{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:structuredClone(base)};
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'New local offer'}}));
+ let active=true;root.LeadIntelTaskCentre={list:()=>active?[{status:'running'}]:[]};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const fetch=root.fetch;let calls=0;root.fetch=async(...args)=>{if(++calls===2)server={version:5,payload:{...base,main:{...base.main,answers:{offer:'Competing remote offer'}}}};return fetch(...args);};
+ const pending=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(writes,2);assert.equal(pending.reason,'research_in_progress');assert.equal(events.includes('reload'),false);
+ assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'New local offer');assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,3);
+ active=false;const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.conflict,true);assert.equal(root.LeadIntelServerBridge.conflict,true);
+ assert.equal(JSON.parse(values.get(RECOVERY)).server.payload.main.answers.offer,'Competing remote offer');
+ assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'New local offer');
+});
+
+test('continuous revision-only contention during research retries at most three writes per save cycle',async()=>{
+ let writes=0,base;const {root,values,events}=load(async()=>new Response(JSON.stringify({current:{version:4+writes++,payload:base}}),{status:409}),{withBridge:true});
+ base=establishBase(root,values);values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Unsynced local offer'}}));
+ root.LeadIntelTaskCentre={list:()=>[{status:'running'}]};Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(writes,3);assert.equal(result.saved,false);assert.equal(result.retryable,true);assert.equal(result.reason,'concurrent_save');
+ assert.equal(events.includes('reload'),false);assert.equal(root.LeadIntelServerBridge.conflict,false);
+ assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Unsynced local offer');assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,3);
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_server_dirty')).base_version,3);
+});
+
+test('a failed revision retry keeps the original baseline for a later competing edit',async()=>{
+ let writes=0,server;const {root,values}=load(async()=>{
+  if(++writes===2)throw new TypeError('Failed to fetch');
+  return new Response(JSON.stringify({current:server}),{status:409});
+ },{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:structuredClone(base)};
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Local offer after research'}}));
+ let active=true;root.LeadIntelTaskCentre={list:()=>active?[{status:'running'}]:[]};Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ await assert.rejects(()=>root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}),/Failed to fetch/);
+ assert.equal(root.LeadIntelServerBridge.stateVersion,4);assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,3);
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_server_dirty')).base_version,3);
+ active=false;server={version:5,payload:{...base,main:{...base.main,answers:{offer:'Competing remote offer'}}}};
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).conflict,true);
+ assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer after research');
+ assert.equal(JSON.parse(values.get(RECOVERY)).server.payload.main.answers.offer,'Competing remote offer');
+});
