@@ -30,3 +30,6 @@ The authenticated deployment test exposed an existing scheduler branch that rera
 
 ### Whole-record parser acceptance correction
 Authenticated acceptance exposed two service-page headings in the whole-company record. The broad staff path now consumes only extracted named staff claims, never raw page/result titles. Company-record entries retain validated provenance (official staff, public identity, exact-employer directory, or registry role); unvalidated records from the initial release are discarded during normalization/merge and reacquired from source, while saved buyer cards remain intact. A regression combines homepage/CAD service titles, staff, registry and stale records and requires exactly seven sourced people with two published emails after normalization/CRM mapping.
+
+### CRM remediation
+The first authenticated run had persisted two invalid page-title contacts before the parser correction. Exposed the existing workspace-scoped soft-archive endpoint through writer-only CRM contact actions, with in-app confirmation and company/workspace guards across the asynchronous confirmation. Archiving retains company and activity history, and archived identities cannot silently reappear. Regression covers action visibility, exact contact targeting, cancel and workspace switch.

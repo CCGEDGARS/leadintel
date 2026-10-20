@@ -86,7 +86,7 @@
     if(source.toLowerCase()==="manual")return "Manual";
     return source;
   }
-  function contactsHtml(contacts=[]){
+  function contactsHtml(contacts=[],options={}){
     const rows=Array.isArray(contacts)?contacts:[];
     if(!rows.length)return '<div class="crm-detail-empty">No contacts saved.</div>';
     return rows.map(contact=>{
@@ -100,7 +100,7 @@
       const link=profileUrl
         ?`<a class="crm-contact-linkedin" href="${esc(profileUrl)}" target="_blank" rel="noopener noreferrer">View LinkedIn profile ↗</a><small class="crm-contact-provenance">${publicProfileUrl===profileUrl?"Public profile match · ":source==="Apollo"?"Apollo-provided identity link · ":""}Confirm the current role before outreach.</small>`
         :"";
-      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong>${nameEvidence?`<a href="${esc(nameEvidence)}" target="_blank" rel="noopener noreferrer">Public name source ↗</a>`:""}<span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small>${emailEvidence?`<a href="${esc(emailEvidence)}" target="_blank" rel="noopener noreferrer">Public email source ↗</a>`:""}<small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}</div>`;
+      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong>${nameEvidence?`<a href="${esc(nameEvidence)}" target="_blank" rel="noopener noreferrer">Public name source ↗</a>`:""}<span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small>${emailEvidence?`<a href="${esc(emailEvidence)}" target="_blank" rel="noopener noreferrer">Public email source ↗</a>`:""}<small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}${options.canArchive&&contact?.id?`<button class="secondary-btn small" type="button" data-crm-archive-contact="${esc(contact.id)}">Archive contact</button>`:""}</div>`;
     }).join("");
   }
   return {safePublicUrl,safeLinkedInProfileUrl,scoreBreakdownHtml,evidenceHtml,intelligenceHtml,contactsHtml};
