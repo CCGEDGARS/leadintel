@@ -49,6 +49,15 @@ function generationRequest(task='company-extraction',signal){
   });
 }
 
+test('bounded company assessments request low reasoning effort to fit the provider deadline',async()=>{
+ const originalFetch=globalThis.fetch,calls=[],env=await makeEnv();
+ globalThis.fetch=async(url,options)=>{calls.push(JSON.parse(options.body));return Response.json({output_text:'{"companies":[]}'});};
+ try{
+  const response=await handleAiRoute(generationRequest('buyer-fit'),env,{});
+  assert.equal(response.status,200);assert.deepEqual(calls[0].reasoning,{effort:'low'});
+ }finally{globalThis.fetch=originalFetch;}
+});
+
 test('buyer-fit bounds a stalled primary and reuses the identical evidence with configured Gemini',async()=>{
   const originalFetch=globalThis.fetch,originalTimeout=globalThis.setTimeout,calls=[];
   const env=await makeEnv(),controller=new AbortController();

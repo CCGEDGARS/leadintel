@@ -88,6 +88,19 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
   return context;
 }
 
+test('verification recovers a real internal URL returned by search when the home contains only consent text',async()=>{
+ const calls=[],cookie='We use cookies to improve your browsing experience. Manage cookie preferences. Accept all cookies. '.repeat(3);
+ const operating='Nordic operates equipment assembly facilities in Latvia. Our production teams integrate purchased industrial automation and commission complete machinery for business customers.';
+ const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(url,options)=>{
+  const body=JSON.parse(options.body);calls.push(body);
+  if(body.url)return {ok:true,json:async()=>({data:{markdown:body.url.endsWith('/operations')?operating:cookie,metadata:{sourceURL:body.url}}})};
+  return {ok:true,json:async()=>({data:[{url:'https://nordic.lv/operations',title:'Nordic operations',markdown:cookie}]})};
+ }});
+ const rows=await context.__firecrawlCompanySearch({kind:'verification',domain:'nordic.lv',company:'Nordic',market:'Latvia',query:'site:nordic.lv operations'},new AbortController().signal);
+ assert.ok(calls.some(body=>body.url==='https://nordic.lv/operations'));
+ assert.ok(rows.some(row=>row.text.includes('integrate purchased industrial automation')));
+});
+
 test('a permanently pending provider cannot leave Company Discovery running', async () => {
   const context = loadDiscoveryRunner();
   const completed = await Promise.race([
@@ -894,7 +907,7 @@ test('transient Firecrawl failures are retried once before being reported',async
     return {ok:true,json:async()=>({success:true,data:[{url:'https://buyer.lv/news',title:'Buyer update',description:'Company update.'}]})};
   }});
   const result=await context.__firecrawlCompanySearch({id:'verify-buyer',market:'Latvia',domain:'buyer.lv',company:'Buyer',kind:'verification',query:'site:buyer.lv expansion'});
-  assert.equal(requests,2);
+  assert.equal(requests,3,'home check, successful search and a discovered internal-page recovery');
   assert.equal(result.length,1);
 });
 

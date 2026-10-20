@@ -228,7 +228,7 @@ export async function handleAiRoute(request,env,cors={}){
       const preparedAssistant=assistant?await prepareAssistantRequest(env,{workspaceId,userId:access.user.id},body):null;
       const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
       const materials=assistant?{system:writing.system,prompt:writing.prompt,refs:[]}:await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
-      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens};
+      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;

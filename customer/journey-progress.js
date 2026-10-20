@@ -33,7 +33,7 @@
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
     const campaign=main.campaignStudio&&typeof main.campaignStudio==='object'?main.campaignStudio:{};
-    const candidates=list(discovery.candidates),pipeline=list(discovery.pipeline),prospects=list(discovery.selectedProspects),items=list(outreach.items),opportunities=list(delivery.opportunities);
+    const candidates=list(discovery.candidates).filter(item=>item&&!item.needsRecheck&&item.qualification?.eligible!==false&&item.buyerFit?.fit!==0&&item.qualification?.score!==0),pipeline=list(discovery.pipeline),prospects=list(discovery.selectedProspects),items=list(outreach.items),opportunities=list(delivery.opportunities);
     const selectedItem=items.find(item=>item?.domain===outreach.selectedDomain)||items[0]||null;
     const selectedDelivery=opportunities.find(item=>item?.domain===delivery.selectedDomain)||opportunities[0]||null;
     const drafts=selectedItem?.drafts||{};
@@ -95,7 +95,7 @@
     const availability=input.availability&&typeof input.availability==='object'?input.availability:{};
     const internal=stageSteps(input);
     const discovery=input.discovery&&typeof input.discovery==='object'?input.discovery:{};
-    const candidates=list(discovery.candidates),pipeline=list(discovery.pipeline);
+    const candidates=list(discovery.candidates).filter(item=>item&&!item.needsRecheck&&item.qualification?.eligible!==false&&item.buyerFit?.fit!==0&&item.qualification?.score!==0),pipeline=list(discovery.pipeline);
     const groups={
       1:internal[1]||[],
       2:[...(internal[2]||[]),...(internal[3]||[])],

@@ -36,5 +36,24 @@
   function claimText(value){let text=String(value||'');const heading=text.search(/(?:^|\n)\s*#{0,4}\s*(?:forward[- ]looking statements?|safe harbor|legal disclaimer)\s*(?:\n|:)/i);if(heading>=0)text=text.slice(0,heading);return text.split(/(?<=[.!?])\s+|\n+/).filter(sentence=>!DISCLAIMER.test(sentence)&&!FAILURE.test(sentence)).join('\n');}
   const GENERIC=new Set(('currently relevant development structure structures company companies business businesses market markets customer customers service services product products industrial industry industries manufacturing manufacturer manufacturers production producer producers factory factories facility facilities engineering engineer engineers equipment project projects technology technologies solution solutions organization organizations employee employees custom serial sweden swedish sverige priority priorities strategic strategy growth growing advanced innovative innovation quality high low strong leading needs need required requires requiring available provide provides providing help helps support supports supporting deliver delivers delivery improve improves improving create creates based focus focused focuses potential opportunity opportunities operations operating commercial including includes include related mainly primarily specific different various broad today tomorrow future general additional international global domestic local online should would could must have has had with from that this your their into more less very also only both other another about such each many some most every well best real data information customers outcomes effective efficient efficiency relevant successful success important new latest current established website websites analysis research description confirmed known planned verified targeting target targets demand problems challenges capability capabilities process processes investment funding expansion necessary use used using offer offers seller sellers supplier suppliers offering means intended suitable seeking searching reference references similar similarity limited existing evidence recently recent often normally typically generally and are for not our the will financial statements expectations regarding projections revenues volumes margins cash flow profitability value revenue services').split(' '));
   function terms(value){return [...new Set(clean(value).toLowerCase().normalize('NFKC').match(/[\p{L}\p{N}]+/gu)||[])].filter(word=>word.length>=4&&!GENERIC.has(word)&&!/^\d+$/.test(word));}
-  return {host,companyDomain,firstParty,publication,recency,usable,claimText,terms,isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
+  // This is page-content selection, not commercial qualification. Keep prose
+  // from every industry; consent screens and menus cannot evidence operations.
+  const RESEARCH_BOILERPLATE=/\b(?:(?:we use|this (?:site|website) uses|accept(?: all)?|reject(?: all)?|necessary|optional|third-party|tracking) cookies?|cookie (?:preferences|settings|policy|consent|notice)|manage (?:consent|preferences)|consent (?:preferences|settings|can be)|privacy policy|skip to (?:main )?content|all rights reserved|enable javascript|javascript (?:is )?(?:required|disabled)|choose your (?:country|language)|select (?:your )?(?:country|language))\b/i;
+  function researchText(value,budget=7000){
+    const blocks=claimText(value).replace(/!\[[^\]]*\]\([^)]*\)/g,' ').split(/\n+|(?<=[.!?])\s+/);
+    const prose=[];
+    for(const raw of blocks){
+      if(RESEARCH_BOILERPLATE.test(raw))continue;
+      const residual=raw.replace(/\[[^\]]*\]\([^)]*\)/g,' ').replace(/[#*_`>|\s-]/g,'');
+      if(/\[[^\]]*\]\([^)]*\)/.test(raw)&&residual.length<25)continue;
+      const text=clean(raw.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[#*_`>|]/g,' '));
+      if(text.length<12||!/[\p{L}]/u.test(text))continue;
+      const assertion=/\b(?:operates?|manufactures?|produces?|provides?|delivers?|runs?|builds?|develops?|assembles?|offers?|serves?|supplies|announc\w*|invests?|expands?|opens?|is a|are a|has a|have a|based in|headquartered in|tillverkar|producerar|erbjuder|ražo|sniedz)\b/i.test(text);
+      const navigation=(text.match(/\b(?:home|about us|products|solutions|capabilities|markets|sustainability|investors|careers|news|contact|downloads|menu|search|hem|om oss|kontakt|produkter|karriär)\b/gi)||[]).length;
+      if(navigation>=5||!/[.!?。]$/.test(text)&&!assertion)continue;
+      prose.push(text);
+    }
+    return prose.join(' ').slice(0,Math.max(0,budget));
+  }
+  return {host,companyDomain,firstParty,publication,recency,usable,claimText,terms,researchText,isResearchBoilerplate:value=>RESEARCH_BOILERPLATE.test(String(value||'')),isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
 });

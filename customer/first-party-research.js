@@ -25,13 +25,13 @@
     const ranked=[...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)),coverage=purpose==='company'?['offer','reference','technical'].map(area=>ranked.find(row=>row.area===area)).filter(Boolean):[];
     return [...coverage,...ranked.filter(row=>!coverage.includes(row))].slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
   }
-  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0}={}){
+  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0,seedUrls=[],skipHome=false}={}){
     const domain=host(website);if(!domain)throw new Error('A company website is required');if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
     const parentSignal=signal,budgetController=new AbortController();
     const abortParent=()=>budgetController.abort(parentSignal.reason);if(parentSignal?.aborted)abortParent();else parentSignal?.addEventListener('abort',abortParent,{once:true});
     const budgetTimer=maxDurationMs>0?setTimeout(()=>budgetController.abort(new DOMException('Company website check deadline reached','TimeoutError')),maxDurationMs):null;
     signal=budgetController.signal;
-    const pages=[],issues=[];
+    const pages=[],issues=[];let terminalStatus=0;
     try{
     async function read(url){
       const controller=new AbortController(),abort=()=>controller.abort(signal?.reason);
@@ -47,22 +47,27 @@
         return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,...(EvidencePolicy?.publication(data)||{}),statusCode:Number(data.metadata?.statusCode)||200,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:new Date().toISOString()};
       }finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);signal?.removeEventListener('abort',abort);}
     }
-    const home=await read(website);pages.push(home);
+    let home,homeError;
+    if(!skipHome)try{home=await read(website);pages.push(home);}catch(error){if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED')throw error;homeError=error;issues.push({url:website,reason:clean(error.message)});}
     const pageLimit=Math.max(1,Math.min(8,Number(maxPages)||5));
-    const visited=new Set([home.url.replace(/\/$/,'')]),queue=selectInternalLinks(home,home.url,purpose,6).map(url=>({url,depth:1}));
+    const seeds=seedUrls.filter(value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password&&host(url.href)===domain&&!/privacy|cookie|terms|login|signin|\.(?:pdf|zip|jpg|png|mp4)(?:$|\?)/i.test(url.pathname);}catch{return false;}}).slice(0,6);
+    const visited=new Set([String(home?.url||website).replace(/\/$/,'')]),queue=[...seeds,...(home?selectInternalLinks(home,home.url,purpose,6):[])].map(url=>({url,depth:1}));
+    if(!home&&!queue.length)throw homeError||new Error('Insufficient readable company evidence');
     while(queue.length&&pages.length<pageLimit&&visited.size<pageLimit+3){
       if(signal?.aborted)break;
       const next=queue.shift(),key=next.url.replace(/\/$/,'');if(visited.has(key))continue;visited.add(key);
       try{const page=await read(next.url);pages.push(page);
         if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue.unshift(...links.map(url=>({url,depth:next.depth+1})));}
-      }catch(error){issues.push({url:next.url,reason:clean(error.message)});}
+      }catch(error){issues.push({url:next.url,reason:clean(error.message)});if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED'){if(!pages.length)throw error;terminalStatus=Number(error.status)||0;break;}}
     }
     if(parentSignal?.aborted)throw parentSignal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
     if(signal.aborted&&!issues.length)issues.push({url:website,reason:'Company website check deadline reached'});
-    return {domain,pages,issues,coverage:{pagesRead:pages.length,pagesPlanned:visited.size,partial:issues.length>0}};
+    if(!pages.length)throw homeError||new Error('Insufficient readable company evidence');
+    return {domain,pages,issues,...(terminalStatus?{terminalStatus}:{}),coverage:{pagesRead:pages.length,pagesPlanned:visited.size,partial:issues.length>0}};
     }finally{clearTimeout(budgetTimer);parentSignal?.removeEventListener('abort',abortParent);}
   }
   function selectEvidenceText(text,budget){
+    const selected=EvidencePolicy?.researchText(text,budget);if(selected)return selected;
     const blocks=String(text||'').split(/\n+/).map(clean).filter(Boolean);
     const substantive=blocks.filter(block=>/(certific|standard|specification|experience|installation|completed|delivered|20\d{2}|manufactur|produc|equipment|machin|develop|capabilit|steel|metal|weld|assembly|mining|construction|harvest|forestry|crane|lift|tillverk|produkt)/i.test(block)&&block.replace(/\[[^\]]*\]\([^)]*\)/g,'').length>=40);
     return clean([...substantive,...blocks.filter(block=>!substantive.includes(block))].join(' ')).slice(0,budget);
