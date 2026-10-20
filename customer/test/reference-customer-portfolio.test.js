@@ -9,6 +9,19 @@ function referenceState({active=false,count=3,fingerprint='rc-a'}={}){
   return {version:3,rows,analyses:{},segments:[],activeSegmentIds:[],activeIds:active?rows.map(r=>r.id):[],activated:active,fingerprint:active?fingerprint:'',dna,publishedModel,draftDirty:false};
 }
 
+test('reading active models never traverses unrelated workspace research or the unsaved editor',()=>{
+  const reference=referenceState({active:true});
+  const state={referenceCustomerPortfolio:{lists:[{id:'saved',name:'Saved',active:true,reference}]}};
+  for(const key of ['scrapedSources','market','referenceCustomers','outreach'])Object.defineProperty(state,key,{enumerable:true,get(){throw Error(`Unrelated workspace read: ${key}`);}});
+  const model=Portfolio.getCombinedActiveModel(state);
+  assert.equal(model.models.length,1);
+  assert.equal(model.models[0].listId,'saved');
+  model.models[0].dna.dimensions[0].values.push('Changed by consumer');
+  assert.deepEqual(Portfolio.getCombinedActiveModel(state).dna.dimensions[0].values,['B2B services']);
+  state.referenceCustomerPortfolio.lists[0].active=false;
+  assert.equal(Portfolio.getCombinedActiveModel(state),null,'activation changes take effect immediately');
+});
+
 test('a current reference customer draft can be saved as a named list without activating it',()=>{
   const state={referenceCustomers:referenceState({active:false})};
   const next=Portfolio.saveCurrentList(state,{name:'Latvia Training Clients',markets:['Latvia'],purpose:'Training prospecting'});

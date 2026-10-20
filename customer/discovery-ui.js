@@ -2824,7 +2824,25 @@ function renderStatus(){if(!discovery)return;renderCompanyReviewBatch();const ma
   const clear=$("clear-company-results");if(clear)clear.disabled=discovery.status==='running'||![discovery.candidates,discovery.potentialMatches,discovery.selectedProspects,discovery.rawResults].some(rows=>rows?.length)&&!discovery.lastRunAt;
   const context=$("company-last-run-context");if(context)context.innerHTML=searchRunContextHtml();;}
 function companyQualificationProfile(main={}){const referenceDomains=(main.referenceCustomers?.rows||[]).map(r=>canonicalDomain(r.website||r.domain));const base={...(main.profile||{}),...window.LeadIntelTargeting?.profileFields?.(main),website:main.website||main.profile?.website,referenceDomains,exclusions:[main.profile?.exclusions,main.answers?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets};return LeadIntelDiscovery.effectiveTargetingProfile(base,main.market||{});}
-function qualificationAssessment(candidate,options={}){const main=mainState()||{},rules=window.LeadIntelQualificationSettings?.get?.()||{},profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})};const saved=crmCompanyByDomain(candidate.domain);const assessment=LeadIntelDiscovery.assessCompanyQualification({...candidate,lifecycle_status:saved?.lifecycle_status},profile,main.market||{},{...rules,researchedAt:options.researchedAt??discovery?.lastRunAt??candidate.researchedAt});return assessment;}
+// Cache only preparation of immutable saved context, never a qualification result.
+// Every candidate still passes the current evidence, date, rules and CRM gates.
+let qualificationContextCache=null;
+function qualificationContext(){
+  let raw;try{raw=localStorage.getItem(MAIN_STORAGE_KEY)||"{}";}catch{raw="{}";}
+  const scope=JSON.stringify([bridge()?.workspace?.id,bridge()?.session?.user?.id]);
+  const dependencies=[LeadIntelDiscovery.effectiveTargetingProfile,window.LeadIntelTargeting?.profileFields,window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel,window.LeadIntelReferenceCustomers?.getActiveReferenceModel];
+  const previous=qualificationContextCache;
+  if(previous&&previous.raw===raw&&previous.scope===scope&&dependencies.every((fn,i)=>fn===previous.dependencies[i]))return previous;
+  let main;try{main=JSON.parse(raw)||{};}catch{main={};}
+  const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})};
+  qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}};
+  return qualificationContextCache;
+}
+function qualificationAssessment(candidate,options={}){
+  const {profile,market}=qualificationContext(),rules=window.LeadIntelQualificationSettings?.get?.()||{};
+  const saved=crmCompanyByDomain(candidate.domain);
+  return LeadIntelDiscovery.assessCompanyQualification({...candidate,lifecycle_status:saved?.lifecycle_status},profile,market,{...rules,researchedAt:options.researchedAt??discovery?.lastRunAt??candidate.researchedAt});
+}
 function qualificationHtml(candidate){const assessment=qualificationAssessment(candidate);const reference=Number.isFinite(assessment.lookalikeScore)?` · Reference similarity ${assessment.lookalikeScore}/100`:'';return `<p class="candidate-fit-summary"><strong>Company fit ${assessment.score===null?'not yet scored':assessment.score+'/100'}</strong>${reference} · ${assessment.eligible?(assessment.automaticEligible?'Checked · 80+ company score':'Checked · Manual review'):'Needs verification'}</p>${!assessment.eligible?`<small>${assessment.gaps.map(esc).join(' · ')}</small>`:''}`;}
 function renderAll(){if(!discoveryMounted)return;if(window.LeadIntelPageQuality)queueMicrotask(()=>window.LeadIntelPageQuality.refresh(currentJourneyFocus()));let summary=$('company-qualification-summary');if(!summary&&window.LeadIntelQualificationSettings){summary=document.createElement('div');summary.id='company-qualification-summary';summary.className='qualification-summary';document.querySelector('#step-5 .discovery-header')?.after(summary);}window.LeadIntelQualificationSettings?.renderSummary?.();renderStatus();renderTargetList();renderSearchPreferences();renderDiscoveryFunnel();renderCandidates();renderPotentialMatches();renderPipeline();}
 function renderDiscoverySafely(){try{renderAll();return true;}catch(error){console.error("Companies page render failed",error);const run=$("run-company-discovery");if(run){run.disabled=discovery?.status==="running";run.innerHTML=discovery?.status==="running"?"Finding companies…":discovery?.status==="error"?"Retry company search <span>↻</span>":discovery?.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}return false;}}

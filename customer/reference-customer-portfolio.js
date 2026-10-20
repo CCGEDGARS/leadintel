@@ -101,7 +101,9 @@
     next.referenceCustomerPortfolio=normalizePortfolio(next.referenceCustomerPortfolio);return next;
   }
   function getActiveModels(state={}){
-    const next=ensurePortfolio(state);return next.referenceCustomerPortfolio.lists.filter(x=>x.active&&x.reference?.publishedModel?.active).map(list=>({
+    // This read runs for every company assessment. Do not clone the workspace
+    // (including scraped pages and reports) just to read published references.
+    const portfolio=normalizePortfolio(state?.referenceCustomerPortfolio||{});return portfolio.lists.filter(x=>x.active&&x.reference?.publishedModel?.active).map(list=>({
       listId:list.id,listName:list.name,markets:[...list.markets],purpose:list.purpose,
       ...clone(list.reference.publishedModel),active:true
     }));
