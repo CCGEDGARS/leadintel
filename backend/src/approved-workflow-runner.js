@@ -1,4 +1,4 @@
-import stateBudget from '../../customer/state-budget.js';
+import {readOwnedPayload} from './workspace-record-store.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
 // Reuse the same evidence, exclusion and role qualification engine as the customer journey.
@@ -82,7 +82,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
   if(company&&company.lifecycle_status!=='prospect')return null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
-  const saved=stateBudget.restoreFromSync(parse(state?.payload_json)).discovery||{};
+  const saved=((await readOwnedPayload(env,workspaceId,state)).payload).discovery||{};
   const priorRecords=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].filter(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
   const priorPeople=priorRecords.flatMap(item=>[...(item.buyerDiscovery?.pool||[]),...(item.people||[])]);
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard);

@@ -361,3 +361,18 @@ test('safe contention remains pending and persistence schedules its next automat
  assert.match(status.textContent,/saving shortly/);assert.doesNotMatch(status.textContent,/failed|conflict/);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
  assert.equal(timers.size,1,'next automatic attempt remains scheduled');[...timers.values()][0]();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2);
 });
+
+test('a safe sync merge never reloads an active company research task',async()=>{
+ const puts=[];let server;const {root,values,events,timers}=load(async(input,options)=>{
+  puts.push(JSON.parse(options.body));return puts.at(-1).version<server.version?new Response(JSON.stringify({current:server}),{status:409}):new Response(JSON.stringify({saved:true,version:5}));
+ },{withBridge:true});
+ const base=establishBase(root,values);values.set(MAIN,JSON.stringify({...base.main,step:6}));
+ server={version:4,payload:{...base,discovery:{people:[{id:'a',name:'Remote researched buyer'}]}}};
+ let active=true;root.LeadIntelTaskCentre={list:()=>active?[{status:'running'}]:[]};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const pending=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(pending.retryable,true);assert.equal(pending.saved,false);
+ assert.equal(events.includes('reload'),false,'saving must not interrupt in-flight research');
+ active=false;assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).saved,true);
+ assert.ok(events.includes('reload'),'the merged workspace can load safely after research completes');
+});

@@ -1,19 +1,20 @@
+import {readStoredPayload,readOwnedPayload,preparePayloadRecord,payloadRecordWrites,MAX_WORKSPACE_TRANSFER_BYTES} from './workspace-record-store.js';
 import FlowState from '../../customer/my-flows.js';
 import stateBudget from '../../customer/state-budget.js';
 import {approvedContext,approvalStatus,normalizeWorkflowConfig,fingerprint,setupBlockers} from './approved-workflow-engine.js';
 import {automaticGmailDeliveryEnabled} from './outreach-automation.js';
 import {apolloCapabilities,hunterVerificationPolicy,resolveWorkspaceServiceCredential} from './service-integrations.js';
 export const parse=(value,fallback={})=>{try{return JSON.parse(value||'')??fallback;}catch{return fallback;}};
-export const decode=row=>stateBudget.restoreFromSync(parse(row?.payload_json));
-export const encode=payload=>JSON.stringify(stateBudget.prepareForSync(payload,{allowSectionPacking:true,allowBundlePacking:true,allowCompressionPacking:true}).payload);
-export async function currentPayload(env,workspaceId){return decode(await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first());}
+export const decode=(row,env)=>JSON.parse(row?.payload_json||'{}')?.format==='leadintel-workspace-records-v1'?readOwnedPayload(env,row?.workspace_id,row,{flowId:row.id}).then(value=>value.payload):readStoredPayload(env,row?.workspace_id,row?.payload_json);
+export const encode=payload=>JSON.stringify(stateBudget.prepareForSync(payload,{allowSectionPacking:true,allowBundlePacking:true,allowCompressionPacking:true,maxSyncBytes:MAX_WORKSPACE_TRANSFER_BYTES}).payload);
+export async function currentPayload(env,workspaceId){return (await readOwnedPayload(env,workspaceId,await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first())).payload;}
 export async function savedFlowRow(env,workspaceId,id){return env.DB.prepare('SELECT * FROM saved_flows WHERE workspace_id=? AND id=?').bind(workspaceId,id).first();}
-export async function savedFlowPayload(env,row){const current=await currentPayload(env,row.workspace_id);const saved=row.id==='legacy-'+row.workspace_id&&!current.main?.myFlow?.id?current:decode(row);return FlowState.composePayload(saved,current,row);}
+export async function savedFlowPayload(env,row){const current=await currentPayload(env,row.workspace_id);const saved=row.id==='legacy-'+row.workspace_id&&!current.main?.myFlow?.id?current:await decode(row,env);return FlowState.composePayload(saved,current,row);}
 export async function sharedHash(payload){return fingerprint(FlowState.sharedBusiness(payload));}
 export async function savedFlowView(env,row){
  const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio});
  const config=normalizeWorkflowConfig(parse(row.config_json),context),stages=await approvalStatus(context,config,parse(row.approvals_json));
- const sharedChanged=(row.shared_hash||await sharedHash(decode(row)))!==await sharedHash(await currentPayload(env,row.workspace_id));
+ const sharedChanged=(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,row.workspace_id));
  const review=parse(row.review_json,[]);const blockers=setupBlockers(context,config);
  if(sharedChanged)blockers.push('Shared business settings changed. Open this flow and review the affected pages.');
  if(review.length)blockers.push('Confirm the duplicate review checklist');
@@ -32,7 +33,7 @@ export async function savedFlowAuthorized(env,workspaceId,revision,id){
  const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,row.approved_by).first();if(member?.role!=='owner')return false;
  const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}),hash=await fingerprint(context);
  let stagesApproved=false;try{stagesApproved=(await approvalStatus(context,normalizeWorkflowConfig(parse(row.config_json),context),parse(row.approvals_json))).every(stage=>stage.approved);}catch{}
- if(hash!==row.context_hash||!stagesApproved||(row.shared_hash||await sharedHash(decode(row)))!==await sharedHash(await currentPayload(env,workspaceId))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic'").bind(workspaceId,id,revision).run();return false;}
+ if(hash!==row.context_hash||!stagesApproved||(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,workspaceId))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic'").bind(workspaceId,id,revision).run();return false;}
  return true;
 }
 // Include projection writes in the customer-state CAS transaction. Progress alone never invalidates approval.
@@ -40,11 +41,11 @@ export async function flowProjectionStatements(env,workspaceId,before,after,enco
  const id=after.main?.myFlow?.id;if(!id)return {writes:[],guard:null};
  const row=await savedFlowRow(env,workspaceId,id);if(!row)throw Error('Saved flow is unavailable in this workspace');
  const context=approvedContext({...after.main,messageStudio:after.outreach?.messageStudio}),hash=await fingerprint(context),shared=await sharedHash(after);
- const material=row.context_hash!==hash||(row.shared_hash||await sharedHash(decode(row)))!==shared,revision=row.revision+(material?1:0);
+ const material=row.context_hash!==hash||(row.shared_hash||await sharedHash(await decode(row,env)))!==shared,revision=row.revision+(material?1:0);
  const writes=[];
  if(!before.main?.myFlow?.id&&id!=='legacy-'+workspaceId){
    const legacy=await savedFlowRow(env,workspaceId,'legacy-'+workspaceId);
-   if(legacy){const previousHash=await fingerprint(approvedContext({...before.main,messageStudio:before.outreach?.messageStudio})),previousShared=await sharedHash(before),changed=previousHash!==legacy.context_hash||(legacy.shared_hash||await sharedHash(decode(legacy)))!==previousShared;writes.push(env.DB.prepare("UPDATE saved_flows SET payload_json=?,state_version=state_version+1,revision=revision+?,status=CASE WHEN ? AND status='automatic' THEN 'needs_review' ELSE status END,approved_at=CASE WHEN ? THEN NULL ELSE approved_at END,context_hash=?,shared_hash=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND EXISTS(SELECT 1 FROM customer_workspace_state WHERE workspace_id=? AND version=? AND payload_json=?)").bind(encode(before),changed?1:0,changed?1:0,changed?1:0,previousHash,previousShared,workspaceId,legacy.id,workspaceId,nextVersion,encodedPayload));}
+   if(legacy){const legacyRecord=await preparePayloadRecord(encode(before));const previousHash=await fingerprint(approvedContext({...before.main,messageStudio:before.outreach?.messageStudio})),previousShared=await sharedHash(before),changed=previousHash!==legacy.context_hash||(legacy.shared_hash||await sharedHash(await decode(legacy,env)))!==previousShared;writes.push(env.DB.prepare("UPDATE saved_flows SET payload_json=?,state_version=state_version+1,revision=revision+?,status=CASE WHEN ? AND status='automatic' THEN 'needs_review' ELSE status END,approved_at=CASE WHEN ? THEN NULL ELSE approved_at END,context_hash=?,shared_hash=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND EXISTS(SELECT 1 FROM customer_workspace_state WHERE workspace_id=? AND version=? AND payload_json=?)").bind(legacyRecord.encoded,changed?1:0,changed?1:0,changed?1:0,previousHash,previousShared,workspaceId,legacy.id,workspaceId,nextVersion,encodedPayload));writes.push(...payloadRecordWrites(env,workspaceId,legacyRecord,'EXISTS(SELECT 1 FROM saved_flows WHERE workspace_id=? AND id=? AND payload_json=?)',[workspaceId,legacy.id,legacyRecord.encoded]));}
  }
  writes.push(env.DB.prepare("UPDATE saved_flows SET payload_json=?,state_version=state_version+1,context_hash=?,shared_hash=?,revision=?,status=CASE WHEN ? AND status='automatic' THEN 'needs_review' ELSE status END,approved_at=CASE WHEN ? THEN NULL ELSE approved_at END,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND EXISTS(SELECT 1 FROM customer_workspace_state WHERE workspace_id=? AND version=? AND payload_json=?)").bind(encodedPayload,hash,shared,revision,material?1:0,material?1:0,workspaceId,id,workspaceId,nextVersion,encodedPayload));
  return {guard:{id,revision:row.revision},writes};

@@ -26,7 +26,9 @@
       "inmail_masters_version": "inmail-facts-20261016-v2",
       "phone_masters_version": "phone-20261017-v1",
       "professional_master_version": "20261017-professional-v1",
-      "additional_contact_services_version": "qualified-email-v1"
+      "additional_contact_services_version": "qualified-email-v1",
+      "workspace_records_version": "workspace-records-v1",
+      "research_recovery_version": "company-recovery-v1"
     }
   },
   "smokeChecks": [
@@ -713,7 +715,7 @@
         "discovery.lastSuccessfulRunAt=discovery.lastRunAt;",
         "company-ranked-list=20261019-v1",
         "function restoreCheckedCompanyResearch()",
-        "Checked · Manual review"
+        "Checked \u00b7 Manual review"
       ]
     },
     {
@@ -3055,6 +3057,38 @@
         "Find email with additional services",
         "/api/additional-contact-services/email",
         "Verify email with Hunter"
+      ]
+    },
+    {
+      "id": "durable-research-record-negotiation",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "workspace-records-v1",
+        "workspaceMaxSyncBytes",
+        "reason:'research_in_progress'"
+      ]
+    },
+    {
+      "id": "research-quote-recovery",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "buyerFitQuoteOptions",
+        "retryAttempts=1",
+        "This is a recovery of an incomplete assessment"
+      ]
+    },
+    {
+      "id": "research-record-transport",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "MAX_RECORD_SYNC_BYTES=8*1024*1024",
+        "syncLimit(options)>MAX_SYNC_BYTES"
       ]
     }
   ],

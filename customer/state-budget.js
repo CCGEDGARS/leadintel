@@ -6,6 +6,8 @@
   "use strict";
 
   const MAX_SYNC_BYTES=500*1024;
+  const MAX_RECORD_SYNC_BYTES=8*1024*1024;
+  function syncLimit(options={}){return Math.max(MAX_SYNC_BYTES,Math.min(MAX_RECORD_SYNC_BYTES,Number(options.maxSyncBytes)||MAX_SYNC_BYTES));}
   const TARGET_SYNC_BYTES=450*1024;
   const MAX_RESTORED_SECTION_BYTES=8*1024*1024;
   const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
@@ -67,7 +69,7 @@
     for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>maxDecodedBytes)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
     try{return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(chunks.join(''),char=>char.charCodeAt(0)));}catch{invalid();}
   }
-  function restoreCompressedWorkspace(value,maxEncodedBytes=MAX_SYNC_BYTES){
+  function restoreCompressedWorkspace(value,maxEncodedBytes=MAX_RECORD_SYNC_BYTES){
     const decoded=decompressText(value,maxEncodedBytes,MAX_RESTORED_BUNDLE_BYTES);
     try{const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))throw new Error();return value.encoding===TEXT_ENCODING&&restored.format===NESTED_FORMAT?restoreNestedDiscovery(restored,MAX_RESTORED_BUNDLE_BYTES):restored;}catch{throw new Error('Invalid stored compressed workspace');}
   }
@@ -257,7 +259,10 @@
   function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={},options={}){
     const original=clone(input);let payload=restoreFromSync(clone(input));let compressionBytes=null;
-    if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);compressionBytes=compressed?bytes(compressed):null;if(compressed&&bytes(compressed)<=MAX_SYNC_BYTES)return {payload:compressed,bytes:bytes(compressed),compacted:true};}
+    // Record-capable servers persist the complete research separately. Legacy
+    // clients keep their original bounded encoding until the server advertises it.
+    if(syncLimit(options)>MAX_SYNC_BYTES&&bytes(payload)<=syncLimit(options))return {payload,bytes:bytes(payload),compacted:false};
+    if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);compressionBytes=compressed?bytes(compressed):null;if(compressed&&bytes(compressed)<=syncLimit(options))return {payload:compressed,bytes:bytes(compressed),compacted:true};}
     payload.main=compactMain(payload.main||{},8000,12000);
     for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
       if(bytes(payload)<=TARGET_SYNC_BYTES)break;
@@ -288,7 +293,7 @@
   }
   function prepareForSync(input={},options={}){
     const result=compactBundle(input,options);
-    if(result.bytes>MAX_SYNC_BYTES){const sizes=Object.entries(result.payload).map(([key,value])=>`${key}: ${Math.ceil(bytes(value)/1024)} KB`).join(', ');throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Section sizes: ${sizes}. Compression permitted: ${options.allowCompressionPacking===true}; candidate: ${result.compressionBytes==null?'unavailable':Math.ceil(result.compressionBytes/1024)+' KB'}.`);}
+    if(result.bytes>syncLimit(options)){if(syncLimit(options)>MAX_SYNC_BYTES)throw new Error(`Workspace exceeds the ${Math.ceil(syncLimit(options)/1024/1024)} MB transfer limit; research remains preserved locally.`);const sizes=Object.entries(result.payload).map(([key,value])=>`${key}: ${Math.ceil(bytes(value)/1024)} KB`).join(', ');throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Section sizes: ${sizes}. Compression permitted: ${options.allowCompressionPacking===true}; candidate: ${result.compressionBytes==null?'unavailable':Math.ceil(result.compressionBytes/1024)+' KB'}.`);}
     return result;
   }
   function compactMainStorageValue(value){
@@ -344,5 +349,5 @@
   root?.LeadIntelStartupTrace?.('storage codec:start');
   installStorageGuard();
   root?.LeadIntelStartupTrace?.('storage codec:complete');
-  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,MAX_RECORD_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });

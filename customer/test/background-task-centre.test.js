@@ -58,7 +58,7 @@ test('registered cancel and retry actions update task state safely',async()=>{
   assert.equal(centre.get('apollo:1').status,'canceled');
   await centre.retry('apollo:1');
   assert.equal(retried,true);
-  assert.equal(centre.get('apollo:1').status,'running');
+  assert.equal(centre.get('apollo:1').status,'complete','a settled retry handler must not leave a running task');
 });
 
 test('clearing a workspace removes active and finished task history across reloads',()=>{
@@ -106,4 +106,18 @@ test('long-running workflows publish progress to the shared task centre',()=>{
   assert.match(discovery,/decision-maker-search/);
   assert.match(discovery,/apollo-enrichment/);
   assert.match(apollo,/LeadIntelTaskCentre/);
+});
+
+test('retry handlers that create a new task never leave the old attempt running',async()=>{
+ const centre=TaskCentre.createTaskCentre({storage:memoryStorage()});centre.start({id:'old',type:'company-discovery'});centre.fail('old','Temporary failure');
+ centre.registerActions('old',{retry:async()=>{centre.start({id:'new',type:'company-discovery'});centre.complete('new');}});
+ await centre.retry('old');assert.equal(centre.list().some(t=>['running','queued'].includes(t.status)),false);assert.equal(centre.get('new').status,'complete');
+});
+test('a declined retry restores a terminal task instead of blocking future sync',async()=>{
+ const centre=TaskCentre.createTaskCentre({storage:memoryStorage()});centre.start({id:'old',type:'company-discovery'});centre.fail('old','Earlier failure');centre.registerActions('old',{retry:async()=>false});
+ await centre.retry('old');assert.equal(centre.list().some(t=>['running','queued'].includes(t.status)),false);
+});
+test('a retry preflight that returns no result never leaves a phantom running job',async()=>{
+ const centre=TaskCentre.createTaskCentre({storage:memoryStorage()});centre.start({id:'old',type:'company-discovery'});centre.fail('old','Earlier failure');centre.registerActions('old',{retry:async()=>undefined});
+ await centre.retry('old');assert.equal(centre.list().some(t=>['running','queued'].includes(t.status)),false);
 });

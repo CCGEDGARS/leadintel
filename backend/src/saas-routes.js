@@ -1,3 +1,4 @@
+import {readWorkspaceWrite} from './workspace-record-store.js';
 import {handleGmailTestSend} from './gmail-test-send.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {putCustomerProjectState} from './customer-project-state.js';
@@ -115,7 +116,7 @@ export async function handleSaasRoute(request,env,corsOverride){
     }
     if(request.method==='GET')return json(await getCustomerState(env,workspaceId),200,cors);
     if(request.method==='PUT'){
-      const contentLength=Number(request.headers.get('Content-Length')||0);if(contentLength>1150000)return error('Customer state request is too large',413,cors);const body=await request.json().catch(()=>null);if(!body)return error('Customer state payload is required',400,cors);
+      let body;try{body=await readWorkspaceWrite(request);}catch(cause){return error(cause.message||'Customer state payload is required',cause.status||400,cors);}if(!body)return error('Customer state payload is required',400,cors);
       try{const result=await putCustomerState(env,{workspaceId,userId:access.user.id,expectedVersion:body.version,schemaVersion:body.schema_version,payload:body.payload,role:access.member.role});if(result.conflict)return json({error:'Customer state version conflict',current:result.current},409,cors);await audit(env,{workspaceId,userId:access.user.id,type:'customer_state.saved',entityType:'customer_workspace_state',entityId:workspaceId,metadata:{version:result.state.version,schema_version:result.state.schema_version}});return json(result.state,200,cors);}catch(cause){const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;return error(String(cause?.message||'Invalid customer state'),400,cors);}
     }
     return error('Method not allowed',405,cors);
