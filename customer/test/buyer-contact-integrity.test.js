@@ -152,3 +152,13 @@ test('the evidence review receives passages around names rather than only the na
  const excerpt=D.buyerEvidenceExcerpt(row,[johan]);
  assert.ok(excerpt.includes('Contact Mikko Viitala'));assert.ok(excerpt.length<=1800);
 });
+
+test('LKAB-style explicitly published at/dot addresses are decoded and attributed to the correct purchasing contact',()=>{
+ const url='https://lkab.com/en/contact-us/purchasing/',markdown='## Malin Barsk\n\nRock reinforcement, steel and drilling materials, mobile machinery and cars\n\nmalin.barsk(at)lkab(dot)com\n\n## Julia Öhrn\n\nElectricity, automation and media, supplies for processing plants, steel and drilling materials\n\njulia.ohrn(at)lkab(dot)com\n\n## Fredrik Eriksson\n\nMechanical maintenance services, equipment\n\nfredrik.eriksson2(at)lkab(dot)com';
+ const people=[{name:'Malin Barsk',title:'Procurement contact'},{name:'Julia Öhrn',title:'Procurement contact'},{name:'Fredrik Eriksson',title:'Procurement contact'}];
+ const matched=D.matchPublicBuyerDetails(people,[{url,markdown,sourceRead:true}],'lkab.com','LKAB');
+ assert.deepEqual(matched.map(p=>p.publicEmail),['malin.barsk@lkab.com','julia.ohrn@lkab.com','fredrik.eriksson2@lkab.com']);
+ for(const person of matched)assert.equal(person.publicEmailUrl,url);
+ assert.deepEqual(D.sourcedBuyerEmails({name:'Malin Barsk'},'lkab.com',[{url,markdown}]).map(p=>p.email),['malin.barsk@lkab.com']);
+ assert.equal(D.sourcedBuyerEmails({name:'Other Person'},'lkab.com',[{url,markdown}]).length,0);
+});

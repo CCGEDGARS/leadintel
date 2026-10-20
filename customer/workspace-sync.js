@@ -33,6 +33,9 @@
     function choose(path,l,r){conflicts.push(path);return preference==='server'?r:l;}
     function visit(bl,l,br,r,path){
       if(NAVIGATION_PATHS.has(path))return l;
+      // A progress caption is local activity, never a competing business edit.
+      // Reload reconstructs its state from the retained research results.
+      if(/^discovery\.(?:selectedProspects|candidates|pipeline|potentialMatches)\[[^\]]+\]\.buyerResearchProgress$/.test(path))return undefined;
       if(equal(l,r))return l;
       // Rebuilding an unchanged profile in two tabs advances these clocks.
       // They describe generation, not competing edits to the field values.

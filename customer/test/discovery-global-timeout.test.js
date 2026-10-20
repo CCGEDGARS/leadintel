@@ -607,7 +607,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   const finishedRequests=requests;
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v21-full-roster');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v22-public-confirmation');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Profile matched automatically/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -1375,7 +1375,7 @@ test('a company-level completed check does not conceal an unresearched individua
  let requests=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
-  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v21-full-roster',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v22-public-confirmation',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:4}));
  context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0);
@@ -1484,7 +1484,7 @@ test('evidence-disqualified top pick is replaced by the next researched buyer, w
 test('targeted executive search fills the reserved place and retains completed existing contact checks',async()=>{
  const context=loadDiscoveryRunner({requestTimeout:1000,renderNodes:true,fetchImpl:async url=>({ok:true,json:async()=>/firecrawl(?:-scrape|\/scrape)/.test(String(url))?{data:{markdown:'Anna Executive is CEO at Example'}}:{data:[{url:'https://example.com/team/anna-executive',title:'Anna Executive | CEO | Example',description:'Anna Executive is CEO at Example'}]}}),bridgeImpl:{session:{authenticated:true},workspace:{id:'test'},saveNow:async()=>({saved:true})}});
  const people=Array.from({length:5},(_,i)=>({id:'p'+i,name:'Person Buyer'+i,title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()},contactResearch:{version:1,identityKey:'existing',checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}},channels:{gmail:{status:'complete'}}}}));
- context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',publicContactVersion:'buyer-contacts-v21-full-roster',buyerSearchMode:'user_selected_target'}]});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',publicContactVersion:'buyer-contacts-v22-public-confirmation',buyerSearchMode:'user_selected_target'}]});
  assert.equal(await context.__findExecutiveBuyer('example.com'),true);
  const candidate=context.__discoveryState().selectedProspects[0],ranked=Discovery.rankedBuyerShortlist(candidate.people,{decisionMakers:candidate.buyerRoles},candidate);
  assert.equal(ranked.committeeCoverage.executives,1);assert.equal(ranked.executiveCoverage.status,'incomplete');assert.ok(candidate.buyerDiscovery.executiveResearch.queries>=3&&candidate.buyerDiscovery.executiveResearch.queries<=8);
@@ -2030,4 +2030,62 @@ test('batch execution reviews untouched companies before older retries at queue 
  const expected=Array.from(plan().domains);assert.deepEqual(expected,['pending10.lv','pending11.lv','pending0.lv','pending1.lv','pending2.lv']);
  assert.deepEqual(Array.from(context.__existingCompanyResearchTargets(undefined,expected),c=>c.domain),expected);
  calls.length=0;await review();const initial=calls.filter(c=>c.body.query?.startsWith('"Pending')).slice(0,5).map(c=>`pending${c.body.query.match(/Pending(\d+)/)[1]}.lv`);assert.deepEqual(initial,expected);
+});
+
+test('manual public contact research confirms sourced work emails in CRM without paid providers',async()=>{
+ const sourceUrl='https://example.com/team',calls=[];
+ const bridgeImpl={session:{authenticated:true},workspace:{id:'w1'},listCrmCompanies:async()=>({ok:true,companies:[{id:'c1',normalized_domain:'example.com'}]}),saveCrmContacts:async()=>({ok:true}),saveCrmCompany:async()=>({ok:true})};
+ const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl,fetchImpl:async(url,options)=>{
+  calls.push(String(url));
+  if(String(url).includes('/confirm-public-email'))return {ok:true,json:async()=>({contact:{id:'confirmed-anna',name:'Anna Buyer',work_email:'anna.buyer@example.com',email_status:'public_confirmed',verification_provider:'Public source',public_email_url:sourceUrl,verified_at:new Date().toISOString()}})};
+  if(String(url).includes('/contact-evidence-review'))return {ok:true,json:async()=>({status:'complete',conflicts:[]})};
+  if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Anna Buyer, Procurement Director, anna.buyer@example.com',metadata:{sourceURL:sourceUrl}}})};
+  if(/firecrawl(?:-search|\/search)/.test(String(url)))return {ok:true,json:async()=>({data:[{url:sourceUrl,markdown:'Anna Buyer, Procurement Director, anna.buyer@example.com'}]})};
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ context.LeadIntelCrm=require('../crm-engine.js');context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setBuyerConfirmationPolicy();
+ context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',people:[{id:'anna',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:sourceUrl,linkedin_url:'https://linkedin.com/in/anna-buyer'}]}]});
+ await context.__findPublicProspectContacts('example.com');
+ const person=context.__discoveryState().selectedProspects[0].people[0];
+ assert.equal(calls.filter(url=>url.includes('/confirm-public-email')).length,1,'public research must finish the free source confirmation');
+ assert.equal(person.publicEmailSourceCheck.status,'confirmed');assert.equal(person.contactVerification.status,'public_confirmed');
+ assert.equal(calls.some(url=>/hunter|enrich|additional-contact-services/.test(url)),false,'research never spends optional enrichment credits');
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0].people[0];
+ assert.equal(restored.publicEmailSourceCheck.status,'confirmed');
+});
+
+test('automatic public source confirmation keeps failed checks pending and never falls through to paid lookup',async()=>{
+ const calls=[],context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url)=>{calls.push(String(url));return {ok:false,status:503,json:async()=>({error:'Official source unavailable'})};}});
+ context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setBuyerConfirmationPolicy();context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+ const person={id:'anna',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicEmail:'anna.buyer@example.com',publicEmailUrl:'https://example.com/team'};
+ const candidate={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:[person]};
+ await context.confirmResearchedPublicEmails(candidate,new AbortController().signal);
+ assert.equal(person.contactVerification.status,'error');assert.equal(person.publicEmailSourceCheck,undefined);assert.match(person.contactVerification.issues[0],/unavailable/);
+ assert.equal(calls.filter(url=>url.includes('/confirm-public-email')).length,1);assert.equal(calls.some(url=>/hunter|enrich|additional-contact-services/.test(url)),false);
+});
+
+test('finishing an old workspace research pass cannot confirm a buyer in the new workspace',async()=>{
+ const calls=[],context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'new-workspace'}},fetchImpl:async url=>{calls.push(String(url));return {ok:false,status:503,json:async()=>({error:'Source unavailable'})};}});
+ context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+ const candidate={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:[{id:'anna',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicEmail:'anna.buyer@example.com',publicEmailUrl:'https://example.com/team'}]};
+ await context.confirmResearchedPublicEmails(candidate,new AbortController().signal,'old-workspace');
+ assert.equal(calls.some(url=>url.includes('/confirm-public-email')),false);
+ assert.equal(candidate.people[0].contactVerification,undefined);
+});
+
+test('cached official identities reread their shared source once and confirm explicitly published addresses',async()=>{
+ const calls=[],url='https://example.com/purchasing';
+ const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(path,options)=>{
+  calls.push(String(path));
+  if(String(path).includes('/confirm-public-email')){const body=JSON.parse(options.body);return {ok:true,json:async()=>({contact:{id:body.person_id,name:body.name,work_email:body.email,email_status:'public_confirmed',verification_provider:'Public source',public_email_url:url,verified_at:new Date().toISOString()}})};}
+  return {ok:true,json:async()=>({data:{markdown:'## Anna Buyer\nProcurement\nanna.buyer(at)example(dot)com\n\n## Eva Buyer\nProcurement\neva.buyer(at)example(dot)com',metadata:{sourceURL:url}}})};
+ }});
+ context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+ const candidate={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:['Anna Buyer','Eva Buyer'].map((name,i)=>({id:String(i),name,title:'Procurement Director',organization:'Example',publicNameUrl:url}))};
+ await context.confirmResearchedPublicEmails(candidate,new AbortController().signal);
+ assert.deepEqual(Array.from(candidate.people,p=>p.publicEmail),['anna.buyer@example.com','eva.buyer@example.com']);
+ assert.equal(calls.filter(path=>path.includes('/firecrawl/scrape')).length,1);
+ assert.equal(calls.filter(path=>path.includes('/confirm-public-email')).length,2);
+ assert.ok(candidate.people.every(p=>p.publicEmailSourceCheck.status==='confirmed'));
 });

@@ -89,8 +89,12 @@
       return parsed.href.replace(/\/$/,"");
     }catch{return "";}
   }
+  function decodePublishedEmailText(value){
+    // Decode only an explicitly printed address. This never generates an alias.
+    return String(value||'').replace(/([a-z0-9._%+-]+)\s*(?:\(\s*at\s*\)|\[\s*at\s*\])\s*([a-z0-9-]+(?:\s*(?:\(\s*dot\s*\)|\[\s*dot\s*\]|\.)\s*[a-z0-9-]+)+)/gi,(_,local,host)=>local+'@'+host.replace(/\s*(?:\(\s*dot\s*\)|\[\s*dot\s*\]|\.)\s*/gi,'.'));
+  }
   function publicPageText(row){
-    const text=[row?.title,row?.description,row?.markdown,row?.content].map(clean).join(" ");
+    const text=decodePublishedEmailText([row?.title,row?.description,row?.markdown,row?.content].map(clean).join(" "));
     // Full-page scrapes keep contact details in the footer. Retain both ends
     // when a provider returns a page larger than our evidence scan budget.
     return text.length<=64000?text:`${text.slice(0,32000)} ${text.slice(-32000)}`;
@@ -189,14 +193,14 @@
     for(const row of rows.slice().sort((a,b)=>Number(companyIdentityDomain(b.url||b.metadata?.sourceURL)===host)-Number(companyIdentityDomain(a.url||a.metadata?.sourceURL)===host))){
       let url;try{url=new URL(row.url||row.metadata?.sourceURL);}catch{continue;}
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password)continue;
-      const text=(row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n');
+      const text=decodePublishedEmailText((row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n'));
       for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
         const email=match[0].toLowerCase(),gmail=email.endsWith('@gmail.com');
         if(!validResearchEmail(email,gmail?'gmail.com':host)||findings.some(item=>item.email===email))continue;
         const near=text.slice(Math.max(0,match.index-160),match.index+email.length+100);
         if(!named.test(near)||/email formats? and examples?|email pattern|guessed|predicted|generated email/i.test(near))continue;
         // Generic first-name aliases and unrelated addresses in multi-person directories are ambiguous.
-        if(!gmail&&!emailLocalPatterns(person).some(item=>item.local===email.split('@')[0])){
+        if(!gmail&&!emailLocalPatterns(person).some(item=>item.local===email.split('@')[0]||item.local===email.split('@')[0].replace(/\d{1,3}$/,''))){
           const explicit=new RegExp(escape(name)+'\\s*(?:[|·,:-]\\s*)?(?:e-?mail\\s*:?\\s*)?'+escape(email),'iu');
           const parts=emailNameParts(person),local=email.split('@')[0];
           const initialFormat=new RegExp('^'+escape(parts.first)+'[._-](?:[a-z][._-]){1,3}'+escape(parts.last)+'$','i');
@@ -214,7 +218,7 @@
     return findings.slice(0,12);
   }
   function buyerEvidenceExcerpt(row={},people=[],limit=1800){
-    const text=(row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n');
+    const text=decodePublishedEmailText((row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n'));
     const spans=[];
     for(const person of people){
       const name=clean(person.publicName||person.name),lower=text.toLowerCase();let at=lower.indexOf(name.toLowerCase());
@@ -304,7 +308,7 @@
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url)continue;
         const official=canonicalDomain(url)===domain,company=clean(companyName||person.organization);
-        const body=String(row.markdown||row.content||'');
+        const body=decodePublishedEmailText(row.markdown||row.content||'');
         // External listings require underlying text, a named company-domain
         // address and the employer. A generated summary cannot establish contact ownership.
         if(!official&&(!fullName||!body||!company||!body.toLowerCase().includes(company.toLowerCase())||!sourcedBuyerEmails(person,domain,[{url,markdown:body}],company).some(item=>item.email.endsWith('@'+domain))))continue;
@@ -316,11 +320,12 @@
           const nearby=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+130));
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
           const roleSupported=roleWords.some(word=>new RegExp('(?:^|[^\\p{L}])'+word+'(?:$|[^\\p{L}])','iu').test(nearby));
-          const personal=sourcedBuyerEmails({name},domain,[{url,content:nearby}])[0]?.email;
+          const contactPassage=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+260));
+          const personal=sourcedBuyerEmails({name},domain,[{url,content:contactPassage}])[0]?.email;
           const passage=directPhonePassage(text,match.index,name,person,personal);
           if(person.publicPhoneSourceCheck?.version===2&&person.publicPhoneSourceCheck.url===url&&!row.sourceRead)passage.phone='';
           if(!roleSupported&&!personal)continue;
-          matches.push({name,url,date:evidenceDate(row),roleSupported,email:personal||"",emailQuote:clean(nearby),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
+          matches.push({name,url,date:evidenceDate(row),roleSupported,email:personal||"",emailQuote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
         }
       }
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
@@ -1441,7 +1446,13 @@
     const selection=researched.length?researched:ranked;
     const leaders=selection.filter(supportedExecutive),sponsor=leaders.find(person=>/\bCEO\b|chief executive|managing director|koncernchef|verkställande direktör|^(?:owner|business owner|managing partner)$/i.test(person.title))||leaders[0];
     const executives=[sponsor,...leaders.filter(person=>person!==sponsor)].filter(Boolean).slice(0,2);
-    const functional=selection.filter(person=>!isExecutiveBuyer(person));
+    const confirmedEmail=person=>{
+      const check=person.publicEmailSourceCheck,email=clean(person.publicEmail).toLowerCase(),checked=Date.parse(check?.checkedAt||''),age=Date.now()-checked;
+      return check?.status==='confirmed'&&validResearchEmail(email,candidate.domain)&&clean(check.email).toLowerCase()===email&&normalizeUrl(check.url)===normalizeUrl(person.publicEmailUrl)&&companyIdentityDomain(check.url)===companyIdentityDomain(candidate.domain)&&age>=0&&age<30*86400000;
+    };
+    // Reserve each buying function for a reachable, qualified source-confirmed
+    // contact when present; retain score ordering and all evidence/role gates.
+    const functional=selection.filter(person=>!isExecutiveBuyer(person)).sort((a,b)=>Number(confirmedEmail(b))-Number(confirmedEmail(a)));
     const purchasing=functional.find(person=>buyerFunction(person.matchedBuyerRole||person.title)==='Procurement / sourcing');
     const operational=functional.find(person=>person!==purchasing&&buyerFunction(person.matchedBuyerRole||person.title)!=='Procurement / sourcing');
     const reserved=[...executives,...[purchasing,operational].filter(Boolean)];
