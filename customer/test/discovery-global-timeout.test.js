@@ -733,7 +733,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,8);
+  assert.equal(searches,9);
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });

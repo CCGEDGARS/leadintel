@@ -3520,7 +3520,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-research-policy=20261020-v1"
+        "buyer-research-policy=20261020-v2"
       ]
     }
   ],
