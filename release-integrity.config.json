@@ -3187,6 +3187,26 @@
         "awaiting review",
         "batch-review=20261020-v1"
       ]
+    },
+    {
+      "id": "company-stage-back-navigation",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function navigateBackFromDiscoveryStage()",
+        "if(currentJourneyFocus()===\"buyers\"){setJourneyFocus(\"companies\");renderAll();return;}",
+        "$(\"back-to-strategy\")?.addEventListener(\"click\",navigateBackFromDiscoveryStage)"
+      ]
+    },
+    {
+      "id": "company-stage-back-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "stage-back=20261020-v1"
+      ]
     }
   ],
   "retry": {

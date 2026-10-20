@@ -26,6 +26,8 @@ Use the fixed release labels defined by the release-integrity skill: **LATEST CO
 
 ## Cooperation and completion rules
 
+Mandatory user rule (20 October 2026): finish delegated tasks completely and provide a clear completion confirmation. Carry authorized work through implementation, regression checks, release when required, and verification against the requested acceptance criteria. Do not end with a plan, partial result or defect inventory when the authorized fix remains feasible. Resolve discovered defects within the delegated flow before handing it back. Completion claims must be backed by evidence; a genuine external blocker must be disclosed rather than concealed with a false 100% claim.
+
 The user agreements recorded in `docs/project-state/2026-09-30-leadintel-checkpoint.md` govern continuing work. Own the connected Profile → Companies → Buyers → Triggers → Scripts → CRM workflow. For recurring bugs, record the root cause, inspect related paths, add meaningful regression coverage, and verify save/reload/downstream behavior. Report separately what tests prove, what the exact production release proves, and what authenticated customer evidence proves. Do not substitute a build passing for customer acceptance, ask the customer to repeatedly diagnose basic controls, or claim background work is continuing after the turn. Script generation and approval do not authorize sending outreach.
 
 ## Customer portability is mandatory
