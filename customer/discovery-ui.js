@@ -100,7 +100,14 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
       const selectionKey=value=>LeadIntelDiscovery.buyerSelectionRoles({decisionMakers:value}).map(role=>role.toLowerCase()).join(';');
       if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
     }return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
-function saveDiscovery(){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(discovery));window.dispatchEvent?.(new CustomEvent("leadintel:workspace-dirty"));window.LeadIntelJourney?.refresh?.();}
+function saveDiscovery(){
+  // CRM hydration on every page load calls this with an unchanged section. Rewriting it
+  // re-encodes the whole section on the main thread and raises workspace-dirty, which sends
+  // an identical PUT, bumps the server version and makes other tabs reload on their next save.
+  const next=JSON.stringify(discovery);
+  if(localStorage.getItem(DISCOVERY_STORAGE_KEY)!==next){localStorage.setItem(DISCOVERY_STORAGE_KEY,next);window.dispatchEvent?.(new CustomEvent("leadintel:workspace-dirty"));}
+  window.LeadIntelJourney?.refresh?.();
+}
 let clearCompanyResultsReturnFocus=null;
 function openClearCompanyResultsModal(){
   if(discovery.status==='running'){showToast("Wait for the company search to finish before clearing results.");return false;}
