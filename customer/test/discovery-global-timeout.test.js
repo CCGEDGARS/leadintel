@@ -27,7 +27,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__syncStrategyFingerprint=syncStrategyFingerprint;globalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__withDiscoveryDeadline = withDiscoveryDeadline;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__clearCompanySearchResults=clearCompanySearchResults;globalThis.__renderSearchPreferences=typeof renderSearchPreferences==="function"?renderSearchPreferences:undefined;globalThis.__bindDiscovery=bindDiscovery;globalThis.__companySearchFeedbackHtml=typeof companySearchFeedbackHtml==="function"?companySearchFeedbackHtml:undefined;globalThis.__updateCompanySearchFeedback=typeof updateCompanySearchFeedback==="function"?updateCompanySearchFeedback:undefined;globalThis.__syncStrategyFingerprint=syncStrategyFingerprint;globalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__withDiscoveryDeadline = withDiscoveryDeadline;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -53,7 +53,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     if (!elements.has(id)) elements.set(id, {
       id, textContent: '', innerHTML: '', value: '', hidden: false, disabled: false, dataset: {},
       classList: (()=>{const values=new Set();return {add(...names){names.forEach(name=>values.add(name));},remove(...names){names.forEach(name=>values.delete(name));},toggle(name,force){const enabled=force??!values.has(name);if(enabled)values.add(name);else values.delete(name);return enabled;},contains(name){return values.has(name);}};})(),
-      addEventListener() {}, remove() {}, insertAdjacentHTML() {}
+      addEventListener(type,listener) { this.listeners||={};this.listeners[type]=listener; }, remove() {}, insertAdjacentHTML() {}
     });
     return elements.get(id);
   };
@@ -254,7 +254,8 @@ test('an isolated verification outage does not prevent qualifying readable compa
     }
     const query=body.query||'';
     if(query.startsWith('site:northsteel.lv'))return {ok:false,status:502,json:async()=>({})};
-    const name=query.includes('Polar Engineering')||query.includes('polarengineering.lv')?names[1]:query.includes('North Steel')||query.includes('northsteel.lv')?names[0]:names[marketRequests++<6?0:1];
+    const positiveQuery=query.replace(/-site:\S+/g,'');
+    const name=positiveQuery.includes('Polar Engineering')||positiveQuery.includes('polarengineering.lv')?names[1]:positiveQuery.includes('North Steel')||positiveQuery.includes('northsteel.lv')?names[0]:names[marketRequests++<6?0:1];
     const official=query.startsWith('site:')||query.startsWith('"')&&!query.includes('-site:');
     return {ok:true,json:async()=>({success:true,data:[{url:official?`https://${slug(name)}.lv/`:`https://industrynews.lv/${slug(name)}`,title:`${name} plans a new factory`,description:text(name),markdown:text(name)}]})};
   }});
@@ -1097,6 +1098,7 @@ test('Company Discovery asks Firecrawl to attach page evidence to search results
 
   assert.deepEqual(requestBody, {
     query: 'Latvia office furniture companies official website',
+    location: 'Latvia',
     limit: 8,
     scrapeOptions: { formats: ['markdown'], onlyMainContent: true }
   });
@@ -1638,4 +1640,101 @@ test('purchasing-fit recovery cannot apply an old workspace result after an acco
  const ctx=loadDiscoveryRunner({renderNodes:true,bridgeImpl:bridge,fetchImpl:async()=>{bridge.workspace.id='new';return {ok:true,json:async()=>({text:'{"companies":[]}'})};}});
  ctx.__setDiscovery({status:'partial',lastRunAt:at,potentialMatches:[{company:'Northstar',domain:'northstar.com',market:'Latvia',evidence:[{url:'https://northstar.com/about',verifiedAt:at,text:'Northstar manufactures industrial equipment in Latvia with industrial automation.'}],qualificationGaps:['Purchasing application unverified']}],searchFailures:[{phase:'buyer-fit',domain:'northstar.com',reason:'timeout'}]});
  assert.equal(await ctx.__retryFailedDiscoveryChecks(),false);assert.equal(ctx.__discoveryState().candidates.length,0);assert.notEqual(ctx.__discoveryState().status,'running');
+});
+
+
+test('company feedback change handler saves a reversible preference without removing research or altering scores',()=>{
+ const {JSDOM}=require('jsdom'),context=loadDiscoveryRunner({renderNodes:true});
+ const candidate={company:'North Steel',domain:'northsteel.lv',market:'Latvia',buyerSearchMode:'user_selected_target',qualificationGaps:['Check evidence'],evidence:[{url:'https://northsteel.lv/',text:'North Steel operates manufacturing facilities in Latvia.'}],score:{total:68}};
+ context.__setDiscovery({potentialMatches:[candidate]});
+ context.__bindDiscovery();
+ const html=context.__companySearchFeedbackHtml(candidate),document=new JSDOM(html).window.document;
+ const select=document.querySelector('[data-company-search-feedback]');assert.ok(select,'feedback is a labeled control in the company card');
+ select.value='competitor';context.__elements.get('discovery-potential-matches').listeners.change({target:select});
+ const saved=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'));
+ assert.equal(saved.searchFeedback[0].decision,'competitor');assert.equal(saved.potentialMatches.length,1);
+ context.__setDiscovery(saved);assert.equal(context.__discoveryState().searchFeedback[0].decision,'competitor');
+ select.value='clear';context.__elements.get('discovery-potential-matches').listeners.change({target:select});
+ assert.equal(context.__discoveryState().searchFeedback.length,0);assert.equal(context.__discoveryState().potentialMatches.length,1);
+});
+
+test('the real search runner prioritizes names from buyer evidence before paid domain resolution',async()=>{
+ const resolutions=[];
+ const evidence='Steel Vendor supplies metal fabrication services. Insurance One operates regional sales teams and improves sales conversion.';
+ const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async(url,options)=>{
+  const body=JSON.parse(options.body||'{}');
+  if(body.task==='buyer-fit')return {ok:true,json:async()=>({text:weakBuyerFitResponse(body.prompt)})};
+  const query=body.query||'';
+  if(query.startsWith('"')){const name=query.split('"')[1];resolutions.push(name);return {ok:true,json:async()=>({data:[{url:`https://${name==='Insurance One'?'insuranceone':'steelvendor'}.lv/`,title:name+' official website',description:evidence}]})};}
+  if(query.startsWith('site:'))return {ok:true,json:async()=>({data:[]})};
+  if(String(url).includes('firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:evidence,metadata:{sourceURL:body.url}}})};
+  return {ok:true,json:async()=>({data:[{url:'https://journal.lv/company-updates',title:'Company updates',description:evidence,markdown:evidence}]})};
+ }});
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ main.profile.idealCustomer='Insurance companies with regional sales teams';main.profile.customerPainPoints='sales conversion';
+ main.answers.ideal_customer=main.profile.idealCustomer;main.targetingConfirmation=Targeting.confirm(main);
+ context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ await context.__runDiscovery({autoPass:3});
+ assert.equal(resolutions[0],'Insurance One');
+});
+
+test('one failed purchasing assessment does not block healthy adaptive discovery',async()=>{
+ const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>({ok:true,json:async()=>({data:[]})})});
+ const candidate={company:'North Steel',domain:'northsteel.lv',market:'Latvia',evidence:[{url:'https://northsteel.lv/',text:'North Steel operates an industrial equipment manufacturing business in Latvia.'}]};
+ let fail=true;
+ context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>[candidate],buildPotentialCompanyCandidates:()=>[],researchBuyerFit:async(pool,profile,generate,options)=>{if(fail){fail=false;options.onFailure(new Error('Provider timeout'),pool);}return pool.map(c=>({...c,buyerFitIssue:'Purchasing fit request timed out'}));}};
+ await context.__runDiscovery({autoPass:3});
+ assert.ok(context.__discoveryState().funnel.adaptiveFollowUpSearches>0,'an incomplete sibling is a gap, not a global research veto');
+ assert.ok(context.__discoveryState().searchFailures.some(x=>x.phase==='buyer-fit'));
+});
+
+
+test('discovery reuses deferred extracted names before paying for another market search',async()=>{
+ const actions=[],names=['First Buyer','Second Buyer','Third Buyer','Fourth Buyer'];
+ const text=names.map(name=>name+' operates an insurance business in Latvia.').join(' ');
+ const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async(url,options)=>{
+  const body=JSON.parse(options.body||'{}'),query=body.query||'';
+  if(String(url).includes('firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:text,metadata:{sourceURL:body.url}}})};
+  if(query.startsWith('"')){const name=query.split('"')[1];if(!query.includes('-site:'))actions.push('resolve:'+name);return {ok:true,json:async()=>({data:[{url:'https://'+name.toLowerCase().replace(/ /g,'')+'.lv/',title:name,description:text}]})};}
+  if(query.startsWith('site:'))return {ok:true,json:async()=>({data:[]})};
+  actions.push('market');return {ok:true,json:async()=>({data:[{url:'https://journal.lv/buyers',title:'Insurance buyers',description:text,markdown:text}]})};
+ }});
+ context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>[],buildPotentialCompanyCandidates:()=>[]};
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:1,targetMode:'custom'}));
+ await context.__runDiscovery({autoPass:3});
+ const fourth=actions.indexOf('resolve:Fourth Buyer');assert.ok(fourth>0,'the retained fourth name is eventually researched');
+ assert.equal(actions.slice(0,fourth).filter(x=>x==='market').length,6,'no extra market queries before the deferred name');
+ assert.equal(actions.filter(x=>x==='resolve:First Buyer').length,1,'earlier identities are not resolved again');
+});
+
+
+test('search preferences remain manageable and reversible after clearing the result list',()=>{
+ const {JSDOM}=require('jsdom'),context=loadDiscoveryRunner({renderNodes:true});context.document.body.classList={remove(){}};
+ const candidate={company:'Rejected Buyer',domain:'rejected.lv',qualificationGaps:['Needs more evidence'],evidence:[{url:'https://rejected.lv/',text:'Rejected Buyer operates an insurance business in Latvia.'}]};
+ context.__setDiscovery({potentialMatches:[candidate]});
+ const select=new JSDOM(context.__companySearchFeedbackHtml(candidate)).window.document.querySelector('select');
+ select.value='poor_fit';assert.equal(context.__updateCompanySearchFeedback(select),true);
+ assert.equal(context.__clearCompanySearchResults(),true);
+ assert.equal(context.__discoveryState().searchFeedback.length,1,'clearing search results does not erase learned preferences');
+ context.__renderSearchPreferences();
+ const node=context.__elements.get('company-search-preferences');assert.match(node.innerHTML,/Rejected Buyer/);
+ const clear=new JSDOM(node.innerHTML).window.document.querySelector('select');clear.value='clear';
+ assert.equal(context.__updateCompanySearchFeedback(clear),true,'undo works without a current company card');
+ assert.equal(context.__discoveryState().searchFeedback.length,0);
+});
+
+test('changing the seller offer while discovery is in flight discards stale results',async()=>{
+ let release,started;const began=new Promise(resolve=>{started=resolve;}),pending=new Promise(resolve=>{release=resolve;});
+ const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>{started();await pending;return {ok:true,json:async()=>({data:[]})};}});
+ const running=context.__runDiscovery({autoPass:3});await began;
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.profile.priorityOffers='Office furniture';main.answers.priority_offers='Office furniture';main.targetingConfirmation=Targeting.confirm(main);context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));release();
+ assert.equal(await running,false,'an obsolete purchasing context cannot publish results');
+ assert.notEqual(context.__discoveryState().status,'running','the same workspace can retry under its new offer');
+ assert.equal(context.__discoveryState().lastRunAt,'');
+});
+
+test('a confirmed operational buyer profile can search without references or buying signals',async()=>{
+ let calls=0;const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>{calls++;return {ok:true,json:async()=>({data:[]})};}});
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.market.signals=[];main.referenceCustomers={rows:[]};main.targetCompanies=[];context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ assert.equal(await context.__runDiscovery({autoPass:3}),true);assert.ok(calls>0);assert.notEqual(context.__discoveryState().status,'running');
 });

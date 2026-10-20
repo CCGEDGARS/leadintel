@@ -147,7 +147,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
         const company = companyNames.find(name => slugOf(name) === domain.split('.')[0]) || 'North Steel';
         return { ok: true, json: async () => ({ success: true, data: [{ date: new Date().toISOString().slice(0, 10), url: `https://${domain}/news/new-factory`, title: `${company} opens a new factory in Latvia`, description: signalText(company), markdown: signalText(company) }] }) };
       }
-      if (query.includes('-site:')) return { ok: true, json: async () => ({ success: true, data: [] }) };
+      if (query.startsWith('"') && query.includes('-site:')) return { ok: true, json: async () => ({ success: true, data: [] }) };
       const resolution = query.match(/^"([^"]+)"/);
       if (resolution) {
         const company = resolution[1];

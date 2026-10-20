@@ -1,0 +1,13 @@
+# Search relevance improvement
+
+Approved brief: implement the six improvements discussed with Edgars on 20 October: purchasing-relationship queries, positive/negative examples, broad inexpensive discovery followed by selective verification, three complementary search routes, adaptive follow-up, and workspace-local feedback.
+
+The goal is more relevant researched companies at lower cost, measured separately from numeric fit scores. Checked companies retain real scores and remain visible; automatic company advancement stays at 80, and contact readiness remains a separate gate. Preserve requested targets, existing results, evidence, CRM and selected buyers. Never fabricate a company, buying intent, score or email to fill a count.
+
+Use existing Firecrawl and authenticated AI paths. Fallback queries must derive from the active ICP, customer needs, confirmed offers, markets and active reference models, with no manufacturing defaults. Seller offers inform purchasing reasoning, not supplier-directory searches. Balanced discovery covers operational need, reference similarity when available, and relevant active signals. Signals-only and lookalike-only remain authoritative. Translate/localize using the existing planner.
+
+Rank extracted names using their own source excerpts before paid domain/site verification; filter explicit rejected domains, seller/reference identities and clear non-company entities. Unknown fit is a lower research priority, not rejection. Broader extraction remains bounded; all paid calls retain the existing shared ceiling. Failed purchasing assessments reuse existing evidence and do not prevent healthy-domain follow-up. Follow-up uses actual gaps and avoids checked/rejected domains and repeated queries.
+
+Provide reversible good-fit / poor-fit feedback with concrete reasons on Companies cards and Research review. Store bounded normalized feedback in synchronized discovery state, scoped by seller, target offer/ICP and market context. Retain the company and its original score. Good-fit examples guide search; they cannot qualify a company or raise its score. User-added targets remain available for explicit recheck.
+
+Verification: deterministic cross-industry/name-invariance query cases; customer-identity and offer-change isolation; relevance ordering with mixed-entity articles; real runner requests, caching, budget, cancellation and save/reload; feedback UI action/persistence/undo; unchanged 79/80 and email gates; full customer/backend suites, build, independent branch review and exact-SHA release proof. Synthetic fixtures demonstrate behavior, not real-market yield improvement. Real market acceptance is reported separately.

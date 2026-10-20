@@ -113,7 +113,7 @@
       for(const [field,key] of Object.entries({idealCustomer:'description',targetMarkets:'targetMarkets',decisionMakers:'buyerRoles',priorityOffers:'offers',opportunityValue:'value'})){
         result[field]=active.length?(merge(key)||profile[field]||''):'';
       }
-      result.exclusions=[...new Set([clean(profile.exclusions),merge('exclusions')].filter(Boolean))].join('; ');
+      result.exclusions=[...new Map([profile.exclusions,merge('exclusions')].flatMap(value=>String(value||'').split(/[;\n]+/).map(clean)).filter(Boolean).map(value=>[value.toLowerCase(),value])).values()].join('; ');
       if(!active.some(item=>['lookalike','lookalike-led'].includes(item.type)||item.id==='icp-reference-lookalike')){
         result.lookalikeCustomers='';result.referenceSimilarityModel=null;
       }
