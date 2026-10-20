@@ -71,7 +71,11 @@ test('verified company fit can enter the manual shortlist without claiming a buy
 });
 test('manual shortlist preserves evidence, lifecycle and seller context while research modes do not hide checked results',()=>{
  const {candidate,profile}=fixture(),check=(c,p=profile,settings={})=>D.assessCompanyQualification(c,p,{}, {minimumScore:80,researchedAt,...settings});
- assert.equal(check({...candidate,evidence:[candidate.evidence[0]]}).eligible,false);
+ const singleOfficial={...candidate,evidence:[candidate.evidence[0]]};
+ assert.equal(check(singleOfficial).eligible,true);
+ assert.equal(check(singleOfficial).confidence,'Medium');
+ assert.equal(check(singleOfficial).automaticEligible,false);
+ assert.equal(D.assessAutomaticCompanyQualification(singleOfficial,profile,{}, {researchedAt}).eligible,false);
  assert.equal(check({...candidate,lifecycle_status:'suppressed'}).eligible,false);
  assert.equal(check({...candidate,buyerFit:undefined}).eligible,false);
  assert.equal(check(candidate,{...profile,priorityOffers:'legal representation'}).eligible,false);

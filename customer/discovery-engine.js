@@ -2032,9 +2032,11 @@
   // automatic company flow; a weak score must not erase completed research.
   function assessCompanyQualification(candidate={},profile={},marketState={},settings={},now=Date.now()){
     const q=assessAutomaticQualification(candidate,profile,marketState,settings,now);
-    const gaps=q.companyCheckGaps.slice();
+    // A quoted official operating source can complete manual research. A
+    // second source strengthens confidence and remains mandatory for automation.
+    const gaps=q.companyCheckGaps.filter(gap=>gap!=='Obtain two independent credible source families');
     if(q.commercial&&(q.companyScore<=0||q.commercial.relationship!=='buyer'))gaps.push('No relevant buyer relationship established from the operating evidence');
-    const automaticGaps=gaps.slice();
+    const automaticGaps=[...new Set([...q.companyCheckGaps,...gaps])];
     if(q.companyScore===null||q.companyScore<80)automaticGaps.push('Company fit below automatic-flow minimum 80/100');
     return {...q,qualificationKind:'company',opportunityEligible:q.eligible,opportunityGaps:q.gaps,companyEligible:!gaps.length,companyGaps:gaps,eligible:!gaps.length,checked:!gaps.length,gaps,score:q.companyScore,automaticMinimumScore:80,automaticEligible:!automaticGaps.length,automaticGaps};
   }
