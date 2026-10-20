@@ -27,7 +27,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
   return async url => {
     const parsed = new URL(String(url));
     if(parsed.hostname==='apollo-proxy.edgars-7e7.workers.dev'&&parsed.pathname==='/api/health')return response({json:{billing:'customer_only'}});
-    if(['/customer/reference-customer-portfolio.js','/customer/workspace-codec-worker.js','/customer/website-scanning-ui.js','/customer/website-scanning.js','/customer/release-freshness.js','/customer/outreach-automation-ui.js','/customer/campaign-research.js','/customer/campaign-plan.js','/customer/email-campaign-ui.js','/customer/email-campaigns.js','/customer/app.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});if((parsed.pathname==='/api/email-campaigns'||parsed.pathname==='/api/email-campaigns/companies'))return response({status:401,json:{error:'Authentication required'}});if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
+    if(['/customer/qualification-worker.js','/customer/qualification-display.js','/customer/reference-customer-portfolio.js','/customer/workspace-codec-worker.js','/customer/website-scanning-ui.js','/customer/website-scanning.js','/customer/release-freshness.js','/customer/outreach-automation-ui.js','/customer/campaign-research.js','/customer/campaign-plan.js','/customer/email-campaign-ui.js','/customer/email-campaigns.js','/customer/app.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});if((parsed.pathname==='/api/email-campaigns'||parsed.pathname==='/api/email-campaigns/companies'))return response({status:401,json:{error:'Authentication required'}});if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
     if(parsed.pathname==='/api/storage/status')return response({status:storageStatus,json:{error:'Authentication required'}});
     if(['/api/storage/checkout','/api/webhooks/stripe/storage'].includes(parsed.pathname))return response({status:405,json:{error:'Method not allowed'}});
     if (['/api/customer/state','/api/integrations/calendly/status'].includes(parsed.pathname)) return response({status:privateSettingsStatus,json:{error:'Authentication required'}});
@@ -116,7 +116,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v2"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
@@ -131,7 +131,7 @@ test('production proof rejects the old stage back handler and a cached entry', a
     const proof = await verifyRelease({
       config, expectedSha: SHA, ciConclusion: 'success', ciRunId: 'navigation',
       fetchImpl: productionFetch({
-        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v2'}"></script>`,
+        customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v3'}"></script>`,
         discoveryUi: stale === 'runtime' ? boundedDiscoveryRuntime.replace('$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)', '$("back-to-strategy")?.addEventListener("click",showStrategyStep)') : boundedDiscoveryRuntime
       }),
       nonce: `stale-stage-back-${stale}`
@@ -175,7 +175,7 @@ test('production proof blocks a Discovery runtime without a hard stop', async ()
     ciConclusion: 'success',
     ciRunId: '201',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
       discoveryUi: 'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};\ninitDiscoveryWhenReady();'
     }),
     nonce: 'timeout-regression'
@@ -193,7 +193,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
     ciConclusion: 'success',
     ciRunId: '202',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
       discoveryUi: [
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
         'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',

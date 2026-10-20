@@ -2838,6 +2838,10 @@ function qualificationContext(){
   qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}};
   return qualificationContextCache;
 }
+const qualificationDisplay=window.LeadIntelQualificationDisplay?.create({onUpdate:context=>{
+  if(qualificationContext()!==context)return;
+  renderDiscoverySafely();window.LeadIntelJourney?.refresh?.();
+}})||null;
 let qualificationPresentationDepth=0,qualificationPresentationTimer=null;
 let qualificationPresentationContext=null,qualificationPresentationResults=new Map();
 function withQualificationPresentation(operation){
@@ -2851,6 +2855,7 @@ function qualificationAssessment(candidate,options={}){
   const context=qualificationContext(),{profile,market}=context,rules=window.LeadIntelQualificationSettings?.get?.()||{};
   const saved=crmCompanyByDomain(candidate.domain);
   const settings={...rules,researchedAt:options.researchedAt??discovery?.lastRunAt??candidate.researchedAt};
+  if(qualificationPresentationDepth&&qualificationDisplay)return qualificationDisplay.read(context,{...candidate,lifecycle_status:saved?.lifecycle_status},settings);
   let key;
   if(qualificationPresentationDepth){
     if(qualificationPresentationContext!==context){qualificationPresentationContext=context;qualificationPresentationResults.clear();}
@@ -2863,7 +2868,13 @@ function qualificationAssessment(candidate,options={}){
   return assessment;
 }
 function qualificationHtml(candidate){const assessment=qualificationAssessment(candidate);const reference=Number.isFinite(assessment.lookalikeScore)?` · Reference similarity ${assessment.lookalikeScore}/100`:'';return `<p class="candidate-fit-summary"><strong>Company fit ${assessment.score===null?'not yet scored':assessment.score+'/100'}</strong>${reference} · ${assessment.eligible?(assessment.automaticEligible?'Checked · 80+ company score':'Checked · Manual review'):'Needs verification'}</p>${!assessment.eligible?`<small>${assessment.gaps.map(esc).join(' · ')}</small>`:''}`;}
-function renderAll(){if(!discoveryMounted)return;if(!qualificationPresentationDepth){const started=Date.now();try{return withQualificationPresentation(()=>renderAll());}finally{window.LeadIntelStartupTrace?.(`companies render ${Date.now()-started} ms`);}}if(window.LeadIntelPageQuality)queueMicrotask(()=>window.LeadIntelPageQuality.refresh(currentJourneyFocus()));let summary=$('company-qualification-summary');if(!summary&&window.LeadIntelQualificationSettings){summary=document.createElement('div');summary.id='company-qualification-summary';summary.className='qualification-summary';document.querySelector('#step-5 .discovery-header')?.after(summary);}window.LeadIntelQualificationSettings?.renderSummary?.();renderStatus();renderTargetList();renderSearchPreferences();renderDiscoveryFunnel();renderCandidates();renderPotentialMatches();renderPipeline();}
+function renderAll(){if(!discoveryMounted)return;if(!qualificationPresentationDepth){const started=Date.now();try{return withQualificationPresentation(()=>renderAll());}finally{window.LeadIntelStartupTrace?.(`companies render ${Date.now()-started} ms`);}}if(window.LeadIntelPageQuality)queueMicrotask(()=>window.LeadIntelPageQuality.refresh(currentJourneyFocus()));let summary=$('company-qualification-summary');if(!summary&&window.LeadIntelQualificationSettings){summary=document.createElement('div');summary.id='company-qualification-summary';summary.className='qualification-summary';document.querySelector('#step-5 .discovery-header')?.after(summary);}window.LeadIntelQualificationSettings?.renderSummary?.();renderStatus();if(qualificationDisplay?.isPending()){
+  const status=$('company-discovery-status');if(status)status.textContent='Checking saved company evidence…';
+  const cards=$('company-candidates');if(cards)cards.innerHTML='<div class="market-empty" role="status">Checking saved company evidence… You can continue using the sidebar.</div>';
+  const review=$('discovery-potential-matches');if(review)review.hidden=true;
+  const next=$('review-next-companies');if(next)next.disabled=true;
+  return;
+}const review=$('discovery-potential-matches');if(review)review.hidden=false;renderTargetList();renderSearchPreferences();renderDiscoveryFunnel();renderCandidates();renderPotentialMatches();renderPipeline();}
 function renderDiscoverySafely(){try{renderAll();return true;}catch(error){console.error("Companies page render failed",error);const run=$("run-company-discovery");if(run){run.disabled=discovery?.status==="running";run.innerHTML=discovery?.status==="running"?"Finding companies…":discovery?.status==="error"?"Retry company search <span>↻</span>":discovery?.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}return false;}}
 function bindDiscovery(){
   $("company-review-batch")?.addEventListener("click",event=>{if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();});

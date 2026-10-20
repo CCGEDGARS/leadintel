@@ -3416,7 +3416,38 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "qualification-context=20261020-v2"
+        "qualification-context=20261020-v3"
+      ]
+    },
+    {
+      "id": "background-qualification-worker",
+      "type": "text",
+      "url": "/customer/qualification-worker.js",
+      "status": 200,
+      "contains": [
+        "importScripts(",
+        "LeadIntelDiscovery.assessCompanyQualification",
+        "self.postMessage({results})"
+      ]
+    },
+    {
+      "id": "background-qualification-display",
+      "type": "text",
+      "url": "/customer/qualification-display.js",
+      "status": 200,
+      "contains": [
+        "qualification-worker.js?v=20261020-v1",
+        "if(generation!==current)return;",
+        "function read(active,candidate,settings)"
+      ]
+    },
+    {
+      "id": "background-qualification-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "qualification-display.js?v=20261020-v1"
       ]
     }
   ],

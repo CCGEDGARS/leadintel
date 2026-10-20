@@ -39,3 +39,20 @@ context changes invalidate entries. Action calls remain fresh, and returned
 presentation values are detached from cached results. Optional startup tracing
 reports restore/context boundaries and Companies render duration so acceptance
 can distinguish scoring from persistence costs.
+
+## Move presentation scoring off the input thread
+
+The synchronous batching release reduced startup to 14.2 seconds and repeated
+Companies rendering to about 110 ms, but a navigation acceptance check still
+stalled during saving. Presentation scoring therefore now runs in a short-lived
+worker. The UI shows an explicit checking state until results arrive. Reads
+batch/deduplicate candidate requests; completed display results have a bounded
+60-second lifetime and invalidate immediately on context, evidence, settings or
+CRM lifecycle changes. Late results from an obsolete context are discarded.
+Workers terminate after completion and fall back to one yielded company check
+at a time if unavailable. The existing synchronous action path is unchanged.
+
+Tests prove no scoring on the presentation call stack, fresh action validation,
+detached cached results, invalidation, stale-response rejection and identical
+worker/action evidence-policy output. This replaces the initial assumption that
+less synchronous work alone would satisfy responsiveness.

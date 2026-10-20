@@ -4,13 +4,14 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 
-function runtime(){
+function runtime(background=false){
   let builds=0,checks=0,raw=JSON.stringify({website:'https://seller.example',profile:{priorityOffers:'Training'},market:{signals:[]}});
   const c={console,URL,setTimeout,clearTimeout,addEventListener(){},document:{getElementById(){return null;}},
     localStorage:{getItem:()=>raw},
     LeadIntelDiscovery:{canonicalDomain:value=>value,effectiveTargetingProfile:p=>{builds++;return p;},assessCompanyQualification:(candidate,profile,market,rules)=>{checks++;return {offer:profile.priorityOffers,lifecycle:candidate.lifecycle_status,minimum:rules.minimumScore,researchedAt:rules.researchedAt};}},
     LeadIntelServerBridge:{workspace:{id:'one'},session:{user:{id:'user'}}},
     LeadIntelQualificationSettings:{get:()=>({minimumScore:80})}};
+  if(background)c.LeadIntelQualificationDisplay=require('../qualification-display.js');
   c.window=c;
   const source=fs.readFileSync(path.join(__dirname,'../discovery-ui.js'),'utf8').replace(/\ninitDiscoveryWhenReady\(\);\s*$/,'');
   vm.createContext(c);vm.runInContext(source,c);
@@ -46,4 +47,12 @@ test('one presentation pass checks each unchanged company once; actions still ch
     assert.equal(r.assess().minimum,95);
   });
   assert.equal(r.checks(),4,'evidence and rule changes invalidate presentation results');
+});
+
+
+test('background display never runs scoring on the UI call stack, while actions remain fresh',()=>{
+  const r=runtime(true);
+  const shown=r.c.withQualificationPresentation(()=>r.assess());
+  assert.equal(shown.pending,true);assert.equal(r.checks(),0);
+  assert.equal(r.assess().offer,'Training');assert.equal(r.checks(),1);
 });
