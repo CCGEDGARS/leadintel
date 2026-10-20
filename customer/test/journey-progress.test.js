@@ -8,7 +8,7 @@ const Journey=fs.existsSync(modulePath)?require(modulePath):{};
 test('journey can assess retained companies before Companies mounts and uses the saved research timestamp',()=>{
  const D=require('../discovery-engine.js'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
  const assess=vm.runInNewContext(source.slice(source.indexOf('function qualificationAssessment('),source.indexOf('function qualificationHtml('))+';qualificationAssessment',{
-  discovery:null,mainState:()=>({}),companyQualificationProfile:()=>({website:'seller.example',priorityOffers:'assembly services',idealCustomer:'equipment operators'}),crmCompanyByDomain:()=>null,LeadIntelDiscovery:D,window:{}
+  discovery:null,qualificationContext:()=>({profile:{website:'seller.example',priorityOffers:'assembly services',idealCustomer:'equipment operators'},market:{}}),crmCompanyByDomain:()=>null,LeadIntelDiscovery:D,window:{}
  });
  const researchedAt='2026-10-20T08:00:00Z';let q;
  assert.doesNotThrow(()=>{q=assess({company:'Nordic',domain:'nordic.se'},{researchedAt});});

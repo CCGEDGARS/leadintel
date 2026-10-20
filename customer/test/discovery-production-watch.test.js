@@ -27,7 +27,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
   return async url => {
     const parsed = new URL(String(url));
     if(parsed.hostname==='apollo-proxy.edgars-7e7.workers.dev'&&parsed.pathname==='/api/health')return response({json:{billing:'customer_only'}});
-    if(['/customer/workspace-codec-worker.js','/customer/website-scanning-ui.js','/customer/website-scanning.js','/customer/release-freshness.js','/customer/outreach-automation-ui.js','/customer/campaign-research.js','/customer/campaign-plan.js','/customer/email-campaign-ui.js','/customer/email-campaigns.js','/customer/app.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});if((parsed.pathname==='/api/email-campaigns'||parsed.pathname==='/api/email-campaigns/companies'))return response({status:401,json:{error:'Authentication required'}});if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
+    if(['/customer/reference-customer-portfolio.js','/customer/workspace-codec-worker.js','/customer/website-scanning-ui.js','/customer/website-scanning.js','/customer/release-freshness.js','/customer/outreach-automation-ui.js','/customer/campaign-research.js','/customer/campaign-plan.js','/customer/email-campaign-ui.js','/customer/email-campaigns.js','/customer/app.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});if((parsed.pathname==='/api/email-campaigns'||parsed.pathname==='/api/email-campaigns/companies'))return response({status:401,json:{error:'Authentication required'}});if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
     if(parsed.pathname==='/api/storage/status')return response({status:storageStatus,json:{error:'Authentication required'}});
     if(['/api/storage/checkout','/api/webhooks/stripe/storage'].includes(parsed.pathname))return response({status:405,json:{error:'Method not allowed'}});
     if (['/api/customer/state','/api/integrations/calendly/status'].includes(parsed.pathname)) return response({status:privateSettingsStatus,json:{error:'Authentication required'}});
@@ -71,6 +71,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
 const storageEntries=['account-cache.js','ai-settings.js','attention-centre.js','api-transport.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[0]).join('\n');
 const shell = 'workspace-save=20261020-v1 buyer-runtime-recovery=20261020-v1 id="additional-contact-preferences" Use additional services automatically when no confirmed public work email is found. additional-contact-services.js?v=20261019-v1 '+fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/<script src="state-budget\.js[^"]*"><\/script>/)[0]+'\n'+'audit-monitoring=20261015-v1 audit-delivery=20261015-v1 email-campaign-ui.js?v=20261014-v1 email-campaigns.css?v=20261014-v1 email-campaigns=20261014-v1\nassistant-window=20261015-v3 content-library=20261015-v2 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
+  'function qualificationContext(){ previous.raw===raw qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}}',
   'CRM refresh request_timeout crm-refresh:',
   'const waitForRun=async operation=> BUYER_RESEARCH_CANCELED Cross-checking buyer evidence with grounded web research scopeIsCurrent',
   'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
@@ -115,7 +116,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v1"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
@@ -130,7 +131,7 @@ test('production proof rejects the old stage back handler and a cached entry', a
     const proof = await verifyRelease({
       config, expectedSha: SHA, ciConclusion: 'success', ciRunId: 'navigation',
       fetchImpl: productionFetch({
-        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1'}"></script>`,
+        customerHtml: `${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v1'}"></script>`,
         discoveryUi: stale === 'runtime' ? boundedDiscoveryRuntime.replace('$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)', '$("back-to-strategy")?.addEventListener("click",showStrategyStep)') : boundedDiscoveryRuntime
       }),
       nonce: `stale-stage-back-${stale}`

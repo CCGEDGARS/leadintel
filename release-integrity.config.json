@@ -3389,6 +3389,35 @@
         "request_timeout",
         "crm-refresh:"
       ]
+    },
+    {
+      "id": "qualification-context-preparation",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function qualificationContext(){",
+        "previous.raw===raw",
+        "qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}}"
+      ]
+    },
+    {
+      "id": "reference-read-workspace-isolation",
+      "type": "text",
+      "url": "/customer/reference-customer-portfolio.js",
+      "status": 200,
+      "contains": [
+        "const portfolio=normalizePortfolio(state?.referenceCustomerPortfolio||{})"
+      ]
+    },
+    {
+      "id": "qualification-context-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "qualification-context=20261020-v1"
+      ]
     }
   ],
   "retry": {
