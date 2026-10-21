@@ -200,19 +200,19 @@ async function extractionFallback(env,url,access,workspaceId,credential,status,s
   await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status}});
   return direct;
 }
-export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal}={}){
+export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,directTimeoutMs=10000,firecrawlTimeoutMs=20000}={}){
   if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
   const researchTrace=[],unused=provider=>researchTrace.push({provider,operation:'extract',status:'skipped',results:0,reason:'Earlier extractor succeeded'});
   const check=()=>{if(signal.aborted)throw Object.assign(new Error('Public extraction canceled'),{status:499,researchTrace});};
   const valid=page=>{const text=String(page?.markdown||page?.content||'').trim();return text.length>=40&&!(/just a moment|access denied|verify you are human|cloudflare ray id/i.test(text)&&text.length<1600);};
   check();
-  try{const result=await fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});if(!valid(result.data))throw new Error('Blocked or empty page');researchTrace.push({provider:'direct',operation:'extract',status:'succeeded',results:1});unused('firecrawl');unused('scrapling');return {...result,researchTrace};}
+  try{const result=await fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(Math.max(1000,Math.min(10000,directTimeoutMs)))])});if(!valid(result.data))throw new Error('Blocked or empty page');researchTrace.push({provider:'direct',operation:'extract',status:'succeeded',results:1});unused('firecrawl');unused('scrapling');return {...result,researchTrace};}
   catch{researchTrace.push({provider:'direct',operation:'extract',status:'failed',results:0,reason:signal.aborted?'Extraction canceled or timed out':'Direct page unavailable or blocked'});check();}
   let credential;
   try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch{researchTrace.push({provider:'firecrawl',operation:'extract',status:'skipped',results:0,reason:'Workspace Firecrawl credential unavailable'});}
   if(credential){
     check();try{
-      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0}),signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
+      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0}),signal:AbortSignal.any([signal,AbortSignal.timeout(Math.max(1000,Math.min(20000,firecrawlTimeoutMs)))])});
       const payload=await response.json(),data=payload.data||payload;if(!response.ok||payload.success===false||!valid(data))throw new Error(response.ok?'Blocked or empty page':`HTTP ${response.status}`);
       researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
       if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();
