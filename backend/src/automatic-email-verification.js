@@ -10,7 +10,7 @@ export async function verifyAutomaticEmail(env,workspaceId,email,{companyDomain=
     const minimum=confirmationLevel||await loadConfirmationLevel(env,workspaceId);
     const verified=String(contact?.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted({...contact,normalized_email:address},companyDomain,minimum);
     if(verified&&contact.email_status==='public_confirmed')return {verified:true,status:'public_confirmed',provider:'Public source',mailbox_verified:false};
-    const provider=[contact?.verification_provider,contact?.source].find(value=>['apollo','hunter'].includes(String(value||'').toLowerCase()));
-    return {verified,status:verified?'verified':'needs_review',reason:verified?'':contact?.email_status==='public_confirmed'?'Recheck the official source, or separately approve provider verification for this contact.':'Confirm the company email in Buyers. Apollo and Hunter require separate approval.',provider:provider?/hunter/i.test(provider)?'Hunter':'Apollo':'CRM',...(verified&&/hunter/i.test(provider||'')?{cached:true}:{})};
+    const provider=[contact?.verification_provider,contact?.source].find(value=>['apollo','hunter','treg'].includes(String(value||'').toLowerCase()));
+    return {verified,status:verified?'verified':'needs_review',reason:verified?'':contact?.email_status==='public_confirmed'?'Recheck the official source, or separately approve provider verification for this contact.':'Confirm the company email in Buyers. Paid contact research requires approval.',provider:provider?/treg/i.test(provider)?'Treg':/hunter/i.test(provider)?'Hunter':'Apollo':'CRM',...(verified&&/hunter/i.test(provider||'')?{cached:true}:{})};
   }catch{return {verified:false,status:'needs_review',reason:'Email confirmation unavailable. Retry the saved contact check.'};}
 }

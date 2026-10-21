@@ -5,8 +5,8 @@ import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from 
 import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
 
-const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter']);
-const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter'});
+const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter','treg']);
+const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter',treg:'Treg'});
 const MAX_DIRECT_PAGE_BYTES=2_000_000;
 const MAX_DIRECT_PAGE_CHARS=60_000;
 const MAX_DIRECT_REDIRECTS=4;
@@ -60,7 +60,14 @@ async function verifyHunter(apiKey){
   const remaining=kind=>{const value=payload.data.requests?.[kind]?.remaining;return value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))?Number(value):null;};
   return {plan:clean(payload.data.plan_name,80),remaining_credits:remaining('credits'),remaining_searches:remaining('searches'),remaining_verifications:remaining('verifications')};
 }
-async function verifyCredential(provider,apiKey){if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
+async function verifyTreg(apiKey){
+  const response=await fetch('https://treg.to/mcp/',{method:'POST',headers:{Authorization:'Bearer '+apiKey,Accept:'application/json, text/event-stream','Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'balance',arguments:{}}}),signal:AbortSignal.timeout(20000)});
+  const payload=await response.json().catch(()=>({}));let balance=payload.result?.structuredContent;
+  if(!balance){try{balance=JSON.parse(payload.result?.content?.find(row=>row.type==='text')?.text||'{}');}catch{}}
+  if(!response.ok||payload.error||payload.result?.isError||!balance?.team||!Number.isFinite(Number(balance.balance_usd)))throw new Error('Treg could not verify this team token.');
+  return {team:clean(balance.team,100),balance_usd:Number(balance.balance_usd)};
+}
+async function verifyCredential(provider,apiKey){if(provider==='treg')return verifyTreg(apiKey);if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
 
 function privateIpv4(hostname){
   const parts=hostname.split('.');if(parts.length!==4||parts.some(part=>!/^\d+$/.test(part)||Number(part)>255))return false;

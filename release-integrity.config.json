@@ -230,8 +230,8 @@
       "status": 200,
       "contains": [
         "name=\"confirmationLevel\"",
-        "name=\"confirmPhone\"",
-        "Public confirmation verifies the identity link, not mailbox delivery."
+        "Public confirmation verifies the identity link, not mailbox delivery.",
+        "Paid search is controlled by Activate paid search in Setup."
       ]
     },
     {
@@ -3838,9 +3838,9 @@
       "url": "/customer/service-settings-extension.js",
       "status": 200,
       "contains": [
-        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>config.provider==='firecrawl')",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider))",
         "for(const config of SETTINGS_PROVIDERS)",
-        "Connect Firecrawl with your own API key."
+        "Connect Firecrawl and your Treg team token."
       ]
     },
     {
@@ -3853,6 +3853,28 @@
         "quote:clean(row.quote).slice(0,1200)",
         "function malformedBuyerRole(value)",
         "Parsed role contains website navigation or markup"
+      ]
+    },
+    {
+      "id": "treg-paid-search-control",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "data-paid-search-toggle",
+        "Activate paid search",
+        "Approx. $0.30",
+        "provider:'treg'"
+      ]
+    },
+    {
+      "id": "treg-research-single-buyer-gate",
+      "type": "text",
+      "url": "/customer/additional-contact-policy.js",
+      "status": 200,
+      "contains": [
+        "options.provider!=='treg'",
+        "allowPartialRoster:options.provider==='treg'"
       ]
     }
   ],

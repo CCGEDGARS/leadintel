@@ -4,11 +4,12 @@ const SETTINGS_VERSION='20261012-visible-apollo-key-v1';
 const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
+  {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Pay per use work-email finding and verification'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
   {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Manually approved email finding and additional delivery verification using your Hunter credits'}
 ]);
 // Legacy providers remain available to existing runtime policies, outside Settings.
-const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>config.provider==='firecrawl');
+const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider));
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
 let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
@@ -42,7 +43,7 @@ function serviceControls(config,row){
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
     ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check. If Apollo returns no confirmed email, Find email can separately request your approval to use Hunter email finding. No provider guarantees 100% accuracy.</small>`:''}
-    <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
+    <label class="ai-settings-field">${config.provider==='treg'?'Team token':'API key'}<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
       <button class="ai-settings-btn danger" data-service-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
@@ -66,6 +67,7 @@ function serviceDetail(config,row,current){
   if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Connect your own Apollo key'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
+  if(config.provider==='treg')return 'Team '+(row.metadata?.team||'connected')+' · '+(Number.isFinite(row.metadata?.balance_usd)?'$'+Number(row.metadata.balance_usd).toFixed(4)+' prepaid balance':'Pay per use')+(row.last_used_at?' · last used '+shortDate(row.last_used_at):'');
   if(config.provider==='hunter')return `Customer-owned credential${Number.isFinite(Number(row?.metadata?.remaining_verifications))&&row.metadata.remaining_verifications!==null?` · ${Number(row.metadata.remaining_verifications)} verifications remaining`:''}${row.verified_at?` · checked ${shortDate(row.verified_at)}`:''}`;
   return `Customer-owned credential${row.verified_at?` · verified ${shortDate(row.verified_at)}`:''}${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
 }
@@ -92,7 +94,7 @@ function decorateReadiness(){
   const observedFirecrawl=window.LeadIntelIntegrationHealth?.firecrawl;
   const serviceReady=SETTINGS_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
   const calendlyReady=Boolean(calendlyStatus.connected);
-  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/5 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
+  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
 }
 function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
@@ -104,9 +106,9 @@ function decorateCards(){
   if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Firecrawl with your own API key. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Firecrawl and your Treg team token. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
   for(const config of SETTINGS_PROVIDERS){
-    const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
+    let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&config.provider==='treg'){card=document.createElement('article');card.className='integration-card';card.dataset.integration='treg';card.innerHTML='<div class="integration-card-head"><div><strong>Treg</strong><small>Buyer work-email research</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>';grid.appendChild(card);}if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');

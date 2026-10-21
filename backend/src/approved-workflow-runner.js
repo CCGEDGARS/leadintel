@@ -1,3 +1,5 @@
+import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
+import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import '../../customer/company-dossier-ui.js';
 import {readOwnedPayload} from './workspace-record-store.js';
@@ -74,7 +76,7 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   const research=globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch,prior=detail.intelligence?.research_snapshot?.buyerResearch;
   if(Date.parse(prior?.checkedAt||'')>Date.parse(research.checkedAt||''))return false;
   if(Date.parse(prior?.discovery?.officialContactInventory?.checkedAt||'')>Date.parse(research.discovery?.officialContactInventory?.checkedAt||''))research.discovery.officialContactInventory=prior.discovery.officialContactInventory;
-  await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),research_snapshot:{...(detail.intelligence?.research_snapshot||{}),buyerResearch:research}});await guard();return true;
+  await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),research_snapshot:{...(detail.intelligence?.research_snapshot||{}),...(candidate.qualification?{qualification:candidate.qualification}:{}),...(candidate.buyerFit?{buyerFit:candidate.buyerFit}:{}),buyerResearch:research}});await guard();return true;
 }
 
 async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier){
@@ -156,6 +158,20 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
+  const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
+  if(paidPolicy.enabled&&paidPolicy.provider==='treg'){
+    const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1});
+    const targetPerson=targets[0],review=candidate.publicResearch.aiReview;
+    const affects=entry=>!entry.person_id||String(entry.person_id)===String(targetPerson?.id);
+    if(targetPerson&&review?.status==='complete'&&review.reviewedPersonIds?.includes(String(targetPerson.id))&&!review.findings?.some(affects)&&!review.conflicts?.some(affects)){
+      await guard();const paidCompany=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
+      const result=await lookupAdditionalEmail(env,crmContext,paidCompany.id,{person_id:targetPerson.id,provider:'treg',automatic:true},{guard});await guard();
+      candidate.buyerDiscovery.paidResearch=result.research;
+      if(result.contact&&globalThis.LeadIntelContactPolicy.accepted(result.contact,candidate.domain,config.buyers.confirmationLevel))return complete(result.contact);
+      candidate.buyerDiscovery.issues.push(result.reason||'Treg did not confirm a usable work email.');
+    }else candidate.buyerDiscovery.issues.push(targetPerson?'AI review for the strongest buyer needs attention.':'Complete the strongest buyer’s required public checks before paid search.');
+    candidate.buyerDiscovery.contactConfirmationRequired=true;return null;
+  }
   if(candidate.publicResearch.aiReview?.status!=='complete'||candidate.publicResearch.aiReview.findings.length){candidate.buyerDiscovery.contactConfirmationRequired=true;candidate.buyerDiscovery.issues.push('AI supervisor review is incomplete or has unresolved evidence gaps; review before choosing a new automatic recipient');return null;}
   if(config.buyers.confirmationLevel==='public_confirmed'){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
@@ -167,6 +183,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       try{const contact=await confirmPublicWorkEmail(env,crmContext,target.id,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url});await guard();if(globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel))return complete(contact);}catch(error){candidate.buyerDiscovery.issues.push(error.message);}
     }
   }
+  if(paidPolicy.provider==='treg'){candidate.buyerDiscovery.contactConfirmationRequired=true;return null;}
   if(accountability.status!=='complete'){candidate.buyerDiscovery.contactConfirmationRequired=true;candidate.buyerDiscovery.issues.push('Mandatory public contact research is incomplete; resume checks before additional services');return null;}
   // Owner-approved automatic confirmation uses the same cache and credit
   // policy as manual Apollo enrichment. Phone requires its own approval; personal email remains excluded.
@@ -262,7 +279,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,context.profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
+    const candidates=[],reviewBuyers=[];for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,context.profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
     return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
