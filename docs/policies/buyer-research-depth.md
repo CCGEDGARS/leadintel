@@ -24,6 +24,8 @@ The check passes only when each retained identity has completed its required che
 
 Earlier saved runs display **not assessed** until explicitly refreshed; opening Buyers never launches a full upgrade search. Reports and provider counters survive workspace normalization and CRM snapshots. Use the same policy for other customers, industries, languages and company names.
 
+Fresh selection handoff (21 October 2026): explicitly selecting a new, unresearched company starts identity discovery and the existing public-contact workflow once. Merely opening/reloading Buyers or reselecting retained/attempted research does not restart it. With no full identities, the quality action must start/retry identity discovery. Show an unstarted search as **Research not started**, not a zero-email outcome. Failed starts remain visible and retryable; contact-phase activity blocks overlapping identity refreshes.
+
 ## Gmail execution correction — 21 October 2026
 
 The shared mandatory path generated Gmail name variants but replaced the dedicated variant query with a broad public-contact query. It then copied the public check status into the Gmail channel, allowing the UI to claim completed Gmail searches that had not run. The older dedicated query remained in a legacy path bypassed for known identities.
