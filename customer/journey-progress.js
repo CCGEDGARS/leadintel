@@ -29,7 +29,7 @@
     return STATUS_LABELS[stage.status]||'Available';
   }
 
-  function stageSteps({main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false}={}){
+  function stageSteps({main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
     const answers=main.answers&&typeof main.answers==='object'?main.answers:{};
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
@@ -72,7 +72,8 @@
         step('companies',discovery.status==='no_results'?(retainedCompanies?'No new qualified companies · saved companies retained':'No qualified companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>=requested,{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
         step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
-        step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
+        step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'}),
+        step('buyer-quality','Buyer research quality requirements met',buyerQualityPassed,{action:'Complete the buyer quality check and resolve its unmet requirements'})
       ],
       6:[
         step('brand','Sender identity configured',main.brandIdentity?.status==='ready',{optional:true,action:'Configure sender identity in Messages'}),
@@ -102,8 +103,8 @@
       1:internal[1]||[],
       2:[...(internal[2]||[]),...(internal[3]||[])],
       3:internal[4]||[],
-      4:(internal[5]||[]).filter(item=>item.id!=='people'),
-      5:(internal[5]||[]).filter(item=>item.id==='people'),
+      4:(internal[5]||[]).filter(item=>!['people','buyer-quality'].includes(item.id)),
+      5:(internal[5]||[]).filter(item=>['people','buyer-quality'].includes(item.id)),
       6:internal[6]||[],
       7:internal[7]||[]
     };

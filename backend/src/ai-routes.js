@@ -53,19 +53,31 @@ async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
 async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='gemini' LIMIT 1`).bind(workspaceId).first();}
 
-export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal=AbortSignal.timeout(20000),userId=null,generate=generateText}={}){
-  const trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
+async function boundedBuyerReview(operation,parent,timeoutMs){
+  const controller=new AbortController();let timer,rejectStopped;
+  const stopped=new Promise((_,reject)=>{rejectStopped=reject;});
+  const cancel=()=>{controller.abort();rejectStopped(new Error(parent?.aborted?'AI review canceled':'AI review timed out'));};
+  timer=setTimeout(cancel,Math.max(1,timeoutMs));parent?.addEventListener('abort',cancel,{once:true});if(parent?.aborted)cancel();
+  try{return await Promise.race([Promise.resolve().then(()=>operation(controller.signal)),stopped]);}finally{clearTimeout(timer);parent?.removeEventListener('abort',cancel);controller.abort();}
+}
+
+export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,userId=null,generate=generateText,maxDurationMs=20000}={}){
+  const started=Date.now(),duration=Math.max(1,Math.min(20000,maxDurationMs)),trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
   try{
     if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
-    const choices=(await Promise.all([geminiIntegration(env,workspaceId),activeIntegration(env,workspaceId),openAiIntegration(env,workspaceId)])).filter(Boolean),seen=new Set();
+    const configured=(await Promise.all([geminiIntegration(env,workspaceId),openAiIntegration(env,workspaceId),activeIntegration(env,workspaceId)])).filter(Boolean),choices=[...new Map(configured.map(row=>[row.provider,row])).values()].slice(0,2),seen=new Set();
     for(const integration of choices){
       if(seen.has(integration.provider))continue;seen.add(integration.provider);
       const tool=integration.provider==='gemini'?'gemini':'ai_review';let result;
       try{
         if(signal?.aborted)break;
-        const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
-        result=await reviewContactEvidence({body,apiKey,model:integration.model,provider:integration.provider,signal,generate});
-      }catch(cause){trace.push({provider:tool,status:'failed',reason:'AI evidence review unavailable; no web search'});continue;}
+        const remaining=duration-(Date.now()-started);if(remaining<=0)break;
+        const hasFallback=choices.some(row=>!seen.has(row.provider)),attemptMs=hasFallback?Math.min(6000,Math.max(1,remaining*.35)):remaining;
+        result=await boundedBuyerReview(async attemptSignal=>{
+          const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+          return reviewContactEvidence({body,apiKey,model:integration.model,provider:integration.provider,signal:attemptSignal,generate});
+        },signal,attemptMs);
+      }catch(cause){const message=String(cause?.message||''),reason=/^(AI review (?:timed out|canceled)|(?:OpenAI|Gemini|Anthropic) (?:request|returned)|AI contact review returned invalid JSON)/.test(message)?message.slice(0,160):'AI evidence review unavailable';trace.push({provider:tool,status:'failed',reason});continue;}
       trace.push({provider:tool,status:'succeeded',results:result.supervisor.reviewedPersonIds.length,reason:integration.provider+' evidence review; no web search'});
       try{
         await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,integration.provider).run();
@@ -73,7 +85,7 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal=
       }catch{}
       return {...result,researchTrace:trace};
     }
-    return unavailable(choices.length?'AI evidence review was unavailable':'No workspace AI reviewer is configured');
+    return unavailable(trace.length?trace.map(row=>row.provider+': '+row.reason).join(' · ').slice(0,300):choices.length?'AI evidence review was unavailable':'No workspace AI reviewer is configured');
   }catch(cause){return unavailable('AI evidence review was unavailable');}
 }
 

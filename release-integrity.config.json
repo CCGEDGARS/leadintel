@@ -3573,7 +3573,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-supervisor=20261021-v2"
+        "buyer-supervisor=20261021-v3"
       ]
     }
   ],

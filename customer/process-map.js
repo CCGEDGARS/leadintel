@@ -137,7 +137,9 @@ function websiteActivated(main){
 function journeyModel(availability,current){
   const state=readJourneyState();
   const journeyFocus=state.discoveryMeta.activeJourneyStage===5?'buyers':'companies';
-  return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,journeyFocus,websiteActivated:websiteActivated(state.main)})||[];
+  const quality=window.LeadIntelDiscoveryUI?.assessBuyerQuality;
+  const buyerQualityPassed=typeof quality==='function'&&[...(state.discovery.selectedProspects||[]),...(state.discovery.pipeline||[])].some(candidate=>candidate.people?.length&&candidate.peopleStatus!=='loading'&&candidate.publicContactStatus!=='loading'&&quality(candidate).passed);
+  return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,journeyFocus,buyerQualityPassed,websiteActivated:websiteActivated(state.main)})||[];
 }
 const statusLabels={current:"In progress",complete:"Complete",available:"Available",locked:"Locked",skipped:"Skipped · optional"};
 function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Available";}
