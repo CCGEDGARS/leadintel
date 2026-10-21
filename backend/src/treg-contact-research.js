@@ -86,7 +86,8 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const domainOf=value=>{try{return new URL(/^https?:/.test(value)?value:'https://'+value).hostname.replace(/^www\./,'').toLowerCase();}catch{return '';}};
  const clean=value=>typeof value==='string'?value.trim().slice(0,200):'';
  const fields={full_name:name,first_name:parts[0],last_name:parts.slice(1).join(' '),domain,...(expectedProfile?{linkedin_url:expectedProfile}:{}),...(emailResult.contact?.work_email?{email:emailResult.contact.work_email}:{})};
- const previousData=person.contactData?.version===1&&person.contactData.domain===domain&&String(person.contactData.personId)===String(person.id)?person.contactData:null;
+ const retained=person.contactData;
+ const previousData=retained?.version===1&&retained.domain===domain&&String(retained.personId)===String(person.id)&&(!retained.identityName||String(retained.identityName).trim().toLowerCase()===name.toLowerCase())&&(!retained.identityLinkedinUrl||!expectedProfile||linkedin(retained.identityLinkedinUrl)===linkedin(expectedProfile))?retained:null;
  const data={version:1,personId:String(person.id),identityName:name,identityLinkedinUrl:expectedProfile||'',domain,checkedAt,status:'no_new_data',profile:!includeEmail&&previousData?.profile?{...previousData.profile}:{status:includeEmail?'not_found':'not_requested'},phone:!includePhone&&previousData?.phone?.number?{...previousData.phone,checkedAt:previousData.phone.checkedAt||previousData.checkedAt,requested:false}:{status:includePhone?'not_found':'not_requested'},costMicro:0,callIds:[]};
  const attributed=payload=>{
   const row=object(payload.output),raw=object(payload.raw),r=object(raw.person||raw.data||raw);

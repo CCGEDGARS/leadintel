@@ -103,3 +103,12 @@ test('phone-only research never buys email or profile and retains existing profe
  const result=await f.mod.findTregWorkEmail({},ctx,candidate,selected,'c',{attemptKey:'phone-only',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
  assert.deepEqual(f.calls.map(c=>c.url),['https://treg.to/call/treg.people.phone.find']);assert.equal(result.contact,null);assert.equal(result.contactData.profile.city,'Riga');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.research.costMicro,125000);
 });
+
+test('phone-only lookup cannot relabel retained profile data from another identity',async()=>{
+ for(const stale of [{identityName:'Other Person',identityLinkedinUrl:person.publicLinkedinUrl},{identityName:person.name,identityLinkedinUrl:'https://www.linkedin.com/in/other-person'}]){
+  const f=await fixture();f.deps.saveData=async()=>{};f.deps.fetch=async()=>Response.json({output:{phone:'+37120000001'}});
+  const selected={...person,contactData:{version:1,domain:'example.com',personId:person.id,...stale,profile:{status:'provider_reported',title:'Other Person role',city:'Other city'},phone:{status:'provider_listed',number:'+37120000002'}}};
+  const result=await f.mod.findTregWorkEmail({},ctx,candidate,selected,'c',{attemptKey:'identity-check',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
+  assert.equal(result.contactData.identityName,person.name);assert.equal(result.contactData.profile.title,undefined);assert.equal(result.contactData.profile.city,undefined);assert.equal(result.contactData.profile.status,'not_requested');assert.equal(result.contactData.phone.number,'+37120000001');
+ }
+});
