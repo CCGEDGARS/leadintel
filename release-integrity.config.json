@@ -3567,7 +3567,7 @@
       "url": "/customer/additional-contact-policy.js",
       "status": 200,
       "contains": [
-        "this buyer’s mandatory public research"
+        "this buyer\u2019s mandatory public research"
       ]
     },
     {
@@ -3707,7 +3707,7 @@
         "function officialCompanyContactInventory(",
         "function safeOfficialContactInventory(",
         "async function runOfficialContactResearch(",
-        "20261021-official-contacts-v3"
+        "20261021-official-contacts-v4"
       ]
     },
     {
@@ -3719,7 +3719,10 @@
         "async function refreshOfficialCompanyContacts(",
         "data-refresh-company-contacts=",
         "published email routes",
-        "inventoryRestored"
+        "inventoryRestored",
+        "Read this source first",
+        "Official sources read",
+        "data-official-contact-url"
       ]
     },
     {
@@ -3738,7 +3741,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v3"
+        "official-company-contacts=20261021-v4"
       ]
     },
     {
@@ -3747,7 +3750,7 @@
       "url": "/customer/shell-support-loader.js",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v3"
+        "official-company-contacts=20261021-v4"
       ]
     }
   ],
