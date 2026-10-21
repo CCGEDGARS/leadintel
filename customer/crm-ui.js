@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  const VERSION='20260928-crm-buyer-recovery-v1';
+  const VERSION='20261021-contact-data-retention-v1';
   const state={open:false,view:'all',q:'',companies:[],selectedId:'',detail:null,loading:false,error:'',activityCursor:null,activityLoading:false,activityError:'',buyerSearching:false,buyerError:''};
   let loadedWorkspace='';
   function qualityContext(){const Q=root.LeadIntelPageQuality,make=Q.check,b=bridge();return {loaded:Boolean(q('crm-workspace')),busy:state.loading||state.activityLoading||state.buyerSearching,inputs:{workspace:b?.workspace?.id,loadedWorkspace,view:state.view,query:state.q,company:state.detail?.company?.id,detail:state.detail,error:state.error},checks:[make('crm-loaded','CRM records loaded from the current workspace',loadedWorkspace===b?.workspace?.id&&!state.error,state.error||'Load the CRM records for this workspace.',{actions:['write'],state:state.error?'blocked':'preparing'}),make('crm-record','Selected CRM record loaded',Boolean(state.detail?.company?.id&&state.selectedId===state.detail.company.id),'Choose a company record before changing it.',{actions:['write'],target:{id:'crm-company-list'}})]};}

@@ -77,7 +77,7 @@
     if(!intelligence)return '<div class="crm-detail-empty">No durable intelligence snapshot yet.</div>';
     const signals=Array.isArray(intelligence.matched_signals)?intelligence.matched_signals:[];
     const evidence=Array.isArray(intelligence.evidence)?intelligence.evidence:[];
-    return `<div class="crm-intel-block"><p>${esc(intelligence.opportunity_hypothesis||"No opportunity hypothesis saved.")}</p><div class="crm-chip-list">${signals.length?signals.slice(0,8).map(item=>`<span>${esc(item.name||item.id||"Signal")}</span>`).join(""):"<span>No matched signals</span>"}</div><small>${evidence.length} evidence source${evidence.length===1?"":"s"} · ${esc(intelligence.confidence||"Unrated")} confidence</small><h5 class="crm-subheading">Score breakdown</h5>${scoreBreakdownHtml(intelligence.score_breakdown)}<h5 class="crm-subheading">Evidence</h5>${evidenceHtml(evidence)}${buyerResearchHtml(intelligence.research_snapshot?.buyerResearch)}</div>`;
+    return `<div class="crm-intel-block"><p>${esc(intelligence.opportunity_hypothesis||"No opportunity hypothesis saved.")}</p><div class="crm-chip-list">${signals.length?signals.slice(0,8).map(item=>`<span>${esc(item.name||item.id||"Signal")}</span>`).join(""):"<span>No matched signals</span>"}</div><small>${evidence.length} evidence source${evidence.length===1?"":"s"} · ${esc(intelligence.confidence||"Unrated")} confidence</small><h5 class="crm-subheading">Score breakdown</h5>${scoreBreakdownHtml(intelligence.score_breakdown)}<h5 class="crm-subheading">Evidence</h5>${evidenceHtml(evidence)}${buyerResearchHtml(intelligence.research_snapshot?.buyerResearch)}${(intelligence.contactData||[]).length?'<h5 class="crm-subheading">Retained contact profiles</h5>'+intelligence.contactData.map(data=>'<article class="crm-contact"><strong>'+esc(data.identityName||intelligence.research_snapshot?.buyerResearch?.buyers?.find(p=>String(p.id)===String(data.personId))?.name||data.personId)+'</strong>'+contactDataHtml(data)+'</article>').join(''):''}</div>`;
   }
   function sourceLabel(value){
     const source=clean(value,80);
@@ -85,6 +85,12 @@
     if(source.toLowerCase()==="apollo")return "Apollo";
     if(source.toLowerCase()==="manual")return "Manual";
     return source;
+  }
+  function contactDataHtml(data){
+    if(!data||data.version!==undefined&&data.version!==1)return '';
+    const p=data.profile||{},phone=data.phone||{},profile=safeLinkedInProfileUrl(p.linkedinUrl);
+    const fields=[['Role',p.title],['Company',p.company],['Seniority',p.seniority],['City',p.city],['Country',p.country],['Profile source',p.source],['Phone source',phone.source]];
+    return `<section class="crm-contact-data"><strong class="crm-data-updated">${data.status==='updated'?'Data updated ✓':'Data checked'}</strong><small>Saved check · ${esc(data.checkedAt)}</small>${fields.filter(([,v])=>v).map(([k,v])=>`<small>${k} · ${esc(v)}</small>`).join('')}${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">Provider profile ↗</a>`:''}${p.status==='provider_reported'?'<small>Profile · provider reported</small>':`<small>Profile · ${esc(p.status||'not found')}</small>`}${phone.number?`<small>Phone · ${esc(phone.number)} · provider listing · reachability and ownership unconfirmed</small>`:`<small>Phone · ${esc(phone.status||'not found')}</small>`}${Number.isFinite(data.costMicro)?`<small>Lookup cost · $${(data.costMicro/1000000).toFixed(4)}</small>`:''}${data.lastAttempt?.status==='partial'?'<small>Latest check needs review; previously found details retained.</small>':''}</section>`;
   }
   function contactsHtml(contacts=[],options={}){
     const rows=Array.isArray(contacts)?contacts:[];
@@ -100,8 +106,8 @@
       const link=profileUrl
         ?`<a class="crm-contact-linkedin" href="${esc(profileUrl)}" target="_blank" rel="noopener noreferrer">View LinkedIn profile ↗</a><small class="crm-contact-provenance">${publicProfileUrl===profileUrl?"Public profile match · ":source==="Apollo"?"Apollo-provided identity link · ":""}Confirm the current role before outreach.</small>`
         :"";
-      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong>${nameEvidence?`<a href="${esc(nameEvidence)}" target="_blank" rel="noopener noreferrer">Public name source ↗</a>`:""}<span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small>${emailEvidence?`<a href="${esc(emailEvidence)}" target="_blank" rel="noopener noreferrer">Public email source ↗</a>`:""}<small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}${options.canArchive&&contact?.id?`<button class="secondary-btn small" type="button" data-crm-archive-contact="${esc(contact.id)}">Archive contact</button>`:""}</div>`;
+      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong>${nameEvidence?`<a href="${esc(nameEvidence)}" target="_blank" rel="noopener noreferrer">Public name source ↗</a>`:""}<span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small>${emailEvidence?`<a href="${esc(emailEvidence)}" target="_blank" rel="noopener noreferrer">Public email source ↗</a>`:""}<small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}${contactDataHtml(contact.contact_data)}${options.canArchive&&contact?.id?`<button class="secondary-btn small" type="button" data-crm-archive-contact="${esc(contact.id)}">Archive contact</button>`:""}</div>`;
     }).join("");
   }
-  return {safePublicUrl,safeLinkedInProfileUrl,scoreBreakdownHtml,evidenceHtml,intelligenceHtml,contactsHtml};
+  return {contactDataHtml,safePublicUrl,safeLinkedInProfileUrl,scoreBreakdownHtml,evidenceHtml,intelligenceHtml,contactsHtml};
 });

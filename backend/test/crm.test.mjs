@@ -32,6 +32,32 @@ const ctx=(workspaceId='w1',role='owner')=>({workspaceId,userId:'u1',role});
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 const candidate=(domain='example.com')=>({company:{company_name:'Example Manufacturing',domain,website:`https://${domain}/`,country:'LV',industry:'Manufacturing',opportunity_score:81,confidence:'High',source:'discovery'},intelligence:{matched_signals:[{name:'Expansion'}],evidence:[{url:`https://${domain}/news`,title:'Expansion'}],opportunity_hypothesis:'Expansion creates an opportunity',score_breakdown:{fit:25}},contacts:[{id:'apollo-1',name:'Anna Buyer',title:'Procurement Director',work_email:'ANNA@EXAMPLE.COM',source:'apollo'}]});
 
+sqliteTest('paid profile data survives stale research replacement, empty rosters, older activity pages and later failed lookups',async()=>{
+ const db=new D1Db(),buyer={id:'paid-anna',name:'Anna Buyer',title:'Director'},pack=candidate();pack.contacts=[];
+ pack.intelligence.research_snapshot={buyerResearch:{version:2,checkedAt:'2026-10-20T08:00:00Z',buyers:[buyer]}};
+ const {company}=await upsertCrmCompany(db,ctx(),pack);
+ const data={version:1,domain:'example.com',personId:buyer.id,identityName:buyer.name,checkedAt:'2026-10-21T08:00:00Z',status:'updated',profile:{status:'provider_reported',title:'Director',city:'Riga'},phone:{status:'provider_listed',number:'+37120000001'},costMicro:14500,callIds:['profile-call']};
+ await appendCrmActivity(db,ctx(),{companyId:company.id,type:'contact.enriched',metadata:{contact_data:data},occurredAt:data.checkedAt});
+ for(let i=0;i<45;i++)await appendCrmActivity(db,ctx(),{companyId:company.id,type:'company.saved',occurredAt:'2026-10-21T09:00:00Z'});
+ await upsertCrmCompany(db,ctx(),pack); // A stale client has no enrichment data.
+ let detail=await getCrmCompany(db,ctx(),company.id);
+ assert.equal(detail.intelligence.research_snapshot.buyerResearch.buyers[0].contactData.profile.city,'Riga');
+ assert.equal(detail.contactData[0].phone.number,'+37120000001');
+ await appendCrmActivity(db,ctx(),{companyId:company.id,type:'contact.enriched',metadata:{contact_data:{...data,checkedAt:'2026-10-21T09:30:00Z',profile:{status:'provider_reported',title:'Procurement Director'},phone:{status:'provider_listed',number:'+37120000001'}}},occurredAt:'2026-10-21T09:30:00Z'});
+ await appendCrmActivity(db,ctx(),{companyId:company.id,type:'contact.enriched',metadata:{contact_data:{...data,checkedAt:'2026-10-21T10:00:00Z',status:'partial',profile:{status:'error',reason:'Unavailable'},phone:{status:'not_requested'}}},occurredAt:'2026-10-21T10:00:00Z'});
+ await upsertCrmCompany(db,ctx(),{...pack,intelligence:{research_snapshot:{buyerResearch:{buyers:[]}}}});
+ detail=await getCrmCompany(db,ctx(),company.id);
+ assert.equal(detail.contactData[0].profile.city,'Riga');assert.equal(detail.contactData[0].profile.title,'Procurement Director');assert.equal(detail.contactData[0].phone.number,'+37120000001');
+ assert.equal(detail.contactData[0].lastAttempt.status,'partial');
+ await assert.rejects(getCrmCompany(db,ctx('other-workspace'),company.id),/not found/i);
+ await upsertCrmCompany(db,ctx(),{...pack,intelligence:{research_snapshot:{buyerResearch:{buyers:[{...buyer,name:'Different Person'}]}}}});
+ detail=await getCrmCompany(db,ctx(),company.id);assert.ok(!detail.intelligence.research_snapshot.buyerResearch.buyers[0].contactData);
+ const [contact]=await upsertCrmContacts(db,ctx(),company.id,[{external_person_id:buyer.id,name:buyer.name,source:'treg'}]);
+ await archiveCrmContact(db,ctx(),contact.id);
+ detail=await getCrmCompany(db,ctx(),company.id);assert.equal(detail.contactData.length,0);
+ assert.ok(db.raw.prepare("SELECT COUNT(*) AS n FROM crm_activities WHERE activity_type='contact.enriched'").get().n>0,'archiving hides the profile but retains its history');
+});
+
 sqliteTest('unconfirmed Gmail research and query receipts round-trip through durable CRM without creating a Gmail recipient',async()=>{
   await import('../../customer/discovery-engine.js');const D=globalThis.LeadIntelDiscovery,{default:C}=await import('../../customer/crm-engine.js');
   const row={url:'https://association.test/business',markdown:'Anna Andersson\nHead of Procurement, Example Manufacturing\nBusiness contact: anna.andersson@gmail.com',sourceRead:true};
