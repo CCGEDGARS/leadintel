@@ -92,7 +92,7 @@ test('legacy general-public completion does not prevent the missing Gmail algori
  const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Example company team'})});
  delete c.people[0].contactResearch.checks.gmail;c.people[0].contactResearch.channels.gmail={status:'complete'};
  const queries=[];await D.runMandatoryBuyerResearch(c,{search:async q=>{queries.push(q);return [];},readPage:async()=>({markdown:'Example company team'})});
- assert.equal(queries.length,1);assert.ok(queries[0].includes('"anna.andersson@gmail.com"'));
+ assert.equal(queries.length,3);assert.ok(queries[1].includes('"anna.andersson@gmail.com"'));
 });
 
 test('the Gmail algorithm retains only a published address explicitly linked to the person and company',async()=>{

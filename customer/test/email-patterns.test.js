@@ -109,7 +109,7 @@ test('Gmail display uses Not found and never displays guessed Hunter addresses',
  const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
  assert.match(absent,/<strong>Gmail<\/strong><span>Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
- assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Publicly listed · unverified/);
+ assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Saved listing · Unconfirmed/);
 });
 test('person-first official research recovers a published email and phone even when guesses return nothing',async()=>{
  const queries=[],ctx={...context,crmAuthenticated:()=>false,fetchFirecrawlBuyerResearch:async()=>({ok:true,json:async()=>({data:{markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}})}),searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};
