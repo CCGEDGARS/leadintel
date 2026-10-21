@@ -3842,6 +3842,18 @@
         "for(const config of SETTINGS_PROVIDERS)",
         "Connect Firecrawl with your own API key."
       ]
+    },
+    {
+      "id": "dossier-buyer-role-handoff",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "Dossier.validatePass({people:[dossierPerson]},pages,candidate)",
+        "quote:clean(row.quote).slice(0,1200)",
+        "function malformedBuyerRole(value)",
+        "Parsed role contains website navigation or markup"
+      ]
     }
   ],
   "retry": {

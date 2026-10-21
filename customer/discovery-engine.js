@@ -364,7 +364,20 @@
       const words=title.toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=4&&!ROLE_GENERIC_WORDS.has(word));
       if(aliases.some(alias=>lower.includes(alias))||words.length&&words.every(word=>lower.includes(word)))sources.push({url,date:evidenceDate(row),quote:clean(quote)});
     }
-    if(sources.length)return {...person,roleReview:{version:1,status:'supported',reason:'Named role supported by company evidence; purchasing authority remains unconfirmed',checkedAt:new Date().toISOString(),sources:safeDecisionEvidence(sources).slice(0,3)}};
+    const dossier=candidate.buyerDiscovery?.companyDossier;
+    const dossierPerson=(dossier?.people||[]).find(row=>clean(row.name).toLowerCase()===name.toLowerCase()&&clean(row.title).toLowerCase()===title.toLowerCase());
+    let dossierSource;
+    if(dossierPerson&&!Dossier.holdReason(person,dossier)&&companyIdentityDomain(dossierPerson.sourceUrl)===domain){
+      const pages=authoritativeBuyerSourceRows(rows).filter(row=>row.sourceRead===true&&row.evidenceKind!=='model_summary').map(row=>({url:row.url||row.metadata?.sourceURL,text:row.markdown||row.content||''}));
+      const supported=Dossier.validatePass({people:[dossierPerson]},pages,candidate).people[0];
+      if(supported){dossierSource={url:supported.sourceUrl,date:supported.date,quote:supported.quote};sources.push(dossierSource);}
+    }
+    let decisionEvidence;
+    if(dossierSource){
+      const retained=(person.decisionEvidence||[]).filter(row=>normalizeUrl(row.url)!==dossierSource.url||!dossierSource.quote.startsWith(clean(row.quote)));
+      decisionEvidence=safeDecisionEvidence([...new Map([dossierSource,...retained].map(row=>[normalizeUrl(row.url)+'|'+clean(row.quote),row])).values()]);
+    }
+    if(sources.length)return {...person,...(decisionEvidence?{decisionEvidence}:{}),roleReview:{version:1,status:'supported',reason:'Named role supported by company evidence; purchasing authority remains unconfirmed',checkedAt:new Date().toISOString(),sources:safeDecisionEvidence(sources).slice(0,3)}};
     if(options.complete&&isExecutiveBuyer(person)&&!safeCorporateRoleEvidence(person.corporateRoleEvidence))return {...person,roleReview:{version:1,status:'unconfirmed',reason:'Current executive role has no independent company evidence; review before recommending',checkedAt:new Date().toISOString(),sources:[]}};
     return person;
   }
@@ -1380,7 +1393,7 @@
     return [...new Set(terms)].slice(0,6);
   }
   function safeDecisionEvidence(rows=[]){
-    return (Array.isArray(rows)?rows:[]).slice(0,6).map(row=>({url:normalizeUrl(row.url),date:clean(row.date).slice(0,40),quote:clean(row.quote).slice(0,800)})).filter(row=>row.url&&row.quote);
+    return (Array.isArray(rows)?rows:[]).slice(0,6).map(row=>({url:normalizeUrl(row.url),date:clean(row.date).slice(0,40),quote:clean(row.quote).slice(0,1200)})).filter(row=>row.url&&row.quote);
   }
   function buyerDecisionEvidence(person={},candidate={},options={}){
     const name=clean(person.publicName||person.name).toLowerCase(),domain=companyIdentityDomain(candidate.domain),now=Date.parse(options.now||new Date().toISOString());
@@ -1486,6 +1499,7 @@
   function mergeBuyerPool(previous=[],incoming=[],profile={}){
     const merged=new Map();
     for(const person of [...previous,...incoming]){
+      if(malformedBuyerRole(person.title))continue;
       let key=buyerIdentity(person);if(!key)continue;
       const full=clean(person.publicName||person.name).toLowerCase(),url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
       const same=[...merged.entries()].filter(([,old])=>{
@@ -1510,7 +1524,7 @@
       for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
       merged.set(key,next);
     }
-    const values=[...merged.values()];
+    const values=[...merged.values()].filter(person=>!malformedBuyerRole(person.title));
     const kept=values.filter(person=>person.kept).slice(0,10);
     const relevant=selectDecisionMakers(values.filter(person=>!person.kept&&person.identityStatus!=='pending'&&clean(person.publicName||person.name).split(/\s+/).length>=2),profile,20);
     const pending=selectDecisionMakers(values.filter(person=>!person.kept&&person.identityStatus==='pending'&&clean(person.id)),profile,20);
@@ -1811,6 +1825,7 @@
   function qualifyBuyer(person={},profile={},candidate={},options={}){
     const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company),directory=person.identitySource==='apollo';
     const blocked=[];
+    if(malformedBuyerRole(person.title))blocked.push('Job title contains website navigation or markup');
     const dossierHold=Dossier?.holdReason(person,candidate.buyerDiscovery?.companyDossier);if(dossierHold)blocked.push(dossierHold);
     if(/^(?:Close|Menu|Management|Leadership|Read more|Stäng|Läs mer|Koncernledning)\s/iu.test(clean(person.publicName||person.name)))blocked.push('Identity contains a website control label; research again');
     if(!full||person.identityStatus==='pending'||person.nameVerification==='pending')blocked.push('Full identity unresolved');
@@ -1920,6 +1935,7 @@
     return found;
   }
   function validCompanyContactSource(person={}){
+    if(malformedBuyerRole(person.title))return '';
     const kind=clean(person.companyContactSource);
     if(kind==='registry')return safeCorporateRoleEvidence(person.corporateRoleEvidence)?kind:'';
     if(kind==='directory')return person.identitySource==='apollo'&&clean(person.id)?kind:'';
@@ -1931,6 +1947,7 @@
   function mergeCompanyContacts(previous=[],incoming=[],candidate={}){
     const contacts=new Map();
     for(const person of [...previous,...incoming]){
+      if(malformedBuyerRole(person.title))continue;
       if(!hasFullBuyerName(person.publicName||person.name)||!companyNameMatches(person.organization,candidate.company))continue;
       const key=clean(person.publicName||person.name).toLowerCase(),old=contacts.get(key)||{};
       if(!validCompanyContactSource(person)&&!validCompanyContactSource(old))continue;
@@ -2063,6 +2080,7 @@
     return mergeCompanyContacts(previous,[...matched,...registeredCompanyContacts(rows,candidate)],candidate);
   }
 
+  function malformedBuyerRole(value){return /https?:\/\/|\]\(|#{2,}|\b[\w-]+\.(?:com|org|net|se|lv|uk)\//i.test(clean(value));}
   function tracePublicBuyers(rows=[],company='',profile={}){
     const people=[],diagnostics=[],seen=new Set(),companyText=clean(company);
     const escaped=companyText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -2128,6 +2146,7 @@
       if(employment?.[1])role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
+      if(malformedBuyerRole(role)){reject('roleMatching','Parsed role contains website navigation or markup');continue;}
       const relevance=roleRelevance({title:role},buyerSelectionRoles(profile));
       if(!role||!relevance&&!profile.collectAllCompanyContacts){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
       diagnostic.roleMatching='complete';diagnostic.matchedBuyerRole=relevance?.role||'';
