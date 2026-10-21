@@ -3456,8 +3456,10 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "function publishedCompanyContactsHtml(",
-        "data-use-company-contact",
+        "function prospectContactControls(",
+        "Email confirmed",
+        "buyer-email-confirmed",
+        "data-prospect-enrich-email",
         "function hydratePublishedCompanyEmails(",
         "function confirmPublishedCompanyContacts("
       ]
@@ -3468,7 +3470,7 @@
       "url": "/customer/discovery.css",
       "status": 200,
       "contains": [
-        ".published-company-contacts .buyer-proceed-ready{background:#0d6453"
+        ".buyer-four-actions button.buyer-email-confirmed,.person-actions button.buyer-email-confirmed{background:#0d6453"
       ]
     },
     {
@@ -3477,7 +3479,8 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "company-contact-record=20261020-v5"
+        "company-contact-record=20261020-v5",
+        "buyer-email-button=20261021-v1"
       ]
     },
     {

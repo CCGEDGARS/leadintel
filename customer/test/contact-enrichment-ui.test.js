@@ -17,8 +17,8 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
   assert.match(ui,/people\.length\s*<\s*3/);
 });
 
-test('Discovery exposes a separate authenticated paid enrichment action for selected people',()=>{
-  assert.match(ui,/Confirm company email/);
+test('Discovery keeps Find email and its authenticated provider-confirmation path for selected people',()=>{
+  assert.match(ui,/aria-label="\$\{hasEmail\?\'Email confirmed\':\'Find email\'\}"/);
   assert.match(ui,/data-action="enrich-contact"/);
   assert.match(ui,/bridge\(\)\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);
