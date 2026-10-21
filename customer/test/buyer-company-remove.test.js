@@ -10,6 +10,36 @@ function runtime({crmOk=true,syncOk=true,confirmed=true,authenticated=true,role=
  vm.createContext(ctx);const start=source.indexOf('function buyerCompanySnapshot(');assert.ok(start>=0,'complete removal must coordinate the saved workspace and CRM');vm.runInContext(source.slice(start,source.indexOf('\nfunction buyerAutomaticMode(',start)),ctx);
  return {ctx,b,candidate,other,events,writes,toasts,storage,meta:()=>meta};
 }
+function realCrmSave(r){
+ r.saves=[];r.b.saveCrmCompany=async payload=>{r.events.push('save-crm');r.saves.push(payload);return {ok:true};};
+ Object.assign(r.ctx,{LeadIntelDiscovery:D,mainState:()=>({}),refreshCrmState:async()=>true});
+ const start=source.indexOf('async function saveBuyerResearch(');vm.runInContext(source.slice(start,source.indexOf('\nfunction buyerCompanySnapshot(',start)),r.ctx);
+}
+
+test('Save to CRM in the removal dialog preserves research and history, then clears only the Buyers selection',async()=>{
+ const r=runtime({confirmed:'alternative'});realCrmSave(r);const outreach=r.storage.get('outreach'),delivery=r.storage.get('delivery'),main=r.storage.get('main');
+ assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),true);assert.equal(r.writes.length,0,'no CRM deletion');assert.equal(r.saves.length,1);
+ assert.equal(r.saves[0].intelligence.research_snapshot.buyerResearch.buyers[0].name,'Anna');assert.equal(r.saves[0].contacts.length,0,'verified CRM contacts retain their own authoritative records');
+ assert.ok(r.events.indexOf('save-crm')<r.events.indexOf('sync'));assert.equal(r.ctx.discovery.selectedProspects.length,1);assert.equal(r.ctx.discovery.selectedProspects[0].domain,'other.com');assert.equal(r.ctx.discovery.candidates.length,2);
+ assert.equal(r.ctx.crmCompanies[0].id,'crm-one');assert.equal(r.storage.get('outreach'),outreach);assert.equal(r.storage.get('delivery'),delivery);assert.equal(r.storage.get('main'),main);assert.equal(r.meta().scriptBuyer.personId,'anna');assert.equal(r.meta().activeBuyerCompanyDomain,'other.com');
+ const reloaded=D.normalizeDiscoveryState(JSON.parse(JSON.stringify(r.ctx.discovery)));assert.equal(reloaded.selectedProspects.some(row=>row.domain==='example.com'),false);assert.match(r.toasts.at(-1),/saved to CRM.*removed from.*Buyers/i);
+});
+test('failed CRM save or failed list sync keeps the company visible and never deletes CRM history',async()=>{
+ for(const failure of ['crm','sync']){const r=runtime({confirmed:'alternative',syncOk:failure!=='sync'});realCrmSave(r);if(failure==='crm')r.b.saveCrmCompany=async()=>({ok:false,error:'CRM offline'});assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),false);assert.equal(r.ctx.discovery.selectedProspects[0].domain,'example.com');assert.equal(r.ctx.crmCompanies[0].id,'crm-one');assert.equal(r.meta().activeBuyerCompanyDomain,'example.com');assert.equal(r.writes.length,0);if(failure==='crm')assert.equal(r.events.includes('sync'),false);}
+});
+test('changed research during CRM save remains visible so newer unsaved evidence cannot be hidden',async()=>{
+ const r=runtime({confirmed:'alternative'});realCrmSave(r);r.b.saveCrmCompany=async()=>{r.candidate.people.push({id:'new',name:'New Buyer'});return {ok:true};};assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),false);assert.equal(r.ctx.discovery.selectedProspects[0],r.candidate);assert.equal(r.writes.length,0);assert.equal(r.events.includes('sync'),false);
+});
+test('account switches during Save to CRM cannot clear the new workspace selection',async()=>{
+ const r=runtime({confirmed:'alternative'});realCrmSave(r);r.b.saveCrmCompany=async()=>{r.b.workspace={id:'two',role:'owner'};return {ok:true};};assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),false);assert.equal(r.ctx.discovery.selectedProspects.length,2);assert.equal(r.events.includes('sync'),false);assert.equal(r.writes.length,0);
+});
+test('Save to CRM explicitly creates an unsaved company and can close the final Buyers card',async()=>{
+ const r=runtime({confirmed:'alternative',exists:false});realCrmSave(r);r.ctx.discovery.selectedProspects=[r.candidate];assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),true);assert.equal(r.saves.length,1);assert.equal(r.saves[0].company.domain,'example.com');assert.equal(r.ctx.discovery.selectedProspects.length,0);assert.equal(r.meta().activeBuyerCompanyDomain,'');assert.equal(r.writes.length,0);
+});
+test('failed dismissal restores its selection while retaining unrelated edits made during sync',async()=>{
+ const r=runtime({confirmed:'alternative'});realCrmSave(r);let finish,calls=0;r.b.saveNow=()=>++calls===1?new Promise(resolve=>finish=resolve):Promise.resolve({saved:true});const pending=r.ctx.removeSelectedBuyerCompany('example.com');while(!finish)await new Promise(resolve=>setImmediate(resolve));r.ctx.discovery.selectedProspects.push({domain:'new.com',company:'New'});r.ctx.saveMeta({...r.meta(),note:'Keep this edit'});const outreach=JSON.parse(r.storage.get('outreach'));outreach.note='Keep message edit';r.storage.set('outreach',JSON.stringify(outreach));finish({saved:false});assert.equal(await pending,false);assert.equal(r.ctx.discovery.selectedProspects.length,3);assert.equal(r.meta().note,'Keep this edit');assert.equal(JSON.parse(r.storage.get('outreach')).note,'Keep message edit');assert.equal(r.writes.length,0);
+});
+test('an unexpected dialog result cannot trigger permanent deletion',async()=>{const r=runtime({confirmed:'unknown'});assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),false);assert.equal(r.writes.length,0);assert.equal(r.events.includes('sync'),false);});
 
 test('confirmed Remove deletes the CRM company and all working records without ever saving it to CRM',async()=>{
  const r=runtime();assert.equal(await r.ctx.removeSelectedBuyerCompany('https://www.example.com/team'),true);
@@ -56,7 +86,7 @@ test('Save never marks changed research as saved and transport failure leaves Sa
  const failed=runtime();failed.b.saveNow=async()=>{throw Error('offline');};assert.equal(await failed.ctx.saveSelectedBuyerCompany('example.com'),false);assert.equal(failed.ctx.buyerCompanySaved(failed.candidate),false);assert.equal(failed.ctx.discovery.selectedProspects.length,2);
 });
 function mount(r){
- const dom=new JSDOM('<section id="customer-pipeline"></section><p id="selection-count"></p>');const ctx=r.ctx;
+ const dom=new JSDOM('<section id="customer-pipeline"></section><p id="selection-count"></p>',{runScripts:'outside-only',pretendToBeVisual:true});const ctx=r.ctx;
  Object.assign(ctx,{LeadIntelDiscovery:D,document:dom.window.document,$:id=>dom.window.document.getElementById(id),esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),mainState:()=>({}),crmCompanyByDomain:()=>({id:'crm-one'}),candidateBuyerRoles:()=>['Director'],selectedBuyerEnrichment:new Set(),enrichmentResults:new Map()});
  for(const fn of ['buyerQualitySupervisorHtml','companyContactDossierHtml','buyerProviderStatusHtml','buyerResearchAccountabilityHtml'])ctx[fn]=()=>'';
  vm.runInContext(source.slice(source.indexOf('function renderSelectedProspects('),source.indexOf('function renderPipeline(')),ctx);
@@ -71,4 +101,10 @@ test('company cards show exactly Refresh, Save and Remove in that order and the 
 });
 test('canceling the rendered Remove confirmation leaves its card and all data intact',async()=>{
  const r=runtime({confirmed:false}),dom=mount(r);dom.window.document.querySelector('[data-remove-buyer-company]').click();await settle(r.ctx);assert.equal(dom.window.document.querySelectorAll('.selected-prospect-row').length,2);assert.equal(r.writes.length,0);dom.window.close();
+});
+test('the real Remove dialog wires Save to CRM to preserved records and a dismissed Buyers card',async()=>{
+ const r=runtime(),dom=mount(r);realCrmSave(r);dom.window.eval(fs.readFileSync(require.resolve('../confirmation-dialog.js'),'utf8'));r.ctx.window.LeadIntelDialogs=dom.window.LeadIntelDialogs;
+ dom.window.document.querySelector('[data-remove-buyer-company]').click();while(!dom.window.document.querySelector('[data-li-confirm]'))await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual([...dom.window.document.querySelectorAll('[data-li-confirm] button')].map(b=>b.textContent),['Cancel','Save to CRM','Remove completely']);
+ dom.window.document.querySelector('[data-li-alternative]').click();await settle(r.ctx);assert.equal(dom.window.document.querySelectorAll('.selected-prospect-row').length,1);assert.equal(r.saves.length,1);assert.equal(r.writes.length,0);assert.equal(r.ctx.crmCompanies.length,1);dom.window.close();
 });
