@@ -1466,7 +1466,7 @@ test('one failed contact source does not prevent research for the other nine and
  assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,9);assert.equal(c.people[9].contactResearch.channels.phone.status,'partial');assert.equal(c.publicContactStatus,'error');
  fail=false;queries.length=0;await context.__findPublicProspectContacts('example.com');c=context.__discoveryState().selectedProspects[0];
  assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,10);assert.equal(c.publicContactStatus,'complete');
- assert.equal(queries.length,1);assert.ok(queries[0].includes('Anna Juliet')&&queries[0].includes('(phone OR'));
+ assert.equal(queries.filter(isOfficialInventoryQuery).length,3,'an earlier empty company inventory must be rechecked');const personQueries=queries.filter(query=>!isOfficialInventoryQuery(query));assert.equal(personQueries.length,1);assert.ok(personQueries[0].includes('Anna Juliet')&&personQueries[0].includes('(phone OR'));
 });
 test('pending role edits do not start contact research automatically before the buyer refresh',async()=>{
  let calls=0;const context=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async()=>{calls++;return {ok:true,json:async()=>({data:[]})};}});
