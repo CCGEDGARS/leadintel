@@ -145,7 +145,8 @@ test('late buyer provider results cannot write into a different workspace with t
 
 test('a fulfilled public query in an interrupted batch is retained when a sibling ignores cancellation',async()=>{
  const {context,candidate,centre,timers}=runtime();let searches=0;
- context.searchBuyerPublicPages=async()=>{
+ context.searchBuyerPublicPages=async query=>{
+  if(/\(contact OR contacts OR kontakt OR team\)|\(management OR leadership OR ledning OR executive\)|\(investor-contacts OR press-contact/.test(query))return [];
   const index=searches++;
   if(index===0)return [{url:'https://linkedin.com/in/ada-andersson',title:'Ada Andersson | Head of Procurement | Example Mining'}];
   if(index===1){await new Promise(resolve=>setTimeout(resolve,5));[...timers.values()].find(timer=>timer.delay===450000).fn();}

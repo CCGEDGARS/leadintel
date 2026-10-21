@@ -58,7 +58,7 @@
       if(signal?.aborted)break;
       const next=queue.shift(),key=next.url.replace(/\/$/,'');if(visited.has(key))continue;visited.add(key);
       try{const page=await read(next.url);pages.push(page);await onPage?.(page);
-        if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue.unshift(...links.map(url=>({url,depth:next.depth+1})));}
+        if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue[purpose==='buyers'?'push':'unshift'](...links.map(url=>({url,depth:next.depth+1})));}
       }catch(error){issues.push({url:next.url,reason:clean(error.message)});if([401,402,403].includes(Number(error.status))||error.code==='DISCOVERY_BUDGET_REACHED'){if(!pages.length)throw error;terminalStatus=Number(error.status)||0;break;}}
     }
     if(parentSignal?.aborted)throw parentSignal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});

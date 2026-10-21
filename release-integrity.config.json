@@ -3694,6 +3694,58 @@
         "confirmation-dialog.css?v=20261021-v1",
         "buyer-crm-close=20261021-v1"
       ]
+    },
+    {
+      "id": "official-contact-inventory-engine",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function officialCompanyContactInventory(",
+        "function safeOfficialContactInventory(",
+        "async function runOfficialContactResearch(",
+        "20261021-official-contacts-v1"
+      ]
+    },
+    {
+      "id": "official-contact-inventory-ui",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function refreshOfficialCompanyContacts(",
+        "data-refresh-company-contacts=",
+        "published email routes",
+        "inventoryRestored"
+      ]
+    },
+    {
+      "id": "official-contact-inventory-crm",
+      "type": "text",
+      "url": "/customer/crm-engine.js",
+      "status": 200,
+      "contains": [
+        "function mergeContactEvidence(",
+        "officialContactInventory:candidate.buyerDiscovery?.officialContactInventory"
+      ]
+    },
+    {
+      "id": "official-contact-inventory-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "official-company-contacts=20261021-v1"
+      ]
+    },
+    {
+      "id": "official-contact-inventory-crm-cache",
+      "type": "text",
+      "url": "/customer/shell-support-loader.js",
+      "status": 200,
+      "contains": [
+        "official-company-contacts=20261021-v1"
+      ]
     }
   ],
   "retry": {

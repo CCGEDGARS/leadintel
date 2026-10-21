@@ -3,12 +3,13 @@ import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
 // Reuse the same evidence, exclusion and role qualification engine as the customer journey.
 import '../../customer/discovery-engine.js';
+import '../../customer/crm-engine.js';
 import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage,renderDefaultWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities,fetchDirectPublicPage,readPublicBuyerPage} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
-import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
+import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain,getCrmCompany} from './crm.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
 import {enrichCrmContact} from './crm-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
@@ -60,7 +61,18 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,account
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
 export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[]){
+  await discovery.runOfficialContactResearch(candidate,{search,guard,rows,readPage:async(...args)=>{const page=await readPage(...args);for(const entry of page?.researchTrace||[])discovery.recordBuyerResearchTool(candidate.publicResearch?.accountability,entry);return page;}});
   return discovery.runMandatoryBuyerResearch(candidate,{search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+}
+
+export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
+  await guard();const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
+  if(!company||company.lifecycle_status!=='prospect')return false;
+  const detail=await getCrmCompany(env.DB,context,company.id);await guard();
+  const research=globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch,prior=detail.intelligence?.research_snapshot?.buyerResearch;
+  if(Date.parse(prior?.checkedAt||'')>Date.parse(research.checkedAt||''))return false;
+  if(Date.parse(prior?.discovery?.officialContactInventory?.checkedAt||'')>Date.parse(research.discovery?.officialContactInventory?.checkedAt||''))research.discovery.officialContactInventory=prior.discovery.officialContactInventory;
+  await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),research_snapshot:{...(detail.intelligence?.research_snapshot||{}),buyerResearch:research}});await guard();return true;
 }
 
 async function buyer(env,workspaceId,candidate,config,guard,userId){
@@ -243,7 +255,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
+    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
     return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
@@ -255,7 +267,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     const candidates=[];for(const candidate of result.candidates||[]){await guard();const old=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(old&&old.lifecycle_status!=='prospect')continue;
       const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Ready for Outreach',source:'approved_workflow'});await guard();
       const contacts=await upsertCrmContacts(env.DB,crmContext,saved.company.id,[{...candidate.contact,work_email:candidate.contact.email,email_status:'verified'}]);await guard();
-      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{flowId:row.id||null,runId:run.id,revision:row.revision,researchAt:result.researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification}});await guard();
+      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{flowId:row.id||null,runId:run.id,revision:row.revision,researchAt:result.researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification,...(candidate.buyerDiscovery?{buyerResearch:globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch}:{})}});await guard();
       await appendCrmActivity(env.DB,crmContext,{id:`workflow-message-${run.id}-${saved.company.id}`,companyId:saved.company.id,type:'dossier.built',summary:'Message generated under approved workflow template',metadata:{flow_id:row.id||null,run_id:run.id,revision:row.revision,subject:candidate.message.subject,body:candidate.message.body,approval:'workflow_template',script_package:{version:1,savedAt:new Date().toISOString(),item:{domain:candidate.domain,company:candidate.company,researchStatus:'complete',researchAt:result.researchedAt,selectedPersonId:contacts[0]?.id||candidate.contact.id,approved:false,dossier:{company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,recommendedOffer:profile.priorityOffers,buyerRoles:config.buyers.roles,evidence:candidate.evidence,matchedSignals:candidate.matchedSignals,people:[{...candidate.contact,id:contacts[0]?.id||candidate.contact.id}]},drafts:{emailSubject:candidate.message.subject,emailBody:candidate.message.body,followUp:candidate.message.followup_body}}}}});
       candidates.push({...candidate,crmId:saved.company.id});}return {...result,candidates};
   }
