@@ -366,12 +366,13 @@
     }
     const dossier=candidate.buyerDiscovery?.companyDossier;
     const dossierPerson=(dossier?.people||[]).find(row=>clean(row.name).toLowerCase()===name.toLowerCase()&&clean(row.title).toLowerCase()===title.toLowerCase());
+    let dossierSource;
     if(dossierPerson&&!Dossier.holdReason(person,dossier)&&companyIdentityDomain(dossierPerson.sourceUrl)===domain){
       const pages=authoritativeBuyerSourceRows(rows).filter(row=>row.sourceRead===true&&row.evidenceKind!=='model_summary').map(row=>({url:row.url||row.metadata?.sourceURL,text:row.markdown||row.content||''}));
       const supported=Dossier.validatePass({people:[dossierPerson]},pages,candidate).people[0];
-      if(supported)sources.push({url:supported.sourceUrl,date:supported.date,quote:supported.quote});
+      if(supported){dossierSource={url:supported.sourceUrl,date:supported.date,quote:supported.quote};sources.push(dossierSource);}
     }
-    if(sources.length)return {...person,roleReview:{version:1,status:'supported',reason:'Named role supported by company evidence; purchasing authority remains unconfirmed',checkedAt:new Date().toISOString(),sources:safeDecisionEvidence(sources).slice(0,3)}};
+    if(sources.length)return {...person,...(dossierSource?{decisionEvidence:safeDecisionEvidence([dossierSource,...(person.decisionEvidence||[])])}:{}),roleReview:{version:1,status:'supported',reason:'Named role supported by company evidence; purchasing authority remains unconfirmed',checkedAt:new Date().toISOString(),sources:safeDecisionEvidence(sources).slice(0,3)}};
     if(options.complete&&isExecutiveBuyer(person)&&!safeCorporateRoleEvidence(person.corporateRoleEvidence))return {...person,roleReview:{version:1,status:'unconfirmed',reason:'Current executive role has no independent company evidence; review before recommending',checkedAt:new Date().toISOString(),sources:[]}};
     return person;
   }

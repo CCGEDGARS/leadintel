@@ -9,7 +9,9 @@ const candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_se
 const rows=[{url,markdown:quote,sourceRead:true}];
 test('shared dossier authority and role survive contact validation and workspace reload',()=>{
   const buyer=D.buyers(dossier,'Example')[0];assert.ok(quote.indexOf(buyer.name)>800);
-  const checked=Discovery.matchBuyerRoleEvidence(buyer,rows,candidate,{complete:true});
+  const truncated={...buyer,decisionEvidence:buyer.decisionEvidence.map(row=>({...row,quote:row.quote.slice(0,800)}))};
+  assert.equal(Discovery.isExecutiveBuyer(truncated),false);
+  const checked=Discovery.matchBuyerRoleEvidence(truncated,rows,candidate,{complete:true});
   assert.equal(checked.roleReview?.status,'supported');
   const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{...candidate,people:[checked]}]}).selectedProspects[0];
   assert.equal(Discovery.isExecutiveBuyer(saved.people[0]),true);
