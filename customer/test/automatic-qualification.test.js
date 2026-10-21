@@ -124,3 +124,21 @@ test('stable quote identifiers resolve only to supplied official evidence',()=>{
  const result=D.parseBuyerFit(JSON.stringify(response),[raw],profile)[0];assert.ok(D.verifiedBuyerFit(result,profile));assert.equal(result.buyerFit.evidence[0].quote,source.quoteOptions[0].quote);
  response.companies[0].evidence[0].quoteId='invented';assert.equal(D.parseBuyerFit(JSON.stringify(response),[raw],profile)[0].buyerFit,undefined);
 });
+test('an explicit evidence abstention is a retained review outcome rather than an invalid score or provider failure',async()=>{
+ const failures=[];let calls=0;const [result]=await D.researchBuyerFit([raw],profile,async()=>{calls++;return JSON.stringify({companies:[{domain:raw.domain,fit:null,offerId:null,evidenceStatus:'insufficient',relationship:'unverified',reason:'Only a navigation page was supplied.',evidence:[]}]});},{onFailure:e=>failures.push(e)});
+ assert.equal(calls,1);assert.equal(failures.length,0);assert.equal(result.buyerFit,undefined);assert.equal(result.buyerFitIssueCode,'insufficient_evidence');assert.match(result.buyerFitIssue,/navigation page/i);
+ const saved=D.normalizeDiscoveryState({potentialMatches:[{...result,qualificationGaps:D.assessCompanyQualification(result,profile,market).gaps}]}).potentialMatches[0];assert.equal(saved.buyerFitIssueCode,'insufficient_evidence');assert.equal(D.assessCompanyQualification(saved,profile,market).eligible,false);
+ assert.equal(require('../crm-engine.js').mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerFitIssueCode,'insufficient_evidence');
+ assert.match(D.buyerFitPrompt([raw],profile),/fit:null/);
+});
+test('quote choices validate against the same readable official text supplied to the model',()=>{
+ const c={...raw,evidence:[{url:'https://nordic.se/about',verifiedAt:researchedAt,text:'We manufacture **renewable energy machinery** and [purchase welded frames](https://nordic.se/frames) for equipment assembly in Sweden.'}]};
+ const source=JSON.parse(D.buyerFitPrompt([c],profile).split('. Companies: ')[1])[0].evidence[0];
+ const response={companies:[{domain:c.domain,fit:85,offerId:'offer-0',reason:'Equipment assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:source.sourceId,quoteId:source.quoteOptions[0].quoteId}]}]};
+ const result=D.parseBuyerFit(JSON.stringify(response),[c],profile)[0];assert.equal(result.buyerFit?.fit,85);assert.ok(D.verifiedBuyerFit(result,profile));
+ response.companies[0].evidence[0]={sourceId:source.sourceId,quote:'We purchase computer equipment for a new factory.'};assert.equal(D.parseBuyerFit(JSON.stringify(response),[c],profile)[0].buyerFit,undefined);
+});
+test('invalid assessment recovery gets its precise validation reason and preserves that reason on final failure',async()=>{
+ const prompts=[],failures=[];await D.researchBuyerFit([raw],profile,async prompt=>{prompts.push(prompt);return JSON.stringify({companies:[{domain:raw.domain,fit:null,evidenceStatus:'sufficient',relationship:'buyer',offerId:'offer-0'}]});},{onFailure:e=>failures.push(e)});
+ assert.equal(prompts.length,2);assert.match(prompts[1],/valid fit score/i);assert.match(failures[0].detail,/valid fit score/i);
+});
