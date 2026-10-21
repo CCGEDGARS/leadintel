@@ -21,24 +21,24 @@ async function mount({hunterPayment=false,connection=false,aiPayment=false,saveE
  w.eval('(function(){'+read('service-settings-extension.js').replace(/^import .*;\s*$/gm,'').replace(/^export .*;\s*$/gm,'window.refreshServicesForTest=refreshServiceStatus;')+'})()');
  w.document.getElementById('open-settings').click();await settle();return {w,recover:()=>{payment=false;}};
 }
-test('Hunter payment appears red in its card and summary through refresh and reopen, then clears on recovery',async()=>{
+test('removed Hunter payment stays absent from Settings through refresh and reopen',async()=>{
  const {w,recover}=await mount({hunterPayment:true,connection:true});try{
-  const check=()=>{assert.ok(w.document.querySelector('[data-integration="hunter"] .integration-status.bad'));assert.ok(w.document.querySelector('#integration-health-summary.credit-alert'));assert.match(w.document.querySelector('.integration-summary-copy strong').textContent,/Payment alert: Hunter/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
+  const check=()=>{assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.doesNotMatch(w.document.querySelector('.integration-summary-copy strong').textContent,/Hunter|Apollo/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
   await w.refreshServicesForTest();await settle();check();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await settle();check();
-  recover();await w.refreshServicesForTest();await settle();assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.ok(w.document.querySelector('[data-integration="hunter"] .integration-status.warn'));
+  recover();await w.refreshServicesForTest();await settle();assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);
  }finally{w.close();}
 });
 test('connection-only failures are yellow throughout integration cards and summary',async()=>{
- const {w}=await mount({connection:true});try{for(const provider of ['apollo','firecrawl','hunter','gmail','microsoft-mail'])assert.ok(w.document.querySelector(`[data-integration="${provider}"] .integration-status.warn`),provider);
+ const {w}=await mount({connection:true});try{for(const provider of ['firecrawl','gmail','microsoft-mail'])assert.ok(w.document.querySelector(`[data-integration="${provider}"] .integration-status.warn`),provider);
   assert.equal(w.document.querySelector('.integration-status.bad'),null);assert.ok(w.document.querySelector('#integration-health-summary.connection-alert'));assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);
  }finally{w.close();}
 });
 test('AI credit alerts stay red while unrelated connections are yellow',async()=>{
- const {w}=await mount({aiPayment:true,connection:true});try{assert.ok(w.document.querySelector('[data-provider-card="openai"] .ai-provider-status.credit-alert'));assert.match(w.document.querySelector('.integration-summary-copy strong').textContent,/Payment alert: OpenAI/);assert.ok(w.document.querySelector('[data-integration="apollo"] .integration-status.warn'));}finally{w.close();}
+ const {w}=await mount({aiPayment:true,connection:true});try{assert.ok(w.document.querySelector('[data-provider-card="openai"] .ai-provider-status.credit-alert'));assert.match(w.document.querySelector('.integration-summary-copy strong').textContent,/Payment alert: OpenAI/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));}finally{w.close();}
 });
-for(const [error,payment] of [['API key rejected',false],['Hunter credits exhausted or payment required',true],['rate_limit_exceeded',false]])test(`inline provider error classifies ${error}`,async()=>{
+for(const [error,payment] of [['API key rejected',false],['Firecrawl credits exhausted or payment required',true],['rate_limit_exceeded',false]])test(`inline provider error classifies ${error}`,async()=>{
  const {w}=await mount({saveError:error});try{
-  for(const [input,button,output] of [['[data-ai-key="openai"]','[data-ai-action="save"][data-provider="openai"]','[data-ai-error="openai"]'],['[data-service-key="hunter"]','[data-service-action="save"][data-provider="hunter"]','[data-service-error="hunter"]']]){
+  for(const [input,button,output] of [['[data-ai-key="openai"]','[data-ai-action="save"][data-provider="openai"]','[data-ai-error="openai"]'],['[data-service-key="firecrawl"]','[data-service-action="save"][data-provider="firecrawl"]','[data-service-error="firecrawl"]']]){
    w.document.querySelector(input).value='test-key';w.document.querySelector(button).click();await settle();const node=w.document.querySelector(output);assert.equal(node.hidden,false);assert.equal(node.dataset.paymentError,String(payment));assert.equal(w.document.querySelector(input).value,'test-key');
   }
  }finally{w.close();}

@@ -1376,7 +1376,11 @@
         "function integrationTone(check={})",
         "check.state==='bad'?'warn'",
         "Payment alert:",
-        "...(hunterPayment?['Hunter']:[])"
+        "...(firecrawl.creditIssue?['Firecrawl']:[])"
+      ],
+      "notContains": [
+        "data-integration=\"apollo\"",
+        "data-integration=\"hunter\""
       ]
     },
     {
@@ -3826,6 +3830,17 @@
         "Building company dossier",
         "/api/ai/company-dossier",
         "companyDossier:"
+      ]
+    },
+    {
+      "id": "paid-provider-settings-removed",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>config.provider==='firecrawl')",
+        "for(const config of SETTINGS_PROVIDERS)",
+        "Connect Firecrawl with your own API key."
       ]
     }
   ],
