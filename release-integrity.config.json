@@ -3499,7 +3499,7 @@
       "url": "/customer/discovery-engine.js",
       "status": 200,
       "contains": [
-        "20261021-adaptive-depth-v2",
+        "20261021-adaptive-depth-v3",
         "async function runMandatoryBuyerResearch(",
         "function recordBuyerResearchTool(",
         "function safeBuyerResearchAccountability("
@@ -3523,7 +3523,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-research-policy=20261020-v2"
+        "buyer-research-policy=20261021-v3"
       ]
     },
     {
@@ -3582,7 +3582,7 @@
       "url": "/customer/discovery-engine.js",
       "status": 200,
       "contains": [
-        "requiredChecks:Object.freeze(['official','public','phone','linkedin','gmail'])",
+        "requiredChecks:Object.freeze(['official','public','direct_email','phone','linkedin','gmail'])",
         "gmail:research.checks.gmail?{...research.checks.gmail}"
       ]
     },
@@ -3601,7 +3601,30 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-gmail=20261021-v1"
+        "buyer-gmail=20261021-v2"
+      ]
+    },
+    {
+      "id": "mandatory-direct-email-discovery-v3",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerDirectEmailQueries(",
+        "function buyerGmailResearchQueries(",
+        "function gmailResearchMatches(",
+        "gmailMatches:safeGmailMatches(person,domain)"
+      ]
+    },
+    {
+      "id": "gmail-unconfirmed-match-evidence-v3",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Possible match \u00b7 Unconfirmed",
+        "Name-based Gmail patterns",
+        "Gmail research \u00b7"
       ]
     }
   ],

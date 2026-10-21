@@ -17,12 +17,12 @@ test('buyer titles are concise without altering original source text',()=>{
 });
 const fs=require('node:fs'),vm=require('node:vm'),ui=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function contactRuntime(){const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,emailPatternCandidates:D.rankedEmailGuesses};vm.runInNewContext(ui.slice(ui.indexOf('function buyerContactRows('),ui.indexOf('function emailPatternCandidates('))+';globalThis.render=buyerContactRows;',ctx);return ctx;}
-test('unverified company patterns are collapsed and Gmail is displayed only with a published source',()=>{
+test('company and Gmail patterns remain labelled unconfirmed and separate from sourced contacts',()=>{
  const ctx=contactRuntime(),p={...person,gmailCandidates:D.gmailGuessCandidates(person),contactResearch:{channels:{gmail:{status:'complete'},phone:{status:'partial',reason:'Phone request timed out'},company:{status:'partial',reason:'Email source timed out'}}}};
  const html=ctx.render(p,company);
  assert.match(html,/<details class="buyer-email-patterns"><summary>Unverified email patterns/);
  assert.match(html,/anna.smith@example.com · Unverified pattern/);
- assert.doesNotMatch(html,/anna.smith@gmail.com/);
+ assert.match(html,/anna.smith@gmail.com · Name pattern · Unconfirmed/);
  assert.match(html,/Phone request timed out/);assert.match(html,/Profile matched automatically/);
  assert.doesNotMatch(html,/<strong>Gmail[\s\S]*Additional checks incomplete/);
  const invalid=ctx.render({...p,hunterChecks:{'anna.smith@example.com':{status:'invalid',deliverability:'undeliverable'}}},company);
@@ -54,6 +54,6 @@ test('Gmail absence is never presented as a completed search without its dedicat
  const ctx=contactRuntime(),p={...person,emailResearch:{status:'complete'},contactResearch:{checks:{public:{status:'complete'}},channels:{gmail:{status:'complete'}}}};
  const html=ctx.render(p,company),gmail=html.slice(html.indexOf('<strong>Gmail</strong>'));
  assert.match(gmail,/Not searched yet/);assert.doesNotMatch(gmail,/No Gmail address found in completed searches/);
- const checked=ctx.render({...p,contactResearch:{...p.contactResearch,checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}}}},company);
+ const checked=ctx.render({...p,contactResearch:{...p.contactResearch,checks:{gmail:{status:'complete',checkedAt:new Date().toISOString(),queryLog:[1,2,3].map(()=>({status:'complete'}))}}}},company);
  assert.match(checked,/<strong>Gmail<\/strong>[\s\S]*No Gmail address found in completed searches/);
 });

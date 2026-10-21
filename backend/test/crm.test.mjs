@@ -32,6 +32,19 @@ const ctx=(workspaceId='w1',role='owner')=>({workspaceId,userId:'u1',role});
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 const candidate=(domain='example.com')=>({company:{company_name:'Example Manufacturing',domain,website:`https://${domain}/`,country:'LV',industry:'Manufacturing',opportunity_score:81,confidence:'High',source:'discovery'},intelligence:{matched_signals:[{name:'Expansion'}],evidence:[{url:`https://${domain}/news`,title:'Expansion'}],opportunity_hypothesis:'Expansion creates an opportunity',score_breakdown:{fit:25}},contacts:[{id:'apollo-1',name:'Anna Buyer',title:'Procurement Director',work_email:'ANNA@EXAMPLE.COM',source:'apollo'}]});
 
+sqliteTest('unconfirmed Gmail research and query receipts round-trip through durable CRM without creating a Gmail recipient',async()=>{
+  await import('../../customer/discovery-engine.js');const D=globalThis.LeadIntelDiscovery,{default:C}=await import('../../customer/crm-engine.js');
+  const row={url:'https://association.test/business',markdown:'Anna Andersson\nHead of Procurement, Example Manufacturing\nBusiness contact: anna.andersson@gmail.com',sourceRead:true};
+  const researched={company:'Example Manufacturing',domain:'example.com',people:[{id:'anna',name:'Anna Andersson',title:'Head of Procurement',organization:'Example Manufacturing',publicNameUrl:'https://example.com/team'}]};
+  await D.runMandatoryBuyerResearch(researched,{search:async q=>q.includes('"anna.andersson@gmail.com"')?[row]:[],readPage:async url=>({markdown:url===row.url?row.markdown:'Example Manufacturing team',metadata:{sourceURL:url}})});
+  const db=new D1Db(),pack=C.mapDiscoveryCandidateToCrm(researched),saved=await upsertCrmCompany(db,ctx(),pack),detail=await getCrmCompany(db,ctx(),saved.company.id);
+  const person=detail.intelligence.research_snapshot.buyerResearch.buyers[0];
+  assert.equal(person.gmailMatches[0].status,'unconfirmed');assert.equal(person.gmailMatches[0].email,'anna.andersson@gmail.com');
+  assert.equal(person.contactResearch.checks.gmail.queryLog.length,3);assert.equal(person.contactResearch.checks.direct_email.queryLog.length,2);
+  assert.ok(detail.contacts.every(contact=>!String(contact.work_email||'').endsWith('@gmail.com')));
+  await assert.rejects(getCrmCompany(db,ctx('other-workspace'),saved.company.id),/not found/i);
+});
+
 sqliteTest('public buyer evidence survives CRM refresh without downgrading a verified email',async()=>{
   const db=new D1Db();
   const {company}=await upsertCrmCompany(db,ctx(),{...candidate(),contacts:[]});
