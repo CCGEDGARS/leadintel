@@ -82,3 +82,19 @@ test('a partial refresh retains earlier sourced contacts when only the homepage 
  const inventory=candidate.buyerDiscovery.officialContactInventory;
  assert.equal(inventory.research.status,'partial');assert.equal(inventory.research.retainedPrevious,true);assert.equal(inventory.contacts.length,7);assert.equal(inventory.channels.length,3);assert.equal(inventory.checkedAt,previous.checkedAt);assert.equal(inventory.research.queries.length,3);
 });
+test('split first and last names remain one official staff heading',()=>{
+ const rows=[page('management','## Group management\n### Rickard\nGustafson\nPresident and Chief Executive Officer\n### Susanne\nLarsson\nChief Financial Officer')];
+ const result=D.officialCompanyContactInventory(rows,company);assert.deepEqual(result.contacts.map(p=>p.name),['Rickard Gustafson','Susanne Larsson']);
+});
+
+test('rendered portrait headings separate inline full names and titles without reading image filenames as identity',()=>{
+ const result=D.officialCompanyContactInventory([page('management','## ![portrait-wrong-name](https://cdn.example/photo.png)       Rickard    Gustafson    President and Chief Executive Officer\n\n## ![portrait](https://cdn.example/photo2.png)       Susanne    Larsson    Chief Financial & Sustainability Officer and Senior Vice President Group Finance & Sustainability')],company);
+ assert.deepEqual(result.contacts.map(p=>[p.name,p.title]),[['Rickard Gustafson','President and Chief Executive Officer'],['Susanne Larsson','Chief Financial & Sustainability Officer and Senior Vice President Group Finance & Sustainability']]);
+});
+
+test('a fresh cached inventory seeds buyer discovery even when raw source bodies were released',()=>{
+ const inventory=D.officialCompanyContactInventory(pages,company);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete'};
+ const candidate={...company,buyerDiscovery:{officialContactInventory:inventory}},contacts=D.discoverCompanyContacts([],candidate);
+ assert.equal(contacts.length,7);assert.ok(contacts.some(p=>p.name==='Vagner Rego'));assert.ok(contacts.some(p=>p.name==='Daniel Althoff'));
+ inventory.checkedAt=new Date(Date.now()-31*86400000).toISOString();assert.equal(D.discoverCompanyContacts([],candidate).length,0);
+});

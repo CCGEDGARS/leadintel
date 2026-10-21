@@ -1930,7 +1930,7 @@
     }
     return [...contacts.values()].slice(0,60);
   }
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-official-contacts-v1',maxPages:12,maxDurationMs:45000,concurrency:3,queries:3});
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-official-contacts-v2',maxPages:12,maxDurationMs:45000,concurrency:3,queries:3});
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),sourcePages=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries)(?:[._+-]|$)/i;
@@ -1943,10 +1943,22 @@
       sourcePages.push(url);
       const body=decodePublishedEmailText(String(row.markdown||row.content||row.text||'')).slice(0,60000);
       const lines=body.replace(/^([ \t]*#{1,6})[ \t]*\n+[ \t]*([^\n]+)/gm,'$1 $2').split(/\r?\n/),plain=line=>line.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*#{1,6}\s*|\*\*/g,'').trim();
-      const headings=lines.map((line,index)=>({index,name:plain(line)})).filter(item=>/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[item.index])&&nameValid(item.name));
+      const roleStart=/\b(?:Senior(?: Executive)? (?:Vice )?President|Vice President|President|Chief|CEO|CFO|COO|CTO|CIO|CMO|CHRO|General Counsel|Head of|Managing Director|Director|Manager)\b/i;
+      const headings=[];
+      for(let index=0;index<lines.length;index++){
+        if(!/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[index]))continue;
+        const label=clean(plain(lines[index])),at=label.search(roleStart),inlineName=at>0?label.slice(0,at).trim():'',inlineTitle=at>0?label.slice(at).trim():'';
+        if(nameValid(inlineName)&&roleValid(inlineTitle)){headings.push({index,endIndex:index,name:inlineName,inlineTitle});continue;}
+        let name=label,endIndex=index;
+        if(!nameValid(name)&&/^\p{Lu}[\p{L}’'.-]+$/u.test(name)){
+          let next=index+1;while(next<lines.length&&!plain(lines[next]))next++;
+          if(next<lines.length&&!/^\s*#/.test(lines[next])&&nameValid(name+' '+plain(lines[next]))){name+=' '+plain(lines[next]);endIndex=next;}
+        }
+        if(nameValid(name))headings.push({index,endIndex,name});
+      }
       const adjacent=(index,direction)=>{for(let at=index+direction;at>=0&&at<lines.length;at+=direction)if(plain(lines[at]))return {text:plain(lines[at]),index:at};return {text:'',index:-1};};
-      const first=headings[0],roleBefore=first&&roleValid(adjacent(first.index,-1).text);
-      const cards=headings.map(item=>{const before=adjacent(item.index,-1),after=adjacent(item.index,1),role=roleBefore?before:after;return {...item,title:roleValid(role.text)?role.text:'',roleIndex:role.index};}).filter(item=>item.title);
+      const first=headings[0],roleBefore=first&&!first.inlineTitle&&roleValid(adjacent(first.index,-1).text);
+      const cards=headings.map(item=>{const before=adjacent(item.index,-1),after=adjacent(item.endIndex,1),role=roleBefore?before:after;return {...item,title:item.inlineTitle||(roleValid(role.text)?role.text:''),roleIndex:item.inlineTitle?item.index:role.index};}).filter(item=>item.title);
       const addChannel=(value,personName='',quote='')=>{
         value=value.toLowerCase();if(!emailValid(value))return null;
         const channel={kind:'email',value,url,status:'published_listing',type:shared.test(value)?'shared_department':personName?'named_work_listing':'company_channel',emailDomain:value.split('@')[1],quote:clean(quote).slice(0,700)};
@@ -2018,8 +2030,8 @@
   function discoverCompanyContacts(rows=[],candidate={},previous=[]){
     const official=rows.filter(row=>row.sourceRead===true&&companyIdentityDomain(row.url||row.metadata?.sourceURL)===companyIdentityDomain(candidate.domain));
     const staff=tracePublicBuyers(official,candidate.company,{companyDomain:candidate.domain,collectAllCompanyContacts:true}).people;
-    const inventory=officialCompanyContactInventory(official,candidate);
-    const matched=matchPublicBuyerDetails(mergeCompanyContacts(staff,inventory.contacts,candidate),official,candidate.domain,candidate.company);
+    const inventory=officialCompanyContactInventory(official,candidate),cached=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),age=Date.now()-Date.parse(cached?.checkedAt||''),cachedContacts=cached?.research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&age>=0&&age<30*86400000?cached.contacts:[];
+    const matched=matchPublicBuyerDetails(mergeCompanyContacts(staff,[...cachedContacts,...inventory.contacts],candidate),official,candidate.domain,candidate.company);
     // Attribute first-name work addresses only inside an exact named staff card.
     // A page-level name/email co-occurrence is insufficient in a shared directory.
     for(const person of matched)for(const row of official){
