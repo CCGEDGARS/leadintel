@@ -3032,14 +3032,16 @@
       ]
     },
     {
-      "id": "additional-contact-preferences",
+      "id": "paid-search-replaces-additional-contact-preferences",
       "type": "text",
       "url": "/customer/",
       "status": 200,
       "contains": [
+        "treg-paid-search=20261021-v1"
+      ],
+      "notContains": [
         "id=\"additional-contact-preferences\"",
-        "Use additional services automatically when no confirmed public work email is found.",
-        "additional-contact-services.js?v=20261019-v1"
+        "<strong>Additional email research</strong>"
       ]
     },
     {
