@@ -47,3 +47,9 @@
 - First fresh Stegra attempt returned two failed passes after the per-provider deadline windows. Existing buyers survived and the dossier was marked incomplete; this does not satisfy research acceptance.
 - Fresh integration status confirmed both engines executed. Eight sources at three concurrent readers could consume the 90-second pass allowance through serial extractor fallbacks, leaving no guaranteed extraction time.
 - Follow-up bounds each page read, starts six readers, shortens direct/Firecrawl waits only for dossier reads, and budgets extraction output. Receipts now retain phase, elapsed time and actual source counts. Source and mailbox evidence requirements remain unchanged.
+
+## Extraction and coverage acceptance finding
+- Second fresh Stegra attempt: Gemini completed in 64 seconds with four people and no contact routes; OpenAI read 8/8 sources but hit the extraction deadline at 90 seconds. This remains below the requested benchmark.
+- Compact extraction now selects server-numbered source passages; the server restores exact quotes and URLs, reducing repeated model output. Leadership/recent-change and contact-route searches run separately within each independent provider, with balanced source slots.
+- Failed required search families remain partial and resume without repurchasing successful family searches. Partial supported evidence stays visible. Provider signatures invalidate earlier checkpoints that lack the required family policy.
+- Independent follow-up review found and regression tests cover cross-person title attribution, provider-order loss of scheduled departures, and false completion from contact-only search success. Shared module changes now trigger backend CI/deployment.
