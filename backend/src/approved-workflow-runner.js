@@ -9,7 +9,7 @@ import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.j
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities,fetchDirectPublicPage,readPublicBuyerPage} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
-import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
+import {reviewWorkspaceBuyerEvidence,searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
 import {enrichCrmContact} from './crm-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
 const discovery=globalThis.LeadIntelDiscovery;
@@ -59,8 +59,8 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,account
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard,readPage){
-  return discovery.runMandatoryBuyerResearch(candidate,{search,guard,readPage,accountability:candidate.publicResearch?.accountability});
+export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[]){
+  return discovery.runMandatoryBuyerResearch(candidate,{search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
 }
 
 async function buyer(env,workspaceId,candidate,config,guard,userId){
@@ -100,9 +100,14 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};});
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows);
   candidate.publicResearch={...candidate.publicResearch,checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.publicResearch.accountability?.status!=='complete'||candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
+  await guard();
+  const review=await reviewWorkspaceBuyerEvidence(env,workspaceId,{company:candidate.company,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,email:p.publicEmail,email_source:p.publicEmailUrl,checks:p.contactResearch?.checks})),evidence:discovery.buyerReviewEvidence(candidate.people,research.rows).map(row=>({url:row.url,title:row.title,excerpt:discovery.buyerEvidenceExcerpt(row,candidate.people)})),quality:{depth:discovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:accountability.status,checked_people:accountability.checkedPeople,official_pages:accountability.officialPages}},{userId});
+  await guard();
+  candidate.publicResearch.aiReview=discovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider,checkedAt:new Date().toISOString(),inputSignature:discovery.buyerReviewSignature(candidate),reviewedPersonIds:review.supervisor?.reviewedPersonIds,conflicts:review.conflicts,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason});
+  candidate.publicResearch.conflicts=review.conflicts||[];
   pool=discovery.mergeBuyerPool(pool,candidate.people,profile);candidate.buyerDiscovery.pool=pool;
   if(candidate.people.some(person=>['partial','unavailable'].includes(person.emailResearch?.status)))candidate.buyerDiscovery.issues.push('Public email evidence searches incomplete');
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
@@ -132,6 +137,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
+  if(candidate.publicResearch.aiReview?.status!=='complete'||candidate.publicResearch.aiReview.findings.length){candidate.buyerDiscovery.contactConfirmationRequired=true;candidate.buyerDiscovery.issues.push('AI supervisor review is incomplete or has unresolved evidence gaps; review before choosing a new automatic recipient');return null;}
   if(config.buyers.confirmationLevel==='public_confirmed'){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
     for(const person of candidate.people.slice(0,10)){

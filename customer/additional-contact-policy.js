@@ -7,6 +7,7 @@
     const now=Date.parse(options.now||new Date().toISOString()),researched=Date.parse(qualification.researchedAt||'');
     if(!Number.isFinite(researched)||researched>now+300000||now-researched>30*86400000)return blocked('Refresh company verification before using additional services.');
     if(candidate.buyerRolesChanged||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return blocked('Complete the current buyer and public research first.');
+    if(!D.buyerQualityAssessment(candidate,options).researchPassed)return blocked('Complete the mandatory public research quality check before using additional services.');
     const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||[...new Set((candidate.people||[]).map(p=>p.matchedBuyerRole||p.title))]};
     const eligible=(candidate.people||[]).filter(p=>D.qualifyBuyer(p,profile,candidate,options).eligible&&D.buyerResearchAssessment(p,options).status==='complete');
     if(new Set(eligible.map(p=>D.buyerIdentity(p))).size<4)return blocked('Complete qualification and public research for four buyers first.');

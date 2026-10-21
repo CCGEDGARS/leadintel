@@ -3525,6 +3525,56 @@
       "contains": [
         "buyer-research-policy=20261020-v2"
       ]
+    },
+    {
+      "id": "buyer-quality-supervisor-engine",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerQualityAssessment(",
+        "function buyerReviewSignature(",
+        "Mandatory research depth has not been assessed"
+      ]
+    },
+    {
+      "id": "buyer-quality-supervisor-ui",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function buyerQualitySupervisorHtml(",
+        "priority buyers have confirmed company emails",
+        "AI supervisor: checking research coverage"
+      ]
+    },
+    {
+      "id": "buyer-quality-public-first",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "if(freeConfirm)await freeConfirm();",
+        "publicChecking"
+      ]
+    },
+    {
+      "id": "buyer-quality-credit-gate",
+      "type": "text",
+      "url": "/customer/additional-contact-policy.js",
+      "status": 200,
+      "contains": [
+        "mandatory public research quality check"
+      ]
+    },
+    {
+      "id": "buyer-quality-entry-version",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-supervisor=20261021-v1"
+      ]
     }
   ],
   "retry": {

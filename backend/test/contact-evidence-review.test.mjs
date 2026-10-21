@@ -31,3 +31,23 @@ test('Gemini contact review stays within supplied people and evidence',async()=>
   assert.deepEqual(reviewed.conflicts,[{person_id:'jacob',reason:'Role date unclear'}]);
   assert.throws(()=>parseContactReview('not json',input),/invalid JSON/);
 });
+
+test('a quality review cannot declare completion without reviewing every supplied identity',()=>{
+ const input=contactReviewInput({company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'},{id:'b',name:'Bob Buyer',role:'COO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO. Bob Buyer COO.'}]});
+ assert.notEqual(parseContactReview('{}',input).supervisor?.status,'complete');
+ const partial=parseContactReview(JSON.stringify({reviewed_person_ids:['a','invented'],conflicts:[]}),input);assert.equal(partial.supervisor.status,'partial');assert.deepEqual(partial.supervisor.reviewedPersonIds,['a']);
+ const complete=parseContactReview(JSON.stringify({reviewed_person_ids:['a','b'],conflicts:[]}),input);assert.equal(complete.supervisor.status,'complete');
+});
+test('supervisor follow-up findings must cite a supplied source and existing person',()=>{
+ const input=contactReviewInput({company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]});
+ const result=parseContactReview(JSON.stringify({reviewed_person_ids:['a'],findings:[{person_id:'a',reason:'Employer unclear',source_url:'https://example.com/team'},{person_id:'a',reason:'Invented evidence',source_url:'https://other.com/'},{person_id:'ghost',reason:'Invented person',source_url:'https://example.com/team'}]}),input);
+ assert.equal(result.supervisor.findings.length,1);assert.equal(result.supervisor.findings[0].person_id,'a');
+});
+
+test('the workspace supervisor uses the configured active AI when Gemini is absent and reports the actual provider',async()=>{
+ const {reviewWorkspaceBuyerEvidence}=await import('../src/ai-routes.js'),{importAesKey,encryptSecret}=await import('../src/oauth.js');
+ const secret=btoa(String.fromCharCode(...new Uint8Array(32).fill(9))),encrypted=await encryptSecret('fixture-provider-key',await importAesKey(secret)),calls=[];
+ const env={OAUTH_TOKEN_ENCRYPTION_KEY:secret,DB:{prepare(sql){return {bind(){return this;},async first(){return sql.includes('active=1')?{provider:'openai',encrypted_api_key:encrypted,model:'fixture-model'}:null;},async run(){return {};}};}}};
+ const result=await reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]},{generate:async options=>{calls.push(options.provider);return {text:JSON.stringify({reviewed_person_ids:['a'],conflicts:[]})};}});
+ assert.deepEqual(calls,['openai']);assert.equal(result.provider,'openai');assert.equal(result.supervisor.status,'complete');
+});
