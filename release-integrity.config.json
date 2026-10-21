@@ -30,7 +30,8 @@
       "company_search_version": "20261020-buyer-context-v1",
       "workspace_records_version": "workspace-records-v1",
       "research_recovery_version": "company-recovery-v2",
-      "company_dossier_version": "20261021-dossier-first-v1"
+      "company_dossier_version": "20261021-dossier-first-v1",
+      "confirm_contact_data_version": "20261021-v1"
     }
   },
   "smokeChecks": [
@@ -3467,7 +3468,7 @@
       "status": 200,
       "contains": [
         "function prospectContactControls(",
-        "Email confirmed",
+        "Confirm data",
         "buyer-email-confirmed",
         "data-prospect-enrich-email",
         "function hydratePublishedCompanyEmails(",
@@ -3877,6 +3878,27 @@
       "contains": [
         "options.provider!=='treg'",
         "allowPartialRoster:options.provider==='treg'"
+      ]
+    },
+    {
+      "id": "manual-confirm-data-contract",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "title:'Confirm data'",
+        "alternativeAction:'Email & profile only'",
+        "data_lookup:true,phone_approved:includePhone",
+        "This action does not send messages."
+      ]
+    },
+    {
+      "id": "confirm-data-entry-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "confirm-contact-data=20261021-v1"
       ]
     }
   ],

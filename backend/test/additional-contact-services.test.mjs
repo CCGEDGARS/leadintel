@@ -88,3 +88,36 @@ test('verified Hunter result is stored as a trusted scoped CRM contact and survi
  assert.equal(globalThis.LeadIntelContactPolicy.accepted(saved,'example.com','provider_verified'),true);
  assert.equal(f.raw.prepare("SELECT count(*) n FROM crm_activities WHERE workspace_id='w' AND activity_type='contact.enriched'").get().n,1);
 });
+
+test('manual data research reuses confirmed email but still requests profile and explicitly approved phone',async()=>{
+ const f=fixture();f.detail.contacts=[{id:'saved',external_person_id:'p0',name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified',source:'treg',verification_provider:'Treg'}];
+ f.deps.credential=async()=>({configured:true});let options;
+ f.deps.findTreg=async(e,c,company,person,id,input)=>{options=input;return {contact:f.detail.contacts[0],contactData:{status:'updated',profile:{status:'provider_reported'},phone:{status:'provider_listed'}},research:{status:'verified'}};};
+ const result=await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true,data_lookup:true,phone_approved:true},f.deps);
+ assert.equal(options.dataLookup,true);assert.equal(options.includePhone,true);assert.equal(options.existingContact.id,'saved');assert.equal(result.contactData.status,'updated');
+});
+test('automatic requests cannot upgrade email-only consent into manual profile or phone purchases',async()=>{
+ const f=fixture();f.deps.credential=async()=>({configured:true});await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:1});f.raw.exec("UPDATE additional_contact_policies SET provider='treg'");
+ for(const extra of [{data_lookup:true},{phone_approved:true}])await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true,...extra},f.deps),/Manual data research requires individual approval/);
+ assert.equal(f.calls.length,0);
+});
+
+test('manual profile and listed phone persist to the exact CRM buyer and replay without another paid phase',async()=>{
+ for(const reorder of [false,true]){
+ const {findTregWorkEmail}=await import('../src/treg-contact-research.js');const f=fixture();
+ for(const file of ['0011_master_crm.sql','0012_crm_contact_enrichment.sql','0022_crm_public_contact_sources.sql'])f.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
+ f.raw.exec("ALTER TABLE workspace_service_integrations ADD COLUMN last_used_at TEXT;ALTER TABLE workspace_service_integrations ADD COLUMN updated_at TEXT;INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('c','w','example.com','Example','prospect','now','now','now','now');");
+ f.raw.prepare("INSERT INTO crm_intelligence(company_id,workspace_id,research_snapshot_json,intelligence_updated_at) VALUES('c','w',?,'now')").run(JSON.stringify(f.detail.intelligence.research_snapshot));
+ const original=f.env.DB.prepare;if(reorder)f.env.DB.prepare=sql=>{if(sql.startsWith('UPDATE crm_intelligence SET research_snapshot_json')){const row=f.raw.prepare("SELECT research_snapshot_json FROM crm_intelligence WHERE company_id='c'").get(),snapshot=JSON.parse(row.research_snapshot_json);snapshot.buyerResearch.buyers.reverse();f.raw.prepare("UPDATE crm_intelligence SET research_snapshot_json=? WHERE company_id='c'").run(JSON.stringify(snapshot));}return original(sql);};
+ const calls=[],deps={credential:async()=>({source:'customer',apiKey:'test-token'}),fetch:async(url,options)=>{calls.push(url);return Response.json(url.includes('email.find')?{output:{}}:url.includes('people.enrich')?{output:{full_name:'Anna Buyer0',company_domain:'example.com',title:'Director',city:'Riga'}}:{output:{phone:'+37120000001'}},{headers:{'X-Treg-Call-Id':url.split('/').pop(),'X-Treg-Cost-Micro':'4000'}});}};
+ for(let i=0;i<2;i++){
+  const result=await findTregWorkEmail(f.env,f.context,{company:'Example',domain:'example.com'},f.people[0],'c',{attemptKey:'month-a',dataLookup:true,includePhone:true},deps);
+  assert.equal(result.contact.phone_number,'+37120000001');assert.equal(result.contact.phone_status,'provider_listed');assert.equal(result.contact.email_status,null);assert.equal(result.cached,i===1);
+ }
+ const snapshot=JSON.parse(f.raw.prepare("SELECT research_snapshot_json FROM crm_intelligence WHERE company_id='c'").get().research_snapshot_json);
+ assert.equal(snapshot.buyerResearch.buyers.find(p=>p.id==='p0').contactData.profile.city,'Riga');assert.equal(snapshot.buyerResearch.buyers.find(p=>p.id==='p1').contactData,undefined);assert.equal(calls.length,3);assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,1);
+ f.raw.exec("UPDATE crm_contacts SET phone_number='+37120000002',phone_status='manual'");
+ await findTregWorkEmail(f.env,f.context,{company:'Example',domain:'example.com'},snapshot.buyerResearch.buyers.find(p=>p.id==='p0'),'c',{attemptKey:'month-a',dataLookup:true,includePhone:false},deps);
+ assert.equal(f.raw.prepare('SELECT phone_number FROM crm_contacts').get().phone_number,'+37120000002');assert.equal(calls.length,3);
+ }
+});

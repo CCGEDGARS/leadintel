@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
 import '../../customer/contact-confirmation-policy.js';
 
 const ctx={workspaceId:'workspace-a',userId:'owner-a',role:'owner'};
@@ -22,6 +23,7 @@ test('Treg finds then independently verifies a work email with workspace tags, c
  assert.equal(result.contact.work_email,'anna@example.com');assert.equal(f.calls.length,2);assert.equal(result.research.costMicro,8000);
  for(const c of f.calls){assert.match(c.options.headers['X-Treg-Meta'],/workspace=workspace-a/);assert.ok(c.options.headers['Idempotency-Key']);assert.ok(Number(c.options.headers['X-Treg-Route-Max-Cost'])<=0.05);}
  assert.equal(f.receipts.length,2);assert.equal(f.saved.length,1);
+ const legacyHash=createHash('sha256').update([ctx.workspaceId,'company-a',person.id,'attempt-a'].join('|')).digest('hex');assert.equal(f.calls[0].options.headers['Idempotency-Key'],'leadintel-'+legacyHash+'-find');
  assert.equal(globalThis.LeadIntelContactPolicy.accepted(result.contact,'example.com','provider_verified'),true);
 });
 test('Treg rejects wrong identities, personal domains and shared inboxes without saving or verification spend',async()=>{
@@ -52,4 +54,44 @@ test('an interrupted verification resumes its saved finder result and reuses the
  await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps),/saved lookup/);
  interrupted=false;const result=await f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps);
  assert.equal(result.contact.work_email,'anna@example.com');assert.equal(f.calls.filter(url=>url.includes('email.find')).length,1);assert.equal(keys[0],keys[1]);assert.equal(result.research.costMicro,8000);assert.equal(db.prepare('SELECT SUM(cost_micro) n FROM treg_contact_calls').get().n,8000);db.close();
+});
+
+test('manual Confirm data includes profile and optional phone while preserving email-specific verification',async()=>{
+ const f=await fixture(),emailFetch=f.deps.fetch;
+ f.deps.fetch=async(url,options)=>{
+  if(!url.includes('people.enrich')&&!url.includes('phone.find'))return emailFetch(url,options);
+  f.calls.push({url,options});return Response.json(url.includes('people.enrich')?{output:{full_name:'Anna Buyer',title:'Procurement Director',company_domain:'example.com',linkedin_url:person.publicLinkedinUrl,city:'Riga',country:'Latvia'}}:{output:{phone:'+37120000001'},_treg:{served_by:'test-phone'}},{headers:{'X-Treg-Cost-Micro':'5000','X-Treg-Call-Id':url.includes('phone')?'phone-1':'profile-1'}});
+ };
+ f.deps.saveData=async data=>data;
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'data-a',dataLookup:true,includePhone:true},f.deps);
+ assert.equal(f.calls.length,4);assert.equal(result.contact.work_email,'anna@example.com');assert.equal(result.contactData.profile.city,'Riga');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.contactData.phone.status,'provider_listed');assert.equal(result.contactData.status,'updated');assert.equal(result.research.costMicro,18000);
+ assert.equal(f.calls.find(c=>c.url.includes('phone.find')).options.headers['X-Treg-Route-Max-Cost'],'0.10');
+});
+test('profile enrichment remains available for an already confirmed email without buying email again',async()=>{
+ const f=await fixture();f.deps.saveData=async data=>data;f.deps.fetch=async(url,options)=>{f.calls.push({url,options});return Response.json({output:{full_name:'Anna Buyer',title:'Procurement Director',company_domain:'example.com',linkedin_url:person.publicLinkedinUrl}});};
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'a',dataLookup:true,existingContact:{id:'saved',name:person.name,work_email:'anna@example.com',email_status:'verified'}},f.deps);
+ assert.equal(f.calls.length,1);assert.match(f.calls[0].url,/people.enrich/);assert.equal(result.contactData.phone.status,'not_requested');assert.equal(result.contact.work_email,'anna@example.com');
+});
+test('a missing email does not discard available profile or phone and never approves sending',async()=>{
+ const f=await fixture({find:{output:{}}}),emailFetch=f.deps.fetch;f.deps.saveData=async data=>data;
+ f.deps.fetch=async(url,options)=>url.includes('email.find')?emailFetch(url,options):Response.json(url.includes('phone.find')?{output:{phone:'+37120000001'}}:{output:{full_name:'Anna Buyer',company_domain:'example.com',title:'Director'}});
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'c',{attemptKey:'a',dataLookup:true,includePhone:true},f.deps);
+ assert.equal(result.contact,null);assert.equal(result.contactData.phone.status,'provider_listed');assert.equal(result.contactData.profile.title,'Director');assert.notEqual(result.research.status,'verified');
+});
+test('profile identity or employer conflicts are not saved and a phone error preserves a confirmed email',async()=>{
+ for(const output of [{full_name:'Other Person',company_domain:'example.com'},{full_name:'Anna Buyer',company_domain:'wrong.example'},{full_name:'Anna Buyer',company_domain:'example.com',linkedin_url:'https://linkedin.com/in/another'}]){
+  const f=await fixture(),emailFetch=f.deps.fetch;f.deps.saveData=async data=>data;f.deps.fetch=async(url,options)=>url.includes('people.enrich')?Response.json({output}):emailFetch(url,options);
+  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'c',{attemptKey:'a',dataLookup:true},f.deps);
+  assert.equal(result.contactData.profile.status,'conflict');assert.equal(result.contactData.profile.title,undefined);assert.ok(result.contact.work_email);
+ }
+ const f=await fixture(),emailFetch=f.deps.fetch;f.deps.saveData=async data=>data;f.deps.fetch=async(url,options)=>url.includes('phone.find')?new Response('{}',{status:402}):url.includes('people.enrich')?Response.json({output:{}}):emailFetch(url,options);
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'c',{attemptKey:'a',dataLookup:true,includePhone:true},f.deps);assert.ok(result.contact.work_email);assert.equal(result.contactData.phone.status,'error');assert.equal(result.contactData.status,'partial');
+});
+
+test('email-only success counts as updated data and excluding phone preserves earlier phone evidence',async()=>{
+ const f=await fixture(),emailFetch=f.deps.fetch;f.deps.saveData=async()=>{};
+ f.deps.fetch=(url,options)=>url.includes('people.enrich')?Promise.resolve(Response.json({output:{}})):emailFetch(url,options);
+ const p={...person,contactData:{version:1,domain:'example.com',personId:person.id,phone:{status:'provider_listed',number:'+37120000001',source:'previous-provider'}}};
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'a',dataLookup:true},f.deps);
+ assert.equal(result.contactData.status,'updated');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.contactData.phone.source,'previous-provider');assert.equal(f.calls.length,2);
 });

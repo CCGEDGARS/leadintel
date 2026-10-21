@@ -2126,7 +2126,7 @@ test('the Buyers page keeps four existing cards without a separate published-con
  assert.equal(dom.window.document.querySelectorAll('.published-company-contacts').length,0);
  assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,4);
  assert.equal(dom.window.document.querySelectorAll('[data-prospect-enrich-email]').length,4);
- for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Find email');
+ for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Confirm data');
  assert.equal(candidate.buyerDiscovery.companyContacts[0].publicEmail,'staff@northstar.com');dom.window.close();
 });
 
