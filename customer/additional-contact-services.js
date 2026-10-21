@@ -15,25 +15,29 @@
   function status(message){const node=document.getElementById('additional-contact-status');if(node)node.textContent=message;}
   function mountPaidSearch(card=document.getElementById('delivery-setup')){
     if(!card)return;const footer=card.querySelector('.delivery-settings-footer');if(!footer)return;
-    let button=footer.querySelector('[data-paid-search-toggle]');if(!button){button=document.createElement('button');button.type='button';button.className='secondary-btn';button.dataset.paidSearchToggle='1';footer.prepend(button);button.addEventListener('click',togglePaidSearch);}
-    const valid=loadedWorkspace===workspace()&&policy,active=valid&&policy.provider==='treg'&&policy.enabled;
-    button.disabled=!valid||busyPolicy||policyRole!=='owner';button.textContent=busyPolicy?'Saving paid search…':active?'Paid search active ✓':'Activate paid search';button.setAttribute('aria-pressed',String(Boolean(active)));button.classList.toggle('paid-search-active',Boolean(active));
+    const valid=loadedWorkspace===workspace()&&policy,isTreg=valid&&policy.provider==='treg';
+    for(const channel of ['email','phone']){
+      const phone=channel==='phone',selector=phone?'[data-paid-phone-toggle]':'[data-paid-search-toggle]';
+      let button=footer.querySelector(selector);if(!button){button=document.createElement('button');button.type='button';button.className='secondary-btn';if(phone)button.dataset.paidPhoneToggle='1';else button.dataset.paidSearchToggle='1';footer.insertBefore(button,footer.querySelector('#delivery-setup-save')||footer.lastElementChild);button.addEventListener('click',()=>togglePaidSearch(channel));}
+      const active=isTreg&&(phone?policy.phoneEnabled:policy.enabled);
+      button.disabled=!valid||busyPolicy||policyRole!=='owner';button.textContent=busyPolicy?'Saving preferences…':active?'Paid '+channel+' search: ON ✓':'Activate paid '+channel+' search';button.setAttribute('aria-pressed',String(Boolean(active)));button.classList.toggle('paid-search-active',Boolean(active));
+    }
     let estimate=card.querySelector('[data-paid-search-estimate]');if(!estimate){estimate=document.createElement('p');estimate.className='field-help paid-search-estimate';estimate.dataset.paidSearchEstimate='1';footer.after(estimate);}
-    estimate.textContent='Approx. $0.30 per researched email + AI and additional company research. Example: Firecrawl Hobby ($19/month, 5,000 credits) + Treg contact lookup. Variable estimate, not a fixed price; Firecrawl usage comes from your plan allowance.';
+    estimate.textContent='Email research: approx. €0.30/contact. Phone lookup: approx. €0.20 extra per number found.'+(isTreg&&policy.enabled&&policy.phoneEnabled?' Estimated combined cost: €0.50/contact.':'')+' Planning estimates for research and AI, not fixed prices; provider, AI and scraping usage vary. Existing subscription charges are separate. Numbers may be unavailable or unconfirmed.';
     let note=card.querySelector('[data-paid-search-status]');if(!note){note=document.createElement('p');note.className='field-help';note.dataset.paidSearchStatus='1';note.setAttribute('role','status');estimate.after(note);}
-    note.textContent=!valid?'Sign in or reload paid-search settings.':active?'Treg active · 1 strongest eligible buyer per company · '+policy.dailyLimit+' lookups/day · '+policy.monthlyLimit+'/month. Sending follows your separately activated workflow.':treg?.configured?'Treg connected. Paid contact research is off.':'Connect your Treg team token in Settings before activation.';
+    note.textContent=!valid?'Sign in or reload paid-search settings.':isTreg&&(policy.enabled||policy.phoneEnabled)?'Treg · Email '+(policy.enabled?'ON':'OFF')+' · Phone '+(policy.phoneEnabled?'ON':'OFF')+' · 1 strongest eligible buyer per company · '+policy.dailyLimit+' lookups/day · '+policy.monthlyLimit+'/month. Preferences are saved. Paid lookups run only during contact research; sending requires separate activation.':treg?.configured?'Treg connected. Paid email and phone research are off. Saving settings does not start paid searches or send messages.':'Connect your Treg team token in Settings before activation.';
   }
-  async function togglePaidSearch(){
+  async function togglePaidSearch(channel='email'){
     if(busyPolicy||loadedWorkspace!==workspace()||policyRole!=='owner')return;
-    const id=workspace(),enabled=!(policy.provider==='treg'&&policy.enabled);
+    const id=workspace(),phone=channel==='phone',enabled=!(policy.provider==='treg'&&(phone?policy.phoneEnabled:policy.enabled));
     if(enabled&&!treg?.configured){openSettings('treg');status('Connect your Treg team token in Settings, then activate paid search.');return;}
     const daily=Math.max(1,Math.min(50,Number(document.getElementById('delivery-setup-custom')?.hidden===false?document.getElementById('delivery-setup-custom').value:document.getElementById('delivery-setup-limit')?.value)||policy.dailyLimit||5));
-    const input={enabled,provider:'treg',maxPerCompany:1,dailyLimit:daily,monthlyLimit:Math.max(daily,Math.min(1000,Math.max(policy.monthlyLimit||0,daily*30)))};
+    const input={enabled:phone?Boolean(policy.provider==='treg'&&policy.enabled):enabled,phoneEnabled:phone?enabled:Boolean(policy.provider==='treg'&&policy.phoneEnabled),provider:'treg',maxPerCompany:1,dailyLimit:daily,monthlyLimit:Math.max(daily,Math.min(1000,Math.max(policy.monthlyLimit||0,daily*30)))};
     busyPolicy=true;policyRequest++;mountPaidSearch();
     try{
-      if(enabled){const approved=await (root.LeadIntelDialogs?.confirm('Activate Treg work-email finding and verification for the strongest qualified buyer when public research has no confirmed email? Estimated research subtotal is approximately $0.30 per email plus AI and additional company research. Up to '+input.dailyLimit+' lookups/day and '+input.monthlyLimit+'/month; one buyer per company. Each Treg lookup is capped at $0.075 for finding plus verification. An attempt may produce no usable email. Automatic sending still requires separate workflow activation.',{title:'Activate paid search',action:'Activate paid search'})??false);if(!approved)return;}
+      if(enabled){const approved=await (root.LeadIntelDialogs?.confirm((phone?'Activate paid phone lookup. Budget approximately €0.20 per number found. This does not activate paid email search. A number may be missing or provider-listed without confirmed reachability or ownership. Each phone request is capped at $0.25.':'Activate paid work-email finding and verification. Budget approximately €0.30/contact for research and AI. This does not activate paid phone search. Treg finding and verification are capped at $0.075 combined; public/AI research costs vary.')+' These are estimates, not fixed prices. Up to '+input.dailyLimit+' contact lookups/day and '+input.monthlyLimit+'/month; one buyer per company. Saving this choice does not run a paid lookup or send messages. Automatic sending requires separate activation.',{title:'Activate paid '+channel+' search',action:'Activate paid '+channel+' search'})??false);if(!approved)return;}
       if(id!==workspace())throw Error('Workspace changed. Paid search was not changed.');
-      const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));adapter?.render?.();
+      const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
     }catch(error){status(error.message);outcomes.set('policy-error',error.message);}
     finally{busyPolicy=false;if(id===workspace()){mountPaidSearch();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
   }
@@ -54,7 +58,7 @@
       const [value,services]=await Promise.all([api('/api/additional-contact-services/policy'),api('/api/integrations/services/status')]);
       if(workspace()!==id||serial!==policyRequest||busyPolicy)return;
       policy=value.policy;policyRole=value.role||bridge()?.workspace?.role||'';loadedWorkspace=id;treg=services.providers?.find(p=>p.provider==='treg');provider=services.providers?.find(p=>p.provider==='apollo');hunter=services.providers?.find(p=>p.provider==='hunter');renderPolicy();adapter?.render?.();
-      if(policy.enabled)for(const candidate of adapter?.rows?.()||[])void auto(candidate);
+      if(policy.enabled||policy.phoneEnabled)for(const candidate of adapter?.rows?.()||[])void auto(candidate);
     }catch(error){if(workspace()===id){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
   }
   function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
@@ -65,7 +69,7 @@
   }
   function card(candidate,person){
     if(person.contactData){
-      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status).replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status).replaceAll('_',' ')];
+      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status||'not_requested').replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status||'not_requested').replaceAll('_',' ')];
       return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Some checks need review':'No new data')+' · '+esc(d.checkedAt)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>Latest check needs review; previously found details retained.':'')+'</p>';
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
@@ -120,18 +124,20 @@
         check();
         if(loadedWorkspace!==id||!policy)await load();
         check();if(!policy||loadedWorkspace!==id)throw Error('Research preferences could not load. Retry or check Settings.');
-        if(automatic&&!policy.enabled)throw Error('Automatic paid email research is off.');
+        if((dataLookup||policy.provider==='treg')&&(policy.provider!=='treg'||!policy.enabled&&!policy.phoneEnabled))throw Error('Paid email and phone search are off. Activate the required service in Setup.');
+        if(automatic&&!policy.enabled&&!policy.phoneEnabled)throw Error('Automatic paid contact research is off.');
         const tregReady=(dataLookup||policy.provider==='treg')&&treg?.configured&&treg.source==='customer';
         const apolloReady=!dataLookup&&policy.provider!=='treg'&&provider?.configured&&provider.source==='customer'&&provider.metadata?.email_enrichment_enabled===true;
         const hunterReady=!dataLookup&&policy.provider!=='treg'&&!automatic&&hunter?.configured&&hunter.source==='customer'&&hunter.metadata?.additional_verification_enabled===true;
         if(!tregReady&&!apolloReady&&!hunterReady)throw Error('Connect Treg in Settings before paid email research.');
         for(const service of [...(tregReady?['treg']:[]),...(apolloReady?['apollo']:[]),...(hunterReady?['hunter']:[])]){
           check();const name=service==='treg'?'Treg':service==='apollo'?'Apollo':'Hunter';
-          let includePhone=false;
-          if(dataLookup){
-            if(automatic||service!=='treg')throw Error('Manual data confirmation requires Treg and individual approval.');
-            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: check work email and available professional profile details. Include a phone lookup? Maximum Treg lookup cost: $0.125 for email + profile, or $0.225 including phone ($0.10 extra). Existing phase results are reused. AI and public research are separate. Results may be missing or unconfirmed. This action does not send messages.`,{title:'Confirm data',action:'Confirm data + phone',alternativeAction:'Email & profile only'})??false);
-            if(!choice||!current())return false;includePhone=choice===true;
+          const includePhone=service==='treg'&&policy.phoneEnabled===true,includeEmail=service!=='treg'||policy.enabled===true;
+          const lookupData=dataLookup||includePhone;
+          if(dataLookup&&!automatic){
+            if(service!=='treg')throw Error('Data confirmation requires Treg.');
+            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${includeEmail?'research work email and professional profile':'reuse saved email; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
+            if(!choice||!current())return false;
           }
           if(!dataLookup&&!automatic&&!(service==='treg'&&policy.enabled)){
             const description=service==='treg'?'Treg work-email finding and delivery verification':service==='apollo'?'Apollo email enrichment':'Hunter email finding and, if needed, one delivery verification';
@@ -142,7 +148,7 @@
           check();adapter.pending(candidate,person,true);adapter.render();
           try{
             const company=await adapter.prepare(candidate);check();
-            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,approved:!automatic,...(dataLookup?{data_lookup:true,phone_approved:includePhone}:{}),hunter_approved:service==='hunter'&&!automatic})});
+            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
             if(result.error)throw Error(result.error);
             if(result.contactData){person.contactData=result.contactData;adapter?.saveOutcome?.(candidate,person);}
@@ -171,18 +177,18 @@
     })();running.set(identity,execute);try{return await execute;}finally{running.delete(identity);}
   }
   async function auto(candidate){
-    if(!adapter||loadedWorkspace!==workspace()||!policy?.enabled)return;
+    if(!adapter||loadedWorkspace!==workspace()||!(policy?.enabled||policy?.phoneEnabled))return;
     if(policy.provider==='treg'){
       if(!treg?.configured||treg.source!=='customer')return;
       const mode=root.LeadIntelOutreachAutomationUI?.getPolicy?.().preferredMode||root.LeadIntelOutreachAutomationUI?.getPolicy?.().mode||'manual';if(mode!=='automatic')return;
       const ranked=root.LeadIntelDiscovery.rankQualifiedCompanies((adapter.rows?.()||[]).filter(c=>{const q=adapter.assessment(c);return q?.eligible&&Number(q.companyScore??q.score)>=80;}));
       if(ranked[0]?.domain!==candidate.domain)return;
     }else if(!provider?.configured||provider.source!=='customer'||provider.metadata?.email_enrichment_enabled!==true)return;
-    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.provider==='treg'?1:policy.maxPerCompany,confirmedEmail:p=>adapter.email(candidate,p)});
+    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.provider==='treg'?1:policy.maxPerCompany,confirmedEmail:p=>policy.phoneEnabled?'':adapter.email(candidate,p)});
     for(const person of targets){
       const fingerprint=[key(candidate,person),person.emailResearch?.checkedAt,policy.updatedAt].join('|');
       if(automaticAttempts.has(fingerprint))continue;automaticAttempts.add(fingerprint);
-      await run(candidate,person,{automatic:true});
+      await run(candidate,person,{automatic:true,dataLookup:policy.provider==='treg'&&policy.phoneEnabled===true});
     }
   }
   document.getElementById('additional-contact-preferences')?.addEventListener('submit',async event=>{

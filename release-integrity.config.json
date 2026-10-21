@@ -31,7 +31,8 @@
       "workspace_records_version": "workspace-records-v1",
       "research_recovery_version": "company-recovery-v2",
       "company_dossier_version": "20261021-dossier-first-v1",
-      "confirm_contact_data_version": "20261021-v1"
+      "confirm_contact_data_version": "20261021-v1",
+      "paid_contact_permissions_version": "email-phone-v1"
     }
   },
   "smokeChecks": [
@@ -232,7 +233,7 @@
       "contains": [
         "name=\"confirmationLevel\"",
         "Public confirmation verifies the identity link, not mailbox delivery.",
-        "Paid search is controlled by Activate paid search in Setup."
+        "Paid email and phone searches have separate controls in Setup."
       ]
     },
     {
@@ -3865,8 +3866,10 @@
       "status": 200,
       "contains": [
         "data-paid-search-toggle",
-        "Activate paid search",
-        "Approx. $0.30",
+        "data-paid-phone-toggle",
+        "\u20ac0.30/contact",
+        "\u20ac0.20 extra",
+        "\u20ac0.50/contact",
         "provider:'treg'"
       ]
     },
@@ -3887,8 +3890,8 @@
       "status": 200,
       "contains": [
         "title:'Confirm data'",
-        "alternativeAction:'Email & profile only'",
-        "data_lookup:true,phone_approved:includePhone",
+        "email_lookup:includeEmail",
+        "phone_approved:includePhone",
         "This action does not send messages."
       ]
     },
@@ -4017,6 +4020,15 @@
         "company-dossier.js?v=20261021-v4",
         "company-dossier-ui.js?v=20261021-v5",
         "formula-execution=20261021-v2"
+      ]
+    },
+    {
+      "id": "paid-email-phone-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "paid-email-phone=20261021-v1"
       ]
     }
   ],

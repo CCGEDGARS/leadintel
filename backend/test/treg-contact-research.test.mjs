@@ -65,7 +65,7 @@ test('manual Confirm data includes profile and optional phone while preserving e
  f.deps.saveData=async data=>data;
  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'data-a',dataLookup:true,includePhone:true},f.deps);
  assert.equal(f.calls.length,4);assert.equal(result.contact.work_email,'anna@example.com');assert.equal(result.contactData.profile.city,'Riga');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.contactData.phone.status,'provider_listed');assert.equal(result.contactData.status,'updated');assert.equal(result.research.costMicro,18000);
- assert.equal(f.calls.find(c=>c.url.includes('phone.find')).options.headers['X-Treg-Route-Max-Cost'],'0.10');
+ assert.equal(f.calls.find(c=>c.url.includes('phone.find')).options.headers['X-Treg-Route-Max-Cost'],'0.25');
 });
 test('profile enrichment remains available for an already confirmed email without buying email again',async()=>{
  const f=await fixture();f.deps.saveData=async data=>data;f.deps.fetch=async(url,options)=>{f.calls.push({url,options});return Response.json({output:{full_name:'Anna Buyer',title:'Procurement Director',company_domain:'example.com',linkedin_url:person.publicLinkedinUrl}});};
@@ -94,4 +94,12 @@ test('email-only success counts as updated data and excluding phone preserves ea
  const p={...person,contactData:{version:1,domain:'example.com',personId:person.id,phone:{status:'provider_listed',number:'+37120000001',source:'previous-provider'}}};
  const result=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'a',dataLookup:true},f.deps);
  assert.equal(result.contactData.status,'updated');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.contactData.phone.source,'previous-provider');assert.equal(f.calls.length,2);
+});
+
+test('phone-only research never buys email or profile and retains existing professional data',async()=>{
+ const f=await fixture();f.deps.saveData=async data=>data;
+ f.deps.fetch=async(url,options)=>{f.calls.push({url,options});return Response.json({output:{phone:'+37120000001'}},{headers:{'X-Treg-Cost-Micro':'125000'}});};
+ const selected={...person,contactData:{version:1,domain:'example.com',personId:person.id,profile:{status:'provider_reported',city:'Riga'}}};
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,selected,'c',{attemptKey:'phone-only',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
+ assert.deepEqual(f.calls.map(c=>c.url),['https://treg.to/call/treg.people.phone.find']);assert.equal(result.contact,null);assert.equal(result.contactData.profile.city,'Riga');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.research.costMicro,125000);
 });

@@ -148,8 +148,17 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   const pinned=new Set([...candidate.people.filter(p=>p.kept),...selectedCompanyContacts].map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   const crmContext={workspaceId,userId,role:'owner'};
+  const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
   const complete=async contact=>{
-    if(config.buyers.confirmPhone===true&&!(contact.phone_number&&String(contact.phone_status).toLowerCase()==='verified')){
+    if(paidPolicy.provider==='treg'&&paidPolicy.phoneEnabled&&!(contact.phone_number&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase()))){
+      const selected=candidate.people.find(p=>String(p.id)===String(contact.external_person_id)||buyerName(p)===buyerName(contact));
+      if(selected&&contact.company_id)try{
+        await guard();await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);const phoneResult=await lookupAdditionalEmail(env,crmContext,contact.company_id,{person_id:selected.id,contact_id:contact.id,provider:'treg',automatic:true,data_lookup:true,email_lookup:false,phone_approved:true},{guard});await guard();
+        if(phoneResult.contactData)selected.contactData=phoneResult.contactData;
+        if(phoneResult.contact)contact={...contact,phone_number:phoneResult.contact.phone_number||contact.phone_number,phone_status:phoneResult.contact.phone_status||contact.phone_status};
+      }catch(error){candidate.buyerDiscovery.issues.push(error.message||'Paid phone lookup needs attention');}
+    }
+    if(paidPolicy.provider!=='treg'&&config.buyers.confirmPhone===true&&!(contact.phone_number&&String(contact.phone_status).toLowerCase()==='verified')){
       const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
       const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
       const personId=contact.external_person_id;
@@ -158,15 +167,15 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
-  const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
-  if(paidPolicy.enabled&&paidPolicy.provider==='treg'){
+  if((paidPolicy.enabled||paidPolicy.phoneEnabled)&&paidPolicy.provider==='treg'){
     const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1});
     const targetPerson=targets[0],review=candidate.publicResearch.aiReview;
     const affects=entry=>!entry.person_id||String(entry.person_id)===String(targetPerson?.id);
     if(targetPerson&&review?.status==='complete'&&review.reviewedPersonIds?.includes(String(targetPerson.id))&&!review.findings?.some(affects)&&!review.conflicts?.some(affects)){
       await guard();const paidCompany=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
-      const result=await lookupAdditionalEmail(env,crmContext,paidCompany.id,{person_id:targetPerson.id,provider:'treg',automatic:true},{guard});await guard();
+      const result=await lookupAdditionalEmail(env,crmContext,paidCompany.id,{person_id:targetPerson.id,provider:'treg',automatic:true,data_lookup:paidPolicy.phoneEnabled,phone_approved:paidPolicy.phoneEnabled,email_lookup:paidPolicy.enabled},{guard});await guard();
       candidate.buyerDiscovery.paidResearch=result.research;
+      if(result.contactData)targetPerson.contactData=result.contactData;
       if(result.contact&&globalThis.LeadIntelContactPolicy.accepted(result.contact,candidate.domain,config.buyers.confirmationLevel))return complete(result.contact);
       candidate.buyerDiscovery.issues.push(result.reason||'Treg did not confirm a usable work email.');
     }else candidate.buyerDiscovery.issues.push(targetPerson?'AI review for the strongest buyer needs attention.':'Complete the strongest buyer’s required public checks before paid search.');

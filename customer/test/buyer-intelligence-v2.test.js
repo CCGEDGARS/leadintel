@@ -36,7 +36,7 @@ test('automatic workflow requires explicit provider-neutral contact confirmation
  assert.match(workflow,/Paid search in Setup controls Treg/);
  const paid=fs.readFileSync(require.resolve('../additional-contact-services.js'),'utf8');
  assert.match(paid,/LeadIntelDialogs\?\.confirm/);
- assert.match(paid,/Activate Treg work-email finding and verification/);
+ assert.match(paid,/Activate paid work-email finding and verification/);
  assert.doesNotMatch(workflow,/Allow automatic Apollo email enrichment/);
  assert.doesNotMatch(workflow,/Find and enrich buyers with Apollo/);
 });

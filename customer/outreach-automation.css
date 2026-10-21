@@ -22,3 +22,5 @@
 .delivery-setup #delivery-setup-auto-limits[hidden]{display:none}
 
 .delivery-settings-footer{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}.delivery-settings-footer .paid-search-active{background:#176c43;color:#fff;border-color:#176c43}.paid-search-estimate{max-width:760px;margin:12px 0 0;line-height:1.5}
+
+@media(max-width:680px){.delivery-settings-footer [data-paid-search-toggle],.delivery-settings-footer [data-paid-phone-toggle]{width:100%;min-height:44px}.paid-search-estimate{font-size:14px}}
