@@ -3918,7 +3918,7 @@
         "data-contact-channel=",
         "View profile \u2197",
         "officialPageReads",
-        "buyer-polish=20261021-v1"
+        "buyer-polish=20261021-v2"
       ],
       "type": "text",
       "status": 200
@@ -3952,6 +3952,35 @@
       "status": 200,
       "contains": [
         "'linkedinIdentityEvidence','linkedinProfileReview','opportunityScope'"
+      ]
+    },
+    {
+      "id": "buyers-resume-progress-copy",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Checking public contact evidence"
+      ]
+    },
+    {
+      "id": "buyers-resume-copy-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-polish=20261021-v2"
+      ]
+    },
+    {
+      "id": "buyers-mobile-column",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        "@container(max-width:260px)",
+        "#step-5 .pipeline-panel{padding:14px 0",
+        ".topbar .top-actions{flex:1 1 100%"
       ]
     }
   ],
