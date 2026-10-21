@@ -42,3 +42,8 @@
 - Customer suite: 3,395 passed; backend suite: 761 passed. Static build and Worker dry run passed.
 - Git main fork confirmed at bc46b5f1545ff27179674988052ed41531f08bea. User explicitly requested integration and repository instructions require release and authenticated acceptance; proceed through PR and CI without another integration-choice prompt.
 - Release proof and authenticated research outcomes remain separate acceptance gates.
+
+## Authenticated acceptance finding
+- First fresh Stegra attempt returned two failed passes after the per-provider deadline windows. Existing buyers survived and the dossier was marked incomplete; this does not satisfy research acceptance.
+- Fresh integration status confirmed both engines executed. Eight sources at three concurrent readers could consume the 90-second pass allowance through serial extractor fallbacks, leaving no guaranteed extraction time.
+- Follow-up bounds each page read, starts six readers, shortens direct/Firecrawl waits only for dossier reads, and budgets extraction output. Receipts now retain phase, elapsed time and actual source counts. Source and mailbox evidence requirements remain unchanged.
