@@ -38,6 +38,16 @@ test('an interrupted forced refresh cannot retain an earlier completed-check cla
  const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async url=>({markdown:'Anna Andersson — Head of Procurement — Example anna.andersson@example.com',metadata:{sourceURL:url,source:'direct-fallback'}})});assert.equal(c.people[0].emailResearch.status,'complete');
  await D.runMandatoryBuyerResearch(c,{force:true,maxDurationMs:10,search:()=>new Promise(()=>{})});assert.equal(c.people[0].emailResearch.status,'partial');assert.equal(c.publicResearch.accountability.checkedPeople,0);
 });
+test('a forced refresh expiring before the first person invalidates earlier coverage and retries it',async t=>{
+ const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async url=>({markdown:'Anna Andersson — Head of Procurement — Example anna.andersson@example.com',metadata:{sourceURL:url,source:'direct-fallback'}})});
+ const email=c.people[0].publicEmail,base=Date.now();let ticks=0,calls=0;
+ const clock=t.mock.method(Date,'now',()=>base+(ticks++?20:0));
+ await D.runMandatoryBuyerResearch(c,{force:true,maxDurationMs:10,search:async()=>{calls++;return [];}});clock.mock.restore();
+ assert.equal(calls,0);assert.equal(c.publicResearch.accountability.stopReason,'time_budget');assert.equal(c.publicResearch.accountability.checkedPeople,0);assert.equal(c.people[0].emailResearch.status,'partial');
+ assert.ok(D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>c.people[0].contactResearch.checks[key]?.status!=='complete'));assert.equal(c.people[0].publicEmail,email,'refresh invalidates coverage without deleting sourced addresses');
+ await D.runMandatoryBuyerResearch(c,{search:async()=>{calls++;return [];},readPage:async url=>({markdown:'Anna Andersson — Head of Procurement — Example anna.andersson@example.com',metadata:{sourceURL:url,source:'direct-fallback'}})});
+ assert.ok(calls>0,'a normal retry must execute the invalidated checks');assert.equal(c.people[0].emailResearch.status,'complete');
+});
 test('deep escalation covers at most four unresolved priority people and never calls paid enrichment',async()=>{
  const c=company();c.people=['Anna Andersson','Bob Smith','Chris Brown','Diana Jones','Erika Green'].map(buyer);const queries=[];
  await D.runMandatoryBuyerResearch(c,{search:async q=>{queries.push(q);return [];},readPage:async()=>{throw new Error('No discovered source');}});

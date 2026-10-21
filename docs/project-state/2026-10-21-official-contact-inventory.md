@@ -2,7 +2,7 @@
 
 The Atlas Copco reference exposed two capture failures: the official website domain differs from its published email domain, and contact cards put the role before a name whose heading text may be split across HTML elements. Existing strict buyer-email rules discarded the company channels, while the staff parser missed the named cards. Bounded website traversal could also exhaust its budget in one branch.
 
-Add a separate source-backed official contact inventory with shared departmental inboxes and named work listings. Preserve exact official URLs and keep publication separate from personal mailbox ownership, deliverability, buyer suitability and recipient eligibility. Manual and automatic research use the same mandatory bounded plan: three official discovery queries, twelve pages, three concurrent reads and forty-five seconds. The visible settings describe that depth; an independent Refresh official contacts action repairs retained records without restarting individual discovery. Buyer quality requires an assessed current-policy scan.
+Add a separate source-backed official contact inventory with shared departmental inboxes and named work listings. Preserve exact official URLs and keep publication separate from personal mailbox ownership, deliverability, buyer suitability and recipient eligibility. Manual and automatic research use the same mandatory bounded plan: three official discovery queries, twelve pages, three concurrent reads and ninety seconds. The visible settings describe that depth; an independent Refresh official contacts action repairs retained records without restarting individual discovery. Buyer quality requires an assessed current-policy scan.
 
 Scope card attribution to its own section, reject unrelated profile/reception evidence, support role-before-name and abbreviated executive roles, and preserve richer evidence across sparse duplicate pages regardless of completion order. Partial refreshes preserve earlier sourced contacts and explicitly report unfinished checks. Cancellation and workspace/user/context changes prevent stale mutations.
 
@@ -17,3 +17,8 @@ A further source acquisition check reproduced a rendering race on SKF's canonica
 
 
 The authenticated SKF refresh exhausted45seconds after9readpages without identities. Inspection found that the shared scanner discarded pending URLs and restarted the crawl on retry. Policyv4 preserves and prioritizes pending sources, accepts validated official source URLs first, shows all actual read-source links, and raises the bounded official scan deadline to90seconds. The source-first control allows evidence already found through research or supplied by the user to be read directly; all company, person, email and approval gates remain intact.
+
+
+The final main CI exposed a deadline-before-first-person race in forced individual research: the global guard could expire before a person’s earlier complete checks were invalidated. Reset forced coverage for the retained people before entering any timed operation, keeping sourced addresses intact. A deterministic clock regression reproduces expiration before the first search and verifies an ordinary retry actually reruns the invalidated checks.
+
+The authenticated downstream retry also exposed job-description headings admitted as full names by the generic identity predicate. Reject those position/section labels while retaining genuine names (including surnames Job and Key), preventing their shortlist admission and company-contact retention.

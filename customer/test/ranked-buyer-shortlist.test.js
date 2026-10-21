@@ -62,6 +62,11 @@ test('surname initials never qualify as full identities or supply contact-name p
  assert.equal(D.rankedBuyerShortlist([partial],profile,{company:'Example'}).people.length,0);
  assert.equal(D.normalizeApolloPeople({people:[partial]})[0].identityStatus,'pending');
 });
+test('job headings and position labels never become buyer identities',()=>{
+ const names=['Warehouse Associate','Key Responsibilities','JOB DESCRIPTION','Product Owner'];
+ for(const name of names){const person=buyer(name,'Production Manager',{name});assert.equal(D.hasFullBuyerName(name),false);assert.equal(D.rankedBuyerShortlist([person],{decisionMakers:'Production Manager'},{company:'Example'}).people.length,0);}
+ for(const name of ['John Job','Anna Key','Tony Ten Eyck','Ann-Sofie Zaks'])assert.equal(D.hasFullBuyerName(name),true);
+});
 test('local titles preserve manager/director distinctions and prefer specific technical roles',()=>{
  const people=D.selectDecisionMakers([buyer('manager','Projektledare'),buyer('director','Projektchef'),buyer('technical','Teknisk projektledare'),buyer('sourcing','Strategisk inköpare')],profile,10);
  assert.equal(people.find(p=>p.id==='manager').matchedBuyerRole,'Project Manager');
