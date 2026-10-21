@@ -16,6 +16,12 @@ test('shared dossier authority and role survive contact validation and workspace
   const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{...candidate,people:[checked]}]}).selectedProspects[0];
   assert.equal(Discovery.isExecutiveBuyer(saved.people[0]),true);
   assert.equal(Discovery.qualifyBuyer(saved.people[0],{decisionMakers:'Executive leadership'},saved).eligible,true);
+  const procurement={url:'https://example.com/news/procurement',quote:'Ada Morgan oversees supplier selection and procurement.'};
+  let repeated={...truncated,decisionEvidence:[...truncated.decisionEvidence,procurement]};
+  for(let i=0;i<8;i++)repeated=Discovery.matchBuyerRoleEvidence(repeated,rows,candidate,{complete:true});
+  assert.equal(repeated.decisionEvidence.length,2);
+  assert.ok(repeated.decisionEvidence.some(row=>row.url===procurement.url&&row.quote===procurement.quote));
+  assert.equal(repeated.decisionEvidence.filter(row=>row.url===url).length,1);
 });
 test('dossier role support requires matching identity, title, underlying text and no hold',()=>{
   const buyer=D.buyers(dossier,'Example')[0];
