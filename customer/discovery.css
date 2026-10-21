@@ -664,3 +664,6 @@
 .buyer-four-actions button.buyer-email-confirmed,.person-actions button.buyer-email-confirmed{background:#0d6453;color:#fff;border-color:#0d6453;opacity:1}
 
 .buyer-quality-supervisor{padding:16px 18px;margin:16px 0;border:1px solid #d6c18a;border-left:4px solid #b58623;border-radius:12px;background:#fffbf1}.buyer-quality-supervisor>strong{font-size:16px;color:#4c3c17}.buyer-quality-supervisor p{font-size:14px;line-height:1.5;margin:8px 0}.buyer-quality-supervisor details{font-size:13px;margin:10px 0}.buyer-quality-supervisor summary{cursor:pointer;font-weight:600}.buyer-quality-supervisor li{margin:6px 0}
+
+/* Company research precedes buyer selection. */
+.company-dossier{margin:18px 0;padding:20px;border:1px solid #cfe0d9;border-radius:16px;background:#f5faf7;color:#203d32}.company-dossier h4{margin:0 0 8px;font-size:20px}.company-dossier p{line-height:1.5;margin:8px 0}.company-dossier ul{padding-left:22px}.company-dossier li{margin:8px 0;overflow-wrap:anywhere}.company-dossier summary{cursor:pointer;font-weight:700;padding:10px 0}.company-dossier blockquote{font-size:13px;border-left:3px solid #cfe0d9;margin:8px 0;padding-left:12px;color:#526b60}.company-dossier a{white-space:nowrap}.company-dossier-settings select{width:100%;padding:10px}.company-dossier-settings{border:1px solid #cfe0d9;border-radius:12px;padding:16px;margin-bottom:16px}

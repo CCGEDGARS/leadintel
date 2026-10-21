@@ -51,3 +51,7 @@ Stop when the selected mode's evidence threshold is met, incremental searches st
 
 ## Common mistakes
 Avoid one giant query, repetitive near-duplicate searches, generic country source defaults, single-source certainty, contact enrichment before company qualification, stale-event scoring, fabricated URLs, and claims that a provider/tool was used when no verified runtime path exists.
+
+## Company dossier research
+
+Before buyer selection, execute the user-approved dossier-first two-provider sequence in `docs/policies/buyer-research-depth.md`. OpenAI, Anthropic/Claude and Gemini have actual grounded-search adapters for this workflow; do not confuse generic text generation with web research. A configured secondary searches independently and source-backed reconciliation precedes qualification. Dossier execution receipts, contact outcomes, and the existing offline AI supervision remain separate. Never claim that two providers researched a company based only on connection status or an offline review.
