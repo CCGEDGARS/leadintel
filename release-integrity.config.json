@@ -3660,6 +3660,40 @@
         "buyer-company-remove=20261021-v2",
         "buyer-company-actions=20261021-v2"
       ]
+    },
+    {
+      "id": "buyer-save-crm-and-close",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "alternativeAction:'Save to CRM'",
+        "choice==='alternative'",
+        "Company saved to CRM \u00b7 removed from the Buyers list",
+        "Research changed during saving."
+      ]
+    },
+    {
+      "id": "confirmation-crm-choice",
+      "type": "text",
+      "url": "/customer/confirmation-dialog.js",
+      "status": 200,
+      "contains": [
+        "copy.alternativeAction",
+        "liAlternative",
+        "finish('alternative')"
+      ]
+    },
+    {
+      "id": "buyer-crm-choice-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "confirmation-dialog.js?v=20261021-v1",
+        "confirmation-dialog.css?v=20261021-v1",
+        "buyer-crm-close=20261021-v1"
+      ]
     }
   ],
   "retry": {
