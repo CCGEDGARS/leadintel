@@ -53,6 +53,30 @@ async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
 async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='gemini' LIMIT 1`).bind(workspaceId).first();}
 
+export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal=AbortSignal.timeout(12000),userId=null,generate=generateText}={}){
+  const trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
+  try{
+    if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
+    const choices=[await geminiIntegration(env,workspaceId),await activeIntegration(env,workspaceId)].filter(Boolean),seen=new Set();
+    for(const integration of choices){
+      if(seen.has(integration.provider))continue;seen.add(integration.provider);
+      const tool=integration.provider==='gemini'?'gemini':'ai_review';let result;
+      try{
+        if(signal?.aborted)break;
+        const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+        result=await reviewContactEvidence({body,apiKey,model:integration.model,provider:integration.provider,signal,generate});
+      }catch(cause){trace.push({provider:tool,status:'failed',reason:'AI evidence review unavailable; no web search'});continue;}
+      trace.push({provider:tool,status:'succeeded',results:result.supervisor.reviewedPersonIds.length,reason:integration.provider+' evidence review; no web search'});
+      try{
+        await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,integration.provider).run();
+        await audit(env,{workspaceId,userId,type:'ai.contact_evidence_reviewed',provider:integration.provider,metadata:{evidence_count:Math.min(32,body.evidence?.length||0),conflict_count:result.conflicts.length,supervisor_status:result.supervisor.status,reviewed_people:result.supervisor.reviewedPersonIds.length}});
+      }catch{}
+      return {...result,researchTrace:trace};
+    }
+    return unavailable(choices.length?'AI evidence review was unavailable':'No workspace AI reviewer is configured');
+  }catch(cause){return unavailable('AI evidence review was unavailable');}
+}
+
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
   const known=path.startsWith('/api/follow-up-assistant/')||path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
@@ -186,16 +210,8 @@ export async function handleAiRoute(request,env,cors={}){
   if(path==='/api/ai/contact-evidence-review'&&request.method==='POST'){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     const unavailable=reason=>json({status:'unavailable',provider:'gemini',web_search:false,reason},200,cors);
-    if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
     const body=await request.json().catch(()=>null);if(!body)return error('Contact evidence payload is required',400,cors);
-    const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
-    try{
-      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await reviewContactEvidence({body,apiKey,model:integration.model,signal:request.signal});
-      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='gemini'`).bind(workspaceId).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.contact_evidence_reviewed',provider:'gemini',metadata:{evidence_count:Math.min(16,body.evidence?.length||0),conflict_count:result.conflicts.length}});
-      return json(result,200,cors);
-    }catch(cause){console.error('Gemini contact review unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Gemini contact review was unavailable');}
+    return json(await reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal:request.signal,userId:access.user.id}),200,cors);
   }
 
   if(path==='/api/ai/grounded-contact-search'&&request.method==='POST'){

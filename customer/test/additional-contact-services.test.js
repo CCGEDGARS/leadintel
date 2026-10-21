@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const D=require('../discovery-engine.js');
-function fixture(){const now=new Date().toISOString();return {company:'Example',domain:'example.com',market:'Sweden',qualification:{eligible:true,researchedAt:now,version:2,qualificationKind:'company',companyScore:85},people:Array.from({length:4},(_,i)=>({id:'p'+i,name:'Anna Buyer'+i,title:i===0?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now}}))};}
+function fixture(){const now=new Date().toISOString();const c={company:'Example',domain:'example.com',market:'Sweden',qualification:{eligible:true,researchedAt:now,version:2,qualificationKind:'company',companyScore:85},people:Array.from({length:4},(_,i)=>({id:'p'+i,name:'Anna Buyer'+i,title:i===0?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries(['official','public','phone','linkedin','deep'].map(k=>[k,{status:'complete',checkedAt:now}]))}}))};c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1}};return c;}
 test('additional services require a qualified company and four real researched eligible buyers',()=>{
  const P=require('../additional-contact-policy.js'),c=fixture();assert.equal(P.readiness(c,c.people[0]).eligible,true);
  for(const mutate of [c=>c.qualification.eligible=false,c=>c.people.pop(),c=>c.people[1].emailResearch.status='partial',c=>c.people[0].organization='Other employer',c=>c.buyerRolesChanged=true,c=>c.publicResearch={conflicts:[{person_id:'p0'}]}]){const x=fixture();mutate(x);assert.equal(P.readiness(x,x.people[0]).eligible,false);}
@@ -85,4 +85,16 @@ test('newer paid Hunter evidence restores from CRM without repeating equal-times
  const detail={company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:2,checkedAt:stamp,buyers:saved}}}},source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
  vm.runInNewContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);assert.equal(candidate.people[0].hunterChecks['anna@example.com'].checked_at,checked_at);
+});
+
+test('Find email runs public confirmation even when no public address was saved beforehand',async()=>{
+ const f=runtime();await f.loaded;let free=0;
+ assert.equal(await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{freeConfirm:async()=>{free++;f.contact.set('p0',{});return true;}}),true);
+ assert.equal(free,1);assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();
+});
+test('failed public research and workspace changes during it never fall through to provider credits',async()=>{
+ for(const change of [()=>{throw Error('Public checks incomplete');},f=>{f.w.LeadIntelServerBridge.workspace.id='other';return false;}]){
+  const f=runtime();await f.loaded;await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{freeConfirm:()=>change(f)});
+  assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();
+ }
 });

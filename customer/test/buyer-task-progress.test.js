@@ -109,7 +109,7 @@ test('public contact runner emits source checkpoints while retaining independent
  assert.ok(reports.includes('Verifying public contact evidence · 0/1 people checked'));
  assert.ok(reports.includes('Verifying public contact evidence · 1/1 people checked'));
  assert.ok(reports.includes('Cross-checking public contact evidence with grounded research'));
- assert.ok(reports.includes('Reviewing identities, current roles and source conflicts'));
+ assert.ok(reports.includes('AI supervisor: checking research coverage and person–contact evidence'));
  assert.equal(owner.people[0].emailResearch.status,'complete');
  assert.equal(owner.buyerDiscovery.pool[0].emailResearch.status,'complete');
 });

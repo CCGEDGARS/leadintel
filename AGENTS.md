@@ -45,3 +45,7 @@ Apply the recurring-error controls in `docs/project-state/2026-10-01-report-dele
 ## In-app confirmations
 
 Use `LeadIntelDialogs.confirm` for customer confirmations. Never introduce native browser `confirm`, `alert` or `prompt` popups or monkey-patch their synchronous APIs. Await the result before changing data, spending credits, activating automation or sending. Keep Cancel, Escape, focus restoration and context/race guards. Book deletion uses the explicit Delete book action. The runtime regression scan in `customer/test/confirmation-dialog.test.js` protects this standard.
+
+## Step 5 is the current product priority
+
+User instruction, 21 October 2026: Buyers research, qualification, confirmed company emails and usable downstream recipients are the top priority. Use `docs/policies/buyer-quality-supervisor.md`. Test completion and production freshness prove implementation state; they do not prove the requested contacts were obtained. Report research coverage, AI review coverage and usable contact outcomes separately. Never mark the whole step complete while its explicit quality requirements remain unmet.

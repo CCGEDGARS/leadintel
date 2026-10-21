@@ -2,7 +2,7 @@
   'use strict';
   const API='https://leadintel-api.edgars-7e7.workers.dev',P=root.LeadIntelAdditionalContactPolicy;
   let adapter=null,loadedWorkspace='',policy=null,provider=null,busyPolicy=false;
-  const running=new Map(),automaticAttempts=new Set(),outcomes=new Map();
+  const publicChecking=new Map(),running=new Map(),automaticAttempts=new Set(),outcomes=new Map();
   const bridge=()=>root.LeadIntelServerBridge,workspace=()=>bridge()?.workspace?.id||'';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const key=(candidate,person)=>[workspace(),candidate.domain,person.id].join('|');
@@ -42,13 +42,22 @@
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="apollo"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
   async function confirm(candidate,person,{automatic=false,freeConfirm}={}){
-    if(adapter?.email?.(candidate,person))return freeConfirm?.()??true;
-    if(adapter?.publicSource?.(candidate,person)){
-      await freeConfirm?.();
+    const identity=key(candidate,person);if(publicChecking.has(identity))return publicChecking.get(identity);
+    const id=workspace(),personId=String(person.id),domain=candidate.domain;
+    const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId);
+    const task=(async()=>{try{
+      if(!current())return false;
       if(adapter?.email?.(candidate,person))return true;
-    }
-    if(adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
-    return run(candidate,person,{automatic});
+      // Every Find email action checks saved/public evidence before provider credits,
+      // including people with no public address saved by an earlier research run.
+      if(freeConfirm)await freeConfirm();
+      if(!current())return false;
+      person=candidate.people.find(p=>String(p.id)===personId);
+      if(adapter?.email?.(candidate,person))return true;
+      if(adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
+      return run(candidate,person,{automatic});
+    }catch(error){if(workspace()===id){outcomes.set(identity,error.message||'Public contact checks need attention.');adapter?.toast?.(error.message);adapter?.render?.();}return false;}})();
+    publicChecking.set(identity,task);try{return await task;}finally{publicChecking.delete(identity);}
   }
   async function verifyHunter(candidate,person){
     const id=workspace(),email=adapter.baseEmail(candidate,person),identity=key(candidate,person)+'|hunter';
