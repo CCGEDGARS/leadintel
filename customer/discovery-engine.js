@@ -1281,8 +1281,9 @@
     };
   }
 
+  function isNonPersonBuyerHeading(value){return /^(?:(?:cookie|privacy|consent|preference) (?:consent|policy|notice|settings|preferences|manager|center|centre)|(?:district|regional|territory|area|global|national|group|inside|outside) (?:sales|marketing|operations|support|service)(?: (?:team|department|office|manager|director))?)$/i.test(clean(value));}
   function hasFullBuyerName(value){
-    const name=clean(value);if(/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner|(?:cookie|privacy|consent|preference) (?:consent|policy|notice|settings|preferences|manager|center|centre)|(?:district|regional|territory|area|global|national|group|inside|outside) (?:sales|marketing|operations|support|service)(?: (?:team|department|office|manager|director))?)$/i.test(name))return false;
+    const name=clean(value);if(isNonPersonBuyerHeading(name)||/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
     const parts=name.split(/\s+/);
     // Initials can be middle names, but cannot stand in for either the first
     // name or surname. Keep partial identities out of contact generation.
@@ -1953,6 +1954,8 @@
       const headings=[];
       for(let index=0;index<lines.length;index++){
         if(!/^\s*(?:#{2,5}\s+|\*\*)/.test(lines[index]))continue;
+        const bold=lines[index].match(/^\s*(?:#{2,5}\s+)?\*\*([^*]+)\*\*\s+(.+)$/u);
+        if(bold&&nameValid(clean(bold[1]))&&roleValid(clean(bold[2]))){headings.push({index,endIndex:index,name:clean(bold[1]),inlineTitle:clean(bold[2])});continue;}
         const label=clean(plain(lines[index])),at=label.search(roleStart),inlineName=at>0?label.slice(0,at).trim():'',inlineTitle=at>0?label.slice(at).trim():'';
         if(nameValid(inlineName)&&roleValid(inlineTitle)){headings.push({index,endIndex:index,name:inlineName,inlineTitle});continue;}
         let name=label,endIndex=index;
@@ -2084,6 +2087,7 @@
         const line=rawLine.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*#{1,6}\s*|[*_]/g,'').trim();
         if(!line)continue;
         if(/^(?:(?:our|meet (?:our|the)|vårt|våra)\s+)?(?:personal|team|staff|people|management|leadership|ledning|komanda|darbinieki|vadība)\s*[:.]?$/iu.test(line)){staffSection=true;continue;}
+        if(/^\s*#{1,6}\s/.test(rawLine)&&isNonPersonBuyerHeading(line)){if(staffSection)lines.push(line);continue;}
         if(/^\s*#{1,6}\s/.test(rawLine)&&(!hasFullBuyerName(line)||/customer|client|testimonial|partner|kunder|former|previous|tidigare|kontakta|contact|öppettider|opening|visit/i.test(line))){staffSection=false;continue;}
         if(staffSection){
           const inline=rawLine.trim().match(/^\*\*([^*]+)\*\*\s+(.+)$/u);

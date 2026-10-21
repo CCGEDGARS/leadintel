@@ -67,10 +67,11 @@ test('job headings and position labels never become buyer identities',()=>{
  for(const name of names){const person=buyer(name,'Production Manager',{name});assert.equal(D.hasFullBuyerName(name),false);assert.equal(D.rankedBuyerShortlist([person],{decisionMakers:'Production Manager'},{company:'Example'}).people.length,0);}
  for(const name of ['John Job','Anna Key','Tony Ten Eyck','Ann-Sofie Zaks','Cookie Johnson','Jordan Sales'])assert.equal(D.hasFullBuyerName(name),true);
 });
-test('official contact discovery and reload exclude site and department headings without losing the following real staff',()=>{
- const candidate={company:'Example',domain:'example.com'},rows=[{url:'https://example.com/management',sourceRead:true,markdown:'### Cookie Consent\nMarketing Manager\n### District Sales\nRegional Sales Manager\n### Jane Smith\nProcurement Manager'}];
+for(const [format,card] of [['heading','### Jane Smith\nProcurement Manager'],['adjacent','Jane Smith\nProcurement Manager'],['bold inline','**Jane Smith** Procurement Manager']])test('official contact discovery retains '+format+' staff after rejected site and department headings',()=>{
+ const candidate={company:'Example',domain:'example.com'},rows=[{url:'https://example.com/management',sourceRead:true,markdown:'### Cookie Consent\nMarketing Manager\n### District Sales\nRegional Sales Manager\n'+card}];
  const contacts=D.discoverCompanyContacts(rows,candidate);assert.deepEqual(contacts.map(p=>p.name),['Jane Smith']);
- const inventory=D.officialCompanyContactInventory(rows,candidate),restored=D.safeOfficialContactInventory(JSON.parse(JSON.stringify(inventory)),candidate.domain);assert.deepEqual(restored.contacts.map(p=>p.name),['Jane Smith']);
+ const inventory=D.officialCompanyContactInventory(rows,candidate),restored=D.safeOfficialContactInventory(JSON.parse(JSON.stringify(inventory)),candidate.domain);assert.ok(restored.contacts.every(p=>p.name==='Jane Smith'));
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target',buyerDiscovery:{companyContacts:contacts,officialContactInventory:inventory}}]}).selectedProspects[0];assert.deepEqual(D.mergeCompanyContacts(saved.buyerDiscovery.companyContacts,[],candidate).map(p=>p.name),['Jane Smith']);
 });
 test('local titles preserve manager/director distinctions and prefer specific technical roles',()=>{
  const people=D.selectDecisionMakers([buyer('manager','Projektledare'),buyer('director','Projektchef'),buyer('technical','Teknisk projektledare'),buyer('sourcing','Strategisk inköpare')],profile,10);
