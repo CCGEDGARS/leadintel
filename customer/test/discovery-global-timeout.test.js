@@ -1,3 +1,4 @@
+function isOfficialInventoryQuery(query=''){return /\(contact OR contacts OR kontakt OR team\)|\(management OR leadership OR ledning OR executive\)|\(investor-contacts OR press-contact/.test(query);}
 const {weakBuyerFitResponse}=require('./helpers/buyer-fit-fixtures.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -549,6 +550,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Mikael',title:'President & CEO'}]})},
     fetchImpl:async(url,options)=>{
       if(!(/\/firecrawl(?:-search|\/search)/.test(String(url))))throw new Error('Unexpected request');
+      if(isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};
       publicSearches++;
       if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
       if(publicSearches===2)return {ok:true,json:async()=>({data:[]})};
@@ -622,6 +624,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
     if(String(url).includes('/ai/'))return {ok:false,json:async()=>({})};
     if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{}})};
+    if(isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};
     requests++;
     if(requests<4)return {ok:true,json:async()=>({data:[]})};
     if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
@@ -664,7 +667,7 @@ test('grounded follow-up extracts an official person email and keeps company pho
   assert.ok(candidate.publicContacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
   assert.equal(candidate.publicResearch.openai,'complete');
   assert.equal(candidate.publicResearch.gemini,'complete');
-  assert.ok(openAiCalls>=1);assert.equal(scrapes,2);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
+  assert.ok(openAiCalls>=1);assert.equal(scrapes,4);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
 });
 
 test('refresh repairs a truncated name, matches LinkedIn, and shows official company contacts separately',async()=>{
@@ -715,7 +718,7 @@ test('email button stops at a sourced public work email without calling Apollo',
   let searches=0,apolloCalls=0,savedContacts=0,confirmations=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
-    fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:searches===1?[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]:[]})};}
+    fetchImpl:async(url,options)=>{if(/firecrawl(?:-scrape|\/scrape)/.test(String(url))||isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};searches++;return {ok:true,json:async()=>({data:searches===1?[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]:[]})};}
   });
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
@@ -730,12 +733,12 @@ test('email button offers Apollo only after a completed public search has no per
   let searches=0,apolloCalls=0,confirmations=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),enrichCrmContact:async()=>{apolloCalls++;return {ok:true,contact:{work_email:'jacob@sodra.com'}};}},
-    fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:[]})};}
+    fetchImpl:async(url,options)=>{if(/firecrawl(?:-scrape|\/scrape)/.test(String(url))||isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};searches++;return {ok:true,json:async()=>({data:[]})};}
   });
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,9);
+  assert.equal(searches,7); // Counts person search requests; page reads and the three official scans are handled separately.
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });
@@ -1310,7 +1313,7 @@ test('known full identities receive contact evidence searches before optional pr
  await context.__findPublicProspectContacts('example.com');
  const contact=queries.indexOf('site:example.com "Jane Example"');
  const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
- assert.equal(contact,0);assert.ok(profiles>contact);
+ assert.equal(contact,3);assert.ok(queries.slice(0,3).every(isOfficialInventoryQuery));assert.ok(profiles>contact);
 });
 
 test('ranked buyer controls retain the original candidate index after ranking clones the people',()=>{

@@ -87,3 +87,12 @@ test('buyer link planning prioritizes a discovered sitemap above unrelated produ
  const page={links:['/products','/sitemap.xml','/contact','/about']};
  assert.deepEqual(R.selectInternalLinks(page,'https://company.example/','buyers',4),['https://company.example/about','https://company.example/contact','https://company.example/sitemap.xml','https://company.example/products']);
 });
+
+test('buyer crawl reads sibling contact sections before following a deep branch',async()=>{
+ const seen=[];
+ await R.collectWebsiteEvidence({website:'https://company.example/',purpose:'buyers',maxPages:4,fetchImpl:async(_,options)=>{
+  const {url}=JSON.parse(options.body);seen.push(url);const links=url.endsWith('.example/')?['/about','/contact','/management']:url.endsWith('/about')?['/about/team','/about/history']:[];
+  return {ok:true,json:async()=>({data:{markdown:evidence,links,metadata:{sourceURL:url}}})};
+ }});
+ assert.deepEqual(seen,['https://company.example/','https://company.example/about','https://company.example/contact','https://company.example/management']);
+});

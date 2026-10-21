@@ -8,7 +8,7 @@ import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {sha256} from '../src/security.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,approvalStatus,fingerprint,renderWorkflowMessage,freshEvidence} from '../src/approved-workflow-engine.js';
 import {handleApprovedWorkflowRoute} from '../src/approved-workflow-routes.js';
-import {executeWorkflowStage,runApprovedWorkflows,researchBuyerContacts} from '../src/approved-workflow-runner.js';
+import {executeWorkflowStage,runApprovedWorkflows,researchBuyerContacts,persistWorkflowBuyerResearch} from '../src/approved-workflow-runner.js';
 import {workflowAuthorized,workflowDeliveryAuthorized} from '../src/approved-workflow-store.js';
 import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...a){this.args=a;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes)}};}}
@@ -200,7 +200,7 @@ test('public confirmation workflow can be approved without paid email, phone or 
 test('automatic contact research discovers official name-linked email and phone without enrichment',async()=>{
  const queries=[],candidate={company:'Fixture Legal',domain:'legal.example',market:'Sweden',people:[{name:'Anna Lind',title:'Managing Director',organization:'Fixture Legal'}]};
  await researchBuyerContacts(candidate,async query=>{queries.push(query);return query==='site:legal.example "Anna Lind"'?[{url:'https://legal.example/team',markdown:'Managing Director Anna Lind: anna.lind@legal.example, +46 70 235 51 61.'}]:[];},async()=>{});
- assert.equal(queries[0],'site:legal.example "Anna Lind"');assert.equal(candidate.people[0].publicEmail,'anna.lind@legal.example');assert.equal(candidate.people[0].publicPhone,'+46 70 235 51 61');assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].emailResearch.searches,9);assert.ok(queries.some(query=>query.includes('\"anna.lind@gmail.com\"')));assert.equal(candidate.people[0].contactResearch.checks.gmail.status,'complete');
+ assert.equal(queries[3],'site:legal.example "Anna Lind"');assert.ok(queries.slice(0,3).every(q=>q.startsWith('site:legal.example (')));assert.equal(candidate.people[0].publicEmail,'anna.lind@legal.example');assert.equal(candidate.people[0].publicPhone,'+46 70 235 51 61');assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].emailResearch.searches,9);assert.ok(queries.some(query=>query.includes('\"anna.lind@gmail.com\"')));assert.equal(candidate.people[0].contactResearch.checks.gmail.status,'complete');
 });
 
 test('automatic messaging quarantines only invalid company drafts and retains valid candidates',async()=>{
@@ -245,4 +245,14 @@ test('automatic workflow reuses a user-selected published company contact with i
   const original=globalThis.fetch,calls=[];globalThis.fetch=async(url)=>{calls.push(String(url));return new Response(JSON.stringify({data:[]}));};
   try{const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:false}}),guard:async()=>{}});if(kept){assert.equal(result.candidates[0].contact.email,'catrin@example.com');assert.equal(result.candidates[0].contact.title,'Administration');}else assert.equal(result.candidates.length,0);assert.equal(calls.some(url=>/people\/match|hunter\.io/.test(url)),false);}finally{globalThis.fetch=original;}
  }
+});
+
+test('automatic inventory persists for a saved company even with no eligible buyer and preserves other CRM metadata',async()=>{
+ const env=await fixture(),context={workspaceId:'w1',userId:'u1',role:'owner'},crm=await import('../src/crm.js');
+ const saved=await crm.upsertCrmCompany(env.DB,context,{company:'Example',domain:'example.com'});
+ await crm.upsertCrmIntelligence(env.DB,context,saved.company.id,{opportunity_hypothesis:'Preserve me',research_snapshot:{flowId:'existing-flow',custom:'retained'}});
+ const inventory=globalThis.LeadIntelDiscovery.officialCompanyContactInventory([{url:'https://example.com/contact',sourceRead:true,markdown:'CEO\n### Jane Smith\n[info@legacy.example](mailto:info@legacy.example)'}],{company:'Example',domain:'example.com'}),candidate={company:'Example',domain:'example.com',people:[],buyerDiscovery:{checkedAt:new Date().toISOString(),officialContactInventory:inventory}};
+ assert.equal(await persistWorkflowBuyerResearch(env,context,candidate),true);
+ const detail=await crm.getCrmCompany(env.DB,context,saved.company.id);assert.equal(detail.intelligence.opportunity_hypothesis,'Preserve me');assert.equal(detail.intelligence.research_snapshot.custom,'retained');assert.equal(detail.intelligence.research_snapshot.buyerResearch.discovery.officialContactInventory.channels[0].value,'info@legacy.example');assert.equal(detail.contacts.length,0);
+ assert.equal(await persistWorkflowBuyerResearch(env,{...context,workspaceId:'w2'},candidate),false);
 });
