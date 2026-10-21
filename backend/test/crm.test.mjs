@@ -32,6 +32,17 @@ const ctx=(workspaceId='w1',role='owner')=>({workspaceId,userId:'u1',role});
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 const candidate=(domain='example.com')=>({company:{company_name:'Example Manufacturing',domain,website:`https://${domain}/`,country:'LV',industry:'Manufacturing',opportunity_score:81,confidence:'High',source:'discovery'},intelligence:{matched_signals:[{name:'Expansion'}],evidence:[{url:`https://${domain}/news`,title:'Expansion'}],opportunity_hypothesis:'Expansion creates an opportunity',score_breakdown:{fit:25}},contacts:[{id:'apollo-1',name:'Anna Buyer',title:'Procurement Director',work_email:'ANNA@EXAMPLE.COM',source:'apollo'}]});
 
+sqliteTest('CRM hydration prefers accepted saved email over a newer public copy of the same external person',async()=>{
+ const db=new D1Db(),{company}=await upsertCrmCompany(db,ctx(),{company:{company_name:'Example',domain:'example.com'}});
+ const [verified]=await upsertCrmContacts(db,ctx(),company.id,[{external_person_id:'same-person',name:'Anna Buyer',work_email:'anna@example.com',email_status:'verified',source:'treg'}]);
+ const [publicCopy]=await upsertCrmContacts(db,ctx(),company.id,[{external_person_id:'same-person',name:'Anna Buyer',email_status:'public_unverified',source:'public_research'}]);
+ db.raw.prepare('UPDATE crm_contacts SET updated_at=? WHERE id=?').run('2026-10-21T23:00:00Z',publicCopy.id);
+ const detail=await getCrmCompany(db,ctx(),company.id),hydrated=detail.contacts.find(c=>c.external_person_id==='same-person');
+ assert.equal(hydrated.id,verified.id);assert.equal(hydrated.work_email,'anna@example.com');assert.equal(detail.contacts.length,2,'keep both source records');
+ await upsertCrmContacts(db,ctx(),company.id,[{external_person_id:'same-person',name:'Anna Buyer',work_email:'anna@wrong.example',email_status:'verified',source:'manual'}]);
+ assert.equal((await getCrmCompany(db,ctx(),company.id)).contacts.find(c=>c.external_person_id==='same-person').id,verified.id,'unsupported provider or wrong-domain claims cannot outrank accepted evidence');
+});
+
 sqliteTest('paid profile data survives stale research replacement, empty rosters, older activity pages and later failed lookups',async()=>{
  const db=new D1Db(),buyer={id:'paid-anna',name:'Anna Buyer',title:'Director'},pack=candidate();pack.contacts=[];
  pack.intelligence.research_snapshot={buyerResearch:{version:2,checkedAt:'2026-10-20T08:00:00Z',buyers:[buyer]}};

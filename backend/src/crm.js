@@ -1,4 +1,5 @@
 import EvidencePolicy from '../../customer/evidence-policy.js';
+import ContactPolicy from '../../customer/contact-confirmation-policy.js';
 const uuid=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
 
@@ -132,6 +133,10 @@ export async function getCrmCompany(db,context,companyId){
   const workspaceId=clean(context?.workspaceId,160),company=await companyRow(db,workspaceId,companyId);
   if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);
   const {results:contacts=[]}=await db.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL ORDER BY updated_at DESC`).bind(workspaceId,companyId).all();
+  // Public research and paid enrichment can retain separate source records for
+  // one external identity. Existing hydrators select the first matching record.
+  const domain=normalizeDomain(company.normalized_domain||company.website);
+  contacts.sort((a,b)=>Number(ContactPolicy.accepted(b,domain))-Number(ContactPolicy.accepted(a,domain)));
   const intelligence=parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE workspace_id=? AND company_id=?`).bind(workspaceId,companyId).first());
   const contactData=await retainedContactData(db,workspaceId,companyId,normalizeDomain(company.normalized_domain||company.website));
   if(intelligence)intelligence.contactData=contactData;
