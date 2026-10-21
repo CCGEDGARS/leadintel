@@ -64,9 +64,9 @@ test('commercial journey derives completed substeps from real workspace outcomes
   const delivery={selectedDomain:'buyer.example',activity:[{type:'message.sent'},{type:'reply.received'},{type:'outcome.recorded'}],opportunities:[{domain:'buyer.example',sentAt:'2026-09-17T00:00:00Z',replies:[{text:'Yes'}],outcomeStage:'Meeting'}]};
   const availability=Object.fromEntries([1,2,3,4,5,6,7].map(step=>[step,true]));
 
-  const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true});
+  const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true,buyerQualityPassed:true});
 
-  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[3,3],[8,8],[4,4],[4,4],[1,1],[6,6],[5,5]]);
+  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[3,3],[8,8],[4,4],[4,4],[2,2],[6,6],[5,5]]);
   assert.equal(model[6].status,'current');
   assert.equal(model[6].nextAction,'Stage complete');
 });
@@ -222,4 +222,10 @@ test('approved profile may finish without optional paid market research',()=>{
  assert.equal(research.optional,true);assert.equal(research.complete,false);
  assert.equal(profileStage.requiredCompleted,profileStage.requiredTotal);
  assert.equal(profileStage.status,'complete');
+});
+
+test('finding a name cannot mark Buyers complete before its quality requirements pass',()=>{
+ const input={currentStep:6,availability:{5:true,6:true},discovery:{selectedProspects:[{company:'Example',domain:'example.com',people:[{name:'Anna Buyer'}]}]}};
+ const before=Journey.buildJourneyModel(input)[4];assert.notEqual(before.status,'complete');assert.match(before.nextAction,/quality/i);
+ const after=Journey.buildJourneyModel({...input,buyerQualityPassed:true})[4];assert.equal(after.status,'complete');assert.equal(after.completed,after.total);
 });

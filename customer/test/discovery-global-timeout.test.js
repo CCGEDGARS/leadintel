@@ -2105,3 +2105,11 @@ test('the Buyers page keeps four existing cards without a separate published-con
  for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Find email');
  assert.equal(candidate.buyerDiscovery.companyContacts[0].publicEmail,'staff@northstar.com');dom.window.close();
 });
+
+test('rendering the buyer cards calculates the shared full quality report once per company',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});let assessments=0;
+ context.LeadIntelDiscovery={...Discovery,buyerQualityAssessment:(...args)=>{assessments++;return Discovery.buyerQualityAssessment(...args);}};
+ const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'q'+i,name:'Quality Person'+i,title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:new Date().toISOString(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:new Date().toISOString()}}));
+ context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:people.map(p=>p.title)}]);
+ assert.equal(assessments,1);
+});

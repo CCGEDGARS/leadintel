@@ -59,3 +59,11 @@ test('failed selected Gemini review can fall back to configured OpenAI even when
  const result=await reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]},{generate:async options=>{calls.push(options.provider);if(options.provider==='gemini')throw Error('Provider unavailable');return {text:JSON.stringify({reviewed_person_ids:['a'],conflicts:[]})};}});
  assert.deepEqual(calls,['gemini','openai']);assert.equal(result.provider,'openai');assert.equal(result.supervisor.status,'complete');
 });
+
+test('a primary reviewer ignoring cancellation cannot consume the fallback deadline',async()=>{
+ const {reviewWorkspaceBuyerEvidence}=await import('../src/ai-routes.js'),{importAesKey,encryptSecret}=await import('../src/oauth.js');
+ const secret=btoa(String.fromCharCode(...new Uint8Array(32).fill(6))),encrypted=await encryptSecret('fixture-key',await importAesKey(secret)),calls=[];
+ const env={OAUTH_TOKEN_ENCRYPTION_KEY:secret,DB:{prepare(sql){return {bind(){return this;},async first(){return {provider:sql.includes("provider='openai'")?'openai':'gemini',encrypted_api_key:encrypted,model:'fixture'};},async run(){return {};}};}}};
+ const result=await Promise.race([reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]},{signal:new AbortController().signal,maxDurationMs:60,generate:async options=>{calls.push(options.provider);if(options.provider==='gemini')return new Promise(()=>{});assert.equal(options.reasoningEffort,'low');return {text:JSON.stringify({reviewed_person_ids:['a'],conflicts:[]})};}}),new Promise(resolve=>setTimeout(()=>resolve({hung:true}),200))]);
+ assert.equal(result.hung,undefined);assert.deepEqual(calls,['gemini','openai']);assert.equal(result.provider,'openai');
+});
