@@ -8,7 +8,7 @@
   const key=(candidate,person)=>[workspace(),candidate.domain,person.id].join('|');
   async function api(path,options={}){
     const id=workspace();if(!id||!bridge()?.session?.authenticated)throw Error('Sign in to configure additional services.');
-    const response=await fetch(`${API}${path}${path.includes('?')?'&':'?'}workspace_id=${encodeURIComponent(id)}`,{credentials:'include',...options,headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(60000)});
+    const response=await fetch(`${API}${path}${path.includes('?')?'&':'?'}workspace_id=${encodeURIComponent(id)}`,{credentials:'include',...options,headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(options.body?.includes('\"data_lookup\":true')?240000:60000)});
     const result=await response.json();if(workspace()!==id)throw Error('Workspace changed; retry in the current workspace.');
     if(!response.ok)throw Error(result.error||'Additional services are unavailable.');return result;
   }
@@ -57,13 +57,17 @@
       if(policy.enabled)for(const candidate of adapter?.rows?.()||[])void auto(candidate);
     }catch(error){if(workspace()===id){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
   }
-  function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:adapter?.email?.(candidate,person)});}
+  function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
   function record(candidate,person,message,{status='not_verified',append=false}={}){
     outcomes.set(key(candidate,person),message);
     person.contactVerification={status,checkedAt:new Date().toISOString(),issues:[...(append?person.contactVerification?.issues||[]:[]),message].slice(-12)};
     adapter?.saveOutcome?.(candidate,person);adapter?.render?.();
   }
   function card(candidate,person){
+    if(person.contactData){
+      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl].filter(Boolean).join(' · '):'Profile · '+String(p.status).replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status).replaceAll('_',' ')];
+      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Some checks need review':'No new data')+' · '+esc(d.checkedAt)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+'</p>';
+    }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');
     if(!adapter||!readiness(candidate,person).eligible)return result?`<p class="additional-contact-note" role="status">${esc(result)}</p>`:'';
@@ -71,21 +75,21 @@
   }
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
-  async function confirm(candidate,person,{automatic=false,freeConfirm}={}){
+  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false}={}){
     const identity=key(candidate,person);if(publicChecking.has(identity))return publicChecking.get(identity);
     const id=workspace(),personId=String(person.id),domain=candidate.domain;
     const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId);
     const task=(async()=>{try{
       if(!current())return false;
-      if(adapter?.email?.(candidate,person))return true;
+      if(!dataLookup&&adapter?.email?.(candidate,person))return true;
       // Every Find email action checks saved/public evidence before provider credits,
       // including people with no public address saved by an earlier research run.
-      if(freeConfirm)await freeConfirm();
+      if(!adapter?.email?.(candidate,person)){if(freeConfirm)await freeConfirm();}
       if(!current())return false;
       person=candidate.people.find(p=>String(p.id)===personId);
-      if(adapter?.email?.(candidate,person))return true;
-      if(adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
-      return run(candidate,person,{automatic});
+      if(!dataLookup&&adapter?.email?.(candidate,person))return true;
+      if(!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
+      return run(candidate,person,{automatic,dataLookup});
     }catch(error){if(workspace()===id){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
     publicChecking.set(identity,task);try{return await task;}finally{publicChecking.delete(identity);}
   }
@@ -105,25 +109,31 @@
       finally{if(workspace()===id){adapter.pending(candidate,person,false);adapter.render();}}
     })();running.set(identity,task);try{return await task;}finally{running.delete(identity);}
   }
-  async function run(candidate,person,{automatic=false}={}){
+  async function run(candidate,person,{automatic=false,dataLookup=false}={}){
     const identity=key(candidate,person);if(running.has(identity))return running.get(identity);
     const execute=(async()=>{
-      const id=workspace(),domain=candidate.domain,personId=person.id;
-      const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===String(personId));
-      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');const ready=readiness(candidate,person,{automatic});if(!ready.eligible)throw Error(ready.reason);};
+      const id=workspace(),domain=candidate.domain,personId=person.id,identitySnapshot=JSON.stringify([person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
+      const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===String(personId)&&(!dataLookup||JSON.stringify([p.publicName||p.name,p.title,p.publicLinkedinUrl||p.linkedin_url])===identitySnapshot));
+      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason);};
       const receipts=[];
       try{
         check();
         if(loadedWorkspace!==id||!policy)await load();
         check();if(!policy||loadedWorkspace!==id)throw Error('Research preferences could not load. Retry or check Settings.');
         if(automatic&&!policy.enabled)throw Error('Automatic paid email research is off.');
-        const tregReady=policy.provider==='treg'&&treg?.configured&&treg.source==='customer';
-        const apolloReady=policy.provider!=='treg'&&provider?.configured&&provider.source==='customer'&&provider.metadata?.email_enrichment_enabled===true;
-        const hunterReady=policy.provider!=='treg'&&!automatic&&hunter?.configured&&hunter.source==='customer'&&hunter.metadata?.additional_verification_enabled===true;
+        const tregReady=(dataLookup||policy.provider==='treg')&&treg?.configured&&treg.source==='customer';
+        const apolloReady=!dataLookup&&policy.provider!=='treg'&&provider?.configured&&provider.source==='customer'&&provider.metadata?.email_enrichment_enabled===true;
+        const hunterReady=!dataLookup&&policy.provider!=='treg'&&!automatic&&hunter?.configured&&hunter.source==='customer'&&hunter.metadata?.additional_verification_enabled===true;
         if(!tregReady&&!apolloReady&&!hunterReady)throw Error('Connect Treg in Settings before paid email research.');
         for(const service of [...(tregReady?['treg']:[]),...(apolloReady?['apollo']:[]),...(hunterReady?['hunter']:[])]){
           check();const name=service==='treg'?'Treg':service==='apollo'?'Apollo':'Hunter';
-          if(!automatic&&!(service==='treg'&&policy.enabled)){
+          let includePhone=false;
+          if(dataLookup){
+            if(automatic||service!=='treg')throw Error('Manual data confirmation requires Treg and individual approval.');
+            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: check work email and available professional profile details. Include a phone lookup? Maximum Treg lookup cost: $0.125 for email + profile, or $0.225 including phone ($0.10 extra). Existing phase results are reused. AI and public research are separate. Results may be missing or unconfirmed. This action does not send messages.`,{title:'Confirm data',action:'Confirm data + phone',alternativeAction:'Email & profile only'})??false);
+            if(!choice||!current())return false;includePhone=choice===true;
+          }
+          if(!dataLookup&&!automatic&&!(service==='treg'&&policy.enabled)){
             const description=service==='treg'?'Treg work-email finding and delivery verification':service==='apollo'?'Apollo email enrichment':'Hunter email finding and, if needed, one delivery verification';
             const approved=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: use ${description} with your provider credits. ${receipts.length?'Apollo has not confirmed an email. ':''}Limits: ${policy.maxPerCompany} buyers per company, ${policy.dailyLimit} provider lookups per day, ${policy.monthlyLimit} per month. A lookup can return no confirmed email.`,{title:'Find email with additional services',action:service==='hunter'?'Find with Hunter':'Find work email'})??false);
             if(!current())return false;
@@ -132,18 +142,19 @@
           check();adapter.pending(candidate,person,true);adapter.render();
           try{
             const company=await adapter.prepare(candidate);check();
-            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,approved:!automatic,hunter_approved:service==='hunter'&&!automatic})});
+            const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,approved:!automatic,...(dataLookup?{data_lookup:true,phone_approved:includePhone}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
             if(result.error)throw Error(result.error);
+            if(result.contactData){person.contactData=result.contactData;adapter?.saveOutcome?.(candidate,person);}
             const cost=result.research?.costMicro;
             const outcome=result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
             receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${result.reason?': '+result.reason:''}`);
             if(result.contact){
               await adapter.accept(candidate,person,result);
               if(!current())return false;
-              record(candidate,person,receipts.join(' · '),{status:'verified'});
+              record(candidate,person,receipts.join(' · '),{status:adapter.email(candidate,person)?'verified':'not_verified'});
               if(service==='hunter'&&result.verification)await adapter.saveHunter?.(candidate,person,result.contact.work_email,result.verification);
-              if(adapter.baseEmail?.(candidate,person)&&!adapter.email(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
+              if(!dataLookup&&adapter.baseEmail?.(candidate,person)&&!adapter.email(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
               return Boolean(adapter.email(candidate,person));
             }
             if(outcome==='processing'){record(candidate,person,receipts.join(' · ')+' · A lookup is in progress; retry after it completes.');return false;}

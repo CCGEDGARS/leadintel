@@ -17,8 +17,8 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
   assert.match(ui,/people\.length\s*<\s*3/);
 });
 
-test('Discovery keeps Find email and its authenticated provider-confirmation path for selected people',()=>{
-  assert.match(ui,/aria-label="\$\{hasEmail\?\'Email confirmed\':\'Find email\'\}"/);
+test('Discovery keeps Confirm data and its authenticated provider-confirmation path for selected people',()=>{
+  assert.match(ui,/aria-label="\$\{person\.contactData\?\.status==='updated'\?'Data updated':'Confirm data'\}"/);
   assert.match(ui,/data-action="enrich-contact"/);
   assert.match(ui,/bridge\(\)\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);
@@ -35,7 +35,7 @@ test('verified enrichment stays out of local Discovery state and is rendered fro
 test('selected buyer card shows Apollo outcome and makes another lookup explicit',()=>{
   assert.match(ui,/\$\{enrichmentResultHtml\(enrichmentResults\.get\(personKey\(candidate,person\)\),\{hideContacts:true\}\)\}<\/div>\$\{prospectContactControls/);
   assert.match(ui,/Confirm email/);
-  assert.match(ui,/confirmBuyerContact\(candidate,Number\(button\.dataset\.personIndex\),\{kind:"email"\}\)/);
+  assert.match(ui,/confirmBuyerContact\(candidate,Number\(button\.dataset\.personIndex\),\{kind:"email",dataLookup:true\}\)/);
   assert.match(ui,/Apollo check failed/);
 });
 
