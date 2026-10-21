@@ -685,3 +685,47 @@
 .buyer-research-details>.buyer-quality-supervisor{margin:18px 0}
 .buyer-research-details summary:focus-visible,.buyer-other-contacts summary:focus-visible,.company-dossier summary:focus-visible{outline:3px solid #167363;outline-offset:3px;border-radius:4px}
 @media(max-width:620px){.selected-prospect-header-controls{justify-items:start;width:100%}.selected-prospect-header-controls .selected-prospect-signal{text-align:left}.selected-prospect-header-controls .selected-prospect-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.selected-prospect-header-controls .selected-prospect-actions button{width:100%;padding:10px 8px;min-width:0}.selected-prospect-row>.company-dossier{padding:14px}}
+
+/* Compact buyer review: clear channels and actions, with evidence on demand. */
+.selected-prospect-people{gap:16px}
+.selected-prospect-person{background:#fff;border-color:#d7e4dd;border-radius:14px;padding:18px;box-shadow:0 2px 9px #173e2910;gap:10px 12px}
+.selected-prospect-person-name{gap:6px 9px}
+.selected-prospect-person-name strong{font-size:19px;letter-spacing:-.2px}
+.selected-prospect-person-name small:not(.buyer-recommendation){padding:0;background:transparent;color:#687b70;font-weight:400}
+.selected-prospect-person-name .buyer-recommendation{background:#e9f3ed;color:#38664f;font-size:10px}
+.selected-prospect-person-details>p{margin-top:6px;font-size:14px;color:#455c50}
+.buyer-qualification{margin:12px 0 0;font-size:12px;line-height:1.5;color:#52685c}
+.buyer-qualification>summary{cursor:pointer;color:#466052;line-height:1.8}
+.buyer-qualification>summary span{display:inline-block;margin-right:9px;font-size:11px}
+.buyer-qualification>summary span:first-child{font-weight:700;color:#214b38}
+.buyer-qualification>summary .buyer-ready-label{color:#0d6453;font-weight:700}
+.buyer-qualification[open]{padding-bottom:10px;border-bottom:1px solid #e3ece7}
+.buyer-qualification[open]>summary{margin-bottom:9px}
+.selected-prospect-person .buyer-qualification p,.selected-prospect-person .buyer-qualification li{font-size:12px;line-height:1.55}
+.buyer-contact-fields{gap:8px;margin-top:13px;font-size:12px;line-height:1.5}
+.buyer-contact-fields>div{gap:7px;min-height:80px;padding:12px;background:#f8fbf9;border-color:#e2ebe6;border-radius:9px}
+.buyer-contact-fields>div>strong{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#62796b}
+.buyer-contact-fields>div>span{display:block;min-width:0}
+.buyer-contact-fields small{display:block;color:#6c7e73;font-size:11px;line-height:1.5}
+.buyer-contact-fields .buyer-contact-value{font-weight:650;color:#0d6453;text-decoration:none;overflow-wrap:anywhere}
+.buyer-contact-fields .buyer-contact-value:hover{text-decoration:underline}
+.buyer-contact-fields .buyer-field-state{color:#63766b;font-size:12px}
+.buyer-contact-fields [data-contact-status="incomplete"] .buyer-field-state{color:#88651d}
+.buyer-field-evidence,.buyer-email-patterns{margin-top:6px;font-size:11px}
+.buyer-field-evidence>summary,.buyer-email-patterns>summary{cursor:pointer;color:#63796c;line-height:1.5}
+.buyer-field-evidence[open]>summary,.buyer-email-patterns[open]>summary{margin-bottom:5px}
+.selected-prospect-contact-actions{grid-column:1/-1;padding-top:12px;margin-top:2px;gap:10px}
+.selected-prospect-contact-actions>.people-note{font-size:12px;line-height:1.45;margin:0;color:#607367}
+.buyer-four-actions{gap:8px}
+.buyer-four-actions button{min-height:52px;height:auto;padding:10px 7px;font-size:12px;border-radius:8px}
+.buyer-public-summary{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0 0 20px;padding:13px 15px;border:1px solid #dce8e1;border-radius:10px;background:#f6faf7}
+.buyer-public-summary strong{font-size:13px;color:#345542}
+.buyer-public-summary p{margin:4px 0 0;font-size:12px;line-height:1.5;color:#65776c;max-width:78ch}
+.buyer-public-summary button{flex:0 0 auto;font-size:12px;white-space:normal}
+.buyer-field-evidence>summary:focus-visible,.buyer-email-patterns>summary:focus-visible,.buyer-qualification>summary:focus-visible{outline:3px solid #167363;outline-offset:3px;border-radius:3px}
+@media(max-width:620px){.selected-prospect-person{padding:14px;grid-template-columns:24px minmax(0,1fr);column-gap:9px}.selected-prospect-rank{width:24px;height:24px}.selected-prospect-person-name strong{font-size:18px}.buyer-public-summary{align-items:stretch;flex-direction:column;gap:10px}.buyer-public-summary button{align-self:flex-start}.buyer-contact-fields>div{padding:10px}.buyer-four-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:360px){.buyer-contact-fields{grid-template-columns:1fr}}
+.buyer-public-summary small{display:block;margin-top:5px;color:#88651d;font-size:12px;line-height:1.45}
+.selected-prospect-person .additional-contact-note{margin:0;padding:0;border:0;border-radius:0;background:transparent;color:#607367;font-size:12px;line-height:1.45}
+.selected-prospect-person .additional-contact-note strong,.selected-prospect-person .additional-contact-note span{display:inline;font-weight:400}
+.selected-prospect-person .additional-contact-note span::before{content:' ';white-space:pre}

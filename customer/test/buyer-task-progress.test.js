@@ -40,12 +40,13 @@ test('the buyer run deadline remains active during contact evidence and preserve
  const {context,candidate,centre,timers}=runtime();let contactDeadline;
  context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
  context.findPublicProspectContacts=async(domain,{signal})=>{
-  contactDeadline=[...timers.values()].find(timer=>timer.delay===450000);
+  contactDeadline=[...timers.values()].find(timer=>timer.delay>450000);
+  assert.ok(contactDeadline?.delay<=1500000,'public handoff has a finite upper bound');
   if(contactDeadline)contactDeadline.fn();
   if(signal.aborted){candidate.publicContactStatus='error';candidate.people[0].emailResearch={status:'partial',searches:2,failed:1};}
  };
  assert.equal(await context.run(candidate,{allowCrmSync:false}),false);
- assert.ok(contactDeadline,'the total-run deadline must not be cleared when contact checks start');
+ assert.ok(contactDeadline,'a fresh bounded deadline stays active when contact checks start');
  assert.equal(candidate.people[0].name,'Ada Andersson');
  assert.equal(candidate.people[0].emailResearch.status,'partial');
  assert.equal(candidate.buyerDiscovery.pool[0].name,'Ada Andersson');
@@ -117,7 +118,7 @@ test('public contact runner emits source checkpoints while retaining independent
 test('a contact promise that ignores abort cannot leave the buyer task running past its deadline',async()=>{
  const {context,candidate,centre,timers}=runtime();
  context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
- context.findPublicProspectContacts=async()=>{candidate.publicContactStatus='loading';[...timers.values()].find(timer=>timer.delay===450000)?.fn();return new Promise(()=>{});};
+ context.findPublicProspectContacts=async()=>{candidate.publicContactStatus='loading';[...timers.values()].find(timer=>timer.delay>450000)?.fn();return new Promise(()=>{});};
  const result=await Promise.race([context.run(candidate,{allowCrmSync:false}),new Promise(resolve=>setTimeout(()=>resolve('hung'),100))]);
  assert.equal(result,false);
  assert.equal(candidate.peopleStatus,'error');
@@ -198,7 +199,7 @@ test('public contact CRM sync stops after cancellation during company lookup',as
 
 test('a pending contact lookup from another workspace cannot block the same domain in the current workspace',async()=>{
  let workspaceId='first',release;const calls=[];
- const context={AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:workspaceId}}),runPublicProspectContacts:async domain=>{calls.push({domain,workspaceId});return workspaceId==='first'?new Promise(resolve=>{release=resolve;}):true;}};
+ const context={LeadIntelDiscovery:D,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:workspaceId}}),runPublicProspectContacts:async domain=>{calls.push({domain,workspaceId});return workspaceId==='first'?new Promise(resolve=>{release=resolve;}):true;}};
  require('./helpers/dossier-boundary.cjs')(context);vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.run=findPublicProspectContacts;',context);
  const first=context.run('example.com');workspaceId='second';
  const second=await Promise.race([context.run('example.com'),new Promise(resolve=>setTimeout(()=>resolve('hung'),50))]);
@@ -208,7 +209,7 @@ test('a pending contact lookup from another workspace cannot block the same doma
 
 test('canceling a shared contact lookup allows immediate retry and old completion cannot detach its replacement',async()=>{
  let calls=0,releaseOld,releaseNew;
- const context={AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async()=>{calls++;return new Promise(resolve=>{if(calls===1)releaseOld=resolve;else releaseNew=resolve;});}};
+ const context={LeadIntelDiscovery:D,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async()=>{calls++;return new Promise(resolve=>{if(calls===1)releaseOld=resolve;else releaseNew=resolve;});}};
  require('./helpers/dossier-boundary.cjs')(context);vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.run=findPublicProspectContacts;',context);
  const controller=new AbortController();const old=context.run('example.com',{signal:controller.signal});controller.abort();
  const fresh=context.run('example.com');
@@ -225,7 +226,7 @@ test('standalone public contact deadline settles an ignored await and its late r
  const actual=context.run;context.runPublicProspectContacts=(...args)=>{const run=actual(...args);runs.push(run);return run;};
  context.fetchFirecrawlBuyerResearch=async()=>{entered();return new Promise(resolve=>{releaseOld=resolve;});};
  vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.find=findPublicProspectContacts;',context);
- const old=context.find(owner.domain);await began;[...timers.values()].find(timer=>timer.delay===180000).fn();
+ const old=context.find(owner.domain);await began;[...timers.values()].find(timer=>timer.delay>450000).fn();
  assert.equal(await Promise.race([old,new Promise(resolve=>setTimeout(()=>resolve('hung'),50))]),false);assert.equal(owner.publicContactStatus,'error');assert.equal(context.publicContactPromises.size,0);
  context.fetchFirecrawlBuyerResearch=async()=>({ok:true,json:async()=>({data:{markdown:'Ada Andersson — Procurement Director — Old company. Published company team information.'}})});
  assert.equal(await context.find(owner.domain),true);assert.equal(owner.people[0].emailResearch.status,'complete');const saved=JSON.stringify(owner);
@@ -234,7 +235,7 @@ test('standalone public contact deadline settles an ignored await and its late r
 
 test('canceling a new subscriber detaches an older shared contact lookup so retry can start immediately',async()=>{
  let calls=0,releaseOld;
- const context={AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async()=>++calls===1?new Promise(resolve=>{releaseOld=resolve;}):true};
+ const context={LeadIntelDiscovery:D,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async()=>++calls===1?new Promise(resolve=>{releaseOld=resolve;}):true};
  require('./helpers/dossier-boundary.cjs')(context);vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.run=findPublicProspectContacts;',context);
  const old=context.run('example.com'),controller=new AbortController(),subscriber=context.run('example.com',{signal:controller.signal});controller.abort();
  assert.equal(await subscriber,false);assert.equal(await old,false);
@@ -280,7 +281,7 @@ test('pipeline search entry preserves unrelated active contact owners before its
 
 test('shared contact research for a different owner cannot displace the requested current owner',async()=>{
  const firstOwner={domain:'example.com'},requestedOwner={domain:'example.com'};let releaseOld;const calls=[];
- const context={AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,discovery:{selectedProspects:[firstOwner],pipeline:[requestedOwner]},publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async(domain,{researchOwner})=>{calls.push(researchOwner);return researchOwner===firstOwner?new Promise(resolve=>{releaseOld=resolve;}):true;}};
+ const context={LeadIntelDiscovery:D,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,discovery:{selectedProspects:[firstOwner],pipeline:[requestedOwner]},publicContactPromises:new Map(),bridge:()=>({workspace:{id:'workspace'}}),runPublicProspectContacts:async(domain,{researchOwner})=>{calls.push(researchOwner);return researchOwner===firstOwner?new Promise(resolve=>{releaseOld=resolve;}):true;}};
  require('./helpers/dossier-boundary.cjs')(context);vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.run=findPublicProspectContacts;',context);
  const old=context.run('example.com',{researchOwner:firstOwner});
  const current=await Promise.race([context.run('example.com',{researchOwner:requestedOwner}),new Promise(resolve=>setTimeout(()=>resolve('hung'),50))]);

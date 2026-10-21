@@ -548,28 +548,34 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
 });
 
 test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{
-  let publicSearches=0;
+  let publicSearches=0;const publicQueries=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Mikael',title:'President & CEO'}]})},
     fetchImpl:async(url,options)=>{
       if(!(/\/firecrawl(?:-search|\/search)/.test(String(url))))throw new Error('Unexpected request');
       if(isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};
       publicSearches++;
+      publicQueries.push(JSON.parse(options.body).query);
       if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
       if(publicSearches===2)return {ok:true,json:async()=>({data:[]})};
-      if(JSON.parse(options.body).query.includes('@')||JSON.parse(options.body).query.includes('(contact OR email OR phone OR kontakt)'))return {ok:true,json:async()=>({data:[]})};
-      assert.match(JSON.parse(options.body).query,/site:linkedin\.com\/in\//);
+      if(!JSON.parse(options.body).query.startsWith('site:linkedin.com/in/'))return {ok:true,json:async()=>({data:[]})};
       return {ok:true,json:async()=>({data:[{url:'https://www.linkedin.com/in/mikael-example',title:'Mikael Example – Boliden | LinkedIn',description:'President and CEO at Boliden'}]})};
     }});
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
   await context.__findPublicProspectContacts('boliden.com');
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,12); // Direct-email discovery and all three Gmail searches remain mandatory.
-  assert.equal(context.__discoveryState().selectedProspects[0].people[0].contactResearch.checks.gmail.status,'complete');
+  assert.ok(publicSearches<=12,'reconciling the mandatory LinkedIn result must avoid a redundant lookup');
+  const checks=context.__discoveryState().selectedProspects[0].people[0].contactResearch.checks;
+  for(const [key,count] of [['direct_email',2],['gmail',3],['linkedin',1]]){
+    assert.equal(checks[key].status,'complete');assert.equal(checks[key].queryLog.length,count);
+    for(const receipt of checks[key].queryLog){assert.equal(receipt.status,'complete');assert.ok(publicQueries.includes(receipt.query));}
+  }
+  assert.equal(publicQueries.filter(query=>query.startsWith('site:linkedin.com/in/')&&query.includes('"Mikael Example"')).length,1);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Publicly listed · unverified/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Profile matched automatically/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mailto:mikael\.example@boliden\.com/);assert.match(context.__elements.get('customer-pipeline').innerHTML,/Publicly listed · unverified/);
+  const linkedinField=new (require('jsdom').JSDOM)(context.__elements.get('customer-pipeline').innerHTML).window.document.querySelector('[data-contact-channel="linkedin"]');
+  assert.equal(linkedinField.dataset.contactStatus,'found');assert.match(linkedinField.textContent,/Profile matched automatically/);assert.match(linkedinField.querySelector('a').href,/linkedin\.com\/in\//);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 
@@ -616,7 +622,8 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(person.publicName,'Jacob Jonstoij');
   assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v23-company-record');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Profile matched automatically/);
+  const linkedinField=new (require('jsdom').JSDOM)(context.__elements.get('customer-pipeline').innerHTML).window.document.querySelector('[data-contact-channel="linkedin"]');
+  assert.equal(linkedinField.dataset.contactStatus,'found');assert.match(linkedinField.textContent,/Profile matched automatically/);assert.match(linkedinField.querySelector('a').href,/linkedin\.com\/in\//);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,finishedRequests);
@@ -692,7 +699,8 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone found in completed searches<\/span>/);
+  const phoneField=new (require('jsdom').JSDOM)(context.__elements.get('customer-pipeline').innerHTML).window.document.querySelector('[data-contact-channel="phone"]');
+  assert.equal(phoneField.dataset.contactStatus,'not_found');assert.match(phoneField.querySelector('.buyer-field-state').textContent,/Not found/);assert.match(phoneField.querySelector('details').textContent,/No direct phone found in completed searches/);
   assert.doesNotMatch(context.__elements.get('customer-pipeline').innerHTML,/<strong>\+46 470 890 00<\/strong> · Public listing/);
 });
 
@@ -1376,7 +1384,7 @@ test('buyers with incomplete research have visible reasons and cannot occupy the
  const context=loadDiscoveryRunner({renderNodes:true});
  const people=Array.from({length:11},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,title:i===10?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:i===10?{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}:{status:'partial',searches:1,failed:1,checkedAt:new Date().toISOString()}}));
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:['Project Director','Procurement Director']}]);
- assert.match(html,/4 priority buyers/);assert.equal((html.match(/Recommended · researched match/g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
+ assert.match(html,/4 priority buyers/);assert.equal((html.match(/class="buyer-recommendation">Recommended</g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
  assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Checks incomplete/);
 });
 
