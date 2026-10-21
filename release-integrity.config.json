@@ -726,7 +726,7 @@
       "status": 200,
       "contains": [
         "async function researchBuyerFit(candidates=[],profile={},generate,",
-        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined,buyerFitIssue:undefined}))",
+        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined,buyerFitIssue:undefined,buyerFitIssueCode:undefined}))",
         "BUYER_FIT_EVIDENCE_REJECTED",
         "offerOptions:splitList(profile.priorityOffers)",
         "function buyerFitSources(candidate={})",
@@ -3744,7 +3744,8 @@
       "contains": [
         "official-company-contacts=20261021-v4",
         "buyer-force-refresh=20261021-v2",
-        "saved-buyer-resume=20261021-v1"
+        "saved-buyer-resume=20261021-v1",
+        "company-assessment=20261021-v1"
       ]
     },
     {
@@ -3753,7 +3754,42 @@
       "url": "/customer/shell-support-loader.js",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v4"
+        "official-company-contacts=20261021-v4",
+        "company-assessment=20261021-v1"
+      ]
+    },
+    {
+      "id": "company-assessment-outcomes-engine",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "fit:null",
+        "buyerFitIssueCode:code",
+        "Validation issue:",
+        "sources.some(e=>e.url===q.url&&clean(q.quote).length>=12"
+      ]
+    },
+    {
+      "id": "company-assessment-outcomes-ui",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "discovery-assessment-gaps",
+        "company assessment",
+        "failure.detail||",
+        "buyerFitIssueCode:cachedFit(c)?.buyerFitIssueCode"
+      ]
+    },
+    {
+      "id": "company-assessment-outcomes-crm",
+      "type": "text",
+      "url": "/customer/crm-engine.js",
+      "status": 200,
+      "contains": [
+        "buyerFitIssue:clean(candidate.buyerFitIssue)",
+        "buyerFitIssueCode:candidate.buyerFitIssueCode==='insufficient_evidence'"
       ]
     }
   ],
