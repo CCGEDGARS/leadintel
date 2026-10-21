@@ -3982,6 +3982,42 @@
         "#step-5 .pipeline-panel{padding:14px 0",
         ".topbar .top-actions{flex:1 1 100%"
       ]
+    },
+    {
+      "id": "company-formula-execution-contract",
+      "type": "text",
+      "url": "/customer/company-dossier.js",
+      "status": 200,
+      "contains": [
+        "20261021-formula-execution-v2",
+        "function coverageComplete",
+        "function safeSourceReads",
+        "extractedSources:"
+      ]
+    },
+    {
+      "id": "company-formula-execution-ui",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "Search plan and progress",
+        "View search queries",
+        "Source extraction details",
+        "force:force&&!resume",
+        "D.coverageComplete(prior,body)"
+      ]
+    },
+    {
+      "id": "company-formula-execution-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-dossier.js?v=20261021-v4",
+        "company-dossier-ui.js?v=20261021-v5",
+        "formula-execution=20261021-v2"
+      ]
     }
   ],
   "retry": {

@@ -45,8 +45,24 @@ class ExtractionTests(unittest.TestCase):
             result = self.extract()
             self.assertEqual(result['data']['links'], ['https://company.se/team','https://company.se/products'])
             self.assertEqual(result['data']['metadata']['source'], 'scrapling-fallback')
-            self.assertEqual(fetch.call_args.kwargs['timeout'], 25)
-            self.assertFalse(fetch.call_args.kwargs['allow_redirects'])
+            self.assertGreater(fetch.call_args.kwargs['timeout'], 24)
+            self.assertLessEqual(fetch.call_args.kwargs['timeout'], 25)
+            self.assertFalse(fetch.call_args.kwargs['follow_redirects'])
+    def test_residual_request_budget_is_shared_across_redirects_without_sdk_retries(self):
+        redirect = Page(); redirect.status = 302; redirect.headers = {'location': '/team'}
+        with patch('time.monotonic', side_effect=[10, 10, 10.4, 10.4, 10.5]), patch.object(service.Fetcher, 'get', side_effect=[redirect, Page()]) as fetch:
+            result = service.scrape(types.SimpleNamespace(url='https://company.se/', timeout_ms=1200), 'Bearer test')
+            self.assertTrue(result['success'])
+            self.assertLessEqual(fetch.call_args_list[1].kwargs['timeout'], 0.8)
+            self.assertEqual(fetch.call_args_list[0].kwargs['retries'], 1)
+            self.assertFalse(fetch.call_args_list[0].kwargs['follow_redirects'])
+    def test_provider_exception_never_exposes_request_credentials(self):
+        with patch.object(service.Fetcher, 'get', side_effect=RuntimeError('https://user:secret@example.com/?token=private-key')):
+            with self.assertRaises(HTTPException) as caught: self.extract()
+            self.assertIsInstance(caught.exception.detail, dict)
+            self.assertEqual(caught.exception.detail['code'], 'SCRAPLING_EXTRACTION_ERROR')
+            self.assertNotIn('secret', str(caught.exception.detail))
+            self.assertNotIn('private-key', str(caught.exception.detail))
     def test_missing_token_fails_closed(self):
         with patch.dict(service.os.environ, {'SCRAPLING_SERVICE_TOKEN': ''}):
             self.assertFalse(service._authorized(None))

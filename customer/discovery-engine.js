@@ -1673,6 +1673,11 @@
     if(!['succeeded','failed'].includes(entry.status))return;
     row.attempted++;row[entry.status]++;row.results+=Math.max(0,Number(entry.results)||0);
     if(entry.reason)row.reason=clean(entry.reason).slice(0,180);
+    if(entry.status==='failed')row.lastFailure=safeResearchToolFailure(entry);
+  }
+  function safeResearchToolFailure(value={}){
+    const duration=n=>Number.isFinite(n)?Math.max(0,Math.min(55000,Math.round(n))):null;
+    return {failureKind:['authentication','blocked_content','timeout','cancelled','network','http','configuration','invalid_target','invalid_response','extraction'].includes(value.failureKind)?value.failureKind:'',code:/^[A-Z][A-Z0-9_]{0,79}$/.test(value.code||'')?value.code:'',httpStatus:Number.isInteger(value.httpStatus)&&value.httpStatus>=100&&value.httpStatus<=599?value.httpStatus:null,elapsedMs:duration(value.elapsedMs),timeoutMs:duration(value.timeoutMs)};
   }
   function safeBuyerResearchAccountability(value){
     if(!value||![BUYER_CONTACT_RESEARCH_POLICY.version,'20261021-adaptive-depth-v2','20261020-adaptive-depth-v1'].includes(value.version))return null;
@@ -1682,7 +1687,7 @@
     for(const key of ['reusedChecks','officialPages','checkedPeople','totalPeople','deepPeople'])report[key]=count(value[key]);
     report.officialPageReads=(Array.isArray(value.officialPageReads)?value.officialPageReads:[]).filter(row=>row?.sourceRead===true&&normalizeUrl(row.url)&&Number.isFinite(Date.parse(row.checkedAt))).slice(0,24).map(row=>({url:normalizeUrl(row.url),sourceRead:true,checkedAt:clean(row.checkedAt).slice(0,40)}));
     report.gaps=(value.gaps||[]).map(clean).filter(Boolean).slice(0,20).map(s=>s.slice(0,220));
-    report.tools=report.tools.map(row=>{const input=(value.tools||[]).find(item=>item.provider===row.provider)||{};return {...row,...Object.fromEntries(['attempted','succeeded','failed','skipped','results'].map(key=>[key,count(input[key])])),reason:clean(input.reason).slice(0,180)};});
+    report.tools=report.tools.map(row=>{const input=(value.tools||[]).find(item=>item.provider===row.provider)||{};return {...row,...Object.fromEntries(['attempted','succeeded','failed','skipped','results'].map(key=>[key,count(input[key])])),reason:clean(input.reason).slice(0,180),...(input.lastFailure?{lastFailure:safeResearchToolFailure(input.lastFailure)}:{})};});
     return report;
   }
   const BUYER_QUALITY_VERSION='20261021-supervised-quality-v1';
