@@ -32,7 +32,8 @@
       "research_recovery_version": "company-recovery-v2",
       "company_dossier_version": "20261021-dossier-first-v1",
       "confirm_contact_data_version": "20261021-v1",
-      "paid_contact_permissions_version": "email-phone-v1"
+      "paid_contact_permissions_version": "email-phone-v1",
+      "messages_audit_version": "20261021-v1"
     }
   },
   "smokeChecks": [
@@ -1718,7 +1719,10 @@
         "AbortController",
         "reconcileDraft",
         "loadCurrentDraft",
-        "m.sourceKey===sourceKey(c)"
+        "m.sourceKey===sourceKey(c)",
+        "workingAssistant",
+        "contextKey",
+        "workingVersion"
       ]
     },
     {
@@ -1734,7 +1738,9 @@
         "showModal",
         "Load current script",
         "Keep assistant copy",
-        "Writing with your customer research"
+        "Writing with your customer research",
+        "controller.contextKey?.()!==loadContext",
+        "state.workingAssistant"
       ]
     },
     {
@@ -4029,6 +4035,54 @@
       "status": 200,
       "contains": [
         "paid-email-phone=20261021-v1"
+      ]
+    },
+    {
+      "id": "messages-audit-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "messages-audit=20261021-v1"
+      ]
+    },
+    {
+      "id": "messages-audit-runtime-imports",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "writing-mentors=20261017-v1&messages-audit=20261021-v1"
+      ]
+    },
+    {
+      "id": "messages-assistant-applied-provenance",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "messages-audit=20261021-v1",
+        "next.messageStudioDraft.writingAssistant=JSON.parse(JSON.stringify(assistant))"
+      ]
+    },
+    {
+      "id": "phone-applied-source-persistence",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "writingAssistant:submitted.writingAssistant||null",
+        "async usePhone(input,style,assistant=null)"
+      ]
+    },
+    {
+      "id": "inmail-stage-applied-source-persistence",
+      "type": "text",
+      "url": "/customer/linkedin-inmail-ui.js",
+      "status": 200,
+      "contains": [
+        "async applyDraft(draft,assistant=null)",
+        "delete record.stages[record.stage].writingAssistant"
       ]
     }
   ],

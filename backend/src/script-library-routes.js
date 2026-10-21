@@ -6,6 +6,15 @@ import {phoneScriptSeeds} from './phone-script-seeds.js';
 const channels=['email','linkedin','phone'],styles=['professional','curiosity','friendly','brutal'];
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
+function appliedAssistant(value,workspace){
+ if(value===null||value===undefined)return null;
+ const object=v=>v&&typeof v==='object'&&!Array.isArray(v),bounded=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max,revision=v=>Number.isSafeInteger(v)&&v>0;
+ if(!object(value)||JSON.stringify(value).length>8000||Object.keys(value).some(k=>!['workspaceId','referenceRevision','sourceRefs','citations','appliedAt'].includes(k))||value.workspaceId!==workspace||!Number.isSafeInteger(value.referenceRevision)||value.referenceRevision<0||!Array.isArray(value.sourceRefs)||value.sourceRefs.length>3||!Array.isArray(value.citations)||value.citations.length>8||!bounded(value.appliedAt,40)||!Number.isFinite(Date.parse(value.appliedAt)))fail('Invalid applied writing-source attribution');
+ const refs=value.sourceRefs;if(refs.some(r=>!object(r)||Object.keys(r).some(k=>!['id','revision'].includes(k))||!bounded(r.id,120)||!revision(r.revision))||new Set(refs.map(r=>r.id)).size!==refs.length)fail('Invalid applied writing-source references');
+ for(const citation of value.citations)if(!object(citation)||Object.keys(citation).some(k=>!['passageId','sourceId','revision','filename','location','role'].includes(k))||!refs.some(r=>r.id===citation.sourceId&&r.revision===citation.revision)||!bounded(citation.filename,256)||!bounded(citation.location,80)||!/^(page|line):\d+$/.test(citation.location)||!['guidance','seller','customer'].includes(citation.role)||citation.passageId!==undefined&&!bounded(citation.passageId,200))fail('Invalid applied writing-source citation');
+ // This is historical attribution for the saved text, never current evidence or activation authority.
+ return value;
+}
 export function platformScriptOwner(env,user){return Boolean(env.ADMIN_EMAIL&&user?.email&&String(env.ADMIN_EMAIL).trim().toLowerCase()===String(user.email).trim().toLowerCase());}
 export function validateScript(input,{core=false}={}){
  if(!input||!channels.includes(input.channel))fail('Choose a supported channel');
@@ -32,7 +41,10 @@ export async function coreScripts(db){
   // or a deletion tombstone. Retain every replaced original in revision history.
   const sameStages=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((stage,i)=>stage.id===b[i].id&&stage.body===b[i].body&&stage.subject===b[i].subject);
   const obsoleteInMail=master?.mode==='inmail'&&saved.masterVersion!==master.masterVersion&&master.previousBuiltinStages?.some(stages=>sameStages(saved.stages,stages)&&saved.body===stages[0].body&&saved.subject===stages[0].subject);
-  const obsolete=obsoleteInMail||master?.channel==='email'&&saved.masterVersion!==master.masterVersion&&(!saved.masterVersion||master.previousBuiltinBodies?.includes(saved.body));
+  // Missing version metadata is not proof of a builtin; owner subjects and
+  // explicit owner-copy markers must survive even when the body is familiar.
+  const obsoleteEmail=master?.channel==='email'&&saved.masterVersion!==master.masterVersion&&saved.builtin!==false&&saved.subject===master.subject&&master.previousBuiltinBodies?.includes(saved.body);
+  const obsolete=obsoleteInMail||obsoleteEmail;
   if(obsolete&&!saved.deleted)rows.set(row.id,{...master,id:row.id,revision:row.revision,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision,...(saved.stages?{stages:saved.stages}:{})}].slice(-30)});
   else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:!saved.deleted&&saved.body===master?.body&&saved.subject===master?.subject});
  }
@@ -67,11 +79,11 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
   if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal)$/.test(id))fail('Invalid core script');
   const existing=(await coreScripts(env.DB)).find(r=>r.id===id);
-  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false,...(existing?.masterVersion?{masterVersion:existing.masterVersion}:{})};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
+  let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false,builtin:false,...(existing?.masterVersion?{masterVersion:existing.masterVersion}:{})};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
   // Revisions preserve prior approved wording; AI paths have no access to these writes.
-  const previous=await env.DB.prepare('SELECT payload_json FROM core_script_registry WHERE id=?').bind(id).first();
   if(existing?.mode==='inmail')next={...next,original:existing.original,sourceFile:existing.sourceFile,sourceSha256:existing.sourceSha256};
-  next.history=[...(previous?JSON.parse(previous.payload_json).history||[]:[]),...(existing?[{body:existing.body,subject:existing.subject,name:existing.name,revision:existing.revision,...(existing.stages?{stages:existing.stages}:{} )}]:[])].slice(-30);
+  // The resolved row includes any builtin migration's recoverable prior text.
+  next.history=[...(existing?.history||[]),...(existing?[{body:existing.body,subject:existing.subject,name:existing.name,revision:existing.revision,...(existing.stages?{stages:existing.stages}:{} )}]:[])].slice(-30);
   const saved=await cas(env.DB,'core_script_registry',['id'],[id],next,body.expectedRevision,{updated_by:user.id});return json({script:{...saved,id,builtin:false}},200,cors);
  }
  if(kind==='personal'){
@@ -98,6 +110,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   if(request.method!=='PUT')fail('Method not allowed',405);
   const record=body.record;if(!record||typeof record!=='object'||Array.isArray(record)||!['professional','curiosity','friendly','brutal','original'].includes(record.style)||!['initial','connection','followup','calendar'].includes(record.stage)||!record.stages||!record.values||!record.checks||JSON.stringify(record).length>30000)fail('Invalid InMail draft');
   for(const [id,draft] of Object.entries(record.stages))if(!['initial','connection','followup','calendar'].includes(id)||typeof draft?.subject!=='string'||typeof draft?.message!=='string'||draft.message.length>12000||draft.subject.length>500||id!=='initial'&&draft.subject)fail('Invalid InMail stage');
+  for(const draft of Object.values(record.stages)){const assistant=appliedAssistant(draft.writingAssistant,workspace);if(assistant)draft.writingAssistant=assistant;else delete draft.writingAssistant;}
   for(const [key,value] of Object.entries(record.values))if(!/^[A-Za-z][A-Za-z0-9]*$/.test(key)||typeof value!=='string'||value.length>3000)fail('Invalid InMail fact');
   const saved=await cas(env.DB,'inmail_script_drafts',keys,values,{record,savedAt:new Date().toISOString()},body.expectedRevision);return json({draft:saved},200,cors);
  }
@@ -109,7 +122,8 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   if(request.method!=='PUT')fail('Method not allowed',405);
   const script=validateScript({channel:'phone',subject:'',name:'Phone script',body:body.message,style:body.style});
   if(/\{\{|\}\}/.test(script.body))fail('Complete missing script fields before saving');
-  const saved=await cas(env.DB,'phone_script_drafts',keys,values,{message:script.body,style:script.style,savedAt:new Date().toISOString(),sourceId:String(body.sourceId||'').slice(0,120)},body.expectedRevision);return json({draft:saved},200,cors);
+  const assistant=appliedAssistant(body.writingAssistant,workspace);
+  const saved=await cas(env.DB,'phone_script_drafts',keys,values,{message:script.body,style:script.style,savedAt:new Date().toISOString(),sourceId:String(body.sourceId||'').slice(0,120),...(assistant?{writingAssistant:assistant}:{})},body.expectedRevision);return json({draft:saved},200,cors);
  }
  fail('Method not allowed',405);
  }catch(error){const storage=storageErrorResponse(error,cors);if(storage)return storage;if(!error.status)throw error;return json({error:error.message},error.status,cors);}
