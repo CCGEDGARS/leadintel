@@ -105,7 +105,7 @@ test('attribution evidence and role holds survive normalization and durable CRM 
 const ui=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function render(person){const ctx={URL,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,emailPatternCandidates:D.rankedEmailGuesses};vm.runInNewContext(ui.slice(ui.indexOf('function buyerContactRows('),ui.indexOf('function emailPatternCandidates('))+';globalThis.render=buyerContactRows;',ctx);return ctx.render(person,company);}
 test('Gmail guesses never appear as contact details and LinkedIn matching does not claim full verification',()=>{
- const html=render({...johan,publicNameUrl:johan.publicLinkedinUrl,gmailCandidates:D.gmailGuessCandidates(johan),contactResearch:{channels:{gmail:{status:'complete'},company:{status:'complete'},phone:{status:'complete'}}}});
+ const html=render({...johan,publicNameUrl:johan.publicLinkedinUrl,gmailCandidates:D.gmailGuessCandidates(johan),contactResearch:{checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}},channels:{gmail:{status:'complete'},company:{status:'complete'},phone:{status:'complete'}}}});
  assert.doesNotMatch(html,/johan\.menckel@gmail\.com/);assert.doesNotMatch(html,/Verified automatically/);
  assert.match(html,/Profile matched automatically/);assert.match(html,/No Gmail address found/);
 });

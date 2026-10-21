@@ -67,3 +67,48 @@ test('runtime records the actual extractor chain and continues observing optiona
  const response=await ctx.fetchBuyerResearch('https://api.example/firecrawl/scrape',{signal:controller.signal});assert.equal((await response.json()).data.markdown,'Company contacts');assert.equal(report.tools.find(t=>t.provider==='scrapling').succeeded,1);assert.equal(report.tools.find(t=>t.provider==='firecrawl').failed,1);
  ctx.fetch=async()=>Response.json({data:[]});await ctx.fetchBuyerResearch('https://api.example/firecrawl/search',{signal:controller.signal});assert.equal(report.tools.find(t=>t.provider==='firecrawl').succeeded,1);assert.equal(report.tools.find(t=>t.provider==='firecrawl').results,0);
 });
+
+test('each retained buyer gets the dedicated Gmail variant search and its own execution receipt',async()=>{
+ const c=company(),queries=[];
+ await D.runMandatoryBuyerResearch(c,{search:async q=>{queries.push(q);return [];},readPage:async()=>({markdown:'Anna Andersson at Example. Procurement contact.'})});
+ const dedicated=queries.find(q=>q.includes('"anna.andersson@gmail.com"'));
+ assert.ok(dedicated,'a general public query cannot substitute for the Gmail algorithm');
+ assert.ok(dedicated.includes('"Anna Andersson"')&&dedicated.includes('"Example"'));
+ for(const row of D.gmailGuessCandidates(c.people[0]))assert.ok(dedicated.includes('"'+row.email+'"'));
+ assert.equal(c.people[0].contactResearch.checks.gmail.status,'complete');
+ assert.ok(c.people[0].contactResearch.checks.gmail.checkedAt);
+ assert.equal(c.people[0].contactResearch.channels.gmail.status,'complete');
+ assert.equal(c.people[0].patternFindings?.length||0,0,'generated variants are never saved as found addresses');
+});
+test('a failed dedicated Gmail search cannot inherit successful general public-contact status',async()=>{
+ const c=company();
+ await D.runMandatoryBuyerResearch(c,{search:async q=>{if(q.includes('"anna.andersson@gmail.com"'))throw Error('Gmail source search timed out');return [];},readPage:async()=>({markdown:'Anna Andersson at Example. Procurement contact.'})});
+ assert.equal(c.people[0].contactResearch.channels.gmail.status,'partial');
+ assert.match(c.people[0].contactResearch.channels.gmail.reason,/Gmail source search timed out/);
+ assert.equal(c.publicResearch.accountability.checkedPeople,0);
+ assert.equal(c.publicResearch.accountability.status,'partial');
+});
+test('legacy general-public completion does not prevent the missing Gmail algorithm from running',async()=>{
+ const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Example company team'})});
+ delete c.people[0].contactResearch.checks.gmail;c.people[0].contactResearch.channels.gmail={status:'complete'};
+ const queries=[];await D.runMandatoryBuyerResearch(c,{search:async q=>{queries.push(q);return [];},readPage:async()=>({markdown:'Example company team'})});
+ assert.equal(queries.length,1);assert.ok(queries[0].includes('"anna.andersson@gmail.com"'));
+});
+
+test('the Gmail algorithm retains only a published address explicitly linked to the person and company',async()=>{
+ for(const owner of ['Anna Andersson','Bob Svensson']){
+  const c=company(),url='https://association.example/contact';
+  await D.runMandatoryBuyerResearch(c,{search:async q=>q.includes('"anna.andersson@gmail.com"')?[{url,description:owner+' at Example: anna.business@gmail.com'}]:[],readPage:async page=>({markdown:page===url?owner+' at Example: anna.business@gmail.com':'Example official company website'})});
+  assert.equal((c.people[0].patternFindings||[]).some(row=>row.email==='anna.business@gmail.com'&&row.url===url),owner==='Anna Andersson');
+  assert.equal(D.validResearchEmail('anna.business@gmail.com',c.domain),false);
+ }
+});
+
+test('upgrading the Gmail policy preserves the previous tool audit without treating it as a current pass',()=>{
+ const c=company(),report=D.createBuyerResearchAccountability();report.version='20261020-adaptive-depth-v1';report.status='complete';
+ D.recordBuyerResearchTool(report,{provider:'firecrawl',status:'succeeded',results:3});c.publicResearch={accountability:report};
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...c,buyerSearchMode:'user_selected_target'}]}).selectedProspects[0];
+ assert.ok(saved.publicResearch.accountability,'previous tool execution evidence must survive the policy upgrade');assert.equal(saved.publicResearch.accountability.version,'20261020-adaptive-depth-v1');
+ assert.equal(saved.publicResearch.accountability.tools.find(row=>row.provider==='firecrawl').results,3);
+ assert.equal(D.buyerResearchCoveragePassed(saved),false);
+});

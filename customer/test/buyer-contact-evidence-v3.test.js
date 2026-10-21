@@ -49,3 +49,11 @@ test('homepage capture date is not presented as a company event date',()=>{
  const event=O.specificEventEvidence({evidence:[{url:'https://example.com/',date:'2026-10-05',text:'Example is investing six billion in a new sorting plant.'}]});
  assert.equal(event.date,'');assert.match(event.event,/new sorting plant/);
 });
+
+test('Gmail absence is never presented as a completed search without its dedicated check',()=>{
+ const ctx=contactRuntime(),p={...person,emailResearch:{status:'complete'},contactResearch:{checks:{public:{status:'complete'}},channels:{gmail:{status:'complete'}}}};
+ const html=ctx.render(p,company),gmail=html.slice(html.indexOf('<strong>Gmail</strong>'));
+ assert.match(gmail,/Not searched yet/);assert.doesNotMatch(gmail,/No Gmail address found in completed searches/);
+ const checked=ctx.render({...p,contactResearch:{...p.contactResearch,checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}}}},company);
+ assert.match(checked,/<strong>Gmail<\/strong>[\s\S]*No Gmail address found in completed searches/);
+});
