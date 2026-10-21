@@ -1,0 +1,54 @@
+name: Repair protected Scrapling credential
+on:
+  push:
+    branches: [ops/scrapling-auth-repair-20261021]
+    paths: [.github/workflows/scrapling-auth-repair.yml]
+permissions:
+  contents: read
+concurrency:
+  group: leadintel-backend-production
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Synchronize Worker secret and encrypted operator handoff
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          repair_dir=$(mktemp -d)
+          chmod 700 "$repair_dir"
+          trap 'rm -rf "$repair_dir"' EXIT
+          umask 077
+          openssl rand -hex 32 > "$repair_dir/token"
+          printf '::add-mask::%s\n' "$(cat "$repair_dir/token")"
+          cat > "$repair_dir/public.pem" <<'HANDOFF_PUBLIC_KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA6vWPdnmfFTEkK7rSTFy7
+          a6vaOzbmea1rrjZ0m91ne4KUnAE07IOlRQXRMR3rRNVknmX0kA51pmHSuqUiRvCH
+          Iya3fSph1Mda8e5zn6kyzaLY5L4eY5UBjUKzKakszMa0m4YQ4V4/WeKWdqIjrNcG
+          Sx0g3fAcAu6Y7VypB+jcWJ2v7rrPtau/LWfnTk99NgOImKD0O6LnzIC/Zc9L77MH
+          0iPQOe/vaz2MINits1Kct67FQaXX9uVi5ueItjcqrJ5xrjYasUGe26xOI89CFiqk
+          nFW/31No77iOJ7mD2XAJVb9PlcA/Ohe8Af6iCkSbEqdVzdyvPoX3eErEf0ZjvpuI
+          jYrkx5lnjqzsoaKXFJ81ualJxunRFQuS9UPY2806B7Ve/Au7CEcQFfcEKJSDExJK
+          nbA1MBt2Fgbl5eW9atMnl3/sqvGDqlJpnQn+fcscEKD6IJu0IMQuqpKYip0uhEeO
+          x3hIw/hRGgQLJuHjrE3s+oL2unfvK78sLqOas9bx4y+7AgMBAAE=
+          -----END PUBLIC KEY-----
+          HANDOFF_PUBLIC_KEY
+          openssl pkeyutl -encrypt -pubin -inkey "$repair_dir/public.pem" -in "$repair_dir/token" -out "$repair_dir/token.enc" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -pkeyopt rsa_mgf1_md:sha256
+          printf 'SCRAPLING_ENCRYPTED_HANDOFF=%s\n' "$(base64 -w0 "$repair_dir/token.enc")"
+          npx wrangler secret put SCRAPLING_SERVICE_TOKEN < "$repair_dir/token"
