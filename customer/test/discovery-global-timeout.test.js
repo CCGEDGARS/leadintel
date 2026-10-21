@@ -2091,3 +2091,17 @@ test('cached official identities reread their shared source once and confirm exp
  assert.equal(calls.filter(path=>path.includes('/confirm-public-email')).length,2);
  assert.ok(candidate.people.every(p=>p.publicEmailSourceCheck.status==='confirmed'));
 });
+
+
+test('the Buyers page keeps four existing cards without a separate published-contact card section',()=>{
+ const {JSDOM}=require('jsdom'),context=loadDiscoveryRunner({renderNodes:true});
+ const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'buyer'+i,name:'Priority Buyer'+i,title,organization:'Northstar',publicNameUrl:'https://northstar.com/team/'+i,identityEvidenceDate:new Date().toISOString()}));
+ const companyContacts=[{id:'staff',name:'Other Staff',title:'Administration',organization:'Northstar',publicEmail:'staff@northstar.com',publicEmailUrl:'https://northstar.com/team',sourceUrl:'https://northstar.com/team'}];
+ const candidate={company:'Northstar',domain:'northstar.com',buyerRoles:['Procurement Director','Plant Manager'],people,peopleStatus:'complete',buyerDiscovery:{companyContacts}};
+ const html=context.__renderSelectedProspects([candidate]),dom=new JSDOM(html);
+ assert.equal(dom.window.document.querySelectorAll('.published-company-contacts').length,0);
+ assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,4);
+ assert.equal(dom.window.document.querySelectorAll('[data-prospect-enrich-email]').length,4);
+ for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Find email');
+ assert.equal(candidate.buyerDiscovery.companyContacts[0].publicEmail,'staff@northstar.com');dom.window.close();
+});
