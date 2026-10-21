@@ -19,12 +19,12 @@ test('an empty source extraction remains incomplete',async()=>{
 test('automatic buyer research searches full name, company email and Gmail without paid reveal',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'}]},queries=[];
  await researchBuyerContacts(candidate,async query=>{queries.push(query);return [{url:'https://example.com/team',title:'Anna Andersson | COO | Example',markdown:'Anna Andersson COO Example anna.andersson@example.com'}];},async()=>{});
- assert.equal(queries.length,4);assert.ok(queries.some(query=>query.includes('@gmail.com')));assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].patternFindings[0].email,'anna.andersson@example.com');assert.equal(candidate.people[0].patternFindings[0].status,'public_unverified');
+ assert.equal(queries.length,5);assert.ok(queries.some(query=>query.includes('"anna.andersson@gmail.com"')));assert.equal(candidate.people[0].contactResearch.checks.gmail.status,'complete');assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].patternFindings[0].email,'anna.andersson@example.com');assert.equal(candidate.people[0].patternFindings[0].status,'public_unverified');
 });
 test('automatic contact research records failures and never presents guesses as found',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'},{name:'Anna',identityStatus:'pending'}]};
  await researchBuyerContacts(candidate,async()=>{throw new Error('timeout');},async()=>{});
- assert.equal(candidate.people[0].emailResearch.status,'unavailable');assert.equal(candidate.people[0].emailResearch.failed,6);assert.equal(candidate.people[0].patternFindings,undefined);assert.equal(candidate.people[1].emailResearch.status,'not_searched');
+ assert.equal(candidate.people[0].emailResearch.status,'unavailable');assert.equal(candidate.people[0].emailResearch.failed,7);assert.equal(candidate.people[0].patternFindings,undefined);assert.equal(candidate.people[1].emailResearch.status,'not_searched');
 });
 test('automatic research uses observed company formats and rejects generic or unattributed addresses',async()=>{
  const candidate={company:'Example',domain:'example.com',people:[{name:'Anna Andersson',title:'COO'},{name:'Bob Smith',publicEmail:'bsmith@example.com',publicEmailUrl:'https://example.com/team'}]},queries=[];

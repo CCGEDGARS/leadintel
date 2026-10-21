@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const now=()=>new Date().toISOString();
 function fixture(){
- const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'p'+i,name:'Anna Buyer'+i,publicName:'Anna Buyer'+i,title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:now(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:now()},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries(['official','public','phone','linkedin','deep'].map(k=>[k,{status:'complete',checkedAt:now()}]))}}));
+ const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'p'+i,name:'Anna Buyer'+i,publicName:'Anna Buyer'+i,title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:now(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:now()},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now()}]))}}));
  const c={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:['CEO','COO','Procurement Director','Plant Manager'],people};
  c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now(),totalPeople:4,checkedPeople:4,officialPages:1}};
  return c;
@@ -42,4 +42,9 @@ test('the supervisor payload preserves evidence for every person without repeati
  vm.createContext(context);vm.runInContext(s.slice(a,b),context);await context.reviewBuyerPublicEvidence({company:'Example',domain:'example.com',people},rows,new AbortController().signal);
  assert.ok(payload.evidence.reduce((total,row)=>total+row.excerpt.length,0)<=20000);
  for(const name of names)assert.ok(payload.evidence.some(row=>row.excerpt.includes(name)),name+' evidence must be retained');
+});
+
+test('completed public contact checks cannot authorize research coverage without the dedicated Gmail check',()=>{
+ const c=reviewed(fixture());delete c.people[0].contactResearch.checks.gmail;
+ assert.equal(D.buyerResearchCoveragePassed(c),false);assert.equal(D.buyerQualityAssessment(c).researchPassed,false);
 });

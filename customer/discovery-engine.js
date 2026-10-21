@@ -1566,7 +1566,7 @@
     const title=clean(value).replace(/\s+(?:på|at|hos)\s*$/i,'');
     return /^Projektchef process och produktutveckling$/i.test(title)?'Project Director · Process & Product Development':title;
   }
-  const BUYER_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261020-adaptive-depth-v1',maxPeople:10,deepPeople:4,concurrency:2,deepQueries:2,pagesPerPerson:2,maxSourcePages:24,maxDurationMs:180000,requiredChecks:Object.freeze(['official','public','phone','linkedin'])});
+  const BUYER_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-adaptive-depth-v2',maxPeople:10,deepPeople:4,concurrency:2,deepQueries:2,pagesPerPerson:2,maxSourcePages:24,maxDurationMs:180000,requiredChecks:Object.freeze(['official','public','phone','linkedin','gmail'])});
   const BUYER_RESEARCH_TOOLS=['direct','firecrawl','scrapling','grounded','gemini','ai_review','apollo','hunter'];
   function createBuyerResearchAccountability(){
     return {version:BUYER_CONTACT_RESEARCH_POLICY.version,depth:'Adaptive deep',startedAt:new Date().toISOString(),completedAt:'',status:'running',stopReason:'',reusedChecks:0,officialPages:0,checkedPeople:0,totalPeople:0,deepPeople:0,gaps:[],tools:BUYER_RESEARCH_TOOLS.map(provider=>({provider,attempted:0,succeeded:0,failed:0,skipped:0,results:0,reason:''}))};
@@ -1580,8 +1580,8 @@
     if(entry.reason)row.reason=clean(entry.reason).slice(0,180);
   }
   function safeBuyerResearchAccountability(value){
-    if(!value||value.version!==BUYER_CONTACT_RESEARCH_POLICY.version)return null;
-    const report=createBuyerResearchAccountability(),count=n=>clamp(Number(n)||0,0,10000,0);
+    if(!value||![BUYER_CONTACT_RESEARCH_POLICY.version,'20261020-adaptive-depth-v1'].includes(value.version))return null;
+    const report=createBuyerResearchAccountability(),count=n=>clamp(Number(n)||0,0,10000,0);report.version=value.version;
     for(const key of ['startedAt','completedAt','stopReason'])report[key]=clean(value[key]).slice(0,80);
     report.status=['running','complete','partial'].includes(value.status)?value.status:'partial';
     for(const key of ['reusedChecks','officialPages','checkedPeople','totalPeople','deepPeople'])report[key]=count(value[key]);
@@ -1593,7 +1593,7 @@
   function buyerReviewSignature(candidate={}){
     const roles=splitList(candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles).map(value=>value.toLowerCase()).sort();
     const people=(candidate.people||[]).slice(0,10).map(p=>[clean(p.id),clean(p.publicName||p.name).toLowerCase(),clean(p.title).toLowerCase(),clean(p.organization).toLowerCase(),clean(p.publicEmail).toLowerCase(),normalizeUrl(p.publicEmailUrl),normalizeUrl(p.publicNameUrl),clean(p.opportunityScope?.status)]).sort((a,b)=>a[0].localeCompare(b[0]));
-    const input=JSON.stringify([companyIdentityDomain(candidate.domain),roles,people,Boolean(candidate.buyerRolesChanged)]);let hash=2166136261;
+    const input=JSON.stringify([BUYER_CONTACT_RESEARCH_POLICY.version,companyIdentityDomain(candidate.domain),roles,people,Boolean(candidate.buyerRolesChanged)]);let hash=2166136261;
     for(const char of input){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return 'buyer-review-v1:'+(hash>>>0).toString(16).padStart(8,'0');
   }
   function safeBuyerAiReview(value){
@@ -1604,7 +1604,7 @@
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
     const fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;};
     const checked=person=>person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>person.contactResearch?.checks?.[key]?.status==='complete'&&fresh(person.contactResearch.checks[key].checkedAt))&&buyerResearchAssessment(person,options).status==='complete';
-    return Boolean(people.length&&report?.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length&&report.officialPages>0&&fresh(report.completedAt)&&people.every(checked)&&people.filter(p=>hasFullBuyerName(p.publicName||p.name)&&p.identityStatus!=='pending').slice(0,4).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||p.contactResearch?.checks?.deep?.status==='complete'&&fresh(p.contactResearch.checks.deep.checkedAt)));
+    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length&&report.officialPages>0&&fresh(report.completedAt)&&people.every(checked)&&people.filter(p=>hasFullBuyerName(p.publicName||p.name)&&p.identityStatus!=='pending').slice(0,4).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||p.contactResearch?.checks?.deep?.status==='complete'&&fresh(p.contactResearch.checks.deep.checkedAt)));
   }
   function buyerQualityAssessment(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -1630,7 +1630,7 @@
   async function runMandatoryBuyerResearch(candidate={},options={}){
     const {search,readPage,signal,onProgress}=options,policy=BUYER_CONTACT_RESEARCH_POLICY;
     const report=options.accountability||createBuyerResearchAccountability(),people=(candidate.people||[]).slice(0,policy.maxPeople),pages=new Map((options.rows||[]).filter(row=>row.sourceRead===true&&String(row.markdown||row.content||'').trim()).map(row=>[row.url,Promise.resolve(row)])),sourceRows=options.rows||[],started=Date.now(),duration=Math.min(policy.maxDurationMs,options.maxDurationMs||policy.maxDurationMs);
-    candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report};report.status='running';report.totalPeople=people.length;
+    candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report};report.version=policy.version;report.status='running';report.totalPeople=people.length;
     const guard=async()=>{if(signal?.aborted)throw Object.assign(new Error('Research canceled'),{code:'CANCELED'});if(Date.now()-started>=duration)throw Object.assign(new Error('Contact research time budget reached'),{code:'TIME_BUDGET'});await options.guard?.();};
     const bounded=async operation=>{
       await guard();let timer,cancel;
@@ -1680,12 +1680,12 @@
       const savedSource=person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
       if(savedSource&&readPage)try{await extract(person,[{url:savedSource}]);}catch(error){if(error.code||signal?.aborted)throw error;failedPages.add(savedSource);}
       const domain=companyIdentityDomain(candidate.domain),company=clean(candidate.company);
-      const queries={official:`site:${domain} "${name}"`,public:`"${name}" "${company}" (email OR phone OR kontakt OR "@gmail.com")`,phone:`site:${domain} "${name}" (phone OR telephone OR tel OR telefon OR mobil)`,linkedin:`site:linkedin.com/in/ "${name}" "${company}"`};
+      const queries={official:`site:${domain} "${name}"`,public:`"${name}" "${company}" (email OR phone OR kontakt OR "@gmail.com")`,phone:`site:${domain} "${name}" (phone OR telephone OR tel OR telefon OR mobil)`,linkedin:`site:linkedin.com/in/ "${name}" "${company}"`,gmail:`"${name}" "${company}" ("@gmail.com" OR ${person.gmailCandidates.map(row=>`"${row.email}"`).join(' OR ')})`};
       for(const key of policy.requiredChecks)await run(key,[queries[key]]);
       if(priorities.includes(person)&&!attributable(person)){report.deepPeople++;await run('deep',buyerDeepContactQueries(candidate,person));}
       else if(!research.checks.deep||research.checks.deep.status!=='complete')research.checks.deep={status:'not_needed',reason:attributable(person)?'Published company email already found':'Outside the four priority escalation places',attempts:0,checkedAt:new Date().toISOString()};
       research.policyVersion=policy.version;
-      research.channels={...research.channels,company:{status:research.checks.official?.status==='complete'&&research.checks.public?.status==='complete'&&(!priorities.includes(person)||attributable(person)||research.checks.deep?.status==='complete')?'complete':'partial'},phone:{status:research.checks.phone?.status||'not_searched'},linkedin:{status:research.checks.linkedin?.status||'not_searched'},gmail:{status:research.checks.public?.status||'not_searched'}};
+      research.channels={...research.channels,company:{status:research.checks.official?.status==='complete'&&research.checks.public?.status==='complete'&&(!priorities.includes(person)||attributable(person)||research.checks.deep?.status==='complete')?'complete':'partial'},phone:{status:research.checks.phone?.status||'not_searched'},linkedin:{status:research.checks.linkedin?.status||'not_searched'},gmail:research.checks.gmail?{...research.checks.gmail}:{status:'not_searched'}};
       const checks=[...policy.requiredChecks.map(key=>research.checks[key]),...(priorities.includes(person)&&!attributable(person)?[research.checks.deep]:[])];
       person.emailResearch={...(person.emailResearch||{}),status:checks.every(row=>row?.status==='complete')?'complete':!successfulSearches&&failed?'unavailable':'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
       onProgress?.({label:`Verifying public contact evidence · ${people.filter(p=>p.emailResearch?.status==='complete').length}/${people.length} people checked`});

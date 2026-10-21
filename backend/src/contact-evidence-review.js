@@ -4,7 +4,7 @@ const clean=(value,limit=300)=>String(value??'').replace(/\s+/g,' ').trim().slic
 
 export function contactReviewInput(body={}){
   const company=clean(body.company,160);
-  const people=(Array.isArray(body.people)?body.people:[]).slice(0,10).map(row=>({id:clean(row.id,100),name:clean(row.name,160),role:clean(row.role,160),email:clean(row.email,180),email_source:clean(row.email_source,1000),checks:Object.fromEntries(['official','public','phone','linkedin','deep'].map(key=>[key,clean(row.checks?.[key]?.status,30)]))})).filter(row=>row.id&&row.name);
+  const people=(Array.isArray(body.people)?body.people:[]).slice(0,10).map(row=>({id:clean(row.id,100),name:clean(row.name,160),role:clean(row.role,160),email:clean(row.email,180),email_source:clean(row.email_source,1000),checks:Object.fromEntries(['official','public','phone','linkedin','gmail','deep'].map(key=>[key,clean(row.checks?.[key]?.status,30)]))})).filter(row=>row.id&&row.name);
   const evidence=(Array.isArray(body.evidence)?body.evidence:[]).slice(0,32).map(row=>({url:clean(row.url,1000),title:clean(row.title,240),excerpt:clean(row.excerpt,1800)})).filter(row=>/^https:\/\//i.test(row.url));
   return {company,people,evidence,quality:{depth:clean(body.quality?.depth,80),research_status:clean(body.quality?.research_status,40),checked_people:Math.min(10,Math.max(0,Number(body.quality?.checked_people)||0)),official_pages:Math.min(100,Math.max(0,Number(body.quality?.official_pages)||0))}};
 }
