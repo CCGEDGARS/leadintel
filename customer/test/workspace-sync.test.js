@@ -148,3 +148,13 @@ test('invalid coverage dates and competing source confirmation dates still requi
  const left=structuredClone(b),right=structuredClone(b);left.discovery.people[0].publicEmailSourceCheck.checkedAt='2026-10-20T11:00:00Z';right.discovery.people[0].publicEmailSourceCheck.checkedAt='2026-10-20T12:00:00Z';
  assert.equal(Sync.merge(b,left,right).safe,false,'email freshness remains part of its atomic evidence record');
 });
+
+test('concurrent profile replacement cannot escape an identity ambiguity hold',()=>{
+ const b=base();Object.assign(b.discovery.people[0],{publicLinkedinUrl:'https://linkedin.com/in/anna-buyer',linkedinIdentityEvidence:{url:'https://linkedin.com/in/anna-buyer',name:'Anna Buyer',organization:'Buyer'}});
+ const local=structuredClone(b),remote=structuredClone(b);
+ local.discovery.people[0].linkedinProfileReview={status:'review_required',reason:'Multiple public profiles match this identity',urls:['https://linkedin.com/in/anna-buyer','https://linkedin.com/in/anna-buyer-2'],checkedAt:'2026-10-21T10:00:00Z'};
+ remote.discovery.people[0].publicLinkedinUrl='https://linkedin.com/in/anna-buyer-2';remote.discovery.people[0].linkedinIdentityEvidence.url=remote.discovery.people[0].publicLinkedinUrl;
+ assert.equal(Sync.merge(b,local,remote).safe,false,'profile provenance and its hold must resolve as one identity record');
+ const unrelated=structuredClone(b);unrelated.discovery.people[0].publicEmail='anna@buyer.example';
+ const merged=Sync.merge(b,local,unrelated);assert.equal(merged.safe,true);assert.deepEqual(merged.payload.discovery.people[0].linkedinProfileReview,local.discovery.people[0].linkedinProfileReview);assert.equal(merged.payload.discovery.people[0].publicEmail,'anna@buyer.example');
+});

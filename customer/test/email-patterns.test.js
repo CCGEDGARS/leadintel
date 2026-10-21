@@ -102,12 +102,12 @@ test('Gmail discovery searches full name and company and accepts a sourced non-p
  assert.ok(queries.some(query=>query.startsWith('"Marta Berzina" "Example" ("@gmail.com" OR')));
  assert.deepEqual(Array.from(candidate.people[0].patternFindings,p=>p.email),['bluebird42@gmail.com']);
 });
-test('Gmail display uses Not found and never displays guessed Hunter addresses',()=>{
+test('Gmail display distinguishes unsearched from not-found and never displays invalid Hunter addresses',()=>{
  const ctx={...context,LeadIntelDiscovery:{normalizeLinkedInUrl:()=>''},esc:value=>String(value)};
  const start=source.indexOf('function buyerContactRows('),end=source.indexOf('function emailPatternCandidates(',start);
  vm.runInNewContext(`${source.slice(start,end)};globalThis.render=buyerContactRows;`,ctx);
  const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
- assert.match(absent,/<strong>Gmail<\/strong><span>Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
+ assert.match(absent,/data-contact-channel="gmail" data-contact-status="not_searched"/);assert.match(absent,/<strong>Gmail<\/strong><span><span class="buyer-field-state">Not checked/);assert.match(absent,/Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
  assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Saved listing · Unconfirmed/);
 });

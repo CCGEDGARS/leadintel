@@ -3900,6 +3900,59 @@
       "contains": [
         "confirm-contact-data=20261021-v1"
       ]
+    },
+    {
+      "id": "buyers-polish-entry-cache",
+      "url": "/customer/",
+      "contains": [
+        "buyer-polish=20261021-v1"
+      ],
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "buyers-compact-review-fields",
+      "url": "/customer/discovery-ui.js",
+      "contains": [
+        "buyer-public-summary",
+        "data-contact-channel=",
+        "View profile \u2197",
+        "officialPageReads",
+        "buyer-polish=20261021-v1"
+      ],
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "buyers-compact-review-style",
+      "url": "/customer/discovery.css",
+      "contains": [
+        ".buyer-public-summary",
+        ".buyer-field-evidence",
+        "[data-contact-status=\"incomplete\"]"
+      ],
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "buyers-public-profile-reconciliation",
+      "url": "/customer/discovery-engine.js",
+      "contains": [
+        "profileMatchVersion:1",
+        "report.officialPageReads",
+        "matchPublicLinkedInProfiles([person],sourceRows,candidate.company)"
+      ],
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "buyers-profile-conflict-persistence",
+      "type": "text",
+      "url": "/customer/workspace-sync.js",
+      "status": 200,
+      "contains": [
+        "'linkedinIdentityEvidence','linkedinProfileReview','opportunityScope'"
+      ]
     }
   ],
   "retry": {

@@ -26,7 +26,7 @@ test('Buyer recommendations carry a visible relevance score and matched buying f
  assert.match(engine,/buyerRelevanceScore:/);
  assert.match(engine,/matchedBuyerRole:/);
  assert.match(ui,/Priority/);
- assert.match(ui,/matched to/);
+ assert.match(ui,/Buying function: \$\{esc\(person\.matchedBuyerRole\)\}/);
 });
 test('generic company contacts are not rendered as person buyer evidence',()=>{
  assert.match(ui,/filter\(row=>row\.personId\|\|row\.personName\)/);
