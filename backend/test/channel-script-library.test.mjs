@@ -3,10 +3,56 @@ import {storageDb} from './workspace-storage-fixture.mjs';
 import {handleScriptLibraryRoute,platformScriptOwner,validateScript} from '../src/script-library-routes.js';
 import {validatePlatformOriginalScriptsWrite} from '../src/original-scripts-policy.js';
 import {sha256} from '../src/security.js';
+import {coreScriptSeeds} from '../src/core-script-seeds.js';
 async function fixture(){const DB=storageDb(),env={DB,ADMIN_EMAIL:'owner@example.test'};DB.raw.exec("INSERT INTO users(id,email,display_name,role) VALUES('customer','customer@test.com','Customer','owner');INSERT INTO workspace_members(workspace_id,user_id,role) VALUES('storage-w1','customer','owner');");for(const [id,token] of [['storage-owner','admin'],['customer','customer']])DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,'2099-01-01')").run(await sha256(token),id);return {env,DB,async call(path='',{method='GET',token='admin',workspace='storage-w1',body}={}){const r=await handleScriptLibraryRoute(new Request('https://app.test/api/script-library'+path+(path.includes('?')?'&':'?')+'workspace_id='+workspace,{method,headers:{Cookie:'leadintel_session='+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),env);return {status:r.status,data:await r.json()};}};}
 const core={channel:'phone',style:'professional',name:'Professional call',subject:'',body:'Hello {{firstName}}, this is {{sender}}.',expectedRevision:0};
 test('platform ownership cannot be obtained through workspace role or client payload',async()=>{const f=await fixture();assert.equal(platformScriptOwner({}, {email:'owner@example.test'}),false);assert.equal((await f.call()).data.canManage,true);assert.equal((await f.call('',{token:'customer'})).data.canManage,false);assert.equal((await f.call('/core/phone:professional',{token:'customer',method:'PUT',body:{...core,canManage:true,role:'owner'}})).status,403);assert.equal((await f.call('/core/phone:professional',{method:'PUT',body:core})).status,200);assert.equal((await f.call('/core/phone:professional',{token:'customer',method:'DELETE',body:{expectedRevision:1}})).status,403);assert.equal((await f.call('',{token:'customer',workspace:'storage-w2'})).status,403);});
 test('core edits preserve history, reject stale revisions and deletion never revives a bundled master',async()=>{const f=await fixture(),before=(await f.call()).data.core.find(r=>r.id==='email:professional');assert.equal(before.builtin,true);const deleted=await f.call('/core/email:professional',{method:'DELETE',body:{expectedRevision:0}});assert.equal(deleted.status,200);assert.equal((await f.call()).data.core.find(r=>r.id===before.id).deleted,true);const next={...before,name:'Approved version',body:'Hello {{firstName}}',expectedRevision:1};assert.equal((await f.call('/core/email:professional',{method:'PUT',body:next})).status,200);assert.equal((await f.call('/core/email:professional',{method:'PUT',body:next})).status,409);const row=(await f.call()).data.core.find(r=>r.id===before.id);assert.equal(row.body,next.body);assert.ok(row.history.some(r=>r.body===before.body));});
+test('legacy owner email body and subject survive catalogue reads, explicit saves and fresh reloads',async()=>{
+ const f=await fixture();
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const owner={channel:'email',style:seed.style,name:'Approved '+seed.style,body:'Owner approved body for {{firstName}}.',subject:'Owner approved subject',builtin:false,history:[]};
+  f.DB.raw.prepare('INSERT INTO core_script_registry(id,payload_json,revision,updated_by) VALUES(?,?,?,?)').run(seed.id,JSON.stringify(owner),6,'storage-owner');
+  const before=(await f.call()).data.core.find(row=>row.id===seed.id);
+  assert.equal(before.body,owner.body);assert.equal(before.subject,owner.subject);assert.equal(before.revision,6);
+  const next={...before,body:before.body+' Reviewed again.',subject:before.subject+' revised',expectedRevision:6};
+  const saved=await f.call('/core/'+seed.id,{method:'PUT',body:next});assert.equal(saved.status,200);
+  const reloaded=(await f.call()).data.core.find(row=>row.id===seed.id);
+  assert.equal(reloaded.body,next.body);assert.equal(reloaded.subject,next.subject);assert.equal(reloaded.revision,7);
+  assert.equal(reloaded.history.at(-1).body,owner.body);assert.equal(reloaded.history.at(-1).subject,owner.subject);
+  assert.equal((await f.call('/core/'+seed.id,{method:'DELETE',body:{expectedRevision:7}})).status,200);
+  const deleted=(await f.call()).data.core.find(row=>row.id===seed.id);
+  assert.equal(deleted.deleted,true);assert.equal(deleted.body,next.body);assert.equal(deleted.subject,next.subject);
+ }
+});
+test('migrated genuine email builtins can be saved and reloaded without losing history or owner subject edits',async()=>{
+ const f=await fixture(),seed=coreScriptSeeds.find(row=>row.id==='email:professional'),old={...seed,body:seed.previousBuiltinBodies.at(-1),masterVersion:'20261015-v4'};
+ f.DB.raw.prepare('INSERT INTO core_script_registry(id,payload_json,revision,updated_by) VALUES(?,?,?,?)').run(seed.id,JSON.stringify(old),2,'storage-owner');
+ const migrated=(await f.call()).data.core.find(row=>row.id===seed.id);
+ assert.equal(migrated.body,seed.body);assert.equal(migrated.subject,seed.subject);assert.equal(migrated.history.at(-1).body,old.body);
+ const subject='Owner approved after migration';
+ assert.equal((await f.call('/core/'+seed.id,{method:'PUT',body:{...migrated,subject,expectedRevision:2}})).status,200);
+ const reloaded=(await f.call()).data.core.find(row=>row.id===seed.id);
+ assert.equal(reloaded.body,seed.body);assert.equal(reloaded.subject,subject);assert.equal(reloaded.revision,3);
+ assert.ok(reloaded.history.some(row=>row.body===old.body),'Migration history remains after an explicit owner save');
+});
+test('name-only saves durably preserve unversioned owner copies matching old email builtin wording',async()=>{
+ const f=await fixture();
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const owner={channel:'email',style:seed.style,name:'Owner-approved copy',body:seed.previousBuiltinBodies[0],subject:seed.subject,builtin:false,history:[]};
+  f.DB.raw.prepare('INSERT INTO core_script_registry(id,payload_json,revision,updated_by) VALUES(?,?,?,?)').run(seed.id,JSON.stringify(owner),2,'storage-owner');
+  const before=(await f.call()).data.core.find(row=>row.id===seed.id);
+  assert.equal(before.body,owner.body);assert.equal(before.builtin,false);
+  const saved=await f.call('/core/'+seed.id,{method:'PUT',body:{...before,name:'Renamed owner copy',expectedRevision:2}});
+  assert.equal(saved.status,200);assert.equal(saved.data.script.builtin,false);
+  const reloaded=(await f.call()).data.core.find(row=>row.id===seed.id);
+  assert.equal(reloaded.body,owner.body,seed.id);assert.equal(reloaded.subject,owner.subject);
+  assert.equal(reloaded.name,'Renamed owner copy');assert.equal(reloaded.revision,3);assert.equal(reloaded.builtin,false);
+  const stored=JSON.parse(f.DB.raw.prepare('SELECT payload_json FROM core_script_registry WHERE id=?').get(seed.id).payload_json);
+  assert.equal(stored.builtin,false,'The owner-copy marker must be durable, not just returned in the PUT response');
+  assert.equal(reloaded.history.at(-1).body,owner.body);assert.equal(reloaded.history.at(-1).subject,owner.subject);
+ }
+});
 test('personal templates and primary preferences are isolated by user, workspace, and channel',async()=>{const f=await fixture(),id='personal-'+crypto.randomUUID();assert.equal((await f.call('/personal/'+id,{method:'PUT',body:{...core,channel:'phone'}})).status,200);assert.equal((await f.call('',{token:'customer'})).data.personal.length,0);assert.equal((await f.call('/primary/phone',{token:'customer',method:'PUT',body:{templateId:id,expectedRevision:0}})).status,400);assert.equal((await f.call('/primary/email',{method:'PUT',body:{templateId:id,expectedRevision:0}})).status,400);assert.equal((await f.call('/primary/phone',{method:'PUT',body:{templateId:id,expectedRevision:0}})).status,200);assert.equal((await f.call('/personal/'+id,{method:'PUT',body:core})).status,409);assert.equal((await f.call('',{workspace:'storage-w2'})).data.personal.length,0);assert.equal((await f.call('/personal/'+id,{method:'DELETE',body:{expectedRevision:1}})).status,200);assert.equal((await f.call('/primary/phone',{method:'PUT',body:{templateId:id,expectedRevision:1}})).status,400);});
 test('phone scripts save to exact CRM contact, survive reload, reject stale or foreign saves, and never mark contacted',async()=>{const f=await fixture();f.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,company_name,first_seen_at,last_seen_at,created_at,updated_at) VALUES('company','storage-w1','Company',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,created_at,updated_at) VALUES('person','storage-w1','company','Alice',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);");const body={companyId:'company',contactId:'person',message:'Hi Alice, this is Bob.',style:'original',expectedRevision:0};assert.equal((await f.call('/draft',{method:'PUT',body})).status,200);assert.equal((await f.call('/draft?companyId=company&contactId=person')).data.draft.message,body.message);assert.equal((await f.call('/draft',{method:'PUT',body})).status,409);assert.equal((await f.call('/draft?companyId=company&contactId=person',{token:'customer'})).data.draft,null);assert.equal((await f.call('/draft',{workspace:'storage-w2',method:'PUT',body})).status,409);const activity=f.DB.raw.prepare("SELECT * FROM crm_activities WHERE channel='phone'").all();assert.equal(activity.length,1);assert.equal(activity[0].activity_type,'script.saved');assert.equal(activity[0].contact_id,'person');assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='company'").get().pipeline_stage,null);});
 test('quota failure atomically preserves personal script revision and text',async()=>{const f=await fixture(),id='personal-'+crypto.randomUUID();await f.call('/personal/'+id,{method:'PUT',body:core});f.DB.raw.exec("UPDATE workspace_storage_accounts SET included_records_limit=records_bytes WHERE workspace_id='storage-w1'");const r=await f.call('/personal/'+id,{method:'PUT',body:{...core,body:'Much longer '.repeat(100),expectedRevision:1}});assert.ok(r.status>=400);const saved=(await f.call()).data.personal[0];assert.equal(saved.revision,1);assert.equal(saved.body,core.body);});

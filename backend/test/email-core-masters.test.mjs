@@ -35,13 +35,54 @@ test('flattened October 15 imports migrate with history while tombstones stay de
   else {assert.equal(item.body,seed.body);assert.equal(item.builtin,true);assert.ok(item.history.some(h=>h.body===old.body));}
  }
 });
-test('legacy protected database copies cannot override newly approved masters',async()=>{
+test('unrecognized unversioned email wording remains an owner revision',async()=>{
  const db={prepare(){return {all:async()=>({results:[{id:'email:professional',payload_json:JSON.stringify({channel:'email',style:'professional',name:'Old master',body:'Old email message',subject:'Old subject',history:[]}),revision:3}]})};}};
  const rows=await coreScripts(db);
  const item=rows.find(x=>x.id==='email:professional');
- assert.ok(item.body.includes(fixtures.professional));
+ assert.equal(item.body,'Old email message');
+ assert.equal(item.subject,'Old subject');
+ assert.equal(item.builtin,false);
  assert.equal(item.revision,3);
- assert.ok(item.history.some(h=>h.body==='Old email message'));
+ assert.deepEqual(item.history,[]);
+});
+
+test('explicit unversioned owner revisions never migrate even when their text matches an old builtin',async()=>{
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const saved={...seed,body:seed.previousBuiltinBodies[0],builtin:false};delete saved.masterVersion;
+  const db={prepare(){return {all:async()=>({results:[{id:seed.id,payload_json:JSON.stringify(saved),revision:7}]})};}};
+  const item=(await coreScripts(db)).find(row=>row.id===seed.id);
+  assert.equal(item.body,saved.body,seed.id);assert.equal(item.subject,saved.subject);assert.equal(item.revision,7);
+ }
+});
+
+test('an owner-edited subject preserves a recognized old body for every email style',async()=>{
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const saved={...seed,body:seed.previousBuiltinBodies[0],subject:'Owner approved subject',masterVersion:'20261015'};
+  const db={prepare(){return {all:async()=>({results:[{id:seed.id,payload_json:JSON.stringify(saved),revision:4}]})};}};
+  const item=(await coreScripts(db)).find(row=>row.id===seed.id);
+  assert.equal(item.subject,saved.subject,seed.id);assert.equal(item.body,saved.body);assert.equal(item.builtin,false);
+ }
+});
+
+test('recognized unversioned builtins upgrade to exact canonical sources with history',async()=>{
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const saved={...seed,body:seed.previousBuiltinBodies[0]};delete saved.masterVersion;
+  const db={prepare(){return {all:async()=>({results:[{id:seed.id,payload_json:JSON.stringify(saved),revision:3}]})};}};
+  const item=(await coreScripts(db)).find(row=>row.id===seed.id);
+  assert.equal(item.body,A.approvedPattern(seed.style));assert.equal(item.original,A.originalText(seed.style));
+  assert.equal(item.subject,seed.subject);assert.equal(item.masterVersion,seed.masterVersion);assert.equal(item.revision,3);
+  assert.equal(item.history.at(-1).body,saved.body);assert.equal(item.history.at(-1).subject,saved.subject);
+ }
+});
+
+test('unversioned email deletion tombstones retain their exact text and history',async()=>{
+ for(const seed of coreScriptSeeds.filter(row=>row.channel==='email')){
+  const saved={...seed,body:seed.previousBuiltinBodies[0],deleted:true,history:[{body:'Previous owner text',subject:'Previous subject',revision:1}]};delete saved.masterVersion;
+  const db={prepare(){return {all:async()=>({results:[{id:seed.id,payload_json:JSON.stringify(saved),revision:5}]})};}};
+  const item=(await coreScripts(db)).find(row=>row.id===seed.id);
+  assert.equal(item.deleted,true);assert.equal(item.body,saved.body);assert.equal(item.subject,saved.subject);
+  assert.deepEqual(item.history,saved.history);assert.equal(item.revision,5);assert.equal(item.builtin,false);
+ }
 });
 test('an owner-edited new-version master can remain primary',async()=>{
  const db={prepare(){return {all:async()=>({results:[{id:'email:friendly',payload_json:JSON.stringify({channel:'email',style:'friendly',name:'Owner updated',body:'Approved revision',subject:'Owner subject',masterVersion:'20261015'}),revision:4}]})};}};
