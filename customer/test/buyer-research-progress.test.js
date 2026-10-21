@@ -12,7 +12,7 @@ test('buyer research exposes five meaningful live phases',()=>{
 });
 
 test('search button communicates active research rather than looking disabled',()=>{
- assert.match(ui,/Researching decision-makers…/);
+ assert.match(ui,/Refreshing…/);
  assert.match(css,/\.buyer-research-spinner/);
  assert.match(css,/@keyframes buyerResearchSpin/);
 });

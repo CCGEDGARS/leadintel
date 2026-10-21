@@ -14,6 +14,7 @@ function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;"
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
 function persistMainStep(step){const main=readJson(MAIN_STORAGE_KEY);main.step=Number(step)||1;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
 function loadDelivery(){return LeadIntelDelivery.normalizeDeliveryState(readJson(DELIVERY_STORAGE_KEY));}
+window.addEventListener('leadintel:company-records-changed',event=>{if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;delivery=loadDelivery();renderAll();});
 function saveDelivery(){delivery=LeadIntelDelivery.normalizeDeliveryState(delivery);localStorage.setItem(DELIVERY_STORAGE_KEY,JSON.stringify(delivery));window.LeadIntelJourney?.refresh?.();}
 function outreachState(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}

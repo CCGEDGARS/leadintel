@@ -45,6 +45,18 @@ sqliteTest('unconfirmed Gmail research and query receipts round-trip through dur
   await assert.rejects(getCrmCompany(db,ctx('other-workspace'),saved.company.id),/not found/i);
 });
 
+sqliteTest('permanent company deletion cascades through contacts, research and activities while preserving another workspace',async()=>{
+  const db=new D1Db();
+  const saved=await upsertCrmCompany(db,ctx('w1'),candidate());
+  await upsertCrmCompany(db,ctx('w2'),candidate());
+  for(const table of ['crm_companies','crm_contacts','crm_intelligence','crm_activities'])assert.ok(db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id='w1'`).get().n>0,table);
+  await crm.deleteCrmCompany(db,ctx('w1'),saved.company.id);
+  for(const table of ['crm_companies','crm_contacts','crm_intelligence','crm_activities']){
+    assert.equal(db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id='w1'`).get().n,0,table);
+    assert.ok(db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id='w2'`).get().n>0,table);
+  }
+});
+
 sqliteTest('public buyer evidence survives CRM refresh without downgrading a verified email',async()=>{
   const db=new D1Db();
   const {company}=await upsertCrmCompany(db,ctx(),{...candidate(),contacts:[]});
