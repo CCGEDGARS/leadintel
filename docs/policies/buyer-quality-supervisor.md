@@ -10,7 +10,7 @@ Research coverage requires the current policy version, fresh successful official
 
 ## AI supervisor
 
-The existing workspace evidence-review service (Gemini first, then the configured active AI provider within one review deadline) reviews supplied sources, every retained identity, current roles, published addresses and mandatory-check coverage. It has no web access and cannot create verified contacts, claim tool execution or approve spending. Its response must identify every reviewed person. Missing identities, unavailable or malformed reviews, changed identity/role/email inputs and material evidence gaps prevent a supervised pass. Findings cite an existing input person and supplied source URL. Current conflicts still block the existing qualification and selection gates.
+The existing workspace evidence-review service (Gemini first, then configured active AI and OpenAI fallbacks within one 20-second review deadline) reviews supplied sources, every retained identity, current roles, published addresses and mandatory-check coverage. It has no web access and cannot create verified contacts, claim tool execution or approve spending. Its response must identify every reviewed person. Missing identities, unavailable or malformed reviews, changed identity/role/email inputs and material evidence gaps prevent a supervised pass. Findings cite an existing input person and supplied source URL. Current conflicts still block the existing qualification and selection gates.
 
 Manual research and the approved automatic workflow call the same review service and save a bounded report with provider, time, input signature, reviewed IDs, conflicts and sourced findings. Normalization and CRM snapshots preserve it. The UI reports unavailable/not assessed honestly. An unavailable supervisor stops selection of a new automatic recipient; already accepted saved contacts remain reusable under existing evidence gates.
 
@@ -21,3 +21,9 @@ Find email always enters the saved/public confirmation path, including when no a
 ## Completion evidence
 
 Require regression checks for public-first routing, incomplete and stale evidence, missing deep checks, per-person AI coverage, source-cited findings, credit gates, workspace changes, save/reload and correct recipient handoff. Run the full customer/backend suites, build and exact-SHA production proof. Separately inspect the authenticated customer result and report the real priority-email count. A pass in CI never substitutes for the requested buyer outcome.
+
+## Live acceptance correction
+
+The first authenticated check found a duplicate pipeline: mandatory person research was followed by legacy company-wide contact searches. This consumed the remaining deadline before AI supervision and could make the button look idle before the run ended. Known full identities now finish through the mandatory research pass and final AI review. The legacy acquisition path remains for unresolved identities. The action stays busy until final review/saving or cancellation. Regression coverage checks both boundaries.
+
+Live acceptance also found that a failed selected Gemini configuration could hide a configured but inactive OpenAI fallback. Review selection now tries that configured connection as well and records the actual provider and failed attempts.
