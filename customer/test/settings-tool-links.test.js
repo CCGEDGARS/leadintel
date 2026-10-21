@@ -15,7 +15,9 @@ async function mounted(provider="",authenticated=true){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- for(const id of ['openai','anthropic','gemini','apollo','firecrawl','hunter','calendly','personal-linkedin','zoom']){
+ for(const id of ['apollo','hunter'])assert.equal(w.document.querySelector(`[data-integration="${id}"], [data-service-provider="${id}"], [data-tool-links="${id}"]`),null,`${id} paid settings must be absent`);
+ assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Apollo|Hunter/);
+ for(const id of ['openai','anthropic','gemini','firecrawl','calendly','personal-linkedin','zoom']){
   const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=2,`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }

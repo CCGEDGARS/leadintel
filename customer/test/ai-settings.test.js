@@ -14,7 +14,7 @@ const css=fs.existsSync(cssPath)?fs.readFileSync(cssPath,'utf8'):'';
 const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8'):'';
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
-test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
+test('Customer V2 loads AI Settings plus the customer-owned service extension',()=>{
   assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1&app-dialogs=20261017-v1['"]/);
   assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
@@ -78,7 +78,7 @@ test('AI provider status clearly separates a connected credential from the activ
   assert.match(css,/\.ai-provider-status\.connected/,'connected providers must have a distinct badge treatment');
 });
 
-test('Apollo and Firecrawl use owner-controlled workspace service routes and editable customer-key fields',()=>{
+test('Service integrations use owner-controlled workspace routes and editable customer-key fields',()=>{
   assert.match(extension,/\/api\/integrations\/services\/status/);
   assert.match(extension,/\/api\/integrations\/services\/provider/);
   assert.match(extension,/data-service-key="\$\{config\.provider\}"/);
@@ -160,7 +160,7 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
 
 test('Settings clearly changes data integrations from platform-only to customer-owned without managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
-  assert.match(extension,/Connect Apollo, Firecrawl or Hunter with your own API key/);
+  assert.match(extension,/Connect Firecrawl with your own API key/);
   assert.match(extension,/No shared paid-service fallback is available/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
@@ -173,9 +173,9 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/Test all integrations/);
   assert.match(js,/id="integration-platform-grid"/);
   assert.match(js,/id="integration-communication-grid"/);
-  for(const name of ['Apollo.io','Firecrawl','Hunter','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
+  for(const name of ['Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/6 connected/);
+  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/5 connected/);
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{
@@ -215,15 +215,4 @@ test('Integration Control Centre offers Microsoft workspace access and Microsoft
   assert.match(js,/send-only/i,'Settings must explain that Microsoft cannot read the inbox');
   assert.match(css,/\.workspace-signin-options/,'the two sign-in choices must have responsive layout styling');
   assert.match(css,/\.microsoft-mail-actions/,'Microsoft mail controls must have dedicated layout styling');
-});
-
-
-test('Apollo key and connection actions remain outside collapsed advanced settings',()=>{
-  const controls=extension.slice(extension.indexOf('function serviceControls('),extension.indexOf('function calendlyCard('));
-  const advanced=controls.indexOf('<details class="apollo-settings-details"');
-  for(const selector of ['data-service-key=', 'data-service-action="save"', 'data-service-action="disconnect"']){
-    assert.ok(controls.indexOf(selector)>=0 && controls.indexOf(selector)<advanced, `${selector} must stay visible`);
-  }
-  assert.match(extensionCss,/grid-template-rows:subgrid/);
-  assert.match(extensionCss,/grid-row:span 5/);
 });

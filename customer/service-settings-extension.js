@@ -7,6 +7,8 @@ const SERVICE_PROVIDERS=Object.freeze([
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
   {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Manually approved email finding and additional delivery verification using your Hunter credits'}
 ]);
+// Legacy providers remain available to existing runtime policies, outside Settings.
+const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>config.provider==='firecrawl');
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
 let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
@@ -73,7 +75,7 @@ function connectGoogle(){
 function needsDecoration(){
   if(!settingsDrawerOpen())return false;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return false;
-  for(const config of SERVICE_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
+  for(const config of SETTINGS_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
   const health=document.getElementById('integration-health-summary');if(health&&!health.querySelector('.service-readiness-note'))return true;
   const google=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!signedIn()&&google&&!google.querySelector('[data-service-action="google-signin"]')&&!google.querySelector('[data-settings-signin="google"]'))return true;
   const communication=document.getElementById('integration-communication-grid');if(communication&&!communication.querySelector('[data-integration="calendly"]'))return true;
@@ -88,9 +90,9 @@ function decorateReadiness(){
   const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
   const deliveryReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good, #integration-communication-grid [data-integration="microsoft-mail"] .integration-status.good'));
   const observedFirecrawl=window.LeadIntelIntegrationHealth?.firecrawl;
-  const serviceReady=SERVICE_PROVIDERS.filter(config=>config.provider!=='hunter'&&providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
+  const serviceReady=SETTINGS_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
   const calendlyReady=Boolean(calendlyStatus.connected);
-  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
+  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/5 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
 }
 function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
@@ -102,8 +104,8 @@ function decorateCards(){
   if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Apollo, Firecrawl or Hunter with your own API key. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
-  for(const config of SERVICE_PROVIDERS){
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Firecrawl with your own API key. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
+  for(const config of SETTINGS_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
