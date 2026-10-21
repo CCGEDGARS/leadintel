@@ -667,3 +667,21 @@
 
 /* Company research precedes buyer selection. */
 .company-dossier{margin:18px 0;padding:20px;border:1px solid #cfe0d9;border-radius:16px;background:#f5faf7;color:#203d32}.company-dossier h4{margin:0 0 8px;font-size:20px}.company-dossier p{line-height:1.5;margin:8px 0}.company-dossier ul{padding-left:22px}.company-dossier li{margin:8px 0;overflow-wrap:anywhere}.company-dossier summary{cursor:pointer;font-weight:700;padding:10px 0}.company-dossier blockquote{font-size:13px;border-left:3px solid #cfe0d9;margin:8px 0;padding-left:12px;color:#526b60}.company-dossier a{white-space:nowrap}.company-dossier-settings select{width:100%;padding:10px}.company-dossier-settings{border:1px solid #cfe0d9;border-radius:12px;padding:16px;margin-bottom:16px}
+
+/* Buyers: company controls, compact context, priority contacts, optional detail. */
+.selected-prospect-header-controls{display:grid;justify-items:end;gap:10px;max-width:100%;min-width:0}
+.selected-prospect-header-controls .selected-prospect-actions{padding:0;border:0}
+.selected-prospect-header-controls .selected-prospect-signal{white-space:normal;text-align:right}
+.selected-prospect-row>.company-dossier{margin:0;padding:16px 20px}
+.company-dossier>header{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.company-dossier>header h4{margin:0;font-size:18px}
+.company-dossier-status{font-size:12px;color:#526b60}
+.company-dossier>ul{margin:10px 0;font-size:13px;line-height:1.5}
+.company-dossier>details>summary{padding:4px 0;font-size:13px}
+.buyer-other-contacts,.buyer-research-details{border-top:1px solid #e3ece7;margin-top:18px;padding-top:14px}
+.buyer-other-contacts>summary,.buyer-research-details>summary{cursor:pointer;font-size:14px;font-weight:700;color:#274a3a;padding:5px 0}
+.buyer-other-contacts[open]>.buyer-shortlist-group{margin-top:16px}
+.buyer-research-details{margin-top:0;font-size:13px;min-width:0}
+.buyer-research-details>.buyer-quality-supervisor{margin:18px 0}
+.buyer-research-details summary:focus-visible,.buyer-other-contacts summary:focus-visible,.company-dossier summary:focus-visible{outline:3px solid #167363;outline-offset:3px;border-radius:4px}
+@media(max-width:620px){.selected-prospect-header-controls{justify-items:start;width:100%}.selected-prospect-header-controls .selected-prospect-signal{text-align:left}.selected-prospect-header-controls .selected-prospect-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.selected-prospect-header-controls .selected-prospect-actions button{width:100%;padding:10px 8px;min-width:0}.selected-prospect-row>.company-dossier{padding:14px}}

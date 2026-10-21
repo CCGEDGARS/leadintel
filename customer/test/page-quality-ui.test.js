@@ -42,3 +42,10 @@ test('workspace loading completion retries the current page procedure without au
 test('a failed readiness engine load blocks critical clicks while leaving editing available',()=>{
  const h=harness(false);let approvals=0,edits=0;h.w.document.getElementById('approve-profile').addEventListener('click',()=>approvals++);const edit=h.w.document.createElement('button');edit.id='mw-edit-message';edit.addEventListener('click',()=>edits++);h.w.document.body.appendChild(edit);h.w.document.getElementById('approve-profile').click();edit.click();assert.equal(approvals,0);assert.equal(edits,1);assert.match(h.w.document.querySelector('[data-page-quality]').textContent,/Blocked.*could not load/);h.close();
 });
+
+test('reviewing buyer quality opens collapsed research ancestors before focusing the check',async()=>{
+ const h=harness(),d=h.w.document;d.querySelector('.step-view.active').dataset.step='5';h.w.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
+ const research=d.createElement('details');research.className='buyer-research-details';research.innerHTML='<summary>Research details</summary><section class="buyer-quality-supervisor" tabindex="-1">Needs attention</section>';d.body.append(research);
+ h.api.register('buyers',{read:()=>({loaded:true,checks:[h.api.check('buyer-quality','Buyer quality',false,'Review buyer quality.',{target:{step:5,selector:'.buyer-quality-supervisor'}})]})});await h.api.open('buyers');
+ d.querySelector('[data-quality-resolve]').click();assert.equal(research.open,true);assert.equal(d.activeElement,d.querySelector('.buyer-quality-supervisor'));h.close();
+});
