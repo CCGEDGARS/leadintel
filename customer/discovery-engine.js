@@ -1282,7 +1282,8 @@
   }
 
   function hasFullBuyerName(value){
-    const parts=clean(value).split(/\s+/);
+    const name=clean(value);if(/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
+    const parts=name.split(/\s+/);
     // Initials can be middle names, but cannot stand in for either the first
     // name or surname. Keep partial identities out of contact generation.
     const substantive=part=>(part.match(/\p{L}/gu)||[]).length>=2;
@@ -1694,6 +1695,11 @@
     const report=options.accountability||createBuyerResearchAccountability(),people=(candidate.people||[]).slice(0,policy.maxPeople),pages=new Map((options.rows||[]).filter(row=>row.sourceRead===true&&String(row.markdown||row.content||'').trim()).slice(-policy.maxSourcePages).map(row=>[row.url,Promise.resolve(row)])),sourceRows=options.rows||[],started=Date.now(),duration=Math.min(policy.maxDurationMs,options.maxDurationMs||policy.maxDurationMs);let sourceReads=0;
     candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report};report.version=policy.version;report.status='running';report.totalPeople=people.length;
     Object.assign(report,{startedAt:new Date().toISOString(),completedAt:'',stopReason:'',gaps:[],reusedChecks:0,officialPages:0,checkedPeople:0,deepPeople:0});
+    // Reset coverage before a deadline can stop the first person from starting.
+    if(options.force&&!signal?.aborted)for(const person of people){
+      if(person.contactResearch)person.contactResearch={...person.contactResearch,policyVersion:'',checks:Object.fromEntries(Object.entries(person.contactResearch.checks||{}).map(([key,row])=>[key,{...row,status:'not_searched',checkedAt:'',reason:'Explicit refresh pending',queryLog:(row.queryLog||[]).map(entry=>({...entry,status:'not_searched',checkedAt:'',resultCount:0,reason:''}))}])),channels:Object.fromEntries(Object.keys(person.contactResearch.channels||{}).map(key=>[key,{status:'not_searched'}]))};
+      person.emailResearch={...(person.emailResearch||{}),status:'partial',checkedAt:''};
+    }
     const guard=async()=>{if(signal?.aborted)throw Object.assign(new Error('Research canceled'),{code:'CANCELED'});if(Date.now()-started>=duration)throw Object.assign(new Error('Contact research time budget reached'),{code:'TIME_BUDGET'});await options.guard?.();};
     const bounded=async operation=>{
       await guard();let timer,cancel;
