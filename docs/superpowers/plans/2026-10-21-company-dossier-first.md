@@ -1,0 +1,44 @@
+# Company Dossier First Implementation Plan
+
+> For agentic workers: execute inline using executing-plans, with test-first checks.
+
+**Goal:** Put two-provider sourced company research before buyer selection in both flows.
+**Architecture:** Shared portable dossier evidence contract; workspace-scoped backend orchestration and settings; existing discovery and CRM integration.
+**Tech Stack:** JavaScript, Cloudflare Workers/D1, existing provider adapters and browser modules.
+**Spec:** docs/superpowers/specs/2026-10-21-company-dossier-first.md
+
+## Global Constraints
+- Preserve customer ownership of credentials, source evidence and per-person mandatory contact checks.
+- Two distinct providers execute live search; an offline review cannot substitute.
+- No fabricated identities/emails, paid reveals or sending.
+- Preserve workspace isolation, cancellation, CRM persistence and exact-SHA release proof.
+
+## Review Focus
+- A provider returns sources but no readable passages: partial, never confirmed.
+- Same name has conflicting titles/dates: retain conflict, prevent silent stale role replacement.
+- Workspace changes during research: no stale state or writes.
+- Only one connected provider: fail before any paid call.
+- Refresh fails after prior success: keep prior dossier and expose failure.
+
+### Task 1: Shared evidence contract and regression fixtures
+- [x] Write failing tests for citations, dates, prose identities, reconciliation and normalization.
+- [x] Implement customer/company-dossier.js and backend provider adapter; test all three providers.
+- [x] Run focused tests; commit.
+### Task 2: Workspace orchestration and settings
+- [x] Write failing tests for primary/secondary/failover independence, single-provider preflight and auth.
+- [x] Implement backend/src/company-dossier.js, D1 settings migration and AI routes.
+- [x] Run backend suite; commit.
+### Task 3: Journey, UI and persistence
+- [x] Write failing tests for dossier-before-buyers, CRM reload, settings and cancellation.
+- [x] Integrate manual and automatic flows, compact dossier and Settings overrides; retain all contact gates.
+- [x] Run complete customer/backend tests and static build; commit.
+### Task 4: Review, publish and live verification
+- [x] Review whole diff independently; fix material findings with regressions.
+- [ ] Publish branch/PR, CI, merge and exact-SHA production proof.
+- [ ] Fresh authenticated Stegra acceptance, persistence and downstream checks; report exact outcome.
+
+## Verification checkpoint
+- Independent review completed; seven material findings corrected: successful refresh retention, identity-level conflict holds, person-specific role/date attribution, future assignments, provider resume, seller/role race guards, and Gemini objective budgeting.
+- Customer suite: 3,395 passed; backend suite: 761 passed. Static build and Worker dry run passed.
+- Git main fork confirmed at bc46b5f1545ff27179674988052ed41531f08bea. User explicitly requested integration and repository instructions require release and authenticated acceptance; proceed through PR and CI without another integration-choice prompt.
+- Release proof and authenticated research outcomes remain separate acceptance gates.

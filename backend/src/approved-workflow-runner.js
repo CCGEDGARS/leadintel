@@ -1,3 +1,5 @@
+import {researchWorkspaceDossier} from './company-dossier.js';
+import '../../customer/company-dossier-ui.js';
 import {readOwnedPayload} from './workspace-record-store.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
@@ -75,7 +77,7 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),research_snapshot:{...(detail.intelligence?.research_snapshot||{}),buyerResearch:research}});await guard();return true;
 }
 
-async function buyer(env,workspaceId,candidate,config,guard,userId){
+async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
   if(company&&company.lifecycle_status!=='prospect')return null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
@@ -83,10 +85,15 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   const priorRecords=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].filter(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
   const priorPeople=priorRecords.flatMap(item=>[...(item.buyerDiscovery?.pool||[]),...(item.people||[])]);
   const accountability=discovery.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability};
+  const dossierPlan=discovery.buyerResearchPlan(candidate,{...seller,decisionMakers:config.buyers.roles.join('; ')});
+  const companyDossier=await researchDossier(env,workspaceId,{company:candidate.company,domain:candidate.domain,seller:JSON.parse(discovery.buyerFitContext(seller)),roles:dossierPlan.roles,formulas:dossierPlan.queries,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||''},{guard});
+  await guard();candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier};
+  if(companyDossier.status!=='complete'){candidate.buyerDiscovery.researchIncomplete=true;return null;}
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard,accountability);
   const profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
-  let pool=discovery.mergeBuyerPool(priorPeople,research.people,profile);
-  candidate.buyerDiscovery={coverageFollowUp:research.coverageFollowUp,researchVersion:"20261004-research-state-v1",target:20,found:pool.length,pool,providerStatus:research.providerStatus,resultDiagnostics:research.resultDiagnostics,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
+  research.rows.push(...globalThis.LeadIntelCompanyDossierUi.evidenceRows(companyDossier));
+  let pool=discovery.mergeBuyerPool(priorPeople,[...research.people,...globalThis.LeadIntelCompanyDossier.buyers(companyDossier,candidate.company)],profile);
+  candidate.buyerDiscovery={companyDossier,coverageFollowUp:research.coverageFollowUp,researchVersion:"20261004-research-state-v1",target:20,found:pool.length,pool,providerStatus:research.providerStatus,resultDiagnostics:research.resultDiagnostics,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
   // alongside public research; no email/phone reveal or waterfall flags are requested here.
@@ -193,7 +200,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
 
   return null;
 }
-export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch}){
+export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch,researchDossier=researchWorkspaceDossier}){
   await guard();const profile={...context.profile,website:context.website||context.profile?.website,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
@@ -255,7 +262,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
+    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,context.profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
     return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};

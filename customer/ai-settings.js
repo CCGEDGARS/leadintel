@@ -53,7 +53,7 @@ function injectUi(){
       </section>
       <section class="ai-settings-section" aria-labelledby="ai-provider-heading">
         <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Main engine means LeadIntel uses that provider for normal AI generation. Connected Gemini can separately review research/contact evidence, supply grounded search when primary evidence is missing, and read sparse or scanned source PDFs. Specialist use consumes that provider’s API credits.</p></div></div>
-        <div class="ai-provider-grid" id="ai-provider-grid"></div>
+        <div id="company-research-settings"></div><div class="ai-provider-grid" id="ai-provider-grid"></div>
       </section>
       <section class="ai-settings-section" aria-labelledby="platform-integration-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Data & intelligence</span><h3 id="platform-integration-heading">Platform integrations</h3><p>Connect your own research and enrichment accounts. Each user pays their provider directly.</p></div></div>
@@ -91,6 +91,7 @@ function injectUi(){
   document.getElementById('personal-linkedin-save')?.addEventListener('click',()=>savePersonalLinkedIn(false));
   document.getElementById('personal-linkedin-remove')?.addEventListener('click',()=>savePersonalLinkedIn(true));
   document.getElementById('test-all-integrations')?.addEventListener('click',testAllIntegrations);
+  settingsDrawer.addEventListener('click',saveDossierSettings);
   document.addEventListener('keydown',event=>{const help=document.getElementById('microsoft-connection-help');if(help&&!help.hidden){if(event.key==='Escape'){event.preventDefault();closeMicrosoftHelp();}else if(event.key==='Tab'){const controls=[...help.querySelectorAll('summary,button:not(:disabled),textarea,a[href]')],index=controls.indexOf(document.activeElement);if(event.shiftKey&&index<=0){event.preventDefault();controls.at(-1)?.focus();}else if(!event.shiftKey&&(index<0||index===controls.length-1)){event.preventDefault();controls[0]?.focus();}}return;}if(event.key==='Escape')closeDrawer();});
   render();
 }
@@ -180,8 +181,15 @@ function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
   if(!settingsDrawerOpen()){unmountCredentialControls();return;}
   renderActiveToolsSummary();
+  const researchHost=document.getElementById('company-research-settings');if(researchHost)researchHost.innerHTML=window.LeadIntelCompanyDossierUi?.settingsHtml(status.providers,status.research_settings||{},!signedIn()||!isOwner())||'';
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
+}
+async function saveDossierSettings(event){
+ const button=event.target.closest('#save-dossier-settings');if(!button||button.disabled)return;
+ const workspaceId=workspace()?.id,primary=document.getElementById('dossier-main-provider')?.value||'',secondary=document.getElementById('dossier-second-provider')?.value||'';
+ if(primary&&primary===secondary){toast('Choose a different second researcher.');return;}button.disabled=true;
+ try{const {response,payload}=await api('/api/integrations/ai/research-settings',{method:'PUT',body:JSON.stringify({primary,secondary})});if(workspace()?.id!==workspaceId)return;if(!response.ok)throw Error(payload.error||'Research settings could not be saved');status.research_settings=payload;render();toast('Company research settings saved');}catch(error){if(workspace()?.id===workspaceId){toast(error.message);button.disabled=false;}}
 }
 function handleModelModeChange(event){
   const select=event.target.closest('[data-ai-model-mode]');if(!select)return;

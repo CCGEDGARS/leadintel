@@ -1,5 +1,6 @@
 import {followUpContext,prepareFollowUp,validateFollowUp,followUpToken,saveFollowUp} from './follow-up-assistant.js';
 import {searchWorkspaceResearch} from './ai-task-routing.js';
+import {researchWorkspaceDossier,dossierSettings} from './company-dossier.js';
 import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} from './writing-assistant.js';
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
 import {sha256,cookieValue} from './security.js';
@@ -91,7 +92,7 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/follow-up-assistant/')||path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
+  const known=path.startsWith('/api/follow-up-assistant/')||path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/company-dossier'||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path.startsWith('/api/follow-up-assistant/')){
@@ -121,10 +122,31 @@ export async function handleAiRoute(request,env,cors={}){
     }catch(cause){return error(String(cause?.message||'Follow-up request failed').slice(0,180),cause.status||502,cors);}
   }
 
+  if(path==='/api/integrations/ai/research-settings'){
+    const access=await requireMember(request,env,workspaceId,request.method==='GET'?[]:['owner']);if(access.error)return error(access.error,access.status,cors);
+    try{
+      if(request.method==='GET')return json(await dossierSettings(env,workspaceId),200,cors);
+      if(request.method!=='PUT')return error('Method not allowed',405,cors);
+      const body=await request.json().catch(()=>null);if(!body)return error('Research settings required',400,cors);
+      const primary=body.primary||null,secondary=body.secondary||null;
+      if(primary&&!AI_PROVIDERS.includes(primary)||secondary&&!AI_PROVIDERS.includes(secondary)||primary&&primary===secondary)return error('Select two different supported researchers or Automatic.',400,cors);
+      await env.DB.prepare('INSERT INTO workspace_research_settings(workspace_id,primary_provider,secondary_provider) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET primary_provider=excluded.primary_provider,secondary_provider=excluded.secondary_provider,updated_at=CURRENT_TIMESTAMP').bind(workspaceId,primary,secondary).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_settings_saved',provider:primary||'automatic',metadata:{secondary:secondary||'automatic'}});
+      return json({saved:true,primary_provider:primary,secondary_provider:secondary},200,cors);
+    }catch{return error('Research settings storage unavailable',503,cors);}
+  }
+  if(path==='/api/ai/company-dossier'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null);if(!body?.company||JSON.stringify(body).length>16000)return error('Bounded company research context required',400,cors);
+    try{const result=await researchWorkspaceDossier(env,workspaceId,body,{signal:request.signal});return json(result,200,cors);}
+    catch(cause){return error(String(cause.message||'Company dossier unavailable').slice(0,220),cause.status||502,cors);}
+  }
+
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
     try{
       const result=providerStatus(await integrationRows(env,workspaceId),access.member.role);
+      try{result.research_settings=await dossierSettings(env,workspaceId);}catch{result.research_settings={unavailable:true};}
       await Promise.all(result.providers.map(async row=>{if(row.configured)row.credit_issue=await providerCreditIssue(env,workspaceId,row.provider);}));
       return json(result,200,cors);
     }catch{return error('AI integration storage is not ready',503,cors);}

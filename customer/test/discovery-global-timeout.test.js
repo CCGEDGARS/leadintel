@@ -25,6 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
   source = source
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
     .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MIN_MS=${testRunTimeout};`)
+    .replace('Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*18,450000)', 'Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*18,1000)')
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
@@ -78,6 +79,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     CustomEvent: class CustomEvent {}
   };
   context.window = context;
+  require('./helpers/dossier-boundary.cjs')(context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../first-party-research.js'),'utf8'),context);
   // Existing buyer fixtures represent a previously verified company; provide its readable official page.
   const readWebsite=context.LeadIntelFirstPartyResearch.collectWebsiteEvidence;
@@ -512,6 +514,7 @@ test('editing buyer roles during company verification cannot be overwritten by t
  context.LeadIntelFirstPartyResearch.collectWebsiteEvidence=()=>new Promise(resolve=>{finishVerification=resolve;});
  context.__setDiscovery({selectedProspects:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',buyerRolesChanged:true,people:[{id:'old',name:'Mika Example',title:'Procurement Director',organization:'Northstar',publicNameUrl:'https://linkedin.com/in/mika-example',publicLinkedinUrl:'https://linkedin.com/in/mika-example'}]}]});
  const search=context.__findPotentialDecisionMakers('northstar.com');
+ for(let i=0;i<20&&!finishVerification;i++)await new Promise(resolve=>setImmediate(resolve));
  const candidate=context.__discoveryState().selectedProspects[0];candidate.buyerRoles='Engineering Director';candidate.buyerRolesChanged=true;
  finishVerification({pages:[{url:'https://northstar.com/',text:'Northstar operates an industrial manufacturing facility with production and engineering capabilities.',fetchedAt:new Date().toISOString()}]});
  assert.equal(await search,false);
@@ -738,7 +741,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,7); // Counts person search requests; page reads and the three official scans are handled separately.
+  assert.equal(searches,11); // Includes four grounded retries after empty public results; counts person search requests; page reads and the three official scans are handled separately.
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });
@@ -2133,4 +2136,19 @@ test('rendering the buyer cards calculates the shared full quality report once p
  const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'q'+i,name:'Quality Person'+i,title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:new Date().toISOString(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:new Date().toISOString()}}));
  context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:people.map(p=>p.title)}]);
  assert.equal(assessments,1);
+});
+
+
+test('seller changes during dossier research discard late contact results and clear loading',async()=>{
+ let release,body,searches=0;
+ const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  if(String(url).includes('/company-dossier')){body=JSON.parse(options.body);return new Promise(resolve=>{release=()=>resolve({ok:true,json:async()=>require('../company-dossier.js').reconcile([{provider:'openai',webSearch:true,status:'complete',people:[],facts:[],channels:[]},{provider:'gemini',webSearch:true,status:'complete',people:[],facts:[],channels:[]}],body)});});}
+  searches++;throw Error('Contact search must not start for stale context');
+ }});
+ context.LeadIntelCompanyDossierUi={...require('../company-dossier-ui.js'),render:()=>''};
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:['Procurement Director'],people:[{id:'a',name:'Alex Smith',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+ const work=context.__findPublicProspectContacts('example.com');
+ for(let i=0;i<20&&!release;i++)await new Promise(resolve=>setImmediate(resolve));
+ assert.ok(release);const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.profile.priorityOffers='Different confirmed offer';context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));release();await work;
+ const candidate=context.__discoveryState().selectedProspects[0];assert.equal(searches,0);assert.equal(candidate.buyerDiscovery?.companyDossier,null);assert.equal(candidate.publicContactStatus,'error');
 });
