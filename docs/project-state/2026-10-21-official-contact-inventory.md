@@ -14,3 +14,6 @@ Authenticated live verification on the then-selected SKF company exposed an addi
 
 
 A further source acquisition check reproduced a rendering race on SKF's canonical group-management page: an immediate Firecrawl response contained only navigation and introductory text, while a fresh extraction with a two-second render wait contained the twelve staff cards. Policy v3 requests that bounded wait and a fresh Firecrawl extraction after direct reading fails. Empty completed inventories are never reused as a thirty-day no-contact cache. Regression tests protect the actual provider options, extraction receipts and empty-cache retry.
+
+
+The authenticated SKF refresh exhausted45seconds after9readpages without identities. Inspection found that the shared scanner discarded pending URLs and restarted the crawl on retry. Policyv4 preserves and prioritizes pending sources, accepts validated official source URLs first, shows all actual read-source links, and raises the bounded official scan deadline to90seconds. The source-first control allows evidence already found through research or supplied by the user to be read directly; all company, person, email and approval gates remain intact.

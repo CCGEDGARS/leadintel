@@ -104,3 +104,22 @@ test('a completed empty inventory is rechecked instead of suppressing new eviden
  await D.runOfficialContactResearch(candidate,{search:async()=>{searches++;return pages.map(p=>({url:p.url}));},readPage:async url=>pages.find(p=>p.url===url)||{markdown:'Official company homepage'}});
  assert.equal(searches,3);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,7);
 });
+test('a supplied official page is read before the homepage and unrelated source URLs are rejected',async()=>{
+ const candidate={...company},read=[];
+ await D.runOfficialContactResearch(candidate,{seedUrls:['https://unrelated.example/team',pages[0].url],search:async()=>[],readPage:async url=>{read.push(url);return pages.find(p=>p.url===url)||{markdown:'Company homepage'};}});
+ assert.equal(read[0],pages[0].url);assert.ok(!read.some(url=>url.includes('unrelated')));assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,3);
+});
+test('a deadline retains unfinished official URLs and resumes them before restarting the website crawl',async()=>{
+ const candidate={...company};let stuck=true;const requested=[];
+ await D.runOfficialContactResearch(candidate,{maxDurationMs:15,search:async()=>[{url:pages[0].url}],readPage:async url=>{if(url===pages[0].url)return new Promise(()=>{});return {markdown:'Official company website'};}});
+ assert.ok(candidate.buyerDiscovery.officialContactInventory.research.pendingUrls.includes(pages[0].url));
+ await D.runOfficialContactResearch(candidate,{search:async()=>[],readPage:async url=>{requested.push(url);return pages.find(p=>p.url===url)||{markdown:'Official company website'};}});
+ assert.equal(requested[0],pages[0].url);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,3);
+});
+test('official source controls reject foreign URLs before research and retain the selected page evidence',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),candidate={...company,publicContactStatus:'idle'},state={selectedProspects:[candidate]},b={workspace:{id:'w1'},session:{user:{id:'u1'}}},reads=[];
+ const ctx={URL,AbortController,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,selectedProspects:()=>[candidate],discovery:state,bridge:()=>b,crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,saveDiscovery:()=>{},renderAll:()=>{},showToast:()=>{},searchBuyerPublicPages:async()=>[],fetchFirecrawlBuyerResearch:async(_,body)=>{reads.push(body.url);return {ok:true,json:async()=>({data:pages.find(p=>p.url===body.url)||{markdown:'Official homepage'}})};}};
+ vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function refreshOfficialCompanyContacts('),source.indexOf('function companyContactDossierHtml(')),ctx);
+ for(const sourceUrl of ['https://unrelated.example/team','javascript:alert(1)','https://name:secret@atlascopcogroup.com/team'])assert.equal(await ctx.refreshOfficialCompanyContacts(company.domain,{sourceUrl}),false);
+ assert.equal(reads.length,0);assert.equal(await ctx.refreshOfficialCompanyContacts(company.domain,{sourceUrl:pages[0].url}),true);assert.equal(reads[0],pages[0].url);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,3);assert.equal(candidate.publicContactStatus,'idle');
+});
