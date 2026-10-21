@@ -2030,8 +2030,8 @@
   function discoverCompanyContacts(rows=[],candidate={},previous=[]){
     const official=rows.filter(row=>row.sourceRead===true&&companyIdentityDomain(row.url||row.metadata?.sourceURL)===companyIdentityDomain(candidate.domain));
     const staff=tracePublicBuyers(official,candidate.company,{companyDomain:candidate.domain,collectAllCompanyContacts:true}).people;
-    const inventory=officialCompanyContactInventory(official,candidate);
-    const matched=matchPublicBuyerDetails(mergeCompanyContacts(staff,inventory.contacts,candidate),official,candidate.domain,candidate.company);
+    const inventory=officialCompanyContactInventory(official,candidate),cached=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),age=Date.now()-Date.parse(cached?.checkedAt||''),cachedContacts=cached?.research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&age>=0&&age<30*86400000?cached.contacts:[];
+    const matched=matchPublicBuyerDetails(mergeCompanyContacts(staff,[...cachedContacts,...inventory.contacts],candidate),official,candidate.domain,candidate.company);
     // Attribute first-name work addresses only inside an exact named staff card.
     // A page-level name/email co-occurrence is insufficient in a shared directory.
     for(const person of matched)for(const row of official){

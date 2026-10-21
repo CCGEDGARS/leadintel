@@ -91,3 +91,10 @@ test('rendered portrait headings separate inline full names and titles without r
  const result=D.officialCompanyContactInventory([page('management','## ![portrait-wrong-name](https://cdn.example/photo.png)       Rickard    Gustafson    President and Chief Executive Officer\n\n## ![portrait](https://cdn.example/photo2.png)       Susanne    Larsson    Chief Financial & Sustainability Officer and Senior Vice President Group Finance & Sustainability')],company);
  assert.deepEqual(result.contacts.map(p=>[p.name,p.title]),[['Rickard Gustafson','President and Chief Executive Officer'],['Susanne Larsson','Chief Financial & Sustainability Officer and Senior Vice President Group Finance & Sustainability']]);
 });
+
+test('a fresh cached inventory seeds buyer discovery even when raw source bodies were released',()=>{
+ const inventory=D.officialCompanyContactInventory(pages,company);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete'};
+ const candidate={...company,buyerDiscovery:{officialContactInventory:inventory}},contacts=D.discoverCompanyContacts([],candidate);
+ assert.equal(contacts.length,7);assert.ok(contacts.some(p=>p.name==='Vagner Rego'));assert.ok(contacts.some(p=>p.name==='Daniel Althoff'));
+ inventory.checkedAt=new Date(Date.now()-31*86400000).toISOString();assert.equal(D.discoverCompanyContacts([],candidate).length,0);
+});
