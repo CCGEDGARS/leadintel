@@ -61,8 +61,8 @@ async function boundedBuyerReview(operation,parent,timeoutMs){
   try{return await Promise.race([Promise.resolve().then(()=>operation(controller.signal)),stopped]);}finally{clearTimeout(timer);parent?.removeEventListener('abort',cancel);controller.abort();}
 }
 
-export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,userId=null,generate=generateText,maxDurationMs=20000}={}){
-  const started=Date.now(),duration=Math.max(1,Math.min(20000,maxDurationMs)),trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
+export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,userId=null,generate=generateText,maxDurationMs=45000}={}){
+  const started=Date.now(),duration=Math.max(1,Math.min(45000,maxDurationMs)),trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
   try{
     if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
     const configured=(await Promise.all([geminiIntegration(env,workspaceId),openAiIntegration(env,workspaceId),activeIntegration(env,workspaceId)])).filter(Boolean),choices=[...new Map(configured.map(row=>[row.provider,row])).values()].slice(0,2),seen=new Set();
@@ -72,7 +72,7 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,
       try{
         if(signal?.aborted)break;
         const remaining=duration-(Date.now()-started);if(remaining<=0)break;
-        const hasFallback=choices.some(row=>!seen.has(row.provider)),attemptMs=hasFallback?Math.min(6000,Math.max(1,remaining*.35)):remaining;
+        const hasFallback=choices.some(row=>!seen.has(row.provider)),attemptMs=hasFallback?Math.min(20000,Math.max(1,remaining*.4)):remaining;
         result=await boundedBuyerReview(async attemptSignal=>{
           const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
           return reviewContactEvidence({body,apiKey,model:integration.model,provider:integration.provider,signal:attemptSignal,generate});
