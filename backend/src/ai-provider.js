@@ -211,6 +211,11 @@ async function verifyAnthropicCredential(options,fetchImpl){
 
 async function geminiRequest(options,fetchImpl){
   const body={contents:[{role:'user',parts:[{text:options.prompt}]}],generationConfig:{maxOutputTokens:options.maxOutputTokens}};
+  if(options.responseFormat==='json')body.generationConfig.responseMimeType='application/json';
+  if(options.reasoningEffort==='low'){
+    if(/^gemini-[34](?:[.-])/.test(options.model))body.generationConfig.thinkingConfig={thinkingLevel:'low'};
+    else if(/^gemini-2\.5(?:[.-])/.test(options.model))body.generationConfig.thinkingConfig={thinkingBudget:1024};
+  }
   if(options.system)body.systemInstruction={parts:[{text:options.system}]};
   const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,{
     method:'POST',
@@ -219,6 +224,7 @@ async function geminiRequest(options,fetchImpl){
     body:JSON.stringify(body)
   });
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status,payload);
+  if(options.responseFormat==='json'&&payload?.candidates?.[0]?.finishReason==='MAX_TOKENS')throw new Error('Gemini response exceeded output token limit');
   const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');
   return {provider:'gemini',model:options.model,text,usage:usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount)};
 }
@@ -234,16 +240,17 @@ async function verifyGeminiCredential(options,fetchImpl){
   return {provider:'gemini',model:options.model,text};
 }
 
-export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,fetchImpl=fetch}){
+export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,responseFormat,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal});
-  if(reasoningEffort==='low'&&/^gpt-[56]/.test(options.model))options.reasoningEffort='low';
+  if(reasoningEffort==='low'&&(/^gpt-[56]/.test(options.model)||options.provider==='gemini'))options.reasoningEffort='low';
+  if(options.provider==='gemini'&&responseFormat==='json')options.responseFormat='json';
   try{
     if(options.provider==='openai')return await openAiRequest(options,fetchImpl);
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
     return await geminiRequest(options,fetchImpl);
   }catch(error){
     if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)throw new Error(`${PROVIDER_LABELS[options.provider]} request timed out`);
-    if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
+    if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Gemini response exceeded output token limit|Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
     throw new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
   }
 }
