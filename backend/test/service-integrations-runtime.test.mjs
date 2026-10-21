@@ -396,3 +396,8 @@ sqliteTest('Firecrawl forwards validated geographic search settings with the cus
   assert.equal(calls[1].location,undefined);assert.equal(calls[1].country,undefined);
  }finally{globalThis.fetch=original;}
 });
+sqliteTest('dynamic official staff extraction waits for rendered cards after a thin direct shell',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env);const old=globalThis.fetch;
+ globalThis.fetch=async(url,options)=>{if(String(url).includes('api.firecrawl.dev')){const body=JSON.parse(options.body);assert.equal(body.waitFor,2000);assert.equal(body.maxAge,0);return new Response(JSON.stringify({success:true,data:{markdown:'## Jane Smith\nChief Executive Officer\nOfficial company management contact information.',metadata:{sourceURL:'https://company.example/management'}}}),{headers:{'Content-Type':'application/json'}});}return new Response('<html><title>Company</title><div id="app">Company</div></html>',{headers:{'Content-Type':'text/html'}});};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/management',publicFirst:true}}),env,{}),p=await r.json();assert.equal(r.status,200);assert.match(p.data.markdown,/Jane Smith/);assert.deepEqual(p.researchTrace.map(e=>[e.provider,e.status]),[['direct','failed'],['firecrawl','succeeded'],['scrapling','skipped']]);}finally{globalThis.fetch=old;}
+});

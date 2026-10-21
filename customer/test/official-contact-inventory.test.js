@@ -98,3 +98,9 @@ test('a fresh cached inventory seeds buyer discovery even when raw source bodies
  assert.equal(contacts.length,7);assert.ok(contacts.some(p=>p.name==='Vagner Rego'));assert.ok(contacts.some(p=>p.name==='Daniel Althoff'));
  inventory.checkedAt=new Date(Date.now()-31*86400000).toISOString();assert.equal(D.discoverCompanyContacts([],candidate).length,0);
 });
+
+test('a completed empty inventory is rechecked instead of suppressing new evidence for thirty days',async()=>{
+ const inventory=D.officialCompanyContactInventory([],company);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete'};const candidate={...company,buyerDiscovery:{officialContactInventory:inventory}};let searches=0;
+ await D.runOfficialContactResearch(candidate,{search:async()=>{searches++;return pages.map(p=>({url:p.url}));},readPage:async url=>pages.find(p=>p.url===url)||{markdown:'Official company homepage'}});
+ assert.equal(searches,3);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,7);
+});
