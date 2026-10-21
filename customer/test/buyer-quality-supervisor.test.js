@@ -34,3 +34,12 @@ test('the visible quality panel reports zero usable priority emails and retains 
  const fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom'),s=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),a=s.indexOf('function buyerQualitySupervisorHtml('),b=s.indexOf('function buyerResearchAccountabilityHtml(',a),ctx={LeadIntelDiscovery:D,verifiedBuyerEmail:()=>'',enrichmentResults:new Map(),personKey:(c,p)=>p.id,esc:String,crmAuthenticated:()=>true};
  vm.createContext(ctx);vm.runInContext(s.slice(a,b),ctx);const dom=new JSDOM(ctx.buyerQualitySupervisorHtml(fixture()));assert.match(dom.window.document.body.textContent,/0\/4 priority buyers have confirmed/);assert.match(dom.window.document.body.textContent,/AI review not assessed/);assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,0);dom.window.close();
 });
+
+test('the supervisor payload preserves evidence for every person without repeating an oversized source bundle',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),s=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),a=s.indexOf('async function reviewBuyerPublicEvidence('),b=s.indexOf('async function confirmResearchedPublicEmails(',a);
+ const names=['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind','Eva Karlsson','Fredrik Holm','Greta Lund','Henrik Dahl','Ingrid Ek','Johan Strand'],people=names.map((name,i)=>({id:'p'+i,name,title:'Procurement Director',publicNameUrl:'https://example.com/team/'+i})),rows=people.flatMap(p=>[0,1].map(i=>({url:p.publicNameUrl+'/'+i,title:p.name,markdown:Array.from({length:3},(_,j)=>p.name+' — Procurement Director at Example. '+p.id+'@example.com '+('Evidence '+i+' '+j+'. ').repeat(130)).join('\n'),sourceRead:true})));let payload;
+ const context={LeadIntelDiscovery:D,bridge:()=>({workspace:{id:'w'}}),crmAuthenticated:()=>true,LEADINTEL_API:'https://api.example',DISCOVERY_REQUEST_TIMEOUT_MS:25000,fetchBuyerResearch:async(url,options)=>{payload=JSON.parse(options.body);return Response.json({status:'complete',provider:'fixture',supervisor:{status:'complete',reviewedPersonIds:people.map(p=>p.id)},conflicts:[]});}};
+ vm.createContext(context);vm.runInContext(s.slice(a,b),context);await context.reviewBuyerPublicEvidence({company:'Example',domain:'example.com',people},rows,new AbortController().signal);
+ assert.ok(payload.evidence.reduce((total,row)=>total+row.excerpt.length,0)<=20000);
+ for(const name of names)assert.ok(payload.evidence.some(row=>row.excerpt.includes(name)),name+' evidence must be retained');
+});

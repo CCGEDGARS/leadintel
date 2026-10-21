@@ -281,7 +281,7 @@
         "automatic contact research for all retained people",
         "top 4 ranked recommendations",
         "Contact checks complete:",
-        "const passages=candidate.people.slice(0,10)"
+        "const supplied=LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows)"
       ],
       "notContains": [
         "top 4 researched by default",
@@ -3573,7 +3573,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-supervisor=20261021-v3"
+        "buyer-supervisor=20261021-v4"
       ]
     }
   ],
