@@ -64,6 +64,14 @@ function persistMainStep(step){
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
 function loadOutreach({recoverInterrupted=false}={}){const state=LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));if(recoverInterrupted)for(const item of state.items){if(['running','checking'].includes(item.localizationStatus)){item.localizationStatus='error';item.localizationApprovalBlocked=true;item.localizationMessage='Generation was interrupted by a reload. Regenerate this package before approval.';}if(item.researchStatus==='running')item.researchStatus='error';}return state;}
+function reloadCompanyRecords(event){
+  if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;
+  const affected=outreach.selectedDomain===event.detail.domain;
+  outreach=loadOutreach();
+  if(affected){buyerHandoffRequest++;messageChannelNavigationRequest++;scriptRestoreRequest++;handoffContact=null;messageTranslationController?.abort();messageTranslationOwner++;messageTranslationBusy=false;cancelPendingScriptGeneration();}
+  renderAll();
+}
+window.addEventListener('leadintel:company-records-changed',reloadCompanyRecords);
 function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
 function toast(message){const el=q("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2600);}
 function pipeline(){const shared=window.LeadIntelDiscoveryUI?.getSelectedCompanies?.()||window.LeadIntelDiscoveryUI?.getPipeline?.();if(Array.isArray(shared))return shared;const state=discoveryState();return [...new Map([...(state.pipeline||[]),...(state.selectedProspects||[])].map(item=>[item.domain,item])).values()];}
@@ -513,7 +521,7 @@ function bindOutreach(){
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
   const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function studioState(){return LeadIntelMessageStudio.foundation(outreach.messageStudio||{},mainState(),activeCampaignScenario(),crmBridge()?.session?.user?.name||'');}

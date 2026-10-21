@@ -1,5 +1,5 @@
 // The pure CRM mapper is needed by the bridge's post-verification migration.
-import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261020-v2';
+import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261020-v2&buyer-company-actions=20261021-v2';
 
 const SUPPORT_MODULES=[
   './website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1',
@@ -34,7 +34,7 @@ async function loadSupportModules(){
   const crmResults=[];
   try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1&buyer-research=20261004-v3&public-contacts=20261004-v2&contact-archive=20261020-v1');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}
-  try{await import('./crm-ui.js?v=20260928-crm-buyer-recovery-v1&page-procedures=20261010-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1');crmResults.push({status:'fulfilled'});}
+  try{await import('./crm-ui.js?v=20260928-crm-buyer-recovery-v1&page-procedures=20261010-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&buyer-company-actions=20261021-v2');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}
   const results=[...crmResults,...await Promise.allSettled(SUPPORT_MODULES.map(source=>import(source)))];
   const failed=results.filter(result=>result.status==='rejected');
