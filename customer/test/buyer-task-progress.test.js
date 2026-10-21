@@ -102,13 +102,13 @@ test('public contact runner emits source checkpoints while retaining independent
    candidate.people[0].emailResearch={status:'partial',searches:1,failed:0};onProgress();
    at+=1000;candidate.people[0].emailResearch={status:'complete',searches:7,failed:0};onProgress();
    return {searches:7,failed:0,evidence:[]};
-  },searchBuyerPublicPages:async()=>[],scrapeOfficialContactPage:async()=>null,groundedBuyerFollowUp:async()=>({status:'complete',rows:[]}),reviewBuyerPublicEvidence:async()=>({status:'complete',conflicts:[]})};
+  },searchBuyerPublicPages:async()=>[],scrapeOfficialContactPage:async()=>null,groundedBuyerFollowUp:async()=>({status:'complete',rows:[]}),reviewBuyerPublicEvidence:async()=>{assert.equal(owner.publicContactStatus,'loading','the research action must stay busy until AI review finishes');return {status:'complete',conflicts:[]};}};
  vm.createContext(context);
  vm.runInContext(source.slice(source.indexOf('async function runPublicProspectContacts('),source.indexOf('function scheduleSavedBuyerPublicChecks('))+'\nthis.run=runPublicProspectContacts;',context);
  assert.equal(await context.run(owner.domain,{onProgress:report=>reports.push(report.label)}),true);
  assert.ok(reports.includes('Verifying public contact evidence · 0/1 people checked'));
  assert.ok(reports.includes('Verifying public contact evidence · 1/1 people checked'));
- assert.ok(reports.includes('Cross-checking public contact evidence with grounded research'));
+ assert.equal(reports.includes('Cross-checking public contact evidence with grounded research'),false,'known identities use the mandatory pass without repeating the legacy research pipeline');
  assert.ok(reports.includes('AI supervisor: checking research coverage and person–contact evidence'));
  assert.equal(owner.people[0].emailResearch.status,'complete');
  assert.equal(owner.buyerDiscovery.pool[0].emailResearch.status,'complete');
@@ -167,7 +167,7 @@ function publicCrmRuntime(boundary){
   discovery:{selectedProspects:[owner]},mainState:()=>({}),confirmResearchedPublicEmails:async()=>{},crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,
   saveDiscovery:()=>{if(bridge.workspace.id!=='old-workspace')savesAfterSwitch++;},renderPipeline:()=>{},renderCandidates:()=>{},showToast:()=>{},
   window:{LeadIntelCrm:{mapContacts:people=>people,mapDiscoveryCandidateToCrm:c=>({company:c.company})},dispatchEvent:event=>events.push(event)},
-  searchBuyerEmailPatterns:async()=>({searches:0,failed:0,evidence:[]}),searchBuyerPublicPages:async()=>[],scrapeOfficialContactPage:async()=>null,groundedBuyerFollowUp:async()=>({status:'complete',rows:[]}),reviewBuyerPublicEvidence:async()=>({status:'complete',conflicts:[]})};
+  searchBuyerEmailPatterns:async()=>({searches:0,failed:0,evidence:[]}),searchBuyerPublicPages:async()=>[],scrapeOfficialContactPage:async()=>null,groundedBuyerFollowUp:async()=>({status:'complete',rows:[]}),reviewBuyerPublicEvidence:async()=>{assert.equal(owner.publicContactStatus,'loading','the research action must stay busy until AI review finishes');return {status:'complete',conflicts:[]};}};
  const bridge={workspace:{id:'old-workspace'},
   listCrmCompanies:async()=>{boundary?.('lookup',{context,bridge,parent});return {ok:true,companies:[{id:'old-company',normalized_domain:owner.domain}]};},
   saveCrmContacts:async(id,people)=>{calls.push({type:'contacts',workspace:bridge.workspace.id,id,names:people.map(p=>p.name)});boundary?.('contacts',{context,bridge,parent});return {ok:true};},

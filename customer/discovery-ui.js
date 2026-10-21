@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261020-v2&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261020-v2&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v2";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -2458,7 +2458,7 @@ async function reviewBuyerPublicEvidence(candidate,rows,signal){
   const passages=candidate.people.slice(0,10).flatMap(person=>LeadIntelDiscovery.buyerReviewEvidence([person],rows,2).map(row=>({url:row.url,title:row.title,excerpt:LeadIntelDiscovery.buyerEvidenceExcerpt(row,[person])})));
   const supplied=[...new Map([...passages,...evidence.map(row=>({url:row.url,title:row.title,excerpt:LeadIntelDiscovery.buyerEvidenceExcerpt(row,candidate.people)}))].map(row=>[row.url+'|'+row.excerpt,row])).values()].slice(0,32);
   try{
-    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title,email:person.publicEmail,email_source:person.publicEmailUrl,checks:person.contactResearch?.checks})),evidence:supplied,quality:{depth:LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:candidate.publicResearch?.accountability?.status,checked_people:candidate.publicResearch?.accountability?.checkedPeople,official_pages:candidate.publicResearch?.accountability?.officialPages}}),signal,timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title,email:person.publicEmail,email_source:person.publicEmailUrl,checks:person.contactResearch?.checks})),evidence:supplied,quality:{depth:LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:candidate.publicResearch?.accountability?.status,checked_people:candidate.publicResearch?.accountability?.checkedPeople,official_pages:candidate.publicResearch?.accountability?.officialPages}}),signal,timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,20000)});
     const review=response.ok?await response.json():{status:'unavailable',conflicts:[]};
     return {...review,aiReview:LeadIntelDiscovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'gemini',checkedAt:new Date().toISOString(),inputSignature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts})};
   }catch(error){if(signal?.aborted)throw error;return {status:'unavailable',conflicts:[]};}
@@ -2509,7 +2509,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
   const priorResearch=owner.publicResearch||{};
   const previousConflicts=(owner.publicResearch?.conflicts||[]).filter(row=>!chosenIds.has(String(row.person_id)));
   const runToken={};Object.defineProperty(owner,'__leadIntelPublicContactRun',{value:runToken,writable:true,configurable:true});
-  let controller;
+  let controller,finishing=false;
   const ownerIsCurrent=()=>owner.__leadIntelPublicContactRun===runToken&&researchWorkspace===bridge()?.workspace?.id&&[...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.potentialMatches||[]),...(discovery.pipeline||[])].includes(owner);
   const commit=({closing=false}={})=>{
     if(!ownerIsCurrent()||controller?.signal.aborted&&!closing)return;
@@ -2517,7 +2517,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     owner.people=(owner.people||[]).map(person=>updates.get(String(person.id))||person);
     owner.publicResearch={...candidate.publicResearch,conflicts:[...previousConflicts,...(candidate.publicResearch?.conflicts||[])],researchedPersonIds:[...chosenIds],researchScope:'selected_buyers'};
     owner.publicContacts=[...new Map([...(owner.publicContacts||[]),...(candidate.publicContacts||[])].map(row=>[row.url+'|'+row.value,row])).values()];
-    owner.publicContactStatus=candidate.publicContactStatus;owner.publicContactVersion=candidate.publicContactVersion;
+    owner.publicContactStatus=finishing||closing?candidate.publicContactStatus:'loading';owner.publicContactVersion=candidate.publicContactVersion;
     owner.buyerDiscovery={...(owner.buyerDiscovery||{}),companyContacts:LeadIntelDiscovery.mergeCompanyContacts(owner.buyerDiscovery?.companyContacts||[],candidate.people,owner)};
   };
   candidate.publicContactStatus="loading";commit();saveDiscovery();renderPipeline();renderCandidates();
@@ -2559,7 +2559,20 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
       patternResearch=await mandatory();
       if(!canContinue())return false;
       research.patternSearches=patternResearch.searches;research.checkedAt=new Date().toISOString();commit();saveDiscovery();renderPipeline();
-      if(resumingChecks&&!force&&candidate.people.every(person=>person.contactResearch)&&candidate.people.every(person=>person.publicLinkedinUrl||person.linkedin_url)){candidate.publicContactStatus=candidate.people.some(person=>person.emailResearch?.status!=='complete')?'error':'complete';candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;research.issues=candidate.people.flatMap(person=>Object.values(person.contactResearch.channels).filter(row=>row.reason).map(row=>row.reason));research.sources=[...new Set(candidate.people.flatMap(person=>[person.publicEmailUrl,person.publicPhoneUrl,person.publicNameUrl]).filter(Boolean))];candidate.publicResearch=research;await mandatory();return candidate.publicContactStatus==='complete';}
+      if(candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.name)&&Boolean(person.publicNameUrl||person.publicLinkedinUrl||person.linkedin_url||person.identitySource==='apollo'))){
+      // Mandatory research already covers every known identity and all contact channels.
+      // Do not repeat the older company-wide pipeline and starve final AI review.
+      candidate.people=candidate.people.map(person=>LeadIntelDiscovery.matchBuyerRoleEvidence(person,qualityEvidenceRows,candidate,{complete:true}));
+      candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(qualityEvidenceRows,domain);
+      research.officialPages=accountability.officialPages;
+      research.sources=[...new Set(qualityEvidenceRows.map(row=>row.url).filter(Boolean))].slice(0,12);
+      research.issues=accountability.gaps.slice();
+      candidate.publicContactStatus=accountability.status==='complete'?'complete':'error';
+      candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
+      candidate.publicResearch=research;
+      onProgress?.({label:`Verifying public contact evidence · ${candidate.people.filter(person=>person.emailResearch?.status==='complete').length}/${candidate.people.length} people checked`});
+      return true;
+      }
     }
     const firstNames=[...new Set((candidate.people||[]).map(person=>String(person.name||'').trim().split(/\s+/)[0]).filter(name=>/^[\p{L}'’-]{2,40}$/u.test(name)))].slice(0,10);
     const query=firstNames.length
@@ -2701,6 +2714,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }
     if(!canContinue())return false;
+    finishing=true;
     owner.buyerDiscovery={...(owner.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(owner.buyerDiscovery?.pool||[],owner.people||[],{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles||[]).join('; ')||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)})};commit();saveDiscovery();renderPipeline();renderCandidates();
   }finally{
     clearTimeout(timeout);signal?.removeEventListener('abort',cancel);controller.signal.removeEventListener('abort',closeCanceled);

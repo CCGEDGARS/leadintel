@@ -53,11 +53,11 @@ async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
 async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='gemini' LIMIT 1`).bind(workspaceId).first();}
 
-export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal=AbortSignal.timeout(12000),userId=null,generate=generateText}={}){
+export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal=AbortSignal.timeout(20000),userId=null,generate=generateText}={}){
   const trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
   try{
     if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
-    const choices=[await geminiIntegration(env,workspaceId),await activeIntegration(env,workspaceId)].filter(Boolean),seen=new Set();
+    const choices=(await Promise.all([geminiIntegration(env,workspaceId),activeIntegration(env,workspaceId),openAiIntegration(env,workspaceId)])).filter(Boolean),seen=new Set();
     for(const integration of choices){
       if(seen.has(integration.provider))continue;seen.add(integration.provider);
       const tool=integration.provider==='gemini'?'gemini':'ai_review';let result;
