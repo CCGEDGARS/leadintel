@@ -162,7 +162,7 @@ export async function searchWeb({apiKey,model,query,maxResults=5,purpose='genera
       warning='OpenAI discovered source URLs but returned no usable structured summary. Source pages require extraction.';
     }
     if(purpose==='contact_research')results=results.map(row=>({...row,evidenceKind:'model_summary'}));
-    return {provider:'openai',model:options.model,results,sources,...(warning?{warning}:{}),usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
+    return {provider:'openai',model:options.model,web_search:(Array.isArray(payload.output)?payload.output:[]).some(item=>item?.type==='web_search_call'&&item.status==='completed'),results,sources,...(warning?{warning}:{}),usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
   }catch(error){
     const message=String(error?.message||'');
     if(/request failed \(\d+\)/.test(message)||/^(AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(message))throw error;

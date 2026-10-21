@@ -22,3 +22,8 @@ test('buyer page extraction also uses the authenticated workspace route',async()
  const {context,requests}=runtime(true);await context.transport('scrape',{url:'https://lkab.com/contact',formats:['markdown']});
  assert.match(requests[0].url,/\/firecrawl\/scrape\?workspace_id=/);
 });
+test('page transport allows the bounded server extraction result to arrive without extending search requests',async()=>{
+ const {context,requests}=runtime(true);await context.transport('scrape',{url:'https://example.com/'});await context.transport('search',{query:'Example'});
+ assert.equal(requests[0].options.timeoutMs,30000);assert.equal(requests[1].options.timeoutMs,undefined);
+ await context.transport('scrape',{url:'https://example.com/'},{timeoutMs:12000});assert.equal(requests[2].options.timeoutMs,12000);
+});

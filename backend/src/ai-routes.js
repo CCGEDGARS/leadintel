@@ -137,8 +137,8 @@ export async function handleAiRoute(request,env,cors={}){
   }
   if(path==='/api/ai/company-dossier'&&request.method==='POST'){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
-    const body=await request.json().catch(()=>null);if(!body?.company||JSON.stringify(body).length>16000)return error('Bounded company research context required',400,cors);
-    try{const result=await researchWorkspaceDossier(env,workspaceId,body,{signal:request.signal});return json(result,200,cors);}
+    const body=await request.json().catch(()=>null);if(!body?.company||JSON.stringify(body).length>140000)return error('Bounded company research context required',400,cors);
+    try{globalThis.LeadIntelCompanyDossier.researchPlan(body);const result=await researchWorkspaceDossier(env,workspaceId,body,{signal:request.signal});return json(result,200,cors);}
     catch(cause){return error(String(cause.message||'Company dossier unavailable').slice(0,220),cause.status||502,cors);}
   }
 
