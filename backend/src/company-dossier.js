@@ -67,7 +67,7 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,
   search:(c,q,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s})),
   read:(u,s)=>readPublicBuyerPage(env,workspaceId,u,{signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000}),
-  extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:3000,signal:s,reasoningEffort:'low'})).then(r=>r.text)
+  extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'})).then(r=>r.text)
  });
  if(result.status!=='complete'){try{const previous=JSON.parse(saved?.successful_json||'null');if(previous?.contextKey===contextKey)result.previousSuccessful=previous;}catch{}}
  return result;

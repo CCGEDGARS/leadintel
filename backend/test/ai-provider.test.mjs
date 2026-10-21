@@ -159,6 +159,21 @@ test('Gemini adapter uses current GenerateContent fields and extracts text',asyn
   assert.deepEqual(result.usage,{input_tokens:7,output_tokens:5});
 });
 
+test('Gemini dossier extraction requests JSON and low thinking without changing ordinary text calls',async()=>{
+  const bodies=[];const fetchImpl=async(_url,options)=>{bodies.push(JSON.parse(options.body));return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"people":[]}' } ]}}]});};
+  const result=await generateText({provider:'gemini',apiKey:'fixture',model:'gemini-3.8-flash',prompt:'Extract JSON',responseFormat:'json',reasoningEffort:'low',maxOutputTokens:6000,fetchImpl});
+  assert.deepEqual(JSON.parse(result.text),{people:[]});
+  assert.deepEqual(bodies[0].generationConfig,{maxOutputTokens:6000,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'low'}});
+  await generateText({provider:'gemini',apiKey:'fixture',model:'gemini-2.0-flash',prompt:'Write text',fetchImpl});
+  assert.deepEqual(bodies[1].generationConfig,{maxOutputTokens:1200});
+  await generateText({provider:'gemini',apiKey:'fixture',model:'gemini-2.5-pro',prompt:'Extract JSON',responseFormat:'json',reasoningEffort:'low',fetchImpl});
+  assert.deepEqual(bodies[2].generationConfig.thinkingConfig,{thinkingBudget:1024});
+});
+
+test('Gemini truncated extraction is an explicit token-limit failure, never accepted as complete JSON',async()=>{
+  await assert.rejects(generateText({provider:'gemini',apiKey:'fixture',prompt:'Extract JSON',responseFormat:'json',fetchImpl:async()=>Response.json({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:'{"people":[]}' }]}}]})}),/Gemini response exceeded output token limit/);
+});
+
 test('text generation forwards abort signals to OpenAI and Gemini provider requests',async()=>{
   for(const provider of ['openai','gemini']){
     const controller=new AbortController();let receivedSignal;

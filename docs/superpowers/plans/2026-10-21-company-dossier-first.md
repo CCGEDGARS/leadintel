@@ -34,7 +34,7 @@
 - [x] Run complete customer/backend tests and static build; commit.
 ### Task 4: Review, publish and live verification
 - [x] Review whole diff independently; fix material findings with regressions.
-- [ ] Publish branch/PR, CI, merge and exact-SHA production proof.
+- [x] Publish branch/PR, CI, merge and exact-SHA production proof.
 - [ ] Fresh authenticated Stegra acceptance, persistence and downstream checks; report exact outcome.
 
 ## Verification checkpoint
@@ -53,3 +53,9 @@
 - Compact extraction now selects server-numbered source passages; the server restores exact quotes and URLs, reducing repeated model output. Leadership/recent-change and contact-route searches run separately within each independent provider, with balanced source slots.
 - Failed required search families remain partial and resume without repurchasing successful family searches. Partial supported evidence stays visible. Provider signatures invalidate earlier checkpoints that lack the required family policy.
 - Independent follow-up review found and regression tests cover cross-person title attribution, provider-order loss of scheduled departures, and false completion from contact-only search success. Shared module changes now trigger backend CI/deployment.
+
+## Gemini extraction acceptance finding
+- Production d16468065e4c1c43a8457957b47ff3677b16dd76 passed exact-SHA CI, backend health and all 325 mandatory smoke checks; release proof verdict PROVEN.
+- Third fresh Stegra run: OpenAI completed in 80 seconds after reading 10/10 sources. Supported partial evidence included 11 people, all three delivery-area directors, the CEO transition and six published company routes. Gemini read 10/10 sources but timed out during extraction; resuming cached searches returned invalid extraction JSON after 21 seconds. No confirmed named buyer emails were obtained.
+- The Gemini text adapter ignored the requested low reasoning effort. Dossier extraction now opts into JSON MIME, honors the supported model-specific low thinking control, and allows 6000 total output/thinking tokens for Gemini. Explicit MAX_TOKENS responses fail before parsing. Ordinary text calls without these options retain their previous request shape.
+- Provider regression tests failed before the fix and passed after it. All 770 backend tests passed; independent follow-up review found no material issues. Live dual-provider completion and downstream acceptance still require verification.
