@@ -3402,6 +3402,7 @@ window.LeadIntelCampaignModuleLoader=async step=>{await loadOutreachModules();if
 window.LeadIntelAdditionalContacts?.register({
   rows:()=>[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])],
   assessment:c=>qualificationAssessment(c),
+  saveOutcome:()=>saveDiscovery(),
   email:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{}),
   publicSource:(c,p)=>publicBuyerSource(c,p),
   baseEmail:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{},{skipAdditional:true}),

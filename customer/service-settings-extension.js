@@ -5,7 +5,7 @@ const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
-  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Optional additional email verification using your paid Hunter credits'}
+  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Manually approved email finding and additional delivery verification using your Hunter credits'}
 ]);
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
@@ -39,7 +39,7 @@ function serviceControls(config,row){
   const meta=configured?`Saved key ${esc(row.key_hint||'')} · ${sourceLabel(row)}`:sourceLabel(row);
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
-    ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check; no provider guarantees 100% accuracy.</small>`:''}
+    ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check. If Apollo returns no confirmed email, Find email can separately request your approval to use Hunter email finding. No provider guarantees 100% accuracy.</small>`:''}
     <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
