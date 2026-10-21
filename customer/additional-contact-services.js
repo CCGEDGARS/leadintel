@@ -65,8 +65,8 @@
   }
   function card(candidate,person){
     if(person.contactData){
-      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl].filter(Boolean).join(' · '):'Profile · '+String(p.status).replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status).replaceAll('_',' ')];
-      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Some checks need review':'No new data')+' · '+esc(d.checkedAt)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+'</p>';
+      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status).replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status).replaceAll('_',' ')];
+      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Some checks need review':'No new data')+' · '+esc(d.checkedAt)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>Latest check needs review; previously found details retained.':'')+'</p>';
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');

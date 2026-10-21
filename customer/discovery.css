@@ -742,3 +742,5 @@
   #step-5 .selected-prospect-row{padding:12px;gap:14px}
   #step-5 .selected-prospect-person{padding:12px}
 }
+
+.buyer-four-actions button.buyer-data-updated,.person-actions button.buyer-data-updated{background:#0d6453;color:#fff;border-color:#0d6453;opacity:1}

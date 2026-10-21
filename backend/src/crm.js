@@ -26,6 +26,41 @@ export async function findCrmCompanyByDomain(db,workspaceId,value){const domain=
 async function companyByDomain(db,workspaceId,domain){return findCrmCompanyByDomain(db,workspaceId,domain);}
 function parseIntelligence(row){if(!row)return null;return {...row,matched_signals:safeJson(row.matched_signals_json,[]),evidence:safeJson(row.evidence_json,[]),score_breakdown:safeJson(row.score_breakdown_json,{}),research_snapshot:safeJson(row.research_snapshot_json,{})};}
 function parseActivity(row){return {...row,metadata:safeJson(row.metadata_json,{})};}
+// Paid lookup receipts are immutable commercial history. Project them on reads
+// independently of the replaceable public-research snapshot and timeline page.
+async function retainedContactData(db,workspaceId,companyId,domain){
+  const {results=[]}=await db.prepare(`WITH ranked AS (
+    SELECT metadata_json,occurred_at,created_at,id,
+      ROW_NUMBER() OVER (PARTITION BY json_extract(metadata_json,'$.contact_data.personId') ORDER BY occurred_at DESC,created_at DESC,id DESC) AS latest,
+      ROW_NUMBER() OVER (PARTITION BY json_extract(metadata_json,'$.contact_data.personId') ORDER BY CASE WHEN json_extract(metadata_json,'$.contact_data.profile.status')='provider_reported' THEN 0 ELSE 1 END,occurred_at DESC,created_at DESC,id DESC) AS profile_rank,
+      ROW_NUMBER() OVER (PARTITION BY json_extract(metadata_json,'$.contact_data.personId') ORDER BY CASE WHEN json_extract(metadata_json,'$.contact_data.phone.status')='provider_listed' THEN 0 ELSE 1 END,occurred_at DESC,created_at DESC,id DESC) AS phone_rank
+    FROM crm_activities WHERE workspace_id=? AND company_id=? AND activity_type='contact.enriched' AND json_valid(metadata_json) AND json_extract(metadata_json,'$.contact_data.version')=1
+      AND NOT EXISTS (SELECT 1 FROM crm_contacts ct WHERE ct.workspace_id=crm_activities.workspace_id AND ct.company_id=crm_activities.company_id AND ct.external_person_id=CAST(json_extract(crm_activities.metadata_json,'$.contact_data.personId') AS TEXT) AND ct.archived_at IS NOT NULL)
+  ), profile_fields AS (
+    SELECT ranked.id,ROW_NUMBER() OVER (PARTITION BY json_extract(metadata_json,'$.contact_data.personId'),field.key ORDER BY occurred_at DESC,created_at DESC,ranked.id DESC) AS field_rank
+    FROM ranked,json_each(ranked.metadata_json,'$.contact_data.profile') field
+    WHERE json_extract(metadata_json,'$.contact_data.profile.status')='provider_reported'
+      AND field.key IN ('title','company','linkedinUrl','city','country','seniority','source','checkedAt') AND field.type='text' AND length(trim(field.value))>0
+  ) SELECT * FROM ranked WHERE latest=1 OR profile_rank=1 OR phone_rank=1 OR id IN (SELECT id FROM profile_fields WHERE field_rank=1) ORDER BY occurred_at,created_at,id`).bind(workspaceId,companyId).all();
+  const people=new Map();
+  for(const row of results){
+    const data=safeJson(row.metadata_json,{}).contact_data;
+    if(!data?.personId||normalizeDomain(data.domain)!==domain)continue;
+    const saved=people.get(String(data.personId));
+    const prior=saved?.identityName&&data.identityName&&clean(saved.identityName).toLowerCase()!==clean(data.identityName).toLowerCase()?null:saved;
+    // A later inconclusive result must not erase an earlier returned field.
+    const profile={...(prior?.profile||{}),...(data.profile?.status==='provider_reported'?Object.fromEntries(Object.entries(data.profile).filter(([,v])=>v!==''&&v!==null&&v!==undefined)):prior?.profile?.status==='provider_reported'?{}:data.profile||{})};
+    const phone=data.phone?.number?data.phone:prior?.phone?.number?prior.phone:data.phone;
+    people.set(String(data.personId),{...prior,...data,profile,phone,lastAttempt:{status:data.status,checkedAt:data.checkedAt,profile:data.profile?.status,phone:data.phone?.status},status:profile.status==='provider_reported'||phone?.number||prior?.status==='updated'?'updated':data.status});
+  }
+  return [...people.values()];
+}
+function contactDataMatches(data,person){
+  const id=person.external_person_id||person.id;
+  const profile=person.publicLinkedinUrl||person.linkedin_url;
+  const normalized=value=>String(value||'').replace(/^https?:\/\/(?:[a-z]+\.)?linkedin.com\//,'linkedin.com/').replace(/\/$/,'');
+  return String(data.personId)===String(id)&&(!data.identityName||clean(data.identityName).toLowerCase()===clean(person.publicName||person.name).toLowerCase())&&(!data.identityLinkedinUrl||!profile||normalized(data.identityLinkedinUrl)===normalized(profile));
+}
 function parseActivityCursor(value){if(!value)return null;try{const cursor=JSON.parse(String(value));if(!cursor||typeof cursor!=='object'||Array.isArray(cursor)||!clean(cursor.occurred_at,64)||!clean(cursor.created_at,64)||!validActivityId(cursor.id))throw new Error('Invalid cursor');return {occurred_at:clean(cursor.occurred_at,64),created_at:clean(cursor.created_at,64),id:String(cursor.id)};}catch{throw crmError('CRM_ACTIVITY_CURSOR_INVALID','Invalid CRM activity cursor');}}
 
 function activityValues(context,activity={}){const workspaceId=clean(context?.workspaceId,160);const companyId=clean(activity.companyId||activity.company_id,160);if(!workspaceId||!companyId)throw crmError('CRM_ACTIVITY_INVALID','Workspace and company are required');const type=clean(activity.type||activity.activity_type,80);if(!type)throw crmError('CRM_ACTIVITY_INVALID','Activity type is required');return [validActivityId(activity.id)?String(activity.id):uuid(),workspaceId,companyId,clean(activity.contactId||activity.contact_id,160)||null,type,clean(activity.channel,40)||null,clean(activity.direction,40)||null,clean(activity.subject,500)||null,clean(activity.summary,4000)||null,jsonString(activity.metadata,{}),clean(activity.occurredAt||activity.occurred_at,64)||now(),now(),clean(context?.userId,160)||null];}
@@ -93,7 +128,20 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
 
 export async function upsertCrmIntelligence(db,context,companyId,intelligence={}){const workspaceId=clean(context?.workspaceId,160);const stamp=now();const upsert=db.prepare(`INSERT INTO crm_intelligence(company_id,workspace_id,matched_signals_json,evidence_json,opportunity_hypothesis,score_breakdown_json,confidence,research_snapshot_json,intelligence_updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET workspace_id=excluded.workspace_id,matched_signals_json=excluded.matched_signals_json,evidence_json=excluded.evidence_json,opportunity_hypothesis=excluded.opportunity_hypothesis,score_breakdown_json=excluded.score_breakdown_json,confidence=excluded.confidence,research_snapshot_json=excluded.research_snapshot_json,intelligence_updated_at=excluded.intelligence_updated_at`).bind(companyId,workspaceId,jsonString(intelligence.matched_signals,[]),jsonString(intelligence.evidence,[]),clean(intelligence.opportunity_hypothesis,4000)||null,jsonString(intelligence.score_breakdown,{}),clean(intelligence.confidence,40)||null,jsonString(intelligence.research_snapshot,{}),stamp);await writeWithActivity(db,context,{companyId,type:'intelligence.updated',summary:'Commercial intelligence updated',metadata:{confidence:clean(intelligence.confidence,40)||null}},[upsert]);return parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE company_id=? AND workspace_id=?`).bind(companyId,workspaceId).first());}
 
-export async function getCrmCompany(db,context,companyId){const workspaceId=clean(context?.workspaceId,160);const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);const {results:contacts=[]}=await db.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL ORDER BY updated_at DESC`).bind(workspaceId,companyId).all();const intelligence=parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE workspace_id=? AND company_id=?`).bind(workspaceId,companyId).first());const history=await listCrmActivities(db,context,companyId,{limit:40});return {company,contacts,intelligence,activities:history.activities,activity_next_cursor:history.next_cursor};}
+export async function getCrmCompany(db,context,companyId){
+  const workspaceId=clean(context?.workspaceId,160),company=await companyRow(db,workspaceId,companyId);
+  if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);
+  const {results:contacts=[]}=await db.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL ORDER BY updated_at DESC`).bind(workspaceId,companyId).all();
+  const intelligence=parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE workspace_id=? AND company_id=?`).bind(workspaceId,companyId).first());
+  const contactData=await retainedContactData(db,workspaceId,companyId,normalizeDomain(company.normalized_domain||company.website));
+  if(intelligence)intelligence.contactData=contactData;
+  for(const person of intelligence?.research_snapshot?.buyerResearch?.buyers||[]){
+    const data=contactData.find(d=>contactDataMatches(d,person));if(data)person.contactData=data;
+  }
+  for(const contact of contacts){const data=contactData.find(d=>contactDataMatches(d,contact));if(data)contact.contact_data=data;}
+  const history=await listCrmActivities(db,context,companyId,{limit:40});
+  return {company,contacts,intelligence,contactData,activities:history.activities,activity_next_cursor:history.next_cursor};
+}
 
 export async function listCrmActivities(db,context,companyId,filters={}){const workspaceId=clean(context?.workspaceId,160);const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);const limit=Math.max(1,Math.min(100,Number(filters.limit)||40));const cursor=parseActivityCursor(filters.cursor);const clauses=['workspace_id=?','company_id=?'];const args=[workspaceId,companyId];if(cursor){clauses.push(`(occurred_at<? OR (occurred_at=? AND created_at<?) OR (occurred_at=? AND created_at=? AND id<?))`);args.push(cursor.occurred_at,cursor.occurred_at,cursor.created_at,cursor.occurred_at,cursor.created_at,cursor.id);}args.push(limit+1);const {results=[]}=await db.prepare(`SELECT * FROM crm_activities WHERE ${clauses.join(' AND ')} ORDER BY occurred_at DESC,created_at DESC,id DESC LIMIT ?`).bind(...args).all();const hasMore=results.length>limit;const activities=results.slice(0,limit);const last=activities.at(-1);return {activities:activities.map(parseActivity),next_cursor:hasMore&&last?JSON.stringify({occurred_at:last.occurred_at,created_at:last.created_at,id:last.id}):null};}
 

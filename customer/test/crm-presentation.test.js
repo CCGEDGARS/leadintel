@@ -1,6 +1,12 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const CrmPresentation=require('../crm-presentation.js');
+test('CRM profile exposes retained paid details, provenance and check time without declaring email or phone verified',()=>{
+ const data={status:'updated',checkedAt:'2026-10-21T18:09:22Z',costMicro:14500,profile:{status:'provider_reported',title:'Procurement Director',company:'Example',city:'Riga',country:'Latvia',seniority:'Head',linkedinUrl:'https://www.linkedin.com/in/anna',source:'provider-name'},phone:{status:'provider_listed',number:'+37120000001',source:'phone-provider'}};
+ const html=CrmPresentation.contactsHtml([{name:'Anna Buyer',contact_data:data}]);
+ for(const text of ['Data updated','Procurement Director','Riga','Latvia','Head','provider-name','2026-10-21T18:09:22Z','0.0145','+37120000001'])assert.ok(html.includes(text),text);
+ assert.match(html,/ownership unconfirmed/);assert.match(html,/No work email saved/);
+});
 
 test('CRM intelligence detail shows score factors and classified evidence links',()=>{
   const html=CrmPresentation.intelligenceHtml({

@@ -6,6 +6,14 @@ function runtime(automatic=false){
  vm.createContext(context);const start=source.indexOf('function buyerAutomaticMode('),end=source.indexOf('async function findPublicProspectContacts(',start);vm.runInContext(source.slice(start,end),context);
  return {context,person,candidate};
 }
+test('a saved profile update stays green without misrepresenting email verification or unlocking outreach',()=>{
+ const {context,person,candidate}=runtime();
+ person.contactData={version:1,domain:candidate.domain,personId:person.id,status:'updated',checkedAt:'2026-10-21T18:00:00Z',profile:{status:'provider_reported',city:'Riga'},phone:{status:'not_requested'}};
+ const html=context.prospectContactControls(candidate,person);
+ assert.match(html,/class="[^"]*buyer-data-updated[^"]*"[^>]*data-prospect-enrich-email[^>]*>Data updated ✓/);
+ assert.match(html,/data-prospect-enrich-email[^>]*aria-pressed="false"/);
+ assert.match(html,/data-keep-buyer[^>]*disabled/);
+});
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
  assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm data','Confirm phone','Confirm LinkedIn','Select &amp; proceed'])assert.ok(html.includes(label));

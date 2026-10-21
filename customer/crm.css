@@ -4,3 +4,5 @@ body.crm-open{overflow:hidden}.crm-open-btn{font-weight:700}.crm-workspace{posit
 .crm-load-activity{width:100%;margin-top:10px}.crm-activity-error{color:#a33434}
 
 .crm-buyer-recovery{margin:14px 0;padding:16px!important;border:1px solid #bddbd2!important;border-radius:12px;background:#f2f8f5}.crm-buyer-recovery h4{margin:0 0 5px}.crm-buyer-recovery p{margin:0 0 12px;color:#4e625a;font-size:12px;line-height:1.5}.crm-buyer-recovery button{border:1px solid #0e6656;border-radius:8px;background:#0e6656;color:#fff;padding:10px 14px;font:700 12px 'DM Sans',sans-serif;cursor:pointer}.crm-buyer-recovery button:disabled{opacity:.55;cursor:not-allowed}.crm-buyer-recovery p[role="alert"]{margin:10px 0 0;color:#9a3b29;font-weight:700}
+
+.crm-contact-data{display:grid;gap:6px;margin-top:10px;padding:12px;border:1px solid #c9e0d8;border-radius:10px;background:#f3faf7}.crm-data-updated{color:#0d6453}
