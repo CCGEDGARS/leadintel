@@ -3,7 +3,7 @@ const D=require('../discovery-engine.js');
 function fixture(){const now=new Date().toISOString();const c={company:'Example',domain:'example.com',market:'Sweden',qualification:{eligible:true,researchedAt:now,version:2,qualificationKind:'company',companyScore:85},people:Array.from({length:4},(_,i)=>({id:'p'+i,name:'Anna Buyer'+i,title:i===0?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now,queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}))};c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1}};return c;}
 test('additional services require a qualified company and four real researched eligible buyers',()=>{
  const P=require('../additional-contact-policy.js'),c=fixture();assert.equal(P.readiness(c,c.people[0]).eligible,true);
- for(const mutate of [c=>c.qualification.eligible=false,c=>c.people.pop(),c=>c.people[1].emailResearch.status='partial',c=>c.people[0].organization='Other employer',c=>c.buyerRolesChanged=true,c=>c.publicResearch={conflicts:[{person_id:'p0'}]}]){const x=fixture();mutate(x);assert.equal(P.readiness(x,x.people[0]).eligible,false);}
+ for(const mutate of [c=>c.qualification.eligible=false,c=>c.people.pop(),c=>c.people[1].emailResearch.status='partial',c=>c.people[0].organization='Other employer',c=>c.buyerRolesChanged=true,c=>c.publicResearch={conflicts:[{person_id:'p0'}]}]){const x=fixture();mutate(x);assert.equal(P.readiness(x,x.people[0],{automatic:true}).eligible,false);}
 });
 test('already confirmed emails, stale research, pending source checks and blocked companies never request paid lookup',()=>{
  const P=require('../additional-contact-policy.js');for(const mutate of [c=>c.lifecycle_status='suppressed',c=>c.lifecycle_status='archived',c=>c.people[0].emailResearch.checkedAt='2001-01-01',c=>c.publicContactStatus='loading']){const c=fixture();mutate(c);assert.equal(P.readiness(c,c.people[0]).eligible,false);}
@@ -97,4 +97,42 @@ test('failed public research and workspace changes during it never fall through 
   const f=runtime();await f.loaded;await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{freeConfirm:()=>change(f)});
   assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();
  }
+});
+
+test('manual email lookup is scoped to the selected qualified buyer while automation retains the four-buyer gate',()=>{
+ const P=require('../additional-contact-policy.js'),c=fixture();c.publicResearch.conflicts=[{person_id:'p3',reason:'Other identity needs review'}];
+ assert.equal(P.readiness(c,c.people[0]).eligible,true);
+ assert.equal(P.readiness(c,c.people[0],{automatic:true}).eligible,false);
+ assert.equal(P.readiness(c,c.people[3]).eligible,false);
+ c.people[2].emailResearch.status='partial';assert.equal(P.readiness(c,c.people[0]).eligible,true);
+ c.people[0].contactResearch.checks.gmail.queryLog.pop();assert.equal(P.readiness(c,c.people[0]).eligible,false);
+});
+test('a blocked paid lookup explains the actual reason and retains it on the buyer after rendering',async()=>{
+ const f=runtime();await f.loaded;f.c.qualification.eligible=false;
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);
+ assert.match(f.c.people[0].contactVerification.issues.join(' '),/company qualification/i);
+ assert.match(f.w.LeadIntelAdditionalContacts.card(f.c,f.c.people[0]),/company qualification/i);
+ assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();
+});
+test('no-result Apollo lookup offers separately approved Hunter finding and retains provider receipts',async()=>{
+ const f=runtime();await f.loaded;let hunterCalls=0;
+ f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);let value;
+ if(url.includes('/services/status'))value={providers:[{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}},{provider:'hunter',configured:true,source:'customer',metadata:{additional_verification_enabled:true}}]};
+ else if(url.includes('/policy'))value={policy:{enabled:false,dailyLimit:3,monthlyLimit:30,maxPerCompany:2}};
+ else {const body=JSON.parse(options.body);if(body.provider==='hunter'){hunterCalls++;value={contact:{work_email:'anna@example.com',name:'Anna Buyer0'},research:{provider:'hunter',status:'verified'}};}else value={contact:null,reason:'No verified work email returned',research:{provider:'apollo',status:'not_found'}};}
+ return {ok:true,json:async()=>value};};
+ await f.w.LeadIntelAdditionalContacts.load();assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),true);
+ assert.equal(hunterCalls,1);assert.equal(f.calls.filter(c=>c==='confirm').length,2);
+ assert.match(f.c.people[0].contactVerification.issues.join(' '),/Apollo.*not_found/i);assert.match(f.c.people[0].contactVerification.issues.join(' '),/Hunter.*verified/i);f.close();
+});
+test('saved blockers and provider receipts survive workspace normalization and CRM mapping',()=>{
+ const c=fixture();c.people[0].contactVerification={status:'not_verified',checkedAt:new Date().toISOString(),issues:['Apollo · not_found','Hunter · error: credits exhausted']};
+ const state=D.normalizeDiscoveryState({selectedProspects:[{...c,buyerSearchMode:'user_selected_target'}]});
+ assert.deepEqual(state.selectedProspects[0].people[0].contactVerification.issues,c.people[0].contactVerification.issues);
+ const C=require('../crm-engine.js'),saved=C.mapDiscoveryCandidateToCrm(state.selectedProspects[0]);
+ assert.deepEqual(saved.intelligence.research_snapshot.buyerResearch.buyers[0].contactVerification.issues,c.people[0].contactVerification.issues);
+});
+test('one missing buyer cannot loosen the automatic full-roster research gate',()=>{
+ const P=require('../additional-contact-policy.js'),c=fixture();c.people.pop();
+ assert.equal(P.readiness(c,c.people[0]).eligible,true);assert.equal(P.readiness(c,c.people[0],{automatic:true}).eligible,false);assert.deepEqual(P.targets(c),[]);
 });
