@@ -2051,7 +2051,7 @@ async function removeSelectedBuyerCompany(value){
   if(researching()){showToast('Wait for research to finish before removing this company.');return false;}
   const workspaceId=b.workspace.id,scope=JSON.stringify([workspaceId,b.session?.user?.id]);
   const current=()=>discovery===state&&bridge()===b&&crmAuthenticated()&&JSON.stringify([b.workspace?.id,b.session?.user?.id])===scope;
-  let before,staged,deleted=false;
+  let before,staged,deleted=false,crmBefore;
   buyerCompanyRemovalPending.add(domain);
   try{
     renderAll();
@@ -2064,6 +2064,9 @@ async function removeSelectedBuyerCompany(value){
     if(!window.LeadIntelCrm?.removeBuyerCompanyRecords||!window.LeadIntelWorkspaceSync?.merge)throw new Error('Company removal could not initialize. Refresh and retry.');
     before=JSON.parse(JSON.stringify(buyerCompanySnapshot()));
     staged=window.LeadIntelCrm.removeBuyerCompanyRecords(before,domain);crmRefreshRevision++;
+    crmBefore={companies:crmCompanies,pipeline:crmPipeline};
+    const keep=row=>canonicalDomain(row.normalized_domain||row.website)!==domain;
+    crmCompanies=crmCompanies.filter(keep);crmPipeline=crmPipeline.filter(keep);
     applyBuyerCompanySnapshot(staged,domain,workspaceId);
     // Sync removal before the irreversible delete. No CRM save or upsert occurs here.
     const synced=await b.saveNow({saveIntent:true,explicitSave:true});if(!current())return false;
@@ -2076,6 +2079,8 @@ async function removeSelectedBuyerCompany(value){
   }catch(error){
     if(!current())return false;
     if(staged&&!deleted){
+      const matches=row=>canonicalDomain(row.normalized_domain||row.website)===domain;
+      if(crmBefore){crmCompanies=[...crmCompanies.filter(row=>!matches(row)),...crmBefore.companies.filter(matches)];crmPipeline=[...crmPipeline.filter(row=>!matches(row)),...crmBefore.pipeline.filter(matches)];}crmRefreshRevision++;
       const syncShape=x=>({...x,meta:{discovery:x.meta}});
       const restored=window.LeadIntelWorkspaceSync.merge(syncShape(staged),syncShape(buyerCompanySnapshot()),syncShape(before),{conflictPreference:'local'}).payload;
       applyBuyerCompanySnapshot({...restored,meta:restored.meta.discovery},domain,workspaceId);

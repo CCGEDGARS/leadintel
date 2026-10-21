@@ -19,6 +19,12 @@ test('confirmed Remove deletes the CRM company and all working records without e
  assert.equal(JSON.parse(r.storage.get('outreach')).items.length,1);assert.equal(JSON.parse(r.storage.get('delivery')).activity.length,0);assert.equal(r.meta().scriptBuyer,undefined);assert.equal(r.meta().selectedEmailBuyer,undefined);
  assert.equal(r.ctx.crmCompanies.length,0);assert.match(r.toasts.at(-1),/permanently removed/i);
 });
+test('mounted views cannot select the removed company from an old CRM cache while cleanup is syncing',async()=>{
+ const r=runtime();r.ctx.crmPipeline=[{id:'crm-one',normalized_domain:'example.com'}];
+ r.ctx.window.dispatchEvent=event=>{if(event.type==='leadintel:company-records-changed'){assert.equal(r.ctx.crmCompanies.length,0);assert.equal(r.ctx.crmPipeline.length,0);}};
+ assert.equal(await r.ctx.removeSelectedBuyerCompany('example.com'),true);
+ const failed=runtime({crmOk:false});failed.ctx.crmPipeline=[{id:'crm-one',normalized_domain:'example.com'}];await failed.ctx.removeSelectedBuyerCompany('example.com');assert.equal(failed.ctx.crmCompanies.length,1);assert.equal(failed.ctx.crmPipeline.length,1);
+});
 test('Cancel, non-owner, sign-out and active research never delete or modify the selection',async()=>{
  for(const options of [{confirmed:false},{role:'sales'},{authenticated:false},{busy:'peopleStatus'},{busy:'publicContactStatus'},{enrichment:true}]){
   const r=runtime(options);if(options.busy)r.candidate[options.busy]='loading';if(options.enrichment)r.ctx.enrichmentPending.add('example.com:anna');
