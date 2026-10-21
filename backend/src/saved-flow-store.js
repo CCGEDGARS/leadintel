@@ -24,7 +24,7 @@ export async function savedFlowView(env,row){
  if(!automaticGmailDeliveryEnabled(env)&&env.APPROVED_WORKFLOW_DELIVERY_MODE!=='enabled')blockers.push('Automatic delivery is disabled on the server');
  const apollo=await apolloCapabilities(env,row.workspace_id);
  const paidSearch=await readAdditionalContactPolicy(env,row.workspace_id);
-  if(paidSearch.enabled&&paidSearch.provider==='treg'){if(!(await resolveWorkspaceServiceCredential(env,row.workspace_id,'treg')).configured)blockers.push('Reconnect Treg in Settings');}else if(config.buyers.confirmContacts&&!apollo.email)blockers.push('Enable Apollo email enrichment in Apollo Settings');
+  if(paidSearch.provider==='treg'){if(paidSearch.enabled&&!(await resolveWorkspaceServiceCredential(env,row.workspace_id,'treg')).configured)blockers.push('Reconnect Treg in Settings');}else if(config.buyers.confirmContacts&&!apollo.email)blockers.push('Enable Apollo email enrichment in Apollo Settings');
  if(config.buyers.confirmPhone&&!apollo.phone)blockers.push('Enable Apollo phone enrichment in Apollo Settings');
  const hunter=await hunterVerificationPolicy(env,row.workspace_id);if(hunter.enabled&&!(await resolveWorkspaceServiceCredential(env,row.workspace_id,'hunter')).configured)blockers.push('Additional Hunter verification is enabled but its connection is unavailable');
  const {results:runs=[]}=await env.DB.prepare('SELECT id,revision,status,stage_index,error_message,created_at,updated_at,result_json FROM approved_workflow_runs WHERE workspace_id=? AND flow_id=? ORDER BY created_at DESC LIMIT 10').bind(row.workspace_id,row.id).all();

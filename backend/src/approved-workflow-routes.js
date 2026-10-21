@@ -16,7 +16,7 @@ async function view(env,workspaceId){
   if(!gmail)blockers.push('Connect Gmail for automatic delivery');if(!automaticGmailDeliveryEnabled(env)&&env.APPROVED_WORKFLOW_DELIVERY_MODE!=='enabled')blockers.push('Automatic delivery is disabled on the server');
   const apollo=await apolloCapabilities(env,workspaceId);
   const paidSearch=await readAdditionalContactPolicy(env,workspaceId);
-  if(paidSearch.enabled&&paidSearch.provider==='treg'){if(!(await resolveWorkspaceServiceCredential(env,workspaceId,'treg')).configured)blockers.push('Reconnect Treg in Settings');}else if(config.buyers.confirmContacts&&!apollo.email)blockers.push('Enable Apollo email enrichment in Apollo Settings');
+  if(paidSearch.provider==='treg'){if(paidSearch.enabled&&!(await resolveWorkspaceServiceCredential(env,workspaceId,'treg')).configured)blockers.push('Reconnect Treg in Settings');}else if(config.buyers.confirmContacts&&!apollo.email)blockers.push('Enable Apollo email enrichment in Apollo Settings');
   if(config.buyers.confirmPhone&&!apollo.phone)blockers.push('Enable Apollo phone enrichment in Apollo Settings');
   const {results:runs=[]}=await env.DB.prepare('SELECT id,revision,status,stage_index,error_message,created_at,updated_at,result_json FROM approved_workflow_runs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 10').bind(workspaceId).all();
   return {status:row?.status||'manual',revision:row?.revision||0,config,context,stages,blockers,runs:runs.map(run=>({...run,result:parse(run.result_json),result_json:undefined})),approvedAt:row?.approved_at||null,nextRunAt:row?.next_run_at||null};

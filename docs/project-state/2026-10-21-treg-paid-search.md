@@ -4,6 +4,7 @@ User-approved scope: replace the Setup additional-email-research accordion with 
 
 ## Connected behavior
 
+- Migration disables old automatic paid-contact consent and selects Treg without transferring approval. Existing credentials and manual legacy receipts remain preserved.
 - Workspace owner connects a Treg team token in Settings. Existing encrypted workspace-service storage holds it; no platform token or customer-specific default is used. Saving a token performs only a free balance check and does not activate paid research.
 - Activate paid search records owner consent, provider Treg, one buyer/company and the displayed daily/monthly lookup limits. Its confirmation discloses the estimate, variable outcomes and a $0.075 combined finder/verifier request ceiling. Deactivation prevents subsequent automatic paid calls, including verification after a revoked lookup. Calls already submitted may finish.
 - The saved policy drives manual Find email and the server-approved workflow. Public/saved accepted evidence is reused first. Treg accepts a qualified, individually researched buyer without requiring four other researched buyers. Shared official-page evidence, current company qualification, exact identity, employer, role and mandatory per-person checks still apply. The server also requires AI review of the chosen buyer.

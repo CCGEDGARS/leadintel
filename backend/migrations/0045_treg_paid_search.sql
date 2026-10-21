@@ -1,4 +1,6 @@
-ALTER TABLE additional_contact_policies ADD COLUMN provider TEXT NOT NULL DEFAULT 'apollo' CHECK(provider IN ('apollo','treg'));
+ALTER TABLE additional_contact_policies ADD COLUMN provider TEXT NOT NULL DEFAULT 'treg' CHECK(provider IN ('apollo','treg'));
+-- Consent to Apollo is not consent to a new paid provider. Require the new toggle.
+UPDATE additional_contact_policies SET enabled=0,provider='treg',max_per_company=1,approved_by=NULL,updated_at=CURRENT_TIMESTAMP;
 CREATE TABLE additional_contact_attempts_next (
  workspace_id TEXT NOT NULL, company_id TEXT NOT NULL, person_id TEXT NOT NULL,
  month TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'apollo' CHECK(provider IN ('apollo','hunter','treg')),

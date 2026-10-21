@@ -15,7 +15,7 @@ const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{statu
 const fail=(message,status=409,code='ADDITIONAL_CONTACT_HOLD')=>Object.assign(new Error(message),{status,code});
 export async function readAdditionalContactPolicy(env,workspaceId){
   const row=await env.DB.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').bind(workspaceId).first();
-  return {enabled:row?.enabled===1,dailyLimit:row?.daily_limit??3,monthlyLimit:row?.monthly_limit??30,maxPerCompany:row?.max_per_company??2,provider:row?.provider||'apollo',updatedAt:row?.updated_at||null};
+  return {enabled:row?.enabled===1,dailyLimit:row?.daily_limit??3,monthlyLimit:row?.monthly_limit??30,maxPerCompany:row?.max_per_company??2,provider:row?.provider||'treg',updatedAt:row?.updated_at||null};
 }
 export async function saveAdditionalContactPolicy(env,context,input){
   if(context.role!=='owner')throw fail('Only the workspace owner can approve additional services',403);
