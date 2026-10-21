@@ -57,10 +57,10 @@ test('Resume uses the same current research-coverage decision as its label, reta
  }
 });
 
-test('research summary omits an unavailable search total and labels recorded public queries accurately',()=>{
+test('research summary uses person and page coverage without turning capped search totals into execution claims',()=>{
  const {ctx,candidate}=runtime();candidate.publicResearch.patternSearches=0;
  let summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.doesNotMatch(summary.textContent,/0 (?:email|public) searches/);
- candidate.publicResearch.patternSearches=37;summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/37 public searches/);assert.doesNotMatch(summary.textContent,/email searches/);
+ candidate.publicResearch.patternSearches=37;summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.doesNotMatch(summary.textContent,/(?:email|public) searches/);assert.match(summary.textContent,/official pages read/);
 });
 
 test('standalone contact resume starts at contact evidence without claiming to re-identify all people',()=>{
