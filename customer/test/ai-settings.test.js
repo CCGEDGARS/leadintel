@@ -160,7 +160,7 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
 
 test('Settings clearly changes data integrations from platform-only to customer-owned without managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
-  assert.match(extension,/Connect Firecrawl with your own API key/);
+  assert.match(extension,/Connect Firecrawl and your Treg team token/);
   assert.match(extension,/No shared paid-service fallback is available/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
@@ -175,7 +175,7 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/id="integration-communication-grid"/);
   for(const name of ['Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/5 connected/);
+  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/6 connected/);
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{

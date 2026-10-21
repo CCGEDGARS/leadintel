@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import '../../customer/contact-confirmation-policy.js';
+
+const ctx={workspaceId:'workspace-a',userId:'owner-a',role:'owner'};
+const candidate={company:'Example',domain:'example.com'};
+const person={id:'public-anna',name:'Anna Buyer',title:'Procurement Director',publicLinkedinUrl:'https://www.linkedin.com/in/anna-buyer'};
+const finder={output:{email:'anna@example.com',first_name:'Anna',last_name:'Buyer'},raw:{},_treg:{provider:'test-finder'}};
+const verifier={output:{email:'anna@example.com',status:'valid'},raw:{email:'anna@example.com',result:'deliverable',is_accept_all:false},_treg:{provider:'test-verifier'}};
+async function fixture({find=finder,verify=verifier}={}){
+ const mod=await import('../src/treg-contact-research.js').catch(()=>null);
+ assert.ok(mod,'Treg contact adapter must exist');
+ const calls=[],receipts=[],saved=[];
+ const deps={credential:async(env,id)=>({source:id===ctx.workspaceId?'customer':'none',apiKey:id===ctx.workspaceId?'private-token':''}),fetch:async(url,options)=>{
+  calls.push({url,options});return new Response(JSON.stringify(url.includes('email.find')?find:verify),{headers:{'X-Treg-Call-Id':'call-'+calls.length,'X-Treg-Cost-Micro':'4000'}});
+ },receipt:async row=>receipts.push(row),save:async(email,evidence)=>{saved.push({email,evidence});return {name:person.name,work_email:email,email_status:'verified',source:'treg',verification_provider:'Treg'};}};
+ return {mod,deps,calls,receipts,saved};
+}
+test('Treg finds then independently verifies a work email with workspace tags, caps, idempotency and settled cost',async()=>{
+ const f=await fixture();const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'attempt-a'},f.deps);
+ assert.equal(result.contact.work_email,'anna@example.com');assert.equal(f.calls.length,2);assert.equal(result.research.costMicro,8000);
+ for(const c of f.calls){assert.match(c.options.headers['X-Treg-Meta'],/workspace=workspace-a/);assert.ok(c.options.headers['Idempotency-Key']);assert.ok(Number(c.options.headers['X-Treg-Route-Max-Cost'])<=0.05);}
+ assert.equal(f.receipts.length,2);assert.equal(f.saved.length,1);
+ assert.equal(globalThis.LeadIntelContactPolicy.accepted(result.contact,'example.com','provider_verified'),true);
+});
+test('Treg rejects wrong identities, personal domains and shared inboxes without saving or verification spend',async()=>{
+ for(const output of [{email:'anna@example.com',first_name:'Someone',last_name:'Else'},{email:'anna@gmail.com'},{email:'info@example.com'}]){
+  const f=await fixture({find:{...finder,output}});const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps);
+  assert.equal(result.contact,null);assert.equal(f.saved.length,0);assert.equal(f.calls.length,1);
+ }
+});
+test('Treg never accepts catch-all, unknown, different-address or pending verification as a recipient',async()=>{
+ for(const verify of [{...verifier,raw:{...verifier.raw,is_accept_all:true}},{output:{status:'unknown'},raw:{}},{...verifier,output:{email:'other@example.com',status:'valid'}},{output:{status:'pending'},raw:{task_id:'task-1'}}]){
+  const f=await fixture({verify});const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps);
+  assert.equal(result.contact,null);assert.equal(f.saved.length,0);
+ }
+});
+test('Treg refuses another workspace and does not use a platform token',async()=>{
+ const f=await fixture();await assert.rejects(f.mod.findTregWorkEmail({TREG_TOKEN:'platform-secret'},{...ctx,workspaceId:'other'},candidate,person,'company-a',{attemptKey:'a'},f.deps),/Connect.*Treg/i);assert.equal(f.calls.length,0);
+});
+test('Treg hides upstream account details when credit balance is exhausted',async()=>{
+ const f=await fixture();f.deps.fetch=async()=>new Response(JSON.stringify({balance_usd:123,top_up_url:'https://private.invalid',error:'insufficient_balance'}),{status:402});
+ await assert.rejects(f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps),error=>!/123|private.invalid/.test(error.message)&&/credit|balance/i.test(error.message));
+});
+test('an interrupted verification resumes its saved finder result and reuses the verification idempotency key',async()=>{
+ const f=await fixture(),db=new DatabaseSync(':memory:');
+ db.exec("CREATE TABLE treg_contact_calls(workspace_id TEXT,request_key TEXT,phase TEXT,call_id TEXT,cost_micro INTEGER,result_json TEXT,poll_count INTEGER DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(workspace_id,request_key,phase));CREATE TABLE workspace_service_integrations(workspace_id TEXT,provider TEXT,last_used_at TEXT,updated_at TEXT);");
+ const env={DB:{prepare(sql){let args=[];return {bind(...v){args=v;return this;},async first(){return db.prepare(sql).get(...args)||null;},async run(){return db.prepare(sql).run(...args);}};}}};
+ delete f.deps.receipt;let interrupted=true;const keys=[];
+ f.deps.fetch=async(url,options)=>{f.calls.push(url);if(url.includes('email.verify')){keys.push(options.headers['Idempotency-Key']);if(interrupted)throw Error('connection lost');}return Response.json(url.includes('email.find')?finder:verifier,{headers:{'X-Treg-Call-Id':url.includes('email.find')?'find-1':'verify-1','X-Treg-Cost-Micro':'4000'}});};
+ await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps),/saved lookup/);
+ interrupted=false;const result=await f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'a'},f.deps);
+ assert.equal(result.contact.work_email,'anna@example.com');assert.equal(f.calls.filter(url=>url.includes('email.find')).length,1);assert.equal(keys[0],keys[1]);assert.equal(result.research.costMicro,8000);assert.equal(db.prepare('SELECT SUM(cost_micro) n FROM treg_contact_calls').get().n,8000);db.close();
+});

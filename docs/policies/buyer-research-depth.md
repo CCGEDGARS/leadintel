@@ -1,5 +1,9 @@
 # Mandatory Buyers research standard
 
+## Treg paid-search amendment — 21 October 2026
+
+The owner-approved Activate paid search control in Setup selects Treg for buyer work-email finding and verification. Company evaluation remains with the existing research providers. A single qualified buyer with fresh mandatory individual checks and shared official-page receipts can be enriched; unrelated unfinished buyers do not veto that person's lookup. Automatic selection also requires the selected person's completed AI review, company qualification 80+, and the existing independent workflow/delivery approval. Do not mark aggregate research complete merely because this scoped gate passed. Keep legacy Apollo/Hunter approvals separate. See `docs/project-state/2026-10-21-treg-paid-search.md` for credential isolation, limits, cost assumptions and retry receipts.
+
 Approved by Edgars on 20 October 2026. Applies to new and explicitly refreshed Step 5 research in manual and automatic flows. Runtime authority: `BUYER_CONTACT_RESEARCH_POLICY` and `runMandatoryBuyerResearch` in `customer/discovery-engine.js`.
 
 ## Optimal default: Adaptive deep
