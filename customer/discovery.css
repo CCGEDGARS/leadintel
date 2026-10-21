@@ -729,3 +729,16 @@
 .selected-prospect-person .additional-contact-note{margin:0;padding:0;border:0;border-radius:0;background:transparent;color:#607367;font-size:12px;line-height:1.45}
 .selected-prospect-person .additional-contact-note strong,.selected-prospect-person .additional-contact-note span{display:inline;font-weight:400}
 .selected-prospect-person .additional-contact-note span::before{content:' ';white-space:pre}
+
+/* Give the buyer dossier its full column on small screens. */
+.selected-prospect-person-details{container-type:inline-size}
+@container(max-width:260px){.buyer-contact-fields{grid-template-columns:1fr}}
+@media(max-width:620px){
+  .topbar{height:auto;min-height:66px;flex-wrap:wrap;gap:6px;padding-top:8px;padding-bottom:8px}
+  .topbar .brand{flex:0 0 auto}
+  .topbar .top-actions{flex:1 1 100%;min-width:0;max-width:100%;flex-wrap:wrap;justify-content:space-between;gap:6px}
+  #step-5 .pipeline-panel{padding:14px 0;border:0;background:transparent;box-shadow:none}
+  #step-5 .selected-prospect-list{padding:0;border:0;background:transparent}
+  #step-5 .selected-prospect-row{padding:12px;gap:14px}
+  #step-5 .selected-prospect-person{padding:12px}
+}
