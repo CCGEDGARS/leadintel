@@ -56,3 +56,15 @@ test('Resume uses the same current research-coverage decision as its label, reta
   const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.force,coveragePassed);
  }
 });
+
+test('research summary omits an unavailable search total and labels recorded public queries accurately',()=>{
+ const {ctx,candidate}=runtime();candidate.publicResearch.patternSearches=0;
+ let summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.doesNotMatch(summary.textContent,/0 (?:email|public) searches/);
+ candidate.publicResearch.patternSearches=37;summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/37 public searches/);assert.doesNotMatch(summary.textContent,/email searches/);
+});
+
+test('standalone contact resume starts at contact evidence without claiming to re-identify all people',()=>{
+ const {ctx}=runtime();vm.runInContext(source.slice(source.indexOf('function buyerResearchProgressHtml('),source.indexOf('async function findExecutiveBuyer(')),ctx);
+ const doc=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'complete',publicContactStatus:'loading'}));assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/Checking public contact evidence/);assert.equal(doc.querySelector('li.active').textContent.trim(),'5Contact evidence');assert.match(doc.querySelector('.buyer-research-progress-head b').textContent,/5\/5/);
+ const discovery=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'loading',publicContactStatus:'loading'}));assert.equal(discovery.querySelector('li.active').textContent.trim(),'1Verify company');
+});

@@ -3953,6 +3953,25 @@
       "contains": [
         "'linkedinIdentityEvidence','linkedinProfileReview','opportunityScope'"
       ]
+    },
+    {
+      "id": "buyers-resume-progress-copy",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Checking public contact evidence",
+        "public searches"
+      ]
+    },
+    {
+      "id": "buyers-resume-copy-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-polish=20261021-v2"
+      ]
     }
   ],
   "retry": {
