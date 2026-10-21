@@ -1930,7 +1930,7 @@
     }
     return [...contacts.values()].slice(0,60);
   }
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-official-contacts-v2',maxPages:12,maxDurationMs:45000,concurrency:3,queries:3});
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-official-contacts-v3',maxPages:12,maxDurationMs:45000,concurrency:3,queries:3});
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),sourcePages=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries)(?:[._+-]|$)/i;
@@ -1994,7 +1994,7 @@
     return {version:1,domain:companyIdentityDomain(domain),checkedAt:clean(value.checkedAt).slice(0,40),sourcePages:(value.sourcePages||[]).filter(official).map(normalizeUrl).slice(0,12),contacts:(value.contacts||[]).filter(p=>hasFullBuyerName(p.name)&&official(p.publicNameUrl)).slice(0,60).map(p=>({...safeBuyer(p,domain),companyChannels:(p.companyChannels||[]).map(channel).filter(Boolean)})),channels:(value.channels||[]).slice(0,40).map(channel).filter(Boolean),...(research?{research}:{})};
   }
   async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},force=false,maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
-    const previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),fresh=previous?.research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&previous.research.status==='complete'&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000;
+    const previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),fresh=previous?.research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&previous.research.status==='complete'&&Boolean(previous.contacts.length||previous.channels.length)&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000;
     if(fresh&&!force)return {inventory:previous,rows};
     const controller=new AbortController();onSignal(controller.signal);const cancel=()=>controller.abort(),timer=setTimeout(cancel,maxDurationMs);signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
     const ensure=async()=>{if(controller.signal.aborted)throw new Error('Official contact research stopped');await guard();if(controller.signal.aborted)throw new Error('Official contact research stopped');};

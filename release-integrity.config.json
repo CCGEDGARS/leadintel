@@ -3707,7 +3707,7 @@
         "function officialCompanyContactInventory(",
         "function safeOfficialContactInventory(",
         "async function runOfficialContactResearch(",
-        "20261021-official-contacts-v2"
+        "20261021-official-contacts-v3"
       ]
     },
     {
@@ -3738,7 +3738,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v2"
+        "official-company-contacts=20261021-v3"
       ]
     },
     {
@@ -3747,7 +3747,7 @@
       "url": "/customer/shell-support-loader.js",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v2"
+        "official-company-contacts=20261021-v3"
       ]
     }
   ],

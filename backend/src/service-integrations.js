@@ -212,7 +212,7 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
   try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch{researchTrace.push({provider:'firecrawl',operation:'extract',status:'skipped',results:0,reason:'Workspace Firecrawl credential unavailable'});}
   if(credential){
     check();try{
-      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false}),signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
+      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0}),signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
       const payload=await response.json(),data=payload.data||payload;if(!response.ok||payload.success===false||!valid(data))throw new Error(response.ok?'Blocked or empty page':`HTTP ${response.status}`);
       researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
       if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();
