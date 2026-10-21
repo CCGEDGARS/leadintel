@@ -63,9 +63,14 @@ test('surname initials never qualify as full identities or supply contact-name p
  assert.equal(D.normalizeApolloPeople({people:[partial]})[0].identityStatus,'pending');
 });
 test('job headings and position labels never become buyer identities',()=>{
- const names=['Warehouse Associate','Key Responsibilities','JOB DESCRIPTION','Product Owner'];
+ const names=['Warehouse Associate','Key Responsibilities','JOB DESCRIPTION','Product Owner','Cookie Consent','Cookie Preferences','Privacy Policy','District Sales','Regional Sales','Global Marketing'];
  for(const name of names){const person=buyer(name,'Production Manager',{name});assert.equal(D.hasFullBuyerName(name),false);assert.equal(D.rankedBuyerShortlist([person],{decisionMakers:'Production Manager'},{company:'Example'}).people.length,0);}
- for(const name of ['John Job','Anna Key','Tony Ten Eyck','Ann-Sofie Zaks'])assert.equal(D.hasFullBuyerName(name),true);
+ for(const name of ['John Job','Anna Key','Tony Ten Eyck','Ann-Sofie Zaks','Cookie Johnson','Jordan Sales'])assert.equal(D.hasFullBuyerName(name),true);
+});
+test('official contact discovery and reload exclude site and department headings without losing the following real staff',()=>{
+ const candidate={company:'Example',domain:'example.com'},rows=[{url:'https://example.com/management',sourceRead:true,markdown:'### Cookie Consent\nMarketing Manager\n### District Sales\nRegional Sales Manager\n### Jane Smith\nProcurement Manager'}];
+ const contacts=D.discoverCompanyContacts(rows,candidate);assert.deepEqual(contacts.map(p=>p.name),['Jane Smith']);
+ const inventory=D.officialCompanyContactInventory(rows,candidate),restored=D.safeOfficialContactInventory(JSON.parse(JSON.stringify(inventory)),candidate.domain);assert.deepEqual(restored.contacts.map(p=>p.name),['Jane Smith']);
 });
 test('local titles preserve manager/director distinctions and prefer specific technical roles',()=>{
  const people=D.selectDecisionMakers([buyer('manager','Projektledare'),buyer('director','Projektchef'),buyer('technical','Teknisk projektledare'),buyer('sourcing','Strategisk inköpare')],profile,10);

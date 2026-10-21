@@ -1282,7 +1282,7 @@
   }
 
   function hasFullBuyerName(value){
-    const name=clean(value);if(/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
+    const name=clean(value);if(/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner|(?:cookie|privacy|consent|preference) (?:consent|policy|notice|settings|preferences|manager|center|centre)|(?:district|regional|territory|area|global|national|group|inside|outside) (?:sales|marketing|operations|support|service)(?: (?:team|department|office|manager|director))?)$/i.test(name))return false;
     const parts=name.split(/\s+/);
     // Initials can be middle names, but cannot stand in for either the first
     // name or surname. Keep partial identities out of contact generation.
