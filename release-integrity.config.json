@@ -3722,7 +3722,8 @@
         "inventoryRestored",
         "Read this source first",
         "Official sources read",
-        "data-official-contact-url"
+        "data-official-contact-url",
+        "if(candidate.buyerDiscovery?.checkedAt||candidate.publicResearch?.checkedAt)continue;"
       ]
     },
     {
@@ -3741,7 +3742,9 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "official-company-contacts=20261021-v4"
+        "official-company-contacts=20261021-v4",
+        "buyer-force-refresh=20261021-v1",
+        "saved-buyer-resume=20261021-v1"
       ]
     },
     {

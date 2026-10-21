@@ -2886,9 +2886,9 @@ function scheduleSavedBuyerPublicChecks(){
     if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')continue;
     if(candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&candidate.publicContactStatus==='error'&&candidate.people.some(person=>(person.emailResearch?.searches||0)>0))continue;
     if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle'&&candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&!LeadIntelDiscovery.buyerResearchCandidates(candidate.people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate).some(person=>!person.emailResearch||person.emailResearch.status==='not_searched'))continue;
-    // A schema upgrade is not a new research request. Keep the saved dossier;
-    // the existing Refresh buyers action starts the updated procedure explicitly.
-    if(candidate.buyerDiscovery?.checkedAt&&candidate.buyerDiscovery.researchVersion!==BUYER_RESEARCH_VERSION)continue;
+    // Opening a saved run is not a retry, even when some people remain unchecked.
+    // Refresh buyers or Resume incomplete checks explicitly resumes that work.
+    if(candidate.buyerDiscovery?.checkedAt||candidate.publicResearch?.checkedAt)continue;
     automaticPublicChecks.add(domain);
     setTimeout(()=>{if(currentJourneyFocus()==='buyers')void findPublicProspectContacts(domain);},0);
   }
