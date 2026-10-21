@@ -26,7 +26,7 @@
       "inmail_masters_version": "inmail-facts-20261016-v2",
       "phone_masters_version": "phone-20261017-v1",
       "professional_master_version": "20261017-professional-v1",
-      "additional_contact_services_version": "qualified-email-v1",
+      "additional_contact_services_version": "qualified-email-v2",
       "company_search_version": "20261020-buyer-context-v1",
       "workspace_records_version": "workspace-records-v1",
       "research_recovery_version": "company-recovery-v2"
@@ -3044,7 +3044,7 @@
       "status": 200,
       "contains": [
         "Complete company qualification first.",
-        "Complete qualification and public research for four buyers first.",
+        "Complete qualification and public research for four buyers before automatic lookup.",
         "max-ready"
       ]
     },
@@ -3057,7 +3057,10 @@
         "Strong match. No confirmed public work email found.",
         "Find email with additional services",
         "/api/additional-contact-services/email",
-        "Verify email with Hunter"
+        "Verify email with Hunter",
+        "hunter_approved:service==='hunter'&&!automatic",
+        "Hunter email finding and, if needed, one delivery verification",
+        "function record(candidate,person,message"
       ]
     },
     {
@@ -3564,7 +3567,7 @@
       "url": "/customer/additional-contact-policy.js",
       "status": 200,
       "contains": [
-        "mandatory public research quality check"
+        "this buyer’s mandatory public research"
       ]
     },
     {
