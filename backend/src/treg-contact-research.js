@@ -7,7 +7,7 @@ const tag=value=>String(value||'').replace(/[^a-zA-Z0-9._:-]/g,'_').slice(0,128)
 const object=value=>value&&typeof value==='object'?value:{};
 
 // One backend boundary owns attribution, request ceilings and idempotency.
-export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,guard=async()=>{},dataLookup=false,includePhone=false,existingContact=null}={},deps={}){
+export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,guard=async()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null}={},deps={}){
  const credential=await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,'treg');
  if(credential.source!=='customer'||!credential.apiKey)throw fail('Connect your Treg team token in Settings.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
  const name=String(person.publicName||person.name||'').trim(),parts=name.split(/\s+/),domain=String(candidate.domain||'').toLowerCase();
@@ -22,9 +22,9 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const previous=async phase=>deps.receipt?null:env.DB.prepare('SELECT call_id,cost_micro,result_json,updated_at,created_at,poll_count FROM treg_contact_calls WHERE workspace_id=? AND request_key=? AND phase=?').bind(context.workspaceId,requestKey(phase),phase).first();
  let total=0,newCalls=0;const callIds=[];
  const call=async(phase,endpoint,body,{poll=false}={})=>{
-  await guard();const saved=await previous(phase);
+  await guard({phase});const saved=await previous(phase);
   if(saved&&!poll){total+=Number(saved.cost_micro)||0;if(saved.call_id)callIds.push(saved.call_id);return JSON.parse(saved.result_json);}
-  const headers={'X-Treg-Token':credential.apiKey,'Content-Type':'application/json',Accept:'application/json','X-Treg-Meta':`customer=${tag(context.workspaceId)},workspace=${tag(context.workspaceId)},feature=buyer-email`,'X-Treg-Route-Max-Cost':poll?'0':phase==='phone'?'0.10':['find','profile'].includes(phase)?'0.05':'0.025','Idempotency-Key':`leadintel-${requestKey(phase)}-${phase}`};
+  const headers={'X-Treg-Token':credential.apiKey,'Content-Type':'application/json',Accept:'application/json','X-Treg-Meta':`customer=${tag(context.workspaceId)},workspace=${tag(context.workspaceId)},feature=buyer-email`,'X-Treg-Route-Max-Cost':poll?'0':phase==='phone'?'0.25':['find','profile'].includes(phase)?'0.05':'0.025','Idempotency-Key':`leadintel-${requestKey(phase)}-${phase}`};
   if(phase==='find'){headers['X-Treg-Route-Verify']='false';headers['X-Treg-Route-Exclude']='tomba';}
   if(phase==='verify')headers['X-Treg-Route-Prefer']='bounceban';
   let response;
@@ -79,7 +79,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  });
  return {...result('verified','Work email verified.'),contact:await save(email,evidence),verification:evidence};
  }; // Email verification is independent of profile and phone availability.
- const emailResult=existingContact?{...result('verified','Saved company email reused.'),contact:existingContact,cached:true}:await emailLookup();
+ const emailResult=existingContact?{...result('verified','Saved company email reused.'),contact:existingContact,cached:true}:includeEmail?await emailLookup():result('not_requested','Paid email search is off.');
  if(!dataLookup)return emailResult;
  const checkedAt=new Date().toISOString(),expectedProfile=person.publicLinkedinUrl||person.linkedin_url;
  const linkedin=value=>{try{const u=new URL(value);return /(^|\.)linkedin\.com$/.test(u.hostname)&&u.pathname.startsWith('/in/')?'https://www.linkedin.com'+u.pathname.replace(/\/$/,''):'';}catch{return '';}};
@@ -87,7 +87,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const clean=value=>typeof value==='string'?value.trim().slice(0,200):'';
  const fields={full_name:name,first_name:parts[0],last_name:parts.slice(1).join(' '),domain,...(expectedProfile?{linkedin_url:expectedProfile}:{}),...(emailResult.contact?.work_email?{email:emailResult.contact.work_email}:{})};
  const previousData=person.contactData?.version===1&&person.contactData.domain===domain&&String(person.contactData.personId)===String(person.id)?person.contactData:null;
- const data={version:1,personId:String(person.id),identityName:name,identityLinkedinUrl:expectedProfile||'',domain,checkedAt,status:'no_new_data',profile:{status:'not_found'},phone:!includePhone&&previousData?.phone?.number?{...previousData.phone,checkedAt:previousData.phone.checkedAt||previousData.checkedAt,requested:false}:{status:includePhone?'not_found':'not_requested'},costMicro:0,callIds:[]};
+ const data={version:1,personId:String(person.id),identityName:name,identityLinkedinUrl:expectedProfile||'',domain,checkedAt,status:'no_new_data',profile:!includeEmail&&previousData?.profile?{...previousData.profile}:{status:includeEmail?'not_found':'not_requested'},phone:!includePhone&&previousData?.phone?.number?{...previousData.phone,checkedAt:previousData.phone.checkedAt||previousData.checkedAt,requested:false}:{status:includePhone?'not_found':'not_requested'},costMicro:0,callIds:[]};
  const attributed=payload=>{
   const row=object(payload.output),raw=object(payload.raw),r=object(raw.person||raw.data||raw);
   const returnedName=row.full_name||r.full_name||r.name;
@@ -96,7 +96,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   if(returnedName&&identity(returnedName)!==identity(name)||returnedLinkedin&&expectedProfile&&linkedin(returnedLinkedin)!==linkedin(expectedProfile)||returnedDomain&&domainOf(returnedDomain)!==domain)return {conflict:true};
   return {row,r,matched:Boolean(returnedName&&identity(returnedName)===identity(name)||returnedLinkedin&&expectedProfile&&linkedin(returnedLinkedin)===linkedin(expectedProfile))};
  };
- try{
+ if(includeEmail)try{
   const profile=await call('profile','treg.people.enrich',fields),match=attributed(profile);
   if(match.conflict)data.profile={status:'conflict'};
   else if(match.matched){
@@ -121,7 +121,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   if(['suppressed','archived'].includes(detail.company.lifecycle_status))throw fail('This company is blocked in CRM.');
   contact=contact||detail.contacts.find(c=>String(c.external_person_id)===String(person.id)&&identity(c.name)===identity(name))||null;
   if(includePhone&&data.phone.status==='provider_listed'&&data.phone.number){
-   contact=detail.contacts.find(c=>String(c.external_person_id)===String(person.id)&&identity(c.name)===identity(name))||null;
+   contact=contact||detail.contacts.find(c=>String(c.external_person_id)===String(person.id)&&identity(c.name)===identity(name))||null;
    if(!contact){const saved=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name,title:person.title,linkedin_url:expectedProfile,source:'treg'}]);contact=saved[0];}
    await guard();
    await env.DB.prepare("UPDATE crm_contacts SET phone_number=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_number ELSE ? END,phone_status=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_status ELSE 'provider_listed' END,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(data.phone.number,checkedAt,contact.id,context.workspaceId,companyId).run();

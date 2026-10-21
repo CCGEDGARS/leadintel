@@ -6,7 +6,7 @@ let policyLoadError='',policyWorkspace='',refreshRequest=0;
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261014-automatic-limits-v1&treg-paid-search=20261021-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261014-automatic-limits-v1&treg-paid-search=20261021-v1&paid-email-phone=20261021-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
 function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
