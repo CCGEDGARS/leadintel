@@ -1,3 +1,4 @@
+const {settleFactResearch}=require('./helpers/message-runtime.js');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {mounted}=require('./helpers/message-runtime.js');
 const O=require('../outreach-engine.js'),E=require('../message-editor.js');
@@ -57,7 +58,7 @@ test('a late CRM reopen cannot overwrite a new manual edit',async()=>{
 });
 test('failed style preparation preserves its retry selection while labelling the previous applied draft',async()=>{
  const h=mounted();try{
-  h.w.document.querySelector('[data-writing-style="original"]').click();h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
+  h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
   assert.equal(h.w.studioState().mode,'original');assert.equal(h.q('message-mode').value,'original');
   assert.equal(h.w.document.querySelector('[data-writing-style="original"]').getAttribute('aria-pressed'),'true');
   assert.equal(h.q('mw-applied-style').textContent,'Style: Professional');assert.deepEqual(E.workingDraft(h.item()),h.before);

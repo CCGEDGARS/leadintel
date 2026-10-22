@@ -1,3 +1,4 @@
+const {settleFactResearch}=require('./helpers/message-runtime.js');
 const test=require('node:test'),assert=require('node:assert/strict');
 const E=require('../message-editor.js'),S=require('../message-studio.js'),A=require('../approved-reference-scripts.js'),O=require('../outreach-engine.js');
 const {mounted}=require('./helpers/message-runtime.js');
@@ -21,7 +22,7 @@ test('opening a new message leaves subject and body empty; only a deliberate sty
 });
 for(const style of ['professional','curiosity','friendly','brutal'])test(`every ${style} click restores its approved body, including after editing and CRM reopen`,()=>{
  const h=mounted({selected:style});try{
- const master=A.originalText(style);click(h,style);const first=E.workingDraft(h.item());assert.equal(h.item().messageStudioDraft.mode,style);assert.match(first.message,/Northport/);
+ const factItem=h.item();factItem.dossier.evidence[0].text+=' Foundation work is under way. The sorting plant is due to run in 2029.';h.w.upsertItem(factItem);const master=A.originalText(style);click(h,style);const first=E.workingDraft(h.item());assert.equal(h.item().messageStudioDraft.mode,style);assert.match(first.message,/Northport/);
  E.validateCoreDraft(S.normalize(h.w.studioState()),h.w.studioMessageContext(),first);
  h.w.upsertItem(E.apply(h.item(),{subject:first.subject,message:'My manually edited '+style+' draft'},{style,origin:'manual'}));h.w.renderAll();click(h,style);
  assert.deepEqual(E.workingDraft(h.item()),first);assert.equal(E.savedDraft(h.item()),false);assert.equal(A.originalText(style),master);
@@ -39,8 +40,8 @@ test('AI Generated creates a fresh draft on each click and clears the old saved 
  const h=mounted({selected:'original'});try{
  const source='Hi Alex,\n\nI’m Robin Lane from North Works. We provide steel and installation for industrial teams. I noticed Buyer’s new sorting plant at Northport. If relevant, would you be open to a 20-minute Zoom conversation to compare your project requirements and discuss our approach? I can bring relevant project lessons and hear what matters to your team.\n\nChoose a suitable time: https://calendly.com/north/intro\n\nBest regards,\nRobin Lane';
  const respond=async(message)=>{const request=h.requests.findLast(r=>r.url.includes('/api/ai/generate'));assert.ok(request);request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Northport project discussion',message,subjectOptions:['Northport project discussion','A relevant introduction','Compare project requirements','Discuss your sorting plant','North Works and Buyer']})})});await settle();};
- click(h,'original');await respond(source);assert.equal(h.q('outreach-email-body').value,source);assert.equal(h.item().messageStudioDraft.mode,'original');assert.equal(E.savedDraft(h.item()),false);
- click(h,'original');await respond(source.replace('I noticed','Your update highlighted'));assert.match(h.q('outreach-email-body').value,/Your update highlighted/);assert.equal(h.requests.filter(r=>r.url.includes('/api/ai/generate')).length,2);
+ click(h,'original');await settleFactResearch(h);await respond(source);assert.equal(h.q('outreach-email-body').value,source);assert.equal(h.item().messageStudioDraft.mode,'original');assert.equal(E.savedDraft(h.item()),false);
+ click(h,'original');await settleFactResearch(h);await respond(source.replace('I noticed','Your update highlighted'));assert.match(h.q('outreach-email-body').value,/Your update highlighted/);assert.equal(h.requests.filter(r=>r.url.includes('/api/ai/generate')).length,2);
  }finally{h.w.close();}
 });
 test('a blocked style click cannot change the selected style or pretend a different email was applied',()=>{
@@ -52,11 +53,11 @@ test('a blocked style click cannot change the selected style or pretend a differ
 
 const aiDraft={subject:'Discuss Northport',message:'Hi Alex,\n\nI’m Robin Lane from North Works. We provide steel and installation for industrial teams. I noticed Buyer’s new sorting plant at Northport. If relevant, would you be open to a 20-minute Zoom conversation to compare your project requirements and discuss our approach? I can bring relevant project lessons and hear what matters to your team.\n\nChoose a suitable time: https://calendly.com/north/intro\n\nBest regards,\nRobin Lane',subjectOptions:['Discuss Northport','A relevant introduction','Compare project requirements','Discuss your sorting plant','North Works and Buyer']};
 test('AI failure preserves the working message and stays visible after rendering',async()=>{
- const h=mounted({selected:'professional'});try{const before=E.workingDraft(h.item());click(h,'original');const request=h.requests.find(r=>r.url.includes('/api/ai/generate'));request.resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();h.w.renderAll();assert.deepEqual(E.workingDraft(h.item()),before);assert.equal(h.q('message-generation-status').hidden,false);assert.match(h.q('message-generation-status').textContent,/Draft unchanged.*Provider unavailable/);assert.equal(h.q('message-generate').disabled,false);}finally{h.w.close();}
+ const h=mounted({selected:'professional'});try{const before=E.workingDraft(h.item());click(h,'original');await settleFactResearch(h);const request=h.requests.find(r=>r.url.includes('/api/ai/generate'));request.resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();h.w.renderAll();assert.deepEqual(E.workingDraft(h.item()),before);assert.equal(h.q('message-generation-status').hidden,false);assert.match(h.q('message-generation-status').textContent,/Draft unchanged.*Provider unavailable/);assert.equal(h.q('message-generate').disabled,false);}finally{h.w.close();}
 });
 for(const change of ['style','body','facts','sync'])test(`late AI result cannot replace a newer ${change} change`,async()=>{
- const h=mounted({selected:'professional'});try{click(h,'original');const request=h.requests.find(r=>r.url.includes('/api/ai/generate'));
- if(change==='style'){click(h,'friendly');assert.equal(request.options.signal.aborted,true);}
+ const h=mounted({selected:'professional'});try{click(h,'original');await settleFactResearch(h);const request=h.requests.find(r=>r.url.includes('/api/ai/generate'));
+ if(change==='style'){click(h,'friendly');assert.equal(request.options.signal.aborted,true);await settleFactResearch(h);}
  if(change==='body'){h.w.upsertItem(E.apply(h.item(),{subject:'My subject',message:'My new edit'},{origin:'manual'}));h.w.renderAll();}
  if(change==='facts'){const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.valueProposition='simplify installation';h.w.localStorage.setItem(key,JSON.stringify(main));}
  if(change==='sync'){h.w.LeadIntelServerBridge.conflict=true;h.w.renderAll();}

@@ -1,3 +1,4 @@
+const {settleFactResearch}=require('./helpers/message-runtime.js');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {mounted}=require('./helpers/message-runtime.js');
 const Editor=require('../message-editor.js');
@@ -30,7 +31,7 @@ for(const [style,name] of [['professional','Professional'],['curiosity','NLP'],[
 });
 test('failed AI Generated preparation restores the saved message and shows its failure',async()=>{
  const h=mounted();try{
-  h.w.document.querySelector('[data-writing-style="original"]').click();blankPreparation(h,'AI Generated');
+  h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);blankPreparation(h,'AI Generated');
   h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
   assert.equal(h.q('mw-preparing-editor').hidden,true);assert.equal(h.q('mw-subject-options').hidden,false);
   assert.equal(h.q('step-6').querySelector('.outreach-drafts .script-grid').hidden,false);

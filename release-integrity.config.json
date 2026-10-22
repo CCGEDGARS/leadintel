@@ -450,7 +450,7 @@
         "function parse(",
         "subjectAudit",
         "subjectResearchPlan",
-        "subject-evidence-v7",
+        "subject-evidence-v8",
         "function subjectReference(",
         "messageEvidenceAudit"
       ]
@@ -2810,7 +2810,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "const mandatoryGaps=LeadIntelMessageEditor.coreFactGaps(studio,context)",
+        "LeadIntelMessageEditor.coreFactGaps(studio,context)",
         "const completingFacts=",
         "buyerFactEvidence:",
         "fact-autofill=20261017-v2"
@@ -4083,6 +4083,62 @@
       "contains": [
         "async applyDraft(draft,assistant=null)",
         "delete record.stages[record.stage].writingAssistant"
+      ]
+    },
+    {
+      "id": "all-style-fact-policy",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "message-facts-20261022-v1",
+        "function prepareFactContext",
+        "function factResearchPlan",
+        "function draftFactGaps",
+        "continueTemplateUpdate",
+        "const sellerGaps=gaps.filter"
+      ]
+    },
+    {
+      "id": "all-style-fact-preflight",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelMessageEditor.prepareFactContext(studioState(main),context)",
+        "LeadIntelMessageEditor.factResearchPlan(studio,context)",
+        "queryReceipts",
+        "continueTemplateUpdate:true",
+        "all-style-facts=20261022-v1"
+      ]
+    },
+    {
+      "id": "all-style-fact-readiness",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "needs-information",
+        "Preparing verified facts",
+        "Needs information: "
+      ]
+    },
+    {
+      "id": "all-style-fact-loader",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "all-style-facts=20261022-v1"
+      ]
+    },
+    {
+      "id": "all-style-fact-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "all-style-facts=20261022-v1"
       ]
     }
   ],

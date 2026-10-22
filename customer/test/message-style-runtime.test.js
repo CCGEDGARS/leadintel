@@ -1,3 +1,4 @@
+const {settleFactResearch}=require('./helpers/message-runtime.js');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const S=require('../message-studio.js'),E=require('../message-editor.js'),O=require('../outreach-engine.js');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
@@ -21,7 +22,7 @@ test('failed field preparation releases Update message and its retry applies the
  const choose=()=>h.w.document.querySelector('[data-writing-style="curiosity"]').click(),settle=()=>new Promise(resolve=>setImmediate(resolve));
  choose();assert.equal(h.requests.length,1);assert.equal(h.q('message-generate').textContent,'Updating…');
  h.requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.item().messageStudioDraft.mode,'professional');assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generate').textContent,'Restore selected template');
- assert.equal(h.q('mw-retry-message').disabled,false);h.q('mw-retry-message').click();assert.equal(h.q('mw-retry-message').textContent,'Retrying…');const request=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(request,h.requests[0]);request.resolve({ok:true,json:async()=>({text:JSON.stringify({triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'})})});await settle();
+ assert.equal(h.q('mw-retry-message').disabled,false);h.q('mw-retry-message').click();assert.equal(h.q('mw-retry-message').textContent,'Retrying…');const request=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(request,h.requests[0]);request.resolve({ok:true,json:async()=>({text:JSON.stringify({triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'})})});await settle();await settleFactResearch(h);
  assert.equal(h.q('mw-retry-message').disabled,true);assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.match(h.q('outreach-email-body').value,/This is what we stand for/);assert.deepEqual(E.updateUndo(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Restore selected template');
  }finally{h.w.close();}
 });
@@ -49,7 +50,7 @@ test('a failed style application keeps its actual failure visible across backgro
  h.w.renderAll();assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,false);assert.match(h.q('mw-style-help').textContent,/Preparation failed.*preserved.*Retry/);assert.equal(h.q('message-mode').value,'curiosity');assert.deepEqual(E.workingDraft(h.item()),h.before);
  for(let i=0;i<h.requests.length;i++){const request=h.requests[i];if(request.url.includes('/firecrawl/')){request.resolve({ok:true,json:async()=>({success:true,data:[]})});await settle();}}
  assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.requests.filter(row=>row.url.includes('/api/ai/generate')).length,1);
- h.w.document.querySelector('[data-writing-style="curiosity"]').click();const retry=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));retry.resolve({ok:true,json:async()=>({text:JSON.stringify(preparedFacts)})});await settle();h.w.renderAll();assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.doesNotMatch(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,true);
+ h.w.document.querySelector('[data-writing-style="curiosity"]').click();const retry=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));retry.resolve({ok:true,json:async()=>({text:JSON.stringify(preparedFacts)})});await settle();await settleFactResearch(h);h.w.renderAll();assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.doesNotMatch(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,true);
  }finally{h.w.close();}
 });
 test('changed source facts reject preparation with a visible retry explanation',async()=>{
@@ -58,13 +59,13 @@ test('changed source facts reject preparation with a visible retry explanation',
  }finally{h.w.close();}
 });
 test('AI Generated still rejects a response prepared before writing references changed',async()=>{
- const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate another');
+ const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate another');
  }finally{h.w.close();}
 });
 
 for(const style of ['professional','curiosity','friendly','brutal','original'])test(`Update message retries failed ${style} selection without replacing the previous draft`,async()=>{
  const h=mounted();try{
- requirePreparation(h);h.w.document.querySelector(`[data-writing-style="${style}"]`).click();
+ requirePreparation(h);h.w.document.querySelector(`[data-writing-style="${style}"]`).click();await settleFactResearch(h);
  const first=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(first);
  first.resolve({ok:false,json:async()=>({error:'Provider temporarily unavailable'})});await settle();
  assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-mode').value,style);assert.equal(h.q('message-generate').disabled,false);
@@ -77,8 +78,8 @@ for(const style of ['professional','curiosity','friendly','brutal','original'])t
 test('message context reads one coherent Profile snapshot per action',()=>{
  const h=mounted();try{let reads=0;const original=h.w.mainState;h.w.mainState=()=>{reads++;return original();};const context=h.w.studioMessageContext();assert.equal(reads,1);assert.equal(context.sellerWebsite,'https://north.example');}finally{h.w.close();}
 });
-test('Update message leaves a visible completion receipt beside the button',()=>{
- const h=mounted({selected:'professional'});try{h.q('message-generate').click();const css=h.w.document.createElement('style');css.textContent=read('message-workspace.css');h.w.document.head.append(css);assert.notEqual(h.w.getComputedStyle(h.q('mw-update-help')).display,'none');assert.match(h.q('mw-update-help').textContent,/Professional updated.*Review and Save/);assert.equal(h.q('message-generate').textContent,'Restore selected template');assert.ok(E.updateUndo(h.item()));}finally{h.w.close();}
+test('Update message leaves a visible completion receipt beside the button',async()=>{
+ const h=mounted({selected:'professional'});try{h.q('message-generate').click();await settleFactResearch(h);const css=h.w.document.createElement('style');css.textContent=read('message-workspace.css');h.w.document.head.append(css);assert.notEqual(h.w.getComputedStyle(h.q('mw-update-help')).display,'none');assert.match(h.q('mw-update-help').textContent,/Professional updated.*Review and Save/);assert.equal(h.q('message-generate').textContent,'Restore selected template');assert.ok(E.updateUndo(h.item()));}finally{h.w.close();}
 });
 
 test('Update reuses completed evidence research instead of restarting a disabled-button wait',()=>{
