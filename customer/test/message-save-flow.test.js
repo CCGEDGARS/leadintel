@@ -16,16 +16,33 @@ test('a late save acknowledges only captured text and cannot replace a newer edi
   if(change==='buyer'){assert.equal(h.active.selectedPersonId,'p2');assert.equal(h.active.messageStudioDraft.savedDraft.message,'My exact body');}
  }
 });
-function flowHarness({automatic=false,save=true}={}){let active=item(),queued=0,approved=0;const bridge={workspace:{id:'w1'},getOutreachAutomationPolicy:async()=>({policy:{mode:automatic?'automatic':'manual',enabled:automatic,automaticDelivery:'enabled'}}),enqueueOutreachAutomation:async payload=>{queued++;assert.equal(payload.subject,'Subject');assert.equal(payload.body,'My exact body');return {ok:true,sequence:{id:'q1'}}},saveNow:async()=>({saved:true})};
+function flowHarness({automatic=false,save=true}={}){let active=item(),queued=0,approved=0;const events=[];const bridge={workspace:{id:'w1'},getOutreachAutomationPolicy:async()=>({policy:{mode:automatic?'automatic':'manual',enabled:automatic,automaticDelivery:'enabled'}}),enqueueOutreachAutomation:async payload=>{queued++;return {ok:true,sequence:{id:'q1'}}},saveNow:async()=>({saved:true})};
  const ctx={LeadIntelMessageEditor:Editor,LeadIntelOutreach:{renderApprovedEmail:i=>({subject:i.drafts.emailSubject,textBody:i.drafts.emailBody})},crmBridge:()=>bridge,messageWorkspaceUsable:()=>true,messageEditor:{state:()=>({})},editorDraft:()=>Editor.workingDraft(active),currentItem:()=>active,upsertItem:i=>{active=i},q:()=>({focus(){},disabled:false}),approveOutreach:async()=>{approved++;active={...active,approved:true,approvedAt:'2026-10-09T10:00:00Z'};return {ok:true,item:active}},saveScriptPackage:async next=>{active=next;return {ok:save}},handoffContact:{contact:{work_email:'alex@buyer.example'}},selectedContact:()=>({email:'alex@buyer.example'}),renderAll(){},renderMessageWorkspace(){},toast(){}};
+ ctx.window={dispatchEvent:event=>events.push(event)};ctx.CustomEvent=class{constructor(type,{detail}){this.type=type;this.detail=detail;}};
+ ctx.loadDeliveryModules=async()=>{};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function messageInFlow('),source.indexOf('async function markCurrentTemplateDefault(')),ctx);vm.runInContext(source.slice(source.indexOf('let messageFlowBusy=false;'),source.indexOf('function openFlowScheduler(')),ctx);
- return {ctx,bridge,get active(){return active},set active(x){active=x},get queued(){return queued},get approved(){return approved}};
+ return {ctx,bridge,events,get active(){return active},set active(x){active=x},get queued(){return queued},get approved(){return approved}};
 }
-test('Add to flow requires saved text, is idempotent, and only queues when automatic delivery is enabled',async()=>{
+test('Add to flow opens Delivery with the durable saved recipient and never activates sending',async()=>{
  const unsaved=flowHarness();unsaved.active.drafts.emailBody='Unsaved';await unsaved.ctx.addCurrentMessageToFlow();assert.equal(unsaved.approved,0);assert.equal(unsaved.queued,0);
- for(const automatic of [false,true]){const h=flowHarness({automatic});await h.ctx.addCurrentMessageToFlow();assert.equal(h.ctx.messageInFlow(h.active),true);assert.equal(h.active.messageStudioDraft.flowMembership.mode,automatic?'automatic':'manual');assert.equal(h.queued,automatic?1:0);await h.ctx.addCurrentMessageToFlow();assert.equal(h.approved,1);assert.equal(h.queued,automatic?1:0);}
+ for(const automatic of [false,true]){const h=flowHarness({automatic});await h.ctx.addCurrentMessageToFlow();assert.equal(h.ctx.messageInFlow(h.active),true);assert.equal(h.active.messageStudioDraft.flowMembership.mode,'manual');assert.equal(h.active.messageStudioDraft.flowMembership.recipient,'alex@buyer.example');assert.equal(h.active.messageStudioDraft.flowMembership.workspaceId,'w1');assert.equal(h.queued,0);assert.equal(h.events.at(-1)?.type,'leadintel:message-flow-ready');assert.equal(h.events.at(-1)?.detail.domain,'buyer.example');await h.ctx.addCurrentMessageToFlow();assert.equal(h.approved,1);assert.equal(h.events.length,2);assert.equal(h.queued,0);}
 });
 test('failed flow persistence remains retryable and a buyer switch during approval never queues',async()=>{
  const failed=flowHarness({save:false,automatic:true});await failed.ctx.addCurrentMessageToFlow();assert.equal(failed.queued,0);assert.equal(failed.ctx.messageInFlow(failed.active),false);
- const changed=flowHarness({automatic:true});let finish;changed.ctx.approveOutreach=()=>new Promise(r=>finish=r);const pending=changed.ctx.addCurrentMessageToFlow();changed.active={...item(),selectedPersonId:'p2'};finish({ok:true});await pending;assert.equal(changed.queued,0);assert.equal(changed.active.messageStudioDraft.flowMembership,undefined);
+ assert.equal(failed.events.length,0);
+ const changed=flowHarness({automatic:true});let finish;changed.ctx.approveOutreach=()=>new Promise(r=>finish=r);const pending=changed.ctx.addCurrentMessageToFlow();await new Promise(resolve=>setImmediate(resolve));changed.active={...item(),selectedPersonId:'p2'};finish({ok:true});await pending;assert.equal(changed.queued,0);assert.equal(changed.active.messageStudioDraft.flowMembership,undefined);
+});
+test('Add to flow waits for Delivery initialization and rejects a context switch while loading',async()=>{
+ for(const switched of [false,true]){const h=flowHarness();let finish;h.ctx.loadDeliveryModules=()=>new Promise(resolve=>finish=resolve);const pending=h.ctx.addCurrentMessageToFlow();await new Promise(resolve=>setImmediate(resolve));assert.equal(h.events.length,0);assert.equal(h.approved,0);if(switched)h.bridge.workspace.id='other';finish();await pending;assert.equal(h.events.length,switched?0:1);assert.equal(h.approved,switched?0:1);}
+});
+test('approval invalidated during Delivery loading is rechecked even when message text is unchanged',async()=>{
+ const h=flowHarness();h.active={...h.active,approved:true,approvedAt:'old'};let finish;h.ctx.loadDeliveryModules=()=>new Promise(resolve=>finish=resolve);
+ const pending=h.ctx.addCurrentMessageToFlow();h.active={...h.active,approved:false,approvedAt:''};finish();await pending;assert.equal(h.approved,1);assert.equal(h.events.length,1);assert.equal(h.active.messageStudioDraft.flowMembership.approvedAt,'2026-10-09T10:00:00Z');
+});
+for(const boundary of ['approval','persistence'])test('invalidating approval during '+boundary+' cannot complete the handoff',async()=>{
+ const h=flowHarness();let finish;
+ if(boundary==='approval')h.ctx.approveOutreach=()=>{h.active={...h.active,approved:true,approvedAt:'captured'};const captured=h.active;return new Promise(resolve=>finish=()=>resolve({ok:true,item:captured}));};
+ else h.ctx.saveScriptPackage=next=>{h.active=next;return new Promise(resolve=>finish=()=>resolve({ok:true}));};
+ const pending=h.ctx.addCurrentMessageToFlow();await new Promise(resolve=>setImmediate(resolve));h.active={...h.active,approved:false,approvedAt:''};finish();await pending;
+ assert.equal(h.events.length,0);assert.equal(h.ctx.messageInFlow(h.active),false);
 });

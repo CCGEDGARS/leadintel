@@ -572,3 +572,9 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio #mw-updating-notice[data-state=ready],#message-studio #mw-updating-notice[data-state=saved]{background:#edf7f1;border-color:#bad7c6;color:#285a42}
 
 .mw-updating-notice[data-state="needs-information"]{background:#fff8e9;border-color:#e5c88b;color:#765219}
+
+/* Keep delivery blockers and their repair action beside the saved message. */
+.message-workspace .mw-flow-readiness{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 16px;padding:12px 14px;border:1px solid var(--line,#dce5df);border-radius:10px;background:var(--soft,#f5f8f6)}
+.message-workspace .mw-flow-readiness p{margin:0;color:var(--muted,#52665b);font-size:13px;line-height:1.5}
+.message-workspace .mw-flow-readiness button{flex-shrink:0}
+@media(max-width:620px){.message-workspace .mw-flow-readiness{align-items:flex-start;flex-direction:column}}
