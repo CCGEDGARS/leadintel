@@ -5,7 +5,7 @@ function candidate(text=quote){const raw={provider:'openai',webSearch:true,facts
 const essentials={sender:'Robin Lane',company:'North Works',offer:'steel manufacturing and installation',target:'industrial teams',problem:'handoffs',value:'simplify delivery',difference:'Our team has more than 20 years of metalworking experience.',approach:'We turn drawings into steel.',meetingValue:'project lessons',calendly:'https://calendly.com/north/intro',nextAction:'Choose a time'};
 test('Buyers dossier becomes a source-backed message brief without another research call',()=>{
  assert.equal(typeof O.buildResearchBrief,'function');const brief=O.buildResearchBrief(candidate(),profile,person);
- assert.equal(brief.version,'shared-message-brief-20261022-v2');assert.equal(brief.domain,'buyer.example');assert.ok(brief.developments.some(row=>row.quote===quote&&row.url===url));assert.equal(brief.buyer.name,person.name);assert.equal(brief.buyer.verified,true);assert.ok(brief.hypotheses.every(row=>row.status==='hypothesis'));
+ assert.equal(brief.version,'shared-message-brief-20261022-v3');assert.equal(brief.domain,'buyer.example');assert.ok(brief.developments.some(row=>row.quote===quote&&row.url===url));assert.equal(brief.buyer.name,person.name);assert.equal(brief.buyer.verified,true);assert.ok(brief.hypotheses.every(row=>row.status==='hypothesis'));
 });
 test('outreach handoff preserves the same brief facts and source evidence through CRM reopening',()=>{
  const c=candidate(),dossier=O.buildOpportunityDossier(c,profile);assert.ok(dossier.researchBrief);assert.ok(dossier.evidence.some(row=>row.url===url&&row.text.includes(quote)));
@@ -60,4 +60,15 @@ test('legacy source provenance stays claim-specific even when another valid clai
 test('the compact brief displays a concise verbatim development sentence while retaining the full source quote',()=>{
  const source='Kontakt](https://buyer.example/contact) News and stories. Stegra is implementing changes to the organization of its project in Boden. This includes changes to the management team. '+ 'Additional source detail. '.repeat(25),c=candidate(source),brief=O.buildResearchBrief(c,profile,person),UI=require('../company-dossier-ui'),html=UI.render(c,{profile,person}),summary=html.split('aria-label="Message brief"')[1].split('</section>')[0];
  assert.equal(brief.facts[0].quote,source.trim());assert.equal(brief.facts[0].text,'Stegra is implementing changes to the organization of its project in Boden.');assert.match(summary,/implementing changes/);assert.doesNotMatch(summary,/Kontakt|Additional source detail/);
+});
+test('the original dossier serializer keeps validated aggregate quotes after dropping per-provider claim lists',()=>{
+ const c=candidate(),d=c.buyerDiscovery.companyDossier;delete d.plan;d.receipts=d.passes.map(pass=>({provider:pass.provider,status:'complete',phase:'complete',sourceCount:1,readCount:1}));
+ d.passes=d.passes.map(pass=>({provider:pass.provider,webSearch:pass.webSearch,status:pass.status,sources:pass.sources}));
+ const brief=O.buildResearchBrief(c,profile,person);assert.ok(brief.facts.some(row=>row.quote===quote));assert.equal(brief.buyer.verified,true);assert.equal(brief.researchStatus,'partial');
+ d.receipts=[];assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);
+});
+test('legacy aggregate compatibility requires actual matching completed extraction receipts and cannot bypass a newer research plan',()=>{
+ const c=candidate(),d=c.buyerDiscovery.companyDossier;delete d.plan;d.passes=d.passes.map(pass=>({provider:pass.provider,webSearch:true,status:'complete',sources:pass.sources}));
+ for(const receipt of [{provider:'anthropic',status:'complete',phase:'complete',readCount:1,sourceCount:1},{provider:'openai',status:'failed',phase:'extraction',readCount:1,sourceCount:1},{provider:'openai',status:'complete',phase:'complete',readCount:0,sourceCount:1}]){d.receipts=[receipt];assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);}
+ d.receipts=[{provider:'openai',status:'complete',phase:'complete',readCount:1,sourceCount:1}];for(const pass of d.passes)pass.planSignature='new-plan';assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);
 });

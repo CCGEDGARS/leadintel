@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./company-dossier.js'):root.LeadIntelCompanyDossier);if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelResearchBrief=api;})(typeof globalThis==='object'?globalThis:this,function(D){
 'use strict';
-const VERSION='shared-message-brief-20261022-v2',clean=v=>String(v??'').replace(/\s+/g,' ').trim(),copy=v=>JSON.parse(JSON.stringify(v));
+const VERSION='shared-message-brief-20261022-v3',clean=v=>String(v??'').replace(/\s+/g,' ').trim(),copy=v=>JSON.parse(JSON.stringify(v));
 const unsafe=text=>/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|<[^>]*>|{{|}}/i.test(text);
 const development=text=>/\b(?:under construction|constructing|building|invest(?:ing|ment)|expan(?:ding|sion)|new (?:plant|factory|warehouse|facility|office|hospital|system|platform)|launch(?:ed|ing)?|implement(?:ed|ing|ation)|moderni[sz](?:ed|ing|ation)|commission(?:ed|ing))\b/i.test(text);
 function conciseQuote(quote){const sentences=quote.split(/(?<=[.!?])\s+/).filter(s=>s.length>=12&&s.length<=360&&!/https?:\/\/|\]\(/i.test(s));return sentences.find(development)||sentences[0]||(quote.length>320?quote.slice(0,320)+'…':quote);}
@@ -11,7 +11,8 @@ function build(candidate={},profile={},person=null,prior=null){
  const target=D.domain(candidate.domain||candidate.website),d=D.safe(candidate.buyerDiscovery?.companyDossier,target),previous=safe(prior,target),facts=[];
  const reads=new Set((d?.passes||[]).flatMap(p=>[...(p.extractedSources||[]),...(p.sourceReads||[]).filter(row=>row.status==='succeeded').map(row=>row.url)]));
  // Older validated passes recorded extracted page URLs and exact cited claims before per-read receipts existed.
- const legacyValidatedClaim=(row,kind)=>(d?.passes||[]).some(pass=>pass.webSearch&&['complete','partial'].includes(pass.status)&&!(pass.extractedSources||[]).length&&!(pass.sourceReads||[]).length&&(pass.sources||[]).includes(row.sourceUrl)&&(pass[kind]||[]).some(claim=>claim.sourceUrl===row.sourceUrl&&clean(claim.quote)===clean(row.quote)&&(kind==='facts'||clean(claim.name).toLowerCase()===clean(row.name).toLowerCase()&&clean(claim.title).toLowerCase()===clean(row.title).toLowerCase()&&claim.status===row.status)));
+ const legacyAggregatePass=pass=>!d.plan&&!pass.planSignature&&!(pass.searchFamilies||[]).length&&!['facts','people','channels'].some(kind=>(pass[kind]||[]).length)&&Number.isFinite(Date.parse(d.checkedAt))&&(d.receipts||[]).some(receipt=>receipt.provider===pass.provider&&receipt.status==='complete'&&receipt.phase==='complete'&&receipt.readCount>0&&receipt.sourceCount>=receipt.readCount);
+ const legacyValidatedClaim=(row,kind)=>(d?.passes||[]).some(pass=>pass.webSearch&&['complete','partial'].includes(pass.status)&&!(pass.extractedSources||[]).length&&!(pass.sourceReads||[]).length&&(pass.sources||[]).includes(row.sourceUrl)&&(legacyAggregatePass(pass)||(pass[kind]||[]).some(claim=>claim.sourceUrl===row.sourceUrl&&clean(claim.quote)===clean(row.quote)&&(kind==='facts'||clean(claim.name).toLowerCase()===clean(row.name).toLowerCase()&&clean(claim.title).toLowerCase()===clean(row.title).toLowerCase()&&claim.status===row.status))));
  const provenFacts=(d?.facts||[]).filter(row=>reads.has(row.sourceUrl)||legacyValidatedClaim(row,'facts')),provenPeople=(d?.people||[]).filter(row=>reads.has(row.sourceUrl)||legacyValidatedClaim(row,'people'));
  for(const row of [...provenFacts,...provenPeople])reads.add(row.sourceUrl);
  const extracted=[];
