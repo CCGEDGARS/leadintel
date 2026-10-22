@@ -4147,7 +4147,9 @@
       "url": "/customer/research-brief.js",
       "status": 200,
       "contains": [
-        "shared-message-brief-20261022-v1",
+        "shared-message-brief-20261022-v2",
+        "legacyValidatedClaim",
+        "function conciseQuote",
         "function supports",
         "authoritativeUrls",
         "sourceRead===false",
@@ -4195,7 +4197,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "research-brief.js?v=20261022-v1",
+        "research-brief.js?v=20261022-v2",
         "shared-message-brief=20261022-v1"
       ]
     }
