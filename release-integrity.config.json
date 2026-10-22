@@ -4147,7 +4147,7 @@
       "url": "/customer/research-brief.js",
       "status": 200,
       "contains": [
-        "shared-message-brief-20261022-v3",
+        "shared-message-brief-20261022-v4",
         "legacyValidatedClaim",
         "legacyAggregatePass",
         "function conciseQuote",
@@ -4198,8 +4198,19 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "research-brief.js?v=20261022-v3",
-        "shared-message-brief=20261022-v1"
+        "research-brief.js?v=20261022-v4",
+        "shared-message-brief=20261022-v2"
+      ]
+    },
+    {
+      "id": "shared-message-brief-relevance",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "shared=briefFact?100:0",
+        "opening==='verified-summary'?80:0",
+        "under construction|constructing|commissioning|launching"
       ]
     }
   ],

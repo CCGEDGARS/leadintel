@@ -5,7 +5,7 @@ function candidate(text=quote){const raw={provider:'openai',webSearch:true,facts
 const essentials={sender:'Robin Lane',company:'North Works',offer:'steel manufacturing and installation',target:'industrial teams',problem:'handoffs',value:'simplify delivery',difference:'Our team has more than 20 years of metalworking experience.',approach:'We turn drawings into steel.',meetingValue:'project lessons',calendly:'https://calendly.com/north/intro',nextAction:'Choose a time'};
 test('Buyers dossier becomes a source-backed message brief without another research call',()=>{
  assert.equal(typeof O.buildResearchBrief,'function');const brief=O.buildResearchBrief(candidate(),profile,person);
- assert.equal(brief.version,'shared-message-brief-20261022-v3');assert.equal(brief.domain,'buyer.example');assert.ok(brief.developments.some(row=>row.quote===quote&&row.url===url));assert.equal(brief.buyer.name,person.name);assert.equal(brief.buyer.verified,true);assert.ok(brief.hypotheses.every(row=>row.status==='hypothesis'));
+ assert.equal(brief.version,'shared-message-brief-20261022-v4');assert.equal(brief.domain,'buyer.example');assert.ok(brief.developments.some(row=>row.quote===quote&&row.url===url));assert.equal(brief.buyer.name,person.name);assert.equal(brief.buyer.verified,true);assert.ok(brief.hypotheses.every(row=>row.status==='hypothesis'));
 });
 test('outreach handoff preserves the same brief facts and source evidence through CRM reopening',()=>{
  const c=candidate(),dossier=O.buildOpportunityDossier(c,profile);assert.ok(dossier.researchBrief);assert.ok(dossier.evidence.some(row=>row.url===url&&row.text.includes(quote)));
@@ -71,4 +71,24 @@ test('legacy aggregate compatibility requires actual matching completed extracti
  const c=candidate(),d=c.buyerDiscovery.companyDossier;delete d.plan;d.passes=d.passes.map(pass=>({provider:pass.provider,webSearch:true,status:'complete',sources:pass.sources}));
  for(const receipt of [{provider:'anthropic',status:'complete',phase:'complete',readCount:1,sourceCount:1},{provider:'openai',status:'failed',phase:'extraction',readCount:1,sourceCount:1},{provider:'openai',status:'complete',phase:'complete',readCount:0,sourceCount:1}]){d.receipts=[receipt];assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);}
  d.receipts=[{provider:'openai',status:'complete',phase:'complete',readCount:1,sourceCount:1}];for(const pass of d.passes)pass.planSignature='new-plan';assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);
+});
+test('navigation fragments and generic investment commentary do not displace a concise company development',()=>{
+ const source='Kontakt](https://buyer.example/contact) News and stories 2026.10.06 News ## Buyer implements changes to project organization Buyer is implementing changes to the organization of its project in Riverport. This includes changes to the management team.',c=candidate(source),brief=O.buildResearchBrief(c,profile,person);
+ assert.equal(brief.facts[0].text,'Buyer implements changes to project organization Buyer is implementing changes to the organization of its project in Riverport.');
+ const commentary='We now have a complete picture of the project, investment by investment – how far we have come and what it has cost.',b=O.buildResearchBrief(candidate(commentary),profile,person);
+ assert.equal(b.developments.length,0);assert.equal(require('../research-brief').opening({buyerDomain:'buyer.example',trigger:{verification:'source_verified',url,excerpt:commentary},researchBrief:b}),null);
+});
+test('actual mounted style selection prefers a usable project observation over a sourced organizational change',async()=>{
+ const {mounted,settleFactResearch}=require('./helpers/message-runtime'),h=mounted({selected:'professional'});try{
+  const c=candidate('Buyer is implementing changes to its management team.'),actualUrl='https://buyer.example/about';c.evidence=[{url:actualUrl,text:quote,sourceRead:true,extractedAt:'2026-10-22T09:00:00Z'}];
+  const discovery=JSON.parse(h.w.localStorage.getItem('leadintel_customer_v2_discovery'));Object.assign(discovery.pipeline[0],{buyerDiscovery:c.buyerDiscovery,evidence:c.evidence});h.w.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify(discovery));
+  const item=h.item();h.w.upsertItem({...item,dossier:{...item.dossier,evidence:[],selectedTrigger:null}});
+  h.w.document.querySelector('[data-writing-style="curiosity"]').click();await settleFactResearch(h);
+  assert.equal(h.item().dossier.selectedTrigger.url,actualUrl);assert.match(h.q('outreach-email-body').value,/I noticed your first plant is under construction in Boden/);
+ }finally{h.w.close();}
+});
+test('compact source excerpts never remove uncertainty or conditional prefixes to manufacture a verified assertion',()=>{
+ for(const source of ['Kontakt](https://buyer.example/contact) According to unconfirmed reports, Buyer is constructing a new plant.','if Buyer is constructing a new plant, we will consider expanding our services.']){
+  const brief=O.buildResearchBrief({domain:'buyer.example',evidence:[{url,sourceRead:true,text:source}]},profile,person);assert.notEqual(brief.facts[0].text,'Buyer is constructing a new plant.');assert.ok(brief.facts[0].text.includes(source.startsWith('if ')?'if Buyer':'unconfirmed reports'));
+ }
 });
