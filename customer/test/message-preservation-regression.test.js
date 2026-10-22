@@ -1,3 +1,4 @@
+const {settleFactResearch}=require('./helpers/message-runtime.js');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {mounted}=require('./helpers/message-runtime.js');
 const E=require('../message-editor.js'),S=require('../message-studio.js'),O=require('../outreach-engine.js');
@@ -20,7 +21,7 @@ test('rewritten invalid subjects are never repaired implicitly',()=>{
 });
 test('Reset after failed style creation restores the original style and exact draft together',async()=>{
  const h=mounted({selected:'professional'});try{
-  h.w.document.querySelector('[data-writing-style="original"]').click();
+  h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);
   h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
   assert.equal(h.w.studioState().mode,'original');
   h.q('mw-restore-original').click();

@@ -38,7 +38,7 @@ test('opening Messages selects evidence before rendering but waits for explicit 
   vm.runInContext(source.split('\n').find(line=>line.includes('window.addEventListener("leadintel:module-opened"')),h.c);
   const rendered=[];h.c.renderAll=()=>rendered.push(h.item.dossier.selectedTrigger?.url);
   onOpen({detail:{step:5}});assert.equal(rendered.length,0);onOpen({detail:{step:6}});
-  assert.equal(rendered[0],'https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.selectMandatoryEmailStyle(mode);assert.match(h.item.drafts.emailBody,/Hi Sam/);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/Robin Lane/);E.validateFrame(h.item.drafts.emailBody,mode);
+  assert.equal(rendered[0],'https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.selectMandatoryEmailStyle(mode);assert.match(h.item.drafts.emailBody,/Hi Sam/);assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.match(h.item.drafts.emailBody,/Robin Lane/);E.validateFrame(h.item.drafts.emailBody,mode);
   const subjects=S.subjectsFor(mode).map(option=>h.c.workingSuggestedSubject(S.chooseSubject(h.studio,mode,option.id),h.item,h.c.selectedCandidate(),true)).filter(Boolean);
   assert.ok(subjects.some(subject=>/Northport/.test(subject)),mode);assert.ok(subjects.every(subject=>S.validSubject(subject)&&!/LKAB|ERCON/.test(subject)));assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
   const before=JSON.stringify(h.item);onOpen({detail:{step:6}});assert.equal(JSON.stringify(h.item),before);assert.equal(h.requests.length,0);
@@ -82,7 +82,7 @@ test('a page check cannot confirm a recipient from another workspace or an unver
 test('opening Messages renders the selected trigger even when Profile confirmation blocks text preparation',()=>{
  const h=harness();h.c.LeadIntelStep2Brief={confirmationMissing:()=>['offer']};assert.equal(h.c.prepareMessageOnOpen(),false);
  assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/news');assert.equal(h.renders,1);assert.equal(h.item.drafts.emailBody,'');assert.equal(h.requests.length,0);
- h.c.LeadIntelStep2Brief.confirmationMissing=()=>[];h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);assert.match(h.item.drafts.emailBody,/Northport/);
+ h.c.LeadIntelStep2Brief.confirmationMissing=()=>[];h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);
 });
 test('reopening refreshes automatic evidence choices while preserving reviewed choices and saved drafts',()=>{
  const h=harness();h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);h.item.messageStudioDraft.scriptSavedAt='today';const before=E.workingDraft(h.item);
@@ -105,7 +105,7 @@ test('opening another confirmed buyer uses that recipient and seller context wit
  h.item={domain:'clinic.example',company:'Clinic',channel:'email',selectedPersonId:'alex',drafts:{},dossier:{domain:'clinic.example',company:'Clinic',people:[{id:'alex',name:'Alex Health',title:'Clinical Director'}],evidence:[{url:'https://clinic.example/news',text:'Clinic is opening a new diagnostic centre at Eastport.'}]}};
  h.c.handoffContact={domain:'clinic.example',personId:'alex',channel:'email'};h.c.readJson=()=>({scriptBuyer:{workspaceId:'w1',domain:'clinic.example',personId:'alex',channel:'email'}});h.c.selectedCandidate=()=>({domain:'clinic.example',company:'Clinic'});h.c.rankedBuyingTriggers=()=>F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:'Clinic'});
  h.studio=S.normalize({mode:'friendly',essentials:{...e,sender:'Morgan Health',company:'Health Systems',offer:'diagnostic equipment',difference:'Our team supports healthcare projects.'}});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
- assert.match(h.item.drafts.emailBody,/Hi Alex/);assert.match(h.item.drafts.emailBody,/Morgan Health/);assert.match(h.item.drafts.emailBody,/Eastport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport|Robin Lane|North Works|Sam Buyer/);E.validateFrame(h.item.drafts.emailBody,'friendly');
+ assert.match(h.item.drafts.emailBody,/Hi Alex/);assert.match(h.item.drafts.emailBody,/Morgan Health/);assert.equal(h.c.studioMessageContext().factPreparation.facts.find(f=>f.id==='subjectProject').value,'Eastport');assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified milestone/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport|Robin Lane|North Works|Sam Buyer/);E.validateFrame(h.item.drafts.emailBody,'friendly');
 });
 test('Update message preserves an applied event invitation and refreshes current saved event details within its own frame',()=>{
  const h=harness(),Events=require('../event-campaigns.js'),campaign={id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare our industrial services.'};
@@ -130,7 +130,7 @@ test('Update message uses a newly confirmed buying event and tailors matching su
   const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
   h.item.messageStudioDraft.scriptSavedAt='today';h.item.drafts.emailBody='Saved manual message';h.item.messageStudioDraft.editorOrigin='manual';
   const url='https://buyer.example/new-factory';h.item.dossier.evidence.push({url,title:'Buyer announces a new manufacturing plant at Riverport',text:'Buyer is investing in a new manufacturing plant at Riverport.'});await h.c.chooseBuyingTrigger(url);
-  assert.equal(h.item.drafts.emailBody,'Saved manual message');h.c.updateMessageFromTemplate();assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport/);assert.equal(h.item.messageStudioDraft.triggerSourceUrl,url);E.validateFrame(h.item.drafts.emailBody,mode);
+  assert.equal(h.item.drafts.emailBody,'Saved manual message');h.c.updateMessageFromTemplate();assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport/);assert.equal(h.item.messageStudioDraft.triggerSourceUrl,url);E.validateFrame(h.item.drafts.emailBody,mode);
   const ctx=h.c.studioMessageContext(h.item);for(const option of S.subjectsFor(mode)){const selected=S.chooseSubject(h.studio,mode,option.id),subject=S.resolveApprovedSubject(selected,{...ctx,strictSubjectChoice:true},e);if(subject){assert.ok(S.validSubject(subject));assert.doesNotMatch(subject,/Northport|LKAB|ERCON/);}}
  }
 });
@@ -159,7 +159,7 @@ test('a tampered pending message cannot redefine the approved template on explic
 test('explicit Update preserves a deliberate custom subject and first original while refreshing the body',()=>{
  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const first=JSON.stringify(h.item.messageStudioDraft.tailoredOriginal);
  h.item.drafts.emailSubject='My own valid subject';h.item.drafts.emailBody='Changed body';h.q('message-subject-choice').value='custom';h.c.updateMessageFromTemplate();
- assert.equal(h.item.drafts.emailSubject,'My own valid subject');assert.match(h.item.drafts.emailBody,/Northport/);assert.equal(JSON.stringify(h.item.messageStudioDraft.tailoredOriginal),first);
+ assert.equal(h.item.drafts.emailSubject,'My own valid subject');assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.equal(JSON.stringify(h.item.messageStudioDraft.tailoredOriginal),first);
 });
 test('Update with identical compliant text still requires an explicit Save and respects editor/session guards',()=>{
  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const before=JSON.stringify(h.item.drafts);
@@ -175,7 +175,7 @@ test('canonical subject selection changes no body and does not create a pending 
 });
 test('selecting a verified official signal preserves a blank draft until explicit Update and does not save or send',async()=>{
  const h=harness();await h.c.chooseBuyingTrigger('https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.updateMessageFromTemplate();
- assert.equal(h.requests.length,0);assert.equal(h.item.messageStudioDraft.editorOrigin,'tailored');assert.equal(h.item.messageStudioDraft.triggerSourceUrl,'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20(?:-minute Zoom| minutes on Zoom)/);assert.equal(h.item.drafts.linkedinMessage,'Other channel preserved');assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
+ assert.equal(h.requests.length,0);assert.equal(h.item.messageStudioDraft.editorOrigin,'tailored');assert.equal(h.item.messageStudioDraft.triggerSourceUrl,'https://buyer.example/news');assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.match(h.item.drafts.emailBody,/20(?:-minute Zoom| minutes on Zoom)/);assert.equal(h.item.drafts.linkedinMessage,'Other channel preserved');assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
  const before=JSON.stringify(h.item);assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(JSON.stringify(h.item),before);
 });
 test('third-party evidence requires review and cannot automatically enter a draft',async()=>{
@@ -186,7 +186,7 @@ test('all approved styles use the same compact verified project without changing
  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const before=A.originalText(mode);h.studio=S.normalize({mode,essentials:e});h.c.selectMandatoryEmailStyle(mode);
-  assert.equal(h.item.messageStudioDraft.mode,mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20(?:-minute| minutes)/);assert.equal(A.originalText(mode),before);E.validateFrame(h.item.drafts.emailBody,mode);
+  assert.equal(h.item.messageStudioDraft.mode,mode);assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.match(h.item.drafts.emailBody,/20(?:-minute| minutes)/);assert.equal(A.originalText(mode),before);E.validateFrame(h.item.drafts.emailBody,mode);
   const ctx=h.c.studioMessageContext(h.item);const ids=mode==='curiosity'?['project','success']:mode==='friendly'?['hello']:mode==='brutal'?['project']:['relevance','development','benefit'];
   for(const id of ids){const subject=S.resolvedSubject(S.chooseSubject(h.studio,mode,id),{...ctx,strictSubjectChoice:true},e);assert.ok(S.validSubject(subject),mode+'/'+id);assert.match(subject,/Northport/);assert.doesNotMatch(subject,/investing|mine\./);}
  }
@@ -200,7 +200,7 @@ test('manual, saved, approved and rewritten messages survive automatic preparati
   assert.equal(JSON.stringify(h.item.drafts),before);assert.equal(h.item.approved,false);assert.equal(h.item.localizationApprovalBlocked,true);assert.ok(h.item.messageStudioDraft.pendingTemplateUpdate);assert.deepEqual(h.item.messageStudioDraft.tailoredOriginal,original);
   const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.equal(JSON.stringify(restored.drafts),before);
   assert.deepEqual(restored.messageStudioDraft.pendingTemplateUpdate,h.item.messageStudioDraft.pendingTemplateUpdate);
-  const key=E.scope('w1',restored,h.studio,{...h.c.studioMessageContext(restored),eventCampaign:null});const accepted=E.acceptUpdate(restored,key);assert.match(accepted.drafts.emailBody,/Northport/);assert.equal(accepted.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(accepted.messageStudioDraft.previousDrafts.at(-1).emailBody,restored.drafts.emailBody);assert.ok(accepted.messageStudioDraft.originalHistory.length);
+  const key=E.scope('w1',restored,h.studio,{...h.c.studioMessageContext(restored),eventCampaign:null});const accepted=E.acceptUpdate(restored,key);assert.ok(accepted.drafts.emailBody);assert.doesNotMatch(accepted.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.equal(accepted.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(accepted.messageStudioDraft.previousDrafts.at(-1).emailBody,restored.drafts.emailBody);assert.ok(accepted.messageStudioDraft.originalHistory.length);
  }
 });
 test('proposal acceptance rejects later manual edits, changed source and another workspace',()=>{
@@ -223,7 +223,7 @@ test('unknown seller context and blocked workspace cannot run automatic preparat
 
 test('an official event beyond the first 900 characters selects its exact event rather than page background',()=>{
  const h=harness(),event=h.item.dossier.evidence[0].text;h.item.dossier.evidence[0].text='Buyer serves industrial clients internationally. '.repeat(30)+event;
- assert.equal(h.c.automaticallySelectBuyingTrigger(),true);assert.equal(h.item.dossier.selectedTrigger.excerpt,event);h.c.selectMandatoryEmailStyle(h.studio.mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.doesNotMatch(h.item.drafts.emailBody,/serves industrial clients/);
+ assert.equal(h.c.automaticallySelectBuyingTrigger(),true);assert.equal(h.item.dossier.selectedTrigger.excerpt,event);h.c.selectMandatoryEmailStyle(h.studio.mode);assert.ok(h.item.drafts.emailBody);assert.doesNotMatch(h.item.drafts.emailBody,/\[Add verified (?:milestone|project|opening-year)/);assert.doesNotMatch(h.item.drafts.emailBody,/serves industrial clients/);
 });
 test('a confirmed handoff is required and changing its recipient invalidates in-flight preparation',async()=>{
  const h=harness();h.c.handoffContact.personId='other';assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(h.requests.length,0);

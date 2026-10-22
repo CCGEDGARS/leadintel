@@ -19,3 +19,14 @@ function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null,r
  return {w,q:id=>w.document.getElementById(id),requests,item:()=>JSON.parse(w.localStorage.getItem('leadintel_customer_v2_outreach')).items[0],before:E.workingDraft(item)};
 }
 module.exports={mounted};
+// Finish bounded external fact reads in tests whose subject is generation or editor behavior.
+// AI draft/field requests remain pending for each test to control explicitly.
+async function settleFactResearch(h){
+ for(let round=0;round<30;round++){
+  await new Promise(resolve=>setImmediate(resolve));
+  const rows=h.requests.filter(row=>!row.factSettled&&/\/api\/ai\/web-search|\/firecrawl\/(?:search|scrape)/.test(String(row.url)));
+  for(const row of rows){row.factSettled=true;row.resolve({ok:true,json:async()=>({success:true,results:[],data:[]})});}
+  if(!rows.length&&h.requests.some(row=>String(row.url).includes('/api/ai/generate')))return;
+ }
+}
+module.exports.settleFactResearch=settleFactResearch;

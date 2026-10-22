@@ -116,6 +116,7 @@ const boundedDiscoveryRuntime = [
   'function companyReviewBatchPlan( async function reviewNextCompanyBatch( function renderCompanyReviewBatch( review-next-companies companies awaiting review batch-review=20261020-v1',
   'function rankedCheckedCompanies(){ function companyCandidateCardHtml( company-other-results Show other companies · shortlist-display=20261020-v1',
   'const deferredMentions= const followUpProfile= function renderSearchPreferences() company-search-preferences profileForQueries.searchFeedback= search-relevance=20261020-v1',
+  'all-style-facts=20261022-v1',
   'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
   'const supplied=LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows) buyerResearchCandidates automatic contact research for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
@@ -130,7 +131,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
@@ -145,7 +146,7 @@ test('production proof rejects the old stage back handler and a cached entry', a
     const proof = await verifyRelease({
       config, expectedSha: SHA, ciConclusion: 'success', ciRunId: 'navigation',
       fetchImpl: productionFetch({
-        customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v3'}"></script>`,
+        customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1${stale === 'entry' ? '' : '&stage-back=20261020-v1&qualification-context=20261020-v3'}"></script>`,
         discoveryUi: stale === 'runtime' ? boundedDiscoveryRuntime.replace('$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)', '$("back-to-strategy")?.addEventListener("click",showStrategyStep)') : boundedDiscoveryRuntime
       }),
       nonce: `stale-stage-back-${stale}`
@@ -158,7 +159,7 @@ test('production proof rejects the old stage back handler and a cached entry', a
 
 test('production proof rejects anonymous access to private settings and workspace state',async()=>{
   const {verifyRelease,VERDICTS}=await loadCore();
-  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'privacy',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime,privateSettingsStatus:200}),nonce:'anonymous-access-regression'});
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'privacy',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime,privateSettingsStatus:200}),nonce:'anonymous-access-regression'});
   assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);
   for(const id of ['shared-link-anonymous-state-denied','shared-link-anonymous-booking-denied'])assert.equal(proof.smokeChecks.find(check=>check.id===id).passed,false);
 });
@@ -189,7 +190,7 @@ test('production proof blocks a Discovery runtime without a hard stop', async ()
     ciConclusion: 'success',
     ciRunId: '201',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
       discoveryUi: 'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};\ninitDiscoveryWhenReady();'
     }),
     nonce: 'timeout-regression'
@@ -207,7 +208,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
     ciConclusion: 'success',
     ciRunId: '202',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
+      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
       discoveryUi: [
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
         'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
@@ -233,18 +234,18 @@ test('release integrity re-verifies production automatically every fifteen minut
 
  test('production proof blocks a missing first-party session proxy',async()=>{
   const {verifyRelease,VERDICTS}=await loadCore();
-  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime,sessionStatus:404}),nonce:'missing-session-proxy'});
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime,sessionStatus:404}),nonce:'missing-session-proxy'});
   assert.notEqual(proof.verdict,VERDICTS.PROVEN);assert.ok(proof.failures.some(f=>f.includes('first-party-api-session')));
 });
 
 test('production proof blocks a missing controlled message editor asset',async()=>{
- const {verifyRelease,VERDICTS}=await loadCore(),base=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime});
+ const {verifyRelease,VERDICTS}=await loadCore(),base=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime});
  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'203',fetchImpl:url=>new URL(url).pathname==='/customer/message-editor.js'?Promise.resolve(response({status:404,text:'missing'})):base(url),nonce:'missing-editor'});
  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.match(proof.failures.join(' '),/controlled-message-editor/);
 });
 
 test('production proof blocks a missing mandatory page-check engine',async()=>{
- const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime});const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/page-quality.js'?response({status:404,text:'missing'}):normal(url),nonce:'page-check-missing'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('mandatory-page-checks-engine')));
+ const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,discoveryUi:boundedDiscoveryRuntime});const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/page-quality.js'?response({status:404,text:'missing'}):normal(url),nonce:'page-check-missing'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('mandatory-page-checks-engine')));
 });
 
 test('production proof rejects anonymous access to script library',async()=>{

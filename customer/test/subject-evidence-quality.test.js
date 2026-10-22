@@ -51,7 +51,7 @@ function harness({sources=[],pending=false,fail=false,snippet=false,invalidPaylo
  return {c,requests,waiting,q,get item(){return item;},get state(){return state;},set workspace(v){workspace=v;},set studio(v){st=v;}};
 }
 test('Profile website extracts reach the actual message context and completion check without new provider calls',async()=>{
- const h=harness({sources:[official]});const context=h.c.studioMessageContext();assert.equal(S.subjectAudit(studio(),context).complete,true);assert.equal(await h.c.prepareSubjectEvidence(),false);assert.equal(h.requests.length,0);
+ const h=harness({sources:[{...official,text:official.text+" We use our own installation crews as our cost basis."}]});const context=h.c.studioMessageContext();assert.equal(S.subjectAudit(studio(),context).complete,true);assert.equal(await h.c.prepareSubjectEvidence(),false);assert.equal(h.requests.length,0);
  const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(report.checks.find(row=>row.id==='subjects-prepared').status,'pass');
 });
 
@@ -90,12 +90,12 @@ test('a missing material remains visible while the comparison and a saved manual
  const h=harness();const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(report.checks.find(row=>row.id==='subjects-prepared').status,'fail');assert.match(report.checks.find(row=>row.id==='subjects-prepared').message,/4\/5/);assert.equal(Q.allowed(report,'flow'),true);assert.equal(h.item.drafts.emailBody,'My exact saved message');
 });
 test('automatic targeted research uses workspace credentials, stores source evidence, completes subjects and preserves saved text through CRM reload',async()=>{
- const h=harness();const body=h.item.drafts.emailBody;assert.equal(await h.c.prepareSubjectEvidence(),true);assert.equal(h.requests.length,1);assert.match(h.requests[0].url,/workspace_id=w1/);assert.equal(h.requests[0].opts.credentials,'include');assert.match(JSON.parse(h.requests[0].opts.body).query,/site:seller\.example/);
+ const h=harness();const body=h.item.drafts.emailBody;assert.equal(await h.c.prepareSubjectEvidence(),true);assert.equal(h.requests.length,2);assert.match(h.requests[0].url,/workspace_id=w1/);assert.equal(h.requests[0].opts.credentials,'include');assert.match(JSON.parse(h.requests[0].opts.body).query,/site:seller\.example/);
  assert.equal(h.item.messageStudioDraft.subjectResearch.sources[0].url,official.url);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);assert.equal(h.item.drafts.emailBody,body);assert.equal(h.item.drafts.emailSubject,'My exact subject');assert.ok(h.item.messageStudioDraft.pendingTemplateUpdate);assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/https:\/\/seller.example\/project/);
- const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(restored.messageStudioDraft.subjectResearch,h.item.messageStudioDraft.subjectResearch);assert.equal(await h.c.prepareSubjectEvidence(),false);assert.equal(h.requests.length,1);
+ const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(restored.messageStudioDraft.subjectResearch,h.item.messageStudioDraft.subjectResearch);assert.equal(await h.c.prepareSubjectEvidence(),false);assert.equal(h.requests.length,2);
 });
 test('search snippets must be extracted before their facts are used',async()=>{
- const h=harness({snippet:true});await h.c.prepareSubjectEvidence();assert.equal(h.requests.length,2);assert.match(h.requests[1].url,/firecrawl\/scrape/);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).complete,true);
+ const h=harness({snippet:true});await h.c.prepareSubjectEvidence();assert.equal(h.requests.length,3);assert.match(h.requests[2].url,/firecrawl\/scrape/);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).complete,true);
 });
 test('real page navigation cannot crowd material and specification facts out of the retained excerpt',async()=>{
  const h=harness(),navigation=Array.from({length:12},(_,i)=>`[Projects manufacturing ${i}](https://seller.example/services/${i})`).join('\n');
@@ -115,7 +115,7 @@ test('a known official project is reread when an older excerpt omitted its mater
  assert.equal(h.item.drafts.emailBody,'My exact saved message');
 });
 test('provider failure remains incomplete, bounded on reopen and explicitly retryable without changing saved drafts',async()=>{
- const h=harness({fail:true}),before=JSON.stringify(E.workingDraft(h.item));await h.c.prepareSubjectEvidence();assert.equal(h.item.messageStudioDraft.subjectResearch.status,'incomplete');assert.match(h.item.messageStudioDraft.subjectResearch.errors[0],/credits/);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).complete,false);assert.equal(JSON.stringify(E.workingDraft(h.item)),before);await h.c.prepareSubjectEvidence();assert.equal(h.requests.length,1);await h.c.prepareSubjectEvidence({retry:true});assert.equal(h.requests.length,2);
+ const h=harness({fail:true}),before=JSON.stringify(E.workingDraft(h.item));await h.c.prepareSubjectEvidence();assert.equal(h.item.messageStudioDraft.subjectResearch.status,'incomplete');assert.match(h.item.messageStudioDraft.subjectResearch.errors[0],/credits/);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).complete,false);assert.equal(JSON.stringify(E.workingDraft(h.item)),before);await h.c.prepareSubjectEvidence();assert.equal(h.requests.length,2);await h.c.prepareSubjectEvidence({retry:true});assert.equal(h.requests.length,4);
 });
 test('late research cannot cross a changed workspace, recipient, seller, trigger or style',async()=>{
  for(const change of ['workspace','recipient','seller','trigger','style']){
