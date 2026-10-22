@@ -4230,7 +4230,58 @@
       "type": "text",
       "url": "/customer/",
       "status": 200,
-      "contains": ["sync-recovery-overflow=20261022-v1"]
+      "contains": [
+        "sync-recovery-overflow=20261022-v1"
+      ]
+    },
+    {
+      "id": "saved-email-flow-actions",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-flow-readiness",
+        "mw-flow-resolve",
+        "Open Delivery \u2192",
+        "Nothing is sent or activated by this button."
+      ]
+    },
+    {
+      "id": "email-only-approval",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "Email subject and email body are required before approval."
+      ],
+      "notContains": [
+        "Email subject, email body and LinkedIn message are required before approval."
+      ]
+    },
+    {
+      "id": "saved-message-delivery-handoff",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": [
+        "leadintel:message-flow-ready",
+        "receiveMessageFlow",
+        "approvedBuyerEmail",
+        "entry.workspaceId!==detail.workspaceId"
+      ]
+    },
+    {
+      "id": "flow-preparation-never-enqueues",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "leadintel:message-flow-ready",
+        "Review Delivery before sending or activating automation."
+      ],
+      "notContains": [
+        "enqueueOutreachAutomation?.("
+      ]
     }
   ],
   "retry": {

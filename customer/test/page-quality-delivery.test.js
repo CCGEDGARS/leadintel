@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const source=fs.readFileSync(require.resolve('../delivery-ui.js'),'utf8');
 function harness(){
  const pkg={domain:'buyer.example',approved:true,channel:'email',selectedPersonId:'sam',approvedSource:{emailSubject:'Subject',emailBody:'Body'},drafts:{emailSubject:'Subject',emailBody:'Body'},dossier:{people:[{id:'sam',email:'sam@buyer.example'}]}},record={},nodes={'step-7':{},'delivery-recipient':{value:'sam@buyer.example'}};
- const context={window:{LeadIntelPageQuality:Q},LeadIntelDelivery:Delivery,q:id=>nodes[id],currentPackage:()=>pkg,currentRecord:()=>record,delivery:{selectedDomain:'buyer.example'}};vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function deliveryQualityContext'),source.indexOf('function toast')),context);
+ const context={window:{LeadIntelPageQuality:Q},LeadIntelDelivery:Delivery,q:id=>nodes[id],currentPackage:()=>pkg,currentRecord:()=>record,delivery:{selectedDomain:'buyer.example'},crmBridge:()=>({workspace:{id:'w1'}})};vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function approvedBuyerEmail'),source.indexOf('function toast')),context);
  return {pkg,record,nodes,report:()=>Q.inspect('delivery',{...context.deliveryQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}})};
 }
 test('delivery checks the exact approved text and selected buyer email without changing either',()=>{
