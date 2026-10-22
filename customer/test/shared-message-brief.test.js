@@ -57,3 +57,7 @@ test('legacy source provenance stays claim-specific even when another valid clai
  c.buyerDiscovery.companyDossier.facts.push({sourceUrl:url,quote:'Our new factory is under construction in another town.',text:'Our new factory is under construction in another town.'});
  assert.deepEqual(O.buildResearchBrief(c,profile,person).facts.map(row=>row.quote),[quote]);
 });
+test('the compact brief displays a concise verbatim development sentence while retaining the full source quote',()=>{
+ const source='Kontakt](https://buyer.example/contact) News and stories. Stegra is implementing changes to the organization of its project in Boden. This includes changes to the management team. '+ 'Additional source detail. '.repeat(25),c=candidate(source),brief=O.buildResearchBrief(c,profile,person),UI=require('../company-dossier-ui'),html=UI.render(c,{profile,person}),summary=html.split('aria-label="Message brief"')[1].split('</section>')[0];
+ assert.equal(brief.facts[0].quote,source.trim());assert.equal(brief.facts[0].text,'Stegra is implementing changes to the organization of its project in Boden.');assert.match(summary,/implementing changes/);assert.doesNotMatch(summary,/Kontakt|Additional source detail/);
+});

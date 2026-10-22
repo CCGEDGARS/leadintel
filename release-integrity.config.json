@@ -4149,6 +4149,7 @@
       "contains": [
         "shared-message-brief-20261022-v2",
         "legacyValidatedClaim",
+        "function conciseQuote",
         "function supports",
         "authoritativeUrls",
         "sourceRead===false",
