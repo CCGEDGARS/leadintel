@@ -11,7 +11,7 @@ function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,wit
  root.window=root;root.globalThis=root;
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(persistence,root);
- if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{ready:true,session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
+ if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.__enterConflict=enterConflict;root.__reconcileServerState=reconcileServerState;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{ready:true,session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
  return {root,values,events,timers};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
@@ -481,4 +481,50 @@ test('a failed revision retry keeps the original baseline for a later competing 
  assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).conflict,true);
  assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer after research');
  assert.equal(JSON.parse(values.get(RECOVERY)).server.payload.main.answers.offer,'Competing remote offer');
+});
+
+test('sync conflict recovery overflows to durable storage before replacing local state and can read its backup again',async()=>{
+ const {root,values,events}=load(async()=>Response.json({version:12,payload:{main:{website:'server.example'}}}),{withBridge:true});
+ values.set(RECOVERY,JSON.stringify({workspace_id:'w1',original:{local:{main:{website:'original.example'}}}}));
+ const durable=new Map();let release,started=false;const commit=new Promise(resolve=>release=resolve);
+ root.LeadIntelAccountCache={saveRecoverySnapshot:async record=>{started=true;await commit;durable.set('backup-1',JSON.parse(JSON.stringify(record)));return 'backup-1';},readRecoverySnapshot:async key=>durable.get(key)};
+ const nativeSet=root.localStorage.setItem;root.localStorage.setItem=(key,value)=>{if(key===RECOVERY&&String(value).length>200)throw Object.assign(Error('Quota exceeded'),{name:'QuotaExceededError'});nativeSet(key,value);};
+ const resolving=root.LeadIntelServerBridge.resolveConflictUseServer();try{await new Promise(resolve=>setImmediate(resolve));assert.equal(started,true,'quota overflow must start a durable backup');assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.equal(events.includes('reload'),false);}finally{release();}
+ assert.equal((await resolving).resolved,true);const pointer=JSON.parse(values.get(RECOVERY));assert.equal(pointer.format,'leadintel-indexed-sync-recovery-v1');assert.equal(durable.get(pointer.key).original.local.main.website,'original.example');assert.equal(durable.get(pointer.key).local.main.answers.offer,'Local offer');
+ root.LeadIntelAccountCache.saveRecoverySnapshot=async record=>{durable.set('backup-2',JSON.parse(JSON.stringify(record)));return 'backup-2';};
+ root.LeadIntelServerBridge.conflict=true;assert.equal((await root.LeadIntelServerBridge.resolveConflictUseServer()).resolved,true);assert.equal(durable.get('backup-2').original.local.main.website,'original.example');
+});
+test('a failed durable conflict backup cannot discard the prior backup or working draft',async()=>{
+ const {root,values}=load(async()=>Response.json({version:12,payload:{main:{website:'server.example'}}}),{withBridge:true});
+ const prior=JSON.stringify({workspace_id:'w1',local:{main:{website:'prior.example'}}});values.set(RECOVERY,prior);
+ root.localStorage.setItem=(key,value)=>{if(key===RECOVERY)throw Object.assign(Error('Quota exceeded'),{name:'QuotaExceededError'});values.set(key,String(value));};
+ root.LeadIntelAccountCache={saveRecoverySnapshot:async()=>{throw Error('Durable backup unavailable');}};
+ const result=await root.LeadIntelServerBridge.resolveConflictUseServer();assert.equal(result.resolved,false);assert.equal(values.get(RECOVERY),prior);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.equal(root.LeadIntelServerBridge.conflict,true);
+});
+test('durable sync recovery downloads the original data and rejects another workspace envelope',async()=>{
+ const {root,values}=load(async()=>Response.json({version:12,payload:{main:{website:'server.example'}}}),{withBridge:true});
+ values.set(RECOVERY,JSON.stringify({format:'leadintel-indexed-sync-recovery-v1',workspace_id:'w1',key:'backup'}));
+ let record={workspace_id:'w1',local:{main:{website:'protected.example'}}},file,clicked=false;root.LeadIntelAccountCache={readRecoverySnapshot:async()=>record};
+ root.URL={createObjectURL:blob=>{file=blob;return 'blob:backup';},revokeObjectURL(){}};root.document.createElement=()=>({click(){clicked=true;}});
+ assert.equal(await root.LeadIntelServerBridge.downloadSyncRecovery(),true);assert.equal(clicked,true);assert.equal(JSON.parse(await file.text()).local.main.website,'protected.example');
+ record={workspace_id:'w2',local:{main:{website:'other.example'}}};clicked=false;assert.equal(await root.LeadIntelServerBridge.downloadSyncRecovery(),false);assert.equal(clicked,false);
+ const result=await root.LeadIntelServerBridge.resolveConflictUseServer();assert.equal(result.resolved,false);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');
+});
+test('a workspace switch while committing durable sync recovery cannot publish its pointer or replace state',async()=>{
+ const {root,values}=load(async()=>Response.json({version:12,payload:{main:{website:'server.example'}}}),{withBridge:true});const prior=JSON.stringify({workspace_id:'w1',local:{main:{website:'prior.example'}}});values.set(RECOVERY,prior);
+ root.localStorage.setItem=(key,value)=>{if(key===RECOVERY)throw Object.assign(Error('Quota exceeded'),{name:'QuotaExceededError'});values.set(key,String(value));};
+ root.LeadIntelAccountCache={saveRecoverySnapshot:async()=>{root.LeadIntelServerBridge.workspace={id:'w2'};root.LeadIntelServerBridge.conflict=false;root.LeadIntelServerBridge.conflictState=null;return 'saved-for-w1';}};
+ const result=await root.LeadIntelServerBridge.resolveConflictUseServer();assert.equal(result.resolved,false);assert.equal(values.get(RECOVERY),prior);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.equal(root.LeadIntelServerBridge.conflict,false,'old resolution must not mark the new workspace conflicting');
+});
+
+test('recovery callers recheck workspace ownership after a completed backup before flags or state change',async()=>{
+ for(const operation of ['resolver','reconcile','enter']){
+  const {root,values,events}=load(async()=>Response.json({version:12,payload:{main:{website:'server.example'}}}),{withBridge:true});
+  const base=establishBase(root,values),initial=values.get(MAIN),nativeSet=root.localStorage.setItem;
+  root.localStorage.setItem=(key,value)=>{nativeSet(key,value);if(key===RECOVERY)Promise.resolve().then(()=>{Object.assign(root.LeadIntelServerBridge,{workspace:{id:'w2'},stateVersion:77,conflict:false,conflictState:null,conflictDetails:null});});};
+  if(operation==='resolver')await root.LeadIntelServerBridge.resolveConflictUseServer();
+  if(operation==='reconcile')await root.__reconcileServerState({version:12,payload:base},root.LeadIntelWorkspacePersistence.syncedBase('w1'));
+  if(operation==='enter')await root.__enterConflict({version:12,payload:base});
+  assert.equal(root.LeadIntelServerBridge.workspace.id,'w2',operation);assert.equal(root.LeadIntelServerBridge.stateVersion,77,operation);assert.equal(root.LeadIntelServerBridge.conflict,false,operation);assert.equal(root.LeadIntelServerBridge.conflictState,null,operation);assert.equal(root.LeadIntelServerBridge.conflictDetails,null,operation);assert.equal(values.get(MAIN),initial,operation);assert.equal(events.includes('reload'),false,operation);
+ }
 });

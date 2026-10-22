@@ -12,6 +12,7 @@
   const HYDRATION_KEY='leadintel_customer_v2_server_hydration';
   const CONFLICT_KEY='leadintel_customer_v2_server_conflict';
   const RECOVERY_KEY='leadintel_customer_v2_sync_recovery_v1';
+  const INDEXED_RECOVERY_FORMAT='leadintel-indexed-sync-recovery-v1';
   let conflictResolution=null;
   const DIRTY_KEY='leadintel_customer_v2_server_dirty';
   const VERSION_KEY='leadintel_customer_v2_server_versions';
@@ -165,8 +166,8 @@
   async function fetchWorkspaces(){const {payload}=await bootstrapRead('/api/workspaces',value=>Array.isArray(value?.workspaces)&&value.workspaces.every(item=>typeof item?.id==='string'&&item.id.length>0));bridge.workspaces=payload.workspaces;return bridge.workspaces;}
   async function fetchWorkspaceState(){if(!bridge.workspace)return null;const {payload}=await bootstrapRead(`/api/customer/state?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,value=>Number.isSafeInteger(value?.version)&&value.version>=0&&value.payload&&typeof value.payload==='object'&&!Array.isArray(value.payload));bridge.stateVersion=payload.version;bridge.workspaceStateCodec=payload.state_codec||'';bridge.workspaceBundleCodec=payload.bundle_codec||'';bridge.workspaceCompressionCodec=payload.compression_codec||'';bridge.workspaceRecordCodec=payload.record_codec||'';bridge.workspaceMaxSyncBytes=bridge.workspaceRecordCodec==='workspace-records-v1'?Math.min(8*1024*1024,Number(payload.max_sync_bytes)||500*1024):500*1024;return payload;}
   function pickWorkspace(){const preferred=localStorage.getItem(WORKSPACE_KEY);const dirty=readDirtyLocalState();const dirtyWorkspace=dirty?.workspace_id?bridge.workspaces.find(item=>item.id===dirty.workspace_id):null;bridge.workspace=dirtyWorkspace||bridge.workspaces.find(item=>item.id===preferred)||bridge.workspaces[0]||null;if(bridge.workspace&&!root.LeadIntelAccountCache)localStorage.setItem(WORKSPACE_KEY,bridge.workspace.id);}
-  async function enterConflict(state,message){bridge.conflict=true;try{await preserveSyncRecovery(state,'conflict');}catch{bridge.conflictDetails={...(bridge.conflictDetails||{}),recoveryAvailable:false};}bridge.conflict=true;bridge.conflictState=state&&typeof state==='object'?state:null;renderConflictActions();const detail=bridge.conflictDetails?.paths?.length?' · '+bridge.conflictDetails.paths.slice(0,3).join(', '):bridge.conflictDetails?.reason==='baseline_unavailable'?' · saved baseline unavailable':'';setStatus('Sync conflict · local changes preserved','error');const status=document.getElementById('server-sync-status');if(status)status.title='Sync conflict'+detail+' · local changes preserved';root.dispatchEvent(new CustomEvent('leadintel:server-conflict'));showToast(message||'Server state changed in another session. Your local changes are still safe in this browser.');}
-  async function hydrateAuthenticated(){const persistence=root.LeadIntelWorkspacePersistence;if(hasDirtyLocalState()&&persistence?.isExplicitlySaved?.()&&persistence.hasUnsavedChanges?.()===false)clearDirtyLocalState();const base=persistence?.syncedBase?.(bridge.workspace.id);const state=await fetchWorkspaceState();const latest=persistence?.syncedBase?.(bridge.workspace.id);if(latest?.version===readRememberedVersion(bridge.workspace.id)&&latest.version>Number(state.version)){bridge.stateVersion=latest.version;setStatus(hasDirtyLocalState()?'Unsynced changes · retrying':'Synced to LeadIntel',hasDirtyLocalState()?'saving':'synced');if(hasDirtyLocalState())scheduleSave();return true;}const marker=`${bridge.workspace.id}:${state.version}`;const dirty=readDirtyLocalState();if(hasDirtyLocalState()){if(!dirty.workspace_id&&Number(state.version)===0)rebaseDirtyLocalState();else if(Number(dirty.base_version)!==Number(state.version)){if(await reconcileServerState(state,base)){location.reload();return false;}await enterConflict(state,'LeadIntel preserved your local changes because the server workspace changed in another session.');return true;}setStatus('Unsynced changes · retrying','saving');scheduleSave();return true;}if(state.version>0&&sessionStorage.getItem(HYDRATION_KEY)!==marker){applyPayload(state.payload);clearDirtyLocalState();rememberServerVersion(bridge.workspace.id,state.version);sessionStorage.setItem(HYDRATION_KEY,marker);setStatus('Synced to LeadIntel','synced');location.reload();return false;}if(state.version===0&&hasLocalData()){markDirtyLocalState();setStatus('Unsynced changes · saving','saving');scheduleSave();return true;}rememberServerVersion(bridge.workspace.id,state.version);setStatus('Synced to LeadIntel','synced');return true;}
+  async function enterConflict(state,message){const workspaceId=bridge.workspace?.id;if(!workspaceId)return false;bridge.conflict=true;try{await preserveSyncRecovery(state,'conflict');}catch{if(bridge.workspace?.id!==workspaceId)return false;bridge.conflictDetails={...(bridge.conflictDetails||{}),recoveryAvailable:false};}if(bridge.workspace?.id!==workspaceId)return false;bridge.conflict=true;bridge.conflictState=state&&typeof state==='object'?state:null;renderConflictActions();const detail=bridge.conflictDetails?.paths?.length?' · '+bridge.conflictDetails.paths.slice(0,3).join(', '):bridge.conflictDetails?.reason==='baseline_unavailable'?' · saved baseline unavailable':'';setStatus('Sync conflict · local changes preserved','error');const status=document.getElementById('server-sync-status');if(status)status.title='Sync conflict'+detail+' · local changes preserved';root.dispatchEvent(new CustomEvent('leadintel:server-conflict'));showToast(message||'Server state changed in another session. Your local changes are still safe in this browser.');}
+  async function hydrateAuthenticated(){const workspaceId=bridge.workspace?.id;if(!workspaceId)return false;const persistence=root.LeadIntelWorkspacePersistence;if(hasDirtyLocalState()&&persistence?.isExplicitlySaved?.()&&persistence.hasUnsavedChanges?.()===false)clearDirtyLocalState();const base=persistence?.syncedBase?.(bridge.workspace.id);const state=await fetchWorkspaceState();if(bridge.workspace?.id!==workspaceId)return false;const latest=persistence?.syncedBase?.(bridge.workspace.id);if(latest?.version===readRememberedVersion(bridge.workspace.id)&&latest.version>Number(state.version)){bridge.stateVersion=latest.version;setStatus(hasDirtyLocalState()?'Unsynced changes · retrying':'Synced to LeadIntel',hasDirtyLocalState()?'saving':'synced');if(hasDirtyLocalState())scheduleSave();return true;}const marker=`${bridge.workspace.id}:${state.version}`;const dirty=readDirtyLocalState();if(hasDirtyLocalState()){if(!dirty.workspace_id&&Number(state.version)===0)rebaseDirtyLocalState();else if(Number(dirty.base_version)!==Number(state.version)){if(await reconcileServerState(state,base)){if(bridge.workspace?.id!==workspaceId)return false;location.reload();return false;}if(bridge.workspace?.id!==workspaceId)return false;await enterConflict(state,'LeadIntel preserved your local changes because the server workspace changed in another session.');return true;}setStatus('Unsynced changes · retrying','saving');scheduleSave();return true;}if(state.version>0&&sessionStorage.getItem(HYDRATION_KEY)!==marker){applyPayload(state.payload);clearDirtyLocalState();rememberServerVersion(bridge.workspace.id,state.version);sessionStorage.setItem(HYDRATION_KEY,marker);setStatus('Synced to LeadIntel','synced');location.reload();return false;}if(state.version===0&&hasLocalData()){markDirtyLocalState();setStatus('Unsynced changes · saving','saving');scheduleSave();return true;}rememberServerVersion(bridge.workspace.id,state.version);setStatus('Synced to LeadIntel','synced');return true;}
   async function init(){if(initialized)return;initialized=true;trace('verification:start');injectCss();injectAccountUi();patchStorage();
     try{await root.LeadIntelAccountCache?.pending;trace('snapshot baseline:start');await root.LeadIntelWorkspacePersistence?.ready;trace('snapshot baseline:complete');const conflictNote=sessionStorage.getItem(CONFLICT_KEY);if(conflictNote){sessionStorage.removeItem(CONFLICT_KEY);showToast(conflictNote);}trace('session:start');await fetchSession();trace('session:complete');if(!bridge.session?.authenticated){if(root.LeadIntelAccountCache?.hasWorkspace()){await root.LeadIntelAccountCache.detach();location.reload();return;}root.LeadIntelAccountCache?.complete();const returnedFromSignIn=/[?&]auth=success(?:&|$)/.test(root.location?.search||'');setStatus(returnedFromSignIn?'Sign-in session unavailable · Workspace not loaded':'Local workspace · Sign in to sync',returnedFromSignIn?'error':'local');renderAccount();bridge.ready=true;root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}trace('workspaces:start');await fetchWorkspaces();trace('workspaces:complete');pickWorkspace();renderAccount();if(!bridge.workspace){root.LeadIntelAccountCache?.failed();setStatus('Signed in · No workspace','error');return;}trace('account activation:start');const cache=await root.LeadIntelAccountCache?.activate({workspaceId:bridge.workspace.id,userId:bridge.session.user.id});trace('account activation:complete');if(cache?.changed){location.reload();return;}trace('workspace hydration:start');const stay=await hydrateAuthenticated();trace('workspace hydration:complete');if(!stay)return;root.LeadIntelAccountCache?.complete();bridge.ready=true;trace('verified UI:start');root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));trace('verified UI:complete');}catch(cause){bridge.startupFailure={code:cause?.code||'startup_failed',requestPath:cause?.requestPath||'',phase:cause?.phase||'startup',status:Number(cause?.status)||0};console.warn('LeadIntel server bridge:',cause);root.LeadIntelAccountCache?.failed(cause);setStatus('Local cache · Server unavailable','error');renderAccount();bridge.ready=!root.LeadIntelAccountCache;root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}
     // Auxiliary service availability must not undo verified account access.
@@ -219,7 +220,7 @@
         }
         setStatus('Research running · changes preserved for sync retry','saving');scheduleSave();return {saved:false,retryable:true,reason:'research_in_progress',version:bridge.stateVersion};
       }
-      if(!resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,context.workspaceId)&&await reconcileServerState(result.current,base)){if(!hasDirtyLocalState()){location.reload();return {saved:true,version:bridge.stateVersion};}if(Number(context.syncRetries||0)>=2){setStatus('Changes preserved · sync retrying','saving');scheduleSave();return {saved:false,retryable:true,reason:'concurrent_save',version:bridge.stateVersion};}const retried=await saveWorkspaceState({...context,reconciled:true,syncRetries:Number(context.syncRetries||0)+1});if(retried.saved&&!retried.dirty&&Number(context.syncRetries||0)===0)location.reload();return retried;}bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');await enterConflict(result.current);return {saved:false,conflict:true};
+      const reconciled=!resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,context.workspaceId)&&await reconcileServerState(result.current,base);if(bridge.workspace?.id!==context.workspaceId)return {saved:false,reason:'workspace_changed'};if(reconciled){if(!hasDirtyLocalState()){location.reload();return {saved:true,version:bridge.stateVersion};}if(Number(context.syncRetries||0)>=2){setStatus('Changes preserved · sync retrying','saving');scheduleSave();return {saved:false,retryable:true,reason:'concurrent_save',version:bridge.stateVersion};}const retried=await saveWorkspaceState({...context,reconciled:true,syncRetries:Number(context.syncRetries||0)+1});if(retried.saved&&!retried.dirty&&Number(context.syncRetries||0)===0)location.reload();return retried;}bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');await enterConflict(result.current);return {saved:false,conflict:true};
     }
     if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}if(result?.saved===false){setStatus('Sync skipped · Local cache safe','error');return {saved:false,version:bridge.stateVersion};}const savedWorkspaceId=context.workspaceId;bridge.stateVersion=Math.max(Number(result.version)||bridge.stateVersion+1,readRememberedVersion(savedWorkspaceId));rememberServerVersion(savedWorkspaceId,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${savedWorkspaceId}:${bridge.stateVersion}`);const hasNewerLocalState=!sameWorkspacePayload(bundle(),localPayload);if(hasNewerLocalState)rebaseDirtyLocalState();else clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;bridge.conflictDetails=null;renderConflictActions();setStatus(hasNewerLocalState?'Unsaved changes · click Save workspace':'Synced to LeadIntel',hasNewerLocalState?'saving':'synced');const afterSave=root.LeadIntelWorkspaceResetHygiene?.afterWorkspaceSaved;if(typeof afterSave==='function')void Promise.resolve(afterSave(savedWorkspaceId)).catch(cause=>console.warn('LeadIntel brand asset reset cleanup:',cause));root.dispatchEvent(new CustomEvent('leadintel:server-synced'));return {saved:true,version:bridge.stateVersion,dirty:hasNewerLocalState};
   }
@@ -232,7 +233,7 @@
     if(!result?.safe){bridge.conflictDetails={reason:result?'overlapping_changes':'baseline_unavailable',paths:result?.conflicts||[],localVersion:Number(readDirtyLocalState()?.base_version??bridge.stateVersion),serverVersion:Number(state.version)};return false;}
     // Keep both sides before applying even a conflict-free merge. Quota/network failures
     // must retain the local draft and leave the review gate closed.
-    try{await preserveSyncRecovery(state,'safe_merge');if(!sameWorkspacePayload(local,bundle()))return false;}catch{bridge.conflictDetails={reason:'recovery_storage_failed',paths:[],serverVersion:Number(state.version)};return false;}
+    try{await preserveSyncRecovery(state,'safe_merge');if(bridge.workspace?.id!==workspaceId||!sameWorkspacePayload(local,bundle()))return false;}catch{if(bridge.workspace?.id!==workspaceId)return false;bridge.conflictDetails={reason:'recovery_storage_failed',paths:[],serverVersion:Number(state.version)};return false;}
     try{applyPayload(result.payload);}catch{
       try{applyPayload(local);}catch{}return false;
     }
@@ -249,24 +250,42 @@
     }
     return true;
   }
+  async function readSyncRecovery(workspaceId){
+    let stored=null;try{stored=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
+    if(!stored||stored.workspace_id!==workspaceId)return null;
+    if(stored.format===INDEXED_RECOVERY_FORMAT){
+      if(!root.LeadIntelAccountCache?.readRecoverySnapshot)throw new Error('Durable recovery storage is unavailable');
+      stored=await root.LeadIntelAccountCache.readRecoverySnapshot(stored.key);
+      if(stored?.workspace_id!==workspaceId)throw new Error('Recovery backup belongs to another workspace');
+    }
+    const record=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(stored)||stored;
+    if(record?.workspace_id!==workspaceId)throw new Error('Recovery backup belongs to another workspace');
+    return record;
+  }
   async function preserveSyncRecovery(state,source){
-    // A resolution must never erase the only copy of either side. Fail closed
-    // if browser storage cannot hold the recovery record.
-    const workspaceId=bridge.workspace.id;
-    let previous=null;try{const stored=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');if(stored?.workspace_id===workspaceId)previous=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(stored)||stored;}catch{}
-    const original=previous?.workspace_id===workspaceId?previous.original:null;
-    const local=bundle(),record={schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local,server:state},local,server:state};
+    // Commit both versions before replacing any working state. Large backups
+    // use the existing durable archive when localStorage cannot hold them.
+    const workspaceId=bridge.workspace.id,previous=await readSyncRecovery(workspaceId);
+    if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
+    const original=previous?.original,local=bundle(),record={schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local,server:state},local,server:state};
     const packed=root.LeadIntelWorkspacePersistence?.encodeRecoveryRecord?await root.LeadIntelWorkspacePersistence.encodeRecoveryRecord(record):root.LeadIntelStateBudget?.packRecoveryRecord?.(record)||record;
     if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
-    localStorage.setItem(RECOVERY_KEY,JSON.stringify(packed));
+    try{localStorage.setItem(RECOVERY_KEY,JSON.stringify(packed));}
+    catch(cause){
+      if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
+      const key=await root.LeadIntelAccountCache.saveRecoverySnapshot(packed);
+      if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
+      localStorage.setItem(RECOVERY_KEY,JSON.stringify({format:INDEXED_RECOVERY_FORMAT,workspace_id:workspaceId,key}));
+    }
     renderConflictActions();
   }
-  function downloadSyncRecovery(){
-    let recovery=null;try{recovery=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
-    if(!bridge.workspace||recovery?.workspace_id!==bridge.workspace.id)return false;
-    recovery=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(recovery)||recovery;
-    const url=URL.createObjectURL(new Blob([JSON.stringify(recovery,null,2)],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download='leadintel-sync-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
+  async function downloadSyncRecovery(){
+    try{
+      const workspaceId=bridge.workspace?.id;if(!workspaceId)return false;
+      const recovery=await readSyncRecovery(workspaceId);if(!recovery||bridge.workspace?.id!==workspaceId)return false;
+      const url=URL.createObjectURL(new Blob([JSON.stringify(recovery,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');link.href=url;link.download='leadintel-sync-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
+    }catch{showToast('Recovery copy could not be read. Your stored versions are preserved.');return false;}
   }
   async function resolveSyncConflict(source){
     // A rehydrated conflict may have no in-memory snapshot. Explicit recovery
@@ -281,7 +300,7 @@
         const state=await fetchWorkspaceState();
         if(bridge.workspace?.id!==workspaceId)return {resolved:false};
         const local=bundle();
-        latestState=state;await preserveSyncRecovery(state,source);if(!sameWorkspacePayload(local,bundle()))continue;
+        latestState=state;await preserveSyncRecovery(state,source);if(bridge.workspace?.id!==workspaceId)return {resolved:false,source,saved:false,reason:'workspace_changed'};if(!sameWorkspacePayload(local,bundle()))continue;
         // A conflict choice applies only to overlapping edits. Keep unrelated
         // Profile answers, settings, drafts and templates from both sessions.
         if(base?.workspaceId===workspaceId&&base.version===baseVersion&&root.LeadIntelWorkspaceSync&&state.payload){
@@ -312,6 +331,7 @@
       }
       return {resolved:false,source,saved:false,conflict:true};
     }catch(cause){
+      if(bridge.workspace?.id!==workspaceId)return {resolved:false,source,saved:false,reason:'workspace_changed'};
       bridge.conflict=true;bridge.conflictState=bridge.conflictState||latestState;renderConflictActions();setStatus('Recovery failed · local changes preserved','error');showToast(`Could not resolve sync: ${String(cause?.message||'Request failed').slice(0,180)}. Both versions are preserved.`);return {resolved:false,source,saved:false,error:String(cause?.message||cause)};
     }finally{setConflictBusy(false);}
   }

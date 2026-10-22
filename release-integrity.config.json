@@ -4212,6 +4212,25 @@
         "opening==='verified-summary'?80:0",
         "under construction|constructing|commissioning|launching"
       ]
+    },
+    {
+      "id": "sync-recovery-durable-overflow",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "leadintel-indexed-sync-recovery-v1",
+        "async function readSyncRecovery",
+        "saveRecoverySnapshot(packed)",
+        "Recovery backup belongs to another workspace"
+      ]
+    },
+    {
+      "id": "sync-recovery-durable-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": ["sync-recovery-overflow=20261022-v1"]
     }
   ],
   "retry": {
