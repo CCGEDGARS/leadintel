@@ -3,7 +3,7 @@ const {mounted}=require('./helpers/message-runtime.js');
 const O=require('../outreach-engine.js'),E=require('../message-editor.js');
 const source=fs.readFileSync(require.resolve('../delivery-ui.js'),'utf8');
 function setup({deliveryReady=true}={}){
- const h=mounted(),w=h.w;
+ const h=mounted({selected:'professional'}),w=h.w;
  w.scrollTo=()=>{};w.LeadIntelDelivery=require('../delivery-engine.js');
  h.mountDelivery=()=>{w.document.querySelector('script[data-delivery-engine]')?.dispatchEvent(new w.Event('load'));w.eval('(function(){'+source.replace(/^import .*;\s*$/gm,'')+'\n})();');w.document.querySelector('script[data-delivery-ui]')?.dispatchEvent(new w.Event('load'));};
  if(deliveryReady)h.mountDelivery();
@@ -40,10 +40,13 @@ test('the real email approval handler accepts a complete saved email without req
  const h=setup();try{
  let item=O.invalidateOutreachApproval(h.item());
  const draft={subject:'Discuss Northport',message:'Hi Alex,\n\nI am Robin Lane from North Works. We provide steel and installation for industrial teams. Would you be open to a 20-minute Zoom conversation to discuss your project requirements and relevant project lessons?\n\nChoose a suitable time: https://calendly.com/north/intro\n\nBest regards,\nRobin Lane'};
- item=E.apply(item,draft,{origin:'manual',style:'original',essentials:h.w.studioState().essentials});item.messageStudioDraft.scriptSavedAt='2026-10-22';item.messageStudioDraft.savedDraft=draft;
+ item=E.apply(item,draft,{origin:'manual',style:'original',essentials:h.w.studioState().essentials});item.messageStudioDraft.triggerSourceUrl=item.dossier.selectedTrigger.url;delete item.messageStudioDraft.pendingTemplateUpdate;item.messageStudioDraft.scriptSavedAt='2026-10-22';item.messageStudioDraft.savedDraft=draft;
  h.w.persistStudio({...h.w.studioState(),mode:'original'});h.w.upsertItem(item);h.w.renderAll();
  const result=await h.w.approveOutreach({announce:false});
  assert.equal(result?.ok,true,h.q('toast').textContent);assert.equal(h.item().drafts.linkedinMessage,'');assert.equal(h.item().approvedSource.emailBody,draft.message);
+ h.w.renderMessageWorkspace();assert.equal(h.q('mw-add-flow').disabled,false,h.q('mw-add-flow').title+' '+h.q('mw-flow-readiness-text').textContent);h.q('mw-add-flow').click();
+ for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.q('step-7').classList.contains('active'),true,'the actual rendered button must invoke the handoff');
  }finally{h.w.close();}
 });
 
