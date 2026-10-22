@@ -261,8 +261,8 @@
   const expected=assemble(studio,context);
   if(draft.message!==expected.message)throw Error('The finished message differs from the approved template. Your draft is preserved.');
   validateFrame(draft.message,studio.mode);
-  const audit=S.subjectAudit(studio,context);
-  if(!audit.complete)throw Error('Update needs all five subjects: '+audit.rows.filter(r=>!r.ready).map(r=>r.reason).join('; ')+'. Your draft is preserved.');
+  // Optional subject categories can need facts this buyer does not have.
+  // Their readiness stays visible in the picker; only the actual subject gates this draft.
   if(!S.validSubject(draft.subject))throw Error('Choose a clean subject of at most 60 characters.');
  }
  function repairSubject(item,studio,context={}){

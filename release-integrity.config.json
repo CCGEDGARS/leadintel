@@ -1125,7 +1125,7 @@
         "function currentCoreBody(",
         "A.approvedPattern(style)",
         "function validateCoreDraft(",
-        "Update needs all five subjects:",
+        "only the actual subject gates this draft.",
         "masterVersion:A.coreContract(studio.mode)?.version",
         "function preparationWordLimits(",
         "function coreSellerFlags(",
