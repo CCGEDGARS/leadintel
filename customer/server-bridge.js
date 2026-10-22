@@ -23,7 +23,8 @@
   const BRAND_ASSET_KINDS=new Set(['logo','headshot','banner']);
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
   const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
-  const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
+  const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','email','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
+  const BRAND_MEETING_PLATFORMS=['zoom','teams','google_meet'];
   let saveTimer=null;let suppress=false;let initialized=false;const brandAssetTransactions=new Map(),workspaceSaveTransactions=new Map(),brandAssetResetGenerations=new Map();
   const bridge={ready:false,session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',openSavedFlow,conflict:false,conflictState:null,conflictDetails:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,downloadSyncRecovery,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,archiveCrmContact,enrichCrmContact,searchApolloPeople,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
@@ -55,7 +56,14 @@
     output.options={includeLogo:options.includeLogo!==false,includeHeadshot:options.includeHeadshot===true,includeBanner:options.includeBanner===true};
     const assets=value.assets&&typeof value.assets==='object'&&!Array.isArray(value.assets)?value.assets:{};
     output.assets={logo:safeBrandAsset(assets.logo),headshot:safeBrandAsset(assets.headshot),banner:safeBrandAsset(assets.banner)};
-    return output;
+    output.meetingPlatform=BRAND_MEETING_PLATFORMS.includes(source.meetingPlatform)?source.meetingPlatform:'zoom';
+    // app.js rewrites main.brandIdentity through LeadIntelBrandIdentity.normalize on every load, so the
+    // synced form must serialize identically; any difference re-marks a hydrated workspace dirty and saves
+    // it again on every open device (live 2026-10-22: v101 → v102 → v103 with no edits).
+    if(!normalized||typeof normalized!=='object')return output;
+    const ordered={};for(const key of Object.keys(normalized))if(key in output)ordered[key]=output[key];
+    for(const key of Object.keys(output))if(!(key in ordered))ordered[key]=output[key];
+    return ordered;
   }
   function safeMainState(value){
     if(!value||typeof value!=='object'||Array.isArray(value)||!Object.prototype.hasOwnProperty.call(value,'brandIdentity'))return value;
