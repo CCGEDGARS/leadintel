@@ -42,7 +42,7 @@ test('clicking the visible NLP style replaces the saved Professional text in the
  w.mainState=()=>({brandIdentity:{senderName:studio.essentials.sender},answers:{}});w.crmAuthenticated=()=>true;w.messageRecipientReady=()=>true;
  w.LeadIntelMessageTranslations=require('../message-translations.js');
  w.eval(src.slice(src.indexOf('function seedMandatoryEmail'),src.indexOf('function personalSlots')));
- w.messageRecipientReady=()=>true;w.automaticallySelectBuyingTrigger=()=>false;
+ w.messageRecipientReady=()=>true;w.automaticallySelectBuyingTrigger=()=>false;w.selectedContact=()=>({id:"p1",name:"Alex Buyer"});
  w.renderMessageStudio=()=>{q('message-mode').value=studio.mode;};
  w.renderMessageWorkspace=()=>w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,senderIdentityReady:true,channel:'email',templateSelected:true,selectedStyle:studio.mode,appliedStyle:item().messageStudioDraft?.mode,editorState:w.eval('messageEditor?.state()'),originalAvailable:true});
  const draft=E.tailor(studio,w.studioMessageContext()),key=E.scope('w1',item(),studio,w.studioMessageContext()),first=E.apply(item(),draft,{original:true,key,style:'professional',essentials:studio.essentials,origin:'tailored'});

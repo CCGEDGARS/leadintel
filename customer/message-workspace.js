@@ -200,7 +200,7 @@
       const empty=document.createElement('p');empty.textContent='No supported buying trigger yet. Your email can use an honest introduction.';list.append(empty);
     }
   }
-  q('mw-trigger-summary').textContent=context.factPreparation?.opening==='approved-omission'?'Research context retained. No unverified project opening was added.':context.trigger?(context.appliedTriggerUrl===context.trigger.url?'Applied in the email.':'Selected for the next personalization.'):'';
+  q('mw-trigger-summary').textContent=context.factPreparation?.opening==='verified-summary'?'Verified company context used. Unsupported milestone and date details omitted.':context.factPreparation?.opening==='approved-omission'?'Research context retained. No unverified project opening was added.':context.trigger?(context.appliedTriggerUrl===context.trigger.url?'Applied in the email.':'Selected for the next personalization.'):'';
     const userStyle=context.personalStyle,stylePanel=q('mw-personal-style'),books=q('mw-book-controls');
   if(stylePanel){stylePanel.hidden=linkedin||!['professional','curiosity','friendly','brutal'].includes(context.selectedStyle);q('mw-use-my-style').checked=Boolean(userStyle?.active);q('mw-use-my-style').disabled=!userStyle||context.busy;q('mw-personal-style-status').textContent=userStyle?'My revision '+userStyle.revision+(userStyle.active?' · Active':' · Inactive'):'No personal version saved yet';}
   if(books)books.hidden=false;const length=q('mw-ai-length');if(length){length.value=context.aiLength||'standard';length.disabled=context.selectedStyle!=='original'||context.busy;}
