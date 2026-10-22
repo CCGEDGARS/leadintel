@@ -1,0 +1,7 @@
+# Durable conflict recovery overflow
+
+The final authenticated shared-brief check selected the verified Boden construction source, retained the saved message, and showed the populated Buyers summary. Workspace autosave then timed out; guarded retry exposed a differing server revision. Use server version preserved both versions by policy but could not proceed because writing `leadintel_customer_v2_sync_recovery_v1` exceeded localStorage quota. No draft or research was deleted and no force overwrite was attempted.
+
+The recovery path already encoded large records, but still required the full encoded backup to fit beside active research, drafts and workspace baselines. It now uses the existing account-scoped durable archive on a QuotaExceededError, commits both versions first, and stores only a small workspace-owned pointer locally. Future recovery and Download recovery copy read either format. Original history, the prior pointer, workspace ownership and fail-closed behavior survive storage failures and workspace changes. The ordinary conflict merge and sending gates are unchanged.
+
+Regression coverage checks deferred durable commit before state replacement, original history across repeated recovery, failed backup preservation, download restoration, cross-workspace rejection and a workspace switch during commit. The server bridge entry is cache-busted and mandatory production checks require both the fallback and its entry marker.
