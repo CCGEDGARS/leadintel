@@ -44,10 +44,12 @@ test('approved factual frame never leaks metalworking, steel or thirty years int
   assert.doesNotMatch(draft.message,/metalworking|steel|30 years|ERCON|LKAB/);
  }
 });
-test('final update gate rejects a changed body or an incomplete five-subject set',()=>{
+test('final update gate rejects changed wording and invalid subjects while unavailable categories remain optional',()=>{
  const s=S.normalize({mode:'friendly',essentials}),c=context(),draft=E.tailor(s,c);
  assert.throws(()=>E.validateCoreDraft(s,c,{...draft,message:draft.message.replace('we would be happy to assist','we guarantee success')}),/differs from the approved/);
- assert.throws(()=>E.validateCoreDraft(s,{...c,trigger:{...c.trigger,positive:false}},E.tailor(s,{...c,trigger:{...c.trigger,positive:false}})),/all five subjects/);
+ const negative={...c,trigger:{...c.trigger,positive:false}},safe=E.tailor(s,negative);
+ assert.equal(S.subjectAudit(s,negative).ready,4);assert.doesNotThrow(()=>E.validateCoreDraft(s,negative,safe));
+ assert.doesNotMatch(safe.subject,/Congratulations/);assert.throws(()=>E.validateCoreDraft(s,c,{...draft,subject:'x'.repeat(61)}),/60 characters/);
 });
 test('mounted production context produces 5/5 Friendly subjects and persists explicit restoration through reopen',()=>{
  const h=mounted({selected:'friendly'});try{
@@ -63,11 +65,13 @@ test('mounted production context produces 5/5 Friendly subjects and persists exp
  }finally{h.w.close();}
 });
 
-test('mounted incomplete update cannot overwrite the working copy or report completion',()=>{
+test('mounted update creates a recoverable working draft when an unused subject lacks positive evidence',()=>{
  const h=mounted({selected:'friendly'});try{
-  const before=JSON.stringify(h.item()),context={...h.w.studioMessageContext(),trigger:{...h.w.studioMessageContext().trigger,positive:false}};
-  assert.equal(h.w.applyApprovedTemplate(h.item(),h.w.studioState(),context,'incomplete',{templateUpdate:true}),false);
-  assert.equal(JSON.stringify(h.item()),before);assert.match(h.q('message-generation-status').textContent,/all five subjects.*positive business milestone/);
+  const before=h.item(),context={...h.w.studioMessageContext(),trigger:{...h.w.studioMessageContext().trigger,positive:false}};
+  assert.equal(h.w.applyApprovedTemplate(before,h.w.studioState(),context,'incomplete',{templateUpdate:true}),true);
+  assert.ok(h.item().drafts.emailBody);assert.doesNotMatch(h.item().drafts.emailSubject,/Congratulations/);
+  assert.equal(h.item().messageStudioDraft.templateUpdateUndo.draft.message,before.drafts.emailBody);
+  assert.equal(h.item().approved,false);assert.equal(E.savedDraft(h.item()),false);
  }finally{h.w.close();}
 });
 

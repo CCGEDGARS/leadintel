@@ -27,3 +27,26 @@ test('unchanged, invalid, unavailable and out-of-order release replies do not tr
  h.context.fetch=async()=>{throw Error('offline');};await h.api.check();assert.equal(h.navigation.length,0);
  let resolve;h.context.fetch=()=>new Promise(done=>resolve=done);const pending=h.api.check();await h.api.check();resolve({ok:true,json:async()=>({service:'leadintel-customer',commit:NEW})});await pending;assert.equal(h.dom.window.document.querySelectorAll('#leadintel-release-notice').length,1);
 });
+test('a clean hydrated workspace automatically opens the newer release',async t=>{
+ const h=harness();t.after(()=>h.dom.window.close());
+ h.context.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>false};
+ await h.api.check();assert.equal(h.navigation.length,1);assert.equal(new URL(h.navigation[0]).searchParams.get('release'),NEW);
+});
+test('automatic freshness defers during edits, dirty state and dialogs, then resumes after synchronization',async t=>{
+ const h=harness();t.after(()=>h.dom.window.close());let dirty=true;
+ h.context.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>dirty};
+ await h.api.check();assert.equal(h.navigation.length,0);dirty=false;
+ const input=h.dom.window.document.querySelector('#draft');input.focus();await h.api.check();assert.equal(h.navigation.length,0);input.blur();
+ const dialog=h.dom.window.document.createElement('dialog');dialog.open=true;h.dom.window.document.body.append(dialog);await h.api.check();assert.equal(h.navigation.length,0);dialog.remove();
+ assert.equal(typeof h.listeners['leadintel:server-synced'],'function');await h.listeners['leadintel:server-synced']();assert.equal(h.navigation.length,1);
+});
+test('freshness waits for message generation and ignores hidden busy placeholders',async t=>{
+ const h=harness();t.after(()=>h.dom.window.close());h.context.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>false};
+ const busy=h.dom.window.document.createElement('section');busy.setAttribute('aria-busy','true');h.dom.window.document.body.append(busy);
+ await h.api.check();assert.equal(h.navigation.length,0);busy.hidden=true;await h.api.check();assert.equal(h.navigation.length,1);
+});
+test('an open settings drawer defers refresh even with no focused input; hidden dialogs do not',async t=>{
+ const h=harness();t.after(()=>h.dom.window.close());h.context.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>false};
+ const drawer=h.dom.window.document.createElement('aside');drawer.setAttribute('role','dialog');h.dom.window.document.body.append(drawer);
+ await h.api.check();assert.equal(h.navigation.length,0);drawer.hidden=true;await h.api.check();assert.equal(h.navigation.length,1);
+});
