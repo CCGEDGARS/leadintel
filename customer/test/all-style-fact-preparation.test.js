@@ -53,11 +53,11 @@ test('research cache ownership stays bounded and changes with customer, recipien
  const studio=S.normalize({mode:'curiosity',essentials}),item={domain:'buyer.example',selectedPersonId:'sam'},context={...base,profileEvidence:[{url:'https://seller.example/about',text:'Company facts. '.repeat(10000)}]};
  const first=E.factOwnerKey('w1',item,studio,context);assert.ok(first.length<300);assert.notEqual(first,E.factOwnerKey('w2',item,studio,context));assert.notEqual(first,E.factOwnerKey('w1',{...item,selectedPersonId:'alex'},studio,context));assert.notEqual(first,E.factOwnerKey('w1',item,studio,{...context,profileEvidence:[{url:'https://seller.example/about',text:'Changed facts.'}]}));
 });
-test('an obsolete or contradictory opening date never becomes a ready project opening',()=>{
+test('an obsolete or contradictory opening date never becomes a claimed project date',()=>{
  for(const schedule of ['The plant is due to run in 2020.','The plant is due to run in 2029. The plant is scheduled to open in 2030.']){
   const text='Buyer is investing in a new sorting plant at Riverport. Foundation work is under way. '+schedule;
   const ctx=E.prepareFactContext(S.normalize({mode:'curiosity',essentials}),{...base,trigger:{verification:'source_verified',url:'https://buyer.example/news/riverport',excerpt:text,summary:text},buyerFactEvidence:[]});
-  assert.equal(ctx.factPreparation.opening,'approved-omission');assert.ok(ctx.factPreparation.missingOpening.includes('openingYear'));
+  assert.notEqual(ctx.factPreparation.opening,'verified');assert.ok(ctx.factPreparation.missingOpening.includes('openingYear'));assert.doesNotMatch(ctx.factPreparation.openingFact?.text||'',/20(?:20|29|30)/);
  }
 });
 

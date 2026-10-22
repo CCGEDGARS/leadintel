@@ -4106,7 +4106,7 @@
       "status": 200,
       "contains": [
         "LeadIntelMessageEditor.prepareFactContext(studioState(main),context)",
-        "LeadIntelMessageEditor.factResearchPlan(studio,context)",
+        "LeadIntelMessageEditor.factResearchPlan(studio,context,",
         "queryReceipts",
         "continueTemplateUpdate:true",
         "all-style-facts=20261022-v1"
@@ -4139,6 +4139,64 @@
       "status": 200,
       "contains": [
         "all-style-facts=20261022-v1"
+      ]
+    },
+    {
+      "id": "shared-message-brief-source",
+      "type": "text",
+      "url": "/customer/research-brief.js",
+      "status": 200,
+      "contains": [
+        "shared-message-brief-20261022-v1",
+        "function supports",
+        "authoritativeUrls",
+        "sourceRead===false",
+        "fromResearchBrief"
+      ]
+    },
+    {
+      "id": "shared-message-brief-summary",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "Message brief",
+        "Selected buyer:",
+        "Commercial relevance \u00b7 Hypothesis:",
+        "Evidence gaps"
+      ]
+    },
+    {
+      "id": "shared-message-brief-handoff",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function buildResearchBrief",
+        "function attachResearchBrief",
+        "evidenceHistory",
+        "researchBriefEvidence(researchBrief)"
+      ]
+    },
+    {
+      "id": "shared-message-brief-opening",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "'verified-summary'",
+        "Brief?.supports(context.researchBrief,original)",
+        "context.factPreparation.openingFact.text"
+      ]
+    },
+    {
+      "id": "shared-message-brief-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "research-brief.js?v=20261022-v1",
+        "shared-message-brief=20261022-v1"
       ]
     }
   ],

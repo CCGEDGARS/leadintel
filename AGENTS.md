@@ -51,3 +51,7 @@ Use `LeadIntelDialogs.confirm` for customer confirmations. Never introduce nativ
 ## Step 5 is the current product priority
 
 User instruction, 21 October 2026: Buyers research, qualification, confirmed company emails and usable downstream recipients are the top priority. Use `docs/policies/buyer-quality-supervisor.md`. Test completion and production freshness prove implementation state; they do not prove the requested contacts were obtained. Report research coverage, AI review coverage and usable contact outcomes separately. Never mark the whole step complete while its explicit quality requirements remain unmet.
+
+## Shared research brief is mandatory
+
+User instruction, 22 October 2026: Buyers and Messages must use one source-backed company research brief. Follow `docs/policies/shared-research-brief.md`. Show its compact summary above buyer cards; carry the same verified facts, source quotes, dates, selected-buyer role status, commercial hypotheses and evidence gaps into message personalization and CRM snapshots. Do not substitute an unsupported model summary for evidence or repeat completed research without a meaningful gap/freshness reason. Missing milestone/year fields must not erase other usable buyer context: use the expressly approved bounded factual opening variation. Preserve canonical masters and all saved/manual work; explicit replacement retains Undo. Verify the actual Buyers → Messages → CRM → reopen flow and cross-company isolation.

@@ -1,0 +1,25 @@
+# Mandatory shared research brief
+
+Approved by the owner on 22 October 2026, following the discussion of the missing buyer-specific opening. Applies to all customers, Buyers summaries, message styles and CRM handoffs.
+
+## One evidence source
+
+`research-brief.js` derives `shared-message-brief-20261022-v1` from the selected company's reconciled dossier and extracted official evidence. It retains source quotes, URLs, dates and read timestamps. Displayed factual statements are source quotes, not unsupported dossier-model paraphrases. A source read must exist for dossier claims; snippets, failed reads, model summaries, unsafe content and other-company hosts cannot become verified brief facts. Known facts remain usable while unrelated research gaps stay explicit.
+
+The Buyers page shows a compact Message brief above buyer cards: company context/developments, source links and known dates; selected buyer and verified/needs-verification role status; commercial relevance marked Hypothesis; expandable evidence gaps. Existing full dossier, provider receipts and research coverage remain available. Showing a brief never certifies the full research process or confirms buying intent/contact details.
+
+## Shared handoff
+
+Messages receives this structured brief, rather than treating a prose summary as evidence. The same bounded quotes enter its evidence pool. Relevant extracted dossier developments outrank legacy generic news. Current Profile offers and the selected recipient determine relevance. The brief fingerprint changes when source facts, seller context or the selected buyer changes. AI Generated receives the brief with explicit separation of facts and hypotheses; personal styles receive supported buyer context through their existing slots. The four governed core styles retain their own renderer, word ceilings and factual authority.
+
+The brief and source evidence persist in the outreach dossier and CRM snapshot. Cached recipients refresh their research context without replacing working text. Saved/manual/approved/translated copies remain protected. Explicit style application may use newer facts, preserving the original action's exact Undo target. Source changes invalidate preparation fingerprints; late results retain the existing workspace/recipient/style/draft guards. Reuse existing evidence and query receipts; repeat research only for relevant missing/stale details or explicit refresh.
+
+## Owner-approved factual opening variation
+
+When a complete approved project-opening frame lacks milestone, type or schedule atoms, NLP, Friendly and Brutal Honesty may use the bounded factual observation `I noticed <verified statement>.` at the same opening position. For a first-person company source, deterministic changes to the leading Our / We are / We produce your / you are / you. Other statements use `I noticed that <source statement>.` The approved example is: `I noticed your first plant is under construction in Boden.`
+
+Use an affirmative, concise, English source sentence concerning a real development, from the selected reviewed/source-verified trigger. Retain its provenance. Never add congratulations, a milestone, an opening year, urgency, buyer need or authority that the source does not establish. Omit unsupported clauses rather than the whole useful context. Obsolete schedule claims, instructions and negated/hypothetical developments are ineligible. If no usable source statement exists, retain the declared no-event omission. Professional continues using its supported project target slot; AI Generated and personal templates keep their separate authorities. All canonical masters remain byte-for-byte unchanged. This permission does not allow arbitrary new prose or whole-paragraph AI generation.
+
+## Regression and release gates
+
+Cover source extraction ownership, unsupported paraphrases/snippets, relevant selection, role conflicts, all governed opening styles, AI/personal context, preserved saved/manual drafts, actual mounted handoff, CRM reopen, changed-source invalidation and bounded payloads. Require full customer tests, build, independent review and exact-SHA production proof before claiming completion.

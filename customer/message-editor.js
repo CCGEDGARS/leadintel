@@ -45,10 +45,11 @@
  function coreFactGaps(studio,context={}){
   if(context.channel==='linkedin'||studio.mode==='original'||studio.personalStyles?.[studio.mode]?.active||studio.templates?.find(t=>t.id===studio.mode)?.isPersonal)return [];
   const values=factualValues(studio,context),slots=[...referencePattern(studio.mode).matchAll(/{{(\w+)}}/g)].map(m=>m[1]);
-  const omitted=(context.factPreparation?.opening==='approved-omission'||!['source_verified','user_reviewed'].includes(context.trigger?.verification)||studio.mode==='friendly'&&!context.trigger?.positive)?openingKeys(studio.mode):[];
+  const omitted=(['approved-omission','verified-summary'].includes(context.factPreparation?.opening)||!['source_verified','user_reviewed'].includes(context.trigger?.verification)||studio.mode==='friendly'&&!context.trigger?.positive)?openingKeys(studio.mode):[];
   return [...new Set(slots.filter(key=>!omitted.includes(key)&&!(studio.mode==='professional'&&key==='costProof')&&typeof values[key]==='string'&&values[key].startsWith('[Add verified ')))];
  }
  const FACT_POLICY='message-facts-20261022-v1';
+ const Brief=typeof module==='object'&&module.exports?require('./research-brief.js'):globalThis.LeadIntelResearchBrief;
  function factOwnerKey(workspace,item,studio,context){const input=JSON.stringify([studio.essentials,context.profileEvidence]),hash=seed=>{let value=seed;for(let i=0;i<input.length;i++)value=Math.imul(value^input.charCodeAt(i),16777619);return (value>>>0).toString(16);};return JSON.stringify([FACT_POLICY,workspace,item.domain,item.selectedPersonId,context.sellerWebsite,hash(2166136261)+hash(2246822519)]);}
  function openingKeys(style){if(!['curiosity','friendly','brutal'].includes(style))return [];const paragraph=referencePattern(style).split('\n\n')[style==='brutal'?2:1]||'';return [...new Set([...paragraph.matchAll(/{{(\w+)}}/g)].map(match=>match[1]))];}
  function prepareFactContext(studio,context={}){
@@ -56,24 +57,25 @@
   const raw={...context,trigger:original},style=context.channel==='linkedin'?studio.linkedinMode:studio.mode;
   const values=factualValues(studio,raw),years=[...new Set([...buyerFactText(raw).matchAll(/\b(?:due to (?:run|open|start)(?: in)?|scheduled to (?:open|start|run)(?: in)?|ready (?:in|by)|operational (?:in|by))\s+(20\d{2})\b/gi)].map(match=>match[1]))];if(years.length>1||values.openingYear&&/^20\d{2}$/.test(values.openingYear)&&Number(values.openingYear)<new Date(context.now||Date.now()).getUTCFullYear())values.openingYear='[Add verified opening-year]';
   const keys=openingKeys(style).filter(key=>key!=='friendlyScale'),missing=keys.filter(key=>String(values[key]||'').startsWith('[Add verified ')||!String(values[key]||'').trim());
-  const reviewed=['user_reviewed','source_verified'].includes(original?.verification)&&Boolean(S.subjectDomain(original?.url));
+  const reviewed=['user_reviewed','source_verified'].includes(original?.verification)&&Boolean(S.subjectDomain(original?.url))&&(!context.researchBrief||original.verification==='user_reviewed'||Brief?.supports(context.researchBrief,original));
+  const fallback=Brief?.opening(raw);
   const omitted=keys.length>0&&(!reviewed||missing.length>0||style==='friendly'&&!original?.positive);
   const evidence=[...(raw.buyerFactEvidence||[]),...(raw.sellerEvidence||[])].filter(row=>row.extracted!==false&&!/error|failed|pending/i.test(row.status||'')&&S.subjectDomain(row.url)&&String(row.text||row.excerpt||'').trim());
   const facts=[...new Set([...keys,'subjectProject','projectType','milestoneWork','openingYear','sellerDescription','experienceDuration','experienceOutcome','deliveryItem','deliveryMaterial','costProof'])].map(id=>{
-   const value=String(values[id]||''),owner=['subjectProject','milestoneWork','friendlyMilestoneWork','projectType','projectNoun','openingYear'].includes(id)?'buyer':'seller',available=Boolean(value)&&!value.startsWith('[Add verified ');
+   const value=String(values[id]||''),owner=['subjectProject','milestoneWork','friendlyMilestoneWork','projectType','projectNoun','openingYear'].includes(id)?'buyer':'seller',available=Boolean(value)&&!value.startsWith('[Add verified ')&&(owner==='seller'||reviewed);
    const host=owner==='buyer'?raw.buyerDomain||S.subjectDomain(original?.url):S.subjectDomain(raw.sellerWebsite);
    const eligible=evidence.filter(row=>S.subjectDomain(row.url)===String(host||'').replace(/^www\./,''));
    const source=available?eligible.find(row=>String(row.text||row.excerpt||'').toLowerCase().includes(value.toLowerCase())):null;
    return {id,owner,value:available?value.slice(0,600):'',status:available?'known':'missing',verification:available?(source?'source_verified':owner==='buyer'?original?.verification||'':'user_supplied'):'',url:source?.url||(available&&owner==='buyer'?original?.url||'':''),excerpt:String(source?.text||source?.excerpt||(available&&owner==='buyer'?original?.excerpt||'':'')).slice(0,400),checkedAt:source?.extractedAt||source?.fetchedAt||''};
   });
-  return {...context,researchTrigger:original||null,trigger:original,bodyTrigger:omitted?null:original,factPreparation:{version:FACT_POLICY,style,opening:omitted?'approved-omission':reviewed?'verified':'unavailable',missingOpening:missing,facts}};
+  return {...context,researchTrigger:original||null,trigger:reviewed?original:null,bodyTrigger:!reviewed||omitted&&!fallback?null:original,factPreparation:{version:FACT_POLICY,style,opening:omitted?(fallback?'verified-summary':'approved-omission'):reviewed?'verified':'unavailable',missingOpening:missing,openingFact:omitted?fallback:null,briefKey:context.researchBrief?.key||'',facts}};
  }
- function factResearchPlan(studio,context={}){
+ function factResearchPlan(studio,context={},{forceBuyer=false}={}){
   const style=context.channel==='linkedin'?studio.linkedinMode:studio.mode,core=['professional','curiosity','friendly','brutal'].includes(style)?style:'friendly';
   const raw={...context,factPreparation:undefined,trigger:context.researchTrigger===undefined?context.trigger:context.researchTrigger},target=String(raw.buyerDomain||S.subjectDomain(raw.trigger?.url)||'').replace(/^www\./,'');
   const normalized=S.normalize({...studio,mode:core}),seller=S.subjectResearchPlan(normalized,raw);
   const values=factualValues(normalized,raw),project=S.projectFact(raw),usableProject=project&&!String(values.projectType||'').startsWith('[Add verified ');
-  const gaps=coreFactGaps(normalized,raw),buyerNeeded=!usableProject||['professional','curiosity','friendly','brutal'].includes(style)&&gaps.some(key=>openingKeys(core).includes(key));
+  const gaps=coreFactGaps(normalized,raw),buyerNeeded=forceBuyer||!(context.researchBrief?.facts.length&&Brief?.opening(raw))&&(!usableProject||['professional','curiosity','friendly','brutal'].includes(style)&&gaps.some(key=>openingKeys(core).includes(key)));
   const buyer=[];
   if(target&&buyerNeeded){
    const topic=String(studio.essentials.offer||'').replace(/["\\]/g,'').split(/[,;]|\s+and\s+/i)[0].split(/\s+/).slice(0,5).join(' ');
@@ -166,6 +168,7 @@
   // Existing unsupported-opening omissions remain explicit. Otherwise the
   // canonical source frame stays intact, including visibly unresolved atoms.
   if(!reviewed||style==='friendly'&&!context.trigger?.positive){const openingIndex=style==='brutal'?2:1;if(style!=='professional')body=body.split('\n\n').filter((p,i)=>i!==openingIndex).join('\n\n');}
+  if(context.factPreparation?.opening==='verified-summary'&&context.factPreparation.openingFact&&style!=='professional'){const paragraphs=body.split('\n\n'),index=style==='brutal'?2:1;paragraphs.splice(index,reviewed&&!(style==='friendly'&&!context.trigger?.positive)?1:0,context.factPreparation.openingFact.text);body=paragraphs.join('\n\n');}
   if(! /\bNo slides\b/i.test(raw.meetingValue||''))body=body.replace(' No slides.','');
   if(!values.proof)body=body.split('\n\n').filter(p=>p!=='{{proof}}').join('\n\n');
   if(style==='professional')body=body.split('\n').filter(row=>!/^Reliable: \{\{reliabilityProof\}\}$/.test(row)||values.reliabilityProof).filter(row=>!/^Quality: \{\{qualityProof\}\}$/.test(row)||values.qualityProof).filter(row=>!/^Safety: \{\{safetyProof\}\}$/.test(row)||values.safetyProof).join('\n');
@@ -270,7 +273,7 @@
   const protectedCore=context.channel!=='linkedin'&&!personal&&!template.isPersonal;
   if(protectedCore&&style==='professional'){values.subjectProject=S.projectFact(context)||'';values.development=professionalDevelopment(trigger);const seller=[raw.offer,raw.difference,raw.proof,...Object.keys(context.sellerAnswers||{}).filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers[key])].join(' '),manufacturing=/\b(?:manufactur\w*|metal\w*|steel|fabricat\w*|serial production)\b/i.test(seller);values.planType=manufacturing?'production':'project';values.meetingData=manufacturing?'production':'project';}
   if(protectedCore){
-   const body=S.adaptMeetingInvitation(currentCoreBody(style,e,raw,context.factPreparation?.opening==='approved-omission'?{...context,trigger:null}:context,values),e);
+   const body=S.adaptMeetingInvitation(currentCoreBody(style,e,raw,context.bodyTrigger===null||context.factPreparation?.opening==='approved-omission'?{...context,trigger:null}:context,values),e);
    if(enforceFrame)validateFrame(body,style);
    const subject=String(S.resolveApprovedSubject(studio,context,e)||template.subject||'').replace(/{{(\w+)}}/g,(_,key)=>String(values[key]??''));
    if(enforceFrame&&!S.validSubject(subject))throw Error('Choose a clean subject of at most 60 characters.');
@@ -320,7 +323,7 @@
   if(studio.essentials?.meetingDateOne||studio.essentials?.meetingDateTwo)return computeScope(workspace,item,studio,context);
   return cachedCalculation('scope',[workspace,item?.domain,item?.selectedPersonId,item?.channel,studio,context],()=>computeScope(workspace,item,studio,context));
  }
- function computeScope(workspace,item,studio,context){return JSON.stringify([workspace,item?.domain,item?.selectedPersonId,item?.channel,context.channel==='linkedin'?studio.linkedinMode:studio.mode,context.trigger?.url||'',context.trigger?.summary||'',context.trigger?.subjectSummary||'',context.trigger?.excerpt||'',context.trigger?.positive===true,buyerFactText(context),context.researchTrigger?.url||'',context.factPreparation?[context.factPreparation.version,context.factPreparation.opening,context.factPreparation.missingOpening,context.factPreparation.facts.map(row=>[row.id,row.value,row.status])]:null,coreSellerFlags(context,studio.essentials),studio.essentials,studio.subjectChoices,studio.personalStyles,A.coreContract(studio.mode)?.version,"verbatim-facts-v7",context.eventCampaign,context.buyerName,context.firstName,context.buyerCompany,context.buyerRole,context.senderLinkedInUrl,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,S.subjectReference(context)?.url||'',context.channel==='linkedin'?[]:S.subjectAudit(studio,context).rows.map(row=>row.subject)]);}
+ function computeScope(workspace,item,studio,context){return JSON.stringify([workspace,item?.domain,item?.selectedPersonId,item?.channel,context.channel==='linkedin'?studio.linkedinMode:studio.mode,context.trigger?.url||'',context.trigger?.summary||'',context.trigger?.subjectSummary||'',context.trigger?.excerpt||'',context.trigger?.positive===true,buyerFactText(context),context.researchTrigger?.url||'',context.researchTrigger?.excerpt||'',context.researchTrigger?.summary||'',context.factPreparation?[context.factPreparation.version,context.factPreparation.opening,context.factPreparation.missingOpening,context.factPreparation.openingFact,context.factPreparation.briefKey,context.factPreparation.facts.map(row=>[row.id,row.value,row.status])]:null,coreSellerFlags(context,studio.essentials),studio.essentials,studio.subjectChoices,studio.personalStyles,A.coreContract(studio.mode)?.version,"verbatim-facts-v7",context.eventCampaign,context.buyerName,context.firstName,context.buyerCompany,context.buyerRole,context.senderLinkedInUrl,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,S.subjectReference(context)?.url||'',context.channel==='linkedin'?[]:S.subjectAudit(studio,context).rows.map(row=>row.subject)]);}
  function original(item,key){const d=item.messageStudioDraft?.tailoredOriginal;return d?.key===key?copy(d.draft):null;}
  function workingDraft(item){return {subject:item?.drafts?.emailSubject||'',message:item?.drafts?.emailBody||''};}
  // Sender edits are deterministic slot updates, never a template regeneration.
