@@ -148,8 +148,8 @@ function rankedBuyingTriggers(item=currentItem()){
   let host='';try{host=new URL(row.url).hostname.replace(/^www\./,'');}catch{}
   const content=String([row.summary,row.title].join(' ')).toLowerCase();
   const relevance=[...new Set(terms)].filter(t=>content.includes(t)).length;
-  const trigger=sourceBackedTrigger(item,row),base=studioMessageContext(item,selectedCandidate());let fit=0;if(trigger){const prepared=LeadIntelMessageEditor.prepareFactContext(studioState(),{...base,trigger,researchTrigger:trigger});const project=prepared.factPreparation.facts.find(f=>f.id==='subjectProject'),kind=prepared.factPreparation.facts.find(f=>f.id==='projectType');fit=(project?.value&&kind?.value?80:0)+(prepared.factPreparation.opening==='verified'?60:0);}
-  const briefFact=base.researchBrief?.developments.find(fact=>fact.url===row.url),shared=briefFact?(briefFact.origin==='dossier'?180:100):0;
+  const trigger=sourceBackedTrigger(item,row),base=studioMessageContext(item,selectedCandidate());let fit=0;if(trigger){const prepared=LeadIntelMessageEditor.prepareFactContext(studioState(),{...base,trigger,researchTrigger:trigger});const project=prepared.factPreparation.facts.find(f=>f.id==='subjectProject'),kind=prepared.factPreparation.facts.find(f=>f.id==='projectType');fit=(project?.value&&kind?.value?80:0)+(prepared.factPreparation.opening==='verified'?60:prepared.factPreparation.opening==='verified-summary'?80:0)+(prepared.factPreparation.opening==='verified-summary'&&/\b(?:under construction|constructing|commissioning|launching)\b/i.test(prepared.factPreparation.openingFact?.quote||'')?100:0);}
+  const briefFact=base.researchBrief?.developments.find(fact=>fact.url===row.url),shared=briefFact?100:0;
   return Number(row.score||0)+fit+shared+Math.min(30,relevance*10)+(host===domain?25:0);
  };
  return rows.slice().sort((a,b)=>score(b)-score(a)||a.url.localeCompare(b.url)).slice(0,3);
