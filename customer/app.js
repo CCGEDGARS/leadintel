@@ -715,7 +715,9 @@ function openResearchPreview(mode){
   const queries=LeadIntelMarket.buildResearchPlan(profile,state.market.signals,{mode:pendingResearchMode,sourceTypes:state.market.researchSourceTypes,sourceTypesCustomized:state.market.researchSourceTypesCustomized,instructions:state.market.researchInstructions,language});
   const labels=state.market.researchSourceTypes.map(type=>type[0].toUpperCase()+type.slice(1));
   $("research-preview-title").textContent=modeUi.label;
-  $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · ${modeUi.estimate} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
+  const planApi=globalThis.LeadIntelFirecrawlPlan;const planStatus=planApi?planApi.planFromStatus(globalThis.LeadIntelAttention?.providerStatus?.()||null):{plan:null,remainingCredits:null};
+  const runCost=planApi?planApi.describe({searches:queries.length,resultsPerSearch:limits.resultsPerQuery,pages:0},planStatus.plan,{remainingCredits:planStatus.remainingCredits}):null;
+  $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · ${modeUi.estimate}${runCost?` · ${runCost.text}`:""} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
   $("research-preview-sources").textContent=labels.join(", ")||"No source categories selected";
   $("research-preview-method").textContent=modeUi.method;
   $("research-preview-discovery-note").textContent=modeUi.discoveryNote;
