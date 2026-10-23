@@ -12,6 +12,7 @@ import {fetchDirectPublicPage,handleServiceIntegrationRoute,resolveWorkspaceServ
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const migration=fs.readFileSync(path.join(__dirname,'..','migrations','0013_workspace_service_integrations.sql'),'utf8');
 const hunterMigration=fs.readFileSync(path.join(__dirname,'..','migrations','0023_hunter_service_integration.sql'),'utf8');
+const gateMigration=fs.readFileSync(path.join(__dirname,'..','migrations','0049_firecrawl_rate_gate.sql'),'utf8');
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 
 class D1Statement{
@@ -35,6 +36,7 @@ class D1Db{
     `);
     this.raw.exec(migration);
     this.raw.exec(hunterMigration);
+    this.raw.exec(gateMigration);
   }
   prepare(sql){return new D1Statement(this.raw,sql);}
 }
@@ -46,9 +48,9 @@ async function fixture(role='owner'){
   const encryption=Buffer.alloc(32,7).toString('base64');
   return {DB,token,env:{DB,OAUTH_TOKEN_ENCRYPTION_KEY:encryption,APOLLO_API_KEY:'managed-apollo-key',APOLLO_WEBHOOK_SECRET:'stable-webhook-secret',FIRECRAWL_PROXY_URL:'https://managed.example.test'}};
 }
-async function connectFirecrawl(env){
+async function connectFirecrawl(env,metadata=null){
  const encrypted=await encryptSecret('fc-customer-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
- env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(encrypted);
+ env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES('w1','firecrawl',?,'test',?)").run(encrypted,JSON.stringify(metadata||{}));
 }
 sqliteTest('public extraction reports actual direct use and skips unused extractors',async()=>{
  const {env,token}=await fixture(),old=globalThis.fetch;globalThis.fetch=async()=>new Response('<h1>Company team</h1><p>Anna Andersson, Head of Procurement. '+('Company professional contact information. '.repeat(5))+'</p>',{headers:{'Content-Type':'text/html'}});
@@ -400,4 +402,30 @@ sqliteTest('dynamic official staff extraction waits for rendered cards after a t
  const {env,token}=await fixture();await connectFirecrawl(env);const old=globalThis.fetch;
  globalThis.fetch=async(url,options)=>{if(String(url).includes('api.firecrawl.dev')){const body=JSON.parse(options.body);assert.equal(body.waitFor,2000);assert.equal(body.maxAge,0);return new Response(JSON.stringify({success:true,data:{markdown:'## Jane Smith\nChief Executive Officer\nOfficial company management contact information.',metadata:{sourceURL:'https://company.example/management'}}}),{headers:{'Content-Type':'application/json'}});}return new Response('<html><title>Company</title><div id="app">Company</div></html>',{headers:{'Content-Type':'text/html'}});};
  try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/management',publicFirst:true}}),env,{}),p=await r.json();assert.equal(r.status,200);assert.match(p.data.markdown,/Jane Smith/);assert.deepEqual(p.researchTrace.map(e=>[e.provider,e.status]),[['direct','failed'],['firecrawl','succeeded'],['scrapling','skipped']]);}finally{globalThis.fetch=old;}
+});
+
+sqliteTest('the workspace gate answers 429 with Retry-After and the plan limit when the Free plan minute is full, without calling Firecrawl',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env,{plan_credits:1000,remaining_credits:900});
+ env.DB.raw.prepare("INSERT INTO firecrawl_rate_gate(workspace_id,kind,window_started_at,count,prev_count) VALUES('w1','search',?,10,0)").run(Date.now()-1000);
+ const old=globalThis.fetch;let upstreamCalls=0;globalThis.fetch=async()=>{upstreamCalls++;throw new Error('Firecrawl must not be called while the minute is full');};
+ try{
+  const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'procurement software Latvia',limit:4}}),env,{});
+  const p=await r.json();
+  assert.equal(r.status,429);assert.equal(p.code,'FIRECRAWL_RATE_LIMIT');assert.equal(p.plan,'Free');assert.equal(p.limit_per_minute,10);
+  assert.match(p.error,/10 requests per minute/);assert.ok(Number(r.headers.get('Retry-After'))>=1&&Number(r.headers.get('Retry-After'))<=60);
+  assert.equal(upstreamCalls,0);
+ }finally{globalThis.fetch=old;}
+});
+sqliteTest('an upstream Firecrawl 429 is announced with its retry-after and blocks the next request of that workspace and kind',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env,{plan_credits:1000});const old=globalThis.fetch;let upstreamCalls=0;
+ globalThis.fetch=async url=>{upstreamCalls++;assert.match(String(url),/api\.firecrawl\.dev\/v2\/search/);return new Response(JSON.stringify({success:false,error:'Rate limit exceeded. Consumed 11 req/min, remaining 0. Resets in 43s. Retry after 43 s'}),{status:429,headers:{'Content-Type':'application/json'}});};
+ try{
+  const first=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'procurement software Latvia',limit:4}}),env,{});
+  const p1=await first.json();assert.equal(first.status,429);assert.equal(p1.code,'FIRECRAWL_UPSTREAM_RATE_LIMIT');assert.equal(p1.retry_after,43);assert.equal(first.headers.get('Retry-After'),'43');assert.equal(upstreamCalls,1);
+  const second=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'procurement software Latvia',limit:4}}),env,{});
+  const p2=await second.json();assert.equal(second.status,429);assert.equal(p2.code,'FIRECRAWL_RATE_LIMIT');assert.ok(Number(second.headers.get('Retry-After'))>=40);
+  assert.equal(upstreamCalls,1,'the second request never reaches Firecrawl during the announced block');
+  const scrape=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.example/team'}}),env,{});
+  assert.notEqual(scrape.status,429,'the block is per endpoint kind: scrape is not blocked by a search 429');
+ }finally{globalThis.fetch=old;}
 });

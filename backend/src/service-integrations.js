@@ -4,6 +4,7 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
 import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
+import {acquireFirecrawlSlot,firecrawlPlanFromRow,parseRetryAfterMs,recordFirecrawlRateLimit} from './firecrawl-rate-gate.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter','treg']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter',treg:'Treg'});
@@ -269,6 +270,19 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const signal=providerSignal(request,kind==='scrape'?Math.min(65000,payload.timeout+5000):30000);
   if(signal.aborted)return cancelledResponse(signal,cors);
+  // Workspace gate (firecrawl-rate-gate.js): Firecrawl limits are per team per minute, the browser fans out from many
+  // places and tabs, so the Worker paces every customer-key request and WAITS for the next slot while the request's
+  // own deadline allows. Only when the slot is further away than the deadline does the caller get a 429 that names
+  // the plan limit — a 429 from this gate never reached Firecrawl and never cost a credit.
+  const plan=firecrawlPlanFromRow(credential.row);
+  const waitBudgetMs=kind==='scrape'?Math.max(0,Math.min(65000,payload.timeout+5000)-15000):20000;
+  const gate=await acquireFirecrawlSlot(env,workspaceId,kind,{limit:plan?plan[kind]:null,signal,deadlineMs:waitBudgetMs});
+  if(gate.aborted||signal.aborted)return cancelledResponse(signal,cors);
+  if(!gate.allowed){
+    const seconds=Math.max(1,Math.ceil(gate.retryAfterMs/1000));
+    const message=gate.reason==='upstream_429'?`Firecrawl reported a rate limit on this plan; the next ${kind} can start in ${seconds} s.`:`Firecrawl ${kind} limit on the ${plan?.name||'current'} plan is ${plan?.[kind]??'a fixed number of'} requests per minute; the next slot opens in ${seconds} s.`;
+    return json({error:message,code:'FIRECRAWL_RATE_LIMIT',retry_after:seconds,plan:plan?.name||null,limit_per_minute:plan?.[kind]??null,kind},429,{...cors,'Retry-After':String(seconds)});
+  }
   let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload),signal});}catch(cause){
     if(signal.aborted)return cancelledResponse(signal,cors);
     if(kind==='scrape'&&researchUrl){
@@ -280,10 +294,12 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   if(signal.aborted)return cancelledResponse(signal,cors);
   if(!response.ok){
     if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
+    let upstreamRetryAfterMs=0;if(response.status===429){upstreamRetryAfterMs=parseRetryAfterMs(response,upstream);await recordFirecrawlRateLimit(env,workspaceId,kind,upstreamRetryAfterMs);}
     const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status);
     if(canFallback){
       try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status,signal);return json(direct,200,cors);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
     }
+    if(response.status===429){const seconds=Math.max(1,Math.ceil(upstreamRetryAfterMs/1000));return json({error:`Firecrawl rate limit reached on your plan (${upstream.error||'429'}). The next ${kind} can start in ${seconds} s.`,code:'FIRECRAWL_UPSTREAM_RATE_LIMIT',retry_after:seconds,kind},429,{...cors,'Retry-After':String(seconds)});}
     return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
   }
   await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'recovered',source:credential.source});

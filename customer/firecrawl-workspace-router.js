@@ -35,6 +35,31 @@ async function weakScrapeResponse(response,kind){
   try{const payload=await response.clone().json();const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim();return text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000);}catch{return true;}
 }
 function retryableStatus(status){return status===402||status===404||status===408||status===429||status>=500;}
+const GATE_RATE_LIMIT_CODES=new Set(['FIRECRAWL_RATE_LIMIT','FIRECRAWL_UPSTREAM_RATE_LIMIT']);
+const GATE_MAX_WAIT_MS=60000,GATE_MAX_ATTEMPTS=3;
+// A 429 carrying one of these codes comes from the workspace gate in our own backend: the request never reached
+// Firecrawl and nothing was billed, so waiting for the announced slot and retrying keeps CUSTOMER_ONLY_BILLING
+// intact. Any other 429 (or any paid provider error) is still never retried here.
+async function gateRateLimitDelayMs(response){
+  if(!response||response.status!==429)return 0;
+  let payload=null;try{payload=await response.clone().json();}catch{return 0;}
+  if(!GATE_RATE_LIMIT_CODES.has(String(payload?.code||'')))return 0;
+  const header=Number(response.headers?.get?.('Retry-After'));const seconds=Number.isFinite(header)&&header>0?header:Number(payload?.retry_after)||0;
+  if(!(seconds>0))return 0;
+  return Math.min(GATE_MAX_WAIT_MS,Math.max(1000,Math.round(seconds*1000)));
+}
+function gateSleep(ms,signal){return new Promise(resolve=>{const timer=setTimeout(resolve,ms);signal?.addEventListener?.('abort',()=>{clearTimeout(timer);resolve();},{once:true});});}
+async function fetchWithGateRetry(doFetch,options={},{maxAttempts=GATE_MAX_ATTEMPTS,sleep=gateSleep}={}){
+  let response=await doFetch();
+  for(let attempt=1;attempt<maxAttempts;attempt++){
+    const delay=await gateRateLimitDelayMs(response);
+    if(!delay||options?.signal?.aborted)return response;
+    await sleep(delay,options.signal);
+    if(options?.signal?.aborted)return response;
+    response=await doFetch();
+  }
+  return response;
+}
 function scraplingTarget(kind){
   if(kind!=='scrape')return '';
   const {authenticated,workspace}=workspaceContext();if(!authenticated)return '';
@@ -55,10 +80,10 @@ async function routedFetch(input,options={}){
   if(!target)return originalFetch(input,options);
   const kind=target.includes('/firecrawl/scrape')?'scrape':'search';
   if(kind==='search')options=sanitizeSearchRequestOptions(options);
-  try{return await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})},signal:options?.signal});}
-  catch(error){if(error?.name==="AbortError"||options?.signal?.aborted)throw error;throw error;} // CUSTOMER_ONLY_BILLING: never retry owner-funded services.
+  try{return await fetchWithGateRetry(()=>originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})},signal:options?.signal}),options);}
+  catch(error){if(error?.name==="AbortError"||options?.signal?.aborted)throw error;throw error;} // CUSTOMER_ONLY_BILLING: never retry owner-funded services; only the unbilled workspace-gate 429 is retried (fetchWithGateRetry).
 }
 if(!window.__leadintelFirecrawlWorkspaceRouterInstalled){window.__leadintelFirecrawlWorkspaceRouterInstalled=true;window.fetch=routedFetch;}
-window.LeadIntelFirecrawlRouter={rewriteTarget,workspaceContext,retryableStatus,scraplingTarget,extractScrapeUrl,compactSearchQuery,sanitizeSearchRequestOptions};
+window.LeadIntelFirecrawlRouter={rewriteTarget,workspaceContext,retryableStatus,scraplingTarget,extractScrapeUrl,compactSearchQuery,sanitizeSearchRequestOptions,gateRateLimitDelayMs,fetchWithGateRetry};
 
-export {FIRECRAWL_SEARCH_QUERY_MAX_CHARS,rewriteTarget,workspaceContext,retryableStatus,scraplingTarget,extractScrapeUrl,compactSearchQuery,sanitizeSearchRequestOptions};
+export {FIRECRAWL_SEARCH_QUERY_MAX_CHARS,rewriteTarget,workspaceContext,retryableStatus,scraplingTarget,extractScrapeUrl,compactSearchQuery,sanitizeSearchRequestOptions,gateRateLimitDelayMs,fetchWithGateRetry};

@@ -30,6 +30,20 @@ test('Vercel builds a safe static artifact instead of exposing the repository ro
   assert.doesNotMatch(buildScript, /cp -R backend|cp backend/);
 });
 
+test('the customer app URL without a trailing slash redirects to /customer/ so its relative assets resolve', () => {
+  // customer/index.html references its scripts and styles relatively ("confirmation-dialog.js?v=…"). Served at
+  // /customer (no slash) every one of them resolved to the site root and returned 404, leaving the page on
+  // "We couldn't load your workspace". Vercel's legacy routes do not add the slash by themselves.
+  const config = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
+  const routes = Array.isArray(config.routes) ? config.routes : [];
+  const redirect = routes.find(route => route.src === '^/customer$');
+  assert.ok(redirect, 'a route for /customer without a trailing slash must exist');
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers?.Location, '/customer/');
+  const catchAll = routes.findIndex(route => route.src === '/(.*)');
+  assert.ok(catchAll > routes.indexOf(redirect), 'the redirect must come before the static catch-all route');
+});
+
 test('Vercel build remains deployable if project Root Directory is customer', () => {
   assert.equal(
     fs.existsSync(customerRootBuildScriptPath),
