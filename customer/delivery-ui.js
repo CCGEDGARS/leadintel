@@ -131,7 +131,7 @@ function loadProductionSaas(){
   bridge.addEventListener('load',loadMailboxUi);
   document.body.appendChild(bridge);
 }
-function initDelivery(){injectDeliveryUI();window.LeadIntelPageQuality?.register('delivery',{read:deliveryQualityContext});bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}
+function initDelivery(){injectDeliveryUI();window.LeadIntelConversations?.refresh?.();window.LeadIntelPageQuality?.register('delivery',{read:deliveryQualityContext});bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}
 initDelivery();
 window.LeadIntelDeliveryUI={ready:true};
 import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';

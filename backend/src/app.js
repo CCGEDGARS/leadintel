@@ -18,6 +18,7 @@ import {handleSaasRoute} from './saas-routes.js';
 import {handleOutreachAutomationRoute} from './outreach-automation-routes.js';
 import {runOutreachAutomation} from './outreach-automation-runner.js';
 import {pollOutreachReplies} from './outreach-automation-replies.js';
+import {handleConversationRoute,pollConversations,runConversationPlans} from './conversations.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
@@ -85,6 +86,7 @@ export default {
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const workflow=await handleApprovedWorkflowRoute(request,env,cors);if(workflow)return workflow;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
+      const conversations=await handleConversationRoute(request,runtimeEnv,cors);if(conversations)return conversations;
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
       const automation=await handleOutreachAutomationRoute(request,runtimeEnv,cors);if(automation)return automation;
       const saas=await handleSaasRoute(request,runtimeEnv,cors);if(saas)return saas;
@@ -98,7 +100,7 @@ export default {
     const storageEnv=env;env=withWorkspaceStorage(env);
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
     if(controller.cron==='* * * * *'){ctx.waitUntil(runWritingReferenceJobs(env,{now:now.getTime()}));return;}
-    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
+    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
       runDueSourceHealthChecks(env,now),

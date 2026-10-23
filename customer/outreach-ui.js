@@ -535,7 +535,7 @@ function loadDeliveryModules(){
   const ready=()=>{clearTimeout(timer);if(window.LeadIntelDeliveryUI?.ready)resolve();else fail();};
   const loadUi=()=>{
    let ui=document.querySelector('script[data-delivery-ui]');
-   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2`;ui.dataset.deliveryUi='true';}
+   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1`;ui.dataset.deliveryUi='true';}
    ui.addEventListener('load',ready,{once:true});ui.addEventListener('error',()=>{ui.remove();fail();},{once:true});if(!ui.isConnected)document.body.appendChild(ui);
   };
   if(window.LeadIntelDelivery){loadUi();return;}
@@ -962,6 +962,7 @@ function installFollowUpAssistant(){
   const response=await fetch(url.href,{method:path==='context'?'GET':'POST',credentials:'include',headers:{Accept:'application/json',...(path==='context'?{}:{'Content-Type':'application/json'})},...(path==='context'?{}:{body:JSON.stringify(payload)}),signal});
   const result=await response.json();if(!response.ok)throw Error(result.error||'Follow-Up Assistant unavailable. Your drafts are preserved.');return result;
  };
+ const conversationLink=document.createElement('button');conversationLink.type='button';conversationLink.className='secondary-btn small';conversationLink.textContent='Open conversations & follow-ups';conversationLink.addEventListener('click',()=>{const scope=captureFollowUpScope();window.dispatchEvent(new CustomEvent('leadintel:open-conversations',{detail:{domain:currentItem()?.domain,recipient:scope.recipient}}));});q('mw-follow-up-host').before(conversationLink);
  followUpAssistantView=globalThis.LeadIntelFollowUpAssistantUI.mountFollowUpAssistant(document,{capture:captureFollowUpScope,requestContext:(scope,options)=>request('context',scope,options),analyze:(payload,options)=>request('analyze',payload,options),save:(payload,options)=>request('save',payload,options)});
  for(const name of ['leadintel:workspace-changed','leadintel:server-ready','leadintel:server-conflict'])window.addEventListener(name,()=>followUpAssistantView?.refresh());
 }

@@ -35,7 +35,9 @@
       "confirm_contact_data_version": "20261021-v1",
       "paid_contact_permissions_version": "email-phone-v1",
       "messages_audit_version": "20261021-v1",
-      "writing_workspace_version": "20261023-v1"
+      "writing_workspace_version": "20261023-v1",
+      "conversation_monitoring_version": "supervised-follow-up-v1",
+      "conversation_poll_interval_minutes": 60
     }
   },
   "smokeChecks": [
@@ -4328,6 +4330,38 @@
       "status": 200,
       "contains": [
         "writing-workspace=20261023-v1"
+      ]
+    },
+    {
+      "id": "conversation-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "conversation-ui.js?v=20261023-v1",
+        "conversation.css?v=20261023-v1"
+      ]
+    },
+    {
+      "id": "supervised-conversation-panel",
+      "type": "text",
+      "url": "/customer/conversation-ui.js",
+      "status": 200,
+      "contains": [
+        "Conversations & follow-ups",
+        "/api/conversations",
+        "/api/follow-up-assistant/analyze",
+        "contextVersion",
+        "scopeKey"
+      ]
+    },
+    {
+      "id": "supervised-conversation-auth",
+      "type": "text",
+      "url": "/api/conversations",
+      "status": 401,
+      "contains": [
+        "Authentication required"
       ]
     }
   ],

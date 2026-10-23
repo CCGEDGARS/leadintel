@@ -35,9 +35,9 @@ export async function refreshGoogleAccessToken(refreshToken,{clientId,clientSecr
   if(!response.ok||!payload.access_token)throw new Error(payload.error_description||payload.error||`Google token refresh failed (${response.status})`);
   return {accessToken:String(payload.access_token),expiresIn:Number(payload.expires_in)||0,scope:String(payload.scope||'')};
 }
-export async function sendGmailMessage(accessToken,message,fetchImpl=fetch){
+export async function sendGmailMessage(accessToken,message,fetchImpl=fetch,threadId=null){
   if(!accessToken)throw new Error('Gmail access token is required');const raw=base64UrlEncode(message);
-  const response=await fetchImpl('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({raw})});
+  const response=await fetchImpl('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(threadId?{raw,threadId}:{raw})});
   const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.id)throw Object.assign(new Error(payload.error?.message||`Gmail send failed (${response.status})`),{deliveryRejected:response.status>=400&&response.status<500&&response.status!==408,retryable:response.status===429});
   return {id:String(payload.id),threadId:String(payload.threadId||payload.id),labelIds:Array.isArray(payload.labelIds)?payload.labelIds:[]};
 }
@@ -56,10 +56,22 @@ export function extractMessageText(message){
   const parts=[];const walk=part=>{if(!part)return;const data=decodeBodyData(part.body?.data);if(data)parts.push({mime:String(part.mimeType||''),text:data});for(const child of part.parts||[])walk(child);};walk(payload);
   const plain=parts.find(item=>item.mime.startsWith('text/plain'));if(plain)return plain.text.trim();const html=parts.find(item=>item.mime.startsWith('text/html'));return html?stripHtml(html.text):'';
 }
+export function stripQuotedReplyText(text){return String(text||'').split(/\n\s*(?:On .{0,300}wrote:|_{3,}|-{3,}\s*(?:Original|Forwarded) message|From:\s|>)/i)[0].trim();}
+export function extractCurrentReplyText(message){
+ const fullText=extractMessageText(message);
+ const parts=[];
+ const walk=part=>{if(!part)return;if(part.body?.data)parts.push(part);for(const child of part.parts||[])walk(child);};walk(message.payload);
+ if(parts.some(part=>part.mimeType==='text/plain'))return stripQuotedReplyText(fullText);
+ const html=parts.find(part=>part.mimeType==='text/html');if(!html)return stripQuotedReplyText(fullText);
+ let source;try{source=base64UrlDecode(html.body.data);}catch{return '';}
+ const quote=source.search(/<blockquote\b|<(?:div|section)\b[^>]*(?:class|id)\s*=\s*["'][^"']*(?:gmail_quote|yahoo_quoted|protonmail_quote|divRplyFwdMsg)[^"']*["']/i);
+ if(quote>=0)source=source.slice(0,quote);
+ return stripQuotedReplyText(extractMessageText({payload:{mimeType:'text/html',body:{data:base64UrlEncode(source)}}}));
+}
 export function classifyReply(text){
-  const value=String(text||'').toLowerCase().replace(/\s+/g,' ').trim();if(!value)return 'neutral';
+  const value=stripQuotedReplyText(text).toLowerCase().replace(/\s+/g,' ').trim();if(!value)return 'neutral';
   if(/out of office|automatic reply|auto-reply|away from the office|vacation reply/.test(value))return 'out_of_office';
-  if(/unsubscribe|remove me|do not contact|don't contact|stop emailing/.test(value))return 'unsubscribe';
+  if(/unsubscribe|remove me|do not contact|don't contact|stop emailing|not interested|no thank you|no thanks/.test(value))return 'unsubscribe';
   if(/talk to|contact|reach out to|cc(?:'d)?|colleague|better person|responsible for/.test(value)&&/(instead|please|should|is our|would be)/.test(value))return 'referral';
   if(/not now|later this year|next quarter|next year|circle back|come back|reach out again|too early/.test(value))return 'not_now';
   if(/calendar|schedule|meeting|call|teams|zoom|available|availability|book a time|let's talk|lets talk/.test(value)&&/(yes|sure|happy|can|could|let's|lets|available|schedule|meeting|call)/.test(value))return 'meeting_request';
@@ -71,8 +83,8 @@ export function normalizeInboundReplies(thread,{sentMessageId,sentAt,connectedEm
   const sentTime=new Date(sentAt||0).getTime();const own=normalizeEmail(connectedEmail);const out=[];
   for(const message of thread?.messages||[]){
     if(String(message?.id||'')===String(sentMessageId||''))continue;const received=Number(message?.internalDate)||new Date(header(message,'Date')||0).getTime();if(!Number.isFinite(received)||received<=sentTime)continue;
-    const sender=senderEmail(message);if(!sender||sender===own)continue;const text=extractMessageText(message).slice(0,20000);if(!text)continue;
-    out.push({gmailMessageId:String(message.id||''),gmailThreadId:String(message.threadId||thread?.id||''),senderEmail:sender,receivedAt:new Date(received).toISOString(),bodyText:text,category:REPLY_CATEGORIES.has(classifyReply(text))?classifyReply(text):'neutral'});
+    const sender=senderEmail(message);if(!sender||sender===own||(message.labelIds||[]).includes('SENT'))continue;const text=extractMessageText(message).slice(0,20000);if(!text)continue;const authoredText=extractCurrentReplyText(message);
+    out.push({gmailMessageId:String(message.id||''),gmailThreadId:String(message.threadId||thread?.id||''),senderEmail:sender,receivedAt:new Date(received).toISOString(),bodyText:text,authoredText,category:REPLY_CATEGORIES.has(classifyReply(authoredText))?classifyReply(authoredText):'neutral'});
   }
   return out.sort((a,b)=>a.receivedAt.localeCompare(b.receivedAt));
 }
