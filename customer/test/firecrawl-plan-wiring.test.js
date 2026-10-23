@@ -11,6 +11,7 @@ test('the plan estimate module loads before the modules that show paid-run estim
   assert.ok(at('firecrawl-plan.js')<at('market-engine.js')&&at('firecrawl-plan.js')<at('app.js')&&at('firecrawl-plan.js')<at('discovery-ui.js'));
   for(const entry of ['app.js','discovery-ui.js'])assert.match(html,new RegExp(`src="${entry.replace('.','\\.')}\\?[^"]*plan-estimate=20261023-v1`));
   assert.match(html,/api-transport\.js\?[^"]*shared-gets=20261023-v1/);assert.match(html,/server-bridge\.js\?[^"]*parallel-workspaces=20261023-v1/);
+  assert.match(html,/firecrawl-plan\.js\?v=20261024-plan-estimate-v2/);for(const entry of ['discovery-ui.js','attention-centre.js'])assert.match(html,new RegExp(`src="${entry.replace('.','\\.')}\\?[^"]*plan-status=20261024-v1`));
 });
 
 test('market research preview and the Companies budget line show credits, and minutes on the known plan',()=>{
@@ -20,4 +21,10 @@ test('market research preview and the Companies budget line show credits, and mi
   assert.match(ui,/Research budget: up to \$\{estimate\.cap\} Firecrawl calls\$\{cost\?` \(\$\{cost\.text\}\)`:''\}, billed on your plan/);
   assert.match(ui,/planApi\.describe\(\{searches:estimate\.searches,resultsPerSearch:8,pages:estimate\.pages\},status\.plan,\{remainingCredits:status\.remainingCredits\}\)/);
   for(const source of [app,ui])assert.match(source,/globalThis\.LeadIntelAttention\?\.providerStatus\?\.\(\)/,'the plan comes from the cached services status, never from a new paid call');
+});
+
+test('the Companies estimate is redrawn when the first provider status arrives, so the plan and minutes appear',()=>{
+  const centre=read('attention-centre.js'),ui=read('discovery-ui.js');
+  assert.match(centre,/lastProviderStatus=\{ai,services,checkedAt:Date\.now\(\)\};try\{root\.dispatchEvent\(new root\.CustomEvent\('leadintel:provider-status'/);
+  assert.match(ui,/window\.addEventListener\('leadintel:provider-status',\(\)=>\{try\{renderDiscoveryEstimate\(\);\}catch\{\}\}\)/);
 });

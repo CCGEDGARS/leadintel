@@ -41,7 +41,7 @@
       const url=path=>`${API_BASE}${path}?workspace_id=${encodeURIComponent(workspaceId)}`;
       const [aiResponse,serviceResponse]=await Promise.all([root.fetch(url('/api/integrations/ai/status'),{credentials:'include'}),root.fetch(url('/api/integrations/services/status')+(force?'&verify=1':''),{credentials:'include'})]);
       if(!aiResponse.ok||!serviceResponse.ok)throw new Error('Provider status unavailable');
-      const [ai,services]=await Promise.all([aiResponse.json(),serviceResponse.json()]);lastProviderStatus={ai,services,checkedAt:Date.now()};
+      const [ai,services]=await Promise.all([aiResponse.json(),serviceResponse.json()]);lastProviderStatus={ai,services,checkedAt:Date.now()};try{root.dispatchEvent(new root.CustomEvent('leadintel:provider-status',{detail:lastProviderStatus}));}catch{}
       if(root.LeadIntelServerBridge?.workspace?.id!==workspaceId)return;
       providerIssues=root.LeadIntelAttentionModel?.providerCreditIssues?.({ai,services})||[];connectionIssues=root.LeadIntelAttentionModel?.providerConnectionIssues?.({ai,services,requiredProviders:services?.providers?.find(row=>row.provider==='hunter')?.metadata?.additional_verification_enabled===true?['hunter']:[]})||[];lastProviderCheck=Date.now();render();
     }catch{if(root.LeadIntelServerBridge?.workspace?.id===workspaceId){providerStatusError='Tool status could not be checked. The last confirmed billing alerts are retained.';render();}}

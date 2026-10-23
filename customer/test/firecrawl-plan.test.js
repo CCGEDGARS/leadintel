@@ -8,6 +8,7 @@ test('plan is the largest allotment at or below the reported credits; unknown cr
   assert.deepEqual(plan.planFromStatus({providers:[{provider:'apollo'},{provider:'firecrawl',metadata:{plan_credits:1500,remaining_credits:651}}]}),{plan:plan.PLANS[0],remainingCredits:651});
   assert.deepEqual(plan.planFromStatus({firecrawl:{provider:'firecrawl',metadata:{}}}),{plan:null,remainingCredits:null});
   assert.deepEqual(plan.planFromStatus(null),{plan:null,remainingCredits:null});
+  assert.deepEqual(plan.planFromStatus({ai:{providers:[{provider:'anthropic'}]},services:{providers:[{provider:'firecrawl',metadata:{plan_credits:1500,remaining_credits:627}}]},checkedAt:1}),{plan:plan.PLANS[0],remainingCredits:627},'the attention centre cache nests the services answer');
 });
 
 test('credits follow the published formula and match the measured runs',()=>{

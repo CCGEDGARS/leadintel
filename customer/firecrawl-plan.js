@@ -25,7 +25,10 @@
     return match;
   }
   function planFromStatus(status){
-    const list=Array.isArray(status?.providers)?status.providers:Array.isArray(status)?status:Object.values(status||{});
+    // Accepts the raw /services/status answer ({providers}), a provider list, a provider map, or the attention
+    // centre cache ({ai,services,checkedAt}) that nests the services answer.
+    const source=status?.services?.providers?status.services:status;
+    const list=Array.isArray(source?.providers)?source.providers:Array.isArray(source)?source:Object.values(source||{});
     const firecrawl=list.find(item=>item&&typeof item==='object'&&item.provider==='firecrawl');
     const metadata=firecrawl?.metadata&&typeof firecrawl.metadata==='object'?firecrawl.metadata:{};
     const remaining=Number(metadata.remaining_credits);
