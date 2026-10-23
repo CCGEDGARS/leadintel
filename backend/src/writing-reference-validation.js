@@ -1,3 +1,4 @@
+import {readableWritingCoverage} from './writing-reference-coverage.js';
 import {getDocumentProxy} from 'unpdf';
 export async function extractServer(bytes,mime){
  if(!bytes.byteLength)throw Error('Document is empty');if(bytes.byteLength>20*1024*1024)throw Error('Maximum document size is 20 MiB');
@@ -28,7 +29,7 @@ export async function validateWritingReference({bytes,mime,filename,nativeExtrac
  signal?.throwIfAborted();
  let extracted=await extractServer(bytes,normalized);
  signal?.throwIfAborted();
- if(normalized==='application/pdf'&&nativeExtractor&&bytes.length<=8*1024*1024&&extracted.coverage.total<=60&&(extracted.coverage.unreadable>0||extracted.characters<extracted.coverage.total*120)){
+ if(normalized==='application/pdf'&&nativeExtractor&&bytes.length<=8*1024*1024&&extracted.coverage.total<=60&&(!readableWritingCoverage(extracted.coverage)||extracted.characters<extracted.coverage.total*120)){
   try{const native=await nativeExtractor({bytes,pages:extracted.coverage.total,signal});
    extracted=mergeNativeExtraction(extracted,native);
   }catch(e){signal?.throwIfAborted();if(e?.name==='AbortError')throw e;extracted.coverage.nativeExtractionUnavailable=true;}

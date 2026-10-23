@@ -13,3 +13,18 @@ test('recomputes text instead of trusting browser-supplied claims',async()=>{con
 test('rejects executable filenames, MIME mismatches and empty guidance',async()=>{await assert.rejects(validateWritingReference({bytes:new TextEncoder().encode('x'),mime:'text/plain',filename:'guide.exe'}),/filename/i);await assert.rejects(validateWritingReference({bytes:new TextEncoder().encode(''),mime:'text/plain',filename:'guide.txt'}),/empty/i);});
 
 test('merged native extraction cannot exceed the combined text limit',()=>{const extracted={sections:[{location:'page:1',text:'x'.repeat(1999900)}],coverage:{total:2,readable:1,unreadable:1},characters:1999900};assert.throws(()=>mergeNativeExtraction(extracted,{sections:[{location:'page:2',text:'y'.repeat(200)}]}),/2 million/);assert.equal(extracted.characters,1999900);assert.equal(extracted.coverage.unreadable,1);});
+
+test('80% readable PDF skips native recovery of missing pages and needs no extraction review',async()=>{
+ // Four readable pages and one blank page; enough deterministic text avoids the independent sparse-text check.
+ const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R] /Count 5 >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+ for(let page=0;page<5;page++){
+  const stream=page<4?'BT /F1 12 Tf 20 700 Td '+'(Readable writing advice.) Tj 0 -14 Td '.repeat(20)+'ET':'';
+  objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5+page*2} 0 R >>`,`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+ }
+ let pdf='%PDF-1.4\n';const offsets=[0];for(const [i,object] of objects.entries()){offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${object}\nendobj\n`;}
+ const start=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+ const bytes=new TextEncoder().encode(pdf);let calls=0;
+ const result=await validateWritingReference({bytes,mime:'application/pdf',filename:'eighty-percent.pdf',nativeExtractor:async()=>{calls++;throw Error('Missing pages need no recovery at 80%');}});
+ assert.equal(result.extracted.coverage.readable,4);assert.equal(result.extracted.coverage.unreadable,1);
+ assert.equal(calls,0);assert.equal(result.extracted.coverage.requiresReview,undefined);assert.equal(result.bytes,bytes);
+});

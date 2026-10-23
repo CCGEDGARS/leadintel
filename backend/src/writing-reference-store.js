@@ -1,10 +1,26 @@
+import {readableWritingCoverage} from './writing-reference-coverage.js';
 const stmt=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
 const fail=(message,status=409)=>{const e=Error(message);e.status=status;throw e;};
 function card(row){return {...row,workspaceId:row.workspace_id,role:row.role||'guidance',active:Boolean(row.active),presentation:JSON.parse(row.presentation_json||'{}'),coverage:JSON.parse(row.coverage_json),techniques:JSON.parse(row.techniques_json)};}
 async function init(env,scope){if(!scope?.workspaceId)fail('Authenticated workspace required',401);await stmt(env,'INSERT OR IGNORE INTO writing_reference_workspaces(workspace_id) VALUES(?)',scope.workspaceId).run();}
 export async function writingReferenceRevision(env,scope){await init(env,scope);return Number((await stmt(env,'SELECT revision FROM writing_reference_workspaces WHERE workspace_id=?',scope.workspaceId).first()).revision);}
-export async function listWritingReferences(env,scope){await init(env,scope);const {results}=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.status<>'Deleted' ORDER BY s.slot`,scope.workspaceId).all();return results.map(card);}
-export async function getWritingReference(env,scope,id){const row=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.id=? AND s.status<>'Deleted'`,scope.workspaceId,id).first();if(!row)fail('Source not found',404);return card(row);}
+export async function listWritingReferences(env,scope){await init(env,scope);await recoverReadableWritingReferences(env,scope);const {results}=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.status<>'Deleted' ORDER BY s.slot`,scope.workspaceId).all();return results.map(card);}
+export async function getWritingReference(env,scope,id){if(!scope?.workspaceId)fail('Authenticated workspace required',401);await recoverReadableWritingReferences(env,scope,id);const row=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.id=? AND s.status<>'Deleted'`,scope.workspaceId,id).first();if(!row)fail('Source not found',404);return card(row);}
+// Reconcile already-uploaded books without rewriting originals or re-running AI analysis.
+async function recoverReadableWritingReferences(env,scope,id=null){
+ const {results}=await stmt(env,`SELECT s.* FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.workspace_id=? AND s.status='Needs attention'${id?' AND s.id=?':''}`,scope.workspaceId,...(id?[id]:[])).all();
+ for(const raw of results){
+  const row=card(raw);
+  if(!row.catalogue_key||!row.techniques.length||!readableWritingCoverage(row.coverage))continue;
+  // Every dependent revision advances only if the same source revision is still eligible.
+  const guard="EXISTS(SELECT 1 FROM writing_reference_sources s JOIN writing_reference_slots p ON p.source_id=s.id WHERE s.id=? AND s.workspace_id=? AND s.revision=? AND s.status='Needs attention')";
+  await env.DB.batch([
+   stmt(env,`UPDATE writing_reference_slots SET revision=revision+1 WHERE workspace_id=? AND source_id=? AND ${guard}`,scope.workspaceId,row.id,row.id,scope.workspaceId,row.revision),
+   stmt(env,`UPDATE writing_reference_workspaces SET revision=revision+1 WHERE workspace_id=? AND ${guard}`,scope.workspaceId,row.id,scope.workspaceId,row.revision),
+   stmt(env,`UPDATE writing_reference_sources SET status='Ready',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status='Needs attention' AND EXISTS(SELECT 1 FROM writing_reference_slots WHERE source_id=?)`,row.id,scope.workspaceId,row.revision,row.id)
+  ]);
+ }
+}
 export async function writingReferenceSlots(env,scope){const rows=await stmt(env,'SELECT slot,revision FROM writing_reference_slots WHERE workspace_id=?',scope.workspaceId).all();return Object.fromEntries(rows.results.map(r=>[r.slot,r.revision]));}
 export async function recoverWritingReferenceUploads(env,now=Date.now()){
  const rows=await stmt(env,'SELECT * FROM writing_reference_uploads WHERE expires_at<? LIMIT 12',now).all();

@@ -1,3 +1,4 @@
+import {readableWritingCoverage} from './writing-reference-coverage.js';
 import {chunkWritingReference,analyseWritingReferenceChunk,aggregateWritingReference} from './writing-reference-analysis.js';
 import {getWritingReference,cleanupWritingReference,recoverWritingReferenceUploads} from './writing-reference-store.js';
 import {importAesKey,decryptSecret} from './oauth.js';
@@ -69,7 +70,7 @@ export async function runWritingReferenceJobs(env,{now=Date.now(),maxJobs=1,maxC
    }
    const completed=await stmt(env,"SELECT techniques_json FROM writing_reference_chunks WHERE source_id=? AND status='Complete'",source.id).all();
    if(completed.results.length===chunks.length){
-    const catalogue=aggregateWritingReference(completed.results.map(row=>JSON.parse(row.techniques_json))),status=(extracted.coverage.unreadable||extracted.coverage.requiresReview)?'Needs attention':'Ready';
+    const catalogue=aggregateWritingReference(completed.results.map(row=>JSON.parse(row.techniques_json))),status=readableWritingCoverage(extracted.coverage)?'Ready':'Needs attention';
     const catalogueKey=source.original_key.replace(/original$/,'catalogue.json'),uploadId=crypto.randomUUID();
     await stmt(env,'INSERT INTO writing_reference_uploads(id,workspace_id,source_id,original_key,text_key,expires_at) VALUES(?,?,?,?,?,?)',uploadId,job.workspace_id,source.id,catalogueKey,'',Date.now()+600000).run();
     await env.WRITING_REFERENCES_BUCKET.put(catalogueKey,JSON.stringify(catalogue));
