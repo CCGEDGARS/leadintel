@@ -141,7 +141,10 @@ test('malformed successful session responses are not treated as a confirmed sign
 test('permanent verification failure is bounded and keeps private data hidden and intact',async()=>{
  const runtime=load(startupSeed(),{fetchImpl:startupBackend({failPath:'/api/session',failures:Infinity})});
  await runtime.root.__init();
- assert.equal(runtime.requests.length,3);
+ // three bounded /api/session attempts plus the single /api/workspaces probe that startup now runs beside the session check
+ assert.equal(runtime.requests.length,4);
+ assert.equal(runtime.requests.filter(request=>request.url==='/api/session').length,3);
+ assert.equal(runtime.requests.filter(request=>request.url==='/api/workspaces').length,1);
  assert.equal(runtime.requests.some(request=>request.options.method==='PUT'),false);
  assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
  assert.equal(runtime.attrs.get('data-account-check'),'error');
@@ -391,7 +394,7 @@ test('startup retries a real deadline abort while the workspace-list body is sti
  const r=load(startupSeed(),{fetchImpl:(input,options)=>{
   if(new URL(input).pathname==='/api/workspaces'&&attempts++<2){
    const body=new ReadableStream({start(controller){options.signal.addEventListener('abort',()=>controller.error(options.signal.reason),{once:true});}});
-   queueMicrotask(()=>deadline());return new Response(body);
+   const fire=deadline;queueMicrotask(()=>fire());return new Response(body); // the deadline of THIS request: /api/session runs beside it and arms its own timer
   }return backend(input);
  }});
  Object.assign(r.root,{AbortController,DOMException});

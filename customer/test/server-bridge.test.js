@@ -9,6 +9,15 @@ test('server bridge knows all Customer V2 storage namespaces and API base',()=>{
   assert.match(bridge,/https:\/\/leadintel-api\.edgars-7e7\.workers\.dev/);
 });
 
+test('startup requests /api/workspaces beside /api/session and applies it only once the session is authenticated',()=>{
+  const init=bridge.slice(bridge.indexOf('async function init()'),bridge.indexOf('function runWorkspaceSave'));
+  const prefetchAt=init.indexOf('const workspacesEarly=prefetchWorkspaces();'),sessionAt=init.indexOf('await fetchSession();');
+  assert.ok(prefetchAt>=0&&sessionAt>prefetchAt,'the workspaces request starts before the session answer arrives');
+  assert.ok(init.indexOf('bridge.workspaces=early.workspaces')>init.indexOf("if(!bridge.session?.authenticated){"),'workspaces are applied only on the authenticated path');
+  assert.doesNotMatch(init,/await fetchWorkspaces\(\)/);
+  assert.match(bridge,/function prefetchWorkspaces\(\)\{return bootstrapRead\('\/api\/workspaces',validWorkspaces\)\.then\(\(\{payload\}\)=>\(\{workspaces:payload\.workspaces\}\),error=>\(\{error\}\)\);\}/);
+});
+
 test('server bridge supports Google sign in and versioned workspace state',()=>{
   assert.match(bridge,/\/api\/auth\/google\/start/);assert.match(bridge,/\/api\/session/);assert.match(bridge,/\/api\/workspaces/);assert.match(bridge,/\/api\/customer\/state/);assert.match(bridge,/version:bridge\.stateVersion/);assert.match(bridge,/response\.status===409/);
 });
