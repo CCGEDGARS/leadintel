@@ -17,10 +17,11 @@ test('concurrent identical first-party GETs share one request and every caller r
   const a=window.fetch('/api/integrations/services/status?workspace_id=w1');
   const b=window.fetch('https://leadintel-api.edgars-7e7.workers.dev/api/integrations/services/status?workspace_id=w1');
   const c=window.fetch('/api/integrations/services/status?workspace_id=w1',{method:'GET'});
+  const d=window.fetch('/api/integrations/services/status?workspace_id=w1',{credentials:'include',headers:{'Accept':'application/json','Content-Type':'application/json'},signal:new AbortController().signal});
   release();
-  const bodies=await Promise.all([a,b,c].map(p=>p.then(r=>r.json())));
-  assert.equal(calls,1,'three simultaneous identical GETs reach the server once');
-  assert.deepEqual(bodies,[{calls:1},{calls:1},{calls:1}]);
+  const bodies=await Promise.all([a,b,c,d].map(p=>p.then(r=>r.json())));
+  assert.equal(calls,1,'four simultaneous identical GETs reach the server once, whatever harmless headers or signal they carry');
+  assert.deepEqual(bodies,[{calls:1},{calls:1},{calls:1},{calls:1}]);
   await window.fetch('/api/integrations/services/status?workspace_id=w1');
   assert.equal(calls,2,'a GET issued after the shared one completed is a fresh request');
 });

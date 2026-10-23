@@ -23,8 +23,10 @@
       const url=new URL(target,root.location.origin);
       if(url.origin!==root.location.origin||!url.pathname.startsWith('/api/'))return '';
       const headers=typeof Headers!=='undefined'&&options?.headers instanceof Headers?[...options.headers.entries()]:Object.entries(options?.headers||{});
-      if(headers.some(([name])=>String(name).toLowerCase()!=='accept'))return '';
-      return url.href+'|'+String(options?.credentials||'');
+      // Accept and a body-less Content-Type (some modules send it on every call) do not change what a GET returns.
+      if(headers.some(([name])=>!['accept','content-type'].includes(String(name).toLowerCase())))return '';
+      // Same-origin: cookies travel with 'include', 'same-origin' and the default alike; only 'omit' is a different request.
+      return url.href+(String(options?.credentials||'')==='omit'?'|omit':'');
     }catch{return '';}
   }
   const cloneable=response=>Boolean(response)&&typeof response.clone==='function';
