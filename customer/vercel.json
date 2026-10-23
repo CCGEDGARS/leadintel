@@ -2,6 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "bash scripts/build-vercel-static.sh",
   "outputDirectory": ".vercel-static",
+  "redirects": [
+    {
+      "source": "/customer",
+      "destination": "/customer/",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:route*",

@@ -20,13 +20,6 @@
   ],
   "routes": [
     {
-      "src": "^/customer$",
-      "status": 308,
-      "headers": {
-        "Location": "/customer/"
-      }
-    },
-    {
       "src": "/api/scrapling",
       "dest": "/api/scrapling.py"
     },

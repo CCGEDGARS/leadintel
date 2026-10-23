@@ -33,15 +33,16 @@ test('Vercel builds a safe static artifact instead of exposing the repository ro
 test('the customer app URL without a trailing slash redirects to /customer/ so its relative assets resolve', () => {
   // customer/index.html references its scripts and styles relatively ("confirmation-dialog.js?v=…"). Served at
   // /customer (no slash) every one of them resolved to the site root and returned 404, leaving the page on
-  // "We couldn't load your workspace". Vercel's legacy routes do not add the slash by themselves.
-  const config = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
-  const routes = Array.isArray(config.routes) ? config.routes : [];
-  const redirect = routes.find(route => route.src === '^/customer$');
-  assert.ok(redirect, 'a route for /customer without a trailing slash must exist');
-  assert.equal(redirect.status, 308);
-  assert.equal(redirect.headers?.Location, '/customer/');
-  const catchAll = routes.findIndex(route => route.src === '/(.*)');
-  assert.ok(catchAll > routes.indexOf(redirect), 'the redirect must come before the static catch-all route');
+  // "We couldn't load your workspace". The deployed Vercel project has Root Directory=customer, so the config
+  // that governs it is customer/vercel.json (see scrapling-customer-root-runtime.test.js), not the root one.
+  const liveConfig = JSON.parse(fs.readFileSync(path.join(root, 'customer/vercel.json'), 'utf8'));
+  const redirects = Array.isArray(liveConfig.redirects) ? liveConfig.redirects : [];
+  const redirect = redirects.find(rule => rule.source === '/customer');
+  assert.ok(redirect, 'customer/vercel.json must redirect /customer (no trailing slash)');
+  assert.equal(redirect.destination, '/customer/');
+  assert.equal(redirect.permanent, true, 'a permanent redirect (308) keeps the request method');
+  const rootConfig = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
+  assert.ok(!(rootConfig.routes || []).some(route => route.src === '^/customer$'), 'the root vercel.json does not govern the deployment; keep the rule only in the live config');
 });
 
 test('Vercel build remains deployable if project Root Directory is customer', () => {
