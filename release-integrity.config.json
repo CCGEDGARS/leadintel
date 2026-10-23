@@ -34,7 +34,8 @@
       "company_dossier_version": "20261021-dossier-first-v1",
       "confirm_contact_data_version": "20261021-v1",
       "paid_contact_permissions_version": "email-phone-v1",
-      "messages_audit_version": "20261021-v1"
+      "messages_audit_version": "20261021-v1",
+      "writing_workspace_version": "20261023-v1"
     }
   },
   "smokeChecks": [
@@ -484,7 +485,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose one active book",
+        "Choose up to three books in the Writing Assistant",
         "What AI learned",
         "Retry analysis",
         "error.snapshot?.cards"
@@ -2243,8 +2244,8 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose one active book",
-        "card.active?'Active':'Ready'",
+        "Choose up to three books in the Writing Assistant",
+        "data-delete",
         "wr-options",
         "[1,2,3].map(slot=>",
         "wr-book-cover",
@@ -2931,7 +2932,7 @@
         "data-wa-books",
         "Explore this idea",
         "activateBook(card.id)",
-        "Build your personal writing library"
+        "Books are optional"
       ]
     },
     {
@@ -4282,6 +4283,51 @@
       ],
       "notContains": [
         "enqueueOutreachAutomation?.("
+      ]
+    },
+    {
+      "id": "writing-workspace-editor",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "data-wa-context-mode",
+        "data-wa-save-draft",
+        "data-wa-generate",
+        "Preview changes",
+        "Activate",
+        "resetBooks()"
+      ]
+    },
+    {
+      "id": "writing-workspace-library",
+      "type": "text",
+      "url": "/customer/writing-workspace.js",
+      "status": 200,
+      "contains": [
+        "generalWritingContext",
+        "createWritingWorkspaceApi",
+        "/api/writing-workspace"
+      ]
+    },
+    {
+      "id": "writing-workspace-session-books",
+      "type": "text",
+      "url": "/customer/writing-references-loader.js",
+      "status": 200,
+      "contains": [
+        "sessionSnapshot",
+        "toggleSession",
+        "resetSession"
+      ]
+    },
+    {
+      "id": "writing-workspace-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "writing-workspace=20261023-v1"
       ]
     }
   ],

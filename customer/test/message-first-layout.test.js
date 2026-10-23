@@ -68,7 +68,7 @@ test('mounted canonical email grows with draft changes, shrinks after Reset-size
  w.close();
 });
 
-test('the one Writing Assistant material host retains upload, activation, role and instruction handlers',async()=>{
+test('the one Writing Assistant material host retains upload, role and instruction handlers without settings activation',async()=>{
  const {document,w}=mounted(),root=document.getElementById('mw-writing-reference-host');
  const {mountWritingReferences}=require('../writing-references-ui.js');let card={slot:1,id:'book',filename:'guide.txt',status:'Ready',active:false,revision:1,summary:'Ask useful questions',instruction:'',role:'guidance'},changes=[];
  const api={list:async()=>({cards:[card],referenceRevision:1}),patch:async(id,change)=>{changes.push(change);card={...card,...change};return {cards:[card],referenceRevision:2};}};
@@ -76,8 +76,7 @@ test('the one Writing Assistant material host retains upload, activation, role a
  const refs=document.getElementById('mw-writing-references');refs.open=true;
  assert.equal(root.closest('#mw-writing-assistant')?.id,'mw-writing-assistant');assert.equal(document.querySelectorAll('#mw-writing-reference-host').length,1);
  assert.equal(root.querySelectorAll('.wr-add-source [data-upload]').length,1);assert.equal(root.querySelectorAll('[data-slot]').length,3);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
- const active=root.querySelector('[data-active]');active.checked=true;active.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
- assert.equal(changes[0].active,true);
+ assert.equal(root.querySelector('[data-active]'),null);assert.equal(changes.length,0);
  const instruction=root.querySelector('[data-instruction]');instruction.value='Use concise questions';instruction.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
  assert.equal(changes.at(-1).instruction,'Use concise questions');
  assert.ok(document.getElementById('mw-tools-drawer').contains(document.getElementById('mw-book-controls')));assert.equal(refs.contains(document.getElementById('mw-book-controls')),false);

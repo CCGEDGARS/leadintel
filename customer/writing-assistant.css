@@ -130,3 +130,17 @@
 @media(max-width:720px){.wa-session.wa-workbench{display:flex}.wa-conversation{min-height:640px;height:85dvh}.wa-book-cover{width:72px;height:100px}.wa-workspace{min-height:520px}.wa-book>strong{font-size:12px}}
 @media(max-height:740px) and (min-width:721px){.wa-book-cover{height:78px;width:58px;padding:8px}.wa-dialog .wa-book{padding:8px 5px;gap:5px}.wa-conversation-heading{padding-top:12px;padding-bottom:8px}.wa-book-guidance{margin:10px 0;padding:10px}.wa-question{padding-top:10px;padding-bottom:10px}.wa-question textarea{min-height:66px}}
 .wa-idea p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* writing-workspace=20261023-v1 */
+.wa-context-controls{display:grid;grid-template-columns:210px minmax(0,1fr);align-items:center;gap:4px 18px;padding:0 0 4px;grid-column:1/-1}.wa-context-controls>label{grid-row:1/3}.wa-context-controls [data-wa-context]{grid-column:2}
+.wa-context-controls label{display:grid;gap:5px;min-width:210px;font-weight:700}
+.wa-context-controls select{padding:10px 12px;border:1px solid #bfd1c7;border-radius:10px;background:#fff;color:#244336;font:inherit}
+.wa-context-controls p{margin:0;max-width:780px;font-size:13px;color:#567164;line-height:1.5}
+.wa-editor-heading>.wa-actions{display:flex;gap:8px;flex-wrap:wrap}
+.wa-book-activation{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 14px;border:1px solid #b9d0c3;border-radius:8px;color:#315e46;background:#f5faf7;font-weight:700;font-size:12px}
+.wa-book.is-selected .wa-book-activation{background:#e2f3e8;border-color:#298358;color:#17683d}
+.wa-book:focus-visible,.wa-context-controls select:focus-visible{outline:3px solid #359466;outline-offset:3px}
+.wa-question-footer .wa-actions{flex-wrap:wrap}
+.wa-finish{flex-wrap:wrap}
+.wa-dialog .wa-context-controls{position:relative}
+@media(max-width:700px){.wa-context-controls{display:flex;align-items:stretch;flex-direction:column;gap:8px}.wa-context-controls label{min-width:0}.wa-editor-heading{align-items:flex-start}.wa-editor-heading>.wa-actions{justify-content:flex-end}}

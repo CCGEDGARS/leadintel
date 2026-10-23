@@ -16,6 +16,10 @@
   return {draftAssistant,scope:JSON.stringify([workspace,item?.domain,item?.selectedPersonId,context.channel]),fingerprint:JSON.stringify(context),context,sourceRefs,referenceRevision,usable:Boolean(usable&&workspace&&person?.name&&referenceRevision!==null)};
  }
  function validateWritingDraft(draft,context={}){
+  if(context.writingContext==='general'||context.channel==='general'){
+   if(!draft||typeof draft.subject!=='string'||draft.subject.length>500||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000)throw Error('Writing Assistant returned an invalid general draft. Your text is preserved.');
+   return draft;
+  }
   if(!draft||typeof draft.subject!=='string'||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000||/\{\{|\}\}/.test(draft.message))throw Error('Writing Assistant returned an invalid or unfilled draft. Your message is preserved.');
   if((context.channel||'email')==='email'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
   if(Number.isSafeInteger(context.maximumWords)&&context.maximumWords>0&&draft.message.trim().split(/\s+/).length>context.maximumWords)throw Error(`Writing Assistant exceeded the ${context.maximumWords}-word limit. Your message is preserved.`);

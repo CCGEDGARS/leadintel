@@ -3,6 +3,6 @@ function pdf(){let s='%PDF-1.4\n';const objects=['<< /Type /Catalog /Pages 2 0 R
 test('server extraction runs in the actual Workers runtime',async()=>{
  const code=`import {validateWritingReference} from './src/writing-reference-validation.js'; export default {async fetch(r){try{const d=await validateWritingReference({bytes:new Uint8Array(await r.arrayBuffer()),filename:'guide.pdf',mime:'application/pdf'});return Response.json(d.extracted);}catch(e){return Response.json({error:e.message},{status:422});}}};`;
  const compiled=await build({stdin:{contents:code,resolveDir:new URL('..',import.meta.url).pathname,sourcefile:'worker.js'},bundle:true,write:false,format:'esm',platform:'browser',external:['node:*'],logLevel:'silent'});
- const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:compiled.outputFiles[0].text,compatibilityDate:'2026-07-20'}));
+ const mf=new Miniflare(convertV4MiniflareOptions({cf:false,modules:true,script:compiled.outputFiles[0].text,compatibilityDate:'2026-07-20'}));
  try{const r=await mf.dispatchFetch('https://worker.test/',{method:'POST',body:pdf()});assert.equal(r.status,200,await r.clone().text());assert.ok((await r.json()).characters>0);}finally{await mf.dispose();}
 });

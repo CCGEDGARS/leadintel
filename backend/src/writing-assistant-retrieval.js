@@ -10,18 +10,19 @@ export function chunkSections(source,sections){
  }
  return passages;
 }
-export async function retrieveAssistantSources(env,scope,{sourceRefs=[],query=''}){
+export async function retrieveAssistantSources(env,scope,{sourceRefs=[],query='',selectionMode='active'}){
  if(!scope?.workspaceId)fail('Authenticated workspace required',401);
- if(!Array.isArray(sourceRefs)||sourceRefs.length>3||new Set(sourceRefs.map(r=>r.id)).size!==sourceRefs.length)fail('Invalid source selection',400);
+ if(!Array.isArray(sourceRefs)||sourceRefs.length>3||new Set(sourceRefs.map(r=>r?.id)).size!==sourceRefs.length)fail('Invalid source selection',400);
  const before=await writingReferenceRevision(env,scope),warnings=[],all=[],catalogues=[],instructions=[];
  for(const ref of sourceRefs){
   if(!ref||typeof ref.id!=='string'||!Number.isInteger(ref.revision))fail('Invalid source selection',400);
   const row=await getWritingReference(env,scope,ref.id);
   if(row.revision!==ref.revision)fail('Writing source changed. Refresh and ask again.');
-  if(!row.active||row.status!=='Ready')fail('Selected source is not active and Ready');
+  if((selectionMode!=='session'&&!row.active)||row.status!=='Ready')fail('Selected source is not active and Ready');
   if(row.instruction)instructions.push({sourceId:row.id,instruction:row.instruction});
   if(row.catalogue_key){const catalogue=await env.WRITING_REFERENCES_BUCKET?.get(row.catalogue_key);if(catalogue){try{const data=JSON.parse(await catalogue.text());if(Array.isArray(data.techniques))row.techniques=data.techniques;}catch{warnings.push(`${row.filename}: learned techniques unavailable.`);}}else warnings.push(`${row.filename}: learned techniques unavailable.`);}
-  catalogues.push(row);
+  // Session selection applies only to this request, never durable activation.
+  catalogues.push(selectionMode==='session'?{...row,active:true}:row);
   if(row.coverage?.unreadable)warnings.push(`${row.filename}: ${row.coverage.unreadable} unreadable pages/sections; only readable content is available.`);
   const object=await env.WRITING_REFERENCES_BUCKET?.get(row.text_key);
   if(!object){warnings.push(`${row.filename}: extracted text unavailable; no page passages from this source were used.`);continue;}
