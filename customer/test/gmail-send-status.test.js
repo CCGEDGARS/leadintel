@@ -25,7 +25,7 @@ test('a provider response after a workspace switch cannot record delivery or sav
 function mailHarness(provider,result){
   let confirmations=0;const nodes={'delivery-company-select':{value:'example.com'},'delivery-recipient':{value:'buyer@example.com'},'send-with-gmail':{},'send-with-microsoft':{},'confirm-delivery-sent':{click(){confirmations++;}},toast:{classList:{add(){},remove(){}}}};
   const pkg={domain:'example.com',approved:true,approvedAt:'2026-09-05',drafts:{}},outreachApi={normalizeOutreachState:()=>({items:[pkg]}),buildApprovedSendPayload:(_pkg,recipient)=>({recipient,subject:'Subject',textBody:'Approved body'})};
-  const delivery={normalizeEmail:x=>x,normalizeDeliveryState:()=>({opportunities:[]}),confirmSend:()=>({state:{opportunities:[{domain:'example.com',sentAt:'now'}]}})};
+  const delivery={normalizeEmail:x=>x,normalizeDeliveryState:()=>({opportunities:[]}),confirmSend:()=>({state:{opportunities:[{domain:'example.com',sentAt:'now'}]},record:{sentAt:'now'}})};
   const bridge={session:{authenticated:true},gmail:{connected:provider==='gmail'},microsoftMail:{connected:provider==='microsoft'},sendGmail:async()=>result,sendMicrosoftMail:async()=>result,saveNow:async()=>({saved:true})};
   const window={LeadIntelOutreach:outreachApi,LeadIntelDelivery:delivery,LeadIntelServerBridge:bridge,LeadIntelDialogs:{confirm:async()=>true},dispatchEvent(){},CustomEvent:class{}};
   const source=fs.readFileSync(path.join(__dirname,'../production-gmail-ui.js'),'utf8').replace(/\}\)\(typeof window!==['"]undefined['"]\?window:globalThis\);\s*$/,'root.sendForTest=send;})(typeof window!==\'undefined\'?window:globalThis);');
