@@ -53,13 +53,13 @@ test('classifyReply is conservative but detects meeting, positive, objection, no
   assert.equal(classifyReply('Thanks for your email.'),'neutral');
 });
 
-test('recordReply advances to Replied or Meeting based on reply intent',()=>{
+test('recordReply records meeting intent without claiming a booked meeting',()=>{
   let state=confirmSend(emptyState(),approvedPackage,'anna@example.com','2026-08-23T09:00:00.000Z').state;
   let result=recordReply(state,'example.com','Thanks, can we schedule a call on Thursday?','2026-08-23T10:00:00.000Z');
   assert.equal(result.error,'');
   assert.equal(result.record.latestReplyCategory,'meeting_request');
   assert.equal(result.record.replies.length,1);
-  assert.equal(recommendedPipelineStage(result.record),'Meeting');
+  assert.equal(recommendedPipelineStage(result.record),'Replied');
 
   state=confirmSend(emptyState(),approvedPackage,'anna@example.com','2026-08-23T09:00:00.000Z').state;
   result=recordReply(state,'example.com','Thanks for the information.','2026-08-23T10:00:00.000Z');
@@ -78,13 +78,13 @@ test('recordOutcome validates commercial stages and never loses an existing late
   assert.equal(invalid.error,'Invalid outcome stage');
 });
 
-test('normalizeDeliveryState caps opportunity records, replies and activity safely',()=>{
+test('normalizeDeliveryState preserves all saved opportunity records, replies and activity',()=>{
   const opportunities=Array.from({length:70},(_,i)=>({domain:`c${i}.com`,company:`C${i}`,recipientEmail:`x${i}@c${i}.com`,sentAt:'2026-08-23T09:00:00.000Z',replies:Array.from({length:30},(__,j)=>({id:`r${j}`,text:'hello',category:'neutral',at:'2026-08-23T10:00:00.000Z'}))}));
   const activity=Array.from({length:250},(_,i)=>({id:`a${i}`,type:'message.sent',domain:'x.com',at:'2026-08-23T09:00:00.000Z'}));
   const state=normalizeDeliveryState({selectedDomain:'c0.com',opportunities,activity});
-  assert.equal(state.opportunities.length,50);
-  assert.equal(state.opportunities[0].replies.length,20);
-  assert.equal(state.activity.length,200);
+  assert.equal(state.opportunities.length,70);
+  assert.equal(state.opportunities[0].replies.length,30);
+  assert.equal(state.activity.length,250);
   assert.equal(state.connector.id,'gmail-compose');
   assert.equal(state.connector.syncMode,'manual-confirmation');
 });
@@ -102,7 +102,7 @@ test('buildLearningSummary calculates funnel metrics and waits for minimum sampl
   const summary=buildLearningSummary(state,outreach,pipeline,3);
   assert.equal(summary.metrics.sent,5);
   assert.equal(summary.metrics.replied,3);
-  assert.equal(summary.metrics.meetings,2);
+  assert.equal(summary.metrics.meetings,0);
   assert.equal(summary.byTone.find(x=>x.key==='consultative').sent,3);
   assert.ok(summary.recommendations.some(x=>/Consultative/i.test(x)));
 

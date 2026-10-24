@@ -42,25 +42,83 @@
   },
   "smokeChecks": [
     {
+      "id": "delivery-recipient-history-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "delivery-records=20261024-v2"
+      ]
+    },
+    {
+      "id": "delivery-recipient-history-model",
+      "type": "text",
+      "url": "/customer/delivery-engine.js",
+      "status": 200,
+      "contains": [
+        "function findDeliveryRecord",
+        "selectedPackageKey",
+        "selectedRecordId",
+        "function approvedDeliveryPackages"
+      ]
+    },
+    {
+      "id": "delivery-historical-outcomes",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": [
+        "delivery-history-select",
+        "function currentSendRecord",
+        "markOutreachContacted(pkg,result.record.sentAt)"
+      ]
+    },
+    {
+      "id": "delivery-sent-sync-separation",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "Email sent; synchronization needs attention. Do not resend.",
+        "saved?.saved===false",
+        "confirmedResult=result"
+      ]
+    },
+    {
       "id": "delivery-experience-navigation",
       "type": "text",
       "url": "/customer/delivery-ui.js",
       "status": 200,
-      "contains": ["delivery-experience=20261024-v1", "function reviewNextStep()", "delivery-recording-note", "learning-segments\").hidden=!m.sent", "leadintel:outreach-sent"]
+      "contains": [
+        "delivery-experience=20261024-v1",
+        "function reviewNextStep()",
+        "delivery-recording-note",
+        "learning-segments\").hidden=!m.sent",
+        "leadintel:outreach-sent"
+      ]
     },
     {
       "id": "delivery-light-controls",
       "type": "text",
       "url": "/customer/outreach-automation.css",
       "status": 200,
-      "contains": ["background:#fff;color:#203329", ".oa-suppression-head", "outline:2px solid #277362"]
+      "contains": [
+        "background:#fff;color:#203329",
+        ".oa-suppression-head",
+        "outline:2px solid #277362"
+      ]
     },
     {
       "id": "delivery-status-recovery",
       "type": "text",
       "url": "/customer/outreach-automation-ui.js",
       "status": 200,
-      "contains": ["Delivery status unavailable", "data-oa-retry", "data-oa-settings", "data-oa-suppression-retry"]
+      "contains": [
+        "Delivery status unavailable",
+        "data-oa-retry",
+        "data-oa-settings",
+        "data-oa-suppression-retry"
+      ]
     },
     {
       "id": "customer-shell",
