@@ -1871,7 +1871,7 @@
     return /procure|purchas|sourc|inköp|inkop|buyer/i.test(value)?'Procurement / sourcing':/engineer|technical|tekn|ingenjör/i.test(value)?'Engineering':/operations|plant|production|maintenance|drift|anlägg|produktion|underhåll/i.test(value)?'Operations':/project|projekt|capex|investment/i.test(value)?'Projects':/ceo|chief executive|managing director|verkställande/i.test(value)?'Executive':value;
   }
   function qualifyBuyer(person={},profile={},candidate={},options={}){
-    const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company),directory=person.identitySource==='apollo';
+    const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company)||companyBrandMatches(person.organization,candidate.domain),directory=person.identitySource==='apollo';
     const blocked=[];
     if(malformedBuyerRole(person.title))blocked.push('Job title contains website navigation or markup');
     const dossierHold=Dossier?.holdReason(person,candidate.buyerDiscovery?.companyDossier);if(dossierHold)blocked.push(dossierHold);
@@ -1949,6 +1949,21 @@
   function companyNameMatches(actual,expected){
     const normalize=value=>clean(value).toLowerCase().replace(/\b(?:ab|aktiebolag|inc|ltd|limited|plc|group)\b/g,' ').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
     const a=normalize(actual),e=normalize(expected);return Boolean(a&&e&&(a===e));
+  }
+  // The registered domain is the second identity anchor for employers. A company label truncated by a
+  // search title ("Automation" for balticautomation.com) must neither pull in other employers whose
+  // names merely end with that word ("Tungsten Automation") nor reject the real one ("Baltic Automation").
+  function domainBrand(domain){
+    const host=clean(companyIdentityDomain(domain)).toLowerCase();if(!host)return '';
+    const labels=host.split('.').filter(label=>label&&label!=='www');
+    return labels.length>=2?labels[0].replace(/[^\p{L}\p{N}]+/gu,''):'';
+  }
+  function squashCompanyName(value){
+    return clean(value).toLowerCase().replace(/\b(?:ab|aktiebolag|inc|ltd|limited|plc|group|sia|as|oü|uab|gmbh|oy|llc|co|corp|corporation)\b/g,' ').replace(/[^\p{L}\p{N}]+/gu,'');
+  }
+  function companyBrandMatches(name,domain){
+    const brand=domainBrand(domain),squashed=squashCompanyName(name);
+    return Boolean(brand&&squashed&&brand.length>=4&&squashed===brand);
   }
 
   function namedStaffRole(value){
@@ -2134,6 +2149,13 @@
     const escaped=companyText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     const companyPattern=new RegExp('(?:^|[^\\p{L}\\p{N}])'+escaped+'(?=$|[^\\p{L}\\p{N}])','iu');
     const employmentPattern=new RegExp('([^.!?\\n|]{2,160}?)\\s+(?:at|hos|på)\\s+'+escaped+'(?=\\s*(?:$|[,.|–—]))','iu');
+    // Employer evidence inside a title part: the phrase after the last employment preposition or separator
+    // must be the target company by exact name or by registered-domain brand. A bare suffix match is only
+    // trusted for multi-word company names, where it cannot be the tail of a different employer.
+    const employmentLead='(?:\\s(?:at|hos|på|@|with|for|of|från|from|bei|chez)\\s+|[-–—|·:]\\s*)';
+    const employerPhrase=part=>{const match=clean(part).match(new RegExp('^(?:.*'+employmentLead+')?([^-–—|·:]{2,120}?)\\s*$','iu'));return match?clean(match[1]):'';};
+    const supportedEmployer=phrase=>Boolean(phrase)&&!/(?:supplier|customer|partner|client|leverantör)/i.test(phrase)&&(companyNameMatches(phrase,companyText)||companyBrandMatches(phrase,profile.companyDomain||''));
+    const multiWordTarget=companyText.split(/\s+/).length>=2,brand=domainBrand(profile.companyDomain||''),hasEmploymentLead=new RegExp(employmentLead,'iu');
     const officialClaims=[];
     for(const row of rows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
@@ -2181,16 +2203,28 @@
       diagnostic.parsing='complete';
       const context=[parts.slice(1).join(' | '),description].join('\n');
       const employment=employmentPattern.exec(context);
-      const titleEmployment=parts.slice(1).find(part=>new RegExp('\\s+'+escaped+'$','iu').test(part)&&!/(?:supplier|customer|partner|client|leverantör)/i.test(part));
+      const titleEvidence=parts.slice(1).map(part=>{
+        const text=clean(part);if(/(?:supplier|customer|partner|client|leverantör)/i.test(text))return null;
+        if(hasEmploymentLead.test(text)){const phrase=employerPhrase(text);return phrase&&phrase!==text&&supportedEmployer(phrase)?{part:text,employer:phrase}:null;}
+        if(!new RegExp('\\s+'+escaped+'$','iu').test(text))return null;
+        // "Projektledare LKAB": a bare suffix is trusted when the label is the whole brand or no domain is known.
+        if(!brand||multiWordTarget||squashCompanyName(companyText)===brand)return {part:text,employer:companyText};
+        const words=text.split(/\s+/);
+        for(let k=Math.min(4,words.length-1);k>=1;k--){const tail=words.slice(-k).join(' ');if(companyBrandMatches(tail,profile.companyDomain||''))return {part:text,employer:tail};}
+        return null;
+      }).find(Boolean);
+      const titleEmploymentPart=titleEvidence?.part||'';
       const snippetEmployer=linkedIn&&new RegExp('(?:Erfarenhet|Experience):\\s*'+escaped+'(?=\\s*[·|]|\\s*Utbildning:|$)','iu').test(description)&&!/(?:\s(?:at|hos|på)\s|@)/i.test(parts[1]||'');
-      const explicitCompany=parts.slice(1).some(part=>companyNameMatches(part,companyText)&&!new RegExp('(?:supplier|customer|partner|client|leverantör)','i').test(part));
+      const explicitCompanyPart=parts.slice(1).find(part=>supportedEmployer(part));
+      const explicitCompany=Boolean(explicitCompanyPart);
+      const evidencedEmployer=titleEvidence?.employer||(explicitCompanyPart&&!companyNameMatches(explicitCompanyPart,companyText)?clean(explicitCompanyPart):'');
       const officialSource=companyIdentityDomain(rawUrl)===companyIdentityDomain(profile.companyDomain||'');
-      if(!companyText||!companyPattern.test(context)||(!employment&&!explicitCompany&&!officialSource&&!titleEmployment&&!snippetEmployer)){reject('companyVerification','Result has no exact target-company employment evidence');continue;}
+      if(!companyText||!companyPattern.test(context)||(!employment&&!explicitCompany&&!officialSource&&!titleEmploymentPart&&!snippetEmployer)){reject('companyVerification','Result has no exact target-company employment evidence');continue;}
       // A past job elsewhere must not invalidate an explicitly current target role.
       const formerPattern=new RegExp('(?:former|previous|past|ex-|formerly|worked at|tidigare)[^.!?\\n|]{0,100}'+escaped,'iu');
       if(formerPattern.test(parts.slice(1).join(' | '))||(!companyPattern.test(parts.slice(1).join(' | '))&&formerPattern.test(description))){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
-      let role=clean(parts.find(part=>part!==name&&!companyNameMatches(part,companyText)&&!/^LinkedIn$/i.test(part))||'');
-      if(titleEmployment)role=clean(titleEmployment.replace(new RegExp('\\s+'+escaped+'$','iu'),''));
+      let role=clean(parts.find(part=>part!==name&&!supportedEmployer(part)&&!/^LinkedIn$/i.test(part))||'');
+      if(titleEmploymentPart)role=clean(titleEmploymentPart.replace(new RegExp('(?:'+employmentLead+'|\\s+)'+evidencedEmployer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','iu'),''));
       if(employment?.[1])role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
@@ -2199,7 +2233,7 @@
       if(!role||!relevance&&!profile.collectAllCompanyContacts){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
       diagnostic.roleMatching='complete';diagnostic.matchedBuyerRole=relevance?.role||'';
       const identity=linkedIn||(rawUrl+'|'+name.toLowerCase())||(name.toLowerCase()+'|'+role.toLowerCase());if(seen.has(identity)){diagnostic.rejectionReason='Duplicate person or source identity';continue;}seen.add(identity);
-      diagnostic.accepted=true;people.push({companyContactSource:officialClaims.includes(row)?'official_staff':'public_identity',id:'public-'+slug(identity),name,title:role,organization:company,publicName:name,publicNameUrl:rawUrl||linkedIn,publicLinkedinUrl:linkedIn||'',identityEvidenceDate:clean(evidenceDate({...row,date:row.date||row.publishedAt})).slice(0,40)});
+      diagnostic.accepted=true;people.push({companyContactSource:officialClaims.includes(row)?'official_staff':'public_identity',id:'public-'+slug(identity),name,title:role,organization:evidencedEmployer||company,publicName:name,publicNameUrl:rawUrl||linkedIn,publicLinkedinUrl:linkedIn||'',identityEvidenceDate:clean(evidenceDate({...row,date:row.date||row.publishedAt})).slice(0,40)});
     }
     return {people:profile.collectAllCompanyContacts?people.slice(0,60):selectDecisionMakers(people,profile,30),diagnostics};
   }
