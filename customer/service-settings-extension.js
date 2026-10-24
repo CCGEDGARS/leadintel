@@ -136,12 +136,14 @@ async function refreshServiceStatus(verify=false){
     queueDecorate(true);return serviceStatus;
   }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
 }
+// A saved or removed key makes the cached health observation stale: drop it so the fresh row renders now, and ask for a re-check.
+function credentialChanged(provider){if(window.LeadIntelIntegrationHealth&&provider in window.LeadIntelIntegrationHealth)window.LeadIntelIntegrationHealth[provider]=null;window.dispatchEvent(new CustomEvent('leadintel:service-credential-changed',{detail:{provider}}));}
 async function saveService(provider,button){
   const input=document.querySelector(`[data-service-key="${provider}"]`);const apiKey=String(input?.value||'').trim();if(!apiKey){errors[provider]='Enter an API key first.';queueDecorate(true);return;}
   busy=provider;errors[provider]='';if(button){button.disabled=true;button.textContent='Testing…';}
   try{
     const {response,payload}=await api('/api/integrations/services/provider',{method:'PUT',body:JSON.stringify({provider,api_key:apiKey})});
-    if(!response.ok)throw new Error(payload.error||'Provider verification failed');if(input)input.value='';await refreshServiceStatus(false);
+    if(!response.ok)throw new Error(payload.error||'Provider verification failed');if(input)input.value='';credentialChanged(provider);await refreshServiceStatus(false);
   }catch(cause){errors[provider]=String(cause?.message||cause);busy='';if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors[provider])));node.textContent=errors[provider];}return;}
   busy='';queueDecorate(true);
 }
@@ -162,7 +164,7 @@ async function disconnectCalendly(){
 async function disconnectService(provider){
   if(!(await (window.LeadIntelDialogs?.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`)??false)))return;
   busy=provider;queueDecorate(true);
-  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
+  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';credentialChanged(provider);await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
 async function saveHunterPolicy(enabled){
   const workspaceId=workspace()?.id;busy='hunter';errors.hunter='';queueDecorate(true);
@@ -185,7 +187,7 @@ function handleClick(event){
 function bind(){
   if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);document.addEventListener('change',event=>{if(event.target.matches?.('[data-hunter-enabled]'))void saveHunterPolicy(event.target.checked);});
   const observer=new MutationObserver(()=>{if(needsDecoration())queueDecorate();});observer.observe(document.body,{childList:true,subtree:true});
-  window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));
+  window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));window.addEventListener('leadintel:integration-health',()=>queueDecorate(true));
   document.addEventListener('click',event=>{if(event.target.closest('#open-settings'))setTimeout(()=>refreshServiceStatus(false),0);if(event.target.closest('#test-all-integrations'))setTimeout(()=>refreshServiceStatus(true),0);});
   if(signedIn())refreshServiceStatus(false);else queueDecorate(true);
 }

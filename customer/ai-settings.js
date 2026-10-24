@@ -429,7 +429,7 @@ async function refreshIntegrationStatus(){
   const refreshMicrosoft=Promise.resolve(bridge()?.refreshMicrosoftMailStatus?.()).catch(()=>null);
   const [apollo,firecrawl,gmail]=await Promise.all([checkApolloStatus(),checkFirecrawlStatus(),checkGmailStatus(),refreshMicrosoft]);
   if(!signedIn()||workspace()?.id!==originWorkspace||generation!==integrationStatusGeneration)return integrationStatus;
-  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};renderActiveToolsSummary();renderIntegrationMonitoring();return integrationStatus;
+  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};window.dispatchEvent(new CustomEvent('leadintel:integration-health'));renderActiveToolsSummary();renderIntegrationMonitoring();return integrationStatus;
 }
 async function refreshAllStatus(){
   await refreshStatus();await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};
@@ -495,6 +495,7 @@ window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentErro
 injectUi();
 window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
+addEventListener('leadintel:service-credential-changed',()=>{if(signedIn())void refreshIntegrationStatus();});
 window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
 window.addEventListener('leadintel:gmail-status',()=>{integrationStatus.gmail=gmailMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
