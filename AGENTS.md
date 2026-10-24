@@ -55,3 +55,7 @@ User instruction, 21 October 2026: Buyers research, qualification, confirmed com
 ## Shared research brief is mandatory
 
 User instruction, 22 October 2026: Buyers and Messages must use one source-backed company research brief. Follow `docs/policies/shared-research-brief.md`. Show its compact summary above buyer cards; carry the same verified facts, source quotes, dates, selected-buyer role status, commercial hypotheses and evidence gaps into message personalization and CRM snapshots. Do not substitute an unsupported model summary for evidence or repeat completed research without a meaningful gap/freshness reason. Missing milestone/year fields must not erase other usable buyer context: use the expressly approved bounded factual opening variation. Preserve canonical masters and all saved/manual work; explicit replacement retains Undo. Verify the actual Buyers → Messages → CRM → reopen flow and cross-company isolation.
+
+## Multilingual research and outreach
+
+For language selection, Russian/Kazakh outreach, Kazakhstan research, translation or language persistence, use `.agents/skills/leadintel-multilingual-outreach/SKILL.md`. Preserve the protected core-template and release-integrity rules.
