@@ -4,6 +4,8 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 function harness(bridge,extra={}){
+  bridge.session={authenticated:true,user:{id:'test-user'},...bridge.session};
+  bridge.workspace={role:'owner',...bridge.workspace};
   const window={LeadIntelServerBridge:bridge,...extra};
   const document={readyState:'loading',addEventListener(){},getElementById(){return null;}};
   const source=fs.readFileSync(path.join(__dirname,'../crm-ui.js'),'utf8').replace('})(window);','root.testAccess={state,loadCompanies,openCompany,loadMoreActivities:typeof loadMoreActivities==="function"?loadMoreActivities:null,findBuyersForSavedCompany};})(window);');
@@ -57,7 +59,7 @@ test('saved CRM prospect finds and persists buyer roles without company rediscov
   };
   const engine={buildApolloPeopleSearchPayload:({domain},profile)=>({q_organization_domains_list:[domain],person_titles:profile.decisionMakers}),normalizeApolloPeople:result=>result.people,selectDecisionMakers:people=>people};
   const h=harness(bridge,{LeadIntelCrm:{canonicalDomain:value=>value},LeadIntelDiscovery:engine,localStorage:{getItem:()=>JSON.stringify({profile:{decisionMakers:['Operations Director']}})}});
-  h.state.selectedId=company.id;h.state.detail={company,contacts:[]};
+  await h.loadCompanies();h.state.selectedId=company.id;h.state.detail={company,contacts:[]};
   assert.equal(await h.findBuyersForSavedCompany(),true);
   assert.deepEqual(calls.map(call=>call[0]),['apollo','contacts']);
   assert.equal(calls[0][1].q_organization_domains_list[0],'billerud.com');

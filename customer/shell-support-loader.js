@@ -32,10 +32,10 @@ const SUPPORT_MODULES=[
 
 async function loadSupportModules(){
   const crmResults=[];
-  try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1&buyer-research=20261004-v3&public-contacts=20261004-v2&contact-archive=20261020-v1&contact-data-retention=20261021-v1&finish-core=20261024-v1');crmResults.push({status:'fulfilled'});}
+  try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1&buyer-research=20261004-v3&public-contacts=20261004-v2&contact-archive=20261020-v1&contact-data-retention=20261021-v1&finish-core=20261024-v1&crm-action-safety=20261024-v1');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}
   for(const source of ['./crm-priorities.js?v=20261024-crm-daily-priorities-v1','./commercial-insights-loader.js?v=20261024-finish-core-v1']){try{await import(source);crmResults.push({status:'fulfilled'});}catch(reason){crmResults.push({status:'rejected',reason});}}
-  try{await import('./crm-ui.js?v=20260928-crm-buyer-recovery-v1&page-procedures=20261010-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&buyer-company-actions=20261021-v2&contact-data-retention=20261021-v1&finish-core=20261024-v1');crmResults.push({status:'fulfilled'});}
+  try{await import('./crm-ui.js?v=20260928-crm-buyer-recovery-v1&page-procedures=20261010-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&buyer-company-actions=20261021-v2&contact-data-retention=20261021-v1&finish-core=20261024-v1&crm-action-safety=20261024-v1');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}
   const results=[...crmResults,...await Promise.allSettled(SUPPORT_MODULES.map(source=>import(source)))];
   const failed=results.filter(result=>result.status==='rejected');

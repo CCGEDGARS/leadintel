@@ -984,7 +984,10 @@
       "contains": [
         "register('crm'",
         "loadedWorkspace=workspaceId",
-        "workspaceId!==bridge()?.workspace?.id"
+        "function recordCurrent(context)",
+        "function scopeCurrent(scope)",
+        "data-crm-reload-record",
+        "20261024-crm-action-safety-v1"
       ]
     },
     {
