@@ -21,7 +21,7 @@ test('rewritten invalid subjects are never repaired implicitly',()=>{
 });
 test('Reset after failed style creation restores the original style and exact draft together',async()=>{
  const h=mounted({selected:'professional'});try{
-  h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);
+  h.q('message-mode').value='original';h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));await settleFactResearch(h);
   h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
   assert.equal(h.w.studioState().mode,'original');
   h.q('mw-restore-original').click();

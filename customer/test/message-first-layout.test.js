@@ -79,7 +79,7 @@ test('the one Writing Assistant material host retains upload, role and instructi
  assert.equal(root.querySelector('[data-active]'),null);assert.equal(changes.length,0);
  const instruction=root.querySelector('[data-instruction]');instruction.value='Use concise questions';instruction.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
  assert.equal(changes.at(-1).instruction,'Use concise questions');
- assert.ok(document.getElementById('mw-tools-drawer').contains(document.getElementById('mw-book-controls')));assert.equal(refs.contains(document.getElementById('mw-book-controls')),false);
+ assert.equal(document.getElementById('mw-book-controls'),null);
  app.destroy();w.close();
 });
 

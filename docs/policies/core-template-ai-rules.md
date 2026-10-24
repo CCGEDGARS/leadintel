@@ -1,5 +1,11 @@
 # Mandatory AI rules for LeadIntel core templates
 
+## User-approved interface consolidation — 24 October 2026
+
+The visible AI Generated style choice is retired. Professional, NLP, Friendly and Brutal Honesty remain the email template choices. Writing Assistant owns new free-form drafts and requested working-copy edits. Preserve internal `original` modes, existing saved AI drafts, history and CRM snapshots; this UI change never rewrites or reclassifies them automatically. Legacy original-generation compatibility is not permission to reintroduce its retired style button.
+
+Short/standard/detailed length preferences now belong to Writing Assistant's explicit email/general preview requests. They travel separately from the full 4,000-character user instruction, do not apply to advice or phone/LinkedIn formats, and never change canonical template ceilings or protected wording. Selecting a length must not generate text, invalidate approval, save a replacement draft or send anything.
+
 Recorded 9 October 2026 as the implementation of the user's request to analyze core templates and make strict AI rules. This policy formalizes protection and existing user agreements; it does not approve new wording. Changes to the protected original require explicit user approval of the exact replacement text.
 
 ## Authority and source

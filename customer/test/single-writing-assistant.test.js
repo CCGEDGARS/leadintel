@@ -1,0 +1,35 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom');
+const {mounted}=require('./helpers/message-runtime.js');
+const {mountWritingAssistant}=require('../writing-assistant-ui.js');
+test('Messages offers only four protected styles and no duplicate AI creation controls',()=>{const h=mounted({selected:'original'});try{
+ const d=h.w.document,body=h.q('outreach-email-body').value;
+ assert.deepEqual([...d.querySelectorAll('#mw-style-options [data-writing-style]')].map(b=>b.dataset.writingStyle),['professional','curiosity','friendly','brutal']);
+ assert.equal(h.q('mw-generate-another').hidden,true);assert.equal(h.q('message-generate').hidden,true);
+ assert.equal(d.querySelector('#mw-tools-drawer #mw-ai-length'),null);
+ assert.match(d.querySelector('#mw-writing-assistant-launcher').textContent,/create|new message/i);
+ h.w.renderAll();assert.equal(h.q('outreach-email-body').value,body);assert.equal(h.item().messageStudioDraft.mode,'professional');
+}finally{h.w.close();}});
+test('saved AI drafts survive rendering, CRM serialization and reload without selecting a new template',()=>{const h=mounted({selected:'original'});try{
+ const item=h.item();item.messageStudioDraft.mode='original';item.drafts.emailSubject='My saved AI subject';item.drafts.emailBody='My exact saved AI message';item.messageStudioDraft.savedDraft={subject:item.drafts.emailSubject,message:item.drafts.emailBody};item.messageStudioDraft.scriptSavedAt='2026-10-24';h.w.upsertItem(item);h.w.renderAll();
+ const snapshot=JSON.parse(h.w.localStorage.getItem('leadintel_customer_v2_outreach')),restored=mounted({selected:'original',outreachSnapshot:snapshot});try{assert.equal(restored.q('outreach-email-body').value,item.drafts.emailBody);assert.equal(restored.q('outreach-email-subject').value,item.drafts.emailSubject);assert.equal(restored.item().messageStudioDraft.mode,'original');const O=require('../outreach-engine.js'),reopened=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(restored.item()),'buyer.example');assert.equal(reopened.drafts.emailBody,item.drafts.emailBody);assert.equal(restored.w.document.querySelector('[data-writing-style="original"]'),null);}finally{restored.w.close();}
+}finally{h.w.close();}});
+test('saving assistant length changes only its workspace preference, preserving message approval and text',()=>{const h=mounted();try{const item=h.item();item.approved=true;h.w.upsertItem(item);const before=JSON.stringify(h.item()),requests=h.requests.length;assert.equal(h.w.setAssistantDraftLength('short'),true);assert.equal(h.w.studioState().aiLength,'short');assert.equal(JSON.stringify(h.item()),before);assert.equal(h.requests.length,requests);assert.equal(h.w.setAssistantDraftLength('invalid'),false);assert.equal(h.w.studioState().aiLength,'short');}finally{h.w.close();}});
+function assistantFixture({message='',channel='email'}={}){
+ const dom=new JSDOM('<section id="mw-writing-assistant"></section>',{pretendToBeVisual:true}),d=dom.window.document;
+ let length='detailed',state={scope:'w1:buyer',messages:[],busy:false,working:{subject:'Subject',message},original:{subject:'Subject',message},localPersisted:true},requests=[],changes=0;
+ const controller={state:()=>state,previewChanges:async(value,options)=>requests.push({instruction:value,...options}),ask:async value=>requests.push(value),applyPreview(){},discardPreview(){},cancel(){},setDraft(){}};
+ const ui=mountWritingAssistant(d,controller,{channel:()=>channel,draftLength:()=>length,changeDraftLength:value=>{length=value;changes++;}});d.querySelector('[data-wa-expand]').click();
+ return {dom,d,ui,requests,setState:next=>state={...state,...next},preference:()=>({length,changes})};
+}
+test('assistant owns the length preference and only applies it on explicit preview',async()=>{const f=assistantFixture();try{
+ const length=f.d.querySelector('[data-wa-length]');assert.ok(length);assert.equal(length.value,'detailed');assert.equal(f.requests.length,0);
+ length.value='short';length.dispatchEvent(new f.dom.window.Event('change',{bubbles:true}));assert.deepEqual(f.preference(),{length:'short',changes:1});assert.equal(f.requests.length,0);
+ const input=f.d.querySelector('[data-wa-instruction]');input.value='Write an email about this customer';input.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));f.d.querySelector('form').dispatchEvent(new f.dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
+ assert.equal(f.requests[0].instruction,'Write an email about this customer');assert.equal(f.requests[0].preferredLength,'short');
+ f.setState({busy:true});f.ui.render();assert.equal(length.disabled,true);
+}finally{f.ui.destroy();f.dom.window.close();}});
+test('length selection preserves the current draft and does not constrain advice or phone/LinkedIn scripts',async()=>{for(const channel of ['email','phone','linkedin']){const f=assistantFixture({message:'My saved working text',channel});try{
+ const input=f.d.querySelector('[data-wa-instruction]');input.value='Explain this opening';f.d.querySelector('[data-wa-ask]').click();await new Promise(r=>setImmediate(r));assert.equal(f.requests[0],'Explain this opening');
+ assert.equal(f.d.querySelector('[data-wa-edit-body]').value,'My saved working text');assert.equal(f.d.querySelector('[data-wa-length]').closest('label').hidden,channel!=='email');
+}finally{f.ui.destroy();f.dom.window.close();}}});
+test('a full 4000-character instruction reaches the real controller without length-prefix rejection',async()=>{const {createWritingAssistant}=require('../writing-assistant.js');const dom=new JSDOM('<section id="mw-writing-assistant"></section>',{pretendToBeVisual:true}),d=dom.window.document;let payload;const controller=createWritingAssistant({workbench:true,sessionStore:null,capture:()=>({scope:'w1:general',fingerprint:'v1',referenceRevision:1,sourceRefs:[],usable:true,context:{channel:'general',writingContext:'general',currentDraft:{subject:'',message:''}}}),request:async value=>{payload=value;return {reply:'Review',draft:{subject:'',message:'A draft'},provenance:{referenceRevision:1}};}});controller.syncContext();const ui=mountWritingAssistant(d,controller,{channel:()=> 'general'});try{d.querySelector('[data-wa-expand]').click();d.querySelector('[data-wa-instruction]').value='x'.repeat(4000);d.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));assert.equal(payload?.instruction.length,4000);assert.equal(payload.preferredLength,'standard');assert.equal(controller.state().error,'');}finally{ui.destroy();controller.destroy();dom.window.close();}});

@@ -141,6 +141,11 @@
 .wa-book.is-selected .wa-book-activation{background:#e2f3e8;border-color:#298358;color:#17683d}
 .wa-book:focus-visible,.wa-context-controls select:focus-visible{outline:3px solid #359466;outline-offset:3px}
 .wa-question-footer .wa-actions{flex-wrap:wrap}
+
+.wa-question-footer .wa-length-choice{display:grid;gap:6px;flex:1 1 100%;min-width:0;font-size:13px;font-weight:600;color:#294435}
+.wa-length-choice select{box-sizing:border-box;width:100%;min-height:42px;border:1px solid #cad9ce;border-radius:9px;background:#fff;color:#203329;padding:9px 12px;font:inherit}
+.wa-length-choice select:hover{border-color:#55a572}.wa-length-choice select:focus-visible{outline:2px solid #277362;outline-offset:2px}
+.wa-length-choice small{font-size:12px;font-weight:400;line-height:1.5;color:#607568}.wa-length-choice[hidden]{display:none!important}
 .wa-finish{flex-wrap:wrap}
 .wa-dialog .wa-context-controls{position:relative}
 @media(max-width:700px){.wa-context-controls{display:flex;align-items:stretch;flex-direction:column;gap:8px}.wa-context-controls label{min-width:0}.wa-editor-heading{align-items:flex-start}.wa-editor-heading>.wa-actions{justify-content:flex-end}}

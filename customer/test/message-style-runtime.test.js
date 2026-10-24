@@ -59,13 +59,13 @@ test('changed source facts reject preparation with a visible retry explanation',
  }finally{h.w.close();}
 });
 test('AI Generated still rejects a response prepared before writing references changed',async()=>{
- const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();await settleFactResearch(h);const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate another');
+ const h=mounted();try{h.q('message-mode').value='original';h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));await settleFactResearch(h);const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate another');
  }finally{h.w.close();}
 });
 
 for(const style of ['professional','curiosity','friendly','brutal','original'])test(`Update message retries failed ${style} selection without replacing the previous draft`,async()=>{
  const h=mounted();try{
- requirePreparation(h);h.w.document.querySelector(`[data-writing-style="${style}"]`).click();await settleFactResearch(h);
+ requirePreparation(h);if(style==='original'){h.q('message-mode').value=style;h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));}else h.w.document.querySelector(`[data-writing-style="${style}"]`).click();await settleFactResearch(h);
  const first=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(first);
  first.resolve({ok:false,json:async()=>({error:'Provider temporarily unavailable'})});await settle();
  assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-mode').value,style);assert.equal(h.q('message-generate').disabled,false);
