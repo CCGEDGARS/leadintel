@@ -30,6 +30,7 @@
   const LOW_QUALITY_DISCOVERY_TITLE=/\b(?:\d+\s+top|top\s+\d+|top\s+(?:manufacturing|industrial|technology|business|company)\s+companies|best\s+(?:manufacturing|industrial|technology|business|company)\s+companies|companies\s+in\s+(?:sweden|sverige|finland|norway|denmark)|list\s+of\s+(?:top\s+)?\d+\s+companies|company\s+directory)\b/i;
   const LOW_QUALITY_DISCOVERY_HOSTS=["f6s.com","crunchbase.com","tracxn.com"];
   const MARKET_RULES=[
+    {code:"kz",suffixes:[".kz"],searchNames:["Kazakhstan","Казахстан","Қазақстан"],aliases:["kazakhstan","kazahstan","казахстан","қазақстан","kazahstāna","kazahstānas"]},
     {code:"se",suffixes:[".se"],searchNames:["Sweden","Sverige"],aliases:["sweden","swedish","sverige","svenska","zviedrija","zviedrijas","zviedru"]},
     {code:"fi",suffixes:[".fi"],searchNames:["Finland","Suomi"],aliases:["finland","finnish","suomi","somija","somijas","somu"]},
     {code:"no",suffixes:[".no"],searchNames:["Norway","Norge"],aliases:["norway","norwegian","norge","norsk","norvēģija","norvēģijas","norvēģu"]},
@@ -46,10 +47,10 @@
     {code:"it",suffixes:[".it"],searchNames:["Italy","Italia"],aliases:["italy","italian","italia","itālija","itālijas","itāļu"]}
   ];
   const SIGNAL_CONCEPTS=[
-    {match:/expan|capacity|new factor|new facilit|paplašin|jauna? ražot|jaudas palielin|utök|ny fabrik|produktionskapacitet/i,base:["new factory","new facility","capacity expansion","expanding production capacity"],local:{se:["ny fabrik","ny anläggning","utökar produktionskapaciteten","kapacitetsökning"]}},
+    {match:/expan|capacity|new factor|new facilit|paplašin|jauna? ražot|jaudas palielin|utök|ny fabrik|produktionskapacitet/i,base:["new factory","new facility","capacity expansion","expanding production capacity"],local:{kz:["новый завод","расширение производства","жаңа зауыт"],se:["ny fabrik","ny anläggning","utökar produktionskapaciteten","kapacitetsökning"]}},
     {match:/moderni|automat|equipment|iekārt|robot|digital transform|moderniser|ny utrustning/i,base:["modernization","automation investment","new equipment","equipment upgrade","robotics"],local:{se:["modernisering","automationsinvestering","ny utrustning","robotisering"]}},
     {match:/invest|funding|finansēj|ieguld|capital|finansier|investering/i,base:["investment","funding","capital investment","growth financing"],local:{se:["investering","finansiering","kapitalinvestering"]}},
-    {match:/hiring|recruit|vacanc|pieņem darbā|darbiniek|vakanc|rekryter|anställ/i,base:["hiring","recruitment","new vacancies","team growth"],local:{se:["rekrytering","anställer","nya lediga tjänster"]}},
+    {match:/hiring|recruit|vacanc|pieņem darbā|darbiniek|vakanc|rekryter|anställ/i,base:["hiring","recruitment","new vacancies","team growth"],local:{kz:["вакансии","набор сотрудников","бос жұмыс орындары"],se:["rekrytering","anställer","nya lediga tjänster"]}},
     {match:/relocat|pārcel|flyttar|nytt huvudkontor/i,base:["relocation","new headquarters","moving operations"],local:{se:["flyttar verksamheten","nytt huvudkontor"]}},
     {match:/acqui|merger|apvieno|iegād|förvärv|fusion/i,base:["acquisition","merger","company acquisition"],local:{se:["företagsförvärv","fusion"]}},
     {match:/leadership|management change|vadības mai|new director|appoint|ny vd|ledningsförändring/i,base:["leadership change","new CEO","new director","appointed"],local:{se:["ny vd","ny direktör","ledningsförändring","utsedd"]}},
