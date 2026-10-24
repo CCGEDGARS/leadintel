@@ -13,3 +13,52 @@
 #step-7 .production-gmail-status{font:600 13px 'DM Sans',sans-serif;color:#405e4b}#step-7 .production-mail-provider{padding:16px;background:#fafcfb;gap:10px}#step-7 .connector-card{gap:18px}#step-7 .connector-card .warning-note{background:#f5f9f6;border-color:#8cb39b;color:#526159}#step-7 .connector-card .warning-note strong{color:#2b634a}
 @media(max-width:1000px){#step-7 .learning-scorecard{grid-template-columns:repeat(3,minmax(0,1fr))}#step-7 .learning-scorecard article{border-bottom:1px solid #e2ebe5}#step-7 .learning-scorecard article:nth-child(3n){border-right:0}#step-7 .learning-scorecard article:nth-child(n+4){border-bottom:0}.activity-row small{grid-column:2}.learning-segment-row{grid-template-columns:minmax(0,1fr) repeat(3,minmax(0,60px))}}
 @media(max-width:680px){#step-7 .delivery-control-grid{grid-template-columns:minmax(0,1fr)}.delivery-workflow-next{align-items:flex-start;flex-direction:column;gap:12px}.delivery-workflow-next button{width:100%}#step-7 .learning-scorecard{grid-template-columns:repeat(2,minmax(0,1fr))}#step-7 .learning-scorecard article:nth-child(3n){border-right:1px solid #e2ebe5}#step-7 .learning-scorecard article:nth-child(2n){border-right:0}#step-7 .learning-scorecard article:nth-child(n+4){border-bottom:1px solid #e2ebe5}#step-7 .learning-scorecard article:nth-child(n+5){border-bottom:0}#step-7 .delivery-state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#step-7 .delivery-state-grid article{min-width:0;overflow-wrap:anywhere}#step-7 .delivery-buttons button{flex:1 1 180px}}
+
+/* Delivery field rhythm: keep instructions, inputs and actions distinct. */
+#step-7 .panel{padding:28px}
+#step-7>.panel{margin-bottom:24px}
+#step-7 .section-title{margin-bottom:24px}
+#step-7 .section-title h3{margin:8px 0 10px}
+#step-7 .section-title p{line-height:1.65}
+#step-7 .delivery-control-grid{gap:20px 24px}
+#step-7 .delivery-control-grid label,
+#step-7 .delivery-history>label,
+#step-7 .delivery-field-label{display:block;font-size:14px;font-weight:600;line-height:1.5;color:#40584a}
+#step-7 .delivery-control-grid input,
+#step-7 .delivery-control-grid select,
+#step-7 .delivery-history>select{display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;min-height:48px;margin:10px 0 0;padding:12px 14px;border:1px solid #bccfc2;border-radius:10px;background:#fff;color:var(--ink,#203329);font:500 14px/1.5 'DM Sans',sans-serif}
+#step-7 .delivery-history>p{margin:14px 0 0;max-width:780px;font-size:14px;line-height:1.65;color:var(--muted,#65736a)}
+#step-7 .delivery-state-grid{gap:14px;margin:24px 0 0;grid-template-columns:repeat(4,minmax(0,1fr))}
+#step-7 .delivery-state-grid article{min-width:0;padding:18px;overflow-wrap:anywhere}
+#step-7 .reply-outcome-grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;margin-bottom:24px;align-items:start}
+#step-7 .reply-panel textarea{min-height:220px;margin:10px 0 0;padding:14px 16px;font-size:15px;line-height:1.7;resize:vertical}
+.delivery-reply-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid #e2ebe5}
+#step-7 .reply-classification{margin:0;line-height:1.6;overflow-wrap:anywhere}
+.delivery-reply-footer button{min-height:44px;flex-shrink:0}
+#step-7 .outcome-buttons{gap:12px;margin-top:0}
+#step-7 .outcome-buttons button{min-height:44px;flex:1 1 100px}
+#step-7 .connector-card{gap:24px;grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr);align-items:start}
+#step-7 .connector-card>div:first-child{display:grid;justify-items:start;gap:12px;min-width:0}
+#step-7 .connector-card h3{margin:0}
+#step-7 .connector-card p{margin:0;font-size:14px;line-height:1.65}
+#step-7 .connector-badge{max-width:100%;line-height:1.5;white-space:normal}
+#step-7 .connector-badge i{flex-shrink:0}
+#step-7 .connector-card .warning-note{box-sizing:border-box;max-width:none;padding:16px 18px;font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+#step-7 .production-gmail-controls{min-width:0;gap:16px;padding-top:24px}
+#step-7 .production-mail-provider{min-width:0;gap:12px;padding:20px;align-content:start}
+#step-7 .production-gmail-status{width:100%;line-height:1.6;overflow-wrap:anywhere}
+#step-7 .production-mail-provider button{min-height:44px;white-space:normal}
+@media(max-width:1100px){
+ #step-7 .connector-card,#step-7 .reply-outcome-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:680px){
+ #step-7 .panel{padding:20px}
+ #step-7 .section-title{margin-bottom:20px}
+ #step-7 .delivery-control-grid{gap:20px}
+ #step-7 .delivery-state-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ #step-7 .delivery-state-grid article{padding:14px}
+ #step-7 .production-gmail-controls{grid-template-columns:minmax(0,1fr)}
+ #step-7 .production-mail-provider{padding:16px}
+ .delivery-reply-footer{align-items:stretch;flex-direction:column;gap:14px}
+ .delivery-reply-footer button{width:100%}
+}
