@@ -25,7 +25,7 @@ test('a provider response after a workspace switch cannot record delivery or sav
 function mailHarness(provider,result){
   let confirmations=0;const nodes={'delivery-company-select':{value:'example.com'},'delivery-recipient':{value:'buyer@example.com'},'send-with-gmail':{},'send-with-microsoft':{},'confirm-delivery-sent':{click(){confirmations++;}},toast:{classList:{add(){},remove(){}}}};
   const pkg={domain:'example.com',approved:true,approvedAt:'2026-09-05',drafts:{}},outreachApi={normalizeOutreachState:()=>({items:[pkg]}),buildApprovedSendPayload:(_pkg,recipient)=>({recipient,subject:'Subject',textBody:'Approved body'})};
-  const delivery={normalizeEmail:x=>x,normalizeDeliveryState:()=>({opportunities:[]}),confirmSend:()=>({state:{opportunities:[{domain:'example.com',sentAt:'now'}]}})};
+  const delivery={normalizeEmail:x=>x,normalizeDeliveryState:()=>({opportunities:[]}),confirmSend:()=>({state:{opportunities:[{domain:'example.com',sentAt:'now'}]},record:{sentAt:'now'}})};
   const bridge={session:{authenticated:true},gmail:{connected:provider==='gmail'},microsoftMail:{connected:provider==='microsoft'},sendGmail:async()=>result,sendMicrosoftMail:async()=>result,saveNow:async()=>({saved:true})};
   const window={LeadIntelOutreach:outreachApi,LeadIntelDelivery:delivery,LeadIntelServerBridge:bridge,LeadIntelDialogs:{confirm:async()=>true},dispatchEvent(){},CustomEvent:class{}};
   const source=fs.readFileSync(path.join(__dirname,'../production-gmail-ui.js'),'utf8').replace(/\}\)\(typeof window!==['"]undefined['"]\?window:globalThis\);\s*$/,'root.sendForTest=send;})(typeof window!==\'undefined\'?window:globalThis);');
@@ -36,7 +36,7 @@ for(const provider of ['gmail','microsoft'])test(`${provider} confirmed send wit
   const result={ok:true,message:{status:'sent'},sync_warning:true},button=mailHarness(provider,result);
   await button.window.sendForTest(provider);assert.equal(button.confirmed(),1);assert.match(button.nodes.toast.textContent,/sent|accepted/i);assert.match(button.nodes.toast.textContent,/sync.*needs attention/i);assert.doesNotMatch(button.nodes.toast.textContent,/Pipeline Contacted/);
   const messages=mailHarness(provider,result),outcome=await messages.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});
-  assert.equal(outcome.ok,true);assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
+  assert.equal(outcome.ok,true,outcome.error||JSON.stringify(outcome));assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
 });
 for(const provider of ['gmail','microsoft'])test(`${provider} unresolved duplicate requests tell the user to reconcile and never record a sent email`,async()=>{
   const h=mailHarness(provider,{ok:true,duplicate:true,message:{status:'sending'}});await h.window.sendForTest(provider);assert.equal(h.confirmed(),0);assert.match(h.nodes.toast.textContent,/Sent folder/);
