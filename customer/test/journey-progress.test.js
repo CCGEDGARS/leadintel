@@ -67,8 +67,9 @@ test('commercial journey derives completed substeps from real workspace outcomes
   const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true,buyerQualityPassed:true});
 
   assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[3,3],[8,8],[4,4],[4,4],[2,2],[6,6],[5,5]]);
-  assert.equal(model[6].status,'current');
-  assert.equal(model[6].nextAction,'Stage complete');
+  assert.equal(model[6].active,true);
+  assert.equal(model[6].status,'complete');
+  assert.equal(model[6].nextAction,'Required steps complete');
 });
 
 test('current stage names the next required action without blocking on optional work',()=>{
@@ -90,14 +91,15 @@ test('an empty current stage is labelled not started until real progress exists'
     main:{website:'https://example.com'},currentStep:1,availability:{1:true},websiteActivated:true
   })[0];
 
-  assert.equal(empty.status,'current');
+  assert.equal(empty.active,true);
+  assert.equal(empty.status,'not-started');
   assert.equal(Journey.stageStatusLabel(empty),'Not started');
   assert.equal(Journey.stageStatusLabel(started),'In progress');
 });
 
 test('required targeting cannot be reported as skipped optional profile context',()=>{
   const model=Journey.buildJourneyModel({main:{answers:{}},currentStep:4,availability:{1:true,2:true,3:true,4:true}});
-  assert.equal(model[1].status,'available');
+  assert.equal(model[1].status,'not-started');
   assert.equal(model[1].completed,0);
   assert.equal(model[1].steps.find(step=>step.id==='offer-customer').optional,false);
   assert.equal(model[1].steps.find(step=>step.id==='decision-fit').optional,false);
@@ -175,7 +177,7 @@ test('friendly journey stages route through the preserved internal module IDs',(
 
 test('process map renders the conceptual current stage instead of its legacy module ID',()=>{
   const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
-  assert.match(processMap,/const currentStage=model\.find\(stage=>stage\.status==='current'\)\|\|model\[0\]/);
+  assert.match(processMap,/const currentStage=model\.find\(stage=>stage\.active\)\|\|model\[0\]/);
   assert.match(processMap,/renderStageGuide\(currentStage\)/);
 });
 

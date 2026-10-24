@@ -166,7 +166,7 @@
         "function discoveryRunTimeoutMs(",
         "window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};",
         "initDiscoveryWhenReady();",
-        "function ensureDiscoveryMounted()"
+        "function ensureDiscoveryMounted("
       ],
       "notContains": [
         "import \"./content-variants.js\"",

@@ -1704,13 +1704,32 @@
     if(!value||typeof value!=='object')return null;
     return {status:['complete','partial','unavailable'].includes(value.status)?value.status:'unavailable',provider:clean(value.provider).slice(0,40),checkedAt:clean(value.checkedAt).slice(0,40),inputSignature:clean(value.inputSignature).slice(0,80),reviewedPersonIds:[...new Set((Array.isArray(value.reviewedPersonIds)?value.reviewedPersonIds:[]).map(clean))].slice(0,10),summary:clean(value.summary).slice(0,500),reason:clean(value.reason).slice(0,300),conflicts:(Array.isArray(value.conflicts)?value.conflicts:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300)})),findings:(Array.isArray(value.findings)?value.findings:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300),source_url:normalizeUrl(row.source_url)})).filter(row=>row.person_id&&row.reason&&row.source_url)};
   }
+  function mandatoryBuyerResearchPriorities(people,candidate,{forExecution=false}={}){
+    const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles};
+    const selected=topFourResearchCandidates(people,profile,candidate);
+    // Research must be able to establish the evidence needed for qualification.
+    // An all-public executive pool can have no supported priority committee yet;
+    // fill its unused research places without granting recipient eligibility.
+    if(forExecution){
+      const keys=new Set(selected.map(person=>person.id||buyerIdentity(person)));
+      for(const person of [...selectDecisionMakers(people,profile,10),...people]){
+        if(selected.length>=BUYER_CONTACT_RESEARCH_POLICY.deepPeople)break;
+        const key=person.id||buyerIdentity(person);
+        if(!keys.has(key)&&hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'){selected.push(person);keys.add(key);}
+      }
+    }
+    const ids=new Set(selected.map(person=>person.id||buyerIdentity(person)));
+    // Retained roster order can differ from the ranked committee. Return the
+    // original objects so execution and acceptance share the same people.
+    return people.filter(person=>ids.has(person.id||buyerIdentity(person))&&hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending').slice(0,BUYER_CONTACT_RESEARCH_POLICY.deepPeople);
+  }
   function buyerResearchCoveragePassed(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
     const fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;};
     const logged=(person,key,count)=>{const rows=person.contactResearch?.checks?.[key]?.queryLog;return rows?.length===count&&rows.every(row=>row.status==='complete'&&clean(row.query)&&fresh(row.checkedAt));};
     const reconciledProfile=person=>person.contactResearch?.checks?.linkedin?.profileMatchVersion===1||!person.contactResearch?.checks?.linkedin?.queryLog?.some(row=>row.resultCount>0);
     const checked=person=>reconciledProfile(person)&&logged(person,'direct_email',2)&&logged(person,'gmail',3)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>person.contactResearch?.checks?.[key]?.status==='complete'&&fresh(person.contactResearch.checks[key].checkedAt))&&buyerResearchAssessment(person,options).status==='complete';
-    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&report.officialPages>0&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&people.filter(p=>hasFullBuyerName(p.publicName||p.name)&&p.identityStatus!=='pending').slice(0,4).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||p.contactResearch?.checks?.deep?.status==='complete'&&fresh(p.contactResearch.checks.deep.checkedAt)));
+    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&report.officialPages>0&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(people,candidate).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||p.contactResearch?.checks?.deep?.status==='complete'&&fresh(p.contactResearch.checks.deep.checkedAt)));
   }
   function buyerQualityAssessment(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -1767,7 +1786,7 @@
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
     const attributable=person=>Boolean(validResearchEmail(person.publicEmail,candidate.domain)&&companyIdentityDomain(person.publicEmailUrl)===companyIdentityDomain(candidate.domain));
-    const priorities=people.filter(p=>hasFullBuyerName(p.publicName||p.name)&&p.identityStatus!=='pending').slice(0,policy.deepPeople);
+    const priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
     const collect=(person,rows)=>{

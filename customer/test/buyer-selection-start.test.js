@@ -40,6 +40,6 @@ test('identity retry cannot overlap an active public contact pass',async()=>{
  vm.runInContext(source.slice(source.indexOf('async function findPotentialDecisionMakers('),source.indexOf('async function startSelectedBuyerResearch(')),ctx);assert.equal(await ctx.findPotentialDecisionMakers(candidate.domain),false);assert.equal(calls.length,0);
 });
 test('no identities routes the quality action through buyer discovery and does not claim zero emails before research',()=>{
- const ctx={LeadIntelDiscovery:D,verifiedBuyerEmail:()=>'',enrichmentResults:new Map(),personKey:(c,p)=>p.id,esc:String,crmAuthenticated:()=>true};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerQualitySupervisorHtml('),source.indexOf('function buyerResearchAccountabilityHtml(')),ctx);
+ const ctx={window:{},LeadIntelDiscovery:D,verifiedBuyerEmail:()=>'',enrichmentResults:new Map(),personKey:(c,p)=>p.id,esc:String,crmAuthenticated:()=>true};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerOutcomeEvidenceHtml('),source.indexOf('function buyerResearchAccountabilityHtml(')),ctx);
  for(const peopleStatus of ['idle','error','empty','loading']){const dom=new JSDOM(ctx.buyerQualitySupervisorHtml({domain:'example.com',people:[],peopleStatus})),doc=dom.window.document;assert.ok(doc.querySelector('[data-find-prospect-buyers="example.com"]'));assert.doesNotMatch(doc.body.textContent,/0\/4 priority buyers have confirmed/);if(peopleStatus==='idle')assert.match(doc.body.textContent,/Research not started/);dom.window.close();}
 });

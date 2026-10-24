@@ -32,7 +32,7 @@ module.exports={fixture,reviewed};
 
 test('a claimed aggregate pass cannot hide a missing mandatory deep wave',()=>{const c=fixture();delete c.people[0].contactResearch.checks.deep;assert.equal(D.buyerQualityAssessment(c).researchPassed,false);});
 test('the visible quality panel reports zero usable priority emails and retains the four-card layout',()=>{
- const fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom'),s=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),a=s.indexOf('function buyerQualitySupervisorHtml('),b=s.indexOf('function buyerResearchAccountabilityHtml(',a),ctx={LeadIntelDiscovery:D,verifiedBuyerEmail:()=>'',enrichmentResults:new Map(),personKey:(c,p)=>p.id,esc:String,crmAuthenticated:()=>true};
+ const fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom'),s=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),a=s.indexOf('function buyerOutcomeEvidenceHtml('),b=s.indexOf('function buyerResearchAccountabilityHtml(',a),ctx={window:{},LeadIntelDiscovery:D,verifiedBuyerEmail:()=>'',enrichmentResults:new Map(),personKey:(c,p)=>p.id,esc:String,crmAuthenticated:()=>true};
  vm.createContext(ctx);vm.runInContext(s.slice(a,b),ctx);const dom=new JSDOM(ctx.buyerQualitySupervisorHtml(fixture()));assert.match(dom.window.document.body.textContent,/0\/4 priority buyers have confirmed/);assert.match(dom.window.document.body.textContent,/AI review not assessed/);assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,0);dom.window.close();
 });
 

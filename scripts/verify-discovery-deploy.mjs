@@ -36,7 +36,7 @@ export function discoveryDeploymentFailures({ html = '', runtime = '', appRuntim
     }
   }
   const initBody = String(runtime).match(/function initDiscovery\(\)\{([^}]*)\}/)?.[1] || '';
-  if (!String(runtime).includes('function ensureDiscoveryMounted()')) {
+  if (!String(runtime).includes('function ensureDiscoveryMounted(')) {
     failures.push('Discovery UI runtime must keep hidden stages stage-isolated from Step 1');
   }
   if (/\b(?:loadDiscovery|renderAll|loadOutreachModules|refreshCrmState)\s*\(/.test(initBody)) {

@@ -20,6 +20,7 @@ import {runOutreachAutomation} from './outreach-automation-runner.js';
 import {pollOutreachReplies} from './outreach-automation-replies.js';
 import {handleConversationRoute,pollConversations,runConversationPlans} from './conversations.js';
 import {handleCrmRoute} from './crm-routes.js';
+import {handleResearchCostsRoute} from './research-costs.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
 import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intelligence-sources.js';
@@ -68,6 +69,7 @@ export default {
       });
     }
     try{
+      const researchCosts=await handleResearchCostsRoute(request,env,cors);if(researchCosts)return researchCosts;
       const scripts=await handleScriptLibraryRoute(request,env,cors);if(scripts)return scripts;
       const writingWorkspace=await handleWritingWorkspaceRoute(request,env,cors);if(writingWorkspace)return writingWorkspace;
       const storage=await handleStorageRoute(request,env,cors);if(storage)return storage;

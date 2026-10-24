@@ -4,7 +4,7 @@
  * block the journey shell. These import signatures remain documented because
  * release tests audit their versions and ordering.
  * import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
- * import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1&workspace-save=20261020-v1';
+ * import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&finish-core=20261024-v1';
  * import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&research-recovery=20261020-v1';
  * import './website-input-sync.js?v=20260901-saved-state-v2';
  * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
@@ -141,25 +141,57 @@ function journeyModel(availability,current){
   const buyerQualityPassed=typeof quality==='function'&&[...(state.discovery.selectedProspects||[]),...(state.discovery.pipeline||[])].some(candidate=>candidate.people?.length&&candidate.peopleStatus!=='loading'&&candidate.publicContactStatus!=='loading'&&quality(candidate).passed);
   return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,journeyFocus,buyerQualityPassed,websiteActivated:websiteActivated(state.main)})||[];
 }
-const statusLabels={current:"In progress",complete:"Complete",available:"Available",locked:"Locked",skipped:"Skipped · optional"};
-function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Available";}
+const statusLabels={'in-progress':"In progress",'not-started':"Not started",complete:"Complete",locked:"Locked"};
+function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Not started";}
+function replaceJourneyChildren(parent,nodes){
+  // Research/status events refresh these lists while customers use the keyboard.
+  // Restore the same control only when focus belonged to the refreshed list.
+  const focused=parent.contains(document.activeElement)?document.activeElement:null;
+  const key=['stageMiniStep','sidebarSubstep','messageChannel'].find(name=>focused?.dataset[name]);
+  const value=key&&focused.dataset[key];
+  parent.replaceChildren(...nodes);
+  if(key){const replacement=[...parent.querySelectorAll('button')].find(button=>button.dataset[key]===value);if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});}
+}
+function stageMiniStepNode(stage,item){
+  const row=document.createElement('li');row.className=item.complete?'complete':'pending';
+  const button=document.createElement('button');button.type='button';button.className='stage-mini-step-link';button.dataset.stageMiniStep=item.id;button.dataset.stageId=stage.id;
+  button.setAttribute('aria-label',`${item.complete?'Completed: ':'Review: '}${item.label}${item.optional?' (optional)':''}`);
+  const marker=document.createElement('span');marker.setAttribute('aria-hidden','true');marker.textContent=item.complete?'✓':'○';
+  const label=document.createElement('strong');label.textContent=item.label;button.append(marker,label);
+  if(item.optional){const badge=document.createElement('em');badge.textContent='Optional';button.append(badge);}
+  row.append(button);return row;
+}
 function renderStageGuide(stage){
   const guide=document.getElementById("journey-stage-guide");if(!guide||!stage)return;
-  const kicker=guide.querySelector("[data-stage-guide-kicker]"),title=guide.querySelector("[data-stage-guide-title]"),progress=guide.querySelector("[data-stage-guide-progress]"),list=guide.querySelector("[data-stage-mini-steps]"),next=guide.querySelector("[data-stage-next-action]");
+  const kicker=guide.querySelector("[data-stage-guide-kicker]"),title=guide.querySelector("[data-stage-guide-title]"),progress=guide.querySelector("[data-stage-guide-progress]"),list=guide.querySelector("[data-stage-mini-steps]");
   if(kicker)kicker.textContent=`Stage ${stage.id} · ${stageStatusLabel(stage)}`;
   if(title)title.textContent=stage.name;
-  if(progress)progress.textContent=`${stage.completed} of ${stage.total} steps`;
-  if(next)next.textContent=stage.nextAction;
+  if(progress)progress.textContent=`${stage.requiredCompleted} of ${stage.requiredTotal} required steps`;
+  let next=guide.querySelector('[data-stage-next-action]');
+  if(next&&next.tagName!=='BUTTON'){const button=document.createElement('button');button.type='button';button.dataset.stageNextAction='true';button.className='journey-next-action';next.replaceWith(button);next=button;}
+  if(next){
+    next.textContent=stage.nextAction;next.hidden=!stage.nextTarget;
+    if(stage.nextTarget){next.dataset.stageId=stage.nextTarget.stageId;next.dataset.stageMiniStep=stage.nextTarget.itemId;}
+    else{delete next.dataset.stageId;delete next.dataset.stageMiniStep;}
+    let summary=next.parentNode.querySelector('[data-stage-completion]');if(!summary){summary=document.createElement('span');summary.dataset.stageCompletion='true';next.after(summary);}
+    summary.hidden=Boolean(stage.nextTarget);summary.textContent=stage.nextTarget?'':stage.nextAction;
+    const heading=next.parentNode.querySelector('strong');if(heading)heading.textContent=stage.nextTarget?'Next action':'Status';
+  }
   if(!list)return;
-  const nodes=stage.steps.map(item=>{const row=document.createElement("li");row.className=item.complete?"complete":"pending";const button=document.createElement("button");button.type="button";button.className="stage-mini-step-link";button.dataset.stageMiniStep=item.id;button.dataset.stageId=stage.id;button.setAttribute("aria-label",`Review ${item.label}`);const marker=document.createElement("span");marker.setAttribute("aria-hidden","true");marker.textContent=item.complete?"✓":"";const label=document.createElement("strong");label.textContent=item.label;button.append(marker,label);if(item.optional){const badge=document.createElement("em");badge.textContent="Optional";button.append(badge);}row.append(button);return row;});
-  list.replaceChildren(...nodes);
+  list.setAttribute('aria-label','Required steps');
+  replaceJourneyChildren(list,stage.steps.filter(item=>!item.optional).map(item=>stageMiniStepNode(stage,item)));
+  let optional=guide.querySelector('[data-stage-optional]');
+  if(!optional){optional=document.createElement('section');optional.className='journey-optional';optional.dataset.stageOptional='true';const heading=document.createElement('h4');heading.dataset.stageOptionalTitle='true';const items=document.createElement('ol');items.className='stage-mini-steps';items.dataset.stageOptionalSteps='true';items.setAttribute('aria-label','Optional improvements');optional.append(heading,items);list.after(optional);}
+  optional.hidden=!stage.optionalTotal;
+  optional.querySelector('[data-stage-optional-title]').textContent=`Optional improvements · ${stage.optionalCompleted} of ${stage.optionalTotal} complete`;
+  replaceJourneyChildren(optional.querySelector('[data-stage-optional-steps]'),stage.steps.filter(item=>item.optional).map(item=>stageMiniStepNode(stage,item)));
 }
 function renderSidebarSteps(marker,stage,expanded){
   if(stage.id===6){
     let channels=marker.querySelector('[data-message-channels]');if(!channels){channels=document.createElement('ol');channels.className='sidebar-substeps message-channel-nav';channels.dataset.messageChannels='true';channels.setAttribute('aria-label','Message channels');marker.append(channels);}
     const choice=readStageJson(DISCOVERY_STORAGE_KEY+'_meta').scriptBuyer,workspace=window.LeadIntelServerBridge?.workspace?.id;
-    const active=stage.status==='current'&&currentProcessStep()===6&&workspace&&choice?.workspaceId===workspace?(document.getElementById('step-6')?.dataset.scriptChannel==='phone'?'phone':choice.channel):'';
-    channels.replaceChildren(...['email','linkedin','phone'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent={email:'Email',linkedin:'LinkedIn',phone:'Phone call'}[channel];button.disabled=!stage.available&&stage.status!=='current';if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
+    const active=stage.active&&currentProcessStep()===6&&workspace&&choice?.workspaceId===workspace?(document.getElementById('step-6')?.dataset.scriptChannel==='phone'?'phone':choice.channel):'';
+    replaceJourneyChildren(channels,['email','linkedin','phone'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent={email:'Email',linkedin:'LinkedIn',phone:'Phone call'}[channel];button.disabled=!stage.available&&!stage.active;if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
   }
 
   let toggle=marker.querySelector('[data-sidebar-expand]');
@@ -176,13 +208,13 @@ function renderSidebarSteps(marker,stage,expanded){
   const nodes=stage.steps.map(item=>{
     const row=document.createElement('li');
     const button=document.createElement('button');button.type='button';button.dataset.sidebarSubstep=item.id;button.dataset.stageId=stage.id;
-    button.disabled=!stage.available&&stage.status!=='current'&&stage.status!=='complete'&&stage.status!=='skipped';
-    button.setAttribute('aria-label',`${item.complete?'Completed: ':'Review: '}${item.label}`);
+    button.disabled=!stage.available&&!stage.active&&stage.status!=='complete';
+    button.setAttribute('aria-label',`${item.complete?'Completed: ':'Review: '}${item.label}${item.optional?' (optional)':''}`);
     const symbol=document.createElement('span');symbol.textContent=item.complete?'✓':'○';symbol.setAttribute('aria-hidden','true');
-    const label=document.createElement('span');label.textContent=item.label;
+    const label=document.createElement('span');label.textContent=`${item.label}${item.optional?' · Optional':''}`;
     button.append(symbol,label);row.append(button);return row;
   });
-  list.replaceChildren(...nodes);
+  replaceJourneyChildren(list,nodes);
 }
 function processToast(message){
   const toast=document.getElementById("toast");
@@ -194,32 +226,33 @@ function syncProcessMap(){
   if(!processMap)return;
   const availability=stageAvailability();const current=currentProcessStep();
   const model=journeyModel(availability,current);
-  const currentStage=model.find(stage=>stage.status==='current')||model[0];
-  const completed=model.reduce((sum,stage)=>sum+stage.completed,0);
-  const total=model.reduce((sum,stage)=>sum+stage.total,0);
+  const currentStage=model.find(stage=>stage.active)||model[0];
+  const completed=model.reduce((sum,stage)=>sum+stage.requiredCompleted,0);
+  const total=model.reduce((sum,stage)=>sum+stage.requiredTotal,0);
   const position=processMap.querySelector('[data-journey-position]');
   const title=processMap.querySelector('[data-journey-title]');
   const overall=processMap.querySelector('[data-journey-overall]');
   const overallBar=processMap.querySelector('[data-journey-overall-bar]');
   if(position&&currentStage)position.textContent=`Stage ${currentStage.id} of 7`;
   if(title&&currentStage)title.textContent=currentStage.name;
-  if(overall)overall.textContent=`${completed} of ${total} steps complete`;
+  if(overall)overall.textContent=`${completed} of ${total} required steps complete`;
   if(overallBar)overallBar.style.setProperty('--journey-progress',`${total?Math.round(completed/total*100):0}%`);
   processMap.querySelectorAll("[data-process-step]").forEach(button=>{
-    const step=Number(button.dataset.processStep);const stage=model.find(item=>item.id===step);const available=Boolean(stage?.available);const status=stage?.status||(step===currentStage?.id?"current":available?"available":"locked");
-    button.classList.toggle("available",available);button.classList.toggle("active",status==="current");button.classList.toggle("complete",status==="complete");button.classList.toggle("skipped",status==="skipped");
-    button.setAttribute("aria-disabled",available||status==='current'?'false':'true');
+    const step=Number(button.dataset.processStep);const stage=model.find(item=>item.id===step);const available=Boolean(stage?.available);const status=stage?.status||'locked';
+    button.classList.toggle("available",available);button.classList.toggle("active",Boolean(stage?.active));button.classList.toggle("complete",status==="complete");button.classList.remove('skipped');
+    button.setAttribute("aria-disabled",available||stage?.active?'false':'true');
     if(step===currentStage?.id)button.setAttribute("aria-current","step");else button.removeAttribute("aria-current");
     const stateLabel=button.querySelector("[data-stage-state]"),progress=button.querySelector("[data-stage-progress]");
     if(stateLabel)stateLabel.textContent=stageStatusLabel(stage);
-    if(progress&&stage)progress.textContent=`${stage.completed}/${stage.total}`;
+    if(progress&&stage)progress.textContent=`${stage.requiredCompleted}/${stage.requiredTotal} required`;
+    if(stage)button.setAttribute('aria-label',`Stage ${stage.id}: ${stage.name}. ${stageStatusLabel(stage)}. ${stage.requiredCompleted} of ${stage.requiredTotal} required steps complete.`);
   });
   document.querySelectorAll("[data-workflow-stage]").forEach(marker=>{
     const step=Number(marker.dataset.workflowStage),stage=model.find(item=>item.id===step);if(!stage)return;
     marker.hidden=false;
-    marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",(stage.available||step<=currentStage?.id)?"false":"true");
-    if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
-    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=`${stageStatusLabel(stage)} · ${stage.completed}/${stage.total}`;
+    marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.active);marker.classList.toggle("complete",stage.status==="complete");marker.classList.remove('skipped');marker.setAttribute("aria-disabled",(stage.available||step<=currentStage?.id)?"false":"true");
+    if(stage.active)marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
+    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=`${stageStatusLabel(stage)} · ${stage.requiredCompleted}/${stage.requiredTotal} required`;
     renderSidebarSteps(marker,stage,expandedSidebarStage===step);
   });
   renderStageGuide(currentStage);
@@ -227,9 +260,9 @@ function syncProcessMap(){
 function openProcessStep(stageId){
   const target=Math.min(7,Math.max(1,Number(stageId)||1));
   const availability=stageAvailability();const current=currentProcessStep();const model=journeyModel(availability,current);const stage=model.find(item=>item.id===target);
-  const currentStageId=model.find(item=>item.status==='current')?.id||1;
-  if(!stage?.available&&stage?.status!=='current'&&target>currentStageId){
-    const fallback=model.slice(0,target-1).reverse().find(item=>item.available||item.status==='current')?.id||1;
+  const currentStageId=model.find(item=>item.active)?.id||1;
+  if(!stage?.available&&!stage?.active&&target>currentStageId){
+    const fallback=model.slice(0,target-1).reverse().find(item=>item.available||item.active)?.id||1;
     openProcessStep(fallback);
     const messages={5:'Find a matching company first, then identify its buyers.',6:'Save a company and identify at least one buyer before preparing messages.',7:'Approve a message package before opening Delivery.'};
     processToast(messages[target]||'Complete the previous stage before continuing.');syncProcessMap();return;
@@ -259,6 +292,23 @@ function reviewMiniStep(stageId,itemId){
     return;
   }
   openProcessStep(stageId);
+  const targets={
+    1:{website:'#activate-website, #company-website',markets:'#custom-target-market',evidence:'#pdf-input'},
+    3:{icps:'#icp-list',signals:'#signal-designer',opportunities:'#strategy-market-summary',strategy:'#activate-market-strategy'},
+    4:{scope:'#discovery-target-count',companies:'#run-company-discovery',review:'#company-candidates',pipeline:'#company-candidates'},
+    5:{'buyer-quality':'.buyer-quality-supervisor',people:'.selected-prospect-row'},
+    6:{brand:'#brand-identity-toggle',scenario:'#step-6.message-workspace #message-offer, #step-6:not(.message-workspace) #core-scenario-summary',company:'#outreach-company-select',dossier:'#build-opportunity-dossier',scripts:'#outreach-email-body',approval:'#approve-outreach'},
+    7:{package:'#delivery-company-select',sent:'#confirm-delivery-sent',reply:'#reply-text',outcome:'#delivery-outcomes',learning:'#delivery-activity'}
+  };
+  const selector=targets[stageId]?.[itemId];
+  if(selector)setTimeout(()=>{
+    const target=document.querySelector(selector);if(!target||target.closest('[hidden]'))return;
+    const view=target.closest('.step-view');if(view&&!view.classList.contains('active'))return;
+    for(let details=target.closest('details');details;details=details.parentElement?.closest('details'))details.open=true;
+    target.scrollIntoView({behavior:'smooth',block:'center'});
+    if(!target.matches('button,input,select,textarea,a,[tabindex]'))target.setAttribute('tabindex','-1');
+    target.focus({preventScroll:true});
+  },80);
 }
 if(processMap){
   processMap.addEventListener("click",event=>{const substep=event.target.closest("[data-stage-mini-step]");if(substep){reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.stageMiniStep);return;}const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
