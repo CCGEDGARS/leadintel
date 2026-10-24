@@ -44,5 +44,9 @@ test('early handoff waits for Delivery readiness and then announces the exact se
     assert.equal(announced.length,0,'no approximate package before the Delivery engine is loaded');
     w.LeadIntelDelivery=engine;w.dispatchEvent(new w.CustomEvent('leadintel:delivery-ready'));
     assert.equal(announced.length,1);assert.equal(announced[0].subject,'Hello bob');assert.equal(announced[0].recipient,'bob@buyer.test');
+    announced.length=0;
+    w.localStorage.setItem('leadintel_customer_v2_outreach',JSON.stringify({items:[{...bob,approved:false}]}));
+    w.dispatchEvent(new w.CustomEvent('leadintel:delivery-ready'));
+    assert.equal(announced.length,0,'canonical approval filtering excludes an unapproved package');
   }finally{w.close();}
 });
