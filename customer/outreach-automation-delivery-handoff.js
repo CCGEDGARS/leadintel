@@ -5,7 +5,7 @@ const DELIVERY_KEY='leadintel_customer_v2_delivery';
 function read(key){try{const value=JSON.parse(localStorage.getItem(key)||'{}');return value&&typeof value==='object'?value:{};}catch{return {};}}
 function approvedPackage(){
   const outreach=read(OUTREACH_KEY),delivery=read(DELIVERY_KEY);const items=Array.isArray(outreach.items)?outreach.items:[];const selected=String(delivery.selectedDomain||'');
-  return items.find(item=>item&&item.approved&&String(item.domain||'')===selected)||null;
+  const candidates=root.LeadIntelDelivery?.approvedDeliveryPackages?.(outreach)||items.filter(item=>item&&item.approved);return candidates.find(item=>delivery.selectedPackageKey&&root.LeadIntelDelivery.packageKey(item)===delivery.selectedPackageKey)||candidates.find(item=>String(item.domain||'')===selected)||null;
 }
 function recipient(){return String(document.getElementById('delivery-recipient')?.value||'').trim().toLowerCase();}
 function buildApprovedAutomationPackage(pkg,recipientValue){

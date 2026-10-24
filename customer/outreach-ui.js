@@ -535,12 +535,12 @@ function loadDeliveryModules(){
   const ready=()=>{clearTimeout(timer);if(window.LeadIntelDeliveryUI?.ready)resolve();else fail();};
   const loadUi=()=>{
    let ui=document.querySelector('script[data-delivery-ui]');
-   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1`;ui.dataset.deliveryUi='true';}
+   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2`;ui.dataset.deliveryUi='true';}
    ui.addEventListener('load',ready,{once:true});ui.addEventListener('error',()=>{ui.remove();fail();},{once:true});if(!ui.isConnected)document.body.appendChild(ui);
   };
   if(window.LeadIntelDelivery){loadUi();return;}
   let engine=document.querySelector('script[data-delivery-engine]');
-  if(!engine){engine=document.createElement('script');engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine='true';}
+  if(!engine){engine=document.createElement('script');engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}&delivery-records=20261024-v2`;engine.dataset.deliveryEngine='true';}
   engine.addEventListener('load',loadUi,{once:true});engine.addEventListener('error',()=>{engine.remove();fail();},{once:true});if(!engine.isConnected)document.body.appendChild(engine);
  });
  const pending=deliveryModulesReady;pending.catch(()=>{if(deliveryModulesReady===pending)deliveryModulesReady=null;});return pending;
@@ -769,9 +769,9 @@ async function sendCurrentApprovedEmail(){
  if(!recipient){q('mw-send-status').textContent='Confirm a verified recipient email in Buyers before sending.';return;}
  button.disabled=true;button.textContent='Preparing delivery…';
  try{
-  await import('./delivery-engine.js?v=20261009-message-send-v1');
-  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1&app-dialogs=20261017-v1');
-  const result=await window.LeadIntelProductionMail.sendApprovedFromMessages({domain:item.domain,recipient,approvedAt:item.approvedAt});
+  await import('./delivery-engine.js?v=20261009-message-send-v1&delivery-records=20261024-v2');
+  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1&app-dialogs=20261017-v1&delivery-records=20261024-v2');
+  const result=await window.LeadIntelProductionMail.sendApprovedFromMessages({domain:item.domain,recipient,approvedAt:item.approvedAt,personId:item.selectedPersonId});
   q('mw-send-status').textContent=result.ok?(result.duplicate?'Already sent; duplicate prevented.':result.crmSynced?'Email sent and CRM record saved.':'Email sent; CRM synchronization needs attention. Do not resend.'):(result.cancelled?'Send cancelled.':result.error||'Email could not be sent.');
   if(result.ok){renderAll();window.LeadIntelJourney?.refresh?.();}
  }catch(error){q('mw-send-status').textContent='Unable to open the mail delivery service. '+error.message;}

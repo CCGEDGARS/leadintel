@@ -42,3 +42,15 @@ for(const provider of ['gmail','microsoft'])test(`${provider} unresolved duplica
   const h=mailHarness(provider,{ok:true,duplicate:true,message:{status:'sending'}});await h.window.sendForTest(provider);assert.equal(h.confirmed(),0);assert.match(h.nodes.toast.textContent,/Sent folder/);
   const outcome=await h.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});assert.equal(outcome.ok,false);assert.match(outcome.error,/Sent folder/);
 });
+
+for(const provider of ['gmail','microsoft'])test(`${provider} confirmed send survives a thrown post-send workspace save`,async()=>{
+ const h=mailHarness(provider,{ok:true,message:{status:'sent'}});
+ h.window.LeadIntelServerBridge.saveNow=async()=>{throw Error('Workspace sync timed out');};
+ const outcome=await h.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});
+ assert.equal(outcome.ok,true);assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
+});
+for(const provider of ['gmail','microsoft'])test(`${provider} confirmed send reports a refused workspace save as synchronization pending`,async()=>{
+ const h=mailHarness(provider,{ok:true,message:{status:'sent'}});h.window.LeadIntelServerBridge.saveNow=async()=>({saved:false,conflict:true});
+ await h.window.sendForTest(provider);assert.match(h.nodes.toast.textContent,/sync.*needs attention/i);assert.doesNotMatch(h.nodes.toast.textContent,/Pipeline Contacted/);
+ const outcome=await h.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});assert.equal(outcome.ok,true);assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
+});

@@ -47,16 +47,65 @@
     const category=REPLY_CATEGORIES.has(value?.category)?value.category:classifyReply(text);
     return {id:clean(value?.id)||eventId("reply",value?.domain||"reply",value?.at),text,category,at:safeIso(value?.at)};
   }
+  function packageKey(item={}){return JSON.stringify([normalizeDomain(item.domain),clean(item.selectedPersonId),item.channel==='linkedin'?'linkedin':'email',clean(item.approvedAt)]);}
+  function approvedDeliveryPackages(state={}){
+    const packages=new Map(),seen=new Set();
+    for(const item of [...(state.items||[]),...Object.values(state.buyerDrafts||{})]){
+      if(!item?.domain)continue;
+      const buyer=JSON.stringify([normalizeDomain(item.domain),clean(item.selectedPersonId),item.channel||'email']);
+      if(seen.has(buyer))continue;seen.add(buyer);
+      if(!item.approved||item.channel==='linkedin'||item.reapprovalRequired)continue;
+      // Active items own the buyer's current revision; archived buyer drafts are fallbacks.
+      if(!packages.has(buyer))packages.set(buyer,item);
+    }
+    return [...packages.values()];
+  }
+  function approvedRecipient(pkg={},workspaceId=''){
+    if(!pkg)return '';
+    const entry=pkg.messageStudioDraft?.flowMembership,person=pkg.dossier?.people?.find(row=>row.id===pkg.selectedPersonId);
+    const captured=normalizeEmail(entry?.recipient);
+    if(captured&&entry.workspaceId===workspaceId&&entry.personId===pkg.selectedPersonId&&entry.approvedAt===pkg.approvedAt&&entry.subject===pkg.drafts?.emailSubject&&entry.message===pkg.drafts?.emailBody)return captured;
+    return normalizeEmail(person?.email||person?.work_email||person?.normalized_email);
+  }
+  function findDeliveryRecord(state,packageItem={},recipient=''){
+    if(!packageItem)return null;
+    const person=packageItem.dossier?.people?.find(p=>p.id===packageItem.selectedPersonId);
+    const email=normalizeEmail(recipient||person?.email||person?.work_email||person?.normalized_email);
+    const candidates=normalizeDeliveryState(state).opportunities.filter(row=>row.domain===normalizeDomain(packageItem.domain)&&(!email||row.recipientEmail===email)&&(!row.personId||row.personId===clean(packageItem.selectedPersonId)));
+    const exact=candidates.filter(row=>row.approvedAt&&row.approvedAt===clean(packageItem.approvedAt));
+    if(exact.length)return exact.length===1?exact[0]:null;
+    const legacy=candidates.filter(row=>!row.approvedAt);
+    return legacy.length===1?legacy[0]:null;
+  }
+  function selectedRecord(state,selector){
+    let matches;
+    if(selector&&typeof selector==='object'){
+      matches=state.opportunities.filter(row=>row.domain===normalizeDomain(selector.domain));
+      if(selector.id)matches=matches.filter(row=>row.id===selector.id);
+      else {
+        const threadMatches=selector.threadId?matches.filter(row=>row.threadId===selector.threadId):[];
+        matches=threadMatches.length?threadMatches:matches.filter(row=>(!selector.recipientEmail||row.recipientEmail===normalizeEmail(selector.recipientEmail))&&(!selector.threadId||!row.threadId));
+      }
+    }else matches=state.opportunities.filter(row=>row.id===selector||row.domain===normalizeDomain(selector));
+    return matches.length===1?matches[0]:null;
+  }
   function normalizeOpportunity(value){
     const domain=normalizeDomain(value?.domain);
-    const replies=Array.isArray(value?.replies)?value.replies.map(item=>normalizeReply({...item,domain})).filter(item=>item.text).slice(0,20):[];
+    const replies=Array.isArray(value?.replies)?value.replies.map(item=>normalizeReply({...item,domain})).filter(item=>item.text):[];
     const outcomeStage=OUTCOME_STAGES.includes(value?.outcomeStage)?value.outcomeStage:"";
     return {
+      id:clean(value?.id)||JSON.stringify(value?.approvedAt?[domain,clean(value?.personId),clean(value.approvedAt),normalizeEmail(value?.recipientEmail)]:['legacy',domain,normalizeEmail(value?.recipientEmail)]),
+      personId:clean(value?.personId),
+      threadId:clean(value?.threadId),
+      providerMessageId:clean(value?.providerMessageId),
+      approvedAt:clean(value?.approvedAt),
       domain,
       company:clean(value?.company).slice(0,180),
+      subject:clean(value?.subject).slice(0,500),
+      bodyText:cleanMultiline(value?.bodyText),
       recipientEmail:normalizeEmail(value?.recipientEmail),
       sentAt:value?.sentAt?safeIso(value.sentAt):"",
-      deliveryChannel:value?.deliveryChannel==="gmail-compose"?"gmail-compose":"gmail-compose",
+      deliveryChannel:['gmail','microsoft','gmail-compose'].includes(value?.deliveryChannel)?value.deliveryChannel:'gmail-compose',
       replies,
       latestReplyCategory:REPLY_CATEGORIES.has(value?.latestReplyCategory)?value.latestReplyCategory:(replies[0]?.category||""),
       outcomeStage,
@@ -70,16 +119,16 @@
   function normalizeActivity(value){return {id:clean(value?.id)||eventId("event",value?.domain||"activity",value?.at),type:clean(value?.type).slice(0,80),domain:normalizeDomain(value?.domain),at:safeIso(value?.at),category:clean(value?.category).slice(0,80),stage:clean(value?.stage).slice(0,80)};}
   function normalizeDeliveryState(value){
     const source=value&&typeof value==="object"?value:{};
-    const opportunities=Array.isArray(source.opportunities)?source.opportunities.map(normalizeOpportunity).filter(item=>item.domain).slice(0,50):[];
-    const activity=Array.isArray(source.activity)?source.activity.map(normalizeActivity).filter(item=>item.type).slice(0,200):[];
-    return {selectedDomain:normalizeDomain(source.selectedDomain),opportunities,activity,connector:{...CONNECTOR}};
+    const opportunities=Array.isArray(source.opportunities)?source.opportunities.map(normalizeOpportunity).filter(item=>item.domain):[];
+    const activity=Array.isArray(source.activity)?source.activity.map(normalizeActivity).filter(item=>item.type):[];
+    return {selectedDomain:normalizeDomain(source.selectedDomain),selectedPackageKey:clean(source.selectedPackageKey),selectedRecordId:clean(source.selectedRecordId),opportunities,activity,connector:{...CONNECTOR}};
   }
   function upsertOpportunity(state,record){
-    const next=normalizeDeliveryState(state);const normalized=normalizeOpportunity(record);const index=next.opportunities.findIndex(item=>item.domain===normalized.domain);
+    const next=normalizeDeliveryState(state);const normalized=normalizeOpportunity(record);const index=next.opportunities.findIndex(item=>item.id===normalized.id);
     if(index>=0)next.opportunities[index]=normalized;else next.opportunities.unshift(normalized);
-    next.opportunities=next.opportunities.slice(0,50);next.selectedDomain=normalized.domain||next.selectedDomain;return next;
+    next.selectedDomain=normalized.domain||next.selectedDomain;return next;
   }
-  function addActivity(state,event){const next=normalizeDeliveryState(state);next.activity.unshift(normalizeActivity(event));next.activity=next.activity.slice(0,200);return next;}
+  function addActivity(state,event){const next=normalizeDeliveryState(state);next.activity.unshift(normalizeActivity(event));return next;}
 
   function buildSentCrmActivity(packageItem,record={},options={}){
     if(!packageItem?.approved)return null;
@@ -91,17 +140,18 @@
     return {id:clean(options.id),type:"email.sent",channel,direction:"outbound",subject,summary:`Email sent to ${recipient}`,occurred_at:safeIso(record.sentAt),metadata:{recipient,delivery_channel:options.api?`${channel}-api`:channel}};
   }
 
-  function confirmSend(state,packageItem,recipient,at){
+  function confirmSend(state,packageItem,recipient,at,metadata={}){
     const base=normalizeDeliveryState(state);
     if(!packageItem?.approved)return {state:base,record:null,error:"Approved outreach package required"};
     const email=normalizeEmail(recipient);if(!email)return {state:base,record:null,error:"Valid recipient email required"};
     if(!buildGmailComposeUrl(packageItem,email))return {state:base,record:null,error:"Approved email subject and body required"};
     const domain=normalizeDomain(packageItem?.domain);if(!domain)return {state:base,record:null,error:"Opportunity domain required"};
-    const existing=base.opportunities.find(item=>item.domain===domain)||{};
+    const existing=findDeliveryRecord(base,packageItem,email)||{};
+    if(existing.sentAt)return {state:base,record:existing,error:'',duplicate:true};
     const when=safeIso(at);
-    const record={...existing,domain,company:clean(packageItem?.company)||existing.company,recipientEmail:email,sentAt:when,deliveryChannel:"gmail-compose",tone:clean(packageItem?.drafts?.tone||existing.tone).toLowerCase(),market:clean(packageItem?.dossier?.market||existing.market),offer:clean(packageItem?.dossier?.recommendedOffer||existing.offer),signals:splitSignals(packageItem?.dossier?.matchedSignals||existing.signals),replies:existing.replies||[],latestReplyCategory:existing.latestReplyCategory||"",outcomeStage:existing.outcomeStage||"",outcomeAt:existing.outcomeAt||""};
+    const record=normalizeOpportunity({...existing,domain,threadId:metadata.threadId,providerMessageId:metadata.providerMessageId,personId:packageItem.selectedPersonId,approvedAt:packageItem.approvedAt,company:clean(packageItem?.company)||existing.company,subject:Outreach?.buildApprovedSendPayload?.(packageItem,email)?.subject||packageItem.drafts?.emailSubject,bodyText:Outreach?.buildApprovedSendPayload?.(packageItem,email)?.textBody||packageItem.drafts?.emailBody,recipientEmail:email,sentAt:when,deliveryChannel:metadata.deliveryChannel||"gmail-compose",tone:clean(packageItem?.drafts?.tone||existing.tone).toLowerCase(),market:clean(packageItem?.dossier?.market||existing.market),offer:clean(packageItem?.dossier?.recommendedOffer||existing.offer),signals:splitSignals(packageItem?.dossier?.matchedSignals||existing.signals),replies:existing.replies||[],latestReplyCategory:existing.latestReplyCategory||"",outcomeStage:existing.outcomeStage||"",outcomeAt:existing.outcomeAt||""});
     let next=upsertOpportunity(base,record);next=addActivity(next,{id:eventId("sent",domain,when),type:"message.sent",domain,at:when,stage:"Contacted"});
-    return {state:next,record:next.opportunities.find(item=>item.domain===domain),error:""};
+    next.selectedPackageKey=packageKey(packageItem);next.selectedRecordId="";return {state:next,record:next.opportunities.find(item=>item.id===record.id),error:""};
   }
 
   function classifyReply(text){
@@ -117,30 +167,29 @@
   }
 
   function recordReply(state,domain,text,at){
-    const base=normalizeDeliveryState(state);const key=normalizeDomain(domain);const index=base.opportunities.findIndex(item=>item.domain===key);
-    if(index<0)return {state:base,record:null,error:"Sent opportunity not found"};
+    const base=normalizeDeliveryState(state);const selected=selectedRecord(base,domain);const index=base.opportunities.findIndex(item=>item.id===selected?.id);const key=selected?.domain;
+    if(index<0)return {state:base,record:null,error:"Select a specific sent recipient; company history is missing or ambiguous"};
     const body=cleanMultiline(text);if(!body)return {state:base,record:base.opportunities[index],error:"Reply text required"};
     const when=safeIso(at);const category=classifyReply(body);const record={...base.opportunities[index]};
-    record.replies=[{id:eventId("reply",key,when),text:body.slice(0,12000),category,at:when},...(record.replies||[])].slice(0,20);record.latestReplyCategory=category;
-    let next=upsertOpportunity(base,record);const stage=category==="meeting_request"?"Meeting":"Replied";next=addActivity(next,{id:eventId("reply-event",key,when),type:"reply.received",domain:key,at:when,category,stage});
-    return {state:next,record:next.opportunities.find(item=>item.domain===key),error:""};
+    record.replies=[{id:eventId("reply",key,when),text:body.slice(0,12000),category,at:when},...(record.replies||[])];record.latestReplyCategory=category;
+    let next=upsertOpportunity(base,record);const stage="Replied";next=addActivity(next,{id:eventId("reply-event",key,when),type:"reply.received",domain:key,at:when,category,stage});
+    return {state:next,record:next.opportunities.find(item=>item.id===record.id),error:""};
   }
 
   function recordOutcome(state,domain,stage,at){
-    const base=normalizeDeliveryState(state);const key=normalizeDomain(domain);const index=base.opportunities.findIndex(item=>item.domain===key);
-    if(index<0)return {state:base,record:null,error:"Opportunity not found"};
+    const base=normalizeDeliveryState(state);const selected=selectedRecord(base,domain);const index=base.opportunities.findIndex(item=>item.id===selected?.id);const key=selected?.domain;
+    if(index<0)return {state:base,record:null,error:"Select a specific sent recipient; company history is missing or ambiguous"};
     if(!OUTCOME_STAGES.includes(stage))return {state:base,record:base.opportunities[index],error:"Invalid outcome stage"};
     const record={...base.opportunities[index]};const current=record.outcomeStage;
     const rank={"":0,Meeting:1,Proposal:2,Won:3,Lost:3};
     if(!current||rank[stage]>rank[current]){record.outcomeStage=stage;record.outcomeAt=safeIso(at);}
     let next=upsertOpportunity(base,record);next=addActivity(next,{id:eventId("outcome",key,at),type:"outcome.recorded",domain:key,at:safeIso(at),stage:record.outcomeStage||stage});
-    return {state:next,record:next.opportunities.find(item=>item.domain===key),error:""};
+    return {state:next,record:next.opportunities.find(item=>item.id===record.id),error:""};
   }
 
   function recommendedPipelineStage(record){
     if(!record)return "Ready for Outreach";
     if(OUTCOME_STAGES.includes(record.outcomeStage))return record.outcomeStage;
-    if(record.latestReplyCategory==="meeting_request")return "Meeting";
     if(Array.isArray(record.replies)&&record.replies.length)return "Replied";
     if(record.sentAt)return "Contacted";
     return "Ready for Outreach";
@@ -190,5 +239,5 @@
     return {metrics:{sent:records.length,replied,replyRate:percent(replied,records.length),meetings,meetingRate:percent(meetings,records.length),proposals,won,lost,winRate:percent(won,won+lost)},byTone,byMarket,byOffer,bySignal,recommendations:recommendations.slice(0,6),minimumSample:sample};
   }
 
-  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState};
+  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,packageKey,approvedDeliveryPackages,approvedRecipient,findDeliveryRecord,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState};
 });
