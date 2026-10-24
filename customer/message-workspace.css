@@ -584,7 +584,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-rail{gap:16px}
 #message-studio .mw-rail>.mw-section{padding:18px}
 #message-studio .mw-sender-card{gap:16px;margin-bottom:24px}
-#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{padding:16px;min-height:52px}
+#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{padding:16px;min-height:76px}
 #message-studio .mw-sender-card>.mw-language-tools>summary #message-language-current{margin-top:6px;font-size:12px;line-height:1.5;color:#53695d}
 #message-studio .mw-language-tools .mw-translation-panel{display:grid;gap:16px;margin:20px 0 0;padding:0}
 #message-studio #message-language-default-summary{display:none}
