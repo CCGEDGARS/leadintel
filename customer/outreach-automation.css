@@ -35,4 +35,22 @@
 
 .delivery-settings-footer{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}.delivery-settings-footer .paid-search-active{background:#176c43;color:#fff;border-color:#176c43}.paid-search-estimate{max-width:760px;margin:12px 0 0;line-height:1.5}
 
+/* Contact preferences need the same field spacing as delivery forms. */
+#outreach-contact-suppression{padding:28px;margin-top:24px;min-width:0}
+#outreach-contact-suppression .oa-suppression-head{gap:24px;margin-bottom:24px}
+#outreach-contact-suppression .oa-suppression-head>div{min-width:0}
+#outreach-contact-suppression h3{margin:8px 0 12px;line-height:1.35}
+#outreach-contact-suppression .oa-suppression-head p{margin:0;line-height:1.65;overflow-wrap:anywhere}
+#outreach-contact-suppression .oa-role{white-space:normal;max-width:100%}
+#oa-suppress-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:end}
+#oa-suppress-form label{display:flex;flex-direction:column;gap:10px;margin:0;font-size:14px;line-height:1.5}
+#oa-suppress-form input{min-height:48px;padding:12px 14px;margin:0;font-size:14px;line-height:1.5}
+#oa-suppress-form button{min-height:48px;white-space:normal}
+@media(max-width:680px){
+ #outreach-contact-suppression{padding:20px}
+ #outreach-contact-suppression .oa-suppression-head{gap:12px;margin-bottom:20px}
+ #oa-suppress-form{grid-template-columns:minmax(0,1fr);gap:16px}
+ #oa-suppress-form button{width:100%}
+}
+
 @media(max-width:680px){.delivery-settings-footer [data-paid-search-toggle],.delivery-settings-footer [data-paid-phone-toggle]{width:100%;min-height:44px}.paid-search-estimate{font-size:14px}}
