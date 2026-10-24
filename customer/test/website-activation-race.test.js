@@ -24,7 +24,7 @@ test('same-company evidence refresh preserves profile, markets, references and a
  let destructiveEvents=0;r.root.addEventListener('leadintel:website-activated',()=>{destructiveEvents++;for(const key of keys)r.storage.delete(key);});
  const pending=r.root.LeadIntelWebsiteActivation.activateWebsite();r.finish();assert.equal(await pending,true);
  const next=JSON.parse(r.storage.get(MAIN));for(const key of ['profile','approved','answers','answerStatus','documents','additionalLinks','referenceCustomers','referenceCustomerPortfolio'])assert.deepEqual(next[key],saved[key],key);
- assert.equal(next.market.strategyApproved,true);assert.deepEqual(next.market.researchResults,saved.market.researchResults);assert.equal(next.market.researchContextStale,true);
+ assert.equal(next.market.strategyApproved,true);assert.deepEqual(next.market.researchResults,saved.market.researchResults);assert.equal(next.market.researchContextStale,true);assert.equal(next.market.researchContextFingerprint,'stale:website-reactivated','a forced marker must outlive a matching live fingerprint');
  assert.deepEqual(next.scrapedSources[0],saved.scrapedSources[0]);assert.match(next.scrapedSources[1].text,/Readable evidence/);
  for(const key of keys)assert.equal(r.storage.get(key),before.get(key),key);
  assert.equal(destructiveEvents,0);assert.equal(r.events.includes('leadintel:website-activated'),false,'refresh must not trigger destructive downstream reset listeners');assert.equal(r.events.includes('leadintel:company-research-updated'),true);assert.equal(r.events.includes('leadintel:workspace-dirty'),true);

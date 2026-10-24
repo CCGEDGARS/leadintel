@@ -109,7 +109,7 @@ test('company handoff accepts configured strategy without optional market resear
  const end=app.indexOf('function renderStrategyHandoff',start);
  const fn=app.slice(start,end);
  const state={profile:{companyName:'Legal firm',priorityOffers:'Legal support'},market:{icps:[{active:true,name:'Business customers'}],signals:[{active:true,name:'Legal dispute'}],opportunities:[],researchResults:[],researchSourceStatus:{},researchStatus:'idle',monitoring:{}}};
- const context={state,LeadIntelMarket:{normalizeMonitoring:()=>({enabled:false})},globalThis:{}};
+ const context={syncResearchContextStale:()=>false,state,LeadIntelMarket:{normalizeMonitoring:()=>({enabled:false})},globalThis:{}};
  const result=vm.runInNewContext(fn+';strategyHandoffModel()',context);
  assert.equal(result.blockers.length,0);assert.ok(result.warnings.some(x=>x.includes('Market research is optional')));
  state.market.signals=[];

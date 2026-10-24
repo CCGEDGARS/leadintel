@@ -431,13 +431,7 @@ function ensureMarketStrategySeeded(){
     ?state.profile.recommendedSignals
     :(globalThis.LeadIntelCompanyBrain?.recommendSignals?.({profile:state.profile,answers:state.answers||{}})||LeadIntelProfile.recommendedSignalsForProfile?.(state.profile)||[]);
   if(!state.profile.recommendedSignals?.length&&generatedSignals.length)state.profile.recommendedSignals=generatedSignals;
-  const unrelatedResearchSignals=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile,state.market.signals)||[];
-  const contextChanged=state.market.researchContextFingerprint&&state.market.researchContextFingerprint!==researchContextFingerprint();
-  if((contextChanged||unrelatedResearchSignals.length)&&(state.market.researchResults||[]).length){
-    state.market.researchContextStale=true;
-    state.market.strategyApproved=false;
-    state.market.strategyApprovedAt='';
-  }
+  syncResearchContextStale();
   state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals,state.market.deletedSignalIds);
   if(!state.market.opportunities.length)state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,state.market.icps,state.market.signals,state.market.researchResults||[],language);
   state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,language);
@@ -672,6 +666,18 @@ function researchContextFingerprint(){
   const profile=state.profile||{};
   return JSON.stringify({website:state.website||profile.website||"",offers:profile.priorityOffers||"",customer:profile.idealCustomer||"",markets:[...new Set(LeadIntelMarket.splitList?.((state.market.icps||[]).filter(x=>x.active!==false).map(x=>x.targetMarkets).filter(Boolean).join("; ")||profile.targetMarkets)||[profile.targetMarkets||""])].sort().join("; "),buyers:profile.decisionMakers||"",exclusions:profile.exclusions||"",signals:(state.market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.keywords||x.name]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))});
 }
+// Staleness is a live comparison, not a latch: it clears as soon as the saved research context matches again.
+// A forced marker in the fingerprint (e.g. 'stale:website-reactivated') keeps it stale until the next run rewrites it.
+function syncResearchContextStale(){
+  const market=state.market;if(!market)return false;
+  const hasResults=(market.researchResults||[]).length>0;
+  const unrelated=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile,market.signals)||[];
+  const contextChanged=Boolean(market.researchContextFingerprint)&&market.researchContextFingerprint!==researchContextFingerprint();
+  const stale=hasResults&&(contextChanged||unrelated.length>0);
+  if(stale){market.strategyApproved=false;market.strategyApprovedAt='';}
+  if(hasResults||market.researchContextStale)market.researchContextStale=stale;
+  return stale;
+}
 function returnToProfileResearch(){closeStrategyHandoff();void window.LeadIntelProfileMarket?.open?.();}
 function researchProfile(){
   const profile=state.market.icps.some(item=>item.active!==false)?LeadIntelMarket.effectiveTargetingProfile(state.profile,state.market):state.profile;
@@ -760,7 +766,7 @@ async function runMarketResearch(modeOverride=""){
   taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(state.market.researchMode)});
   closeResearchPreview();
   const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
-  const previousResearch={results:[...state.market.researchResults],opportunities:[...state.market.opportunities],conditions:state.market.marketConditions,quality:state.market.researchQuality,lastResearchAt:state.market.lastResearchAt};
+  const previousResearch={results:[...state.market.researchResults],opportunities:[...state.market.opportunities],conditions:state.market.marketConditions,quality:state.market.researchQuality,lastResearchAt:state.market.lastResearchAt,fingerprint:state.market.researchContextFingerprint};
   state.market.researchQuality=null;
   state.market.researchContextStale=false;
   state.market.researchContextFingerprint=researchContextFingerprint();
@@ -833,7 +839,7 @@ async function runMarketResearch(modeOverride=""){
     taskCentre?.fail(taskId,error,{canRetry:true,resultCount:state.market.researchResults.length});
   }finally{
     const retainedPrevious=!state.market.researchResults.length&&previousResearch.results.length>0;
-    if(retainedPrevious){state.market.researchResults=previousResearch.results;state.market.opportunities=previousResearch.opportunities;state.market.marketConditions=previousResearch.conditions;state.market.researchQuality=previousResearch.quality;state.market.researchContextStale=true;state.market.researchStatus="partial";recordResearchError("LeadIntel","Saved evidence","This rerun returned no usable evidence. Previous research was retained and must be reviewed before reuse.");}
+    if(retainedPrevious){state.market.researchResults=previousResearch.results;state.market.opportunities=previousResearch.opportunities;state.market.marketConditions=previousResearch.conditions;state.market.researchQuality=previousResearch.quality;state.market.researchContextFingerprint=previousResearch.fingerprint||'stale:rerun-failed';state.market.researchContextStale=true;state.market.researchStatus="partial";recordResearchError("LeadIntel","Saved evidence","This rerun returned no usable evidence. Previous research was retained and must be reviewed before reuse.");}
     clearInterval(researchElapsedTimer);researchElapsedTimer=null;state.market.researchPhase="complete";
     state.market.researchProgress={completed:totalJobs,total:totalJobs};
     state.market.lastResearchAt=retainedPrevious?previousResearch.lastResearchAt:new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
@@ -1290,6 +1296,7 @@ function setActivationFeedback(message,tone){
 }
 window.LeadIntelPageProcedures={strategyBlockers:()=>state?strategyHandoffModel().blockers:["Workspace verification is still loading."]};
 function strategyHandoffModel(){
+  syncResearchContextStale();
   const icps=(state.market.icps||[]).filter(item=>item.active);
   const signals=(state.market.signals||[]).filter(item=>item.active);
   const opportunities=(state.market.opportunities||[]).filter(item=>item.active);

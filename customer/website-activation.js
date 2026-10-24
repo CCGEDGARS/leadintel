@@ -76,7 +76,7 @@
       scrapedSources:sameCompany?refreshWebsiteSources(base.scrapedSources,websiteSource):[{type:"website",url,title,text,status:"ready"}],
       profile:sameCompany?base.profile||null:null,
       approved:sameCompany?Boolean(base.approved):false,
-      market:sameCompany?{...(base.market||{}),...(base.profile?{researchContextStale:true}:{})}:{}
+      market:sameCompany?{...(base.market||{}),...(base.profile?{researchContextStale:true,researchContextFingerprint:'stale:website-reactivated'}:{})}:{}
     };
   }
   function refreshWebsiteSources(sources,source){
