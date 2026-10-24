@@ -42,6 +42,27 @@
   },
   "smokeChecks": [
     {
+      "id": "delivery-experience-navigation",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": ["delivery-experience=20261024-v1", "function reviewNextStep()", "delivery-recording-note", "learning-segments\").hidden=!m.sent", "leadintel:outreach-sent"]
+    },
+    {
+      "id": "delivery-light-controls",
+      "type": "text",
+      "url": "/customer/outreach-automation.css",
+      "status": 200,
+      "contains": ["background:#fff;color:#203329", ".oa-suppression-head", "outline:2px solid #277362"]
+    },
+    {
+      "id": "delivery-status-recovery",
+      "type": "text",
+      "url": "/customer/outreach-automation-ui.js",
+      "status": 200,
+      "contains": ["Delivery status unavailable", "data-oa-retry", "data-oa-settings", "data-oa-suppression-retry"]
+    },
+    {
       "id": "customer-shell",
       "type": "text",
       "url": "/customer/",

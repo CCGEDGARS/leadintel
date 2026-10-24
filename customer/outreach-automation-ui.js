@@ -1,12 +1,12 @@
 (function(root){
 'use strict';
 const ID='outreach-automation-panel';
-let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=[];
-let policyLoadError='',policyWorkspace='',refreshRequest=0;
+let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=null;
+let policyLoadError='',policyWorkspace='',refreshRequest=0,suppressionLoadError='';
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261014-automatic-limits-v1&treg-paid-search=20261021-v1&paid-email-phone=20261021-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261024-delivery-experience-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
 function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
@@ -78,7 +78,9 @@ function renderSuppression(destination){
   let card=document.getElementById('outreach-contact-suppression');
   if(!card){card=document.createElement('section');card.id='outreach-contact-suppression';card.className='oa-card';destination.appendChild(card);}
   const owner=isOwner();
-  card.innerHTML=`<h3>Do not contact</h3><p>Block an email address across manual and automatic outreach in this workspace. Replies asking to unsubscribe are added automatically.</p><form id="oa-suppress-form"><label>Contact email<input id="oa-suppress-email" type="email" required placeholder="name@company.com" ${owner?'':'disabled'}></label><button type="submit" ${owner?'':'disabled'}>Block contact</button></form><p>${suppressedContacts.length} blocked contact${suppressedContacts.length===1?'':'s'}</p>${suppressedContacts.length?`<details><summary>View blocked contacts</summary><ul>${suppressedContacts.map(row=>`<li>${esc(row.email)} · ${esc(row.reason)}</li>`).join('')}</ul></details>`:''}<p id="oa-suppress-message" role="status"></p>`;
+  const rows=suppressedContacts||[];
+  card.innerHTML=`<div class="oa-suppression-head"><div><span class="eyebrow">Contact preferences</span><h3>Do not contact</h3><p>Block an address from all outreach in this workspace. Unsubscribe replies are blocked automatically.</p></div><span class="oa-role">${suppressedContacts===null?'List unavailable':rows.length+' blocked contact'+(rows.length===1?'':'s')}</span></div><form id="oa-suppress-form"><label for="oa-suppress-email">Contact email<input id="oa-suppress-email" type="email" autocomplete="email" required placeholder="name@company.com" ${owner?'':'disabled'}></label><button class="secondary-btn" type="submit" ${owner?'':'disabled'}>Block contact</button></form>${suppressionLoadError?`<p class="oa-load-error" role="status">${esc(suppressionLoadError)}</p><button class="secondary-btn small" type="button" data-oa-suppression-retry>Retry blocked list</button>`:''}${rows.length?`<details><summary>View blocked contacts</summary><ul>${rows.map(row=>`<li>${esc(row.email)} · ${esc(row.reason)}</li>`).join('')}</ul></details>`:''}<p id="oa-suppress-message" role="status" aria-live="polite"></p>`;
+  card.querySelector('[data-oa-suppression-retry]')?.addEventListener('click',refresh);
   card.querySelector('#oa-suppress-form')?.addEventListener('submit',async event=>{
     event.preventDefault();const address=card.querySelector('#oa-suppress-email').value.trim();const result=await bridge()?.suppressOutreachContact?.(address);
     if(!result?.ok){card.querySelector('#oa-suppress-message').textContent=result?.error||'Could not block contact';return;}
@@ -95,10 +97,15 @@ function render(){
   renderSetup();
   const destination=anchor();if(!destination)return;
   renderSuppression(destination);renderVerificationReview(destination);
-  const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';}if(el.parentNode!==destination)destination.appendChild(el);
+  const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';}const mailbox=destination.querySelector('.connector-card');if(mailbox)mailbox.after(el);else if(el.parentNode!==destination)destination.appendChild(el);
+  if(policyLoadError||!policy||policyWorkspace!==bridge()?.workspace?.id){
+    el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Delivery mode</span><h3>${policyLoadError?'Delivery status unavailable':'Checking delivery settings'}</h3><p>${esc(policyLoadError||(!bridge()?.session?.authenticated?'Sign in to load your saved delivery mode.':'Loading the saved sending mode for this workspace…'))}</p></div><span class="oa-role">${policyLoadError?'Needs attention':'Not verified'}</span></div>${policyLoadError?'<button class="secondary-btn small" type="button" data-oa-retry>Retry delivery status</button>':''}`;
+    el.querySelector('[data-oa-retry]')?.addEventListener('click',refresh);return;
+  }
   if(p.approvedWorkflow){el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Approved workflow delivery</span><h3>${p.approvedWorkflow.status==='automatic'?'Automatic workflow':'Workflow '+esc(p.approvedWorkflow.status)}</h3><p>Only messages created under your approved workflow can send automatically. Use the workflow controls for review, limits, pause and manual takeover.</p><p>${Number(s.activity?.sent)||0} sent · ${Number(s.queue?.queued)||0} queued · ${Number(s.activity?.replies)||0} replies</p></div></div><button data-open-approved-workflow>Open workflow controls</button>`;el.querySelector('[data-open-approved-workflow]')?.addEventListener('click',()=>root.LeadIntelApprovedWorkflow?.open());return;}
   if(p.automaticDelivery==='manual_only'){
-    el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Gmail delivery</span><h3>Manual delivery</h3><p>Automatic Gmail delivery is not active. Review each approved message and use the explicit Send with Gmail action. Your daily limit is saved for a later automatic pilot.</p></div><span class="oa-role">Manual only</span></div>`;
+    el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Delivery mode</span><h3>Manual delivery</h3><p>You choose when each approved email is sent. Review the recipient and use Send with Gmail or Microsoft above.</p><p class="oa-manual-note">First-email automation is off. Separately approved conversation follow-ups are managed in Conversations &amp; follow-ups.</p></div><span class="oa-role">Manual sending</span></div><button class="secondary-btn small" type="button" data-oa-settings>Delivery settings →</button><p class="oa-message" id="oa-message" role="status" aria-live="polite"></p>`;
+    el.querySelector('[data-oa-settings]')?.addEventListener('click',()=>{root.LeadIntelCustomerNavigation?.setStep?.(1);document.getElementById('delivery-setup')?.scrollIntoView?.({behavior:'smooth',block:'center'});});
     return;
   }
   const owner=isOwner();const usage=s.usage||{},q=s.queue||{},activity=s.activity||{};
@@ -134,13 +141,14 @@ function message(text,error=false){const el=document.getElementById('oa-message'
 function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-enabled').checked,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
 async function refresh(){
   const b=bridge(),workspace=b?.workspace?.id,request=++refreshRequest;
-  if(!b?.session?.authenticated||!workspace){policy=null;status=null;policyWorkspace='';policyLoadError='';render();return;}
-  if(policyWorkspace!==workspace){policy=null;status=null;suppressedContacts=[];policyWorkspace='';}
+  if(!b?.session?.authenticated||!workspace){policy=null;status=null;policyWorkspace='';policyLoadError='';suppressedContacts=null;suppressionLoadError='';render();return;}
+  if(policyWorkspace!==workspace){policy=null;status=null;suppressedContacts=null;suppressionLoadError='';policyWorkspace='';}
   if(!b.getOutreachAutomationPolicy||!b.getOutreachAutomationStatus){policyLoadError='Delivery settings connection is not ready. Retry in a moment.';render();return;}
   policyLoadError='';render();
   const results=await Promise.allSettled([b.getOutreachAutomationPolicy(),b.getOutreachAutomationStatus(),b.listSuppressedContacts?.()||Promise.resolve({ok:false})]);
   if(request!==refreshRequest||workspace!==bridge()?.workspace?.id||!bridge()?.session?.authenticated)return;
   const [p,s,blocked]=results.map(result=>result.status==='fulfilled'?result.value:{ok:false,error:String(result.reason?.message||'Delivery settings request failed')});
+  if(blocked?.ok){suppressedContacts=blocked.contacts||[];suppressionLoadError='';}else {suppressionLoadError=blocked?.error||'Blocked contacts could not load. Retry to verify the list.';}
   if(!p.ok){policyLoadError=p.error||'Delivery settings could not load. Retry to reconnect.';render();message(policyLoadError,true);return;}
   policy=p;policyWorkspace=workspace;if(s.ok)status=s;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();if(!s.ok)message(s.error||'Live delivery status unavailable; saved preferences loaded.',true);
 }
