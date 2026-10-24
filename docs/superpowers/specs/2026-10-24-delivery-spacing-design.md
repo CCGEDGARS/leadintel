@@ -9,3 +9,9 @@ Approaches considered: a global spacing increase would enlarge unrelated pages a
 Keep all existing control IDs, event bindings, approval gates, history selection and CRM records. No sending, suppression mutation, research or state migration is authorized by this design work. The attached CRM spec supplies the durable-history constraint; the astrology PDF is unrelated.
 
 Acceptance: all five screenshot areas have consistent readable fields and visible separation; desktop and narrow layouts avoid clipping; customer tests/build and exact-SHA production proof pass; inspect the authenticated Delivery UI without sending or changing customer records.
+
+## Browser verification follow-through
+
+Desktop inspection confirmed a full-width 48px history picker, 24px description/form separation, 20px reply footer separation, and a 244px reply field. At 390px viewport width, form/action grids stack and no visible Delivery controls overflow horizontally. All five reported areas were inspected. No send, blocking or activation action was used.
+
+The browser also exposed an existing startup race: the shell can initialize the automation handoff before the lazy Delivery engine, but a selected package key caused an unguarded `LeadIntelDelivery.packageKey` call. The fix waits for the canonical engine and announces `leadintel:delivery-ready` after the Delivery controls/API exist. The handoff listens to readiness as well as existing selection/module events. Regression reproduces the exact exception, then verifies the selected buyer (among two at one domain) is announced after readiness. It does not enqueue or send.

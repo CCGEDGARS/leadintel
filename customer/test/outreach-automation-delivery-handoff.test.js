@@ -29,3 +29,20 @@ test('handoff refreshes when approved opportunity or recipient changes and is lo
   assert.match(processMap,/outreach-automation-loader\.js/);
   assert.match(loader,/outreach-automation-delivery-handoff\.js/);
 });
+
+test('early handoff waits for Delivery readiness and then announces the exact selected buyer',()=>{
+  const {JSDOM}=require('jsdom'),engine=require('../delivery-engine.js');
+  const dom=new JSDOM('<input id="delivery-recipient" value="bob@buyer.test">',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window,timers=[],announced=[];
+  try{
+    const make=id=>({domain:'buyer.test',channel:'email',approved:true,approvedAt:'2026-10-24T10:00:00Z',selectedPersonId:id,drafts:{emailSubject:'Hello '+id,emailBody:'Message for '+id}}),alice=make('alice'),bob=make('bob');
+    w.localStorage.setItem('leadintel_customer_v2_outreach',JSON.stringify({items:[alice,bob]}));
+    w.localStorage.setItem('leadintel_customer_v2_delivery',JSON.stringify({selectedDomain:'buyer.test',selectedPackageKey:engine.packageKey(bob)}));
+    w.setTimeout=fn=>{timers.push(fn);return timers.length;};
+    w.addEventListener('leadintel:approved-outreach-package',e=>announced.push(e.detail));
+    w.eval(handoff);w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
+    assert.doesNotThrow(()=>timers.splice(0).forEach(fn=>fn()));
+    assert.equal(announced.length,0,'no approximate package before the Delivery engine is loaded');
+    w.LeadIntelDelivery=engine;w.dispatchEvent(new w.CustomEvent('leadintel:delivery-ready'));
+    assert.equal(announced.length,1);assert.equal(announced[0].subject,'Hello bob');assert.equal(announced[0].recipient,'bob@buyer.test');
+  }finally{w.close();}
+});
