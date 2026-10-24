@@ -1,0 +1,33 @@
+/* Shared defaults; stronger component rules keep their established layouts. */
+:root{
+ --workspace-control-height:44px;
+ --workspace-field-gap:8px;
+ --workspace-section-gap:24px;
+ --workspace-stack-gap:16px;
+ --workspace-control-radius:10px;
+ --workspace-focus:#277362;
+}
+:where(.step-view .panel,.crm-shell) :where(input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=file]),select){
+ box-sizing:border-box;min-width:0;max-width:100%;min-height:var(--workspace-control-height);
+}
+:where(.step-view .panel,.crm-shell) :where(.primary-btn,.secondary-btn):not(.small){min-height:var(--workspace-control-height)}
+.step-view .panel>.section-title{margin-bottom:var(--workspace-section-gap)}
+.step-view .panel>.section-title p{max-width:76ch;line-height:1.65}
+:where(.step-view,.crm-shell) :where(input,textarea,select,button,a):focus-visible{outline:2px solid var(--workspace-focus);outline-offset:3px}
+.buyer-outcome-evidence{margin-top:var(--workspace-stack-gap);padding-top:var(--workspace-stack-gap);border-top:1px solid var(--line,#dde2dd)}
+.buyer-outcome-evidence summary{font-size:13px;font-weight:600;cursor:pointer;line-height:1.6}
+.buyer-outcome-evidence dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;margin:16px 0;font-size:13px}
+.buyer-outcome-evidence dt{color:var(--muted,#65736a)}
+.buyer-outcome-evidence dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere}
+.buyer-outcome-evidence p,.buyer-outcome-evidence li{font-size:13px;line-height:1.6}
+.commercial-insights{margin:0 24px 20px;padding:16px 20px;border:1px solid var(--line,#dde2dd);border-radius:12px;background:#fafcfb}
+.commercial-insights>summary{font-size:14px;font-weight:600;line-height:1.5;cursor:pointer}
+.commercial-insights>summary small{display:block;font-size:12px;font-weight:400;color:var(--muted,#65736a);margin-top:4px}
+.commercial-insights[open]>summary{margin-bottom:20px}
+@media(max-width:680px){
+ :root{--workspace-section-gap:20px}
+ .step-view .panel{padding:20px}
+ .commercial-insights{margin:0 16px 16px;padding:16px}
+ .buyer-outcome-evidence dl{grid-template-columns:minmax(0,1fr);gap:5px}
+ .buyer-outcome-evidence dd{text-align:left;margin-bottom:8px}
+}

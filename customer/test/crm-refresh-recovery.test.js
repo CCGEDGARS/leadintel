@@ -1,9 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{execFileSync}=require('node:child_process');
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),Model=require('../attention-centre-model.js'),{createTaskCentre}=require('../background-task-centre.js');
-const refreshSource=source.slice(source.indexOf('async function refreshCrmState('),source.indexOf('function injectDiscoveryUI('));
+const refreshSource=source.slice(source.indexOf('function registerCrmRecoveryRetry('),source.indexOf('function injectDiscoveryUI('));
 function timeout(){return Object.assign(new Error('LeadIntel server request timed out for /api/crm/companies.'),{code:'request_timeout',requestPath:'/api/crm/companies',phase:'request',transient:true});}
-function runtime({list=async()=>{throw timeout();},hydrate=()=>{}}={}){
- const tasks=createTaskCentre(),bridge={workspace:{id:'w1'},listCrmCompanies:list};
+function runtime({list=async()=>{throw timeout();},hydrate=()=>{},tasks=createTaskCentre()}={}){
+ const bridge={workspace:{id:'w1'},listCrmCompanies:list};
  const ctx={window:{LeadIntelTaskCentre:tasks},discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'cached-company'}],crmPipeline:[{id:'cached-pipeline'}],discovery:{pipeline:[{domain:'buyer.example',people:[{id:'kept',kept:true,publicEmailUrl:'https://buyer.example/team'}]}],selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>bridge,hydrateLocalPipelineFromCrm:hydrate,renderAll(){ctx.renders++;},scheduleSavedBuyerPublicChecks(){ctx.checks++;},renders:0,checks:0};
  vm.createContext(ctx);vm.runInContext(refreshSource,ctx);return {ctx,bridge,tasks};
 }
@@ -15,7 +15,7 @@ test('a CRM read started before permanent removal cannot reintroduce its deleted
  await refresh;assert.equal(r.ctx.crmCompanies.length,0);assert.equal(r.ctx.crmPipeline.length,0);assert.equal(hydrated,0);
 });
 test('the actual server-ready CRM refresh does not report its expected timeout as an unhandled component crash',()=>{
- const script=`const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('customer/discovery-ui.js','utf8'),listeners={},unhandled=[];process.on('unhandledRejection',error=>unhandled.push(error.message));const ctx={window:{addEventListener:(name,fn)=>listeners[name]=fn},discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'saved'}],crmPipeline:[],discovery:{selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'w1'},listCrmCompanies:async()=>{throw Object.assign(new Error('LeadIntel server request timed out for /api/crm/companies.'),{code:'request_timeout',requestPath:'/api/crm/companies',transient:true});}}),renderAll(){},scheduleSavedBuyerPublicChecks(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function refreshCrmState('),source.indexOf('function injectDiscoveryUI('))+'\\n'+source.split('\\n').find(line=>line.includes('window.addEventListener("leadintel:server-ready",()=>{void refreshCrmState();})')),ctx);listeners['leadintel:server-ready']();setImmediate(()=>console.log(JSON.stringify({unhandled,refreshing:ctx.crmRefreshing,companies:ctx.crmCompanies})));`;
+ const script=`const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('customer/discovery-ui.js','utf8'),listeners={},unhandled=[];process.on('unhandledRejection',error=>unhandled.push(error.message));const ctx={window:{addEventListener:(name,fn)=>listeners[name]=fn},discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'saved'}],crmPipeline:[],discovery:{selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'w1'},listCrmCompanies:async()=>{throw Object.assign(new Error('LeadIntel server request timed out for /api/crm/companies.'),{code:'request_timeout',requestPath:'/api/crm/companies',transient:true});}}),renderAll(){},scheduleSavedBuyerPublicChecks(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function registerCrmRecoveryRetry('),source.indexOf('function injectDiscoveryUI('))+'\\n'+source.split('\\n').find(line=>line.includes('window.addEventListener("leadintel:server-ready",()=>{void refreshCrmState();})')),ctx);listeners['leadintel:server-ready']();setImmediate(()=>console.log(JSON.stringify({unhandled,refreshing:ctx.crmRefreshing,companies:ctx.crmCompanies})));`;
  const result=JSON.parse(execFileSync(process.execPath,['-e',script],{cwd:require('node:path').join(__dirname,'../..'),encoding:'utf8'}));
  assert.deepEqual(result.unhandled,[]);assert.equal(result.refreshing,false);assert.deepEqual(result.companies,[{id:'saved'}]);
 });
@@ -68,4 +68,51 @@ test('Workspace status offers the CRM task Retry action and removes its warning 
   const retry=w.document.querySelector('[data-task-action="retry"]');assert.ok(retry);bridge.listCrmCompanies=async()=>({ok:true,companies:[{id:'recovered-company'}]});retry.click();await new Promise(resolve=>setImmediate(resolve));w.LeadIntelAttention.refresh();
   assert.equal(w.LeadIntelTaskCentre.list()[0].status,'complete');assert.equal(w.LeadIntelAttention.list().some(item=>item.id.startsWith('task-crm-refresh:')),false);assert.equal(w.crmCompanies[0].id,'recovered-company');
  }finally{w.close();}
+});
+
+test('a stored CRM failure regains its retry before Buyers mounts and stays failed until the scoped read succeeds',async()=>{
+ const stored=new Map(),storage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)};
+ const before=createTaskCentre({storage});before.start({id:'crm-refresh:w1',type:'crm-refresh',metadata:{workspaceId:'w1'},canRetry:true});before.fail('crm-refresh:w1','CRM refresh timed out');
+ const tasks=createTaskCentre({storage}),r=runtime({tasks,list:async()=>({ok:true,companies:[{id:'restored'}]})});r.ctx.discoveryMounted=false;
+ r.ctx.ensureDiscoveryMounted=options=>{assert.equal(options.refreshCrm,false);r.ctx.discoveryMounted=true;};
+ assert.equal(tasks.hasAction('crm-refresh:w1','retry'),false);assert.equal(await r.ctx.refreshCrmState(),false);
+ assert.equal(tasks.get('crm-refresh:w1').status,'error');assert.equal(tasks.hasAction('crm-refresh:w1','retry'),true);
+ assert.equal(await tasks.retry('crm-refresh:w1'),true);assert.equal(tasks.get('crm-refresh:w1').status,'complete');assert.equal(r.ctx.crmCompanies[0].id,'restored');
+});
+test('malformed successful CRM responses cannot erase cached companies or clear their warning',async()=>{
+ const r=runtime();await r.ctx.refreshCrmState();const before=JSON.stringify({companies:r.ctx.crmCompanies,pipeline:r.ctx.crmPipeline,discovery:r.ctx.discovery});
+ r.bridge.listCrmCompanies=async()=>({ok:true,companies:null});
+ await assert.rejects(r.ctx.refreshCrmState(),error=>error.code==='invalid_crm_response');
+ assert.equal(JSON.stringify({companies:r.ctx.crmCompanies,pipeline:r.ctx.crmPipeline,discovery:r.ctx.discovery}),before);assert.equal(r.tasks.list()[0].status,'error');
+});
+test('an in-flight CRM read cannot apply after its bridge is replaced for the same workspace',async()=>{
+ let release;const response=new Promise(resolve=>{release=resolve;}),r=runtime({list:()=>response}),pending=r.ctx.refreshCrmState();
+ r.ctx.bridge=()=>({workspace:{id:'w1'}});release({ok:true,companies:[{id:'stale'}]});
+ assert.equal(await pending,false);assert.equal(r.ctx.crmCompanies[0].id,'cached-company');
+});
+test('signing out during a CRM read prevents both data application and warning recovery',async()=>{
+ let release;const response=new Promise(resolve=>{release=resolve;}),r=runtime({list:()=>response}),pending=r.ctx.refreshCrmState();
+ r.ctx.crmAuthenticated=()=>false;release({ok:true,companies:[{id:'stale'}]});
+ assert.equal(await pending,false);assert.equal(r.ctx.crmCompanies[0].id,'cached-company');
+});
+test('actual CRM refresh resolves only captured transport incidents after validated success, retaining an unknown component error',async()=>{
+ const {JSDOM}=require('jsdom'),w=new JSDOM('<button id="workspace-attention"><em data-attention-summary></em><b data-attention-count></b></button>',{url:'https://workspace.example',runScripts:'outside-only'}).window;
+ const b={workspace:{id:'w1'},listCrmCompanies:async()=>{throw timeout();}};
+ try{
+  Object.assign(w,{discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'cached'}],crmPipeline:[],discovery:{selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>b,LeadIntelServerBridge:b,hydrateLocalPipelineFromCrm(){},renderAll(){},scheduleSavedBuyerPublicChecks(){},LeadIntelWorkspacePersistence:{hasMeaningfulWorkspaceData:()=>false,hasUnsavedChanges:()=>false}});w.setInterval=()=>0;
+  for(const file of ['background-task-centre.js','attention-centre-model.js','attention-centre.js'])w.eval(fs.readFileSync(require.resolve('../'+file),'utf8'));
+  w.document.dispatchEvent(new w.Event('DOMContentLoaded'));w.eval(refreshSource);
+  for(const error of [timeout(),new TypeError('A real render failure')]){const event=new w.Event('unhandledrejection');event.reason=error;w.dispatchEvent(event);}
+  assert.equal(await w.refreshCrmState(),false);w.LeadIntelAttention.refresh();assert.equal(w.LeadIntelAttention.list().filter(item=>item.target.type==='runtime').length,2);
+  b.listCrmCompanies=async()=>({ok:true,companies:[{id:'verified'}]});assert.equal(await w.refreshCrmState(),true);w.LeadIntelAttention.refresh();
+  const items=w.LeadIntelAttention.list();assert.equal(items.length,1);assert.match(items[0].technical,/A real render failure/);assert.equal(w.LeadIntelTaskCentre.get('crm-refresh:w1').status,'complete');
+ }finally{w.close();}
+});
+test('Discovery initialization rebinds a retained CRM retry when server-ready occurred before its listeners mounted',()=>{
+ const tasks=createTaskCentre();tasks.start({id:'crm-refresh:w1',type:'crm-refresh',metadata:{workspaceId:'w1'}});tasks.fail('crm-refresh:w1','CRM refresh timed out');
+ const r=runtime({tasks});r.ctx.discoveryMounted=false;
+ for(const name of ['injectDiscoveryUI','bindDiscovery','openDiscoveryFromHandoff','pipelineRows','openCampaignResearch','researchCampaign','continueBuyerMessages','readyBuyerCount','renderSelectedEmailBuyer'])r.ctx[name]=()=>{};
+ r.ctx.mainState=()=>({step:1});r.ctx.loadMeta=()=>({});r.ctx.refreshCrmState=()=>assert.fail('Setup initialization must only register recovery actions, never invoke a CRM refresh');
+ vm.runInContext(source.slice(source.indexOf('function initDiscovery(){'),source.indexOf('function initDiscoveryWhenReady(')),r.ctx);r.ctx.initDiscovery();
+ assert.equal(tasks.hasAction('crm-refresh:w1','retry'),true);assert.equal(tasks.get('crm-refresh:w1').status,'error');assert.equal(r.ctx.discoveryMounted,false);
 });

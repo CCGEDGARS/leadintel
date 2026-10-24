@@ -70,7 +70,7 @@
       if(FAILED.has(task.status))items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task needs attention',120),detail:clean(task.error||task.stage||'The task did not finish.'),target:{type:'tasks'}});
       else if(['running','queued'].includes(task.status)&&now-Number(task.updatedAt||now)>STALL_MS)items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task may be stalled',120),detail:'No progress has been reported for more than three minutes.',target:{type:'tasks'}});
     });
-    const current=model.find(stage=>stage?.status==='current');
+    const current=model.find(stage=>stage?.active===true)||model.find(stage=>stage?.active==null&&stage?.status==='current');
     if(workspaceStarted){const next=current?.steps?.find(step=>!step.complete&&!step.optional);if(next)items.push({id:`stage-${current.id}-${clean(next.id,80)}`,severity:'recommendation',title:clean(next.label||'Required step unfinished',120),detail:clean(next.action||`Finish this required step in ${current.name}.`),target:{type:'stage',id:current.id}});}
     const budgetNotice=syncBudgetNotice(syncBudget);if(budgetNotice)items.push(budgetNotice);
     if(unsaved)items.push({id:'unsaved-workspace',severity:'recommendation',title:'Workspace changes are not saved',detail:'Save the workspace so these changes are available next time.',target:{type:'save'}});

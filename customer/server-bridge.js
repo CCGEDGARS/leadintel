@@ -26,7 +26,7 @@
   const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','email','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
   const BRAND_MEETING_PLATFORMS=['zoom','teams','google_meet'];
   let saveTimer=null;let suppress=false;let initialized=false;const brandAssetTransactions=new Map(),workspaceSaveTransactions=new Map(),brandAssetResetGenerations=new Map();
-  const bridge={ready:false,session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',openSavedFlow,conflict:false,conflictState:null,conflictDetails:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,downloadSyncRecovery,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,archiveCrmContact,enrichCrmContact,searchApolloPeople,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
+  const bridge={ready:false,session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',openSavedFlow,conflict:false,conflictState:null,conflictDetails:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,downloadSyncRecovery,getResearchCosts,listConversations,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,archiveCrmContact,enrichCrmContact,searchApolloPeople,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
   if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
 
@@ -86,28 +86,37 @@
   function endpoint(path){const legacy=`${API_BASE}${path}`;return root.LeadIntelApiTransport?.firstPartyUrl(legacy)||legacy;}
   async function api(path,options={}){
     const {headers={},body,signal:externalSignal,timeoutMs,...rest}=options;
+    if(externalSignal?.aborted)throw externalSignal.reason||new DOMException('LeadIntel request canceled','AbortError');
     const multipart=typeof FormData!=='undefined'&&body instanceof FormData;
     const Controller=typeof AbortController==='function'?AbortController:null;
     const controller=Controller?new Controller():null;
-    const forwardAbort=()=>controller?.abort(externalSignal?.reason);
-    if(externalSignal?.aborted)forwardAbort();
-    else externalSignal?.addEventListener?.('abort',forwardAbort,{once:true});
+    let rejectInterrupted,timedOut=false,networkReadComplete=false;
+    const interrupted=new Promise((resolve,reject)=>{rejectInterrupted=reject;});
+    const forwardAbort=()=>{controller?.abort(externalSignal?.reason);rejectInterrupted(externalSignal?.reason||new DOMException('LeadIntel request canceled','AbortError'));};
+    externalSignal?.addEventListener?.('abort',forwardAbort,{once:true});
     const requestTimeoutMs=Math.max(1000,Math.min(60000,Number(timeoutMs)||API_REQUEST_TIMEOUT_MS));
-    const timeout=controller?setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),requestTimeoutMs):null;
+    // Abort remains advisory for some transports/body readers. Race the whole
+    // read against the deadline so a late response cannot become a success.
+    // Workspace persistence ends this deadline once it parses the network
+    // response; its separately awaited durable browser snapshot is local work.
+    const timeout=setTimeout(()=>{if(networkReadComplete)return;timedOut=true;if(controller)controller.abort(new DOMException('LeadIntel request timed out','TimeoutError'));rejectInterrupted(new DOMException('LeadIntel request timed out','TimeoutError'));},requestTimeoutMs);
     try{
-      const request={credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},...(controller?{signal:controller.signal}:{})};
-      const response=await fetch(endpoint(path),request);
-      let payload={};
-      if(response.status!==204){try{payload=await response.json();}catch(cause){
-        if(response.ok){
-          const name=String(cause?.name||'Error'),requestPath=String(path).split('?')[0];
-          throw Object.assign(new Error(`LeadIntel response body failed (${name}) for ${requestPath} (HTTP ${response.status}, ${String(response.headers?.get('Content-Type')||'unknown type').split(';')[0].slice(0,80)}).`),{code:'response_body_failed',requestPath,phase:'response-body',status:response.status,transient:['AbortError','TimeoutError','TypeError'].includes(name),cause});
-        }
-        // Preserve HTTP status handling for empty/non-JSON error responses.
-      }}
-      return {response,payload};
+      return await Promise.race([(async()=>{
+        const request={credentials:'include',...rest,body,leadintelNetworkReadComplete:()=>{networkReadComplete=true;clearTimeout(timeout);},headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},...(controller?{signal:controller.signal}:{})};
+        const response=await fetch(endpoint(path),request);
+        let payload={};
+        if(response.status!==204){try{payload=await response.json();}catch(cause){
+          if(response.ok){
+            const name=String(cause?.name||'Error'),requestPath=String(path).split('?')[0];
+            throw Object.assign(new Error(`LeadIntel response body failed (${name}) for ${requestPath} (HTTP ${response.status}, ${String(response.headers?.get('Content-Type')||'unknown type').split(';')[0].slice(0,80)}).`),{code:'response_body_failed',requestPath,phase:'response-body',status:response.status,transient:['AbortError','TimeoutError','TypeError'].includes(name),cause});
+          }
+          // Preserve HTTP status handling for empty/non-JSON error responses.
+        }}
+        return {response,payload};
+      })(),interrupted]);
     }catch(cause){
-      if(controller?.signal.aborted&&!externalSignal?.aborted)throw Object.assign(new Error('LeadIntel server request timed out for '+String(path).split('?')[0]+'.'),{code:'request_timeout',requestPath:String(path).split('?')[0],phase:'request',transient:true});
+      if(externalSignal?.aborted)throw externalSignal.reason||cause;
+      if(timedOut)throw Object.assign(new Error('LeadIntel server request timed out for '+String(path).split('?')[0]+'.'),{code:'request_timeout',requestPath:String(path).split('?')[0],phase:'request',transient:true});
       throw cause;
     }finally{
       clearTimeout(timeout);
@@ -504,6 +513,18 @@
     return {ok:true,status:response.status,deleted:Number(payload?.deleted)||0};
   }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
+  async function readWorkspaceResource(path,options={}){
+    const selected=bridge.workspace,id=selected?.id,userId=String(bridge.session?.user?.id||'');
+    if(!bridge.session?.authenticated||!id)return {ok:false,status:401,error:'Sign in and choose a workspace.'};
+    if(options.workspaceId&&options.workspaceId!==id)return {ok:false,status:409,error:'Workspace changed. Refresh the view.'};
+    const query=new URLSearchParams({workspace_id:id});
+    for(const name of ['start','end'])if(options[name])query.set(name,String(options[name]));
+    const {response,payload}=await api(path+'?'+query,{method:'GET',signal:options.signal,timeoutMs:25000});
+    if(root.LeadIntelServerBridge!==bridge||!bridge.session?.authenticated||bridge.workspace!==selected||bridge.workspace?.id!==id||String(bridge.session?.user?.id||'')!==userId)return {ok:false,status:409,error:'Workspace or account changed. Refresh the view.'};
+    return {...payload,ok:response.ok,status:response.status};
+  }
+  async function getResearchCosts(options={}){return readWorkspaceResource('/api/research/costs',options);}
+  async function listConversations(options={}){return readWorkspaceResource('/api/conversations',options);}
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
   async function listCrmCompanies(filters={}){const params=new URLSearchParams();if(filters.q)params.set('q',filters.q);if(filters.lifecycle)params.set('lifecycle',filters.lifecycle);if(filters.pipeline_stage||filters.pipelineStage)params.set('pipeline_stage',filters.pipeline_stage||filters.pipelineStage);if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies${suffix}`);}
   async function getCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`);}

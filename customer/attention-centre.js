@@ -3,6 +3,7 @@
   if(!root?.document)return;
   const document=root.document;
   let runtimeErrors=[],lastProviderStatus=null;
+  let runtimeErrorSequence=0;
   let refreshTimer=0;
   let lastItems=[];
   let providerIssues=[];
@@ -65,14 +66,25 @@
   function open(){const drawer=createDrawer(),trigger=document.getElementById('workspace-attention');render();drawer.hidden=false;trigger?.setAttribute('aria-expanded','true');drawer.querySelector('.attention-close')?.focus();}
   function close(){const drawer=document.getElementById('workspace-attention-drawer'),trigger=document.getElementById('workspace-attention');if(drawer)drawer.hidden=true;trigger?.setAttribute('aria-expanded','false');trigger?.focus();}
   function activate(item){if(item.target.type==='tasks'){open();const cards=Array.from(document.querySelectorAll('[data-task-card]'));const card=cards.find(node=>node.dataset.taskCard===item.id.replace(/^task-/,''));card?.scrollIntoView?.({block:'nearest'});card?.focus();return;}close();if(item.target.type==='stage')root.LeadIntelJourney?.open?.(item.target.id);else if(item.target.type==='save')document.getElementById('save-workspace')?.click();else if(item.target.type==='settings')document.getElementById('open-settings')?.click();else if(item.target.type==='ai-billing')root.open?.(OPENAI_BILLING_URL,'_blank','noopener,noreferrer');else root.location.reload();}
-  function rememberError(message){const text=clean(message);if(!text)return;runtimeErrors=[...runtimeErrors,{id:`${Date.now()}-${runtimeErrors.length}`,message:text}].slice(-3);schedule();}
+  function rememberError(error,fallback=''){
+    const text=clean(error?.message||fallback||error);if(!text)return;
+    runtimeErrors=[...runtimeErrors,{id:`${Date.now()}-${++runtimeErrorSequence}`,message:text,workspaceId:error?.workspaceId||root.LeadIntelServerBridge?.workspace?.id||'',bridge:root.LeadIntelServerBridge,code:error?.code||'',requestPath:error?.requestPath||'',transient:error?.transient===true}].slice(-3);schedule();
+  }
+  function prepareCrmRecovery(workspaceId){
+    const bridge=root.LeadIntelServerBridge;
+    // A successful CRM read proves recovery only for the already observed,
+    // typed list-read failures in this exact workspace and bridge instance.
+    // Unknown exceptions and incidents raised during this read stay active.
+    const ids=new Set(runtimeErrors.filter(error=>error.workspaceId===workspaceId&&error.bridge===bridge&&error.transient&&['request_timeout','response_body_failed'].includes(error.code)&&error.requestPath==='/api/crm/companies').map(error=>error.id));
+    return ()=>{if(!workspaceId||root.LeadIntelServerBridge!==bridge||bridge?.workspace?.id!==workspaceId)return false;runtimeErrors=runtimeErrors.filter(error=>!ids.has(error.id));schedule();return true;};
+  }
   function mount(){
     const trigger=document.getElementById('workspace-attention');if(!trigger||trigger.dataset.attentionBound==='1')return;trigger.dataset.attentionBound='1';trigger.addEventListener('click',()=>{const drawer=createDrawer();if(drawer.hidden)open();else close();});
     ['leadintel:storage-status-changed','leadintel:tasks-changed','leadintel:workspace-changed','leadintel:workspace-dirty','leadintel:server-synced','leadintel:server-conflict','leadintel:sync-status-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready','leadintel:company-research-updated'].forEach(name=>root.addEventListener(name,()=>{schedule();if(name==='leadintel:server-ready'||name==='leadintel:tasks-changed'||name==='leadintel:company-research-updated')void refreshProviderCredits();}));
     root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];providerIssues=[];connectionIssues=[];providerStatusError='';checkedWorkspace='';lastProviderCheck=0;root.LeadIntelJourney?.refresh?.();render();});
-    root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.message||event.error?.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason?.message||event.reason));
+    root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.error,event.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
-    render();void refreshProviderCredits();root.setInterval(()=>{render();void refreshProviderCredits();},30000);root.LeadIntelAttention={refresh:render,recheck:()=>refreshProviderCredits({force:true}),list:()=>lastItems.slice(),open,providerStatus:()=>lastProviderStatus};
+    render();void refreshProviderCredits();root.setInterval(()=>{render();void refreshProviderCredits();},30000);root.LeadIntelAttention={refresh:render,recheck:()=>refreshProviderCredits({force:true}),list:()=>lastItems.slice(),open,prepareCrmRecovery,providerStatus:()=>lastProviderStatus};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })(typeof window!=='undefined'?window:null);

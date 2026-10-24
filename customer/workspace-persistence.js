@@ -215,12 +215,13 @@
   function installFetchBoundary(){
     if(!root.fetch||root.__leadintelPersistenceFetchInstalled)return;root.__leadintelPersistenceFetchInstalled=true;nativeFetch=root.fetch.bind(root);
     root.fetch=async function(input,init={}){
-      const {leadintelSaveIntent=false,leadintelExplicitSave=false,leadintelPreparedSync=false,leadintelLocalDataAtSaveStart,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
+      const {leadintelSaveIntent=false,leadintelExplicitSave=false,leadintelPreparedSync=false,leadintelLocalDataAtSaveStart,leadintelNetworkReadComplete,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
       if(method==="GET"){
         // Reuse the parsed body after snapshot work: its original network stream
         // may expire while a large recovery baseline is being prepared.
-        const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json();const workspaceId=url.searchParams.get("workspace_id")||"";
-        if(resetIntentMatchesUrl(url)){const cleared=await clearPendingServerReset(url,body);return jsonResponse(cleared,200);}
+        const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json();if(requestInit.signal?.aborted)throw requestInit.signal.reason||new DOMException('Workspace read canceled','AbortError');const workspaceId=url.searchParams.get("workspace_id")||"";
+        if(resetIntentMatchesUrl(url)){const cleared=await clearPendingServerReset(url,body);leadintelNetworkReadComplete?.();return jsonResponse(cleared,200);}
+        leadintelNetworkReadComplete?.();
         if(isExplicitlySaved()&&hasLocalChangesSinceSnapshot()){
           dirtySinceSave=true;protectLocalChanges();root.setTimeout?.(renderPersistenceStatus,0);
           return jsonResponse(body,response.status);
@@ -239,7 +240,10 @@
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
         if(!leadintelPreparedSync)next.payload=await prepareSyncPayload(next.payload,{explicitSaved:!forceReset&&(explicitSave||isExplicitlySaved())});
-        const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(error=>{if(response.ok)throw error;return {};});const persisted=response.ok&&result?.saved!==false;
+        const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(error=>{if(response.ok)throw error;return {};});if(requestInit.signal?.aborted)throw requestInit.signal.reason||new DOMException('Workspace save canceled','AbortError');
+        // The network response and body are complete. Durable browser storage
+        // remains awaited, but must not be rejected by the network deadline.
+        leadintelNetworkReadComplete?.();const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         // The server acknowledgement is already parsed. Snapshot work can
         // outlast the request deadline and invalidate the original stream.

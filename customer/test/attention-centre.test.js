@@ -247,3 +247,19 @@ test('workspace persistence measures the compacted sync payload for the attentio
   assert.match(html,/attention-centre\.js\?v=[^"]*sync-budget=20261019-v2/);
   for(const file of ['app.js','process-map.js'])assert.match(fs.readFileSync(path.join(root,file),'utf8'),/workspace-persistence\.js\?v=[^"'`\s]*sync-budget=20261019-v1/,file+' reloads persistence');
 });
+
+test('attention follows the active stage independently of completion status and ignores its optional gaps',()=>{
+ const items=Attention.buildAttentionItems({workspaceStarted:true,model:[
+  {id:1,status:'current',name:'Legacy selection',steps:[{id:'old',complete:false}]},
+  {id:5,active:true,status:'in-progress',name:'Buyers',steps:[{id:'optional',label:'Optional improvement',complete:false,optional:true},{id:'quality',label:'Buyer quality requirements',complete:false,optional:false,action:'Complete buyer quality checks'}]}
+ ]});
+ assert.deepEqual(items.map(item=>item.id),['stage-5-quality']);assert.equal(items[0].severity,'recommendation');
+});
+test('a completed active stage never raises optional improvements as an attention issue',()=>{
+ const items=Attention.buildAttentionItems({workspaceStarted:true,model:[{id:3,active:true,status:'complete',name:'Strategy',steps:[{id:'approval',complete:true,optional:false},{id:'research',complete:false,optional:true}]}]});
+ assert.deepEqual(items,[]);
+});
+test('an explicitly inactive legacy current marker cannot create an active-stage warning',()=>{
+ const items=Attention.buildAttentionItems({workspaceStarted:true,model:[{id:1,active:false,status:'current',steps:[{id:'old',complete:false}]}]});
+ assert.deepEqual(items,[]);
+});

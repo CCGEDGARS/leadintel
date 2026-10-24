@@ -22,11 +22,10 @@
   const everyField=(source,fields)=>fields.every(field=>filled(source?.[field]));
   const checkedCompanies=discovery=>list(discovery.candidates).filter(item=>item?.company&&item?.domain&&!item.needsRecheck&&item.qualification?.eligible===true&&Number.isFinite(item.qualification.score)&&item.qualification.score>0);
   const step=(id,label,complete,{optional=false,action=label}={})=>({id,label,complete:Boolean(complete),optional,action});
-  const STATUS_LABELS=Object.freeze({current:'In progress',complete:'Complete',available:'Available',locked:'Locked',skipped:'Skipped · optional'});
+  const STATUS_LABELS=Object.freeze({'in-progress':'In progress','not-started':'Not started',complete:'Complete',locked:'Locked'});
 
   function stageStatusLabel(stage={}){
-    if(stage.status==='current'&&Number(stage.completed)===0)return 'Not started';
-    return STATUS_LABELS[stage.status]||'Available';
+    return STATUS_LABELS[stage.status]||'Not started';
   }
 
   function stageSteps({main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
@@ -45,7 +44,7 @@
     const studioReady=studio&&everyField(studio.essentials,['offer','target','value','sender','company','meetingValue','calendly']);
     return {
       1:[
-        step('website','Website activated',websiteActivated||filled(main.website),{action:'Activate the main company website'}),
+        step('website','Website activated',websiteActivated,{action:'Activate the main company website'}),
         step('markets','Target markets selected',list(main.targetMarkets).some(filled),{action:'Select at least one target market'}),
         step('evidence','Supporting evidence added',list(main.documents).length>0||list(main.additionalLinks).some(filled),{optional:true,action:'Add supporting files or links'})
       ],
@@ -109,11 +108,13 @@
       7:internal[7]||[]
     };
     const activeJourneyStage=Number(input.activeJourneyStage)||journeyStageForModuleStep(currentStep,input.journeyFocus);
-    return STAGES.map(definition=>{
+    const model=STAGES.map(definition=>{
       const steps=groups[definition.id]||[];
       const completed=steps.filter(item=>item.complete).length;
       const required=steps.filter(item=>!item.optional);
       const requiredCompleted=required.filter(item=>item.complete).length;
+      const optional=steps.filter(item=>item.optional);
+      const optionalCompleted=optional.filter(item=>item.complete).length;
       const requiredComplete=required.length?requiredCompleted===required.length:completed===steps.length&&steps.length>0;
       const available=definition.id===1?Boolean(availability[1])
         :definition.id===2?Boolean(availability[2]||availability[3])
@@ -121,13 +122,19 @@
         :definition.id===4?Boolean(availability[5])
         :definition.id===5?Boolean(availability[5]&&(candidates.length||pipeline.length||list(discovery.selectedProspects).length))
         :Boolean(availability[definition.id]);
-      let status=definition.id===activeJourneyStage?'current':requiredComplete?'complete':available?'available':'locked';
-      const answers=input.main?.answers&&typeof input.main.answers==='object'?input.main.answers:{};
-      const profile=input.main?.profile;
-
-      const next=steps.find(item=>!item.complete&&!item.optional)||steps.find(item=>!item.complete);
-      return {...definition,steps,total:steps.length,completed,requiredTotal:required.length,requiredCompleted,available,status,nextAction:next?.action||'Stage complete'};
+      // Selection describes where the customer is looking; completion describes
+      // retained outcomes. Opening a finished stage must not reopen its work.
+      const active=definition.id===activeJourneyStage;
+      const status=requiredComplete?'complete':!available&&!active?'locked':requiredCompleted?'in-progress':'not-started';
+      const next=required.find(item=>!item.complete);
+      return {...definition,steps,total:steps.length,completed,requiredTotal:required.length,requiredCompleted,requiredComplete,optionalTotal:optional.length,optionalCompleted,available,active,status,nextAction:next?.action||'Required steps complete',nextTarget:next?{stageId:definition.id,itemId:next.id}:null};
     });
+    for(const stage of model){
+      if(!stage.requiredComplete)continue;
+      const next=model.find(candidate=>candidate.id>stage.id&&candidate.available&&!candidate.requiredComplete);
+      if(next){stage.nextAction=`Continue to ${next.name}`;stage.nextTarget={stageId:next.id,itemId:next.nextTarget?.itemId||''};}
+    }
+    return model;
   }
 
   function journeyStageForModuleStep(step,focus=''){
@@ -152,13 +159,13 @@
   function visibleStageIds(model=[]){
     const visible=[];
     let includedNext=false;
-    const currentId=Math.max(1,...list(model).filter(stage=>stage?.status==='current').map(stage=>Number(stage.id)||1));
+    const currentId=Math.max(1,...list(model).filter(stage=>stage?.active||stage?.status==='current').map(stage=>Number(stage.id)||1));
     for(const stage of list(model)){
-      if(Number(stage?.id)<=currentId||['complete','skipped','current'].includes(stage?.status)){
+      if(Number(stage?.id)<=currentId||stage?.active||['complete','skipped','current'].includes(stage?.status)){
         visible.push(stage.id);
         continue;
       }
-      if(!includedNext&&stage?.status==='available'){
+      if(!includedNext&&(stage?.available||stage?.status==='available')){
         visible.push(stage.id);
         includedNext=true;
       }

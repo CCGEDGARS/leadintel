@@ -121,8 +121,8 @@ test('a committed PUT remains acknowledged when its durable browser snapshot out
  let release,started;const writing=new Promise(resolve=>{started=resolve;}),durable=new Promise(resolve=>{release=resolve;});
  root.LeadIntelAccountCache={saveRecoverySnapshot:async()=>{started();await durable;return 'committed-snapshot';}};
  const originalSet=root.localStorage.setItem;root.localStorage.setItem=function(key,value){if(key==='leadintel_customer_v2_workspace_saved_snapshot_v1'&&!String(value).includes('leadintel-indexed-workspace-snapshot-v1'))throw Object.assign(new Error('Quota exceeded'),{name:'QuotaExceededError'});return originalSet.call(this,key,value);};
- const saving=bridge.saveNow({saveIntent:true,explicitSave:true}).then(result=>({result}),error=>({error}));
- try{await writing;assert.equal(committed,true);assert.equal(typeof expire,'function');expire();}
+ let settled=false;const saving=bridge.saveNow({saveIntent:true,explicitSave:true}).then(result=>({result}),error=>({error})).then(outcome=>{settled=true;return outcome;});
+ try{await writing;assert.equal(committed,true);assert.equal(typeof expire,'function');expire();await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false,'network acknowledgement must retain the await for durable browser storage');}
  finally{release();}
  const outcome=await saving;assert.ifError(outcome.error);assert.equal(outcome.result.saved,true);
  assert.equal(bridge.stateVersion,4);assert.equal(bridge.conflict,false);
@@ -527,4 +527,16 @@ test('recovery callers recheck workspace ownership after a completed backup befo
   if(operation==='enter')await root.__enterConflict({version:12,payload:base});
   assert.equal(root.LeadIntelServerBridge.workspace.id,'w2',operation);assert.equal(root.LeadIntelServerBridge.stateVersion,77,operation);assert.equal(root.LeadIntelServerBridge.conflict,false,operation);assert.equal(root.LeadIntelServerBridge.conflictState,null,operation);assert.equal(root.LeadIntelServerBridge.conflictDetails,null,operation);assert.equal(values.get(MAIN),initial,operation);assert.equal(events.includes('reload'),false,operation);
  }
+});
+
+test('workspace state response-body stalls retain the network deadline before acknowledgement',async()=>{
+ let expire,releaseBody;const pendingBody=new Promise(resolve=>{releaseBody=resolve;});
+ const {root}=load(async()=>({ok:true,status:200,clone:()=>({json:()=>pendingBody}),json:()=>pendingBody}),{withBridge:true});
+ root.AbortController=AbortController;root.DOMException=DOMException;
+ const bridge=root.LeadIntelServerBridge;bridge.conflict=false;bridge.conflictState=null;
+ const schedule=root.setTimeout;root.setTimeout=(fn,ms)=>{if(ms===15000)expire=fn;return schedule(fn,ms);};
+ let outcome;const saving=bridge.saveNow({saveIntent:true,explicitSave:true}).then(result=>{outcome={result};},error=>{outcome={error};});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(typeof expire,'function');expire();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(outcome?.error?.code,'request_timeout');assert.equal(bridge.stateVersion,3);
+ releaseBody({saved:true,version:4});await saving;await new Promise(resolve=>setImmediate(resolve));assert.equal(bridge.stateVersion,3,'late acknowledgement cannot become an accepted success');assert.notEqual(root.LeadIntelWorkspacePersistence.syncedBase('w1')?.version,4,'a canceled late read cannot publish a synced browser snapshot');
 });
