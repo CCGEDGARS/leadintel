@@ -50,7 +50,7 @@ for(const [width,columns] of [[1440,1],[768,3],[600,3],[390,2]])test(`mounted co
  assert.equal(css(document.querySelector('.mw-style')).textAlign,width>900?'left':'center');
  const settings=css(document.getElementById('mw-settings')),languages=css(document.getElementById('mw-language-tools'));
  assert.equal(settings.minHeight,languages.minHeight);assert.equal(settings.padding,languages.padding);assert.equal(settings.margin,languages.margin);
- assert.equal(css(document.getElementById('mw-sender-card')).gridTemplateColumns,'repeat(2,minmax(0,1fr))');
+ assert.equal(css(document.getElementById('mw-sender-card')).gridTemplateColumns,width<=720?'minmax(0,1fr)':'repeat(2,minmax(0,1fr))');
  assert.equal(css(document.getElementById('outreach-email-body')).maxHeight,'none');assert.equal(css(document.getElementById('outreach-email-body')).overflowY,'hidden');
  assert.equal(css(document.querySelector('.mw-tools-content')).display,'none');
  assert.equal(document.getElementById('mw-settings').open,false);assert.equal(document.getElementById('mw-language-tools').open,false);

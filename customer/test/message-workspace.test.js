@@ -189,7 +189,7 @@ test('email action centre shows one named Save as Template and gates direct send
  w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:false});
  assert.equal(document.getElementById('mw-send-flow-actions').hidden,true);
  w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:true});
- assert.equal(document.getElementById('mw-send-flow-actions').hidden,false);
+ assert.equal(document.getElementById('mw-send-flow-actions').hidden,true);
  assert.equal(document.getElementById('mw-flow-planner').hidden,true);
  w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:true,savedDraft:true,senderIdentityReady:true,sentAlready:true});
  assert.equal(document.getElementById('mw-send-now').disabled,true);

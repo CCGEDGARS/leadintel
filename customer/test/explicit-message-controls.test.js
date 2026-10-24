@@ -7,10 +7,10 @@ const click=(h,style)=>{if(style==='original'){h.q('message-mode').value=style;h
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
 test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
  const h=mounted({selected:'professional'});try{
- assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save','Retry','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save','Copy email']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
  assert.equal(h.q('mw-update-help').textContent,'Choose a style to apply it automatically.');
  assert.ok(h.q('mw-update-help').closest('.mw-editor-head'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
- assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save','Retry']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
  }finally{h.w.close();}
 });
 test('opening a new message leaves subject and body empty; only a deliberate style click fills them',()=>{

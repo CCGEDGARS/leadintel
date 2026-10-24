@@ -14,7 +14,7 @@ test('a saved draft blocked by a pending update has a visible explanation and wo
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true});
  assert.equal(q('mw-flow-readiness')?.hidden,false);assert.match(q('mw-flow-readiness')?.textContent||'',/Update.*Save/i);assert.equal(q('mw-flow-resolve')?.hidden,false);q('mw-flow-resolve').click();assert.equal(updates,1);assert.equal(q('mw-add-flow').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('mw-flow-resolve').hidden,true);
- w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,inFlow:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('mw-add-flow').textContent,'Open Delivery →');w.close();
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,inFlow:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('mw-add-flow').textContent,'Continue to Delivery →');w.close();
 });
 test('single composer has subject immediately before body, one full message and no proposed second script',()=>{
  const {document,w}=mounted();const q=id=>document.getElementById(id);
@@ -79,7 +79,7 @@ test('default requires a saved library template and action labels explain their 
  w.LeadIntelMessageWorkspace.render(document,{...ready,selectedLibraryId:'template-1',savedDraft:false});assert.equal(q('mw-mark-default').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-mark-default').disabled,true);assert.match(q('mw-mark-default').title,/templates first/);
  w.LeadIntelMessageWorkspace.render(document,{...ready,selectedLibraryId:'template-1',savedDraft:true});assert.equal(q('mw-mark-default').disabled,false);
- assert.equal(q('message-save-as-template').textContent,'Add to templates');assert.equal(q('mw-mark-default').textContent,'Set as default');assert.equal(q('mw-add-flow').textContent,'Add to flow');
+ assert.equal(q('message-save-as-template').textContent,'Add to templates');assert.equal(q('mw-mark-default').textContent,'Set as default');assert.equal(q('mw-add-flow').textContent,'Continue to Delivery →');
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,readinessError:'Replace [link] before adding to flow.',editorState:{error:'Save failed. Try again.'}});
  assert.equal(q('mw-editor-status').textContent,'Save failed. Try again.');assert.equal(q('mw-add-flow').disabled,true);
 });
@@ -119,8 +119,8 @@ test('inline Update retains its listener and changes only the working draft when
  const {document,w}=mounted(),q=id=>document.getElementById(id);let calls=0;
  w.currentItem=()=>({channel:'email',messageStudioDraft:{}});w.readStudio=()=>({mode:'professional'});w.updateMessageFromTemplate=()=>{calls++;q('outreach-email-body').value='Explicitly updated draft';};w.seedMandatoryEmail=(style,options)=>{assert.equal(style,'professional');assert.equal(options.replace,true);calls++;q('outreach-email-body').value='Explicitly updated draft';};const handler=q('message-generate').onclick;q('outreach-email-body').value='Saved exact text';
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});
- assert.deepEqual([...document.querySelector('.mw-editor-actions').children].filter(e=>!e.hidden).map(e=>e.id),['mw-edit-message','mw-save-message','mw-retry-message']);
- assert.ok(q('mw-tools-drawer').contains(q('message-save-as-template')));assert.ok(q('mw-tools-drawer').contains(q('mw-mark-default')));assert.equal(q('mw-tools-drawer').contains(q('message-generate')),true);assert.equal(document.querySelector('.mw-generate-bar'),null);assert.equal(document.querySelectorAll('#message-generate').length,1);assert.equal(q('message-generate').hidden,false);assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-header-actions').contains(q('mw-add-flow')),true);assert.equal(q('mw-editor-title').contains(q('mw-draft-badge')),true);
+ assert.deepEqual([...document.querySelector('.mw-editor-actions').children].filter(e=>!e.hidden).map(e=>e.id),['mw-edit-message','mw-save-message']);
+ assert.ok(q('mw-tools-drawer').contains(q('message-save-as-template')));assert.ok(q('mw-tools-drawer').contains(q('mw-mark-default')));assert.equal(q('mw-tools-drawer').contains(q('message-generate')),true);assert.equal(document.querySelector('.mw-generate-bar'),null);assert.equal(document.querySelectorAll('#message-generate').length,1);assert.equal(q('message-generate').hidden,false);assert.equal(q('message-generate').disabled,false);assert.equal(document.querySelector('.mw-message-footer').contains(q('mw-add-flow')),true);assert.equal(q('mw-editor-title').contains(q('mw-draft-badge')),true);
  q('message-generate').click();assert.equal(calls,1);assert.equal(q('outreach-email-body').value,'Explicitly updated draft');
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,automaticUpdate:{draft:{}}});
  assert.equal(q('message-generate').textContent,'Restore selected template');assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-readiness-detail').hidden,true);
@@ -149,5 +149,5 @@ test('AI subject choices remain visible through repeated renders and the Flow ac
  const {document,w}=mounted(),q=id=>document.getElementById(id);q('message-subject-choice-label').hidden=true;q('message-ai-subject-label').hidden=false;
  q('message-ai-subject-choice').innerHTML='<option value="">Choose</option>'+Array.from({length:5},(_,i)=>'<option value="'+i+'">AI subject '+i+'</option>').join('');q('message-ai-subject-choice').value='0';
  for(let i=0;i<3;i++){w.LeadIntelMessageWorkspace.render(document,{...ready,selectedStyle:'original',templateSelected:false});assert.equal(q('mw-subject-choices').children.length,5);assert.match(q('mw-subject-choices').textContent,/AI subject 0/);}
- w.LeadIntelMessageWorkspace.render(document,{...ready,approved:true,savedDraft:true,readinessError:'Replace [link]'});assert.equal(q('mw-header-actions').contains(q('mw-add-flow')),true);assert.equal(q('mw-add-flow').disabled,true);assert.equal(q('message-generate').disabled,false);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,approved:true,savedDraft:true,readinessError:'Replace [link]'});assert.equal(document.querySelector('.mw-message-footer').contains(q('mw-add-flow')),true);assert.equal(q('mw-add-flow').disabled,true);assert.equal(q('message-generate').disabled,false);
 });
