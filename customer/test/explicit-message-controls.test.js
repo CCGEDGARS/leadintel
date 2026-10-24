@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const E=require('../message-editor.js'),S=require('../message-studio.js'),A=require('../approved-reference-scripts.js'),O=require('../outreach-engine.js');
 const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(r=>setImmediate(r));
-const click=(h,style)=>h.w.document.querySelector(`[data-writing-style="${style}"]`).click();
+const click=(h,style)=>{if(style==='original'){h.q('message-mode').value=style;h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));}else h.w.document.querySelector(`[data-writing-style="${style}"]`).click();};
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
 test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
  const h=mounted({selected:'professional'});try{
