@@ -49,6 +49,10 @@
       const record=d.confirmSend(d.normalizeDeliveryState(read(DELIVERY)),pkg,email,new Date().toISOString());
       if(record.error)return {ok:false,error:'Provider sent the email, but CRM delivery recording needs attention: '+record.error};
       write(DELIVERY,record.state);updatePipeline(domain,'Contacted');
+      // Keep Messages contact history consistent with the Delivery-page send path.
+      const outreachState=Outreach.normalizeOutreachState(read(OUTREACH));
+      const contacted=outreachState.items.find(item=>item.domain===domain);
+      if(contacted){contacted.contactedAt=contacted.contactedAt||record.record.sentAt;write(OUTREACH,outreachState);}
       const syncResult=await b.saveNow?.();
       root.dispatchEvent(new root.CustomEvent('leadintel:outreach-sent',{detail:{domain,recipient:email,provider}}));
       return {ok:true,duplicate:Boolean(result.duplicate),provider,recipient:email,crmSynced:!result.sync_warning&&Boolean(syncResult?.saved),syncWarning:Boolean(result.sync_warning)};
