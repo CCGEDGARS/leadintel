@@ -872,7 +872,7 @@
         "Content Library",
         "Add to templates",
         "Set as default",
-        "Add to flow",
+        "Continue to Delivery \u2192",
         "mw-browse-templates",
         "Restore selected template",
         "mw-subject-choices",
@@ -4325,8 +4325,9 @@
       "contains": [
         "mw-flow-readiness",
         "mw-flow-resolve",
-        "Open Delivery \u2192",
-        "Nothing is sent or activated by this button."
+        "mw-message-footer",
+        "Continue to Delivery \u2192",
+        "This button does not send anything."
       ]
     },
     {

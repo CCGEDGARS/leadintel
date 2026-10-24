@@ -578,3 +578,68 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 .message-workspace .mw-flow-readiness p{margin:0;color:var(--muted,#52665b);font-size:13px;line-height:1.5}
 .message-workspace .mw-flow-readiness button{flex-shrink:0}
 @media(max-width:620px){.message-workspace .mw-flow-readiness{align-items:flex-start;flex-direction:column}}
+
+/* Message usability: one next step, clear language states, consistent rhythm. */
+#message-studio .mw-layout{gap:24px}
+#message-studio .mw-rail{gap:16px}
+#message-studio .mw-rail>.mw-section{padding:18px}
+#message-studio .mw-sender-card{gap:16px;margin-bottom:24px}
+#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{padding:16px;min-height:52px}
+#message-studio .mw-sender-card>.mw-language-tools>summary #message-language-current{margin-top:6px;font-size:12px;line-height:1.5;color:#53695d}
+#message-studio .mw-language-tools .mw-translation-panel{display:grid;gap:16px;margin:20px 0 0;padding:0}
+#message-studio #message-language-default-summary{display:none}
+#message-studio #message-language-tabs{display:grid;gap:12px;align-items:stretch}
+#message-studio .mw-language-row{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #dce5df;border-radius:10px;min-width:0;background:#fff}
+#message-studio .mw-language-row[data-target=true]{border-color:#438b70;background:#f3f9f5}
+#message-studio .mw-language-row>button:first-child{flex:1 1 180px;min-width:0;white-space:normal}
+#message-studio .mw-language-row button,#message-studio .mw-translation-actions button,#message-studio .mw-language-quick button{min-height:44px;line-height:20px;padding:10px 14px;margin:0;font-size:13px}
+#message-studio .mw-language-row>button[data-language-action]{flex:0 1 auto;white-space:normal}
+#message-studio .mw-translation-panel details,#message-studio .mw-translation-panel p{margin:0}
+#message-studio .mw-translation-panel details>summary{min-height:28px;cursor:pointer;line-height:1.6;font-size:13px}
+#message-studio .mw-translation-panel details[open]>summary{margin-bottom:12px}
+#message-studio .mw-translation-panel .mw-language-help{color:#53695d;font-size:13px;max-width:70ch}
+#message-studio .mw-translation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding-top:16px;border-top:1px solid #dce5df}
+#message-studio .mw-translation-actions>span{flex:1 1 180px;font-size:13px;font-weight:600}
+#message-studio #message-language-settings{padding-top:16px;border-top:1px solid #dce5df}
+#message-studio #message-language-settings p{margin-bottom:12px}
+#message-studio #message-language-settings-status:empty,#message-studio #message-translation-status:empty,#message-studio #message-language-removed:empty{display:none}
+#message-studio .mw-language-quick{padding:0}
+#message-studio .mw-editor .outreach-drafts{padding:24px}
+#message-studio .mw-editor-head{align-items:flex-start;gap:16px;margin-bottom:24px}
+#message-studio #mw-header-actions{gap:8px;justify-content:flex-start}
+#message-studio #mw-header-actions .mw-editor-actions{gap:8px}
+#message-studio #mw-header-actions button{min-height:44px!important;padding:10px 14px!important;font-size:13px!important}
+#message-studio #mw-header-actions button[hidden],#message-studio #mw-updating-notice[hidden],#message-studio .mw-message-footer[hidden],#message-studio #mw-flow-readiness[hidden],#message-studio #mw-send-flow-actions[hidden]{display:none!important}
+#message-studio .mw-editor .mw-subject-options{margin:24px 0}
+#message-studio .mw-editor .mw-subject-options .draft-label{margin-top:12px}
+#message-studio .mw-subject-picker{margin-top:12px}
+#message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:24px;line-height:1.65;max-width:84ch}
+#message-studio .mw-editor .draft-label{line-height:1.5}
+#message-studio .mw-editor .draft-label textarea{margin-top:10px}
+#message-studio .mw-message-footer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 24px;align-items:center;margin-top:24px;padding-top:24px;border-top:1px solid #dce5df}
+#message-studio .mw-footer-heading{grid-column:1}
+#message-studio .mw-footer-heading h4{margin:0 0 6px;font-size:16px;line-height:1.4}
+#message-studio .mw-footer-heading p{margin:0;color:#53695d;font-size:13px;line-height:1.5}
+#message-studio .mw-message-footer #mw-add-flow{grid-column:2;grid-row:1/3;width:auto;min-height:44px;margin:0;padding:12px 20px;border-radius:10px;font-size:14px;line-height:20px;background:#1c4b36;color:#fff;white-space:normal}
+#message-studio .mw-message-footer #mw-add-flow:disabled{background:#eef2ef;color:#687c6e;border-color:#dce5df;cursor:not-allowed;box-shadow:none}
+#message-studio .mw-message-footer .mw-flow-readiness{grid-column:1;margin:0;padding:0;border:0;background:transparent;align-items:flex-start}
+#message-studio .mw-message-footer .mw-flow-readiness p{font-size:12px}
+#message-studio .mw-follow-up-host{margin-top:24px}
+#message-studio .mw-editor>.secondary-btn{margin:24px 0 0;min-height:44px}
+#message-studio .mw-tools-drawer{margin-top:24px;padding:18px}
+#message-studio .mw-tools-drawer>summary{line-height:1.7}
+#message-studio button:focus-visible,#message-studio summary:focus-visible{outline:3px solid #79a590;outline-offset:3px}
+.message-workspace .delivery-entry[hidden]{display:none!important}
+@media(max-width:1100px){#message-studio .mw-editor-head{display:block}#message-studio #mw-header-actions{margin-top:16px}}
+@media(max-width:720px){
+ #message-studio .mw-layout{gap:20px}
+ #message-studio .mw-sender-card{grid-template-columns:minmax(0,1fr);gap:12px;margin-bottom:20px}
+ #message-studio .mw-editor .outreach-drafts{padding:18px}
+ #message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:16px;max-width:100%}
+ #message-studio .mw-message-footer{grid-template-columns:minmax(0,1fr);gap:16px;padding-top:20px}
+ #message-studio .mw-message-footer #mw-add-flow{grid-column:1;grid-row:auto;width:100%}
+ #message-studio .mw-language-row{align-items:stretch}
+ #message-studio .mw-language-row>button:first-child{flex-basis:100%}
+ #message-studio .mw-translation-actions>span{flex-basis:100%}
+ #message-studio .mw-translation-actions>button{flex:1 1 160px}
+}
