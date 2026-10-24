@@ -36,7 +36,7 @@ for(const provider of ['gmail','microsoft'])test(`${provider} confirmed send wit
   const result={ok:true,message:{status:'sent'},sync_warning:true},button=mailHarness(provider,result);
   await button.window.sendForTest(provider);assert.equal(button.confirmed(),1);assert.match(button.nodes.toast.textContent,/sent|accepted/i);assert.match(button.nodes.toast.textContent,/sync.*needs attention/i);assert.doesNotMatch(button.nodes.toast.textContent,/Pipeline Contacted/);
   const messages=mailHarness(provider,result),outcome=await messages.window.LeadIntelProductionMail.sendApprovedFromMessages({domain:'example.com',recipient:'buyer@example.com',approvedAt:'2026-09-05'});
-  assert.equal(outcome.ok,true);assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
+  assert.equal(outcome.ok,true,outcome.error||JSON.stringify(outcome));assert.equal(outcome.crmSynced,false);assert.equal(outcome.syncWarning,true);
 });
 for(const provider of ['gmail','microsoft'])test(`${provider} unresolved duplicate requests tell the user to reconcile and never record a sent email`,async()=>{
   const h=mailHarness(provider,{ok:true,duplicate:true,message:{status:'sending'}});await h.window.sendForTest(provider);assert.equal(h.confirmed(),0);assert.match(h.nodes.toast.textContent,/Sent folder/);
