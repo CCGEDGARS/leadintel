@@ -9,3 +9,5 @@ Language settings remain collapsed initially. Their summary names the displayed 
 Review reproduced and fixed an empty-message Copy visibility regression and an inherited unresolved-preview handoff guard gap. Mounted runtime tests exercise the new states, language selection, legacy Delivery load ordering and existing exact-recipient no-send handoff. Full test/build and release results are recorded at completion.
 
 Browser preview of the scratch server was unavailable because the connected browser cannot reach the workspace's localhost. Do not represent DOM/CSS fixture checks as authenticated customer/browser acceptance.
+
+Authenticated visual review: the released screen preserves the saved Stegra/Klas message, has one Delivery action and no console errors. At 390px the page has no horizontal overflow. Approved language versions remain locked by the existing approval contract; the panel now explains Edit → revise → Save before translation. The two closed settings cards use the same minimum height.
