@@ -14,8 +14,8 @@
  * import './server-bridge.js?v=20260925-apollo-buyer-search-v1&research-recovery=20261020-v1&workspace-save=20261020-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1&app-dialogs=20261017-v1';
- * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1';
- * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1';
+ * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1';
+ * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
  * import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
@@ -26,7 +26,7 @@
  * import './linkedin-signals.js?v=20260907-public-index-v1';
  * import './company-research-security.js?v=20260918-translation-fidelity-v3';
  * import './company-research-ui.js?v=20260926-guidance-status-v3&research-pipeline=20260930-v1';
- * import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
+ * import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1&in-place-handoff=20261024-v1';
  * import './reference-customers.js?v=20260927-opportunity-map-durable-v1&reference-discovery=5&reference-similarity=20260930-v1';
  * import './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1';
  * import './reference-customer-smart-import.js?v=20260923-reference-interface-v1';

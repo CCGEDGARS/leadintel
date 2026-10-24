@@ -15,7 +15,10 @@ async function buildProfileFromResearch(targetStep=3){
   try{
     const usable=state.scrapedSources.filter(source=>String(source?.text||'').trim());
     state.profile=window.LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});state.approved=false;state.market={};state.step=[3,4].includes(Number(targetStep))?Number(targetStep):3;writeState(state);
-    await window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);toast('Profile built from researched evidence');setTimeout(()=>location.reload(),120);return true;
+    await window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);toast('Profile built from researched evidence');
+    // Hand over in place: the app re-reads the saved state and opens the saved step (never force a page reload as an async research handoff).
+    if(button){button.disabled=false;button.textContent='Build / refresh intelligence profile ✦';}
+    window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website:state.website,profileBuilt:true,step:state.step}}));return true;
   }catch(error){toast(error.message||'Unable to build the intelligence profile');if(button){button.disabled=false;button.textContent='Build / refresh intelligence profile ✦';}return false;}
   finally{building=false;}
 }
