@@ -535,7 +535,7 @@ function loadDeliveryModules(){
   const ready=()=>{clearTimeout(timer);if(window.LeadIntelDeliveryUI?.ready)resolve();else fail();};
   const loadUi=()=>{
    let ui=document.querySelector('script[data-delivery-ui]');
-   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v1`;ui.dataset.deliveryUi='true';}
+   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2`;ui.dataset.deliveryUi='true';}
    ui.addEventListener('load',ready,{once:true});ui.addEventListener('error',()=>{ui.remove();fail();},{once:true});if(!ui.isConnected)document.body.appendChild(ui);
   };
   if(window.LeadIntelDelivery){loadUi();return;}
