@@ -7,6 +7,11 @@
       "source": "/customer",
       "destination": "/customer/",
       "permanent": true
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/",
+      "permanent": true
     }
   ],
   "rewrites": [

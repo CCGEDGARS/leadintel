@@ -9,6 +9,7 @@ on:
     paths:
       - 'demo/**'
       - 'customer/**'
+      - 'admin/**'
       - 'backend/**'
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
@@ -35,6 +36,7 @@ on:
     paths:
       - 'demo/**'
       - 'customer/**'
+      - 'admin/**'
       - 'backend/**'
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'

@@ -4677,6 +4677,51 @@
         "options.reviewedDraft===true",
         "url.username||url.password"
       ]
+    },
+    {
+      "id": "admin-page",
+      "type": "text",
+      "url": "/admin/",
+      "status": 200,
+      "contains": [
+        "Platform administration",
+        "admin.js?v=20261026-v1",
+        "href=\"/customer/\"",
+        "id=\"revoke-dialog\""
+      ]
+    },
+    {
+      "id": "admin-page-script",
+      "type": "text",
+      "url": "/admin/admin.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelAdmin",
+        "'/api/access/users'",
+        "'/api/access/invitations'",
+        "platform_admin===true",
+        "navigate:url=>root.location.replace(url)"
+      ]
+    },
+    {
+      "id": "topbar-admin-entry",
+      "type": "text",
+      "url": "/customer/topbar.js",
+      "status": 200,
+      "contains": [
+        "[data-topbar-action=\"admin\"]",
+        "platform_admin===true",
+        "link.href='/admin/'"
+      ]
+    },
+    {
+      "id": "workspace-topbar-admin-token",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "admin-entry=20261026-v1"
+      ]
     }
   ],
   "retry": {

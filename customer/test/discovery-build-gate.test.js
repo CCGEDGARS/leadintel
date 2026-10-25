@@ -14,6 +14,7 @@ function runProductionBuild({ customerHtml, discoveryUi }) {
     fs.mkdirSync(path.join(fixture, 'customer'), { recursive: true });
     fs.mkdirSync(path.join(fixture, 'v2'), { recursive: true });
     fs.mkdirSync(path.join(fixture, 'demo'), { recursive: true });
+    fs.mkdirSync(path.join(fixture, 'admin'), { recursive: true });
     fs.copyFileSync(
       path.join(root, 'scripts/build-vercel-static.sh'),
       path.join(fixture, 'scripts/build-vercel-static.sh')
@@ -26,6 +27,7 @@ function runProductionBuild({ customerHtml, discoveryUi }) {
     fs.writeFileSync(path.join(fixture, 'LeadIntel.html'), '<main>Legacy</main>');
     fs.writeFileSync(path.join(fixture, 'v2/index.html'), '<main>V2</main>');
     fs.writeFileSync(path.join(fixture, 'demo/index.html'), '<main>Demo</main>');
+    fs.writeFileSync(path.join(fixture, 'admin/index.html'), '<main>Admin</main>');
     fs.writeFileSync(path.join(fixture, 'customer/index.html'), customerHtml);
     fs.writeFileSync(path.join(fixture, 'customer/discovery-ui.js'), discoveryUi);
     fs.writeFileSync(path.join(fixture, 'customer/app.js'), 'function init(){}');

@@ -14,10 +14,10 @@ const PAGE=`<div class="page-shell"><header class="topbar"><a class="brand"></a>
 </div></header>
 <aside class="utility-panel"><button id="workspace-attention"><strong>Workspace status</strong><em data-attention-summary>1 item need attention</em><b data-attention-count>1</b></button><button id="open-settings">Open settings</button></aside></div>`;
 
-async function mount({authenticated=true}={}){
+async function mount({authenticated=true,platformAdmin=false}={}){
   const {JSDOM}=await import('jsdom');
   const dom=new JSDOM(PAGE,{url:'https://example.test/customer/'});
-  const win=dom.window;win.LeadIntelServerBridge={session:{authenticated}};
+  const win=dom.window;win.LeadIntelServerBridge={session:{authenticated,user:{platform_admin:platformAdmin}}};
   const clicks=[];for(const id of ['open-settings','server-signout','reset-workspace','workspace-attention','save-workspace'])win.document.getElementById(id).addEventListener('click',()=>clicks.push(id));
   new Function('window',source)(win);
   return {win,doc:win.document,clicks};
@@ -148,4 +148,20 @@ test('on phones the shell owns a two-row top bar, keeps the launcher clear of th
   const copilot=read('copilot.css');
   assert.match(copilot,/\.leadintel-copilot-entry\{[^}]*z-index:1090/,'the launcher sits under the Settings backdrop (1100) and every drawer');
   assert.match(copilot,/@media\(max-width:720px\)\{\.leadintel-copilot-entry\{right:14px;bottom:calc\(14px \+ env\(safe-area-inset-bottom,0px\)\)/);
+});
+
+test('the Admin entry exists only for a platform administrator: a link to /admin/ above Settings, absent from the DOM for everyone else (2026-10-25)',async()=>{
+  const member=await mount();
+  assert.equal(member.doc.querySelector('#topbar-account-panel [data-topbar-action="admin"]'),null,'a member has no Admin entry at all');
+  const admin=await mount({platformAdmin:true});
+  const entry=admin.doc.querySelector('#topbar-account-panel [data-topbar-action="admin"]');
+  assert.ok(entry,'an administrator gets the Admin entry');
+  assert.equal(entry.tagName,'A');assert.equal(entry.getAttribute('href'),'/admin/');assert.equal(entry.getAttribute('role'),'menuitem');assert.equal(entry.textContent,'Admin');
+  assert.equal(entry.nextElementSibling.dataset.topbarAction,'settings','Admin sits directly above Settings');
+  admin.win.LeadIntelServerBridge.session.user.platform_admin=false;admin.win.LeadIntelTopbar.update();
+  assert.equal(admin.doc.querySelector('[data-topbar-action="admin"]'),null,'the entry leaves when the session stops being an administrator');
+  admin.win.LeadIntelServerBridge.session.user.platform_admin=true;admin.win.LeadIntelTopbar.update();admin.win.LeadIntelTopbar.update();
+  assert.equal(admin.doc.querySelectorAll('[data-topbar-action="admin"]').length,1,'repeated updates never duplicate it');
+  assert.match(css,/\.account-menu-panel>a\{all:unset;display:block;width:100%/,'the shell stylesheet styles the link like the other menu items');
+  assert.match(html,/topbar\.js\?v=[^"]*admin-entry=\d{8}-v\d+/);assert.match(html,/app-shell\.css\?v=[^"]*admin-entry=\d{8}-v\d+/);
 });

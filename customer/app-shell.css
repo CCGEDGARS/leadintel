@@ -72,6 +72,8 @@
 .account-menu-head strong{display:block;font-size:14px}.account-menu-head small{display:block;color:var(--muted,#6c7772);font-size:12px;margin-top:2px}
 .account-menu-panel>button{all:unset;display:block;width:100%;box-sizing:border-box;padding:9px 10px;border-radius:9px;font:inherit;font-size:14px;color:var(--ink,#13201c);cursor:pointer}
 .account-menu-panel>button:hover,.account-menu-panel>button:focus-visible{background:var(--soft,#eef2ed)}
+.account-menu-panel>a{all:unset;display:block;width:100%;box-sizing:border-box;padding:9px 10px;border-radius:9px;font:inherit;font-size:14px;color:var(--ink,#13201c);cursor:pointer}
+.account-menu-panel>a:hover,.account-menu-panel>a:focus-visible{background:var(--soft,#eef2ed)}
 .account-menu-panel>button.danger{color:#a5473e;border-top:1px solid var(--line,#dde2dd);border-radius:0 0 9px 9px;margin-top:4px;padding-top:12px}
 /* The settings drawer slides in from the right edge and its backdrop fades, like Ask LeadIntel (loaded with the page, so the first open animates too). */
 #ai-settings-drawer{transform:translateX(104%);transition:transform .28s cubic-bezier(.2,.8,.2,1)}

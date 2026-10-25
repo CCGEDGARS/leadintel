@@ -4,13 +4,14 @@ set -euo pipefail
 node scripts/verify-discovery-deploy.mjs
 
 rm -rf .vercel-static
-mkdir -p .vercel-static/v2 .vercel-static/customer .vercel-static/demo
+mkdir -p .vercel-static/v2 .vercel-static/customer .vercel-static/demo .vercel-static/admin
 
 cp index.html .vercel-static/index.html
 cp LeadIntel.html .vercel-static/LeadIntel.html
 cp -R v2/. .vercel-static/v2/
 cp -R customer/. .vercel-static/customer/
 cp -R demo/. .vercel-static/demo/
+cp -R admin/. .vercel-static/admin/
 if [[ -f customer/writing-reference-extractor.js ]]; then
   node scripts/bundle-writing-reference-pdf.mjs
 fi

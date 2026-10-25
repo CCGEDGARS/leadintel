@@ -19,6 +19,17 @@
     if(/SYNCED|SAVED/.test(t))return {label:'Saved',tone:'ok'};
     return {label:'Local only',tone:'busy'};
   }
+  // The Admin entry exists only for a platform administrator (CTO decision 2026-10-25): /api/session says so
+  // (platform_admin) and every admin route re-checks the list server-side. Everyone else has no such element at all.
+  function isPlatformAdmin(){return root.LeadIntelServerBridge?.session?.user?.platform_admin===true;}
+  function syncAdminEntry(account){
+    const panel=account.querySelector('.account-menu-panel');if(!panel)return;
+    const existing=panel.querySelector('[data-topbar-action="admin"]');
+    if(!isPlatformAdmin()){existing?.remove();return;}
+    if(existing)return;
+    const link=doc.createElement('a');link.setAttribute('role','menuitem');link.setAttribute('data-topbar-action','admin');link.href='/admin/';link.textContent='Admin';
+    panel.querySelector('[data-topbar-action="settings"]')?.before(link);
+  }
   function signedIn(){if(root.LeadIntelServerBridge?.session)return Boolean(root.LeadIntelServerBridge.session.authenticated);return Boolean(text(doc.getElementById('server-account-label')));}
   function update(){
     const status=doc.getElementById('topbar-status');
@@ -31,7 +42,7 @@
     const attention=doc.getElementById('workspace-attention');const ws=doc.getElementById('topbar-workspace-status');
     if(ws){const count=Number(text(attention?.querySelector('[data-attention-count]')))||0;const badge=ws.querySelector('[data-topbar-badge]');badge.textContent=String(count);badge.hidden=count===0;ws.hidden=!attention;ws.title=text(attention?.querySelector('[data-attention-summary]'))||'Workspace status';}
     const account=doc.getElementById('topbar-account');
-    if(account){const name=text(doc.getElementById('server-account-label'))||'Account';const provider=text(doc.getElementById('server-auth-provider'));account.querySelector('[data-topbar-name]').textContent=name;account.querySelector('[data-topbar-initial]').textContent=name.slice(0,1).toUpperCase();account.querySelector('[data-topbar-provider]').textContent=provider;account.hidden=!signedIn();}
+    if(account){const name=text(doc.getElementById('server-account-label'))||'Account';const provider=text(doc.getElementById('server-auth-provider'));account.querySelector('[data-topbar-name]').textContent=name;account.querySelector('[data-topbar-initial]').textContent=name.slice(0,1).toUpperCase();account.querySelector('[data-topbar-provider]').textContent=provider;account.hidden=!signedIn();syncAdminEntry(account);}
   }
   function build(){
     const actions=doc.querySelector('.top-actions');if(!actions)return null;
