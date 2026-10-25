@@ -46,6 +46,12 @@
         event.preventDefault();select(drawer,buttons[next].dataset.settingsTab,true);buttons[next].focus();
       });
     }
+    // Renderers replace whole sections after status refreshes (the storage card after /storage/status). A replaced
+    // section arrives untagged, so watch the drawer's children and re-apply the current tab in the next frame.
+    if(!drawer.dataset.settingsTabsObserved&&typeof root.MutationObserver==='function'){
+      drawer.dataset.settingsTabsObserved='1';let queued=false;
+      new root.MutationObserver(records=>{if(queued||!records.some(record=>record.addedNodes.length))return;queued=true;const run=()=>{queued=false;build(drawer);};if(typeof root.requestAnimationFrame==='function')root.requestAnimationFrame(run);else root.setTimeout(run,0);}).observe(drawer,{childList:true});
+    }
     // A tab without a section (for example storage hidden for this workspace) is not offered.
     const present=new Set(sections.map(section=>section.dataset.settingsTab));
     for(const button of bar.querySelectorAll('[data-settings-tab]'))button.hidden=!present.has(button.dataset.settingsTab);

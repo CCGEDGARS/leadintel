@@ -67,6 +67,37 @@ test('choosing a tab shows only its sections, remembers the choice, and the next
   assert.equal(drawer.querySelector('[data-settings-tab="delivery"]').getAttribute('aria-selected'),'true');
 });
 
+test('a section replaced by its renderer (storage after a status refresh) is re-tagged and stays hidden on another tab',async()=>{
+  const {win,drawer,tabs}=await mount();
+  tabs.build(drawer);
+  drawer.querySelector('[data-settings-tab="profile"]').click();
+  const old=drawer.querySelector('#workspace-storage-card');
+  const fresh=win.document.createElement('section');fresh.id='workspace-storage-card';fresh.className='workspace-storage-card';fresh.innerHTML='<span class="eyebrow">Your workspace</span>';
+  old.replaceWith(fresh);
+  assert.ok(!fresh.classList.contains('settings-tab-hidden'),'untagged on arrival');
+  await new Promise(r=>setTimeout(r,30));
+  assert.equal(fresh.dataset.settingsTab,'storage');
+  assert.ok(fresh.classList.contains('settings-tab-hidden'),'hidden again because Profile is the open tab');
+  assert.equal(drawer.querySelectorAll('.settings-tabs').length,1);
+});
+
+test('the application shell locks the document and lets the panes scroll; window.scrollTo also moves the content pane',async()=>{
+  const shellCss=read('app-shell.css'),shellJs=read('app-shell.js');
+  assert.match(html,/<link rel="stylesheet" href="app-shell\.css\?v=[^"]+">/);
+  assert.match(html,/<script defer src="app-shell\.js\?v=[^"]+"><\/script>/);
+  assert.match(shellCss,/@media\(min-width:721px\)\{\s*html,body\{height:100%;overflow:hidden\}/);
+  assert.match(shellCss,/main\.content\{height:100%;min-height:0;overflow:auto/);
+  assert.match(shellCss,/\.progress-panel,\.utility-panel\{position:static[^}]*overflow:auto\}/);
+  const {JSDOM}=await import('jsdom');
+  const dom=new JSDOM('<main class="content" style="overflow:hidden"></main>',{url:'https://example.test/customer/'});
+  const win=dom.window;let moved=null;win.document.querySelector('main').scrollTo=o=>{moved=o;};win.document.body.style.overflow='hidden';
+  new Function('window',shellJs)(win);
+  win.scrollTo({top:0,behavior:'smooth'});
+  assert.deepEqual(moved,{top:0,behavior:'smooth'});
+  moved=null;win.document.body.style.overflow='';win.scrollTo({top:0});
+  assert.equal(moved,null,'ordinary page scrolling leaves the pane alone');
+});
+
 test('arrow keys move between tabs and a tab without sections is not offered',async()=>{
   const {win,drawer,tabs}=await mount();
   drawer.querySelector('#workspace-storage-card').remove();
