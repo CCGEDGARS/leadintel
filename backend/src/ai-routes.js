@@ -5,7 +5,7 @@ import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} f
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
-import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,listProviderModels,searchWeb} from './ai-provider.js';
+import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
 import {reviewContactEvidence} from './contact-evidence-review.js';
 import {groundedContactSearch} from './grounded-contact-search.js';
@@ -150,22 +150,6 @@ export async function handleAiRoute(request,env,cors={}){
       await Promise.all(result.providers.map(async row=>{if(row.configured)row.credit_issue=await providerCreditIssue(env,workspaceId,row.provider);}));
       return json(result,200,cors);
     }catch{return error('AI integration storage is not ready',503,cors);}
-  }
-
-  // Model catalogue for the Settings dropdown: the provider lists what this key can use. Uses the key in the
-  // request body (before the first save) or the saved, encrypted key. Owners only, like every credential route.
-  if(path==='/api/integrations/ai/models'&&request.method==='POST'){
-    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
-    const body=await request.json().catch(()=>null);const provider=normalizeAiProvider(body?.provider);if(!provider)return error('Unsupported AI provider',400,cors);
-    let apiKey=String(body?.api_key||'').trim();
-    if(!apiKey){
-      if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
-      const saved=await env.DB.prepare(`SELECT encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND provider=? LIMIT 1`).bind(workspaceId,provider).first();
-      if(!saved)return error('Save and test the API key first',404,cors);
-      try{apiKey=await decryptSecret(saved.encrypted_api_key,await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));}catch{return error('Saved API key could not be read',500,cors);}
-    }
-    try{const listed=await listProviderModels({provider,apiKey});return json({provider,recommended:defaultAiModel(provider),models:listed.models},200,cors);}
-    catch(cause){return error(String(cause?.message||'Model list unavailable').slice(0,180),422,cors);}
   }
 
   if(path==='/api/integrations/ai/provider'&&request.method==='PUT'){

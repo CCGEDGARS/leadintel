@@ -55,12 +55,14 @@ test('Active tools summary is status-only and keeps account sign-out on the sele
   assert.match(css,/\.active-tool-chip/);
 });
 
-test('model selection offers only Recommended and Advanced modes',()=>{
-  assert.match(js,/data-ai-model-mode/);
-  assert.match(js,/>Recommended · \$\{esc\(config\.model\)\}</);
-  assert.match(js,/>Advanced · custom model ID</);
-  assert.match(js,/data-ai-custom-model/);
-  assert.match(js,/mode==='advanced'&&!model/);
+test('model selection is a curated list per provider: strongest, balanced (recommended) and low cost, no free-text model IDs',()=>{
+  // CTO decision 2026-10-25: LeadIntel decides which models a workspace may use; prices shown per 1M tokens.
+  assert.match(js,/data-ai-model-choice/);
+  assert.doesNotMatch(js,/data-ai-model-mode|data-ai-custom-model|Advanced · custom model ID/);
+  for(const id of ['gpt-6-astra','gpt-6.1-sol','gpt-6-luna','claude-fable-5-1','claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5','gemini-3.1-pro-preview','gemini-3.8-flash','gemini-2.5-flash-lite'])assert.match(js,new RegExp(`id:'${id.replace(/\./g,'\\.')}'`));
+  assert.match(js,/function modelOptionLabel\(entry\)\{return `\$\{entry\.label\} · \$\{entry\.role\} · \$\$\{entry\.input\} \/ \$\$\{entry\.output\} per 1M tokens`;\}/);
+  assert.match(js,/· saved earlier</,'a model saved before the list stays selectable');
+  assert.match(js,/role:'balanced · recommended',input:'2\.00',output:'10\.00'\}/);
   assert.match(js,/method:updatingModel\?'PATCH':'PUT'/);
   assert.match(js,/configured\?'Save & test model':'Test & save'/);
   assert.doesNotMatch(js,/Fast & economical|Highest quality/);

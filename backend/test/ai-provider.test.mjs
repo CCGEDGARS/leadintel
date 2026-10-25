@@ -249,18 +249,3 @@ test('text-generation timeouts retain their cause instead of reporting an upstre
 test('writing analysis can request low reasoning without changing normal generation',async()=>{
  let body;await generateText({provider:'openai',apiKey:'fixture',model:'gpt-6.1-sol',prompt:'Analyse source',reasoningEffort:'low',fetchImpl:async(url,options)=>{body=JSON.parse(options.body);return Response.json({output_text:'ok'});}});assert.deepEqual(body.reasoning,{effort:'low'});
 });
-
-test('listProviderModels asks each provider for its catalogue and keeps only chat-capable models',async()=>{
-  const {listProviderModels}=await import('../src/ai-provider.js');
-  const calls=[];
-  const fetchImpl=async(url,options)=>{calls.push({url,headers:options.headers});
-    if(url.startsWith('https://api.openai.com/v1/models'))return {ok:true,json:async()=>({data:[{id:'gpt-6.1-sol'},{id:'gpt-6-mini'},{id:'text-embedding-4'},{id:'gpt-6-realtime'},{id:'o5'},{id:'dall-e-4'}]})};
-    if(url.startsWith('https://api.anthropic.com/v1/models'))return {ok:true,json:async()=>({data:[{id:'claude-sonnet-5-5'},{id:'claude-opus-5-5'},{id:'claude-haiku-5-5'}]})};
-    return {ok:true,json:async()=>({models:[{name:'models/gemini-3.8-flash',supportedGenerationMethods:['generateContent']},{name:'models/gemini-3.8-pro',supportedGenerationMethods:['generateContent']},{name:'models/embedding-002',supportedGenerationMethods:['embedContent']},{name:'models/imagen-5',supportedGenerationMethods:['predict']}]})};};
-  assert.deepEqual((await listProviderModels({provider:'openai',apiKey:'sk-test',fetchImpl})).models,['o5','gpt-6.1-sol','gpt-6-mini']);
-  assert.deepEqual((await listProviderModels({provider:'anthropic',apiKey:'sk-ant-test',fetchImpl})).models,['claude-sonnet-5-5','claude-opus-5-5','claude-haiku-5-5']);
-  assert.deepEqual((await listProviderModels({provider:'gemini',apiKey:'AIza-test',fetchImpl})).models,['gemini-3.8-pro','gemini-3.8-flash']);
-  assert.equal(calls[0].headers.Authorization,'Bearer sk-test');assert.equal(calls[1].headers['x-api-key'],'sk-ant-test');assert.equal(calls[2].headers['x-goog-api-key'],'AIza-test');
-  await assert.rejects(listProviderModels({provider:'openai',apiKey:'',fetchImpl}),/API key is required/);
-  await assert.rejects(listProviderModels({provider:'openai',apiKey:'sk-bad',fetchImpl:async()=>({ok:false,status:401,json:async()=>({})})}),/could not list models \(401\)/);
-});

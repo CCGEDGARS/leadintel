@@ -263,23 +263,3 @@ export async function verifyProviderCredential({provider,apiKey,model,fetchImpl=
   else result=await verifyGeminiCredential(options,fetchImpl);
   return {ok:Boolean(result.text),provider:result.provider,model:result.model};
 }
-
-// Lists the chat-capable models a credential can actually use, so Settings offers the provider's real catalogue
-// instead of a hard-coded guess (CTO, 2026-10-25). Vision/audio/embedding/moderation variants are left out.
-const MODEL_LIST_EXCLUDE=/embed|moderation|realtime|audio|tts|transcri|whisper|image|dall|vision-preview|search-preview|instruct|computer-use|aqa|imagen|veo|learnlm/i;
-export async function listProviderModels({provider,apiKey,fetchImpl=fetch}){
-  const normalized=normalizeAiProvider(provider);const key=String(apiKey||'').trim();
-  if(!normalized)throw new Error('Unsupported AI provider');if(!key)throw new Error('API key is required');
-  const request=normalized==='openai'?['https://api.openai.com/v1/models',{Authorization:`Bearer ${key}`}]
-    :normalized==='anthropic'?['https://api.anthropic.com/v1/models?limit=100',{'x-api-key':key,'anthropic-version':'2023-06-01'}]
-    :['https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{'x-goog-api-key':key}];
-  const response=await fetchImpl(request[0],{method:'GET',headers:{Accept:'application/json',...request[1]}});
-  if(!response.ok)throw new Error(`${normalized} could not list models (${response.status})`);
-  const payload=await response.json().catch(()=>({}));
-  let ids=[];
-  if(normalized==='openai')ids=(payload.data||[]).map(row=>String(row.id||'')).filter(id=>/^(gpt-|o\d)/.test(id));
-  else if(normalized==='anthropic')ids=(payload.data||[]).map(row=>String(row.id||''));
-  else ids=(payload.models||[]).filter(row=>(row.supportedGenerationMethods||[]).includes('generateContent')).map(row=>String(row.name||'').replace(/^models\//,''));
-  const models=[...new Set(ids.filter(id=>id&&!MODEL_LIST_EXCLUDE.test(id)))].sort((a,b)=>b.localeCompare(a,'en',{numeric:true})).slice(0,80);
-  return {provider:normalized,models};
-}
