@@ -11,19 +11,25 @@ const backendCi=fs.readFileSync(path.join(repoRoot,'.github','workflows','backen
 function smoke(id){return config.smokeChecks.find(item=>item.id===id);}
 function escaped(value){return String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 
-test('release integrity validates the production root chooser instead of the retired forced redirect',()=>{
+test('release integrity validates the invitation-only sign-in page at the production root',()=>{
   const entry=smoke('production-entry');
   assert.ok(entry,'production-entry smoke check must exist');
   assert.equal(entry.url,'/');
   assert.equal(entry.status,200);
-  assert.ok(entry.contains.includes('Commercial Intelligence'),'root proof must require the active workspace choice');
-  assert.ok(entry.contains.includes('Contact Intelligence'),'root proof must require the legacy workspace choice');
-  assert.ok(entry.contains.includes('href="customer/"'),'root proof must require the customer workspace link');
-  assert.ok(entry.contains.includes('href="LeadIntel.html"'),'root proof must require the legacy workspace link');
-  assert.ok(entry.notContains.includes("location.replace('/customer/')"),'root proof must reject the retired forced customer redirect');
+  assert.ok(entry.contains.includes('Sign in to LeadIntel'),'root proof must require the sign-in page');
+  assert.ok(entry.contains.includes('href="/api/auth/google/start"'),'root proof must require Google sign-in');
+  assert.ok(entry.contains.includes('href="/api/auth/microsoft/start"'),'root proof must require Microsoft sign-in');
+  assert.ok(entry.contains.includes('invite-required'),'root proof must require the invitation notice');
+  assert.ok(entry.contains.includes("response.ok)location.replace('/customer/')"),'root proof must require the session-guarded workspace redirect');
+  assert.ok(entry.notContains.includes('href="LeadIntel.html"'),'root proof must reject the retired legacy chooser');
   assert.ok(entry.notContains.includes("location.replace('/v2/')"),'root proof must continue rejecting the retired v2 redirect');
   for(const marker of entry.contains)assert.match(rootHtml,new RegExp(escaped(marker)));
   for(const marker of entry.notContains)assert.doesNotMatch(rootHtml,new RegExp(escaped(marker)));
+  const gate=smoke('invite-only-workspace-gate');
+  assert.ok(gate,'workspace gate smoke check must exist');
+  assert.equal(gate.url,'/customer/access-gate.js');
+  const gateSource=fs.readFileSync(path.join(repoRoot,'customer','access-gate.js'),'utf8');
+  for(const marker of gate.contains)assert.match(gateSource,new RegExp(escaped(marker)));
 });
 
 test('release policy changes trigger backend verification so automatic proof always has an exact-SHA deployment',()=>{

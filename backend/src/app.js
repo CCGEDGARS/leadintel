@@ -31,6 +31,7 @@ import {handleCalendlyWebhook,handleCalendlyIntegrationRoute} from './calendly-i
 import {handleContentMaterialsRoute} from './content-materials.js';
 import {handleWritingReferenceRoute} from './writing-reference-routes.js';
 import {runWritingReferenceJobs} from './writing-reference-runner.js';
+import {handleAccessRoute} from './access-invitations.js';
 
 export default {
   async fetch(request,env,ctx){
@@ -72,6 +73,7 @@ export default {
     try{
       const calendar=await handleGoogleCalendarRoute(request,env,cors);if(calendar)return calendar;
       const researchCosts=await handleResearchCostsRoute(request,env,cors);if(researchCosts)return researchCosts;
+      const access=await handleAccessRoute(request,env,cors);if(access)return access;
       const scripts=await handleScriptLibraryRoute(request,env,cors);if(scripts)return scripts;
       const writingWorkspace=await handleWritingWorkspaceRoute(request,env,cors);if(writingWorkspace)return writingWorkspace;
       const storage=await handleStorageRoute(request,env,cors);if(storage)return storage;

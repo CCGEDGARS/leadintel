@@ -41,6 +41,16 @@
     }
   },
   "smokeChecks": [
+        {
+      "id": "invite-only-workspace-gate",
+      "type": "text",
+      "url": "/customer/access-gate.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelAccessGate",
+        "Number(status)===401?'sign-in':'stay'"
+      ]
+    },
     {
       "id": "compact-typography-entry",
       "type": "text",
@@ -261,13 +271,14 @@
       "url": "/",
       "status": 200,
       "contains": [
-        "Commercial Intelligence",
-        "Contact Intelligence",
-        "href=\"customer/\"",
-        "href=\"LeadIntel.html\""
+        "Sign in to LeadIntel",
+        "href=\"/api/auth/google/start\"",
+        "href=\"/api/auth/microsoft/start\"",
+        "invite-required",
+        "response.ok)location.replace('/customer/')"
       ],
       "notContains": [
-        "location.replace('/customer/')",
+        "href=\"LeadIntel.html\"",
         "location.replace('/v2/')"
       ]
     },

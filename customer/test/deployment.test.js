@@ -78,9 +78,14 @@ test('repository declares Vercel as the only frontend deployment authority', () 
   assert.equal(watchedPaths.length, 2, 'push and pull-request CI must watch the deployment authority contract');
 });
 
-test('production root is the LeadIntel entry page while active workspace remains available at /customer/', () => {
-  assert.doesNotMatch(rootIndex, /location\.replace\(['"]\/customer\/['"]\)/);
+test('production root is the invitation-only sign-in page: no legacy chooser, workspace redirect only for a live session', () => {
+  // Invitation-only access (2026-10-25): the root signs people in; it never forces an anonymous visitor into /customer/.
+  assert.match(rootIndex, /href=["']\/api\/auth\/google\/start["']/);
+  assert.match(rootIndex, /href=["']\/api\/auth\/microsoft\/start["']/);
+  assert.doesNotMatch(rootIndex, /href=["']LeadIntel\.html["']/);
   assert.doesNotMatch(rootIndex, /location\.replace\(['"]\/v2\/['"]\)/);
-  assert.match(rootIndex, /href=["']customer\/["']/);
+  const redirects = rootIndex.match(/location\.replace\(['"]\/customer\/['"]\)/g) || [];
+  assert.equal(redirects.length, 1, 'exactly one workspace redirect, guarded by the session check');
+  assert.match(rootIndex, /response\.ok\)location\.replace\('\/customer\/'\)/);
   assert.match(legacyV2Index, /location\.replace\(['"]\/customer\/['"]\)/);
 });

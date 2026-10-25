@@ -67,8 +67,10 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
     if (parsed.pathname === '/customer/') {
       return response({ text: customerHtml });
     }
+    if (parsed.pathname === '/customer/access-gate.js') return response({ text: fs.readFileSync(path.join(root, 'customer/access-gate.js'), 'utf8') });
     if (parsed.pathname === '/') {
-      return response({ text: 'Commercial Intelligence Contact Intelligence href="customer/" href="LeadIntel.html"' });
+      // The production root is the invitation-only sign-in page; the proof reads the real file.
+      return response({ text: fs.readFileSync(path.join(root, 'index.html'), 'utf8') });
     }
     return response({ status: 404, text: 'missing' });
   };
