@@ -1,3 +1,4 @@
+import RichText from '../../customer/rich-text.js';
 import {cookieValue,sha256} from './security.js';
 import {storageErrorResponse} from './workspace-storage.js';
 
@@ -32,12 +33,13 @@ async function readBody(request){
 }
 
 function payload(body,workspace){
- if(Object.keys(body).some(key=>!['expectedRevision','kind','title','subject','message','writingAssistant'].includes(key))||!['draft','template'].includes(body.kind))fail('Invalid writing record');
+ if(Object.keys(body).some(key=>!['expectedRevision','kind','title','subject','message','messageHtml','writingAssistant'].includes(key))||!['draft','template'].includes(body.kind))fail('Invalid writing record');
  if(!bounded(body.title,80)||!body.title.trim())fail('A title of up to 80 characters is required');
  if(body.subject!==undefined&&(typeof body.subject!=='string'||body.subject.length>500))fail('Subject must be at most 500 characters');
  if(!bounded(body.message,12000)||!body.message.trim())fail('A message of up to 12000 characters is required');
+ let html='';if(body.messageHtml!==undefined){if(typeof body.messageHtml!=='string'||body.messageHtml.length>RichText.MAX_HTML)fail('Invalid message formatting');html=RichText.matchingHtml(body.message,body.messageHtml);if(body.messageHtml&&!html)fail('Formatting does not match the message');}
  const writingAssistant=attribution(body.writingAssistant,workspace);
- return {kind:body.kind,title:body.title.trim(),subject:body.subject||'',message:body.message,...(writingAssistant?{writingAssistant}:{})};
+ return {kind:body.kind,title:body.title.trim(),subject:body.subject||'',message:body.message,...(html?{messageHtml:html}:{}),...(writingAssistant?{writingAssistant}:{})};
 }
 const record=row=>({...JSON.parse(row.payload_json),id:row.id,revision:row.revision,updatedAt:row.updated_at});
 

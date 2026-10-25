@@ -7,6 +7,7 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(BrandIdentity,ContentLanguage,EventCampaigns,MessageFacts){
   "use strict";
 
+  const Rich=()=>typeof module==='object'&&module.exports?require('./rich-text.js'):globalThis.LeadIntelRichText;
   const DEFAULT_OUTREACH_STATE=Object.freeze({selectedDomain:"",items:[]});
   const RESEARCH_STATUSES=new Set(["idle","running","complete","partial","error"]);
 
@@ -329,6 +330,7 @@
     const generatedBodies=[item?.drafts?.emailBody,item?.contentVariants?.drafts?.en?.emailBody,item?.contentVariants?.drafts?.lv?.emailBody].map(value=>String(value??"")).filter(Boolean);
     const generated=generatedBodies.includes(drafts.emailBody);
     if(brandSnapshot&&generated)drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
+    Object.assign(drafts,Rich()?.fields(drafts.emailBody,editedDrafts.emailBodyHtml,'emailBodyHtml'));
     const approvedSource=freezeCopy(drafts);
     const approvedEmail=freezeCopy(renderEmail(approvedSource,brandSnapshot));
     const campaignSnapshot=freezeCopy(normalizeCampaignScenario(sourceScenario,{},sourceScenario.language||'en'));
@@ -345,11 +347,13 @@
   function renderEmail(source={},brandSnapshot=null){
     const subject=clean(source.emailSubject);
     const bodyText=String(source.emailBody??"").trim();
-    if(!brandSnapshot||!BrandIdentity?.renderEmail)return {subject,textBody:bodyText,htmlBody:null};
-    return BrandIdentity.renderEmail({subject,bodyText,brandSnapshot});
+    const bodyHtml=Rich()?.matchingHtml(bodyText,source.emailBodyHtml)||'';
+    if(!brandSnapshot||!BrandIdentity?.renderEmail)return {subject,textBody:bodyText,htmlBody:bodyHtml||null};
+    return BrandIdentity.renderEmail({subject,bodyText,bodyHtml,brandSnapshot});
   }
   function hasBrandedApprovalProvenance(item={}){
     if(clean(item.approvalBrandMode).toLowerCase()==="branded")return true;
+    if(item.approvalBrandMode==='plain'&&item.approvedSource?.emailBodyHtml)return false;
     if(Number(item.brandRevision)>0||Number(item.brandSchemaVersion)>0||Number(item.brandIdentityRevision)>0)return true;
     if(item.brandMetadata&&typeof item.brandMetadata==="object")return true;
     return Boolean(String(item.approvedEmail?.htmlBody??"").trim());
@@ -400,7 +404,7 @@
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
     let dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,10)}:null;
     if(dossier)dossier.selectedTrigger=normalizeSelectedTrigger(dossier.selectedTrigger,dossier);
-    const drafts={commercialContext:item.drafts?.commercialContext&&typeof item.drafts.commercialContext==='object'?Object.fromEntries(['proofPoints','differentiation','valueProposition','commonObjections'].map(key=>[key,clean(item.drafts.commercialContext[key]).slice(0,4000)])):{},scriptContext:buildScriptContext(dossier||{},(dossier?.people||[]).find(person=>clean(person.id)===clean(item.selectedPersonId))||dossier?.people?.[0]||{}),tone:clean(item.drafts?.tone)||"consultative",emailSubject:String(item.drafts?.emailSubject??"").slice(0,500),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
+    const drafts={commercialContext:item.drafts?.commercialContext&&typeof item.drafts.commercialContext==='object'?Object.fromEntries(['proofPoints','differentiation','valueProposition','commonObjections'].map(key=>[key,clean(item.drafts.commercialContext[key]).slice(0,4000)])):{},scriptContext:buildScriptContext(dossier||{},(dossier?.people||[]).find(person=>clean(person.id)===clean(item.selectedPersonId))||dossier?.people?.[0]||{}),tone:clean(item.drafts?.tone)||"consultative",emailSubject:String(item.drafts?.emailSubject??"").slice(0,500),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),...Rich()?.fields(String(item.drafts?.emailBody||"").slice(0,12000),item.drafts?.emailBodyHtml,'emailBodyHtml'),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
     const eventSourceUrl=normalizeUrl(item.drafts?.scriptContext?.eventSourceUrl);if(eventSourceUrl&&dossier?.evidence?.some(row=>normalizeUrl(row.url)===eventSourceUrl))drafts.scriptContext.eventSourceUrl=eventSourceUrl;
     const requestedApproval=Boolean(item.approved);let brandSnapshot=null;let corruptedSnapshot=false;
     const hasPersistedSnapshot=Object.prototype.hasOwnProperty.call(item,'brandSnapshot')&&item.brandSnapshot!==null&&item.brandSnapshot!==undefined;
@@ -413,7 +417,7 @@
     const reapprovalRequired=Boolean(item.reapprovalRequired)||corruptedSnapshot;
     const approved=requestedApproval&&!reapprovalRequired;
     const sourceInput=item.approvedSource&&typeof item.approvedSource==="object"?item.approvedSource:drafts;
-    const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:clean(sourceInput.emailSubject)||drafts.emailSubject,emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
+    const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:clean(sourceInput.emailSubject)||drafts.emailSubject,emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),...Rich()?.fields(String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),sourceInput.emailBodyHtml??drafts.emailBodyHtml,'emailBodyHtml'),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
     const approvedEmail=approved?freezeCopy(renderEmail(approvedSource||drafts,brandSnapshot)):null;
     const approvalBrandMode=brandedProvenance?'branded':clean(item.approvalBrandMode).toLowerCase()==='plain'?'plain':brandSnapshot?'branded':'legacy-plain';
     const campaignScenario=item.campaignScenario?normalizeCampaignScenario(item.campaignScenario,{},item.campaignScenario.language||'en'):null;const campaignSnapshot=approved&&item.campaignSnapshot?freezeCopy(normalizeCampaignScenario(item.campaignSnapshot,{},item.campaignSnapshot.language||'en')):null;

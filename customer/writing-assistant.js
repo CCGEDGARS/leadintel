@@ -1,5 +1,6 @@
 (function(root){
  'use strict';
+ const Rich=()=>typeof module==='object'&&module.exports?require('./rich-text.js'):globalThis.LeadIntelRichText;
  function browserSessions(){
   const key='leadintel_writing_sessions_v1';
   const usable=()=>root.LeadIntelAccountCache?.current?.()!==false;
@@ -51,6 +52,8 @@
     if(!result||typeof result.reply!=='string'||result.provenance?.referenceRevision!==c.referenceRevision)throw Error('Writing response is invalid or sources changed. Ask again.');
     if(result.draft&&actionKind){const source=requestContext(c).currentDraft,words=value=>String(value||'').trim().split(/\s+/).filter(Boolean).length;if(actionKind==='shorten'&&words(result.draft.message)>=words(source.message))throw Error('The proposal is not shorter. Your draft is unchanged; try a more specific instruction.');if(result.draft.subject===source.subject&&result.draft.message===source.message)throw Error('The proposal did not change your draft. Try a more specific instruction.');}
     messages.push({role:'user',content:instruction.trim(),sourceKey:sourceKey(c)},{role:'assistant',content:result.reply,sourceKey:sourceKey(c),citations:result.citations||[],warnings:result.warnings||[]});messages=messages.slice(-20);
+    if(result.draft?.messageHtml)result.draft.messageHtml=Rich()?.validateDraftHtml(result.draft.message,result.draft.messageHtml,working?.messageHtml,working?.message);
+    if(result.draft&&!result.draft.messageHtml&&working?.messageHtml){const kept=Rich()?.carry(working.messageHtml,working.message,result.draft.message);if(kept)result.draft.messageHtml=kept;}
     if(result.draft&&intent!=='advice')preview=clone({draft:result.draft,provenance:result.provenance,citations:result.citations||[],warnings:result.warnings||[]});return true;
    }catch(cause){if(alive&&token===owner)error=cause.name==='AbortError'?'Writing request timed out or cancelled. Your draft is preserved.':cause.message||'Writing request failed. Your draft is preserved.';return false;}
    finally{if(alive&&token===owner){clearTimeout(timer);timer=null;controller=null;busy=false;changed();}}

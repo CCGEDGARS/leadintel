@@ -98,3 +98,10 @@ test('storage quota failures preserve draft text and revision atomically',async(
  const saved=(await f.call()).data.records[0];assert.equal(saved.message,draft.message);assert.equal(saved.revision,1);
  assert.equal(f.DB.raw.prepare("SELECT records_bytes FROM workspace_storage_accounts WHERE workspace_id='storage-w1'").get().records_bytes,account.records_bytes);
 });
+
+test('formatted writing drafts save, reload and reject mismatched or oversized HTML',async()=>{
+ const f=await fixture(),id=crypto.randomUUID(),body={...draft,message:'Hello Alex',messageHtml:'Hello <strong>Alex</strong>'};
+ const saved=await f.call(id,{method:'PUT',body});assert.equal(saved.status,200);assert.equal(saved.data.record.messageHtml,body.messageHtml);assert.equal((await f.call()).data.records[0].messageHtml,body.messageHtml);
+ assert.equal((await f.call(crypto.randomUUID(),{method:'PUT',body:{...body,messageHtml:'<b>Another recipient</b>'}})).status,400);
+ assert.equal((await f.call(crypto.randomUUID(),{method:'PUT',body:{...body,messageHtml:'x'.repeat(80001)}})).status,400);
+});

@@ -52,3 +52,13 @@ test('clicking the visible NLP style replaces the saved Professional text in the
  q('mw-undo-rewrite').click();assert.equal(studio.mode,'professional');assert.equal(item().messageStudioDraft.mode,'professional');assert.equal(q('outreach-email-body').value,draft.message);w.renderMessageStudio();assert.equal(q('message-mode').value,'professional');document.querySelector('[data-writing-style="curiosity"]').click();assert.equal(item().messageStudioDraft.mode,'curiosity');
  const edited=E.apply(item(),{subject:'My custom subject',message:'My exact NLP edit'},{origin:'manual'});w.upsertItem(edited);w.renderAll();document.querySelector('[data-writing-style="curiosity"]').click();assert.match(q('outreach-email-body').value,/This is what we stand for/);assert.deepEqual(E.updateUndo(item()),{subject:'My custom subject',message:'My exact NLP edit'});assert.equal(saved.length,0);
 });
+
+test('shared email toolbar saves formatting-only changes and Cancel restores the saved formatting',async()=>{
+ const {w,document,item,saved}=mounted(),q=id=>document.getElementById(id);
+ w.eval(read('rich-text.js'));w.eval(read('rich-text-editor.js'));
+ const rich=w.LeadIntelRichTextEditor.mount(q('outreach-email-body'),{label:'Email body'});
+ q('mw-edit-message').click();await settle();assert.equal(rich.toolbar.hidden,false);
+ const range=document.createRange();range.selectNodeContents(rich.body);w.getSelection().addRange(range);rich.body.dispatchEvent(new w.MouseEvent('mouseup'));rich.command('bold');
+ assert.equal(saved.length,0);assert.match(rich.getHtml(),/<strong>/);q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.match(saved[0].drafts.emailBodyHtml,/<strong>/);
+ q('mw-edit-message').click();await settle();rich.setHtml('<em>Existing working message</em>');q('mw-cancel-edit').click();assert.match(rich.getHtml(),/<strong>/);assert.equal(item().drafts.emailBody,'Existing working message');rich.destroy();w.close();
+});
