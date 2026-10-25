@@ -9,13 +9,14 @@
   .progress-panel,.utility-panel{position:static;top:auto;height:auto;min-height:0;overflow:auto}
   main.content{height:100%;min-height:0;overflow:auto;overscroll-behavior:contain}
 }
-/* Step column: tighter margins, no horizontal movement, no visible scrollbar (it still scrolls with the wheel). */
+/* Step column: 16px from the top and the left edge, no horizontal movement, no visible scrollbar (wheel still
+   scrolls), no rubber-banding. Specificity (.page-shell …) beats the theme sheets that load after this one. */
 @media(min-width:721px){
-  .progress-panel{padding:16px 16px 20px;overflow-x:hidden;overscroll-behavior:none;scrollbar-width:none}
-  .progress-panel>*:first-child{margin-top:0}
-  .utility-panel,main.content{overscroll-behavior:none}
-  .progress-panel::-webkit-scrollbar{width:0;height:0}
-  .progress-panel .steps,.progress-panel .steps>*{min-width:0;max-width:100%}
-  .utility-panel{overflow-x:hidden;scrollbar-width:none}
-  .utility-panel::-webkit-scrollbar{width:0;height:0}
+  .page-shell .progress-panel{padding:16px 16px 20px;overflow-x:hidden;overscroll-behavior:none;scrollbar-width:none}
+  .page-shell .progress-panel::-webkit-scrollbar{width:0;height:0}
+  .page-shell .progress-panel>*:first-child{margin-top:0;padding-top:0}
+  .page-shell .progress-panel .steps,.page-shell .progress-panel .steps>*{min-width:0;max-width:100%}
+  .page-shell .utility-panel{overflow-x:hidden;overscroll-behavior:none;scrollbar-width:none}
+  .page-shell .utility-panel::-webkit-scrollbar{width:0;height:0}
+  .page-shell main.content{overscroll-behavior:none}
 }
