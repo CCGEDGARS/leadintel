@@ -99,6 +99,14 @@ test('the application shell locks the document and lets the panes scroll; window
   assert.equal(moved,null,'ordinary page scrolling leaves the pane alone');
 });
 
+test('the settings drawer slides in from the right and its backdrop fades, like Ask LeadIntel',()=>{
+  assert.match(css,/#ai-settings-drawer\{transform:translateX\(104%\);transition:transform/);
+  assert.match(css,/#ai-settings-drawer\.is-open\{transform:none\}/);
+  assert.match(css,/#ai-settings-backdrop\.is-open\{opacity:1\}/);
+  assert.match(settings,/drawer\?\.classList\.add\('is-open'\);backdrop\?\.classList\.add\('is-open'\)/);
+  assert.match(settings,/drawer\?\.classList\.remove\('is-open'\);backdrop\?\.classList\.remove\('is-open'\)/);
+});
+
 test('arrow keys move between tabs and a tab without sections is not offered',async()=>{
   const {win,drawer,tabs}=await mount();
   drawer.querySelector('#workspace-storage-card').remove();

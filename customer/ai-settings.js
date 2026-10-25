@@ -374,11 +374,18 @@ function clearProviderError(provider){
 }
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
+  // Slide in from the right like Ask LeadIntel: unhide first, then add is-open on the next frames so the transition runs.
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
+  const reveal=()=>{drawer?.classList.add('is-open');backdrop?.classList.add('is-open');};if(typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(()=>window.requestAnimationFrame(reveal));else reveal();
   render();renderPersonalLinkedIn();renderMeetingPlatform();window.dispatchEvent(new CustomEvent('leadintel:settings-opened'));refreshAllStatus();setTimeout(()=>{if(!document.getElementById('microsoft-connection-help')?.hidden&&document.getElementById('microsoft-connection-help'))return;document.getElementById('close-settings')?.focus();},0);
 }
 function closeDrawer(){
-  closeMicrosoftHelp();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
+  closeMicrosoftHelp();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
+  drawer?.classList.remove('is-open');backdrop?.classList.remove('is-open');
+  const finish=()=>{if(drawer&&!drawer.classList.contains('is-open'))drawer.hidden=true;if(backdrop&&!backdrop.classList.contains('is-open'))backdrop.hidden=true;};
+  let animated=false;try{animated=typeof drawer?.getAnimations==='function'&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches;}catch{animated=false;}
+  if(animated)window.setTimeout(finish,300);else finish();
+  unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
 let aiStatusGeneration=0;
 async function refreshStatus(){
