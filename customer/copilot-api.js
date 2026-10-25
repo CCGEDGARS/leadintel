@@ -24,9 +24,11 @@ export async function requestCopilot(path,options={}){
 
 export function bootstrapCopilot(){return requestCopilot('/api/copilot/bootstrap',{timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function listCopilotConversations(){return requestCopilot('/api/copilot/conversations',{timeoutMs:DEFAULT_TIMEOUT_MS});}
+export function listCopilotMemories(){return requestCopilot('/api/copilot/memories',{timeoutMs:DEFAULT_TIMEOUT_MS});}
+export function forgetCopilotMemory(id){return requestCopilot(`/api/copilot/memories/${encodeURIComponent(id)}/archive`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function getCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function sendCopilotMessage(payload,{onProgress}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:payload||{},headers:{Accept:'text/event-stream'},onProgress,timeoutMs:CHAT_TIMEOUT_MS});}
 export function confirmCopilotAction(id,idempotencyKey){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/confirm`,{method:'POST',headers:{'Idempotency-Key':String(idempotencyKey||'')},body:{idempotency_key:String(idempotencyKey||'')},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function rejectCopilotAction(id){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/reject`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 
-if(typeof window!=='undefined')window.LeadIntelCopilotApi={requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};
+if(typeof window!=='undefined')window.LeadIntelCopilotApi={requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,listCopilotMemories,forgetCopilotMemory,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};

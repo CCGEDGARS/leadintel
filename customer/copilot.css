@@ -43,3 +43,19 @@ html.leadintel-copilot-ready body{transition:padding-right .28s cubic-bezier(.2,
 .copilot-print-actions button[data-copilot-print-run]{background:#146347;border-color:#146347;color:#fff}
 .copilot-print-dialog iframe{width:100%;height:calc(92vh - 58px);border:0;background:#fff}
 @media(max-width:720px){.copilot-head-btn{padding:6px 8px;font-size:11px}.copilot-conversation-bar{padding:2px 14px 8px}}
+
+/* B3 (CTO, 2026-10-25): what the assistant remembers — the Remembers panel and the chips under an answer. */
+.copilot-memories{position:absolute;left:0;right:0;top:100%;max-height:min(60vh,520px);overflow:auto;padding:10px 12px 12px;background:#1c2338;border-bottom:1px solid rgba(148,163,184,.18);box-shadow:0 18px 40px rgba(2,6,23,.4);z-index:3}
+.copilot-memories[hidden]{display:none}
+.copilot-memories-intro{margin:0 0 8px;color:#94a3b8;font-size:12px;line-height:1.45}
+.copilot-memories-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.copilot-memory-row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 10px;border-radius:9px;background:#161c2e}
+.copilot-memory-kind{grid-column:1;color:#bc8f2a;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.copilot-memory-value{grid-column:1;color:#e2e8f0;font-size:13px;line-height:1.4}
+.copilot-memory-row .copilot-forget{grid-column:2;grid-row:1/span 2;align-self:center}
+.copilot-memories-empty{padding:10px;color:#94a3b8;font-size:13px}
+.copilot-forget{all:unset;cursor:pointer;color:#cbd5e1;font:600 11px "DM Sans",sans-serif;padding:3px 8px;border-radius:6px;border:1px solid rgba(148,163,184,.28)}
+.copilot-forget:hover{background:#273047;color:#f8fafc}
+.copilot-memory-chips{display:grid;gap:6px;margin-top:10px}
+.copilot-memory-chip{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(188,143,42,.12);border:1px solid rgba(188,143,42,.35);color:#f1f5f9;font-size:13px;line-height:1.4}
+.copilot-memory-chip-text::before{content:"✦ ";color:#bc8f2a}

@@ -2,7 +2,7 @@ import {cookieValue,sha256} from './security.js';
 import {sanitizeClientScreenContext,redactProtectedData} from './copilot-security.js';
 import {buildCopilotWorkspaceContext} from './copilot-context.js';
 import {runDeterministicDiagnostics,persistDiagnosticSnapshot} from './copilot-diagnostics.js';
-import {listCopilotMemories} from './copilot-memory.js';
+import {listCopilotMemories,saveCopilotMemory,archiveCopilotMemory,dueReminders} from './copilot-memory.js';
 import {runCopilotTurn} from './copilot-service.js';
 
 const OPERATING_ROLES=new Set(['owner','researcher','sales']);
@@ -20,13 +20,21 @@ export async function handleCopilotRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;if(!path.startsWith('/api/copilot/'))return null;const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
 
   if(path==='/api/copilot/bootstrap'&&request.method==='GET'){
-    const [latest,memories,ai,context]=await Promise.all([
-      latestConversation(env,workspaceId),listCopilotMemories(env,workspaceId).catch(()=>[]),env.DB.prepare(`SELECT provider,model,active FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first(),buildCopilotWorkspaceContext(env,{workspaceId,currentScreen:{step:1,label:'Company & Market'},role:access.member.role,user:{name:access.user.display_name}})
+    const [latest,memories,remindersDue,ai,context]=await Promise.all([
+      latestConversation(env,workspaceId),listCopilotMemories(env,workspaceId).catch(()=>[]),dueReminders(env,workspaceId).catch(()=>[]),env.DB.prepare(`SELECT provider,model,active FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first(),buildCopilotWorkspaceContext(env,{workspaceId,currentScreen:{step:1,label:'Company & Market'},role:access.member.role,user:{name:access.user.display_name}})
     ]);
     const diagnostics=runDeterministicDiagnostics(context);await persistDiagnosticSnapshot(env,{workspaceId,diagnostics}).catch(()=>{});const unreadImportant=diagnostics.filter(item=>item.severity==='important').length;
-    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
+    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,reminders_due:remindersDue,ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
   }
 
+  // B3 (2026-10-25): what the assistant remembers is visible and forgettable; forgetting archives, it never deletes.
+  if(path==='/api/copilot/memories'&&request.method==='GET'){
+    const [memories,remindersDue]=await Promise.all([listCopilotMemories(env,workspaceId).catch(()=>[]),dueReminders(env,workspaceId).catch(()=>[])]);return json({memories,reminders_due:remindersDue},200,cors);
+  }
+  const memoryMatch=path.match(/^\/api\/copilot\/memories\/([^/]+)\/archive$/);
+  if(memoryMatch&&request.method==='POST'){
+    const memoryId=clean(decodeURIComponent(memoryMatch[1]),180);const result=await archiveCopilotMemory(env,{workspaceId,memoryId});if(!result.archived)return error('Memory not found',404,cors);return json({archived:true,id:memoryId},200,cors);
+  }
   if(path==='/api/copilot/conversations'&&request.method==='GET'){
     const {results=[]}=await env.DB.prepare(`SELECT id,title,created_at,updated_at FROM copilot_conversations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 50`).bind(workspaceId).all();return json({conversations:results},200,cors);
   }
@@ -47,7 +55,8 @@ export async function handleCopilotRoute(request,env,cors={}){
     const execute=async(onProgress=()=>{})=>{
       const turn=await runCopilotTurn(env,{workspaceId,userId:access.user.id,role:access.member.role,user:{name:access.user.display_name},conversation:prior,question:message,currentScreen:screen,onProgress});await persistDiagnosticSnapshot(env,{workspaceId,diagnostics:turn.diagnostics||[]}).catch(()=>{});
       const proposals=[],savedMemories=[];
-      const metadata={skill_ids:turn.skill_ids||[],sources:turn.sources||[],action_proposal_ids:[],research_used:Boolean(turn.research_used),research_status:turn.research_status||'not_needed',research_passes:turn.research_passes||0,provider:turn.provider||{},usage:turn.usage||{}};await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'assistant',?,?)`).bind(uuid(),workspaceId,conversationId,null,clean(turn.answer,12000),JSON.stringify(redactProtectedData(metadata))).run();await env.DB.prepare(`UPDATE copilot_conversations SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(conversationId,workspaceId).run();
+      for(const candidate of Array.isArray(turn.memory_candidates)?turn.memory_candidates.slice(0,3):[]){try{const saved=await saveCopilotMemory(env,{workspaceId,userId:access.user.id,conversationId,candidate});if(saved?.id)savedMemories.push({id:saved.id,kind:saved.kind,value:saved.value,due:saved.due||''});}catch{}}
+      const metadata={skill_ids:turn.skill_ids||[],sources:turn.sources||[],action_proposal_ids:[],memory_ids:savedMemories.map(item=>item.id),research_used:Boolean(turn.research_used),research_status:turn.research_status||'not_needed',research_passes:turn.research_passes||0,provider:turn.provider||{},usage:turn.usage||{}};await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'assistant',?,?)`).bind(uuid(),workspaceId,conversationId,null,clean(turn.answer,12000),JSON.stringify(redactProtectedData(metadata))).run();await env.DB.prepare(`UPDATE copilot_conversations SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(conversationId,workspaceId).run();
       return {...turn,action_proposals:proposals,memory_candidates:savedMemories,conversation_id:conversationId};
     };
     if(request.headers.get('Accept')?.includes('text/event-stream')){

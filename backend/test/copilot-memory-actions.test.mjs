@@ -1,19 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {normalizeMemoryCandidate,listCopilotMemories,saveCopilotMemory,archiveCopilotMemory} from '../src/copilot-memory.js';
+import {normalizeMemoryCandidate,listCopilotMemories,saveCopilotMemory,archiveCopilotMemory,dueReminders} from '../src/copilot-memory.js';
 import {COPILOT_ACTION_TYPES,normalizeActionProposal,createActionProposal,executeConfirmedAction} from '../src/copilot-actions.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...args){this.args=args;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)??null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes||0)}};}}
-class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec(`PRAGMA foreign_keys=ON;CREATE TABLE workspaces(id TEXT PRIMARY KEY);CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT);CREATE TABLE customer_workspace_state(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,schema_version INTEGER NOT NULL DEFAULT 1,version INTEGER NOT NULL DEFAULT 1,payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),updated_by TEXT,updated_at TEXT);CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT);INSERT INTO workspaces VALUES('w1');INSERT INTO workspaces VALUES('w2');INSERT INTO users VALUES('u1','owner@example.com');`);this.raw.exec(fs.readFileSync(new URL('../migrations/0016_ai_copilot.sql',import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(rows){const out=[];for(const item of rows)out.push(await item.run());return out;}}
+class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec(`PRAGMA foreign_keys=ON;CREATE TABLE workspaces(id TEXT PRIMARY KEY);CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT);CREATE TABLE customer_workspace_state(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,schema_version INTEGER NOT NULL DEFAULT 1,version INTEGER NOT NULL DEFAULT 1,payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),updated_by TEXT,updated_at TEXT);CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT);INSERT INTO workspaces VALUES('w1');INSERT INTO workspaces VALUES('w2');INSERT INTO users VALUES('u1','owner@example.com');`);this.raw.exec(fs.readFileSync(new URL('../migrations/0016_ai_copilot.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0051_copilot_memory_kinds.sql',import.meta.url),'utf8'));this.raw.exec("CREATE TABLE IF NOT EXISTS workspace_storage_accounts(workspace_id TEXT PRIMARY KEY,records_bytes INTEGER NOT NULL DEFAULT 0,files_bytes INTEGER NOT NULL DEFAULT 0,plan_key TEXT NOT NULL DEFAULT 'free',paid_until INTEGER NOT NULL DEFAULT 0,plus_records_limit INTEGER NOT NULL DEFAULT 999999999,included_records_limit INTEGER NOT NULL DEFAULT 999999999);");}prepare(sql){return new Statement(this.raw,sql);}async batch(rows){const out=[];for(const item of rows)out.push(await item.run());return out;}}
 function fixture(){const db=new DB();const payload={main:{market:{signals:[{id:'s1',name:'Factory expansion',keywords:['factory expansion'],weight:70,priority:'high',active:true}],icps:[{id:'i1',name:'Manufacturers',criteria:'50-500 employees',exclusions:'consumer'}]}},discovery:{},outreach:{},delivery:{},meta:{}};db.raw.prepare(`INSERT INTO customer_workspace_state(workspace_id,schema_version,version,payload_json,updated_by,updated_at) VALUES('w1',1,3,?,'u1',CURRENT_TIMESTAMP)`).run(JSON.stringify(payload));return {env:{DB:db},db};}
 
 test('memory normalization accepts only concise commercial decisions preferences and constraints',()=>{
-  for(const [kind,value] of [['constraint','Do not target micro-companies.'],['preference','Prefer expansion signals over tenders.'],['decision','Prioritize Procurement Director and Production Director roles.']]){
-    const item=normalizeMemoryCandidate({kind,value});assert.equal(item.kind,kind);assert.equal(item.value,value);assert.ok(item.fingerprint.length>=8);
+  for(const [kind,value] of [['constraint','Do not target micro-companies.'],['preference','Prefer expansion signals over tenders.'],['decision','Prioritize Procurement Director and Production Director roles.'],['fact','The company sells retrofit automation to food plants.']]){
+    const item=normalizeMemoryCandidate({kind,value});assert.equal(item.kind,kind);assert.equal(item.value,value);assert.ok(item.fingerprint.length>=8);assert.equal(item.due,'');
   }
+  // B3 (2026-10-25): reminders carry a due date (YYYY-MM-DD or ISO); other kinds ignore it; junk dates are dropped
+  assert.equal(normalizeMemoryCandidate({kind:'reminder',value:'Follow up with Latvijas Piens about the pilot.',due:'2026-11-03'}).due,'2026-11-03');
+  assert.equal(normalizeMemoryCandidate({kind:'reminder',value:'Check Firecrawl credits.',due:'2026-11-03T09:00:00Z'}).due,'2026-11-03');
+  assert.equal(normalizeMemoryCandidate({kind:'reminder',value:'Check credits.',due:'next week'}).due,'');
+  assert.equal(normalizeMemoryCandidate({kind:'decision',value:'Target dairy first.',due:'2026-11-03'}).due,'');
   assert.throws(()=>normalizeMemoryCandidate({kind:'note',value:'anything'}),/kind/i);
   assert.throws(()=>normalizeMemoryCandidate({kind:'decision',value:'user: '+ 'full transcript '.repeat(120)}),/memory|long|transcript/i);
 });
@@ -66,4 +71,16 @@ sqliteTest('confirmation rejects stale proposal version without mutating state a
   const proposal=await createActionProposal(env,{workspaceId:'w1',userId:'u1',expectedStateVersion:2,idempotencyKey:'proposal-safe-0003',candidate:{action_type:'icp.update_field',payload:{icp_id:'i1',field:'criteria',value:'New criteria'}},state:current});
   const conflict=await executeConfirmedAction(env,{workspaceId:'w1',userId:'u1',role:'owner',proposalId:proposal.id,idempotencyKey:'proposal-safe-0003'});assert.equal(conflict.conflict,true);assert.equal(db.raw.prepare(`SELECT version FROM customer_workspace_state WHERE workspace_id='w1'`).get().version,3);
   await assert.rejects(()=>executeConfirmedAction(env,{workspaceId:'w1',userId:'u1',role:'viewer',proposalId:proposal.id,idempotencyKey:'proposal-safe-0003'}),/role|permission/i);
+});
+
+sqliteTest('reminders persist their due date, list it and surface when due (B3, 2026-10-25)',async()=>{
+  const {env}=fixture();
+  const saved=await saveCopilotMemory(env,{workspaceId:'w1',userId:'u1',conversationId:null,candidate:{kind:'reminder',value:'Ask Edgars for the pilot decision.',due:'2026-11-03'}});
+  assert.equal(saved.kind,'reminder');assert.equal(saved.due,'2026-11-03');
+  await saveCopilotMemory(env,{workspaceId:'w1',userId:'u1',conversationId:null,candidate:{kind:'reminder',value:'Renew the Firecrawl plan.',due:'2026-12-01'}});
+  await saveCopilotMemory(env,{workspaceId:'w1',userId:'u1',conversationId:null,candidate:{kind:'fact',value:'The company sells retrofit automation.'}});
+  const list=await listCopilotMemories(env,'w1');
+  assert.deepEqual(list.map(item=>[item.kind,item.due]).sort(),[['fact',''],['reminder','2026-11-03'],['reminder','2026-12-01']].sort());
+  assert.deepEqual((await dueReminders(env,'w1','2026-11-05')).map(item=>item.value),['Ask Edgars for the pilot decision.']);
+  assert.deepEqual(await dueReminders(env,'w2','2026-12-31'),[]);
 });

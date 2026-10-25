@@ -4758,6 +4758,27 @@
       ]
     },
     {
+      "id": "copilot-memory-ui",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "data-copilot-memories",
+        "Remembers ",
+        "copilotForget",
+        "copilot.css?v=20261026-classic-v4&history=20261026-v1&memory=20261026-v1"
+      ]
+    },
+    {
+      "id": "workspace-copilot-memory-token",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "activity=20261026-v1&memory=20261026-v1"
+      ]
+    },
+    {
       "id": "workspace-topbar-admin-token",
       "type": "text",
       "url": "/customer/",
