@@ -57,3 +57,31 @@ test('a cold Delivery module finishes loading before the saved message handoff',
  h.mountDelivery();await pending;assert.equal(h.q('step-7').classList.contains('active'),true);assert.equal(h.q('delivery-recipient').value,'alex@buyer.example');
  }finally{h.w.close();}
 });
+
+test('a saved manual email can use a deliberately entered booking and profile link without changing defaults',async()=>{
+ const h=setup();try{
+ const before=h.item(),essentials=h.w.studioState().essentials;
+ const draft={subject:'A conversation with our project lead',message:'Hi Alex,\n\nOur project lead can discuss your requirements in a 20-minute Zoom conversation.\n\nBook here: https://calendly.com/project-lead/intro\n\nOur work: https://north.example/gallery\n\nLeadIntel, on behalf of Casey Morgan\nhttps://www.linkedin.com/in/casey-morgan/?source=profile'};
+ const next=E.apply(O.invalidateOutreachApproval(before),draft,{origin:'manual',style:'professional',essentials});
+ next.messageStudioDraft.triggerSourceUrl=next.dossier.selectedTrigger.url;next.messageStudioDraft.scriptSavedAt='2026-10-25';next.messageStudioDraft.savedDraft=draft;h.w.upsertItem(next);h.w.renderAll();
+ assert.equal(h.q('mw-add-flow').disabled,false,h.q('mw-add-flow').title+' '+h.q('mw-flow-readiness-text').textContent);h.q('mw-add-flow').click();for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.q('step-7').classList.contains('active'),true,h.q('toast').textContent);
+ assert.equal(h.item().approvedSource.emailBody,draft.message);
+ assert.equal(h.w.studioState().essentials.calendly,essentials.calendly);
+ assert.equal(h.item().messageStudioDraft.flowMembership.recipient,'alex@buyer.example');
+ assert.equal(h.requests.some(r=>/send|enqueue/.test(r.url)),false);
+ }finally{h.w.close();}
+});
+
+test('a blocked delivery handoff preserves the specific approval error',async()=>{
+ const h=setup();try{
+ const draft={subject:'Project discussion',message:'Hi Alex,\n\nLet us have a 20-minute Zoom conversation.\n\nBook here: https://calendly.com/north/intro\n\nUnsafe link: javascript:alert(1)'};
+ const next=E.apply(O.invalidateOutreachApproval(h.item()),draft,{origin:'manual',style:'professional',essentials:h.w.studioState().essentials});
+ next.messageStudioDraft.triggerSourceUrl=next.dossier.selectedTrigger.url;next.messageStudioDraft.scriptSavedAt='2026-10-25';next.messageStudioDraft.savedDraft=draft;h.w.upsertItem(next);h.w.renderAll();
+ await h.w.addCurrentMessageToFlow();
+ assert.equal(h.q('step-7').classList.contains('active'),false);
+ assert.match(h.q('toast').textContent,/unapproved link/i);
+ assert.equal(h.item().approved,false);
+ assert.equal(h.item().drafts.emailBody,draft.message);
+ }finally{h.w.close();}
+});

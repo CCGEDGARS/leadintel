@@ -41,7 +41,7 @@
     }
   },
   "smokeChecks": [
-        {
+    {
       "id": "invite-only-workspace-gate",
       "type": "text",
       "url": "/customer/access-gate.js",
@@ -4629,6 +4629,28 @@
       "contains": [
         "emailBodyHtml",
         "const bodyHtml=Rich()?.matchingHtml"
+      ]
+    },
+    {
+      "id": "reviewed-message-delivery-handoff",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "reviewed-delivery=20261025-v1",
+        "reviewedDraft:['manual','rewrite'].includes(source.messageStudioDraft?.editorOrigin)&&LeadIntelMessageEditor.savedDraft(source,LeadIntelMessageEditor.workingDraft(edited))",
+        "approved?.error||"
+      ]
+    },
+    {
+      "id": "reviewed-message-safe-links",
+      "type": "text",
+      "url": "/customer/message-studio.js",
+      "status": 200,
+      "contains": [
+        "function reviewedDraftLinks",
+        "options.reviewedDraft===true",
+        "url.username||url.password"
       ]
     }
   ],

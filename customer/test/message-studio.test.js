@@ -80,3 +80,17 @@ test('AI length choices only apply to AI Generated',()=>{
  const mandatory=M.normalize({...ai,mode:'friendly'},essentials);
  assert.equal(JSON.parse(M.prompt(mandatory,{buyerCompany:'RetailCo'}).prompt).aiLength,null);
 });
+
+test('reviewed link permission is explicit and never applies to generated drafts',()=>{
+ const source={subject:'A project conversation',message:'A 20-minute Zoom conversation: https://calendly.com/colleague/intro\nhttps://supplier.example/gallery'};
+ assert.throws(()=>M.parse(JSON.stringify(source),essentials),/Calendly|unapproved/);
+ assert.equal(M.parse(JSON.stringify(source),essentials,{reviewedDraft:true}).message,source.message);
+ const credentials={...source,message:source.message+'\nhttps://user:password@supplier.example/'};
+ assert.throws(()=>M.parse(JSON.stringify(credentials),essentials,{reviewedDraft:true}),/unapproved link/);
+ const unsafe={...source,message:source.message+'\njavascript:alert(1)'};
+ assert.throws(()=>M.parse(JSON.stringify(unsafe),essentials,{reviewedDraft:true}),/unapproved link/);
+ const incomplete={...source,message:source.message+'\n[Add verified fact]'};
+ assert.throws(()=>M.parse(JSON.stringify(incomplete),essentials,{reviewedDraft:true}),/unfilled/);
+ const noMeeting={...source,message:'Our gallery: https://supplier.example/gallery'};
+ assert.throws(()=>M.parse(JSON.stringify(noMeeting),essentials,{reviewedDraft:true}),/invitation/);
+});
