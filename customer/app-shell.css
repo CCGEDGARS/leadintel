@@ -25,6 +25,30 @@
   .page-shell main.content::-webkit-scrollbar-thumb{background:#13201c;border-radius:999px}
   .page-shell main.content::-webkit-scrollbar-track{background:transparent;margin:24px 0}
 }
+/* Phones and small tablets (<=720px, 2026-10-26): the shell above does not apply here, the theme sheets lay the page out
+   as a single scrolling column. What we own on small screens: a two-row top bar (brand + account; CRM · save status ·
+   Workspace status), the Ask LeadIntel button clear of the home indicator with room under the last control, and Settings
+   tabs that scroll sideways instead of wrapping. */
+@media(max-width:720px){
+  .page-shell .topbar{height:auto;min-height:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px}
+  .page-shell .brand{flex:1 1 auto;min-width:0}
+  .page-shell .brand small{display:none}
+  .page-shell .top-actions{display:contents}
+  .page-shell .topbar::after{content:"";flex-basis:100%;height:0;order:2}
+  .page-shell #topbar-account{order:1;margin-left:auto}
+  .page-shell #open-crm,.page-shell #topbar-status,.page-shell #topbar-save,.page-shell #topbar-workspace-status{order:3}
+  .page-shell .account-menu-btn{padding:4px;border-radius:999px}
+  .page-shell .account-menu-btn [data-topbar-name],.page-shell .account-menu-btn .account-chev{display:none}
+  .page-shell .account-avatar{width:30px;height:30px;font-size:13px}
+  .page-shell .topbar-status,.page-shell .topbar-save,.page-shell .topbar-ws,.page-shell #open-crm{padding:6px 10px;font-size:12px}
+  /* "Status" on narrow screens; the text node "Workspace status" stays as the accessible name. */
+  .page-shell .topbar-ws>span:first-child{font-size:0}
+  .page-shell .topbar-ws>span:first-child::before{content:"Status";font-size:12px}
+  .page-shell main.content{padding-bottom:110px}
+  .settings-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .settings-tabs::-webkit-scrollbar{display:none}
+  .settings-tab{flex:0 0 auto;white-space:nowrap}
+}
 /* Top bar: CRM · save status · Workspace status · account menu (topbar.js). The bridge's own texts stay for its logic. */
 #server-account-label,#server-auth-provider,#server-sync-status,.top-actions>.autosave,.top-actions>#server-signout,.top-actions>#reset-workspace,#server-account>#server-signout{display:none!important}
 .top-actions{gap:14px;align-items:center}

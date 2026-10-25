@@ -131,3 +131,21 @@ test('no stylesheet gives the workspace grid a third column above 720px now that
   assert.match(step6,/body:has\(#step-6\.active\) \.workspace\{grid-template-columns:225px minmax\(0,1fr\)\}/);
   assert.doesNotMatch(step6,/body:has\(#step-6\.active\) \.workspace\{[^}]*(258px|max-width)/);
 });
+
+test('on phones the shell owns a two-row top bar, keeps the launcher clear of the last control and scrolls the Settings tabs sideways (2026-10-26)',()=>{
+  const phone=css.match(/@media\(max-width:720px\)\{[\s\S]*?\n\}/);
+  assert.ok(phone,'a <=720px block exists in app-shell.css');
+  const block=phone[0];
+  assert.match(block,/\.page-shell \.topbar\{height:auto;min-height:0;display:flex;flex-wrap:wrap/);
+  assert.match(block,/\.page-shell \.top-actions\{display:contents\}/);
+  assert.match(block,/\.page-shell \.topbar::after\{content:"";flex-basis:100%;height:0;order:2\}/);
+  assert.match(block,/\.page-shell #topbar-account\{order:1;margin-left:auto\}/);
+  assert.match(block,/\.page-shell \.brand small\{display:none\}/);
+  assert.match(block,/\.topbar-ws>span:first-child::before\{content:"Status"/);
+  assert.match(block,/\.page-shell main\.content\{padding-bottom:110px\}/);
+  assert.match(block,/\.settings-tabs\{display:flex;flex-wrap:nowrap;overflow-x:auto/);
+  assert.match(html,/app-shell\.css\?[^"]*phones=20261026-v1/);
+  const copilot=read('copilot.css');
+  assert.match(copilot,/\.leadintel-copilot-entry\{[^}]*z-index:1090/,'the launcher sits under the Settings backdrop (1100) and every drawer');
+  assert.match(copilot,/@media\(max-width:720px\)\{\.leadintel-copilot-entry\{right:14px;bottom:calc\(14px \+ env\(safe-area-inset-bottom,0px\)\)/);
+});

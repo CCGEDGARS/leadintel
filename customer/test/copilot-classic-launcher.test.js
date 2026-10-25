@@ -30,9 +30,9 @@ test('Ask LeadIntel is a plain fixed button bottom-right: no mascot, no animatio
   assert.match(read('styles.css'),/\.primary-btn\{background:var\(--ink\);color:white;border-radius:10px/);
   assert.match(css,/\.copilot-entry-subtitle\{[^}]*clip:rect\(0 0 0 0\)/s,'the subtitle stays for screen readers and the release smoke check only');
   assert.doesNotMatch(css,/@keyframes|copilot-mascot|copilot-eye|copilot-pupil|copilot-entry-hint|copilot-suggestion|copilot-message-avatar|copilot-header-mascot/);
-  assert.match(html,/copilot-loader\.js\?[^"]*classic-button=20261026-v2/);
+  assert.match(html,/copilot-loader\.js\?[^"]*classic-button=20261026-v3/);
   assert.match(loader,/copilot-ui\.js\?v=20261011-business-research-v2&classic-button=20261026-v1/);
-  assert.match(loader,/copilot\.css\?v=20261026-classic-v2/);assert.match(ui,/copilot\.css\?v=20261026-classic-v2/);
+  assert.match(loader,/copilot\.css\?v=20261026-classic-v3/);assert.match(ui,/copilot\.css\?v=20261026-classic-v3/);
 });
 
 test('the drawer opens with a description of the assistant instead of a greeting and suggested questions',()=>{
@@ -70,5 +70,23 @@ test('the intro is visible when the drawer opens and steps aside once the conver
     assert.equal(intro.hidden,true);
     assert.equal(panel.querySelector('.copilot-message.is-assistant .copilot-message-role').textContent,'LeadIntel');
     assert.equal(panel.querySelector('.copilot-message.is-assistant svg'),null);
+  }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
+});
+
+test('the conversation lives at the bottom: full-height drawer, one scrollable body, the composer always last (Edgars, 2026-10-26)',async()=>{
+  assert.match(css,/\.leadintel-copilot-drawer\{[^}]*height:100dvh[^}]*overflow:hidden/s);
+  assert.match(css,/\.copilot-body\{[^}]*flex:1 1 auto[^}]*overflow:auto/s);
+  assert.match(css,/\.copilot-messages\{[^}]*margin-top:auto/s,'messages stack up from the bottom, next to the composer');
+  assert.doesNotMatch(css,/\.copilot-composer\{[^}]*(position:sticky|margin:auto)/s,'the composer no longer depends on sticky positioning or auto margins');
+  const {JSDOM}=await import('jsdom');const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+  try{
+    dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};
+    const mod=await import(`data:text/javascript;base64,${Buffer.from(ui+'\n//chat-layout-test').toString('base64')}`);
+    const panel=await mod.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async()=>({answer:'Advice only.',sources:[]})}});
+    const children=[...panel.children].map(el=>el.className.split(' ')[0]);
+    assert.deepEqual(children,['copilot-header','copilot-body','copilot-composer']);
+    const body=panel.querySelector('[data-copilot-body]');
+    for(const sel of ['[data-copilot-intro]','[data-copilot-messages]','[data-copilot-proposals]','[data-copilot-status]'])assert.ok(body.querySelector(sel),sel+' inside the scrollable body');
+    assert.equal(panel.lastElementChild.tagName,'FORM');
   }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });
