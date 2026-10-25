@@ -14,3 +14,23 @@
 @media(max-width:640px){.li-rich-toolbar{padding:7px;gap:3px}.li-rich-toolbar button{min-height:40px}.li-rich-body{padding:16px;min-height:220px}.li-rich-more{margin-left:0}.wa-message-field .li-rich-body{min-height:220px}}
 
 .li-rich-field{min-width:0}.li-rich-label{display:block;font:inherit;margin-bottom:8px}.li-rich-label textarea[data-rich-text]{display:none!important}
+
+/* Compact formatting controls: isolate the toolbar from page-level details/forms. */
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-toolbar{gap:6px;padding:8px 10px}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more{box-sizing:border-box;min-width:0;min-height:0;margin:0 0 0 auto;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more[open]{display:flex;flex:1 1 100%;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;width:100%;margin:6px 0 0;padding:12px 0 2px;border-top:1px solid #dce7e0}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>summary{flex:0 0 auto;align-self:center;box-sizing:border-box;min-height:36px;margin:0;padding:8px 10px;border:1px solid #d7e3db;border-radius:8px;background:#fff;font:600 12px/18px 'DM Sans',Arial,sans-serif;color:#315d48;white-space:nowrap;cursor:pointer}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>label{display:grid;flex:0 1 156px;align-content:start;gap:6px;min-width:120px;margin:0;padding:0;font:500 11px/15px 'DM Sans',Arial,sans-serif;color:#66796c}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>label+label{flex-basis:136px}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more select{box-sizing:border-box;display:block;width:100%!important;min-width:0!important;max-width:100%;height:36px;min-height:36px;margin:0;padding:7px 10px!important;border:1px solid #c5d7cb;border-radius:8px;background:#fff;color:#244b3b;font:400 13px/20px 'DM Sans',Arial,sans-serif!important;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more select:hover{border-color:#6e9e82}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more select:focus-visible{outline:2px solid #388563;outline-offset:2px;border-color:#388563}
+:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>button{box-sizing:border-box;flex:0 0 auto;min-height:36px;height:36px;margin:0;padding:7px 10px;border-radius:8px;font:500 12px/20px 'DM Sans',Arial,sans-serif;white-space:nowrap}
+@media(max-width:640px){
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more{margin-left:0}
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more[open]{gap:10px}
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more[open]>summary{flex-basis:100%;width:100%}
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>label,:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>label+label{flex:1 1 120px}
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more select{height:40px;min-height:40px}
+ :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>button{min-height:40px;height:40px}
+}

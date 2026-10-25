@@ -42,6 +42,27 @@
   },
   "smokeChecks": [
     {
+      "id": "compact-typography-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "rich-text.css?v=20261025-v1&compact-controls=20261025-v1"
+      ]
+    },
+    {
+      "id": "compact-typography-style",
+      "type": "text",
+      "url": "/customer/rich-text.css",
+      "status": 200,
+      "contains": [
+        "Compact formatting controls",
+        "height:36px",
+        "flex-wrap:wrap",
+        "select:focus-visible"
+      ]
+    },
+    {
       "id": "meeting-options-entry",
       "type": "text",
       "url": "/customer/",
