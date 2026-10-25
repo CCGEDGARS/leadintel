@@ -1,3 +1,4 @@
+import RichText from '../../customer/rich-text.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
 import {inmailScriptSeeds} from './inmail-script-seeds.js';
@@ -22,6 +23,7 @@ export function validateScript(input,{core=false}={}){
  if(core&&!styles.includes(input.style))fail('Choose one of the four core styles');
  const out={};for(const [key,max] of [['name',80],['subject',500],['body',12000]]){if(typeof input[key]!=='string'||input[key].length>max)fail('Invalid '+key);out[key]=input[key].trim();}
  if(!out.name||!out.body||input.channel==='email'&&!out.subject)fail('Name and script are required; email also requires a subject');
+ if(!core&&input.channel==='email'&&input.bodyHtml!==undefined){if(typeof input.bodyHtml!=='string'||input.bodyHtml.length>RichText.MAX_HTML)fail('Invalid template formatting');const html=RichText.matchingHtml(out.body,input.bodyHtml);if(input.bodyHtml&&!html)fail('Formatting does not match the template');if(html)out.bodyHtml=html;}
  const inmail=input.channel==='linkedin'&&input.mode==='inmail';
  if(input.mode&&input.mode!=='inmail'&&input.mode!=='direct')fail('Invalid script mode');
  if(input.mode==='inmail'&&input.channel!=='linkedin')fail('InMail is a LinkedIn mode');

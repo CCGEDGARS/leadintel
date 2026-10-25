@@ -4446,6 +4446,73 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "rich-text-assets",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "rich-text.js?v=20261025-v1",
+        "rich-text-editor.js?v=20261025-v1",
+        "rich-text.css?v=20261025-v1"
+      ]
+    },
+    {
+      "id": "rich-text-safe-model",
+      "type": "text",
+      "url": "/customer/rich-text.js",
+      "status": 200,
+      "contains": [
+        "function matchingHtml",
+        "function validateDraftHtml",
+        "function substitute",
+        "function nodeText"
+      ]
+    },
+    {
+      "id": "rich-text-toolbar",
+      "type": "text",
+      "url": "/customer/rich-text-editor.js",
+      "status": 200,
+      "contains": [
+        "More formatting",
+        "Bullet points",
+        "Numbered list",
+        "function undo",
+        "li-rich-link-dialog"
+      ]
+    },
+    {
+      "id": "rich-text-email-save",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "rich-text=20261025-v1",
+        "emailBodyHtml",
+        "LeadIntelRichTextEditor?.mount"
+      ]
+    },
+    {
+      "id": "rich-text-assistant",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "richEditor?.setHtml(state.working.messageHtml",
+        "LeadIntelRichTextEditor?.mount"
+      ]
+    },
+    {
+      "id": "rich-text-mail-rendering",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "emailBodyHtml",
+        "const bodyHtml=Rich()?.matchingHtml"
+      ]
     }
   ],
   "retry": {

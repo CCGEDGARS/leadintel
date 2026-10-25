@@ -12,15 +12,16 @@ function snapshot(context){
  const {item,draft,brand}=context;
  const subject=String(draft?.subject??item.drafts?.emailSubject??'').trim();
  const message=String(draft?.message??item.drafts?.emailBody??'').trim();
+ const bodyHtml=root.LeadIntelRichText?.matchingHtml(message,draft?draft.messageHtml:item.drafts?.emailBodyHtml)||'';
  if(!subject||!message)throw Error('Prepare an email subject and message first.');
  if(/\{\{|\}\}/.test(subject+message))throw Error('Complete the missing message fields before sending a test.');
  let rendered;
- if(item.approved&&item.approvedSource?.emailSubject===subject&&item.approvedSource?.emailBody===message){rendered=root.LeadIntelOutreach?.renderApprovedEmail(item);if(!rendered)throw Error('The approved email could not be rendered. Review its branding.');}
+ if(item.approved&&item.approvedSource?.emailSubject===subject&&item.approvedSource?.emailBody===message&&(item.approvedSource?.emailBodyHtml||'')===bodyHtml){rendered=root.LeadIntelOutreach?.renderApprovedEmail(item);if(!rendered)throw Error('The approved email could not be rendered. Review its branding.');}
  else if(brand?.status==='ready'){
   const api=root.LeadIntelBrandIdentity;if(!api)throw Error('Email branding is still loading.');
-  rendered=api.renderEmail({subject,bodyText:message,brandSnapshot:api.snapshot(brand)});
- }else rendered={subject,textBody:message,htmlBody:''};
- return {subject:rendered.subject,body:rendered.textBody,text_body:rendered.textBody,html_body:rendered.htmlBody||'',source:JSON.stringify([item.domain,item.selectedPersonId,context.channel,subject,message,brand||null])};
+  rendered=api.renderEmail({subject,bodyText:message,bodyHtml,brandSnapshot:api.snapshot(brand)});
+ }else rendered={subject,textBody:message,htmlBody:bodyHtml};
+ return {subject:rendered.subject,body:rendered.textBody,text_body:rendered.textBody,html_body:rendered.htmlBody||'',source:JSON.stringify([item.domain,item.selectedPersonId,context.channel,subject,message,bodyHtml,brand||null])};
 }
 function ensureDialog(){
  if(q('test-email-dialog'))return q('test-email-dialog');

@@ -5,6 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
+  const Rich=()=>typeof module==='object'&&module.exports?require('./rich-text.js'):globalThis.LeadIntelRichText;
   const DEFAULT_COLOR = '#0f6557';
   const ASSET_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
   const ASSET_ORIGIN = 'https://leadintel-api.edgars-7e7.workers.dev';
@@ -156,11 +157,12 @@
     const source = input && typeof input === 'object' ? input : {};
     const subject = typeof source.subject === 'string' ? source.subject : '';
     const bodyText = typeof source.bodyText === 'string' ? source.bodyText : '';
+    const bodyHtml = Rich()?.matchingHtml(bodyText, source.bodyHtml)||'';
     const identity = normalize(source.brandSnapshot);
     const validation = validate(source.brandSnapshot);
 
     if (!source.brandSnapshot || identity.status !== 'ready') {
-      return {subject, textBody: bodyText, htmlBody: null};
+      return {subject, textBody: bodyText, htmlBody: bodyHtml||null};
     }
     if (!validation.valid) {
       throw new TypeError('Cannot render a present invalid ready brand identity.');
@@ -183,11 +185,11 @@
     return {
       subject,
       textBody: finalTextBody,
-      htmlBody: renderHtml(bodyText, identity)
+      htmlBody: renderHtml(bodyText, identity, bodyHtml)
     };
   }
 
-  function renderHtml(bodyText, identity) {
+  function renderHtml(bodyText, identity, bodyHtml) {
     const logo = identity.options.includeLogo ? identity.assets.logo : null;
     const headshot = identity.options.includeHeadshot ? identity.assets.headshot : null;
     const banner = identity.options.includeBanner ? identity.assets.banner : null;
@@ -207,7 +209,7 @@
       parts.push(imageHtml(logo, identity.companyDisplayName + ' logo', imageStyle(logo, 140, 48, 'border:0;margin:0 0 20px 0;')));
     }
 
-    parts.push('<div style="font-size:16px;line-height:1.55;color:#1f2933;">' + multilineHtml(bodyText) + '</div>');
+    parts.push('<div style="font-size:16px;line-height:1.55;color:#1f2933;">' + (bodyHtml||multilineHtml(bodyText)) + '</div>');
 
     if (banner) {
       parts.push(imageHtml(banner, identity.companyDisplayName + ' promotional banner', imageStyle(banner, 552, 320, 'border:0;margin:20px 0 0 0;')));

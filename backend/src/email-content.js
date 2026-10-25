@@ -5,19 +5,20 @@ const ASSET_ORIGIN='https://leadintel-api.edgars-7e7.workers.dev';
 const ASSET_PATH='/api/customer/brand-assets/';
 const ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
 const VOID_TAGS=new Set(['br','img']);
-const ALLOWED_TAGS=new Set(['html','body','table','tbody','thead','tfoot','tr','td','div','span','p','br','strong','b','em','i','a','img']);
+const ALLOWED_TAGS=new Set(['html','body','table','tbody','thead','tfoot','tr','td','div','span','p','br','strong','b','em','i','u','ul','ol','li','a','img']);
 const ATTRIBUTES={
   html:new Set([]),body:new Set(['style']),
   table:new Set(['role','width','cellpadding','cellspacing','border','style']),
   tbody:new Set(['style']),thead:new Set(['style']),tfoot:new Set(['style']),tr:new Set(['style']),
   td:new Set(['align','width','style']),div:new Set(['style']),span:new Set(['style']),p:new Set(['style']),
   br:new Set([]),strong:new Set(['style']),b:new Set(['style']),em:new Set(['style']),i:new Set(['style']),
+  u:new Set(['style']),ul:new Set(['style']),ol:new Set(['style']),li:new Set(['style']),
   a:new Set(['href','style']),img:new Set(['src','alt','style'])
 };
 const STYLE_PROPERTIES=new Set([
   'margin','margin-top','margin-right','margin-bottom','margin-left',
   'padding','padding-top','padding-right','padding-bottom','padding-left',
-  'background','background-color','color','font-family','font-size','font-weight',
+  'background','background-color','color','font-family','font-size','font-weight','font-style',
   'line-height','width','max-width','height','max-height','border','border-top',
   'border-right','border-bottom','border-left','border-radius','text-decoration','text-align','display'
 ]);
@@ -42,7 +43,7 @@ function validHref(value){
   const decoded=decodeEntities(value);
   if(/[\u0000-\u001f\u007f]/.test(decoded))return false;
   if(decoded.startsWith('tel:'))return /^tel:\+?[0-9]{7,20}$/.test(decoded);
-  try{const url=new URL(decoded);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}
+  try{const url=new URL(decoded);return ['https:','http:','mailto:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}
 }
 function validAssetUrl(value){
   const decoded=decodeEntities(value);
