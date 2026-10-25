@@ -52,6 +52,30 @@
       ]
     },
     {
+      "id": "draft-saving-history-runtime",
+      "type": "text",
+      "url": "/customer/message-draft-history.js",
+      "status": 200,
+      "contains": [
+        "leadintel:message-history:v1:",
+        "Version history",
+        "Before restoring a version",
+        "Browser recovery",
+        "Saved to CRM"
+      ]
+    },
+    {
+      "id": "explicit-safe-release-update",
+      "type": "text",
+      "url": "/customer/release-freshness.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelMessageDraftRecovery?.beforeUpdate()",
+        "Finish or close the open editor before updating.",
+        "Update now"
+      ]
+    },
+    {
       "id": "compact-typography-entry",
       "type": "text",
       "url": "/customer/",
@@ -708,7 +732,7 @@
         "mw-default-template",
         "mw-mark-default",
         "mw-save-required",
-        "Add to templates",
+        "Save as template",
         "Reset",
         "mw-subject-picker",
         "Choose subject",
@@ -963,7 +987,7 @@
         "My content",
         "Approved originals",
         "Content Library",
-        "Add to templates",
+        "Save as template",
         "Set as default",
         "Continue to Delivery \u2192",
         "mw-browse-templates",
@@ -3058,7 +3082,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "library.saveEditedTemplate(draft,{saveDraft})",
+        "library.saveEditedTemplate(draft,{saveDraft:async template=>",
         "personalTemplateName:template.name",
         "quick-template=20261017-v1"
       ]

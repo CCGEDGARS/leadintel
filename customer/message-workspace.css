@@ -676,3 +676,6 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #step-6.message-workspace #message-studio .mw-sender-heading #mw-edit-sender{width:auto;min-height:36px;margin:0}
 #step-6.message-workspace #message-studio #mw-sender-details{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0}
 @media(max-width:720px){#step-6.message-workspace #message-studio #mw-sender-details{grid-template-columns:1fr}}
+
+/* Draft recovery and version previews share the email editor's readable width. */
+.mw-history-dialog{width:min(800px,calc(100vw - 40px));max-height:85vh;overflow:auto}.mw-history-dialog [data-history-version]{display:block;width:100%;text-align:left;margin:8px 0;white-space:normal}.mw-history-body{padding:16px;border:1px solid #dce5df;border-radius:8px;overflow-wrap:anywhere;max-height:45vh;overflow:auto}.mw-history-dialog section{margin:20px 0}.mw-history-dialog [data-history-restore]{margin-top:16px}#mw-draft-recovery{font-size:13px;color:#725417}#mw-draft-recovery[hidden]{display:none}

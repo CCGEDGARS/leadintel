@@ -22,26 +22,17 @@ async function check(){
     if(!response.ok)return false;
     const release=await response.json();if(release.service!=='leadintel-customer'||!valid(release.commit))return false;
     available=release.commit===loaded?'':release.commit;
-    if(available){notice();await updateWhenIdle();}else doc.getElementById('leadintel-release-notice')?.remove();
+    if(available){notice();}else doc.getElementById('leadintel-release-notice')?.remove();
     return Boolean(available);
   }catch{return false;}finally{checking=false;}
-}
-async function updateWhenIdle(){
-  const persistence=root.LeadIntelWorkspacePersistence,bridge=root.LeadIntelServerBridge;
-  if(!available||updating||doc.visibilityState==='hidden'||!persistence?.hasUnsavedChanges||persistence.hasUnsavedChanges())return false;
-  if(bridge&&(bridge.ready!==true||bridge.conflict||bridge.resolvingSync))return false;
-  const focused=doc.activeElement;
-  if(focused?.matches('input,textarea,select,[contenteditable="true"]'))return false;
-  if(doc.querySelector('dialog[open],details#mw-settings[open],#mw-readiness[data-state="busy"]'))return false;
-  if([...doc.querySelectorAll('[aria-busy="true"],[role="dialog"]')].some(element=>!element.closest('[hidden]')))return false;
-  for(const id of ['mw-cancel-edit','mw-subject-cancel']){const control=doc.getElementById(id);if(control&&!control.hidden)return false;}
-  return update();
 }
 async function update(){
   if(!available||updating)return false;
   updating=true;const panel=notice('Preparing update…'),button=panel.querySelector('button');button.disabled=true;
   try{
     const persistence=root.LeadIntelWorkspacePersistence;
+    if(doc.querySelector('dialog[open]')||['mw-subject-cancel'].some(id=>{const e=doc.getElementById(id);return e&&!e.hidden;}))throw Error('Finish or close the open editor before updating.');
+    if(root.LeadIntelMessageDraftRecovery?.beforeUpdate()===false)throw Error('Browser recovery could not save your message. Keep this page open and use Save draft before updating.');
     if(!persistence?.hasUnsavedChanges)throw Error('Workspace is still loading. Try Update now again in a moment.');
     if(persistence.hasUnsavedChanges()){
       notice('Saving your changes before updating…');

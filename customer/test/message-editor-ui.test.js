@@ -62,3 +62,10 @@ test('shared email toolbar saves formatting-only changes and Cancel restores the
  assert.equal(saved.length,0);assert.match(rich.getHtml(),/<strong>/);q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.match(saved[0].drafts.emailBodyHtml,/<strong>/);
  q('mw-edit-message').click();await settle();rich.setHtml('<em>Existing working message</em>');q('mw-cancel-edit').click();assert.match(rich.getHtml(),/<strong>/);assert.equal(item().drafts.emailBody,'Existing working message');rich.destroy();w.close();
 });
+
+test('Save draft never opens a template dialog; Save as template is separate and visible beside it',async()=>{
+ const {w,document,saved}=mounted(),q=id=>document.getElementById(id);let templateCalls=0;
+ w.LeadIntelChannelWorkspace={saveEditedTemplate:async()=>{templateCalls++;return {ok:true}}};
+ q('mw-edit-message').click();q('outreach-email-body').value='A separate exact draft';q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.equal(templateCalls,0);
+ assert.equal(q('mw-save-message').textContent,'Save draft');assert.equal(q('message-save-as-template').textContent,'Save as template');assert.equal(q('message-save-as-template').closest('#mw-header-actions')?.id,'mw-header-actions');assert.ok(q('mw-version-history'));w.close();
+});
