@@ -96,3 +96,22 @@ test('server bridge applies a hard deadline to every backend request',()=>{
   assert.match(bridge,/LeadIntel server request timed out/);
   assert.match(bridge,/clearTimeout\(timeout\)/);
 });
+
+test('a failed startup read names what failed: HTTP status and path, or the error name and path when no answer came (2026-10-26)',async()=>{
+  // Source contract (release smoke keeps the retry loop) …
+  assert.match(bridge,/async function bootstrapRead\(path,valid,\{allowUnauthorized=false\}=\{\}\)\{\n\s*const requestPath=String\(path\)\.split\('\?'\)\[0\];/);
+  assert.match(bridge,/code:'startup_http_'\+response\.status,requestPath,phase:'request',status:response\.status/);
+  assert.match(bridge,/throw startupFailure\(cause,requestPath\)/);
+  assert.match(bridge,/function startupFailure\(cause,requestPath\)/);
+  // … and the behaviour, with the function lifted out of the bridge and a stubbed api().
+  const src=bridge.slice(bridge.indexOf('async function bootstrapRead('),bridge.indexOf('async function fetchSession()'));
+  const make=api=>new Function('api','root',src+'\nreturn bootstrapRead;')(api,{});
+  await assert.rejects(make(async()=>({response:{ok:false,status:429},payload:{}}))('/api/workspaces?x=1',()=>true),error=>error.code==='startup_http_429'&&error.requestPath==='/api/workspaces'&&error.phase==='request'&&error.status===429&&/HTTP 429 on \/api\/workspaces/.test(error.message));
+  await assert.rejects(make(async()=>({response:{ok:false,status:409},payload:{}}))('/api/customer/state?workspace_id=w1',()=>true),error=>error.code==='startup_http_409'&&error.requestPath==='/api/customer/state');
+  let calls=0;const offline=make(async()=>{calls++;throw new TypeError('Failed to fetch');});
+  await assert.rejects(offline('/api/session',()=>true),error=>error.code==='startup_typeerror'&&error.requestPath==='/api/session'&&error.phase==='request');
+  assert.equal(calls,3,'a network failure is retried three times before it is reported');
+  await assert.rejects(make(async()=>{throw Object.assign(new Error('timed out'),{code:'request_timeout',requestPath:'/api/session',phase:'request'});})('/api/session',()=>true),error=>error.code==='request_timeout','an error that already carries a code keeps it');
+  const ok=await make(async()=>({response:{ok:true,status:200},payload:{workspaces:[]}}))('/api/workspaces',()=>true);
+  assert.equal(ok.response.status,200);
+});

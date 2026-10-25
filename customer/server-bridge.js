@@ -162,23 +162,28 @@
   }
   // Only idempotent startup reads retry. Writes and account changes never do.
   async function bootstrapRead(path,valid,{allowUnauthorized=false}={}){
+    const requestPath=String(path).split('?')[0];
     for(let attempt=0;attempt<3;attempt++){
       let result;
       try{result=await api(path);}
       catch(cause){
         const transient=cause?.transient===true||['TypeError','AbortError','TimeoutError'].includes(cause?.name)||/timed out|network|failed to fetch/i.test(String(cause?.message||''));
-        if(!transient||attempt===2||root.LeadIntelAccountCache?.current?.()===false)throw cause;
+        if(!transient||attempt===2||root.LeadIntelAccountCache?.current?.()===false)throw startupFailure(cause,requestPath);
       }
       if(result){
         const {response,payload}=result;
         if(allowUnauthorized&&response.status===401)return result;
-        if(response.ok){if(!valid(payload))throw Object.assign(new Error('Invalid workspace verification response for '+String(path).split('?')[0]+'.'),{code:'invalid_startup_response',requestPath:String(path).split('?')[0],phase:'validation',status:response.status});return result;}
-        if(![408,500,502,503,504].includes(response.status)||attempt===2)throw new Error('Workspace verification request failed (HTTP '+response.status+').');
+        if(response.ok){if(!valid(payload))throw Object.assign(new Error('Invalid workspace verification response for '+requestPath+'.'),{code:'invalid_startup_response',requestPath,phase:'validation',status:response.status});return result;}
+        if(![408,500,502,503,504].includes(response.status)||attempt===2)throw Object.assign(new Error('Workspace verification request failed (HTTP '+response.status+' on '+requestPath+').'),{code:'startup_http_'+response.status,requestPath,phase:'request',status:response.status});
       }
       await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)));
-      if(root.LeadIntelAccountCache?.current?.()===false)throw new Error('LeadIntel account changed. Refresh to continue.');
+      if(root.LeadIntelAccountCache?.current?.()===false)throw Object.assign(new Error('LeadIntel account changed. Refresh to continue.'),{code:'account_changed',requestPath,phase:'request'});
     }
   }
+  // A startup read that failed without a server answer keeps the error's own name as its code (startup_typeerror = the
+  // request never got a response: network, VPN, blocked origin) and the path it was for, so the recovery screen says
+  // what failed (2026-10-26: 'startup_failed / startup' told nobody anything).
+  function startupFailure(cause,requestPath){const error=cause&&typeof cause==='object'?cause:new Error(String(cause));if(!error.code)error.code='startup_'+String(error.name||'error').toLowerCase().replace(/[^a-z0-9]+/g,'_');if(!error.requestPath)error.requestPath=requestPath;if(!error.phase)error.phase='request';return error;}
   async function fetchSession(){const {response,payload}=await bootstrapRead('/api/session',value=>typeof value?.authenticated==='boolean'&&(!value.authenticated||(typeof value.user?.id==='string'&&value.user.id.length>0)),{allowUnauthorized:true});bridge.session=response.ok?payload:{authenticated:false};const providers=Array.isArray(payload?.user?.providers)?payload.user.providers:[];if(response.ok&&!bridge.authProvider&&providers.length){bridge.authProvider=providers.includes('microsoft')&&!providers.includes('google')?'microsoft':'google';try{localStorage.setItem?.(AUTH_PROVIDER_KEY,bridge.authProvider);}catch{}}return bridge.session;}
   const validWorkspaces=value=>Array.isArray(value?.workspaces)&&value.workspaces.every(item=>typeof item?.id==='string'&&item.id.length>0);
   async function fetchWorkspaces(){const {payload}=await bootstrapRead('/api/workspaces',validWorkspaces);bridge.workspaces=payload.workspaces;return bridge.workspaces;}
