@@ -8,93 +8,103 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <!-- The top bar and the frame are the workspace's own: the same stylesheets with the same cache tokens as customer/index.html. -->
+  <link rel="stylesheet" href="../customer/styles.css?v=20260922-hidden-workflow-cta-v1&reset-center=1&delivery-visibility=20261024-v1&toast-layer=20261025-v1">
+  <link rel="stylesheet" href="../customer/app-shell.css?v=20261025-v5&save-now=20261025-v1&phones=20261026-v1&admin-entry=20261026-v1">
   <style>
-    :root{color-scheme:light;--bg:#f6f7f8;--panel:#ffffff;--ink:#17212b;--muted:#5d6b7a;--line:#dfe5e9;--accent:#146347;--accent-ink:#ffffff;--soft:#eef2ed;--danger:#a5473e;--warn-bg:#fff6e5;--warn-line:#f0c987;--warn-ink:#6b4a00}
-    *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;background:var(--bg);font-family:"DM Sans",system-ui,sans-serif;color:var(--ink)}
-    main{width:min(1040px,calc(100% - 32px));margin:0 auto;padding:28px 0 48px;display:grid;gap:16px}
-    .head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:4px 0 8px}
-    .brand{display:flex;align-items:center;gap:10px}
-    .mark{width:36px;height:36px;border-radius:10px;background:var(--ink);display:grid;place-items:center}
-    .mark span{display:block;width:16px;height:16px;border-radius:4px;background:var(--panel)}
-    .brand strong{font-size:18px;letter-spacing:-.01em}
-    .brand small{display:block;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
-    .who{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-    .who span{font-size:14px;color:var(--muted)}
-    .card{padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px rgba(23,33,43,.06)}
-    h1{font-size:24px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
-    h2{font-size:18px;line-height:1.2;margin:0 0 14px;letter-spacing:-.01em}
-    p{margin:0 0 16px;color:var(--muted);line-height:1.55;font-size:15px}
-    .gate{padding:14px 16px;border-radius:12px;border:1px solid var(--warn-line);background:var(--warn-bg);color:var(--warn-ink);font-size:14px}
-    .gate[hidden]{display:none}
-    .invite{display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(200px,1fr) auto;gap:12px;align-items:end}
-    label{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink)}
-    input{font:inherit;font-size:15px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);min-width:0}
-    input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-weight:600;font-size:15px;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s}
-    .btn:hover{border-color:var(--ink)}
-    .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-    .btn.primary:hover{filter:brightness(.95)}
-    .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
-    .status{min-height:22px;margin:12px 0 0;font-size:14px;color:var(--ink)}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:0 10px 10px;border-bottom:1px solid var(--line)}
-    td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.45}
-    tr:last-child td{border-bottom:0}
-    td strong{font-weight:600}
-    td .muted{color:var(--muted)}
-    td .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px;font-weight:600}
-    td.actions{text-align:right;white-space:nowrap}
-    .link-btn{all:unset;cursor:pointer;color:var(--danger);font:inherit;font-size:14px;font-weight:600;padding:4px 6px;border-radius:6px}
-    .link-btn:hover,.link-btn:focus-visible{background:var(--soft)}
-    .empty{margin:12px 0 0;font-size:14px}
-    .empty[hidden]{display:none}
-    dialog{border:1px solid var(--line);border-radius:16px;padding:24px;width:min(440px,calc(100% - 32px));color:var(--ink);box-shadow:0 20px 50px rgba(23,33,43,.18)}
-    dialog::backdrop{background:rgba(23,33,43,.35)}
-    .dialog-actions{display:flex;justify-content:flex-end;gap:10px}
-    @media (max-width:720px){.invite{grid-template-columns:1fr}.card{padding:18px}table{display:block;overflow-x:auto}}
+    /* Page content only; the frame, top bar and account menu come from the workspace stylesheets above. */
+    .admin{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+    .admin-card{min-width:0;padding:24px 26px;background:var(--paper,#fff);border:1px solid var(--line,#dde2dd);border-radius:18px;box-shadow:var(--shadow,0 18px 55px rgba(20,34,29,.08))}
+    .admin h1{font-size:24px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+    .admin h2{font-size:18px;line-height:1.2;margin:0 0 14px;letter-spacing:-.01em}
+    .admin p{margin:0 0 16px;color:var(--muted,#6c7772);line-height:1.55;font-size:15px}
+    .admin-gate{margin:0;padding:14px 16px;border-radius:12px;border:1px solid #f0c987;background:#fff6e5;color:#6b4a00;font-size:14px}
+    .admin-gate[hidden]{display:none}
+    .admin-invite{display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(200px,1fr) auto;gap:12px;align-items:end}
+    .admin label{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink,#13201c)}
+    .admin input{font:inherit;font-size:15px;padding:11px 12px;border:1px solid var(--line,#dde2dd);border-radius:10px;background:var(--paper,#fff);color:var(--ink,#13201c);min-width:0}
+    .admin input:focus-visible{outline:2px solid var(--accent2,#0d5d4f);outline-offset:1px}
+    .admin-invite .primary-btn{padding:12px 18px;border-radius:10px}
+    .admin-status{min-height:22px;margin:12px 0 0;font-size:14px;color:var(--ink,#13201c)}
+    .admin-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .admin table{width:100%;border-collapse:collapse;font-size:14px}
+    .admin th{text-align:left;font-weight:600;color:var(--muted,#6c7772);font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:0 10px 10px;border-bottom:1px solid var(--line,#dde2dd)}
+    .admin td{padding:11px 10px;border-bottom:1px solid var(--line,#dde2dd);vertical-align:top;line-height:1.45}
+    .admin tr:last-child td{border-bottom:0}
+    .admin td strong{font-weight:600}
+    .admin td .muted{color:var(--muted,#6c7772)}
+    .admin td .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--soft,#eef2ed);color:var(--accent2,#0d5d4f);font-size:12px;font-weight:600}
+    .admin td.actions{text-align:right;white-space:nowrap}
+    .admin-link-btn{all:unset;cursor:pointer;color:var(--danger,#a5473e);font:inherit;font-size:14px;font-weight:600;padding:4px 6px;border-radius:6px}
+    .admin-link-btn:hover,.admin-link-btn:focus-visible{background:var(--soft,#eef2ed)}
+    .admin-empty{margin:12px 0 0;font-size:14px}
+    .admin-empty[hidden]{display:none}
+    .admin-dialog{border:1px solid var(--line,#dde2dd);border-radius:16px;padding:24px;width:min(440px,calc(100% - 32px));color:var(--ink,#13201c);box-shadow:0 20px 50px rgba(19,32,28,.18);font-family:"DM Sans",system-ui,sans-serif}
+    .admin-dialog::backdrop{background:rgba(19,32,28,.35)}
+    .admin-dialog h2{font-size:18px;margin:0 0 8px}
+    .admin-dialog p{margin:0 0 18px;color:var(--muted,#6c7772);line-height:1.5}
+    .admin-dialog-actions{display:flex;justify-content:flex-end;gap:10px}
+    .admin-btn{font:600 14px "DM Sans",sans-serif;cursor:pointer;padding:10px 16px;border-radius:10px;border:1px solid var(--line,#dde2dd);background:var(--paper,#fff);color:var(--ink,#13201c)}
+    .admin-btn-danger{background:var(--danger,#a5473e);border-color:var(--danger,#a5473e);color:#fff}
+    .top-actions .ghost-btn{text-decoration:none}
+    @media (max-width:720px){.admin-invite{grid-template-columns:1fr}.admin-card{padding:18px}.admin table{min-width:640px}}
   </style>
-  <script defer src="admin.js?v=20261026-v1"></script>
+  <script defer src="admin.js?v=20261026-v2"></script>
 </head>
 <body>
-  <main>
-    <header class="head">
-      <div class="brand"><div class="mark" aria-hidden="true"><span></span></div><div><strong>LeadIntel</strong><small>Platform administration</small></div></div>
-      <div class="who"><span id="admin-account"></span><a class="btn" href="/customer/">Back to workspace</a></div>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="../" aria-label="LeadIntel home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>LeadIntel</strong><small>PLATFORM ADMINISTRATION</small></span>
+      </a>
+      <div class="top-actions">
+        <a class="ghost-btn" href="/customer/">Back to workspace</a>
+        <div id="topbar-account" class="account-menu" hidden>
+          <button type="button" class="account-menu-btn" id="topbar-account-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="topbar-account-panel"><span class="account-avatar" data-topbar-initial aria-hidden="true"></span><span data-topbar-name></span><span class="account-chev" aria-hidden="true">▾</span></button>
+          <div class="account-menu-panel" id="topbar-account-panel" role="menu" hidden>
+            <div class="account-menu-head"><strong data-topbar-name></strong><small data-topbar-provider></small></div>
+            <a role="menuitem" data-admin-action="workspace" href="/customer/">Workspace</a>
+            <button type="button" role="menuitem" data-admin-action="signout">Sign out</button>
+          </div>
+        </div>
+      </div>
     </header>
-    <p id="admin-gate" class="gate" role="status" aria-live="polite">Checking your access…</p>
-    <div id="admin-app" hidden>
-      <section class="card">
-        <h1>Invite a customer</h1>
-        <p>Access starts the moment the address is saved. The person signs in with Google or Microsoft using exactly that address; no e-mail is sent from here.</p>
-        <form id="invite-form" class="invite" novalidate>
-          <label>E-mail address<input id="invite-email" name="email" type="email" required autocomplete="off" spellcheck="false" placeholder="name@company.com"></label>
-          <label>Note (optional)<input id="invite-note" name="note" maxlength="200" autocomplete="off" placeholder="Company, pilot, who asked"></label>
-          <button class="btn primary" type="submit">Invite</button>
-        </form>
-        <p id="invite-status" class="status" role="status" aria-live="polite"></p>
-      </section>
-      <section class="card">
-        <h2>Invitations</h2>
-        <table id="invitations-table">
-          <thead><tr><th>E-mail</th><th>Note</th><th>Invited by</th><th>Invited on</th><th>Status</th><th><span class="sr-only"></span></th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <p class="empty" id="invitations-empty" hidden>No invitations yet.</p>
-      </section>
-      <section class="card">
-        <h2>Accounts</h2>
-        <table id="users-table">
-          <thead><tr><th>Account</th><th>Signs in with</th><th>Workspaces</th><th>Last sign-in</th><th>Created</th><th>Platform role</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </section>
-    </div>
-    <dialog id="revoke-dialog" aria-labelledby="revoke-title">
+    <main class="content admin">
+      <p id="admin-gate" class="admin-gate" role="status" aria-live="polite">Checking your access…</p>
+      <div id="admin-app" class="admin" hidden>
+        <section class="admin-card">
+          <h1>Invite a customer</h1>
+          <p>Access starts the moment the address is saved. The person signs in with Google or Microsoft using exactly that address; no e-mail is sent from here.</p>
+          <form id="invite-form" class="admin-invite" novalidate>
+            <label>E-mail address<input id="invite-email" name="email" type="email" required autocomplete="off" spellcheck="false" placeholder="name@company.com"></label>
+            <label>Note (optional)<input id="invite-note" name="note" maxlength="200" autocomplete="off" placeholder="Company, pilot, who asked"></label>
+            <button class="primary-btn" type="submit">Invite</button>
+          </form>
+          <p id="invite-status" class="admin-status" role="status" aria-live="polite"></p>
+        </section>
+        <section class="admin-card">
+          <h2>Invitations</h2>
+          <div class="admin-scroll"><table id="invitations-table">
+            <thead><tr><th>E-mail</th><th>Note</th><th>Invited by</th><th>Invited on</th><th>Status</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <p class="admin-empty" id="invitations-empty" hidden>No invitations yet.</p>
+        </section>
+        <section class="admin-card">
+          <h2>Accounts</h2>
+          <div class="admin-scroll"><table id="users-table">
+            <thead><tr><th>Account</th><th>Signs in with</th><th>Workspaces</th><th>Last sign-in</th><th>Created</th><th>Platform role</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </section>
+      </div>
+    </main>
+    <dialog id="revoke-dialog" class="admin-dialog" aria-labelledby="revoke-title">
       <h2 id="revoke-title">Revoke this invitation?</h2>
       <p><strong id="revoke-email"></strong> will no longer be able to sign in for the first time. An account that already exists keeps working.</p>
-      <div class="dialog-actions"><button class="btn" type="button" id="revoke-cancel">Cancel</button><button class="btn danger" type="button" id="revoke-confirm">Revoke</button></div>
+      <div class="admin-dialog-actions"><button class="admin-btn" type="button" id="revoke-cancel">Cancel</button><button class="admin-btn admin-btn-danger" type="button" id="revoke-confirm">Revoke</button></div>
     </dialog>
-  </main>
+  </div>
 </body>
 </html>

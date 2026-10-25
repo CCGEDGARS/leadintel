@@ -37,7 +37,20 @@ test('the page is private, loads its own module with a version token, uses a <di
   assert.match(html,/<script defer src="admin\.js\?v=\d{8}-v\d+"><\/script>/);
   assert.match(html,/<dialog id="revoke-dialog"/);
   assert.match(html,/href="\/customer\/"/);
-  for(const id of ['admin-gate','admin-app','admin-account','invite-form','invite-email','invite-note','invite-status','invitations-table','users-table','revoke-email','revoke-confirm','revoke-cancel'])assert.match(html,new RegExp(`id="${id}"`),id);
+  // v2 (CTO, 2026-10-25 evening): full width, and the top bar IS the workspace top bar — same stylesheets with the same
+  // cache tokens as customer/index.html (so a token bump there must be mirrored here), same markup, same account menu.
+  const workspace=read('customer','index.html');
+  for(const sheet of ['styles.css','app-shell.css']){
+    const token=workspace.match(new RegExp('href="('+sheet.replace('.','\\.')+'\\?v=[^"]+)"'))[1];
+    assert.ok(html.includes(`href="../customer/${token}"`),`admin page must load ../customer/${token}`);
+  }
+  assert.match(html,/<div class="page-shell">\s*<header class="topbar">\s*<a class="brand" href="\.\.\/" aria-label="LeadIntel home">/);
+  assert.match(html,/<span class="brand-mark" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span>/);
+  assert.match(html,/<div class="top-actions">/);
+  assert.match(html,/<main class="content[^"]*"/);
+  assert.doesNotMatch(html,/width:min\(1040px/);
+  assert.doesNotMatch(html,/<main>\s*<header class="head">/);
+  for(const id of ['admin-gate','admin-app','topbar-account','topbar-account-btn','topbar-account-panel','invite-form','invite-email','invite-note','invite-status','invitations-table','users-table','revoke-email','revoke-confirm','revoke-cancel'])assert.match(html,new RegExp(`id="${id}"`),id);
   const source=read('admin','admin.js');
   for(const forbidden of [/\bconfirm\(/,/\balert\(/,/\bprompt\(/,/innerHTML\s*=\s*[^'"`]/])assert.doesNotMatch(source,forbidden);
 });
@@ -64,6 +77,7 @@ async function mount({session,invitations=[],users=[]}){
   win.fetch=async(url,options={})=>{
     const method=options.method||'GET';calls.push({url:String(url),method,body:options.body?JSON.parse(options.body):null,credentials:options.credentials});
     if(url==='/api/session')return jsonResponse(session.status,session.payload);
+    if(url==='/api/logout'&&method==='POST')return jsonResponse(200,{ok:true});
     if(url==='/api/access/invitations'&&method==='GET')return jsonResponse(200,{invitations:state.invitations,admins:['cto@example.lv']});
     if(url==='/api/access/users'&&method==='GET')return jsonResponse(200,{users:state.users,admins:['cto@example.lv']});
     if(url==='/api/access/invitations'&&method==='POST'){const body=JSON.parse(options.body);if(!/@/.test(body.email))return jsonResponse(400,{error:'Enter one valid e-mail address to invite'});state.invitations.unshift({email:body.email.toLowerCase(),note:body.note,invited_by:'cto@example.lv',created_at:'2026-10-26 09:00:00',accepted_at:null,revoked_at:null});return jsonResponse(201,{invitation:state.invitations[0]});}
@@ -75,7 +89,7 @@ async function mount({session,invitations=[],users=[]}){
   await win.LeadIntelAdmin.ready;
   return {win,doc:win.document,calls,replaced,state};
 }
-const ADMIN={status:200,payload:{authenticated:true,user:{id:'u0',email:'cto@example.lv',name:'CTO',platform_admin:true}}};
+const ADMIN={status:200,payload:{authenticated:true,user:{id:'u0',email:'cto@example.lv',name:'CTO',providers:['google'],platform_admin:true}}};
 const INVITATIONS=[
   {email:'guest@example.com',note:'pilot',invited_by:'cto@example.lv',created_at:'2026-10-25 08:00:00',accepted_at:'2026-10-25 08:18:00',revoked_at:null},
   {email:'new@example.com',note:'',invited_by:'cto@example.lv',created_at:'2026-10-26 07:00:00',accepted_at:null,revoked_at:null},
@@ -89,7 +103,7 @@ const USERS=[
 test('an administrator sees who they are, every invitation with its status and every account with providers, workspaces and the admin mark',async()=>{
   const {doc,calls}=await mount({session:ADMIN,invitations:INVITATIONS,users:USERS});
   assert.equal(doc.getElementById('admin-app').hidden,false);assert.equal(doc.getElementById('admin-gate').hidden,true);
-  assert.equal(doc.getElementById('admin-account').textContent,'cto@example.lv');
+  assert.equal(doc.querySelector('#topbar-account .account-menu-head small').textContent,'Google · cto@example.lv');
   assert.ok(calls.every(call=>call.credentials==='include'),'every request carries the session cookie');
   const rows=[...doc.querySelectorAll('#invitations-table tbody tr')];
   assert.equal(rows.length,3);
@@ -149,4 +163,30 @@ test('a signed-in non-administrator is told so and gets no form or tables; an an
   const outage=await mount({session:{status:503,payload:null}});
   assert.equal(outage.doc.getElementById('admin-gate').textContent,'We couldn’t check your access just now. Reload to try again.');
   assert.deepEqual(outage.replaced,[]);
+});
+
+test('the top bar is the workspace account menu: avatar initial and name, provider · e-mail, Workspace link, Sign out that logs out and leaves for the sign-in page',async()=>{
+  const {win,doc,calls,replaced}=await mount({session:ADMIN,invitations:INVITATIONS,users:USERS});
+  const account=doc.getElementById('topbar-account');
+  assert.ok(account,'the account menu exists with the workspace id');assert.equal(account.hidden,false);
+  assert.equal(account.querySelector('.account-menu-btn [data-topbar-initial]').textContent,'C');
+  assert.equal(account.querySelector('.account-menu-btn [data-topbar-name]').textContent,'CTO');
+  assert.equal(account.querySelector('.account-menu-head strong').textContent,'CTO');
+  assert.equal(account.querySelector('.account-menu-head small').textContent,'Google · cto@example.lv');
+  const btn=doc.getElementById('topbar-account-btn'),panel=doc.getElementById('topbar-account-panel');
+  assert.equal(panel.hidden,true);btn.click();assert.equal(panel.hidden,false);assert.equal(btn.getAttribute('aria-expanded'),'true');
+  const items=[...panel.querySelectorAll('[data-admin-action]')].map(e=>e.tagName+':'+e.dataset.adminAction+':'+e.textContent.trim());
+  assert.deepEqual(items,['A:workspace:Workspace','BUTTON:signout:Sign out']);
+  assert.equal(panel.querySelector('[data-admin-action="workspace"]').getAttribute('href'),'/customer/');
+  doc.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(panel.hidden,true);
+  btn.click();panel.querySelector('[data-admin-action="signout"]').click();await win.LeadIntelAdmin.last;
+  assert.deepEqual(calls.filter(c=>c.url==='/api/logout').map(c=>c.method),['POST']);
+  assert.deepEqual(replaced,['/?access=signed-out']);
+  assert.equal(doc.querySelector('.top-actions a.ghost-btn[href="/customer/"]').textContent.trim(),'Back to workspace');
+});
+
+test('a non-administrator still sees who they are in the top bar but no admin content',async()=>{
+  const member=await mount({session:{status:200,payload:{authenticated:true,user:{id:'u1',email:'guest@example.com',name:'Guest Person',providers:['microsoft'],platform_admin:false}}}});
+  assert.equal(member.doc.getElementById('admin-app').hidden,true);
+  assert.equal(member.doc.querySelector('#topbar-account .account-menu-head small').textContent,'Microsoft · guest@example.com');
 });

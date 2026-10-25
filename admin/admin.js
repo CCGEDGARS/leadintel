@@ -38,7 +38,7 @@
       const tr=doc.createElement('tr');
       tr.append(node('td',row.email),node('td',row.note||''),node('td',row.invited_by||''),node('td',shortDate(row.created_at)),node('td',invitationStatus(row)));
       const actions=node('td','','actions');
-      if(!row.revoked_at){const button=node('button','Revoke','link-btn');button.type='button';button.dataset.revoke=row.email;actions.append(button);}
+      if(!row.revoked_at){const button=node('button','Revoke','admin-link-btn');button.type='button';button.dataset.revoke=row.email;actions.append(button);}
       tr.append(actions);body.append(tr);
     }
     const empty=el('invitations-empty');if(empty)empty.hidden=list.length>0;
@@ -100,15 +100,40 @@
     })();
   });
 
+  // The top bar is the workspace top bar: the same account menu (ids and classes from topbar.js), fed by /api/session.
+  const PROVIDERS={google:'Google',microsoft:'Microsoft'};
+  function renderTopbar(user){
+    const account=el('topbar-account');if(!account)return;
+    const name=String(user?.name||user?.email||'Account');const provider=(Array.isArray(user?.providers)?user.providers:[])[0];
+    for(const slot of account.querySelectorAll('[data-topbar-name]'))slot.textContent=name;
+    const initial=account.querySelector('[data-topbar-initial]');if(initial)initial.textContent=name.slice(0,1).toUpperCase();
+    const label=account.querySelector('[data-topbar-provider]');if(label)label.textContent=(provider?PROVIDERS[provider]||provider:'Signed in')+' · '+String(user?.email||'');
+    account.hidden=false;
+  }
+  (function wireTopbar(){
+    const account=el('topbar-account'),btn=el('topbar-account-btn'),panel=el('topbar-account-panel');if(!account||!btn||!panel)return;
+    const close=()=>{panel.hidden=true;btn.setAttribute('aria-expanded','false');};
+    btn.addEventListener('click',()=>{const open=panel.hidden;panel.hidden=!open;btn.setAttribute('aria-expanded',String(open));});
+    doc.addEventListener('click',event=>{if(!account.contains(event.target))close();});
+    doc.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
+    panel.addEventListener('click',event=>{
+      const item=event.target.closest('[data-admin-action]');if(!item)return;close();
+      if(item.dataset.adminAction==='signout'){
+        event.preventDefault();
+        admin.last=(async()=>{try{await request('/api/logout',{method:'POST'});}catch{}admin.navigate('/?access=signed-out');})();
+      }
+    });
+  })();
+
   admin.ready=(async()=>{
     let response=null,payload=null;
     try{response=await request(api.session);payload=await readJson(response);}catch{response=null;}
     const verdict=decide(response?response.status:0,payload);
     const gate=el('admin-gate'),app=el('admin-app');
     if(verdict==='sign-in'){admin.navigate('/');return;}
-    if(verdict==='forbidden'){if(gate)gate.textContent='Only platform administrators can open this page.';return;}
+    if(verdict==='forbidden'){renderTopbar(payload.user);if(gate)gate.textContent='Only platform administrators can open this page.';return;}
     if(verdict==='outage'){if(gate)gate.textContent='We couldn’t check your access just now. Reload to try again.';return;}
-    const who=el('admin-account');if(who)who.textContent=String(payload.user.email||'');
+    renderTopbar(payload.user);
     if(gate)gate.hidden=true;if(app)app.hidden=false;
     await refresh();
   })();

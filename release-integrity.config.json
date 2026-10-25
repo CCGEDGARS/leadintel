@@ -4684,10 +4684,12 @@
       "url": "/admin/",
       "status": 200,
       "contains": [
-        "Platform administration",
-        "admin.js?v=20261026-v1",
+        "PLATFORM ADMINISTRATION",
+        "admin.js?v=20261026-v2",
         "href=\"/customer/\"",
-        "id=\"revoke-dialog\""
+        "id=\"revoke-dialog\"",
+        "<header class=\"topbar\">",
+        "href=\"../customer/app-shell.css?v="
       ]
     },
     {
