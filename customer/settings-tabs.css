@@ -5,7 +5,7 @@
 .settings-tab[aria-selected="true"]{background:var(--ink,#13201c);border-color:var(--ink,#13201c);color:#fff}
 .settings-tab:focus-visible{outline:2px solid rgba(188,143,42,.6);outline-offset:2px}
 .settings-tab[hidden]{display:none}
-.settings-tab-hidden{display:none!important}
+#ai-settings-drawer>section[data-settings-hidden="1"]{display:none!important}
 @media(max-width:720px){.settings-tabs{gap:4px}.settings-tab{padding:7px 11px;font-size:12px}}
 
 /* Delivery tab: the sign-in account is one thing, the sending mailbox another. The active account spans the row; the alternative is a compact option. */

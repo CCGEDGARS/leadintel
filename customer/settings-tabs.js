@@ -21,10 +21,11 @@
     return 'engines';
   }
   function rememberedTab(){try{const saved=root.localStorage?.getItem(STORAGE_KEY);return TABS.some(tab=>tab.id===saved)?saved:'';}catch{return '';}}
-  function ensureCss(){if(document.querySelector('link[data-leadintel-asset="settings-tabs-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./settings-tabs.css?v=20261025-v5';link.dataset.leadintelAsset='settings-tabs-css';document.head.appendChild(link);}
+  function ensureCss(){if(document.querySelector('link[data-leadintel-asset="settings-tabs-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./settings-tabs.css?v=20261025-v6';link.dataset.leadintelAsset='settings-tabs-css';document.head.appendChild(link);}
   function select(drawer,id,persist){
     const known=TABS.some(tab=>tab.id===id)?id:'engines';
-    for(const section of sectionsOf(drawer))section.classList.toggle('settings-tab-hidden',(section.dataset.settingsTab||'engines')!==known);
+    // Hidden state lives in a data attribute: renderers that reset className (the storage card does) cannot drop it.
+    for(const section of sectionsOf(drawer)){const hide=(section.dataset.settingsTab||'engines')!==known;if(hide)section.setAttribute('data-settings-hidden','1');else section.removeAttribute('data-settings-hidden');}
     for(const button of drawer.querySelectorAll('.settings-tabs [data-settings-tab]')){const on=button.dataset.settingsTab===known;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;}
     if(persist){try{root.localStorage?.setItem(STORAGE_KEY,known);}catch{}}
     return known;

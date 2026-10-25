@@ -29,7 +29,7 @@ async function mount(){
 test('the settings drawer loads the tabs module and the tabs stylesheet is scoped',()=>{
   assert.match(html,/<script defer src="settings-tabs\.js\?v=[^"]+"><\/script>/);
   assert.match(settings,/leadintel:settings-opened/);
-  assert.match(css,/\.settings-tab-hidden\{display:none!important\}/);
+  assert.match(css,/#ai-settings-drawer>section\[data-settings-hidden="1"\]\{display:none!important\}/);
   assert.match(css,/\.settings-tab\[aria-selected="true"\]/);
 });
 
@@ -47,16 +47,16 @@ test('sections are grouped into five tabs by their eyebrow, the head and summari
   assert.deepEqual(byTab('delivery'),['Communication','Meetings']);
   assert.deepEqual(byTab('profile'),['Your professional profile']);
   assert.deepEqual(byTab('storage'),['Your workspace']);
-  const hidden=[...drawer.querySelectorAll('section')].filter(s=>s.classList.contains('settings-tab-hidden')).length;
+  const hidden=[...drawer.querySelectorAll('section')].filter(s=>s.hasAttribute('data-settings-hidden')).length;
   assert.equal(hidden,5,'only the AI providers section is visible on the default tab');
-  assert.ok(!win.document.getElementById('integration-health-summary').classList.contains('settings-tab-hidden'));
+  assert.ok(!win.document.getElementById('integration-health-summary').hasAttribute('data-settings-hidden'));
 });
 
 test('choosing a tab shows only its sections, remembers the choice, and the next open restores it',async()=>{
   const {win,drawer,tabs}=await mount();
   tabs.build(drawer);
   drawer.querySelector('[data-settings-tab="delivery"]').click();
-  const visible=[...drawer.querySelectorAll('section')].filter(s=>!s.classList.contains('settings-tab-hidden')).map(s=>s.querySelector('.eyebrow').textContent);
+  const visible=[...drawer.querySelectorAll('section')].filter(s=>!s.hasAttribute('data-settings-hidden')).map(s=>s.querySelector('.eyebrow').textContent);
   assert.deepEqual(visible,['Communication','Meetings']);
   assert.equal(drawer.querySelector('[data-settings-tab="delivery"]').getAttribute('aria-selected'),'true');
   assert.equal(drawer.querySelector('[data-settings-tab="engines"]').getAttribute('aria-selected'),'false');
@@ -74,10 +74,11 @@ test('a section replaced by its renderer (storage after a status refresh) is re-
   const old=drawer.querySelector('#workspace-storage-card');
   const fresh=win.document.createElement('section');fresh.id='workspace-storage-card';fresh.className='workspace-storage-card';fresh.innerHTML='<span class="eyebrow">Your workspace</span>';
   old.replaceWith(fresh);
-  assert.ok(!fresh.classList.contains('settings-tab-hidden'),'untagged on arrival');
+  assert.ok(!fresh.hasAttribute('data-settings-hidden'),'untagged on arrival');
+  // a renderer that only resets className must not reveal a hidden section either
   await new Promise(r=>setTimeout(r,30));
   assert.equal(fresh.dataset.settingsTab,'storage');
-  assert.ok(fresh.classList.contains('settings-tab-hidden'),'hidden again because Profile is the open tab');
+  assert.ok(fresh.hasAttribute('data-settings-hidden'),'hidden again because Profile is the open tab');
   assert.equal(drawer.querySelectorAll('.settings-tabs').length,1);
 });
 
