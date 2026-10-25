@@ -411,7 +411,8 @@
    const before=item.channel==='linkedin'?{subject:'',message:item.drafts?.linkedinMessage||''}:workingDraft(item);
    const continuing=options.continueTemplateUpdate&&updateUndo(item);
    const priorUndo=continuing?copy(info.templateUpdateUndo):null;
-   info.templateUpdateUndo=priorUndo?{...priorUndo,appliedDraft:{subject:draft.subject||'',message:draft.message||''}}:{draft:copy(before),appliedDraft:{subject:draft.subject||'',message:draft.message||''},context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft'].filter(k=>k==='languageVersions'||info[k]!==undefined).map(k=>[k,info[k]??null]))),localizationProvenance:copy(item.localizationProvenance||{}),campaignScenario:copy(item.campaignScenario||{})};
+   const appliedDraft={subject:draft.subject||'',message:draft.message||'',...(item.channel==='email'?Rich()?.fields(draft.message,draft.messageHtml??item.drafts?.emailBodyHtml):{})};
+   info.templateUpdateUndo=priorUndo?{...priorUndo,appliedDraft}:{draft:copy(before),appliedDraft,context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft'].filter(k=>k==='languageVersions'||info[k]!==undefined).map(k=>[k,info[k]??null]))),localizationProvenance:copy(item.localizationProvenance||{}),campaignScenario:copy(item.campaignScenario||{})};
    if(!continuing)info.previousDrafts=[...(info.previousDrafts||[]).slice(-4),{emailSubject:before.subject,emailBody:before.message,savedAt:new Date().toISOString()}];
    delete info.scriptSavedAt;delete info.savedDraft;
   }

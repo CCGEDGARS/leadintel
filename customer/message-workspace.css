@@ -256,6 +256,27 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 .mw-sender-card{background:#fff;border:1px solid #dce5df;border-radius:16px;padding:18px 22px;margin-bottom:18px;min-width:0}
 .mw-sender-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .mw-sender-heading h3{margin:0}
+.mw-meeting-options{margin:0 0 18px;padding:16px 20px;border:1px solid #dce5df;border-radius:14px;background:#fff;min-width:0}
+.mw-meeting-options>summary{cursor:pointer;color:#315d4c;font-weight:650;display:list-item}
+.mw-meeting-options>summary span{font-size:12px;font-weight:400;color:#6a7970;margin-left:10px}
+.meeting-content{display:grid;gap:18px;margin-top:18px}
+.meeting-content h4{margin:0 0 5px;font-size:14px}.meeting-content p{margin:0;color:#637368;font-size:13px;line-height:1.6}
+.meeting-booking,.meeting-calendar-head{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+#meeting-link-value{display:block;font-size:12px;color:#54705e;overflow-wrap:anywhere;margin-top:7px}
+.meeting-calendar-head{border-top:1px solid #e4ebe6;padding-top:18px}
+.meeting-actions{display:flex;gap:8px;flex-wrap:wrap}
+.meeting-fields{display:grid;grid-template-columns:minmax(150px,1fr) minmax(160px,1fr) 1fr;gap:16px;align-items:end;margin:0 0 16px}
+#message-studio .meeting-fields label,.meeting-invitation>label{display:grid;gap:7px;font-size:12px;color:#4d6557}
+#message-studio .meeting-fields input,.meeting-invitation input,.meeting-invitation textarea{box-sizing:border-box;width:100%;min-height:42px;padding:10px 12px;background:#fff;border:1px solid #cedbd1;border-radius:8px;font:inherit}
+.meeting-duration{display:grid;gap:4px;align-self:center;font-size:13px}.meeting-duration small{font-size:11px;color:#6a7970}
+#meeting-calendars{margin-bottom:16px;font-size:12px;color:#4d6557}#meeting-calendar-list{display:grid;gap:8px;padding:12px 0}#meeting-calendar-list label{display:flex;gap:10px;align-items:center;overflow-wrap:anywhere}#message-studio #meeting-calendar-list input{width:auto}
+.meeting-slots{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.meeting-slot{min-width:66px;min-height:40px;padding:8px 12px;border:1px solid #ccdcd1;border-radius:9px;background:#fff;color:#274d3a;cursor:pointer}.meeting-slot:hover,.meeting-slot:focus-visible{border-color:#31885b;outline:2px solid #d7eddf;outline-offset:1px}.meeting-slot[aria-pressed=true]{background:#e5f3e9;border-color:#31885b;font-weight:700}
+.meeting-help{display:block;color:#6c7c72;font-size:11px;line-height:1.6}
+.meeting-invitation{border-top:1px solid #e4ebe6;margin-top:18px;padding-top:14px;font-size:13px}.meeting-invitation>label{margin:14px 0}.meeting-invitation>p{color:#6a7970;font-size:12px}
+#mw-business-context{border-top:1px solid #e4ebe6;padding-top:12px;font-size:13px;line-height:1.7}#mw-business-context>summary{cursor:pointer;color:#315d4c;font-weight:600}#mw-business-context>p{margin:14px 0}
+#message-studio #mw-settings:not([open]){padding:0;border:0;margin:0}#message-studio #mw-settings[open]{padding:12px 0;border:0;border-top:1px solid #e4ebe6;background:transparent}
+#message-studio #mw-settings .brand-identity-summary{display:none}
+@media(max-width:720px){.meeting-fields{grid-template-columns:1fr}.mw-meeting-options{padding:16px}.mw-meeting-options>summary span{display:block;margin:5px 0 0}.meeting-booking,.meeting-calendar-head{align-items:flex-start}.meeting-actions{width:100%}}
 #mw-sender-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:16px 0}
 #mw-sender-details dt{font-size:12px;color:#66756d}
 #mw-sender-details dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:14px}
@@ -643,3 +664,15 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
  #message-studio .mw-translation-actions>span{flex-basis:100%}
  #message-studio .mw-translation-actions>button{flex:1 1 160px}
 }
+
+/* Collapsed identity has no empty card; one Edit control opens the fields. */
+#step-6.message-workspace #message-studio .mw-sender-card{display:block;min-height:0}
+#step-6.message-workspace #message-studio .mw-sender-heading{display:flex}
+#step-6.message-workspace #message-studio #mw-sender-details{display:grid}
+#step-6.message-workspace #message-studio #mw-business-context{grid-column:1/-1}
+#step-6.message-workspace #message-studio #mw-settings:not([open]){display:none}
+#step-6.message-workspace #message-studio #mw-settings[open]{min-height:0;padding:12px 0;background:transparent;border:0;border-top:1px solid #e4ebe6}
+#step-6.message-workspace #message-studio #mw-settings .brand-identity-summary{display:none}
+#step-6.message-workspace #message-studio .mw-sender-heading #mw-edit-sender{width:auto;min-height:36px;margin:0}
+#step-6.message-workspace #message-studio #mw-sender-details{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0}
+@media(max-width:720px){#step-6.message-workspace #message-studio #mw-sender-details{grid-template-columns:1fr}}

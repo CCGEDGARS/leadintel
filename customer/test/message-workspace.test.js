@@ -17,6 +17,21 @@ test('composer mounts once, preserves canonical fields/listeners and keeps setti
  assert.equal(document.querySelector('.message-advanced').open,false);
  const input=document.getElementById('outreach-email-body');input.value='Preserve this draft';let edits=0;input.addEventListener('input',()=>edits++);w.LeadIntelMessageWorkspace.mount(document);input.dispatchEvent(new w.Event('input'));assert.equal(input.value,'Preserve this draft');assert.equal(edits,1);
 });
+test('sender settings separate meeting options and show business facts once',()=>{
+ const {document}=mounted();
+ assert.ok(document.getElementById('mw-meeting-options'));
+ assert.equal(document.getElementById('mw-meeting-options').open,false);
+ assert.ok(!document.getElementById('mw-settings').contains(document.getElementById('message-meetingDateOne')));
+ assert.equal(document.getElementById('message-meetingDateOne').closest('label').hidden,true);
+ assert.equal(document.getElementById('message-pitch-preview').hidden,true);
+ assert.equal(document.getElementById('mw-business-context').querySelector('summary').textContent,'Business context');
+ assert.ok(document.querySelector('.mw-sender-heading #mw-edit-sender'));
+});
+test('sender Edit remains visible and closed identity settings occupy no blank card',()=>{
+ const {document,w}=mounted(),style=document.createElement('style');style.textContent=read('message-workspace.css');document.head.append(style);
+ assert.equal(w.getComputedStyle(document.querySelector('.mw-sender-heading')).display,'flex');assert.equal(w.getComputedStyle(document.getElementById('mw-sender-details')).display,'grid');assert.equal(w.getComputedStyle(document.getElementById('mw-settings')).display,'none');
+ document.getElementById('mw-edit-sender').click();assert.notEqual(w.getComputedStyle(document.getElementById('mw-settings')).display,'none');document.getElementById('mw-edit-sender').click();assert.equal(w.getComputedStyle(document.getElementById('mw-settings')).display,'none');
+});
 test('readiness distinguishes restoration, missing Profile answers, existing drafts and available generation',()=>{
  const ready={ready:true,authenticated:true};assert.equal(Workspace.state({...ready,pending:true}).kind,'loading');
  const blocked=Workspace.state({...ready,unconfirmed:['delivery_approach','meeting_value'],hasDraft:true});assert.equal(blocked.canGenerate,false);assert.equal(blocked.action,'profile');assert.match(blocked.detail,/How you deliver/);assert.doesNotMatch(blocked.text,/Ready to generate/);
@@ -143,7 +158,7 @@ test('message-first workspace places core decisions above editor and reusable to
  assert.equal(document.querySelectorAll('#message-generate').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
- assert.ok(document.querySelector('#mw-settings #mw-value-proof'));assert.equal(tools.querySelector('#mw-value-proof'),null);
+ assert.ok(document.querySelector('#mw-business-context #mw-business-value'));assert.equal(tools.querySelector('#mw-business-context'),null);
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
  assert.equal(tools.open,false);
@@ -160,7 +175,7 @@ test('single strongest buying trigger replaces multi-option picker without losin
  assert.equal(document.querySelectorAll('#mw-style-options .mw-style').length,4);
  assert.ok(document.getElementById('mw-subject-options'));
  assert.ok(document.getElementById('mw-original-peek'));
- assert.ok(document.getElementById('mw-value-proof'));
+ assert.ok(document.getElementById('mw-business-context'));
  assert.equal(document.getElementById('outreach-email-body').closest('.script-grid')!==null,true);
 });
 test('tools group reusable custom styles below the library without duplicated shortcuts',()=>{
@@ -205,7 +220,7 @@ test('compact sender summary shows essential details and clears previous workspa
  const {document,w}=mounted(),base={ready:true,authenticated:true,channel:'email',senderIdentityReady:true};
  w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{senderName:'Marta Kalna',senderTitle:'Partner',companyDisplayName:'North Legal',email:'marta@example.com',phone:'+123456789',linkedinUrl:'https://linkedin.com/in/marta'},calendly:'https://calendly.com/north/call'});
  const card=document.getElementById('mw-sender-card');assert.ok(card.compareDocumentPosition(document.getElementById('outreach-email-body'))&4);
- for(const text of ['Marta Kalna','North Legal','https://calendly.com/north/call'])assert.ok(card.textContent.includes(text),text);
+ for(const text of ['Marta Kalna','North Legal','marta@example.com'])assert.ok(document.getElementById('mw-sender-details').textContent.includes(text),text);
  assert.equal(document.querySelector('#mw-tools-drawer #brand-identity'),null);
  assert.equal(document.querySelectorAll('#brand-email').length,1);
  w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{}});
