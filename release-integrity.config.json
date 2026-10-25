@@ -42,6 +42,45 @@
   },
   "smokeChecks": [
     {
+      "id": "meeting-options-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "meeting-options=20261025-v1"
+      ]
+    },
+    {
+      "id": "meeting-options-runtime",
+      "type": "text",
+      "url": "/customer/message-meeting-options.js",
+      "status": 200,
+      "contains": [
+        "Insert selected times",
+        "Read-only",
+        "formatSuggestions"
+      ]
+    },
+    {
+      "id": "meeting-options-layout",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-meeting-options",
+        "Business context"
+      ]
+    },
+    {
+      "id": "calendar-auth-required",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/google-calendar/status?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Sign in to connect your calendar"
+      ]
+    },
+    {
       "id": "delivery-recipient-history-entry",
       "type": "text",
       "url": "/customer/",

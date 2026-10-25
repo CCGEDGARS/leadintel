@@ -1,0 +1,61 @@
+(function(root){
+ 'use strict';
+ function insertBeforeSignature(message,text,sender=''){
+  if(message.includes(text))return message;
+  const blocks=String(message).split(/\n\s*\n/),name=String(sender).trim();
+  let index=name?blocks.findIndex(block=>block.trim()===name||block.trim().startsWith(name+'\n')):-1;
+  if(index<0)index=blocks.length;blocks.splice(index,0,text);return blocks.filter(Boolean).join('\n\n');
+ }
+ function insertDraft(draft,text,sender=''){
+  const message=insertBeforeSignature(draft.message,text,sender),rich=typeof module==='object'&&module.exports?require('./rich-text.js'):root.LeadIntelRichText;
+  return {subject:draft.subject||'',message,...rich?.fields(message,rich.carry(draft.messageHtml,draft.message,message))};
+ }
+ function formatSuggestions({slots,timeZone,language='en'}){
+  let formatter;try{formatter=new Intl.DateTimeFormat(language==='auto'?'en':language,{timeZone,weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});}catch{formatter=new Intl.DateTimeFormat('en',{timeZone,dateStyle:'short',timeStyle:'short',hourCycle:'h23'});}
+  return '20 min · '+timeZone+'\n'+slots.map(slot=>formatter.format(new Date(slot.start))).join('\n');
+ }
+ function mount(document,deps){
+  const panel=document.getElementById('mw-meeting-options');if(!panel)return null;if(panel._meetingController)return panel._meetingController;
+  const q=id=>document.getElementById(id),view=document.defaultView;
+  const content=document.createElement('div');content.className='meeting-content';content.innerHTML='<div class="meeting-booking"><div><h4>Booking link</h4><p>Let your recipient choose a time.</p><span id="meeting-link-value"></span></div><button type="button" class="secondary-btn small" id="meeting-insert-link">Insert booking link</button></div><div class="meeting-calendar-head"><div><h4>Your Google Calendar</h4><p id="meeting-connection" role="status">Open to check your calendar connection.</p></div><div class="meeting-actions"><button type="button" class="secondary-btn small" id="meeting-connect">Connect Google Calendar</button><button type="button" class="text-btn" id="meeting-disconnect" hidden>Disconnect calendar</button></div></div><div id="meeting-calendar" hidden><div class="meeting-fields"><label>Day<input type="date" id="meeting-day"></label><label>Timezone<input type="text" id="meeting-timezone" maxlength="80" placeholder="Europe/Riga"></label><div class="meeting-duration"><strong>20 minutes</strong><small>Matches your invitation · 09:00–17:00</small></div></div><details id="meeting-calendars"><summary>Calendars to check</summary><div id="meeting-calendar-list"></div></details><button type="button" id="meeting-check" class="secondary-btn">Check availability</button><div id="meeting-slots" class="meeting-slots" role="group" aria-label="Available meeting times"></div><button type="button" id="meeting-insert-times" class="primary-btn" disabled>Insert selected times</button></div><p id="meeting-status" role="status"></p><small class="meeting-help">Times are suggestions, not reservations. Only free/busy information is checked; event details stay private.</small>';
+  panel.append(content);
+  let revision=0,checkKey='',checkedAt=0,connected=false,selected=new Set(),results=[],busy=false,contextKey='',calendars=[];
+  const context=()=>deps.getContext()||{};
+  const stamp=()=>{const c=context();return JSON.stringify([c.key,q('meeting-day').value,q('meeting-timezone').value,[...content.querySelectorAll('[data-calendar-id]:checked')].map(c=>c.dataset.calendarId)]);};
+  const status=text=>{q('meeting-status').textContent=text;};
+  function clear(){revision++;selected.clear();results=[];checkKey='';checkedAt=0;q('meeting-slots').replaceChildren();q('meeting-insert-times').disabled=true;}
+  function update(){const c=context();if(contextKey&&contextKey!==c.key){clear();connected=false;calendars=[];q('meeting-calendar-list').replaceChildren();q('meeting-connection').textContent='Open to check your calendar connection.';q('meeting-calendar').hidden=true;q('meeting-connect').hidden=false;q('meeting-connect').disabled=false;q('meeting-disconnect').hidden=true;status('');}contextKey=c.key||'';q('meeting-link-value').textContent=c.booking||'Add your booking link in Meeting invitation below.';q('meeting-insert-link').disabled=!c.usable||!/^https:\/\/calendly\.com\/[^/]+\/[^/]+/.test(c.booking||'')||c.message?.includes(c.booking);q('meeting-insert-times').disabled=busy||!c.usable||!selected.size||checkKey!==stamp()||Date.now()-checkedAt>120000;}
+  function insert(text){const c=context();if(!c.usable)return status('Finish the current action before editing the message.');if(deps.onInsert(text)===false)return status('Your message changed. Please review it and try again.');status('Inserted into your working message. Review and Save.');selected.clear();update();}
+  async function refresh(){const key=context().key;clear();const token=revision;busy=true;q('meeting-connect').disabled=true;q('meeting-check').disabled=true;
+   try{const result=await deps.request('status');if(token!==revision||key!==context().key)return;if(!result.connected){connected=false;q('meeting-connection').textContent=result.configured?'Connect to check your own availability.':'Google Calendar connection is not configured.';q('meeting-connect').disabled=!result.configured;q('meeting-connect').hidden=false;q('meeting-disconnect').hidden=true;q('meeting-calendar').hidden=true;return;}
+    const list=await deps.request('calendars');if(token!==revision||key!==context().key)return;
+    connected=true;calendars=list.calendars||[];q('meeting-connection').textContent=(result.email||'Google Calendar')+' · Read-only';q('meeting-connect').hidden=true;q('meeting-disconnect').hidden=false;q('meeting-calendar').hidden=false;
+    const host=q('meeting-calendar-list');host.replaceChildren();for(const row of calendars){const label=document.createElement('label'),input=document.createElement('input'),name=document.createElement('span');input.type='checkbox';input.dataset.calendarId=row.id;input.checked=Boolean(row.selected||row.primary);input.onchange=()=>{clear();status('Calendars changed. Check availability again.');};name.textContent=row.name||row.id;label.append(input,name);host.append(label);}
+    const primary=calendars.find(row=>row.primary);if(!q('meeting-timezone').value)q('meeting-timezone').value=primary?.timeZone||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
+    if(!q('meeting-day').value){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:q('meeting-timezone').value,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(Date.now()).map(p=>[p.type,p.value]));q('meeting-day').value=parts.year+'-'+parts.month+'-'+parts.day;}
+    status(calendars.length?'Choose a day and check availability.':'No calendars are available in this account.');
+   }catch(error){if(token!==revision||key!==context().key)return;connected=false;clear();q('meeting-calendar').hidden=true;q('meeting-connect').hidden=false;q('meeting-connect').disabled=false;q('meeting-disconnect').hidden=true;q('meeting-connection').textContent='Calendar connection could not be checked.';status(error.message);}
+   finally{if(key===context().key){busy=false;q('meeting-check').disabled=!connected;update();}}
+  }
+  async function check(){
+   clear();if(!connected)return;const token=revision,key=stamp();busy=true;q('meeting-check').disabled=true;status('Checking selected calendars…');
+   try{const data=await deps.request('availability',{date:q('meeting-day').value,timeZone:q('meeting-timezone').value,calendarIds:[...content.querySelectorAll('[data-calendar-id]:checked')].map(c=>c.dataset.calendarId)});if(token!==revision||key!==stamp())return;
+    if(!Array.isArray(data.slots)||!Number.isFinite(Date.parse(data.checkedAt)))throw Error('Calendar availability could not be verified.');results=data.slots;checkKey=key;checkedAt=Date.parse(data.checkedAt);
+    const formatter=new Intl.DateTimeFormat('en-GB',{timeZone:q('meeting-timezone').value,hour:'2-digit',minute:'2-digit'});for(const slot of results){const button=document.createElement('button');button.type='button';button.className='meeting-slot';button.dataset.meetingSlot=slot.start;button.textContent=formatter.format(new Date(slot.start));button.setAttribute('aria-pressed','false');button.onclick=()=>{if(checkKey!==stamp()||Date.now()-checkedAt>120000){clear();status('Availability expired. Check again.');return;}if(selected.has(slot.start))selected.delete(slot.start);else if(selected.size<3)selected.add(slot.start);button.setAttribute('aria-pressed',String(selected.has(slot.start)));update();};q('meeting-slots').append(button);}
+    status(results.length?'Select up to 3 times · Checked '+new Date(checkedAt).toLocaleTimeString():'No free 20-minute slots between 09:00 and 17:00. Try another day.');
+   }catch(error){if(token===revision&&key===stamp()){clear();status(error.message);}}
+   finally{busy=false;q('meeting-check').disabled=!connected;update();}
+  }
+  q('meeting-connect').onclick=()=>{if(context().canConnect===false)return status('Save or cancel your current edits before connecting Google Calendar.');deps.connect();};
+  q('meeting-disconnect').onclick=async()=>{const key=context().key;if(!(await (deps.confirm?.('Disconnect your Google Calendar from this workspace?')??false)))return;if(key!==context().key)return;clear();try{await deps.request('disconnect');await refresh();}catch(error){status(error.message);}};
+  q('meeting-check').onclick=()=>void check();
+  for(const id of ['meeting-day','meeting-timezone'])q(id).addEventListener('input',()=>{clear();status('Date or timezone changed. Check availability again.');});
+  q('meeting-insert-link').onclick=()=>{update();if(q('meeting-insert-link').disabled)return;insert(context().booking);};
+  q('meeting-insert-times').onclick=async()=>{update();if(q('meeting-insert-times').disabled)return status('Check availability and select a time first.');const key=stamp(),before=context().message,choices=[...selected];await check();if(key!==stamp()||before!==context().message)return status('Your message or meeting options changed. Select the times again.');if(choices.some(start=>!results.some(slot=>slot.start===start)))return status('A selected time is no longer available. Please choose again.');insert(formatSuggestions({slots:choices.map(start=>({start})),timeZone:q('meeting-timezone').value,language:context().language||'en'}));};
+  const returned=new URL(view.location.href),outcome=returned.searchParams.get('calendar');
+  panel.addEventListener('toggle',()=>{if(panel.open)void refresh().then(()=>{if(outcome==='error')status('Calendar permission was not completed. Reconnect and approve the read-only calendar permissions.');});});
+  if(['connected','error'].includes(outcome)){panel.open=true;returned.searchParams.delete('calendar');view.history.replaceState(view.history.state,'',returned.href);}
+  const controller={refresh,check,update,clear};panel._meetingController=controller;update();return controller;
+ }
+ const api=Object.freeze({mount,insertBeforeSignature,insertDraft,formatSuggestions});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageMeetingOptions=api;
+})(typeof window==='object'?window:globalThis);

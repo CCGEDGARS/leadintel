@@ -1,3 +1,4 @@
+import {handleGoogleCalendarRoute} from './google-calendar.js';
 import {handleScriptLibraryRoute} from './script-library-routes.js';
 import {handleWritingWorkspaceRoute} from './writing-workspace-routes.js';
 import {handleEmailCampaignRoute} from './email-campaign-routes.js';
@@ -69,6 +70,7 @@ export default {
       });
     }
     try{
+      const calendar=await handleGoogleCalendarRoute(request,env,cors);if(calendar)return calendar;
       const researchCosts=await handleResearchCostsRoute(request,env,cors);if(researchCosts)return researchCosts;
       const scripts=await handleScriptLibraryRoute(request,env,cors);if(scripts)return scripts;
       const writingWorkspace=await handleWritingWorkspaceRoute(request,env,cors);if(writingWorkspace)return writingWorkspace;
