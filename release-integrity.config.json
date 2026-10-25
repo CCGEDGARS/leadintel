@@ -47,7 +47,19 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "rich-text.css?v=20261025-v1&compact-controls=20261025-v2"
+        "rich-text.css?v=20261025-v1&compact-controls=20261025-v2",
+        "link-actions=20261025-v1"
+      ]
+    },
+    {
+      "id": "link-dialog-action-design",
+      "type": "text",
+      "url": "/customer/rich-text.css",
+      "status": 200,
+      "contains": [
+        ".li-rich-link-dialog button[type=submit]{background:#173f32",
+        ".li-rich-link-dialog button:focus-visible",
+        "min-width:96px;min-height:40px"
       ]
     },
     {

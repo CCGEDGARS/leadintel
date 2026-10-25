@@ -39,3 +39,12 @@
 :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-options{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-top:10px;min-width:0;width:100%}
 :is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-more>summary{width:fit-content}
 @media(max-width:640px){:is(#message-studio,.wa-dialog) .li-rich-editor .li-rich-options{gap:10px}}
+
+/* Link dialog actions live outside the editor, so they need their own button styles. */
+.li-rich-link-dialog form>div{flex-wrap:wrap;gap:10px}
+.li-rich-link-dialog button{appearance:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:96px;min-height:40px;margin:0;padding:9px 16px;border:1px solid #c5d7cb;border-radius:8px;background:#fff;color:#315d48;font:600 13px/20px 'DM Sans',Arial,sans-serif;white-space:nowrap;box-shadow:none;cursor:pointer;transition:background-color .15s,border-color .15s}
+.li-rich-link-dialog button:hover{background:#f2f7f4;border-color:#93b5a1}
+.li-rich-link-dialog button[type=submit]{background:#173f32;border-color:#173f32;color:#fff}
+.li-rich-link-dialog button[type=submit]:hover{background:#245a45;border-color:#245a45}
+.li-rich-link-dialog button:focus-visible{outline:2px solid #388563;outline-offset:3px}
+@media(max-width:640px){.li-rich-link-dialog button{min-height:44px;flex:1 1 auto}}
