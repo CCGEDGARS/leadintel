@@ -47,7 +47,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "rich-text.css?v=20261025-v1&compact-controls=20261025-v1"
+        "rich-text.css?v=20261025-v1&compact-controls=20261025-v2"
       ]
     },
     {
@@ -60,6 +60,16 @@
         "height:36px",
         "flex-wrap:wrap",
         "select:focus-visible"
+      ]
+    },
+    {
+      "id": "typography-content-layout",
+      "type": "text",
+      "url": "/customer/rich-text-editor.js",
+      "status": 200,
+      "contains": [
+        "options.className='li-rich-options'",
+        "options.append(host)"
       ]
     },
     {
