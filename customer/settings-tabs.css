@@ -26,3 +26,6 @@
 /* Provider links: one row, equal width, whatever the card width — "Get API key" and "Pricing" only. */
 .tool-account-links{display:flex;flex-wrap:nowrap;gap:8px}
 .tool-account-links a{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Card actions (Test & save · Make main engine · Disconnect) stay on one row at equal width. */
+#ai-settings-drawer .ai-provider-actions{display:flex;flex-wrap:nowrap;gap:8px}
+#ai-settings-drawer .ai-provider-actions>button{flex:1 1 0;min-width:0;white-space:nowrap}

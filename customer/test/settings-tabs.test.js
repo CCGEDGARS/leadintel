@@ -123,6 +123,7 @@ test('Delivery tab separates the sign-in account from the sending mailbox; Data 
   assert.match(extension,/Optional · only if you already use Hunter/);
   assert.match(extension,/const meta=configured\?`Saved key \$\{esc\(row\.key_hint\|\|''\)\} · \$\{sourceLabel\(row\)\}`:'';/);
   assert.match(css,/#integration-platform-grid\{grid-template-columns:1fr\}/);
+  assert.match(css,/#ai-settings-drawer \.ai-provider-actions\{display:flex;flex-wrap:nowrap/);
   assert.match(css,/\.integration-subheading\{grid-column:1\/-1/);
 });
 
