@@ -177,7 +177,8 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/id="integration-communication-grid"/);
   for(const name of ['Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/6 connected/);
+  assert.match(extension,/optional tools connected/);
+  assert.doesNotMatch(extension,/\}\/6 connected/,'readiness no longer divides a growing numerator by a fixed 6');
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{
@@ -267,4 +268,26 @@ test('Active tools lists every customer-owned tool that is ready, from the fast 
   assert.match(js,/addEventListener\('leadintel:calendly-status',\(\)=>renderActiveToolsSummary\(\)\)/);
   assert.match(extension,/window\.LeadIntelCalendlyStatus=/);
   assert.match(extension,/new CustomEvent\('leadintel:calendly-status'\)/);
+});
+
+test('one definition of critical: main engine, sign-in, sending mailbox and Firecrawl drive the health line, the Test all toast and the cold load',()=>{
+  const start=js.indexOf('function criticalChecksFrom(');
+  assert.ok(start>=0,'criticalChecksFrom helper must exist');
+  const end=js.indexOf('\n}',start);
+  const helper=new Function(`${js.slice(start,end+2)}; return criticalChecksFrom;`)();
+  const checks=helper({activeAi:true,identity:true,deliveryReady:false,firecrawlGood:true});
+  assert.deepEqual(checks.map(check=>check.key),['ai','identity','delivery','firecrawl']);
+  assert.deepEqual(checks.map(check=>check.ok),[true,true,false,true]);
+  assert.match(js,/function criticalChecks\(\)\{[\s\S]{0,700}LeadIntelServiceIntegrationStatus[\s\S]{0,400}criticalChecksFrom\(/,'the live check falls back to the fast Firecrawl row before verification');
+  assert.match(js,/const critical=criticalChecks\(\)\.map\(check=>check\.ok\);const healthy=critical\.filter\(Boolean\)\.length;/);
+  const testAll=js.slice(js.indexOf('async function testAllIntegrations('),js.indexOf('async function handleProviderAction('));
+  assert.match(testAll,/const checks=criticalChecks\(\);toast\(`\$\{checks\.filter\(check=>check\.ok\)\.length\}\/\$\{checks\.length\} critical checks passing`\)/);
+  assert.doesNotMatch(testAll,/apollo/,'Apollo is optional and never a critical check');
+  assert.doesNotMatch(js,/\/5 critical checks passing/);
+  const readiness=extension.slice(extension.indexOf('function decorateReadiness('),extension.indexOf('function decorateGoogleCard('));
+  assert.match(readiness,/config\.provider!=='firecrawl'/,'optional tools exclude Firecrawl, which is critical');
+  assert.match(readiness,/calendlyStatus\.connected/);
+  assert.match(readiness,/\.replace\(\/[^)]*optional tools connected/,'re-decoration strips its own suffix before appending');
+  assert.doesNotMatch(readiness,/aiReady|deliveryReady|serviceReady/,'the extension no longer recomputes the critical checks from the DOM');
+  assert.match(readiness,/Firecrawl needs attention/,'an observed Firecrawl failure still stays visible');
 });

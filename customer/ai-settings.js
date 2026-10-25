@@ -191,6 +191,25 @@ function activeToolItemsFrom({active,integrations={},serviceRows=[],calendly=nul
   if(integrations.microsoftMail?.state==='good')items.push({name:'Microsoft 365',detail:'Mail delivery',state:'CONNECTED'});
   return items;
 }
+// One definition of critical: the four things a workspace cannot run without. The health line, the Test all toast and
+// the readiness note all read this list, so the numbers agree. Optional tools (Treg, Hunter, Apollo, Calendly) are counted separately.
+function criticalChecksFrom({activeAi,identity,deliveryReady,firecrawlGood}){
+  return [
+    {key:'ai',label:'Main AI engine',ok:Boolean(activeAi)},
+    {key:'identity',label:'Workspace sign-in',ok:Boolean(identity)},
+    {key:'delivery',label:'Sending mailbox',ok:Boolean(deliveryReady)},
+    {key:'firecrawl',label:'Firecrawl research',ok:Boolean(firecrawlGood)}
+  ];
+}
+function criticalChecks(){
+  const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
+  const deliveryReady=integrationStatus.gmail?.state==='good'||integrationStatus.microsoftMail?.state==='good';
+  const observed=integrationStatus.firecrawl;
+  const services=window.LeadIntelServiceIntegrationStatus;
+  const row=services&&services.workspace_id===workspace()?.id?(services.providers||[]).find(item=>item.provider==='firecrawl'):null;
+  const firecrawlGood=observed?observed.source==='customer'&&observed.state==='good':Boolean(row&&row.configured&&row.source==='customer'&&row.state==='good');
+  return criticalChecksFrom({activeAi,identity:signedIn(),deliveryReady,firecrawlGood});
+}
 function activeToolItems(active){
   const services=window.LeadIntelServiceIntegrationStatus;
   const serviceRows=services&&services.workspace_id===workspace()?.id?(services.providers||[]):[];
@@ -317,7 +336,7 @@ function renderIntegrationMonitoring(){
   for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')]){if(['gmail','microsoft-mail'].includes(card.dataset.integration)||(signedIn()&&card.classList.contains('workspace-provider-card')))continue;card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');}
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
-  const critical=[activeAi,signedIn(),deliveryReady,firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
+  const critical=criticalChecks().map(check=>check.ok);const healthy=critical.filter(Boolean).length;
   const serviceRows=signedIn()&&window.LeadIntelServiceIntegrationStatus?.workspace_id===workspace()?.id?(window.LeadIntelServiceIntegrationStatus?.providers||[]).filter(row=>row.provider==='firecrawl'):[];
   const creditAlerts=[...new Set([...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...PROVIDERS.filter(item=>paymentError(providerErrors[item.provider])).map(item=>item.name)]),...(firecrawl.creditIssue?['Firecrawl']:[])];
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
@@ -485,8 +504,7 @@ async function testAllIntegrations(){
   if(!signedIn()){toast('Sign in with Google or Microsoft to test workspace integrations');return;}
   integrationStatus.checking=true;renderIntegrationMonitoring();
   await refreshAllStatus();
-  const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));const deliveryReady=integrationStatus.gmail?.state==='good'||integrationStatus.microsoftMail?.state==='good';const checks=[activeAi,integrationStatus.apollo?.state==='good',integrationStatus.firecrawl?.state==='good',integrationStatus.account?.state==='good',deliveryReady];
-  toast(`${checks.filter(Boolean).length}/5 critical checks passing`);
+  const checks=criticalChecks();toast(`${checks.filter(check=>check.ok).length}/${checks.length} critical checks passing`);
 }
 async function handleProviderAction(event){
   const button=event.target.closest('[data-ai-action]');if(!button||button.disabled)return;

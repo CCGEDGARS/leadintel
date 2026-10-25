@@ -91,12 +91,11 @@ function decorateReadiness(){
   const summary=health.querySelector('.integration-summary-copy strong');if(!summary)return;
   if(health.classList.contains('credit-alert')||health.classList.contains('connection-alert'))return;
   if(!signedIn()){summary.textContent='Connect with Google or Microsoft to configure LeadIntel';return;}
-  const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
-  const deliveryReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good, #integration-communication-grid [data-integration="microsoft-mail"] .integration-status.good'));
+  // The critical line (four checks) is written by AI Settings; this note appends the optional tools so both numbers stay honest.
+  const optional=[...SETTINGS_PROVIDERS.filter(config=>config.provider!=='firecrawl').map(config=>providerState(config.provider)?.state==='good'),Boolean(calendlyStatus.connected)];
   const observedFirecrawl=window.LeadIntelIntegrationHealth?.firecrawl;
-  const serviceReady=SETTINGS_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
-  const calendlyReady=Boolean(calendlyStatus.connected);
-  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
+  const base=summary.textContent.replace(/\s*·\s*\d+\/\d+ optional tools connected(\s*·\s*Firecrawl needs attention)?$/,'').trim();
+  summary.textContent=`${base} · ${optional.filter(Boolean).length}/${optional.length} optional tools connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
 }
 function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
