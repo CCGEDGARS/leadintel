@@ -48,12 +48,13 @@ test('composer is a full-width vertical layout with send below the textarea',()=
   assert.match(css,/\.copilot-send\{[^}]*justify-self\s*:\s*end/s);
 });
 
-test('sidebar entry is a premium branded copilot control',()=>{
+test('the launcher is a free-standing branded mascot, not a boxed control',()=>{
+  // 2026-10-25: the mascot stands on its own (no circle or card around it); the shadow follows its silhouette.
   assert.match(loader,/Business & Research/);
   assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-entry-subtitle">Business & Research/);
-  assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
-  assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
-  assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*border\s*:\s*0[^}]*background\s*:\s*transparent/s);
+  assert.match(css,/\.copilot-mascot\{[^}]*filter\s*:\s*drop-shadow\(/s);
+  assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-mascot-skin[^>]*>[\s\S]*?<stop/);
 });
 
 test('support never renders or invokes configuration actions',()=>{
