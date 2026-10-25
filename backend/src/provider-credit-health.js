@@ -8,8 +8,16 @@ export function creditFailure(status, detail=''){
 
 export async function recordProviderCredit(env,{workspaceId,userId=null,provider,kind,source='customer'}){
   // A health write must never break the user's original provider request.
-  try{await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`)
-    .bind(crypto.randomUUID(),workspaceId,userId,kind==='failed'?'provider.credit_exhausted':'provider.credit_recovered','provider_credit',provider,JSON.stringify({source})).run();}catch{}
+  // Transitions only: a provider that stays healthy (every successful request, every status check) or stays exhausted
+  // adds nothing to the audit trail; the latest row still answers providerCreditIssue().
+  const eventType=kind==='failed'?'provider.credit_exhausted':'provider.credit_recovered';
+  try{
+    const last=await env.DB.prepare(`SELECT event_type,metadata_json FROM audit_events WHERE workspace_id=? AND entity_type='provider_credit' AND entity_id=? ORDER BY rowid DESC LIMIT 1`).bind(workspaceId,provider).first();
+    if(last?.event_type===eventType){let lastSource='customer';try{lastSource=JSON.parse(last.metadata_json||'{}').source||'customer';}catch{}if(lastSource===source)return false;}
+    await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`)
+      .bind(crypto.randomUUID(),workspaceId,userId,eventType,'provider_credit',provider,JSON.stringify({source})).run();
+    return true;
+  }catch{return false;}
 }
 
 export async function providerCreditIssue(env,workspaceId,provider){

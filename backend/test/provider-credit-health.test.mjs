@@ -56,3 +56,20 @@ test('provider status uses its scoped index without sorting the workspace audit 
   assert.equal(db.prepare(query).get('w2','apollo').event_type,'provider.credit_exhausted');
  }finally{db.close();}
 });
+
+test('credit health records transitions only: repeated healthy or exhausted results add no audit rows',async()=>{
+  const events=[];
+  const env={DB:{prepare(sql){let args=[];return {bind(...values){args=values;return this;},async run(){events.push({workspace:args[1],type:args[3],provider:args[5],metadata:args[6]});},async first(){const last=events.findLast(row=>row.workspace===args[0]&&row.provider===args[1]);return last?{event_type:last.type,metadata_json:last.metadata}:null;}};}}};
+  const record=(workspaceId,provider,kind,source='customer')=>recordProviderCredit(env,{workspaceId,userId:'u1',provider,kind,source});
+  await record('w1','openai','recovered');await record('w1','openai','recovered');await record('w1','openai','recovered');
+  assert.equal(events.length,1,'a provider that stays healthy adds nothing');
+  await record('w1','openai','failed');await record('w1','openai','failed');
+  assert.equal(events.length,2,'a provider that stays exhausted adds nothing');
+  await record('w1','openai','recovered');
+  assert.equal(events.length,3,'a recovery after a failure is a transition');
+  await record('w1','openai','recovered','managed');
+  assert.equal(events.length,4,'a change of source is still recorded');
+  await record('w1','hunter','recovered');
+  assert.equal(events.length,5,'providers are tracked independently');
+  assert.equal(await providerCreditIssue(env,'w1','openai'),null);
+});
