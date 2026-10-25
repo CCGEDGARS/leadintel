@@ -31,7 +31,7 @@ test('mounted request exposes loading, cancellation and errors without changing 
  const dom=new JSDOM('<section id="mw-writing-assistant"><div class="mw-assistant-actions"><button>Rewrite</button></div></section>',{pretendToBeVisual:true}),d=dom.window.document;
  let state={messages:[],busy:false},finish,asks=0,ui;const c={state:()=>state,ask:()=>{asks++;state={...state,busy:true};ui.render();return new Promise(resolve=>finish=resolve);},applyPreview(){},discardPreview(){},cancel(){state={...state,busy:false,error:'Cancelled. Your draft is preserved.'};ui.render();finish(false);}};
  ui=api.mountWritingAssistant(d,c);d.querySelector('[data-wa-expand]').click();const input=d.querySelector('[data-wa-instruction]');input.value='Keep every supported fact';input.focus();d.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
- assert.equal(asks,1);assert.equal(input.disabled,true);assert.equal(d.querySelector('[data-wa-ask]').textContent,'Thinking…');assert.equal(d.querySelector('[data-wa-cancel]').hidden,false);assert.equal(d.querySelector('.wa-session').getAttribute('aria-busy'),'true');assert.equal(d.querySelector('.mw-assistant-actions button').disabled,true);
+ assert.equal(asks,1);assert.equal(input.disabled,true);assert.equal(d.querySelector('[data-wa-generate]').textContent,'Thinking…');assert.equal(d.querySelector('[data-wa-cancel]').hidden,false);assert.equal(d.querySelector('.wa-session').getAttribute('aria-busy'),'true');assert.equal(d.querySelector('.mw-assistant-actions button').disabled,true);
  d.querySelector('[data-wa-cancel]').click();await Promise.resolve();assert.equal(input.disabled,false);assert.equal(d.querySelector('.mw-assistant-actions button').disabled,false);assert.equal(input.value,'Keep every supported fact');assert.equal(d.activeElement,input);assert.match(d.querySelector('[data-wa-status]').textContent,/Cancelled/);assert.equal(d.querySelector('[data-wa-cancel]').hidden,true);ui.destroy();
 });
 test('preview remains inert, stale apply is blocked and applying cannot discard',()=>{
@@ -69,8 +69,8 @@ test('assistant render evaluates readiness once and refreshes all buttons togeth
  const controller={state:()=>({messages:[],busy:false,scope:'scope',working:{subject:'Subject',message:'Draft'},workingStyle:'original',original:{subject:'Subject',message:'Draft'}}),ask(){},applyPreview(){},discardPreview(){},cancel(){}};
  const ui=api.mountWritingAssistant(w.document,controller,{usable:()=>{checks++;return ready;}});
  const before=checks;ready=false;ui.render();assert.equal(checks-before,1);
- for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template],[data-wa-use-flow]'))assert.equal(button.disabled,true);
- ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-use-flow]').disabled,false);ui.destroy();w.close();
+ for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template],[data-wa-save-draft]'))assert.equal(button.disabled,true);
+ ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-save-draft]').disabled,false);ui.destroy();w.close();
 });
 
 test('deferred closed assistant avoids context work and renders fresh preserved state on opening',()=>{
