@@ -1,0 +1,21 @@
+/* Settings drawer tabs: horizontal choice on top, one group visible at a time. */
+.settings-tabs{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 4px;padding:10px 0 12px;background:var(--paper,#fff);border-bottom:1px solid var(--line,#dde2dd)}
+.settings-tab{padding:8px 14px;border:1px solid var(--line,#dde2dd);border-radius:999px;background:var(--paper,#fff);color:var(--ink,#13201c);font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease}
+.settings-tab:hover{border-color:var(--ink,#13201c)}
+.settings-tab[aria-selected="true"]{background:var(--ink,#13201c);border-color:var(--ink,#13201c);color:#fff}
+.settings-tab:focus-visible{outline:2px solid rgba(188,143,42,.6);outline-offset:2px}
+.settings-tab[hidden]{display:none}
+.settings-tab-hidden{display:none!important}
+@media(max-width:720px){.settings-tabs{gap:4px}.settings-tab{padding:7px 11px;font-size:12px}}
+
+/* Delivery tab: the sign-in account is one thing, the sending mailbox another. The active account spans the row; the alternative is a compact option. */
+.workspace-provider-card.is-active{grid-column:1/-1}
+.workspace-provider-card.is-alternate{padding:12px 14px;background:var(--soft,#eef2ed)}
+.workspace-provider-card.is-alternate .integration-purpose,.workspace-provider-card.is-alternate .integration-meta{display:none}
+.workspace-provider-card.is-alternate .integration-card-head{margin-bottom:8px}
+.integration-subheading{grid-column:1/-1;display:grid;gap:4px;margin:16px 0 0}
+.integration-subheading strong{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#6c7772)}
+.integration-subheading span{font-size:13px;line-height:1.5;color:var(--muted,#6c7772)}
+/* Data sources tab: one card per row so the key form, links and status have room. */
+#integration-platform-grid{grid-template-columns:1fr}
+#integration-platform-grid .tool-account-links{display:flex;flex-wrap:wrap;gap:8px 16px}

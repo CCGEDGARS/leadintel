@@ -15,9 +15,12 @@ async function mounted(provider="",authenticated=true){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- for(const id of ['apollo','hunter'])assert.equal(w.document.querySelector(`[data-integration="${id}"], [data-service-provider="${id}"], [data-tool-links="${id}"]`),null,`${id} paid settings must be absent`);
- assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Apollo|Hunter/);
- for(const id of ['openai','anthropic','gemini','firecrawl','calendly','personal-linkedin','zoom']){
+ // Apollo stays a runtime-only legacy provider; Hunter returned to Settings as an optional card (CTO decision, 2026-10-25).
+ assert.equal(w.document.querySelector('[data-integration="apollo"], [data-service-provider="apollo"], [data-tool-links="apollo"]'),null,'apollo paid settings must be absent');
+ assert.ok(w.document.querySelector('[data-integration="hunter"] [data-service-provider="hunter"]'),'hunter optional card with its key controls');
+ assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Apollo/);
+ assert.match(w.document.querySelector('[data-integration="hunter"]').textContent,/Optional · only if you already use Hunter/);
+ for(const id of ['openai','anthropic','gemini','firecrawl','hunter','calendly','personal-linkedin','zoom']){
   const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=2,`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }
@@ -51,7 +54,7 @@ test('signed-in workspace cards keep authentication controls inside LeadIntel on
  for(const provider of ['google','microsoft','']){const w=await mounted(provider);try{
   const check=()=>{
    for(const id of ['google','microsoft-account']){const card=w.document.querySelector(`[data-integration="${id}"]`);assert.equal(card.querySelector('a'),null);assert.ok(card.querySelector('[data-settings-signout], [data-settings-switch]'));assert.doesNotMatch(card.textContent,/Create account|Manage account|Session active/);}
-   if(provider){const active=w.document.querySelector(`[data-integration="${provider==='google'?'google':'microsoft-account'}"]`);assert.match(active.textContent,/Selected/);assert.match(active.textContent,/user@example.com/);assert.ok(active.querySelector('[data-settings-signout]'));}
+   if(provider){const active=w.document.querySelector(`[data-integration="${provider==='google'?'google':'microsoft-account'}"]`);assert.match(active.textContent,/Signed in/);assert.match(active.textContent,/user@example.com/);assert.ok(active.querySelector('[data-settings-signout]'));}
   };check();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await new Promise(r=>setTimeout(r,25));check();
  }finally{w.disposeObservers();w.close();}}
 });

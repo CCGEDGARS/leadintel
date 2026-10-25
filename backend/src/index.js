@@ -58,7 +58,12 @@ async function router(request,env) {
   }
 
   const user=await sessionUser(request,env);
-  if(url.pathname==="/api/session")return user?json({authenticated:true,user:{id:user.id,email:user.email,name:user.display_name,role:user.role}},200,cors):json({authenticated:false},401,cors);
+  if(url.pathname==="/api/session"){
+    if(!user)return json({authenticated:false},401,cors);
+    // The sign-in providers come from the server so Settings never has to guess from browser storage (new device, cleared storage).
+    const {results:identities=[]}=await env.DB.prepare("SELECT provider FROM user_identities WHERE user_id=? ORDER BY updated_at DESC").bind(user.id).all();
+    return json({authenticated:true,user:{id:user.id,email:user.email,name:user.display_name,role:user.role,providers:identities.map(row=>row.provider)}},200,cors);
+  }
   if(!user)return error("Authentication required",401,cors);
 
   if(url.pathname==="/api/logout"&&request.method==="POST") {

@@ -160,7 +160,7 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
 
 test('Settings clearly changes data integrations from platform-only to customer-owned without managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
-  assert.match(extension,/Connect Firecrawl and your Treg team token/);
+  assert.match(extension,/Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional/);
   assert.match(extension,/No shared paid-service fallback is available/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);

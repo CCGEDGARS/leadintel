@@ -2109,7 +2109,7 @@
       "status": 200,
       "contains": [
         "signedIn()&&card.classList.contains('workspace-provider-card')",
-        "label:'Not identified'",
+        "label:'Signed in'",
         "data-settings-switch"
       ]
     },
@@ -4067,9 +4067,9 @@
       "url": "/customer/service-settings-extension.js",
       "status": 200,
       "contains": [
-        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider))",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg','hunter'].includes(config.provider))",
         "for(const config of SETTINGS_PROVIDERS)",
-        "Connect Firecrawl and your Treg team token."
+        "Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional"
       ]
     },
     {

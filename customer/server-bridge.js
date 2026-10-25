@@ -179,7 +179,7 @@
       if(root.LeadIntelAccountCache?.current?.()===false)throw new Error('LeadIntel account changed. Refresh to continue.');
     }
   }
-  async function fetchSession(){const {response,payload}=await bootstrapRead('/api/session',value=>typeof value?.authenticated==='boolean'&&(!value.authenticated||(typeof value.user?.id==='string'&&value.user.id.length>0)),{allowUnauthorized:true});bridge.session=response.ok?payload:{authenticated:false};return bridge.session;}
+  async function fetchSession(){const {response,payload}=await bootstrapRead('/api/session',value=>typeof value?.authenticated==='boolean'&&(!value.authenticated||(typeof value.user?.id==='string'&&value.user.id.length>0)),{allowUnauthorized:true});bridge.session=response.ok?payload:{authenticated:false};const providers=Array.isArray(payload?.user?.providers)?payload.user.providers:[];if(response.ok&&!bridge.authProvider&&providers.length){bridge.authProvider=providers.includes('microsoft')&&!providers.includes('google')?'microsoft':'google';try{localStorage.setItem?.(AUTH_PROVIDER_KEY,bridge.authProvider);}catch{}}return bridge.session;}
   const validWorkspaces=value=>Array.isArray(value?.workspaces)&&value.workspaces.every(item=>typeof item?.id==='string'&&item.id.length>0);
   async function fetchWorkspaces(){const {payload}=await bootstrapRead('/api/workspaces',validWorkspaces);bridge.workspaces=payload.workspaces;return bridge.workspaces;}
   // /api/workspaces needs only the first-party cookie and is allowed before account verification (account-cache.js),
