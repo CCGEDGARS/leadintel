@@ -16,7 +16,7 @@ STRIPE_STORAGE_BILLING_ENABLED = "false"
 
 WRITING_REFERENCES_ALLOWED_WORKSPACES = "edgars-latvia"
 # Who may manage sign-in invitations (/api/access/invitations). Sign-in itself is invitation-only for new identities.
-PLATFORM_ADMIN_EMAILS = "edgars@ccgroup.lv,euntals@gmail.com,automations@futureleads.io"
+PLATFORM_ADMIN_EMAILS = "edgars@ccgroup.lv,montesuntzu@gmail.com"
 AUTOMATIC_GMAIL_DELIVERY_MODE = "manual_only"
 APPROVED_WORKFLOW_DELIVERY_MODE = "enabled"
 APP_ORIGIN = "https://ccgedgars.github.io,https://leadintel.ccgroup.lv,https://leadintel-api.edgars-7e7.workers.dev"

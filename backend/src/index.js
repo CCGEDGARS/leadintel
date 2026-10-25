@@ -9,6 +9,7 @@ import {assessCandidate,compileQueries} from "./quality.js";
 import {listRuns,policyFor,recordRunEvent,runBudgetState,validDispatchUrl} from "./runs.js";
 import {APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,publicPersonSummary,rankApolloPeople,strongPersonalEmail} from "./enrichment.js";
 import {creditFailure,recordProviderCredit} from "./provider-credit-health.js";
+import {isPlatformAdmin} from "./access-invitations.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -62,7 +63,8 @@ async function router(request,env) {
     if(!user)return json({authenticated:false},401,cors);
     // The sign-in providers come from the server so Settings never has to guess from browser storage (new device, cleared storage).
     const {results:identities=[]}=await env.DB.prepare("SELECT provider FROM user_identities WHERE user_id=? ORDER BY updated_at DESC").bind(user.id).all();
-    return json({authenticated:true,user:{id:user.id,email:user.email,name:user.display_name,role:user.role,providers:identities.map(row=>row.provider)}},200,cors);
+    // platform_admin lets the account menu show the Admin entry to exactly the configured accounts; every admin route re-checks it server-side.
+    return json({authenticated:true,user:{id:user.id,email:user.email,name:user.display_name,role:user.role,providers:identities.map(row=>row.provider),platform_admin:isPlatformAdmin(env,user)}},200,cors);
   }
   if(!user)return error("Authentication required",401,cors);
 
