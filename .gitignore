@@ -4,3 +4,6 @@ backend/node_modules/
 node_modules/
 backend/.dev.vars
 release-proof.json
+
+# Vercel static build output (scripts/build-vercel-static.sh)
+.vercel-static/
