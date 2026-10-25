@@ -41,6 +41,15 @@ async function api(path,options={}){
   const response=await fetch(apiUrl(path),{credentials:'include',headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options});
   const payload=await response.json().catch(()=>({}));return {response,payload};
 }
+function providerSaveConfirmation({name,model,configured,hasMain}){
+  const request=`LeadIntel sends one tiny test request to ${name} with ${model}: a few tokens, billed to your key, well under a cent.`;
+  const outcome=configured
+    ?'The saved model changes only if the test succeeds.'
+    :hasMain
+      ?`Your current main engine stays selected; you can switch to ${name} in this card afterwards.`
+      :`No main engine is set yet, so ${name} becomes your main engine for AI generation.`;
+  return {message:`${request} ${outcome}`,options:{title:`Test & save ${name}`,action:'Test & save'}};
+}
 function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2800);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="ai-settings-css"]'))return;
@@ -477,7 +486,9 @@ async function saveProvider(provider){
   const apiKey=String(input?.value||'').trim();const model=String(choiceInput?.value||config?.model||'').trim();
   if(!model){toast('Choose a model');choiceInput?.focus();return;}
   if(!apiKey&&!configured){toast('Enter your provider API key first');input?.focus();return;}
-  if(!(await (window.LeadIntelDialogs?.confirm(`Test and save ${config.name} model ${model}? This makes a small paid API request. ${configured?'The saved model changes only if the test succeeds.':'An existing main engine stays selected.'}`)??false)))return;
+  const hasMain=status.providers.some(p=>p.active);
+  const confirmation=providerSaveConfirmation({name:config.name,model,configured,hasMain});
+  if(!(await (window.LeadIntelDialogs?.confirm(confirmation.message,confirmation.options)??false)))return;
   const originWorkspace=workspace()?.id;
   clearProviderError(provider);busy=provider;setProviderSaveBusy(provider,true);
   try{

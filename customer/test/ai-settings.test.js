@@ -218,3 +218,30 @@ test('Integration Control Centre offers Microsoft workspace access and Microsoft
   assert.match(css,/\.workspace-signin-options/,'the two sign-in choices must have responsive layout styling');
   assert.match(css,/\.microsoft-mail-actions/,'Microsoft mail controls must have dedicated layout styling');
 });
+
+test('Test & save confirmation names the provider, the cost scale and what happens to the main engine',()=>{
+  const start=js.indexOf('function providerSaveConfirmation(');
+  assert.ok(start>=0,'providerSaveConfirmation helper must exist');
+  const end=js.indexOf('\n}',start);
+  const helper=new Function(`${js.slice(start,end+2)}; return providerSaveConfirmation;`)();
+  const first=helper({name:'OpenAI',model:'gpt-6.1-sol',configured:false,hasMain:false});
+  assert.equal(first.options.title,'Test & save OpenAI');
+  assert.equal(first.options.action,'Test & save');
+  assert.match(first.message,/one tiny test request to OpenAI with gpt-6.1-sol/);
+  assert.match(first.message,/a few tokens, billed to your key, well under a cent/);
+  assert.match(first.message,/OpenAI becomes your main engine/);
+  assert.doesNotMatch(first.message,/existing main engine stays/);
+  const second=helper({name:'Anthropic',model:'claude-fable-5-1',configured:false,hasMain:true});
+  assert.match(second.message,/current main engine stays selected/);
+  assert.match(second.message,/switch to Anthropic/);
+  assert.doesNotMatch(second.message,/becomes your main engine/);
+  const retest=helper({name:'OpenAI',model:'gpt-6.1-sol',configured:true,hasMain:true});
+  assert.match(retest.message,/saved model changes only if the test succeeds/);
+  assert.doesNotMatch(retest.message,/stays selected|becomes your main engine/);
+  const saveStart=js.indexOf('async function saveProvider(provider)');
+  const saveFlow=js.slice(saveStart,js.indexOf('async function activateProvider(provider)'));
+  assert.match(saveFlow,/const hasMain=status\.providers\.some\(p=>p\.active\)/,'the save flow must read whether a main engine exists before asking');
+  assert.match(saveFlow,/providerSaveConfirmation\(\{name:config\.name,model,configured,hasMain\}\)/);
+  assert.match(saveFlow,/LeadIntelDialogs\?\.confirm\(confirmation\.message,confirmation\.options\)/);
+  assert.doesNotMatch(saveFlow,/small paid API request|existing main engine stays/);
+});
