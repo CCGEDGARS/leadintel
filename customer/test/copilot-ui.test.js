@@ -51,7 +51,8 @@ test('composer is a full-width vertical layout with send below the textarea',()=
 test('the launcher is a plain fixed button in the platform palette (Edgars, 2026-10-26)',()=>{
   assert.match(loader,/Business & Research/);
   assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-entry-subtitle">Business & Research/);
-  assert.match(css,/\.leadintel-copilot-entry\{[^}]*position:fixed[^}]*background:#13201c/s);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*position:fixed/s);
+  assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/class="leadintel-copilot-entry primary-btn"/);
   assert.doesNotMatch(css,/copilot-mascot|@keyframes/);
   assert.doesNotMatch(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-mascot-skin/);
 });

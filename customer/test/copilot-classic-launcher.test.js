@@ -16,19 +16,23 @@ export const INTRO={
 };
 
 test('Ask LeadIntel is a plain fixed button bottom-right: no mascot, no animation, no hover hint',()=>{
-  const entry=html.match(/<button class="leadintel-copilot-entry"[\s\S]*?<\/button>/)[0];
+  const entry=html.match(/<button class="leadintel-copilot-entry primary-btn"[\s\S]*?<\/button>/)[0];
   assert.match(entry,/aria-controls="leadintel-copilot-drawer"/);
   assert.match(entry,/copilot-entry-title">Ask LeadIntel</);
   assert.match(entry,/copilot-entry-subtitle">Business & Research</);
   assert.doesNotMatch(entry,/<svg|copilot-pupil|copilot-entry-hint|aria-describedby/);
   assert.match(loader,/copilot-entry-title">Ask LeadIntel</);
   assert.doesNotMatch(loader,/<svg|pupil|pointermove|bindMascot|aria-describedby|document\.body|MutationObserver/);
-  assert.match(css,/\.leadintel-copilot-entry\{[^}]*position:fixed[^}]*right:\d+px[^}]*bottom:\d+px[^}]*background:#13201c/s);
+  // Same button as everywhere else (Edgars/Jonathan 2026-10-26): the platform's .primary-btn supplies colour, radius, shadow, font and hover; copilot.css only positions it.
+  assert.match(loader,/className='leadintel-copilot-entry primary-btn'/);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*position:fixed[^}]*right:\d+px[^}]*bottom:\d+px/s);
+  assert.doesNotMatch(css,/\.leadintel-copilot-entry\{[^}]*(border-radius|background|font)/s,'no own look: the platform button rule decides');
+  assert.match(read('styles.css'),/\.primary-btn\{background:var\(--ink\);color:white;border-radius:10px/);
   assert.match(css,/\.copilot-entry-subtitle\{[^}]*clip:rect\(0 0 0 0\)/s,'the subtitle stays for screen readers and the release smoke check only');
   assert.doesNotMatch(css,/@keyframes|copilot-mascot|copilot-eye|copilot-pupil|copilot-entry-hint|copilot-suggestion|copilot-message-avatar|copilot-header-mascot/);
-  assert.match(html,/copilot-loader\.js\?[^"]*classic-button=20261026-v1/);
+  assert.match(html,/copilot-loader\.js\?[^"]*classic-button=20261026-v2/);
   assert.match(loader,/copilot-ui\.js\?v=20261011-business-research-v2&classic-button=20261026-v1/);
-  assert.match(loader,/copilot\.css\?v=20261026-classic-v1/);assert.match(ui,/copilot\.css\?v=20261026-classic-v1/);
+  assert.match(loader,/copilot\.css\?v=20261026-classic-v2/);assert.match(ui,/copilot\.css\?v=20261026-classic-v2/);
 });
 
 test('the drawer opens with a description of the assistant instead of a greeting and suggested questions',()=>{

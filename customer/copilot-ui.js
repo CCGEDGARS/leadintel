@@ -4,7 +4,7 @@ let conversationId='';
 let pending=false,conversationWorkspace='';
 function workspaceId(){return String(window.LeadIntelServerBridge?.workspace?.id||'');}
 
-function ensureCss(){if(document.querySelector('link[data-leadintel-asset="copilot-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./copilot.css?v=20261026-classic-v1';link.dataset.leadintelAsset='copilot-css';document.head.appendChild(link);}
+function ensureCss(){if(document.querySelector('link[data-leadintel-asset="copilot-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./copilot.css?v=20261026-classic-v2';link.dataset.leadintelAsset='copilot-css';document.head.appendChild(link);}
 function node(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=String(text);return el;}
 function safeUrl(value){try{const url=new URL(String(value||''));return /^https?:$/.test(url.protocol)?url.toString():'';}catch{return '';}}
 // The drawer slides in from the right edge (copilot.css .is-open). Opening removes [hidden] first so the
