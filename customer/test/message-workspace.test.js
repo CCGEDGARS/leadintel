@@ -8,6 +8,37 @@ function mounted(){
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
+test('Edit clears the approved dossier field lock and restores formatting without changing the draft',async()=>{
+ const {dom,document,w}=mounted();
+ for(const name of ['rich-text','rich-text-editor'])w.eval(read(name+'.js'));
+ const body=document.getElementById('outreach-email-body'),subject=document.getElementById('outreach-email-subject');
+ body.value='Hello Alex\n\nQuality\nCosts';subject.value='A personal invitation';
+ // renderDossier locks approved fields before the explicit editor renders.
+ for(const id of ['outreach-email-subject','outreach-email-body','outreach-linkedin'])document.getElementById(id).disabled=true;
+ const rich=w.LeadIntelRichTextEditor.mount(body,{label:'Email body'});
+ const context={ready:true,authenticated:true,hasDraft:true,approved:true,channel:'email',editorState:{editing:true}};
+ w.LeadIntelMessageWorkspace.render(document,context);await new Promise(r=>setImmediate(r));
+ assert.equal(subject.disabled,false);assert.equal(subject.readOnly,false);
+ assert.equal(body.disabled,false);assert.equal(rich.body.contentEditable,'true');assert.equal(rich.toolbar.hidden,false);
+ for(const name of ['bold','italic','underline','insertUnorderedList','insertOrderedList'])assert.equal(rich.toolbar.querySelector('[data-rich-command="'+name+'"]').disabled,false);
+ for(const label of ['Font','Text size'])assert.equal(rich.toolbar.querySelector('[aria-label="'+label+'"]').disabled,false);
+ assert.equal(body.value,'Hello Alex\n\nQuality\nCosts');assert.equal(subject.value,'A personal invitation');
+ const range=document.createRange();range.setStart(rich.body.firstChild,6);range.setEnd(rich.body.firstChild,10);w.getSelection().addRange(range);rich.body.dispatchEvent(new w.MouseEvent('mouseup'));rich.command('bold');
+ assert.match(rich.getHtml(),/<strong>Alex<\/strong>/);assert.equal(body.value,'Hello Alex\n\nQuality\nCosts');
+ w.LeadIntelMessageWorkspace.render(document,{...context,editorState:{editing:false}});await new Promise(r=>setImmediate(r));
+ assert.equal(rich.toolbar.hidden,true);assert.equal(rich.body.contentEditable,'false');assert.match(rich.getHtml(),/<strong>Alex<\/strong>/);
+ rich.destroy();dom.window.close();
+});
+test('formatting stays locked while saving or while workspace, generation or assistant gates block Edit',async()=>{
+ const {dom,document,w}=mounted();for(const name of ['rich-text','rich-text-editor'])w.eval(read(name+'.js'));
+ const body=document.getElementById('outreach-email-body');body.value='Preserve this draft';const rich=w.LeadIntelRichTextEditor.mount(body);
+ const base={ready:true,authenticated:true,hasDraft:true,channel:'email',editorState:{editing:true}};
+ for(const gate of [{editorState:{editing:true,saving:true}},{ready:false},{authenticated:false},{syncConflict:true},{busy:true},{pending:true},{factResearchBusy:true},{assistantBusy:true}]){
+  w.LeadIntelMessageWorkspace.render(document,{...base,...gate});await new Promise(r=>setImmediate(r));
+  assert.equal(body.readOnly,true);assert.equal(rich.toolbar.hidden,true);assert.equal(rich.body.contentEditable,'false');assert.equal(body.value,'Preserve this draft');
+ }
+ rich.destroy();dom.window.close();
+});
 test('composer mounts once, preserves canonical fields/listeners and keeps settings and research collapsed',()=>{
  const {document,w}=mounted();assert.equal(w.LeadIntelMessageWorkspace.mount(document),false);
  const ids=['message-mode','message-language','message-calendly','outreach-email-body','outreach-linkedin','outreach-email-subject','brand-sender-name','message-generation-status'];

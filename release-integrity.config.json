@@ -43,6 +43,15 @@
   },
   "smokeChecks": [
     {
+      "id": "explicit-edit-restores-formatting",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "if(!field.readOnly)field.disabled=false;"
+      ]
+    },
+    {
       "id": "outcome-first-writing-controls",
       "type": "text",
       "url": "/customer/writing-assistant-ui.js",
