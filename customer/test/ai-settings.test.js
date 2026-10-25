@@ -291,3 +291,28 @@ test('one definition of critical: main engine, sign-in, sending mailbox and Fire
   assert.doesNotMatch(readiness,/aiReady|deliveryReady|serviceReady/,'the extension no longer recomputes the critical checks from the DOM');
   assert.match(readiness,/Firecrawl needs attention/,'an observed Firecrawl failure still stays visible');
 });
+
+test('a failed AI status check keeps the last known engines and says so; before the first answer the cards say Checking, not Not connected',()=>{
+  const start=js.indexOf('function providerStateLabel(');
+  assert.ok(start>=0,'providerStateLabel helper must exist');
+  const end=js.indexOf('\n}',start);
+  const label=new Function(`${js.slice(start,end+2)}; return providerStateLabel;`)();
+  assert.equal(label({current:{pending:true},provider:'openai'}),'Checking…');
+  assert.equal(label({current:null,provider:'openai'}),'Not connected');
+  assert.equal(label({current:{configured:true,active:true},provider:'openai'}),'Main engine');
+  assert.equal(label({current:{configured:true,active:false},provider:'anthropic'}),'Connected · inactive');
+  assert.equal(label({current:{configured:true,active:false},provider:'gemini'}),'Connected · specialist');
+  assert.equal(label({current:{configured:true,active:false,credit_issue:{code:'credits_exhausted'}},provider:'openai'}),'Credits exhausted');
+  assert.equal(label({current:{configured:true,active:true},paymentIssue:true,provider:'openai'}),'Payment required');
+  assert.equal(label({current:{pending:true},paymentIssue:true,provider:'openai'}),'Payment required','a payment failure outranks the pending state');
+  const refreshStart=js.indexOf('async function refreshStatus(');
+  const refresh=js.slice(refreshStart,refreshStart+1100);
+  assert.doesNotMatch(refresh,/catch\(error\)\{[^}]*status=\{role:workspace\(\)\?\.role\|\|'',providers:\[\]\}/,'a failed check must not erase the last known providers');
+  assert.match(refresh,/statusUnavailable=String\(error\.message\|\|error\)/);
+  assert.match(refresh,/statusKnown=true;statusUnavailable='';/);
+  assert.match(js,/could not be checked just now/);
+  assert.match(js,/function providerCard\(config,current\)\{/,'the card signature stays as sandboxed tests slice it');
+  assert.match(js,/providerStateLabel\(\{current,paymentIssue,provider:config\.provider\}\)/);
+  assert.match(js,/providerCard\(config,providerState\(config\.provider\)\|\|\(statusKnown\?null:\{pending:true\}\)\)/,'the live renderer marks rows pending until the first status answer');
+  assert.match(js,/leadintel:workspace-changed[^\n]{0,200}statusKnown=false;statusUnavailable='';/);
+});

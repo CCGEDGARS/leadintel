@@ -23,6 +23,8 @@ const PROVIDERS=Object.freeze([
 ]);
 function modelOptionLabel(entry){return `${entry.label} · ${entry.role} · $${entry.input} / $${entry.output} per 1M tokens`;}
 let status={role:'',providers:[]};
+// Unknown is not 'not connected': statusKnown turns true with the first status answer; statusUnavailable keeps the last failure.
+let statusKnown=false,statusUnavailable='';
 let integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};
 let busy='';
 const providerErrors=Object.create(null);
@@ -221,6 +223,11 @@ function activeToolsSummary(active){
   if(!items.length)return '<div class="active-tools-empty">No active tools are ready yet.</div>';
   return `<div class="active-tools-list" role="list" aria-label="Active LeadIntel tools">${items.map(item=>`<div class="active-tool-chip" role="listitem"><div><strong>${esc(item.name)}</strong><small>${esc(item.detail)}</small></div><span>${esc(item.state)}</span></div>`).join('')}</div>`;
 }
+function statusNotice(){
+  if(statusUnavailable)return 'AI engine status could not be checked just now (network). Showing the last known state. ';
+  if(!statusKnown)return 'The first status check is still running. ';
+  return '';
+}
 function renderActiveToolsSummary(){
   if(!settingsDrawerOpen())return;
   const active=status.providers.find(item=>item.active);const connectedCount=status.providers.filter(item=>item.configured).length;
@@ -229,8 +236,8 @@ function renderActiveToolsSummary(){
     if(!signedIn()){
       summary.innerHTML='<span>Workspace access</span><strong>Sign in to configure LeadIntel</strong><small>Use your existing Google or Microsoft account. Mailbox permissions are connected separately.</small><div class="workspace-signin-options" id="ai-settings-signin"><button class="ai-settings-btn primary" data-settings-signin="google" type="button">Continue with Google</button><button class="ai-settings-btn microsoft" data-settings-signin="microsoft" type="button">Sign in with Microsoft</button></div>';
     }
-    else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Main engine · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">MAIN ENGINE</span></strong>${activeToolsSummary(active)}<small>${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
-    else summary.innerHTML=`<span>Active tools</span><strong>No main AI engine</strong>${activeToolsSummary(null)}<small>${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Choose one as the main engine below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
+    else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Main engine · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">MAIN ENGINE</span></strong>${activeToolsSummary(active)}<small>${esc(statusNotice())}${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
+    else summary.innerHTML=`<span>Active tools</span><strong>${statusKnown||connectedCount?'No main AI engine':statusUnavailable?'AI engine status unavailable':'Checking AI engines…'}</strong>${activeToolsSummary(null)}<small>${esc(statusNotice())}${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Choose one as the main engine below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
   }
 }
 function render(){
@@ -238,7 +245,7 @@ function render(){
   if(!settingsDrawerOpen()){unmountCredentialControls();return;}
   renderActiveToolsSummary();
   const researchHost=document.getElementById('company-research-settings');if(researchHost)researchHost.innerHTML=window.LeadIntelCompanyDossierUi?.settingsHtml(status.providers,status.research_settings||{},!signedIn()||!isOwner())||'';
-  grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
+  grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider)||(statusKnown?null:{pending:true}))).join('');
   renderIntegrationMonitoring();
 }
 async function saveDossierSettings(event){
@@ -257,9 +264,7 @@ function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
   const providerError=providerErrors[config.provider]||'';const paymentIssue=paymentError(providerError);
   const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
-  let stateLabel=outOfCredits?'Credits exhausted':active?'Main engine':configured?'Connected · inactive':'Not connected';
-  if(paymentIssue)stateLabel='Payment required';
-  if(config.provider==='gemini'&&configured&&!active&&!outOfCredits&&!paymentIssue)stateLabel='Connected · specialist';
+  let stateLabel=providerStateLabel({current,paymentIssue,provider:config.provider});
   const model=current?.model||config.model;const choices=Array.isArray(config.models)?config.models:[];
   // A model saved before the curated list (or removed from it) stays selectable until the owner picks a listed one.
   const options=choices.map(entry=>`<option value="${esc(entry.id)}" ${entry.id===model?'selected':''}>${esc(modelOptionLabel(entry))}</option>`).join('')+(choices.some(entry=>entry.id===model)?'':`<option value="${esc(model)}" selected>${esc(model)} · saved earlier</option>`);
@@ -279,6 +284,17 @@ function providerCard(config,current){
       <button class="ai-settings-btn danger" data-ai-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
     </div>
   </article>`;
+}
+// Badge text for a provider card. Until the first status answer the renderer passes {pending:true} instead of a missing
+// row, so the badge says Checking…, not Not connected; a failed re-check keeps whatever was last known.
+function providerStateLabel({current,paymentIssue=false,provider=''}){
+  const configured=Boolean(current?.configured);const active=Boolean(current?.active);
+  const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
+  let label=outOfCredits?'Credits exhausted':active?'Main engine':configured?'Connected · inactive':'Not connected';
+  if(paymentIssue)label='Payment required';
+  if(provider==='gemini'&&configured&&!active&&!outOfCredits&&!paymentIssue)label='Connected · specialist';
+  if(current?.pending&&!paymentIssue)label='Checking…';
+  return label;
 }
 function formatDate(value){
   if(!value)return '—';const date=new Date(value);if(Number.isNaN(date.getTime()))return '—';return new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(date);
@@ -438,8 +454,8 @@ async function refreshStatus(){
   try{
     const {response,payload}=await api('/api/integrations/ai/status');
     if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;
-    if(!response.ok)throw new Error(payload.error||'Unable to load AI settings');status=payload;render();return status;
-  }catch(error){if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;status={role:workspace()?.role||'',providers:[]};render();toast(error.message);return status;}
+    if(!response.ok)throw new Error(payload.error||'Unable to load AI settings');status=payload;statusKnown=true;statusUnavailable='';render();return status;
+  }catch(error){if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;statusUnavailable=String(error.message||error);render();toast(error.message);return status;}
 }
 async function checkApolloStatus(){
   try{
@@ -564,7 +580,7 @@ window.addEventListener('leadintel:service-status',()=>{renderIntegrationMonitor
 window.addEventListener('leadintel:calendly-status',()=>renderActiveToolsSummary());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 addEventListener('leadintel:service-credential-changed',()=>{if(signedIn())void refreshIntegrationStatus();});
-window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
+window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};statusKnown=false;statusUnavailable='';integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
 window.addEventListener('leadintel:gmail-status',()=>{integrationStatus.gmail=gmailMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 if(shouldOpenSettingsFromUrl())openDrawer();
