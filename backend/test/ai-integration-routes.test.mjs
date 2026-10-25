@@ -67,3 +67,10 @@ test('AI routes use encrypted storage and unified provider adapter without retur
   assert.match(source,/key_hint/);
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
+
+test('model catalogue route is owner-only, accepts a pasted key or the saved one, and never stores anything',()=>{
+  assert.match(source,/\/api\/integrations\/ai\/models'&&request\.method==='POST'[\s\S]{0,200}requireMember\(request,env,workspaceId,\['owner'\]\)/);
+  assert.match(source,/listProviderModels\(\{provider,apiKey\}\)/);
+  assert.match(source,/SELECT encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=\? AND provider=\? LIMIT 1/);
+  assert.doesNotMatch(source.slice(source.indexOf("/api/integrations/ai/models'"),source.indexOf("/api/integrations/ai/provider'&&request.method==='PUT'")),/INSERT|UPDATE/);
+});

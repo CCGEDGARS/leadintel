@@ -182,6 +182,7 @@ function render(){
   renderActiveToolsSummary();
   const researchHost=document.getElementById('company-research-settings');if(researchHost)researchHost.innerHTML=window.LeadIntelCompanyDossierUi?.settingsHtml(status.providers,status.research_settings||{},!signedIn()||!isOwner())||'';
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
+  for(const config of PROVIDERS)if(providerState(config.provider)?.configured)void ensureModelCatalog(config.provider);
   renderIntegrationMonitoring();
 }
 async function saveDossierSettings(event){
@@ -198,6 +199,15 @@ function handleModelModeChange(event){
 }
 function integrationTone(check={}){return check.creditIssue?'bad':check.state==='bad'?'warn':check.state||'neutral';}
 function paymentError(value=''){return /(?:\b402\b|insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached|payment_required|not_enough_credits|out_of_credits|credits_exhausted|(?:insufficient|exhausted|no|out of|zero)\s+(?:available\s+)?(?:credits?|quota|balance)|(?:credits?|quota|balance)\s+(?:is\s+)?(?:exhausted|depleted)|(?:payment|billing)\s+(?:failed|required|declined|limit)|subscription\s+(?:expired|unpaid))/i.test(String(value));}
+// Per-provider model catalogue from the provider's own list endpoint; null while loading, [] when unavailable.
+const modelCatalog={};let catalogWorkspace='';
+async function ensureModelCatalog(provider){
+  const scope=workspace()?.id||'';if(catalogWorkspace!==scope){for(const key of Object.keys(modelCatalog))delete modelCatalog[key];catalogWorkspace=scope;}
+  if(!scope||!isOwner()||provider in modelCatalog)return;modelCatalog[provider]=null;
+  try{const {response,payload}=await api(`/api/integrations/ai/models?workspace_id=${encodeURIComponent(scope)}`,{method:'POST',body:JSON.stringify({provider})});modelCatalog[provider]=response.ok&&Array.isArray(payload.models)?payload.models.map(String):[];}
+  catch{modelCatalog[provider]=[];}
+  if(workspace()?.id===scope)render();
+}
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
   const providerError=providerErrors[config.provider]||'';const paymentIssue=paymentError(providerError);
@@ -205,16 +215,19 @@ function providerCard(config,current){
   let stateLabel=outOfCredits?'Credits exhausted':active?'Main engine':configured?'Connected · inactive':'Not connected';
   if(paymentIssue)stateLabel='Payment required';
   if(config.provider==='gemini'&&configured&&!active&&!outOfCredits&&!paymentIssue)stateLabel='Connected · specialist';
-  const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';
+  const model=current?.model||config.model;const catalogState=typeof modelCatalog==='object'&&modelCatalog?modelCatalog[config.provider]:undefined;const catalog=Array.isArray(catalogState)?catalogState:[];
+  const mode=model===config.model?'recommended':catalog.includes(model)?'catalog':'advanced';
+  const catalogOptions=catalog.filter(id=>id!==config.model).map(id=>`<option value="model:${esc(id)}" ${mode==='catalog'&&model===id?'selected':''}>${esc(id)}</option>`).join('');
+  const catalogNote=catalog.length?`${catalog.length} models available on this key.`:configured?(catalogState===null?'Loading the model list…':'The model list loads after the key is verified.'):'';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
   return `<article class="ai-provider-card ${active?'active':''} ${outOfCredits||paymentIssue?'credit-alert':''}" data-provider-card="${config.provider}">
     <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${outOfCredits||paymentIssue?'credit-alert':active?'active':configured?'connected':''}">${stateLabel}</span></div>
     ${outOfCredits?`<div class="ai-credit-warning" role="alert">${esc(config.name)} reported exhausted credits or a billing limit during a real request. Check your ${esc(config.name)} balance and spending limit, then retry. A successful request clears this alert.</div>`:''}
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     ${globalThis.LeadIntelToolAccountLinks?.html(config.provider)||''}
-    <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option><option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
+    <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option>${catalogOptions}<option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
-    <div class="ai-model-note">Recommended balances quality, speed and cost for LeadIntel. Existing saved models stay unchanged until you Test &amp; save. Advanced accepts an exact model ID supported by your account.</div><div class="ai-model-confirmed" role="status">${configured?`Confirmed model: <strong>${esc(model)}</strong> · tested ${esc(formatDate(current.verified_at))}`:'No model confirmed. Test &amp; save before use.'}</div>${config.provider==='gemini'?'<p class="ai-model-note">Specialist when connected: research/contact evidence review, grounded search fallback and native source-PDF extraction (up to 8 MiB / 60 pages). Main-engine tasks use the provider selected above.</p>':''}
+    <div class="ai-model-note">Recommended balances quality, speed and cost for LeadIntel. Existing saved models stay unchanged until you Test &amp; save. Advanced accepts an exact model ID supported by your account.${catalogNote?` <span data-ai-model-catalog="${config.provider}">${esc(catalogNote)}</span>`:''}</div><div class="ai-model-confirmed" role="status">${configured?`Confirmed model: <strong>${esc(model)}</strong> · tested ${esc(formatDate(current.verified_at))}`:'No model confirmed. Test &amp; save before use.'}</div>${config.provider==='gemini'?'<p class="ai-model-note">Specialist when connected: research/contact evidence review, grounded search fallback and native source-PDF extraction (up to 8 MiB / 60 pages). Main-engine tasks use the provider selected above.</p>':''}
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
     <div class="ai-provider-error" data-payment-error="${paymentError(providerError)}" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">
@@ -454,7 +467,7 @@ async function handleProviderAction(event){
 async function saveProvider(provider){
   const input=document.querySelector(`[data-ai-key="${provider}"]`);const modeInput=document.querySelector(`[data-ai-model-mode="${provider}"]`);const modelInput=document.querySelector(`[data-ai-model="${provider}"]`);
   const config=PROVIDERS.find(item=>item.provider===provider);const configured=Boolean(providerState(provider)?.configured);
-  const apiKey=String(input?.value||'').trim();const mode=modeInput?.value==='advanced'?'advanced':'recommended';const model=mode==='recommended'?String(config?.model||'').trim():String(modelInput?.value||'').trim();
+  const apiKey=String(input?.value||'').trim();const choice=String(modeInput?.value||'recommended');const mode=choice==='advanced'?'advanced':choice.startsWith('model:')?'catalog':'recommended';const model=mode==='recommended'?String(config?.model||'').trim():mode==='catalog'?choice.slice(6).trim():String(modelInput?.value||'').trim();
   if(mode==='advanced'&&!model){toast('Enter the exact model ID');modelInput?.focus();return;}
   if(!apiKey&&!configured){toast('Enter your provider API key first');input?.focus();return;}
   if(!(await (window.LeadIntelDialogs?.confirm(`Test and save ${config.name} model ${model}? This makes a small paid API request. ${configured?'The saved model changes only if the test succeeds.':'An existing main engine stays selected.'}`)??false)))return;
