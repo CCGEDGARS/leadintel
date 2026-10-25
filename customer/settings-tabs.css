@@ -18,9 +18,11 @@
 .integration-subheading span{font-size:13px;line-height:1.5;color:var(--muted,#6c7772)}
 /* Data sources tab: one card per row so the key form, links and status have room. */
 #integration-platform-grid{grid-template-columns:1fr}
-#integration-platform-grid .tool-account-links{display:flex;flex-wrap:wrap;gap:8px 16px}
 .gmail-mail-actions,.microsoft-mail-actions{display:grid;gap:8px;justify-items:start}
 .mail-note{display:block;order:-1;color:var(--muted,#6c7772);font-size:12px;line-height:1.5}
 /* The note sits above the button so the buttons of paired cards end on the same line. */
 /* Data sources: the source chip repeats the badge until a key is saved — show it only once a key exists. */
 .service-source.managed{display:none}
+/* Provider links: one row, equal width, whatever the card width — "Get API key" and "Pricing" only. */
+.tool-account-links{display:flex;flex-wrap:nowrap;gap:8px}
+.tool-account-links a{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
