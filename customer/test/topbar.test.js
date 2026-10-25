@@ -9,6 +9,7 @@ const PAGE=`<div class="page-shell"><header class="topbar"><a class="brand"></a>
   <button id="open-crm" class="ghost-btn">CRM</button>
   <div id="server-account"><span id="server-account-label">Jonathan</span><span id="server-auth-provider">Google · montesuntzu@gmail.com</span><span id="server-sync-status">SYNCED TO LEADINTEL</span><button id="server-signout">Sign out</button></div>
   <span class="autosave">Saved automatically to LeadIntel</span>
+  <button id="save-workspace" class="ghost-btn">Save now</button>
   <button id="reset-workspace" class="ghost-btn">Reset workspace</button>
 </div></header>
 <aside class="utility-panel"><button id="workspace-attention"><strong>Workspace status</strong><em data-attention-summary>1 item need attention</em><b data-attention-count>1</b></button><button id="open-settings">Open settings</button></aside></div>`;
@@ -17,7 +18,7 @@ async function mount({authenticated=true}={}){
   const {JSDOM}=await import('jsdom');
   const dom=new JSDOM(PAGE,{url:'https://example.test/customer/'});
   const win=dom.window;win.LeadIntelServerBridge={session:{authenticated}};
-  const clicks=[];for(const id of ['open-settings','server-signout','reset-workspace','workspace-attention'])win.document.getElementById(id).addEventListener('click',()=>clicks.push(id));
+  const clicks=[];for(const id of ['open-settings','server-signout','reset-workspace','workspace-attention','save-workspace'])win.document.getElementById(id).addEventListener('click',()=>clicks.push(id));
   new Function('window',source)(win);
   return {win,doc:win.document,clicks};
 }
@@ -33,7 +34,8 @@ test('the page loads topbar.js and the shell stylesheet hides the bridge texts i
 test('three controls replace seven texts: save status, Workspace status with badge, account menu',async()=>{
   const {doc}=await mount();
   const items=[...doc.querySelector('.top-actions').children].map(c=>c.id);
-  assert.deepEqual(items.slice(0,4),['open-crm','topbar-status','topbar-workspace-status','topbar-account']);
+  assert.deepEqual(items.slice(0,5),['open-crm','topbar-status','topbar-save','topbar-workspace-status','topbar-account']);
+  assert.equal(doc.getElementById('topbar-save').hidden,true,'Save now stays hidden while everything is saved');
   assert.equal(doc.getElementById('topbar-status').textContent,'Saved');
   assert.equal(doc.getElementById('topbar-status').dataset.tone,'ok');
   const ws=doc.getElementById('topbar-workspace-status');
@@ -78,4 +80,32 @@ test('signed out, the account menu is hidden and building twice does not duplica
   assert.equal(doc.getElementById('topbar-account').hidden,true);
   win.LeadIntelTopbar.build();
   assert.equal(doc.querySelectorAll('#topbar-status').length,1);
+});
+
+test('the status pill trusts the persistence label over the bridge text, and Save now appears only while changes are unsynced',async()=>{
+  const {win,doc,clicks}=await mount();
+  const {statusFor}=win.LeadIntelTopbar;
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Unsaved changes · saving shortly'),{label:'Unsynced changes',tone:'busy'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Saving workspace…'),{label:'Saving…',tone:'busy'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Sync conflict · local and server versions preserved'),{label:'Needs attention',tone:'attention'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Sync timed out · retry save · changes kept in this browser'),{label:'Needs attention',tone:'attention'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Saved in this browser · cloud sync pending'),{label:'Unsynced changes',tone:'busy'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','Saved automatically to LeadIntel'),{label:'Saved',tone:'ok'});
+  assert.deepEqual(statusFor('SYNCED TO LEADINTEL','New workspace · ready'),{label:'Saved',tone:'ok'});
+  const autosave=doc.querySelector('.top-actions>.autosave'),pill=doc.getElementById('topbar-status'),save=doc.getElementById('topbar-save');
+  autosave.textContent='Unsaved changes · saving shortly';
+  await new Promise(r=>setTimeout(r,20));
+  assert.equal(pill.textContent,'Unsynced changes');assert.equal(pill.dataset.tone,'busy');
+  assert.equal(save.hidden,false);assert.equal(save.textContent,'Save now');
+  save.click();assert.equal(clicks.at(-1),'save-workspace');
+  autosave.textContent='Sync conflict · local and server versions preserved';doc.getElementById('save-workspace').textContent='Keep my local changes';
+  await new Promise(r=>setTimeout(r,20));
+  assert.equal(pill.textContent,'Needs attention');assert.equal(save.hidden,false);assert.equal(save.textContent,'Keep my local changes');
+  autosave.textContent='Saved automatically to LeadIntel';doc.getElementById('save-workspace').textContent='Save now';
+  await new Promise(r=>setTimeout(r,20));
+  assert.equal(pill.textContent,'Saved');assert.equal(save.hidden,true);
+});
+
+test('the shell stylesheet styles the Save now control next to the status pill',()=>{
+  assert.match(css,/\.topbar-save\{/);
 });
