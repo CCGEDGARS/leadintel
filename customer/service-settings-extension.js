@@ -4,7 +4,7 @@ const SETTINGS_VERSION='20261012-visible-apollo-key-v1';
 const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
-  {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Pay per use work-email finding and verification'},
+  {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Finds and verifies buyers’ work e-mail addresses on demand, paid per use from a prepaid Treg balance. Open Treg, sign in, and paste your team token here'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
   {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Manually approved email finding and additional delivery verification using your Hunter credits'}
 ]);
@@ -109,11 +109,11 @@ function decorateCards(){
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
   if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional for customers who already hold Hunter credits. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
   for(const config of SETTINGS_PROVIDERS){
-    let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&['treg','hunter'].includes(config.provider)){card=document.createElement('article');card.className='integration-card';card.dataset.integration=config.provider;card.innerHTML=`<div class="integration-card-head"><div><strong>${esc(config.name)}</strong><small>${config.provider==='hunter'?'Optional · only if you already use Hunter':'Buyer work-email research'}</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>${window.LeadIntelToolAccountLinks?.html(config.provider)||''}`;grid.appendChild(card);}if(!card)continue;
+    let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&['treg','hunter'].includes(config.provider)){card=document.createElement('article');card.className='integration-card';card.dataset.integration=config.provider;card.innerHTML=`<div class="integration-card-head"><div><strong>${esc(config.name)}</strong><small>${config.provider==='hunter'?'Optional · only if you already use Hunter':'Buyer work e-mail finding and verification'}</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>${window.LeadIntelToolAccountLinks?.html(config.provider)||''}`;grid.appendChild(card);}if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
-    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Connect your own key. Each user pays their provider directly.`;
+    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=config.provider==='treg'?`${config.purpose}.`:`${config.purpose}. Connect your own key. Each user pays their provider directly.`;
     const payment=Boolean(observed?.creditIssue||(row?.credit_issue?.code==='credits_exhausted'&&row.credit_issue.source===row.source));
     const tone=payment?'bad':observed?.state==='bad'||row?.state==='bad'?'warn':observed?.state|| (row?.source&&row.source!=='none'?'good':'neutral');
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=payment?'Credits exhausted':observed?.label||statusLabel(row);badge.className=`integration-status ${tone}`;}

@@ -7,7 +7,7 @@
   gemini:{name:'Google Gemini',links:[['Get API key','https://aistudio.google.com/api-keys'],['Billing & credits','https://aistudio.google.com/billing']]},
   apollo:{name:'Apollo.io',links:[['Get API key','https://app.apollo.io/#/settings/integrations/api'],['Pricing','https://www.apollo.io/pricing']]},
   firecrawl:{name:'Firecrawl',links:[['Get API key','https://www.firecrawl.dev/app/api-keys'],['Pricing','https://www.firecrawl.dev/pricing']]},
-  treg:{name:'Treg',links:[['Get team token','https://treg.to/'],['Integration guide','https://treg.to/integrate.md']]},
+  treg:{name:'Treg',links:[['Open Treg','https://treg.to/']]},
   hunter:{name:'Hunter',links:[['Get API key','https://hunter.io/api-keys'],['Pricing','https://hunter.io/pricing']]},
   google:{name:'Google Account',links:[['Create Google account','https://accounts.google.com/signup']]},
   'microsoft-account':{name:'Microsoft Account',links:[['Create Microsoft account','https://signup.live.com/']]},

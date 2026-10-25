@@ -1,5 +1,5 @@
 /* Settings drawer tabs: horizontal choice on top, one group visible at a time. */
-.settings-tabs{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 4px;padding:10px 0 12px;background:var(--paper,#fff);border-bottom:1px solid var(--line,#dde2dd)}
+.settings-tabs{position:sticky;top:-30px;z-index:3;display:flex;flex-wrap:wrap;gap:6px;margin:18px -30px 4px;padding:30px 30px 12px;background:#fbfcf9;border-bottom:1px solid var(--line,#dde2dd)}
 .settings-tab{padding:8px 14px;border:1px solid var(--line,#dde2dd);border-radius:999px;background:var(--paper,#fff);color:var(--ink,#13201c);font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease}
 .settings-tab:hover{border-color:var(--ink,#13201c)}
 .settings-tab[aria-selected="true"]{background:var(--ink,#13201c);border-color:var(--ink,#13201c);color:#fff}
