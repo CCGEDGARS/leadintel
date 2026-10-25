@@ -109,3 +109,25 @@ test('the status pill trusts the persistence label over the bridge text, and Sav
 test('the shell stylesheet styles the Save now control next to the status pill',()=>{
   assert.match(css,/\.topbar-save\{/);
 });
+
+test('no stylesheet gives the workspace grid a third column above 720px now that the tools column is gone',()=>{
+  // 2026-10-26: on step 6 message-workspace.css kept `225px 1fr 258px` with a selector (`body:has(#step-6.active)`)
+  // more specific than the shell's `.page-shell .workspace`, so the hidden tools column still took 258px of blank space.
+  const dir=new URL('../',import.meta.url);
+  const tracks=value=>{const out=[];let depth=0,cur='';for(const ch of value){if(ch==='(')depth++;if(ch===')')depth--;if(ch===' '&&depth===0){if(cur)out.push(cur);cur='';}else cur+=ch;}if(cur)out.push(cur);return out;};
+  const offenders=[];
+  for(const file of fs.readdirSync(dir).filter(name=>name.endsWith('.css'))){
+    const text=fs.readFileSync(new URL(file,dir),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+    for(const match of text.matchAll(/([^{}]+)\{([^{}]*grid-template-columns:([^;}]+)[^{}]*)\}/g)){
+      const selector=match[1].trim();
+      if(!selector.split(',').some(part=>part.trim().split(/\s+/).pop()==='.workspace'))continue;
+      if(tracks(match[3].trim()).length<3)continue;
+      if(selector==='.workspace')continue; // the plain selector loses to the shell's `.page-shell .workspace`
+      offenders.push(`${file}: ${selector} -> ${match[3].trim()}`);
+    }
+  }
+  assert.deepEqual(offenders,[]);
+  const step6=read('message-workspace.css');
+  assert.match(step6,/body:has\(#step-6\.active\) \.workspace\{grid-template-columns:225px minmax\(0,1fr\)\}/);
+  assert.doesNotMatch(step6,/body:has\(#step-6\.active\) \.workspace\{[^}]*(258px|max-width)/);
+});
