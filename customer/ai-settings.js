@@ -174,13 +174,28 @@ function workspaceProviderAction(provider){
   if(selected)return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Use ${providerLabel(provider)} instead</button></div>`;
   return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Use ${providerLabel(provider)} instead</button><button class="ai-settings-btn danger" data-settings-signout type="button">Sign out</button></div>`;
 }
-function activeToolItems(active){
+// Every customer-owned tool that is ready, in journey order. The fast status rows (loaded with the page) feed the list
+// at once; a completed verification wins over the cached row for Firecrawl, so a failed check hides it.
+function activeToolItemsFrom({active,integrations={},serviceRows=[],calendly=null}){
   const items=[];
+  const row=provider=>serviceRows.find(item=>item.provider===provider)||null;
+  const customerGood=item=>Boolean(item&&item.configured&&item.source==='customer'&&item.state==='good');
   if(active)items.push({name:active.name,detail:`AI · ${active.model}`,state:'ACTIVE'});
-  if(integrationStatus.firecrawl?.source==='customer'&&integrationStatus.firecrawl?.state==='good')items.push({name:'Firecrawl',detail:'Research · your connection',state:'READY'});
-  if(integrationStatus.gmail?.state==='good')items.push({name:'Gmail',detail:'Mail delivery',state:'CONNECTED'});
-  if(integrationStatus.microsoftMail?.state==='good')items.push({name:'Microsoft 365',detail:'Mail delivery',state:'CONNECTED'});
+  const firecrawl=integrations.firecrawl;
+  if(firecrawl?firecrawl.source==='customer'&&firecrawl.state==='good':customerGood(row('firecrawl')))items.push({name:'Firecrawl',detail:'Research · your connection',state:'READY'});
+  if(customerGood(row('treg')))items.push({name:'Treg',detail:'Buyer e-mails · your connection',state:'READY'});
+  if(customerGood(row('hunter')))items.push({name:'Hunter',detail:'E-mail finding · your connection',state:'READY'});
+  if(customerGood(row('apollo')))items.push({name:'Apollo.io',detail:'Enrichment · your connection',state:'READY'});
+  if(calendly?.connected)items.push({name:'Calendly',detail:'Meeting bookings',state:'CONNECTED'});
+  if(integrations.gmail?.state==='good')items.push({name:'Gmail',detail:'Mail delivery',state:'CONNECTED'});
+  if(integrations.microsoftMail?.state==='good')items.push({name:'Microsoft 365',detail:'Mail delivery',state:'CONNECTED'});
   return items;
+}
+function activeToolItems(active){
+  const services=window.LeadIntelServiceIntegrationStatus;
+  const serviceRows=services&&services.workspace_id===workspace()?.id?(services.providers||[]):[];
+  const calendly=window.LeadIntelCalendlyStatus&&window.LeadIntelCalendlyStatus.workspace_id===workspace()?.id?window.LeadIntelCalendlyStatus:null;
+  return activeToolItemsFrom({active,integrations:integrationStatus,serviceRows,calendly});
 }
 function activeToolsSummary(active){
   const items=activeToolItems(active);
@@ -527,7 +542,8 @@ async function disconnectProvider(provider){
 window.LeadIntelMicrosoftConnection={version:SETTINGS_VERSION,openSignIn(trigger){openDrawer();openMicrosoftHelp(trigger,'signin');}};
 window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentError=paymentError;
 injectUi();
-window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
+window.addEventListener('leadintel:service-status',()=>{renderIntegrationMonitoring();renderActiveToolsSummary();});
+window.addEventListener('leadintel:calendly-status',()=>renderActiveToolsSummary());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 addEventListener('leadintel:service-credential-changed',()=>{if(signedIn())void refreshIntegrationStatus();});
 window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});

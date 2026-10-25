@@ -245,3 +245,26 @@ test('Test & save confirmation names the provider, the cost scale and what happe
   assert.match(saveFlow,/LeadIntelDialogs\?\.confirm\(confirmation\.message,confirmation\.options\)/);
   assert.doesNotMatch(saveFlow,/small paid API request|existing main engine stays/);
 });
+
+test('Active tools lists every customer-owned tool that is ready, from the fast status before verification completes',()=>{
+  const start=js.indexOf('function activeToolItemsFrom(');
+  assert.ok(start>=0,'activeToolItemsFrom helper must exist');
+  const end=js.indexOf('\n}',start);
+  const helper=new Function(`${js.slice(start,end+2)}; return activeToolItemsFrom;`)();
+  const rows=[{provider:'apollo',configured:false,source:'none',state:'neutral'},{provider:'firecrawl',configured:true,source:'customer',state:'good'},{provider:'hunter',configured:true,source:'customer',state:'good'},{provider:'treg',configured:true,source:'customer',state:'good'}];
+  const active={name:'OpenAI',model:'gpt-6.1-sol'};
+  const cold=helper({active,integrations:{},serviceRows:rows,calendly:{connected:true}});
+  assert.deepEqual(cold.map(i=>i.name),['OpenAI','Firecrawl','Treg','Hunter','Calendly']);
+  assert.deepEqual(cold.map(i=>i.state),['ACTIVE','READY','READY','READY','CONNECTED']);
+  const verifiedBad=helper({active,integrations:{firecrawl:{source:'customer',state:'bad'}},serviceRows:rows,calendly:null});
+  assert.deepEqual(verifiedBad.map(i=>i.name),['OpenAI','Treg','Hunter'],'a failed verification hides Firecrawl even when the cached row says good');
+  const platform=helper({active:null,integrations:{gmail:{state:'good'}},serviceRows:[{provider:'apollo',configured:true,source:'platform',state:'good'}],calendly:{connected:false}});
+  assert.deepEqual(platform.map(i=>i.name),['Gmail'],'platform-owned rows are not the customer\'s tools');
+  const apollo=helper({active:null,integrations:{},serviceRows:[{provider:'apollo',configured:true,source:'customer',state:'good'}],calendly:null});
+  assert.deepEqual(apollo.map(i=>i.name),['Apollo.io']);
+  assert.match(js,/function activeToolItems\(active\)\{[\s\S]{0,400}LeadIntelServiceIntegrationStatus[\s\S]{0,300}LeadIntelCalendlyStatus/);
+  assert.match(js,/addEventListener\('leadintel:service-status',\(\)=>\{renderIntegrationMonitoring\(\);renderActiveToolsSummary\(\);\}\)/);
+  assert.match(js,/addEventListener\('leadintel:calendly-status',\(\)=>renderActiveToolsSummary\(\)\)/);
+  assert.match(extension,/window\.LeadIntelCalendlyStatus=/);
+  assert.match(extension,/new CustomEvent\('leadintel:calendly-status'\)/);
+});
