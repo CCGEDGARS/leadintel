@@ -9,3 +9,11 @@
   .progress-panel,.utility-panel{position:static;top:auto;height:auto;min-height:0;overflow:auto}
   main.content{height:100%;min-height:0;overflow:auto;overscroll-behavior:contain}
 }
+/* Step column: tighter margins, no horizontal movement, no visible scrollbar (it still scrolls with the wheel). */
+@media(min-width:721px){
+  .progress-panel{padding:26px 18px 22px;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none}
+  .progress-panel::-webkit-scrollbar{width:0;height:0}
+  .progress-panel .steps,.progress-panel .steps>*{min-width:0;max-width:100%}
+  .utility-panel{overflow-x:hidden;scrollbar-width:none}
+  .utility-panel::-webkit-scrollbar{width:0;height:0}
+}
