@@ -29,9 +29,3 @@
 /* Card actions (Test & save · Make main engine · Disconnect) stay on one row at equal width. */
 #ai-settings-drawer .ai-provider-actions{display:flex;flex-wrap:nowrap;gap:8px}
 #ai-settings-drawer .ai-provider-actions>button{flex:1 1 0;min-width:0;white-space:nowrap}
-/* The settings drawer slides in from the right edge and its backdrop fades, like Ask LeadIntel. */
-#ai-settings-drawer{transform:translateX(104%);transition:transform .28s cubic-bezier(.2,.8,.2,1)}
-#ai-settings-drawer.is-open{transform:none}
-#ai-settings-backdrop{opacity:0;transition:opacity .28s ease}
-#ai-settings-backdrop.is-open{opacity:1}
-@media(prefers-reduced-motion:reduce){#ai-settings-drawer,#ai-settings-backdrop{transition:none}}

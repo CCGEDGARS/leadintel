@@ -100,6 +100,7 @@ test('the application shell locks the document and lets the panes scroll; window
 });
 
 test('the settings drawer slides in from the right and its backdrop fades, like Ask LeadIntel',()=>{
+  const css=read('app-shell.css');
   assert.match(css,/#ai-settings-drawer\{transform:translateX\(104%\);transition:transform/);
   assert.match(css,/#ai-settings-drawer\.is-open\{transform:none\}/);
   assert.match(css,/#ai-settings-backdrop\.is-open\{opacity:1\}/);
