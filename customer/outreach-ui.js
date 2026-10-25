@@ -8,7 +8,7 @@ import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialog
 import './writing-workspace.js?v=20261023-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1';
-import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2&app-dialogs=20261017-v1&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&writing-mentors=20261017-v1&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&manual-edit=20261024-v1&rich-text=20261025-v1';
+import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2&app-dialogs=20261017-v1&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&writing-mentors=20261017-v1&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&manual-edit=20261024-v1&rich-text=20261025-v1&simple-writing=20261025-v1';
 import './follow-up-assistant.js?v=20261013-v1';
 import './follow-up-assistant-ui.js?v=20261013-v1';
 import './message-evidence.js?message-speed=20261017-v1&v=20261010-evidence-v3';
@@ -1016,13 +1016,13 @@ async function useAssistantDraft(draft,style,assistant=null){
  next.messageStudioDraft.assistantSourceStyle=style;if(assistant){next.messageStudioDraft.writingAssistant=JSON.parse(JSON.stringify(assistant));next.messageStudioDraft.writingAssistantDraft={subject:draft.subject,message:draft.message};}else{delete next.messageStudioDraft.writingAssistant;delete next.messageStudioDraft.writingAssistantDraft;}upsertItem(next);renderAll();
  const result=await saveScriptPackage(next);
  if(captured.scope!==captureWritingAssistantContext().scope)throw Error('Workspace or recipient changed. Check the original recipient’s saved draft.');
- if(!result?.ok||result.localOnly)throw Error('Draft kept locally. CRM save failed; retry Use in Messages.');
+ if(!result?.ok||result.localOnly)throw Error('Draft kept locally. CRM save failed; retry Save draft.');
  return true; // Deliberately no approval, flow membership or automatic enqueue here.
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
  if(writingAssistant||!globalThis.LeadIntelWritingAssistantUI)return;
- const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&writing-mentors=20261017-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1';document.head.append(link);
+ const link=document.createElement('link');link.rel='stylesheet';link.href='writing-assistant.css?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&writing-mentors=20261017-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&simple-writing=20261025-v1';document.head.append(link);
  writingAssistant=globalThis.LeadIntelWritingAssistant.createWritingAssistant({workbench:true,capture:captureWritingAssistantContext,validatePreview:async(proposal,context)=>{
   await globalThis.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:crmBridge()?.workspace?.id}).assertGenerationCurrent(proposal.provenance);
   globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(proposal.draft,context);
@@ -1041,7 +1041,7 @@ function installWritingAssistant(){
   next.messageStudioDraft.writingAssistant={...proposal.provenance,citations:proposal.citations,appliedAt:new Date().toISOString()};next.messageStudioDraft.writingAssistantDraft={subject:draft.subject,message:draft.message};upsertItem(next);renderAll();return true;
  },onChange:()=>{writingAssistantView?.render();if(!writingAssistantRendering){writingAssistantRendering=true;try{renderMessageWorkspace();}finally{writingAssistantRendering=false;}}}});
  writingAssistantView=globalThis.LeadIntelWritingAssistantUI.mountWritingAssistant(document,writingAssistant,{
-  deferClosedRendering:true,draftLength:()=>studioState().aiLength||'standard',changeDraftLength:setAssistantDraftLength,writingContext:()=>writingContextMode,changeWritingContext,resetBooks:resetWritingBooks,
+  deferClosedRendering:true,writingContext:()=>writingContextMode,changeWritingContext,resetBooks:resetWritingBooks,
   channel:()=>writingContextMode==='general'?'general':globalThis.LeadIntelChannelWorkspace?.channel()||currentItem()?.channel||'email',
   scripts:assistantScripts,onLoadScript:row=>{if(writingContextMode==='general'&&row.writingScope===writingScopeIdentity())generalWritingRecord={...row,scope:row.writingScope};},
   saveDraft:(draft,style,assistant)=>saveGeneralWriting(draft,'draft',assistant),saveTemplate:saveAssistantTemplate,useDraft:useAssistantDraft,

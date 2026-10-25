@@ -16,7 +16,7 @@ test('Edit is the first draft toolbar action and focuses the existing message wi
 });
 test('manual edits retain exact text through autosave and reopen while leaving the original and delivery separate',async()=>{
  const f=fixture();try{f.d.querySelector('[data-wa-edit]').click();const draft={subject:'My exact subject',message:'My own text\n\nSecond paragraph — unchanged.'};for(const [selector,key]of [['[data-wa-edit-subject]','subject'],['[data-wa-edit-body]','message']]){const el=f.d.querySelector(selector);el.value=draft[key];el.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));}
- assert.deepEqual(f.c.state().working,draft);assert.deepEqual(f.c.state().original,f.original);assert.equal(f.requests,0);assert.equal(f.used,undefined);const reopened=f.make();reopened.syncContext();assert.deepEqual(reopened.state().working,draft);reopened.destroy();f.d.querySelector('[data-wa-use-flow]').click();await new Promise(r=>setImmediate(r));assert.deepEqual(f.used,draft);assert.equal(f.requests,0);
+ assert.deepEqual(f.c.state().working,draft);assert.deepEqual(f.c.state().original,f.original);assert.equal(f.requests,0);assert.equal(f.used,undefined);const reopened=f.make();reopened.syncContext();assert.deepEqual(reopened.state().working,draft);reopened.destroy();f.d.querySelector('[data-wa-save-draft]').click();await new Promise(r=>setImmediate(r));assert.deepEqual(f.used,draft);assert.equal(f.requests,0);
  }finally{f.close();}
 });
 test('Edit follows busy/cancel state and remains available for an empty general-writing draft',async()=>{

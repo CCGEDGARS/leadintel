@@ -142,10 +142,19 @@
 .wa-book:focus-visible,.wa-context-controls select:focus-visible{outline:3px solid #359466;outline-offset:3px}
 .wa-question-footer .wa-actions{flex-wrap:wrap}
 
-.wa-question-footer .wa-length-choice{display:grid;gap:6px;flex:1 1 100%;min-width:0;font-size:13px;font-weight:600;color:#294435}
-.wa-length-choice select{box-sizing:border-box;width:100%;min-height:42px;border:1px solid #cad9ce;border-radius:9px;background:#fff;color:#203329;padding:9px 12px;font:inherit}
-.wa-length-choice select:hover{border-color:#55a572}.wa-length-choice select:focus-visible{outline:2px solid #277362;outline-offset:2px}
-.wa-length-choice small{font-size:12px;font-weight:400;line-height:1.5;color:#607568}.wa-length-choice[hidden]{display:none!important}
 .wa-finish{flex-wrap:wrap}
 .wa-dialog .wa-context-controls{position:relative}
 @media(max-width:700px){.wa-context-controls{display:flex;align-items:stretch;flex-direction:column;gap:8px}.wa-context-controls label{min-width:0}.wa-editor-heading{align-items:flex-start}.wa-editor-heading>.wa-actions{justify-content:flex-end}}
+
+/* Outcome-first workbench: one instruction, three optional books, one request. */
+.wa-session.wa-workbench{grid-template-columns:minmax(0,3fr) minmax(340px,2fr)}
+.wa-conversation-heading{padding:16px 18px 6px}.wa-conversation-heading h3{font-size:17px}
+.wa-conversation>.wa-question{border-top:0;border-bottom:1px solid var(--wa-line);border-radius:0;background:#fff;padding-top:8px;padding-bottom:12px}
+.wa-question>.wa-mentors{margin:4px 0 2px}.wa-mentor-heading>div{display:grid;gap:3px}.wa-mentor-heading strong{font-size:12px}.wa-mentor-heading [data-wa-library-count]{font-size:11px;color:var(--wa-muted)}
+.wa-question .wa-book-cover{width:62px;height:86px}.wa-question .wa-book{padding:9px 6px;gap:6px}.wa-question .wa-book>strong{font-size:11px}.wa-question .wa-book-activation{padding:5px 9px;font-size:11px}
+.wa-question .wa-book-guidance{background:none;border:0;margin:7px 0 0;padding:0}.wa-question .wa-mentor-note{font-size:11px;line-height:1.4}
+.wa-conversation-stream{background:#f8faf7;padding-top:14px}.wa-question-footer .wa-actions{margin-left:0;width:100%;justify-content:flex-end}
+.wa-dialog [data-wa-save-draft]{background:#173f32;color:#fff;border-color:#173f32}.wa-dialog [data-wa-save-draft]:disabled{opacity:.55}
+@media(min-width:721px) and (max-width:1050px){.wa-session.wa-workbench{grid-template-columns:minmax(0,1.15fr) minmax(300px,1fr)}}
+@media(min-width:721px) and (max-height:740px){.wa-conversation{overflow:auto}.wa-conversation-stream{flex:none;min-height:100px;overflow:visible}.wa-question .wa-book-cover{height:64px;width:48px}.wa-question textarea{min-height:66px}.wa-conversation-heading{padding-top:10px}}
+@media(max-width:720px){.wa-conversation{height:auto;min-height:560px;overflow:visible}.wa-conversation-stream{flex:none;min-height:150px;max-height:55dvh}.wa-question .wa-book-cover{height:76px;width:55px}.wa-question{padding:12px}.wa-context-controls{display:flex;flex-direction:column;align-items:stretch}}
