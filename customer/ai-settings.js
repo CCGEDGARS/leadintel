@@ -250,7 +250,7 @@ function gmailMailActions(mail){
   if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" data-gmail-choose="1" type="button">Change Gmail account</button><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
   if(mail.connected)return '';
   const account=authProvider()==='google'?String(bridge()?.session?.user?.email||'').trim():'';
-  return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>${account?`Connect Gmail for ${esc(account)}`:'Connect Gmail'}</button>${account?'<small class="gmail-mail-note">One more Google permission (send and read replies) for the account you signed in with. A different mailbox? Use the account chooser on the next screen.</small>':''}</div>`;
+  return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>${account?`Connect Gmail for ${esc(account)}`:'Connect Gmail'}</button><small class="mail-note">${account?'One more Google permission (send and read replies) for the account you signed in with. A different mailbox? Use the account chooser on the next screen.':'One Google permission (send and read replies) for the mailbox you choose on the next screen.'}</small></div>`;
 }
 function microsoftMailStatus(){
   const row=bridge()?.microsoftMail||{};
@@ -263,7 +263,7 @@ function microsoftMailActions(mail){
   if(!signedIn())return '';
   if(mail.connected&&mail.role==='owner')return '<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button">Change Microsoft account</button><button class="ai-settings-btn danger" data-microsoft-mail-action="disconnect" type="button">Disconnect Microsoft</button></div>';
   if(mail.connected)return '';
-  return `<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Microsoft 365</button></div>`;
+  return `<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Microsoft 365</button><small class="mail-note">One Microsoft permission (send only) for the account you choose on the next screen. LeadIntel never reads that inbox.</small></div>`;
 }
 function renderIntegrationMonitoring(){
   const platform=document.getElementById('integration-platform-grid');const communication=document.getElementById('integration-communication-grid');const health=document.getElementById('integration-health-summary');

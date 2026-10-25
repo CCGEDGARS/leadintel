@@ -21,7 +21,7 @@
     return 'engines';
   }
   function rememberedTab(){try{const saved=root.localStorage?.getItem(STORAGE_KEY);return TABS.some(tab=>tab.id===saved)?saved:'';}catch{return '';}}
-  function ensureCss(){if(document.querySelector('link[data-leadintel-asset="settings-tabs-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./settings-tabs.css?v=20261025-v1';link.dataset.leadintelAsset='settings-tabs-css';document.head.appendChild(link);}
+  function ensureCss(){if(document.querySelector('link[data-leadintel-asset="settings-tabs-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./settings-tabs.css?v=20261025-v2';link.dataset.leadintelAsset='settings-tabs-css';document.head.appendChild(link);}
   function select(drawer,id,persist){
     const known=TABS.some(tab=>tab.id===id)?id:'engines';
     for(const section of sectionsOf(drawer))section.classList.toggle('settings-tab-hidden',(section.dataset.settingsTab||'engines')!==known);

@@ -97,7 +97,9 @@ test('Delivery tab separates the sign-in account from the sending mailbox; Data 
 test('Delivery stacks every card, and connecting Gmail pre-selects the signed-in Google account unless the member chooses another',()=>{
   const saas=fs.readFileSync(new URL('../../backend/src/saas-routes.js',import.meta.url),'utf8');
   assert.doesNotMatch(css,/#integration-communication-grid\{grid-template-columns:1fr\}/,'accounts and mailboxes stay side by side');
-  assert.match(css,/\.gmail-mail-actions\{display:grid;gap:8px/);
+  assert.match(css,/\.gmail-mail-actions,\.microsoft-mail-actions\{display:grid;gap:8px/);
+  assert.match(css,/#integration-communication-grid \.integration-card\{display:flex;flex-direction:column/);
+  assert.match(settings,/<small class="mail-note">One Microsoft permission \(send only\)/);
   assert.match(css,/\.service-source\.managed\{display:none\}/);
   assert.match(saas,/const choose=url\.searchParams\.get\('choose'\)==='1';const loginHint=choose\?'':String\(access\.user\.email\|\|''\)\.trim\(\);/);
   assert.match(saas,/prompt:loginHint\?'consent':'select_account consent',loginHint\}/);

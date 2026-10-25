@@ -9,18 +9,17 @@
 @media(max-width:720px){.settings-tabs{gap:4px}.settings-tab{padding:7px 11px;font-size:12px}}
 
 /* Delivery tab: the sign-in account is one thing, the sending mailbox another. The active account spans the row; the alternative is a compact option. */
-/* Account cards sit side by side: the active one full, the alternative compact. */
-.workspace-provider-card.is-alternate{padding:12px 14px;background:var(--soft,#eef2ed)}
-.workspace-provider-card.is-alternate .integration-purpose,.workspace-provider-card.is-alternate .integration-meta{display:none}
-.workspace-provider-card.is-alternate .integration-card-head{margin-bottom:8px}
+/* Delivery: cards in a row share one height and one rhythm — title, purpose, status, action at the bottom. */
+#integration-communication-grid .integration-card{display:flex;flex-direction:column;gap:10px}
+#integration-communication-grid .workspace-provider-actions,#integration-communication-grid .gmail-mail-actions,#integration-communication-grid .microsoft-mail-actions{margin-top:auto}
+.workspace-provider-card.is-alternate{background:var(--soft,#eef2ed)}
 .integration-subheading{grid-column:1/-1;display:grid;gap:4px;margin:16px 0 0}
 .integration-subheading strong{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#6c7772)}
 .integration-subheading span{font-size:13px;line-height:1.5;color:var(--muted,#6c7772)}
 /* Data sources tab: one card per row so the key form, links and status have room. */
 #integration-platform-grid{grid-template-columns:1fr}
 #integration-platform-grid .tool-account-links{display:flex;flex-wrap:wrap;gap:8px 16px}
-/* Delivery keeps two columns (accounts side by side, mailboxes side by side); the mailbox note sits under its button. */
-.gmail-mail-actions{display:grid;gap:8px;justify-items:start}
+.gmail-mail-actions,.microsoft-mail-actions{display:grid;gap:8px;justify-items:start}
+.mail-note{display:block;color:var(--muted,#6c7772);font-size:12px;line-height:1.5}
 /* Data sources: the source chip repeats the badge until a key is saved — show it only once a key exists. */
 .service-source.managed{display:none}
-.gmail-mail-note{display:block;margin-top:8px;color:var(--muted,#6c7772);font-size:12px;line-height:1.5}
