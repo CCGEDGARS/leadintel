@@ -4717,6 +4717,27 @@
       ]
     },
     {
+      "id": "copilot-history-ui",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "data-copilot-history",
+        "Save as PDF",
+        "copilotCopy",
+        "copilot.css?v=20261026-classic-v4&history=20261026-v1"
+      ]
+    },
+    {
+      "id": "workspace-copilot-history-token",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261026-v1"
+      ]
+    },
+    {
       "id": "workspace-topbar-admin-token",
       "type": "text",
       "url": "/customer/",

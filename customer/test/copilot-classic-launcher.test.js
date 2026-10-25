@@ -75,7 +75,8 @@ test('the intro is visible when the drawer opens and stays while the conversatio
 
 test('reading order (Edgars, 2026-10-26): description, the composer right under it, the conversation below the composer; full-height drawer with one scrollable body',async()=>{
   assert.match(css,/\.leadintel-copilot-drawer\{[^}]*height:100dvh[^}]*overflow:hidden/s);
-  assert.match(css,/\.copilot-body\{[^}]*flex:1 1 auto[^}]*overflow:auto/s);
+  assert.match(css,/\.copilot-body\{[^}]*flex:1 1 auto[^}]*overflow:hidden/s,'the body is a fixed column (B1, 2026-10-25): only the conversation pane scrolls');
+  assert.match(css,/\.copilot-messages\{[^}]*flex:1 1 auto[^}]*overflow:auto/s);
   assert.doesNotMatch(css,/\.copilot-messages\{[^}]*margin-top:auto/s,'messages are not anchored to the bottom any more');
   assert.doesNotMatch(css,/\.copilot-composer\{[^}]*(position:sticky|margin:auto)/s);
   const {JSDOM}=await import('jsdom');const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
@@ -85,7 +86,7 @@ test('reading order (Edgars, 2026-10-26): description, the composer right under 
     const panel=await mod.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async()=>({answer:'Advice only.',sources:[]})}});
     assert.deepEqual([...panel.children].map(el=>el.className.split(' ')[0]),['copilot-header','copilot-body']);
     const body=panel.querySelector('[data-copilot-body]');
-    assert.deepEqual([...body.children].map(el=>el.className.split(' ')[0]),['copilot-intro','copilot-composer','copilot-status','copilot-messages','copilot-proposals']);
+    assert.deepEqual([...body.children].map(el=>el.className.split(' ')[0]),['copilot-intro','copilot-composer','copilot-status','copilot-conversation-bar','copilot-messages','copilot-proposals']);
     panel.querySelector('textarea').value='What does this step expect?';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
     await new Promise(resolve=>setImmediate(resolve));
     const form=panel.querySelector('form'),answer=panel.querySelector('.copilot-message.is-assistant');
