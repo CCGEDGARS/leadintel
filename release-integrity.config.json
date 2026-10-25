@@ -4779,6 +4779,36 @@
       ]
     },
     {
+      "id": "copilot-attention-badge",
+      "type": "text",
+      "url": "/customer/copilot-loader.js",
+      "status": 200,
+      "contains": [
+        "/api/copilot/attention?workspace_id=",
+        "leadintel:server-ready"
+      ]
+    },
+    {
+      "id": "copilot-suggestions-ui",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "copilot-add-chip",
+        "copilotGoStep",
+        "Since ${last}:"
+      ]
+    },
+    {
+      "id": "workspace-copilot-attention-token",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "memory=20261026-v1&attention=20261026-v1"
+      ]
+    },
+    {
       "id": "workspace-topbar-admin-token",
       "type": "text",
       "url": "/customer/",

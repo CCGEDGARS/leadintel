@@ -59,3 +59,10 @@ html.leadintel-copilot-ready body{transition:padding-right .28s cubic-bezier(.2,
 .copilot-memory-chips{display:grid;gap:6px;margin-top:10px}
 .copilot-memory-chip{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(188,143,42,.12);border:1px solid rgba(188,143,42,.35);color:#f1f5f9;font-size:13px;line-height:1.4}
 .copilot-memory-chip-text::before{content:"✦ ";color:#bc8f2a}
+
+/* B4 (CTO, 2026-10-25): "worth adding" suggestions under an answer, each leading to its step. */
+.copilot-adds{display:grid;gap:6px;margin-top:10px}
+.copilot-adds-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
+.copilot-add-chip{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(20,99,71,.16);border:1px solid rgba(20,99,71,.45);color:#f1f5f9;font-size:13px;line-height:1.4}
+.copilot-go-step{all:unset;cursor:pointer;white-space:nowrap;color:#f8fafc;font:600 11px "DM Sans",sans-serif;padding:3px 8px;border-radius:6px;background:#146347}
+.copilot-go-step:hover{filter:brightness(1.1)}

@@ -14,17 +14,28 @@ async function sessionUser(request,env){const token=cookieValue(request,'leadint
 async function requireMember(request,env,workspaceId){if(!workspaceId)return {error:'workspace_id is required',status:400};const user=await sessionUser(request,env);if(!user)return {error:'Authentication required',status:401};const member=await env.DB.prepare(`SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?`).bind(workspaceId,user.id).first();if(!member)return {error:'Workspace access denied',status:403};if(!OPERATING_ROLES.has(String(member.role||'').toLowerCase()))return {error:'Workspace role is not permitted',status:403};return {user,member};}
 async function conversation(env,workspaceId,id){return env.DB.prepare(`SELECT id,workspace_id,title,created_at,updated_at FROM copilot_conversations WHERE id=? AND workspace_id=?`).bind(id,workspaceId).first();}
 async function messages(env,workspaceId,id){const {results=[]}=await env.DB.prepare(`SELECT id,role,content,metadata_json,created_at FROM copilot_messages WHERE workspace_id=? AND conversation_id=? ORDER BY created_at ASC LIMIT 100`).bind(workspaceId,id).all();return results.map(row=>{let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}');}catch{}return {id:row.id,role:row.role,content:clean(row.content,12000),metadata:redactProtectedData(metadata),created_at:row.created_at};});}
+// B4 (2026-10-25): the launcher badge needs a count, not a context — open important checks plus reminders due.
+async function attentionCounts(env,workspaceId){
+  const important=await env.DB.prepare(`SELECT COUNT(*) AS n FROM copilot_diagnostics WHERE workspace_id=? AND status='open' AND severity='important'`).bind(workspaceId).first().catch(()=>null);
+  const due=await dueReminders(env,workspaceId).catch(()=>[]);
+  return {important:Number(important?.n)||0,reminders_due:due.length,due};
+}
+async function workspaceUpdatedAt(env,workspaceId){const row=await env.DB.prepare(`SELECT updated_at FROM customer_workspace_state WHERE workspace_id=?`).bind(workspaceId).first().catch(()=>null);return clean(row?.updated_at,40);}
 async function latestConversation(env,workspaceId){return env.DB.prepare(`SELECT id,title,created_at,updated_at FROM copilot_conversations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 1`).bind(workspaceId).first();}
 
 export async function handleCopilotRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;if(!path.startsWith('/api/copilot/'))return null;const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
 
+  if(path==='/api/copilot/attention'&&request.method==='GET'){
+    const [counts,latest,updatedAt]=await Promise.all([attentionCounts(env,workspaceId),latestConversation(env,workspaceId),workspaceUpdatedAt(env,workspaceId)]);
+    return json({important:counts.important,reminders_due:counts.reminders_due,total:counts.important+counts.reminders_due,last_conversation_at:clean(latest?.updated_at,40),workspace_updated_at:updatedAt},200,cors);
+  }
   if(path==='/api/copilot/bootstrap'&&request.method==='GET'){
-    const [latest,memories,remindersDue,ai,context]=await Promise.all([
-      latestConversation(env,workspaceId),listCopilotMemories(env,workspaceId).catch(()=>[]),dueReminders(env,workspaceId).catch(()=>[]),env.DB.prepare(`SELECT provider,model,active FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first(),buildCopilotWorkspaceContext(env,{workspaceId,currentScreen:{step:1,label:'Company & Market'},role:access.member.role,user:{name:access.user.display_name}})
+    const [latest,memories,remindersDue,updatedAt,ai,context]=await Promise.all([
+      latestConversation(env,workspaceId),listCopilotMemories(env,workspaceId).catch(()=>[]),dueReminders(env,workspaceId).catch(()=>[]),workspaceUpdatedAt(env,workspaceId),env.DB.prepare(`SELECT provider,model,active FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first(),buildCopilotWorkspaceContext(env,{workspaceId,currentScreen:{step:1,label:'Company & Market'},role:access.member.role,user:{name:access.user.display_name}})
     ]);
     const diagnostics=runDeterministicDiagnostics(context);await persistDiagnosticSnapshot(env,{workspaceId,diagnostics}).catch(()=>{});const unreadImportant=diagnostics.filter(item=>item.severity==='important').length;
-    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,reminders_due:remindersDue,ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
+    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,reminders_due:remindersDue,since:{last_conversation_at:clean(latest?.updated_at,40),workspace_updated_at:updatedAt,important:unreadImportant},ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
   }
 
   // B3 (2026-10-25): what the assistant remembers is visible and forgettable; forgetting archives, it never deletes.
