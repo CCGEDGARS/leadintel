@@ -58,9 +58,11 @@ sqliteTest('support blocks stale action confirmations and file payloads server-s
 
 sqliteTest('support limits paid reasoning before writing another chat request',async()=>{
  const {env,token,db}=await fixture();db.raw.prepare(`INSERT INTO copilot_conversations(id,workspace_id,title) VALUES('busy','w1','Support')`).run();
- for(let i=0;i<10;i++)db.raw.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content) VALUES(?,'w1','busy','u1','user','Help')`).run(`m-${i}`);
+ for(let i=0;i<12;i++)db.raw.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content) VALUES(?,'w1','busy','u1','user','Help')`).run(`m-${i}`);
+ const open=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'Help'}}),env,{});assert.equal(open.status,200,'twelve messages in ten minutes is still a conversation');
+ for(let i=12;i<30;i++)db.raw.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content) VALUES(?,'w1','busy','u1','user','Help')`).run(`m-${i}`);
  const response=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'Help'}}),env,{});
- assert.equal(response.status,429);assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,10);
+ assert.equal(response.status,429,'thirty messages in ten minutes is the ceiling (B2, 2026-10-25: ten blocked a normal discussion)');assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,32);
 });
 
 sqliteTest('authenticated progress stream reports real research and persists the final answer with its sources',async()=>{

@@ -4738,6 +4738,26 @@
       ]
     },
     {
+      "id": "copilot-activity-trail",
+      "type": "text",
+      "url": "/customer/copilot-loader.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelCopilotActivity",
+        "leadintel:module-opened",
+        "copilot-context.js?v=20260924-friendly-workflow-labels-v1&activity=20261026-v1"
+      ]
+    },
+    {
+      "id": "workspace-copilot-activity-token",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "history=20261026-v1&activity=20261026-v1"
+      ]
+    },
+    {
       "id": "workspace-topbar-admin-token",
       "type": "text",
       "url": "/customer/",

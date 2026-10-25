@@ -12,7 +12,7 @@ const PROMPTS=Object.freeze({
 function activeStep(){const active=document.querySelector('.step-view.active[data-step]');const fromView=Number(active?.dataset?.step);if(fromView>=1&&fromView<=7)return fromView;const process=document.querySelector('.process-stage.active[data-process-step]');const fromProcess=Number(process?.dataset?.processStep);return fromProcess>=1&&fromProcess<=7?fromProcess:1;}
 
 export function currentCopilotScreenContext(){
-  const step=activeStep();let label=STEP_LABELS[step]||STEP_LABELS[1];if(step===5){const buyersGuide=document.getElementById('discovery-buyers-guide');if(buyersGuide&&!buyersGuide.hidden)label='Buyers';}const context={step,label};const entity=document.querySelector('[data-copilot-entity-type][data-copilot-entity-id]');
+  const step=activeStep();let label=STEP_LABELS[step]||STEP_LABELS[1];if(step===5){const buyersGuide=document.getElementById('discovery-buyers-guide');if(buyersGuide&&!buyersGuide.hidden)label='Buyers';}const context={step,label};const trail=window.LeadIntelCopilotActivity?.snapshot?.();if(Array.isArray(trail)&&trail.length)context.activity=trail.slice(-20);const entity=document.querySelector('[data-copilot-entity-type][data-copilot-entity-id]');
   if(entity?.dataset?.copilotEntityType)context.entity_type=String(entity.dataset.copilotEntityType).slice(0,80);if(entity?.dataset?.copilotEntityId)context.entity_id=String(entity.dataset.copilotEntityId).slice(0,180);return context;
 }
 export function contextualPromptSuggestions(step){const key=Math.max(1,Math.min(7,Number(step)||1));return [...(PROMPTS[key]||PROMPTS[1])];}

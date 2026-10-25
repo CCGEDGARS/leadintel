@@ -8,6 +8,10 @@ const MAX_ICP=10;
 const MAX_SIGNALS=20;
 const MAX_RESEARCH=12;
 const MAX_TOP_COMPANIES=10;
+const MAX_INTAKE_TEXT=600;
+const MAX_DOSSIERS=5;
+const MAX_DOSSIER_FACTS=5;
+const MAX_CRM_ACTIVITIES=15;
 
 function clean(value,max=MAX_TEXT){return String(value??'').replace(/\s+/g,' ').trim().slice(0,max);}
 function object(value){return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}
@@ -78,16 +82,42 @@ function readiness(main,{icps,signals,markets}){
   return {checks,completeCount:complete,totalChecks:4,percent:Math.round((complete/4)*100)};
 }
 
-export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role}={}){
+// B2 (CTO, 2026-10-25): the assistant knows the person, what they just did and more of the company. Private contact
+// data (e-mails, phones, named people from dossiers, message bodies) stays out; everything is bounded.
+function safeUser(user){const name=clean(user?.name||user?.display_name,120);if(!name)return undefined;return {name,firstName:name.split(/\s+/)[0]};}
+function intakeAnswers(main){const answers=object(main.answers);const out={};for(const [key,value] of Object.entries(answers)){if(Object.keys(out).length>=12)break;const text=clean(value,MAX_INTAKE_TEXT);if(text&&!/(^|_)(email|phone|password|token|secret)/i.test(key))out[key]=text;}return out;}
+function brandSummary(main){const brand=object(main.brandIdentity);const out={};for(const key of ['companyDisplayName','senderName','senderTitle','meetingPlatform']){const text=clean(brand[key],160);if(text)out[key]=text;}return out;}
+function goalsSummary(main){const goals=object(main.workspaceGoals);const out={};for(const [key,value] of Object.entries(goals)){if(Object.keys(out).length>=6)break;const text=clean(value,400);if(text)out[key]=text;}return out;}
+function referencesSummary(main){const refs=object(main.referenceCustomers);const rows=array(refs.rows,50);return {count:rows.length,companies:rows.slice(0,10).map(row=>clean(object(row).company||object(row).name||object(row).domain,160)).filter(Boolean),segments:array(refs.segments,10).map(item=>clean(object(item).name||item,120)).filter(Boolean),activated:refs.activated===true};}
+function factText(item){if(typeof item==='string')return clean(item,200);const value=object(item);return clean(value.text||value.claim||value.statement||value.summary||value.fact,200);}
+async function dossierSummary(env,workspaceId){
+  const rows=await allSafe(env,`SELECT domain,payload_json,updated_at FROM workspace_company_dossiers WHERE workspace_id=? ORDER BY updated_at DESC LIMIT ${MAX_DOSSIERS}`,workspaceId);
+  return rows.map(row=>{let payload={};try{payload=object(JSON.parse(row.payload_json||'{}'));}catch{}return {domain:clean(row.domain,160),company:clean(payload.company,200),status:clean(payload.status,40),checkedAt:clean(payload.checkedAt||row.updated_at,40),facts:array(payload.facts,MAX_DOSSIER_FACTS).map(factText).filter(Boolean),gaps:array(payload.gaps,100).length};});
+}
+async function crmActivities(env,workspaceId){
+  const rows=await allSafe(env,`SELECT a.activity_type,a.channel,a.subject,a.occurred_at,c.company_name FROM crm_activities a LEFT JOIN crm_companies c ON c.id=a.company_id WHERE a.workspace_id=? ORDER BY a.occurred_at DESC LIMIT ${MAX_CRM_ACTIVITIES}`,workspaceId);
+  return rows.slice(0,MAX_CRM_ACTIVITIES).map(row=>({type:clean(row.activity_type,60),channel:clean(row.channel,40),subject:clean(row.subject,120),company:clean(row.company_name,160),occurredAt:clean(row.occurred_at,40)}));
+}
+async function deliveryActivity(env,workspaceId){
+  const rows=await allSafe(env,`SELECT kind,COUNT(*) AS count FROM email_activity_events WHERE workspace_id=? AND occurred_at>=datetime('now','-30 days') GROUP BY kind`,workspaceId);
+  const find=kind=>safeNumber(rows.find(row=>clean(row.kind,40)===kind)?.count);
+  return {period:'last 30 days',sent:find('sent'),replies:find('reply')};
+}
+
+export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role,user}={}){
   const id=clean(workspaceId,160);if(!id)throw new Error('workspaceId is required');
   const state=await getCustomerState(env,id);const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
   const markets=array(main.targetMarkets||main.profile?.targetMarkets,20).map(item=>clean(item,300)).filter(Boolean);
   const icps=array(market.icps||main.icps,MAX_ICP).map(safeIcp);
   const signals=array(market.signals||main.signals,MAX_SIGNALS).map(safeSignal);
   const researchItems=array(market.opportunities||market.research?.items||main.research?.items,MAX_RESEARCH).map(safeResearchItem);
+  const screen=sanitizeClientScreenContext(currentScreen);const activity=Array.isArray(screen.activity)?screen.activity:[];delete screen.activity;
+  const person=safeUser(user);
   const context={
     workspace:{id,...(role?{role:clean(role,40)}:{})},
-    screen:sanitizeClientScreenContext(currentScreen),
+    ...(person?{user:person}:{}),
+    screen,
+    activity,
     company:{name:clean(profile.company||profile.company_name||main.companyName,240),website:clean(main.website||profile.website,1200),description:clean(profile.description||profile.summary,MAX_PROFILE_TEXT)},
     markets,
     profile,
@@ -99,7 +129,14 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     outreachSummary:outreachSummary(payload),
     integrationStatus:await integrationStatus(env,id),
     supportUsage:await supportUsage(env,id),
-    readiness:readiness(main,{icps,signals,markets})
+    readiness:readiness(main,{icps,signals,markets}),
+    intake:intakeAnswers(main),
+    brand:brandSummary(main),
+    goals:goalsSummary(main),
+    references:referencesSummary(main),
+    dossiers:await dossierSummary(env,id),
+    crmActivities:await crmActivities(env,id),
+    deliveryActivity:await deliveryActivity(env,id)
   };
   const sanitized=redactProtectedData(context);
   assertModelSafe(sanitized);
