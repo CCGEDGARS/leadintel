@@ -22,6 +22,21 @@ test('the prompt carries the workspace memories and the system instruction tells
   assert.deepEqual(result.memory_candidates,[{kind:'decision',value:'Target dairy processors first.',due:''}]);
 });
 
+test('a conversational question (answered without private workspace data) still knows the person, the trail and the memories, and can create a reminder',async()=>{
+  const prompts=[];
+  const env={COPILOT_TEST_CONTEXT:{workspace:{id:'w1'},screen:{step:1,label:'Setup'},user:{name:'Jonathan Collins',firstName:'Jonathan'},activity:[{at:'2026-10-25T21:30:00Z',kind:'step',step:1,label:'Setup'}],company:{name:'Seller'},markets:['Latvia'],profile:{private_notes:'PRIVATE-NOTE'},icps:[],signals:[],research:{items:[],count:0},crmSummary:{topCompanies:[{name:'PRIVATE-CRM'}]},integrationStatus:[],readiness:{}},
+    COPILOT_TEST_MEMORIES:[{id:'m1',kind:'preference',value:'Prefers expansion signals over tenders.',due:'',updated_at:'2026-10-20 10:00:00'}],
+    COPILOT_TEST_PROVIDER:{async generate(options){prompts.push(options.prompt);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Noted, Jonathan: dairy first. I will remind you on 3 November.',memory_candidates:[{kind:'decision',value:'Start with dairy processors in Latvia.'},{kind:'reminder',value:'Ask Edgars about the pilot decision.',due:'2026-11-03'}]})};},async search(){throw new Error('must not search');}}};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Lēmums: sākam ar piena pārstrādi Latvijā. Atgādini man 3. novembrī pajautāt Edgaram par pilota lēmumu.',currentScreen:{step:1}});
+  assert.equal(prompts.length,1,'one reasoning call for a conversational turn');
+  const payload=JSON.parse(prompts[0]);
+  assert.deepEqual(payload.user,{name:'Jonathan Collins',firstName:'Jonathan'});assert.deepEqual(payload.activity_trail.map(item=>item.kind),['step']);
+  assert.deepEqual(payload.workspace_memories.map(item=>item.value),['Prefers expansion signals over tenders.']);
+  assert.doesNotMatch(prompts[0],/PRIVATE-CRM|PRIVATE-NOTE/,'general questions still do not carry private workspace data (11 October rule)');
+  assert.deepEqual(result.memory_candidates,[{kind:'decision',value:'Start with dairy processors in Latvia.',due:''},{kind:'reminder',value:'Ask Edgars about the pilot decision.',due:'2026-11-03'}]);
+  assert.match(result.answer,/^Noted, Jonathan/);
+});
+
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...args){this.args=args;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)??null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes||0)}};}}
 class DB{
   constructor(){
