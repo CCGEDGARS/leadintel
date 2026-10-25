@@ -247,9 +247,10 @@ function gmailMailStatus(row=bridge()?.gmail||{}){
 }
 function gmailMailActions(mail){
   if(!signedIn())return '';
-  if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button">Change Gmail account</button><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
+  if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" data-gmail-choose="1" type="button">Change Gmail account</button><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
   if(mail.connected)return '';
-  return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Gmail</button></div>`;
+  const account=authProvider()==='google'?String(bridge()?.session?.user?.email||'').trim():'';
+  return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>${account?`Connect Gmail for ${esc(account)}`:'Connect Gmail'}</button>${account?'<small class="gmail-mail-note">One more Google permission (send and read replies) for the account you signed in with. A different mailbox? Use the account chooser on the next screen.</small>':''}</div>`;
 }
 function microsoftMailStatus(){
   const row=bridge()?.microsoftMail||{};
@@ -331,7 +332,7 @@ async function handleCommunicationAction(event){
   const microsoftButton=event.target.closest('[data-microsoft-mail-action]');
   const mailButton=gmailButton||microsoftButton;if(!mailButton||mailButton.disabled)return;
   const provider=gmailButton?'gmail':'microsoft',action=gmailButton?mailButton.dataset.gmailAction:mailButton.dataset.microsoftMailAction,label=provider==='gmail'?'Gmail':'Microsoft 365 mail';
-  if(action==='connect'){if(provider==='gmail')bridge()?.connectGmail?.();else openMicrosoftHelp(mailButton,'mail');return;}
+  if(action==='connect'){if(provider==='gmail')bridge()?.connectGmail?.({choose:mailButton.dataset.gmailChoose==='1'});else openMicrosoftHelp(mailButton,'mail');return;}
   if(action!=='disconnect'||!(await (window.LeadIntelDialogs?.confirm(`Disconnect ${label} from this LeadIntel workspace?`)??false)))return;
   const originWorkspace=workspace()?.id;mailButton.disabled=true;
   try{

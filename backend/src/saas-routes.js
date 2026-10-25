@@ -128,7 +128,10 @@ export async function handleSaasRoute(request,env,corsOverride){
   }
   if(path==='/api/integrations/gmail/start'&&request.method==='GET'){
     const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GMAIL_OAUTH_REDIRECT_URI','OAUTH_TOKEN_ENCRYPTION_KEY','CUSTOMER_APP_URL']))return error('Gmail integration is not configured',503,cors);
-    const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);const state=await createOAuthState(env,{purpose:'gmail',userId:access.user.id,workspaceId,returnTo});const location=buildGoogleAuthorizationUrl({...googleConfig(env,'gmail'),state,scopes:GMAIL_SCOPES,accessType:'offline',prompt:'select_account consent'});return redirect(location,cors);
+    const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);const state=await createOAuthState(env,{purpose:'gmail',userId:access.user.id,workspaceId,returnTo});
+    // Pre-select the signed-in Google account (one consent screen, no second sign-in) unless the member asks to choose another mailbox.
+    const choose=url.searchParams.get('choose')==='1';const loginHint=choose?'':String(access.user.email||'').trim();
+    const location=buildGoogleAuthorizationUrl({...googleConfig(env,'gmail'),state,scopes:GMAIL_SCOPES,accessType:'offline',prompt:loginHint?'consent':'select_account consent',loginHint});return redirect(location,cors);
   }
   if(path==='/api/integrations/gmail/callback'&&request.method==='GET'){
     const state=await consumeOAuthState(env,{rawState:url.searchParams.get('state'),purpose:'gmail'});if(!state)return error('Gmail connection state is invalid or expired',400,cors);try{

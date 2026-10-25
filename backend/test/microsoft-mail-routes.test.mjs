@@ -208,14 +208,20 @@ test('manual transport ambiguity retains unresolved status and same-key retry ca
 });
 
 // Mailbox identity may differ from the signed-in workspace owner.
-test('Gmail connection offers another account without changing workspace ownership',async()=>{
+test('Gmail connection pre-selects the signed-in account, offers another on request, and never changes workspace ownership',async()=>{
   const {env,DB,token}=await fixture();
+  // 2026-10-25: connecting the mailbox is one consent for the account the member signed in with …
   const response=await handleSaasRoute(req('/api/integrations/gmail/start?workspace_id=w1',{token}),env,{});
   assert.equal(response.status,302);
   const location=new URL(response.headers.get('Location'));
-  assert.equal(location.searchParams.get('prompt'),'select_account consent');
-  assert.equal(location.searchParams.has('login_hint'),false);
+  assert.equal(location.searchParams.get('prompt'),'consent');
+  assert.equal(location.searchParams.get('login_hint'),'owner@example.com');
   assert.equal(location.searchParams.get('access_type'),'offline');
+  // … and the account chooser is still one click away for a different mailbox.
+  const chooser=new URL((await handleSaasRoute(req('/api/integrations/gmail/start?workspace_id=w1&choose=1',{token}),env,{})).headers.get('Location'));
+  assert.equal(chooser.searchParams.get('prompt'),'select_account consent');
+  assert.equal(chooser.searchParams.has('login_hint'),false);
+  DB.raw.prepare('DELETE FROM oauth_states WHERE rowid NOT IN (SELECT MIN(rowid) FROM oauth_states)').run();
   const state=DB.raw.prepare('SELECT purpose,user_id,workspace_id FROM oauth_states').get();
   assert.deepEqual({...state},{purpose:'gmail',user_id:'u1',workspace_id:'w1'});
   assert.equal(DB.raw.prepare('SELECT owner_user_id FROM workspaces').get().owner_user_id,'u1');

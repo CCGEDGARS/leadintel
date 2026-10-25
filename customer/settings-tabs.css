@@ -19,3 +19,9 @@
 /* Data sources tab: one card per row so the key form, links and status have room. */
 #integration-platform-grid{grid-template-columns:1fr}
 #integration-platform-grid .tool-account-links{display:flex;flex-wrap:wrap;gap:8px 16px}
+/* Delivery: every card on its own row (account, then mailboxes), same rhythm as Data sources. */
+#integration-communication-grid{grid-template-columns:1fr}
+.workspace-provider-card.is-alternate{max-width:none}
+/* Data sources: the source chip repeats the badge until a key is saved — show it only once a key exists. */
+.service-source.managed{display:none}
+.gmail-mail-note{display:block;margin-top:8px;color:var(--muted,#6c7772);font-size:12px;line-height:1.5}

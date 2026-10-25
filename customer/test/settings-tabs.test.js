@@ -95,6 +95,19 @@ test('Delivery tab separates the sign-in account from the sending mailbox; Data 
   assert.match(css,/\.integration-subheading\{grid-column:1\/-1/);
 });
 
+test('Delivery stacks every card, and connecting Gmail pre-selects the signed-in Google account unless the member chooses another',()=>{
+  const saas=fs.readFileSync(new URL('../../backend/src/saas-routes.js',import.meta.url),'utf8');
+  assert.match(css,/#integration-communication-grid\{grid-template-columns:1fr\}/);
+  assert.match(css,/\.service-source\.managed\{display:none\}/);
+  assert.match(saas,/const choose=url\.searchParams\.get\('choose'\)==='1';const loginHint=choose\?'':String\(access\.user\.email\|\|''\)\.trim\(\);/);
+  assert.match(saas,/prompt:loginHint\?'consent':'select_account consent',loginHint\}/);
+  assert.match(bridge,/function connectGmail\(options=\{\}\)/);
+  assert.match(bridge,/options\.choose===true\?'&choose=1':''/);
+  assert.match(settings,/Connect Gmail for \$\{esc\(account\)\}/);
+  assert.match(settings,/data-gmail-action="connect" data-gmail-choose="1"/);
+  assert.match(settings,/connectGmail\?\.\(\{choose:mailButton\.dataset\.gmailChoose==='1'\}\)/);
+});
+
 test('identity cards: the server names the sign-in providers, the bridge adopts them, the copy no longer says "Not identified"',()=>{
   assert.match(backend,/SELECT provider FROM user_identities WHERE user_id=\?/);
   assert.match(backend,/providers:identities\.map\(row=>row\.provider\)/);
