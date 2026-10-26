@@ -1,3 +1,4 @@
+import {validCompanyMaterialAttribution} from './company-materials-context.js';
 import RichText from '../../customer/rich-text.js';
 import {cookieValue,sha256} from './security.js';
 import {storageErrorResponse} from './workspace-storage.js';
@@ -13,7 +14,10 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
 // evidence, customer access, source activation, or permission to send anything.
 function attribution(value,workspace){
  if(value==null)return null;
- if(!object(value)||JSON.stringify(value).length>8000||Object.keys(value).some(key=>!['workspaceId','referenceRevision','sourceRefs','citations','appliedAt','writingContext','sourceSelection'].includes(key))||value.workspaceId!==workspace||!Number.isSafeInteger(value.referenceRevision)||value.referenceRevision<0||!Array.isArray(value.sourceRefs)||value.sourceRefs.length>3||!Array.isArray(value.citations)||value.citations.length>8||!bounded(value.appliedAt,40)||!Number.isFinite(Date.parse(value.appliedAt)))fail('Invalid historical writing-source attribution');
+ if(!object(value)||JSON.stringify(value).length>8000||Object.keys(value).some(key=>!['workspaceId','referenceRevision','sourceRefs','citations','appliedAt','writingContext','sourceSelection','companyMaterialRefs','storyRef','storyReview'].includes(key))||value.workspaceId!==workspace||!Number.isSafeInteger(value.referenceRevision)||value.referenceRevision<0||!Array.isArray(value.sourceRefs)||value.sourceRefs.length>3||!Array.isArray(value.citations)||value.citations.length>8||!bounded(value.appliedAt,40)||!Number.isFinite(Date.parse(value.appliedAt)))fail('Invalid historical writing-source attribution');
+ if(value.storyRef&&(!object(value.storyRef)||!bounded(value.storyRef.id,120)||!Number.isSafeInteger(value.storyRef.revision)||value.storyRef.revision<1))fail('Invalid story attribution');
+ if(value.storyReview&&(!object(value.storyReview)||!Number.isInteger(value.storyReview.score)||value.storyReview.score<16||value.storyReview.score>20))fail('Invalid story review');
+ if(!validCompanyMaterialAttribution(value.companyMaterialRefs))fail('Invalid company reference attribution');
  if(value.writingContext!==undefined&&!['general','customer'].includes(value.writingContext)||value.sourceSelection!==undefined&&!['session','active'].includes(value.sourceSelection))fail('Invalid writing-source context');
  const refs=value.sourceRefs;
  if(refs.some(ref=>!object(ref)||Object.keys(ref).some(key=>!['id','revision'].includes(key))||!bounded(ref.id,120)||!Number.isSafeInteger(ref.revision)||ref.revision<1)||new Set(refs.map(ref=>ref.id)).size!==refs.length)fail('Invalid historical writing-source references');

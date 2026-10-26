@@ -53,7 +53,7 @@
     document.getElementById("additional-links")?.closest(".panel.source-panel")?.remove();
     const step=document.getElementById("step-1");
     if(!step)return false;
-    const companyMaterials=[...step.querySelectorAll(".panel.source-panel")].find(panel=>panel.querySelector("h3")?.textContent.trim()==="Company materials");
+    const companyMaterials=[...step.querySelectorAll(".panel.source-panel")].find(panel=>panel.querySelector("h3")?.textContent.trim().startsWith("Company materials"));
     const materialsNumber=companyMaterials?.querySelector(".panel-number");
     if(materialsNumber)materialsNumber.textContent="03";
     const hero=step.querySelector(".hero-copy > p");

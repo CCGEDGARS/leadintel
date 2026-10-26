@@ -1,3 +1,5 @@
+import {critiqueStoryselling,reserveStoryPreview} from './storyselling.js';
+import {prepareCompanyMaterialGeneration,assertCompanyMaterialsCurrent} from './company-materials-context.js';
 import {followUpContext,prepareFollowUp,validateFollowUp,followUpToken,saveFollowUp} from './follow-up-assistant.js';
 import {searchWorkspaceResearch} from './ai-task-routing.js';
 import {researchWorkspaceDossier,dossierSettings} from './company-dossier.js';
@@ -278,7 +280,8 @@ export async function handleAiRoute(request,env,cors={}){
       const preparedAssistant=assistant?await prepareAssistantRequest(env,{workspaceId,userId:access.user.id},body):null;
       const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
       const materials=assistant?{system:writing.system,prompt:writing.prompt,refs:[]}:await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
-      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
+      const companyMaterials=assistant?{...materials,refs:preparedAssistant.companyMaterials||[]}:await prepareCompanyMaterialGeneration(env,workspaceId,{...body,system:materials.system,prompt:materials.prompt});
+      const extractionRequest={system:companyMaterials.system,prompt:companyMaterials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
@@ -313,11 +316,20 @@ export async function handleAiRoute(request,env,cors={}){
         const metadata=boundedResearch?{provider:integration.provider,fallback:attempt.fallback}:{};
         return error(message,502,cors,metadata);
       }
+      await assertCompanyMaterialsCurrent(env,workspaceId,companyMaterials.refs);
       if(assistant)await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
       const assistantReply=assistant?validateAssistantReply(attempt.result.text,preparedAssistant):null;
+      if(assistantReply?.draft&&preparedAssistant.storyselling){
+        const story=preparedAssistant.storyselling;
+        const review=await critiqueStoryselling(input=>runProvider(integration,input),{...story,channel:preparedAssistant.context.channel,context:preparedAssistant.context},assistantReply.draft);
+        await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
+        assistantReply.provenance.storyRef=await reserveStoryPreview(env,workspaceId,story);
+        assistantReply.provenance.storyReview=review;
+        assistantReply.warnings.push('Storyselling quality: '+review.score+'/20. This card is now reserved for this buyer; keep this preview to edit or save. Native language and factual review remain required.');
+      }
       try{await assertWritingContextCurrent(writingReferenceRuntime(env),{workspaceId},writing.context);}catch{return error('Writing references changed. Regenerate the message.',409,cors);}
       if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
-      const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;const usedProvider=result.provider||integration.provider;
+      const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;if(!assistant&&companyMaterials.refs.length)result.company_materials=companyMaterials.refs.map(({id,revision,filename,evidence})=>({id,revision,filename,locations:evidence.map(e=>e.location)}));const usedProvider=result.provider||integration.provider;
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
       if(assistant)return json(assistantReply,200,cors);
