@@ -26,7 +26,7 @@
   }
   return errors;
  }
- function objectionClass(value){const t=clean(value);return /supplier|tool|agency|поставщик|rīks|piegādātāj|құрал/.test(t)?'switching':/expens|price|cost|дорог|цен|dārg|cen[au]|баға/.test(t)?'price':/not now|quarter|later|позже|сейчас|vēlāk|tagad|кейін/.test(t)?'waiting':/intern|board|pass|discuss|обсуд|apsprie|valde/.test(t)?'sponsor':/not interest|неинтерес|neinteresē/.test(t)?'honest_exit':'';}
+ function objectionClass(value){const t=clean(value);if(/not interest|неинтерес|neinteresē/.test(t))return 'honest_exit';if(/send (?:me )?(?:information|info)|пришлите.*информац|atsūt.*informāc/.test(t))return 'sponsor';if(/not sure.*work|не уверен.*подойд|nav pārliec.*der/.test(t))return 'success';return /supplier|tool|agency|поставщик|rīks|piegādātāj|құрал/.test(t)?'switching':/expens|price|cost|дорог|цен|dārg|cen[au]|баға/.test(t)?'price':/not now|quarter|later|позже|сейчас|vēlāk|tagad|кейін/.test(t)?'waiting':/intern|board|pass|discuss|обсуд|apsprie|valde/.test(t)?'sponsor':/not interest|неинтерес|neinteresē/.test(t)?'honest_exit':'';}
  function objectionFits(card,value){if(!value)return true;const a=clean(value),b=clean(card.answers_objection);if(!b)return false;const ac=objectionClass(a),bc=objectionClass(b);if(ac&&bc)return ac===bc;const tokens=a.match(/[\p{L}\p{N}]{4,}/gu)||[];return a===b||tokens.length>0&&tokens.filter(t=>b.includes(t)).length/tokens.length>=.6;}
  function selectCard(cards,{tags=[],language='en',type='',usedIds=[],objection=''}={}){
   const tokens=tags.map(clean).filter(Boolean);if(!tokens.length)return null;
@@ -35,10 +35,10 @@
  function validateNarrative(draft,card,channel='email'){
   const errors=[],body=String(draft?.message||''),subject=String(draft?.subject||''),norm=clean(body),limits={email:130,linkedin:90,phone:100,connection:300};
   if(channel==='connection'?Array.from(body).length>300:words(body)>(limits[channel]||130))errors.push('Message exceeds channel limit');
-  if(/\b(?:story|stories)\b|\bstāst(?:s|u|i|am)\b|\bрассказ\b|\bистори[яюи]\b/iu.test(subject+' '+body))errors.push('Do not use the word story in the message');
+  if(/(?<![\p{L}\p{N}_])(?:story|stories|stāst(?:s|u|i|am)|рассказ|истори[яюи])(?![\p{L}\p{N}_])/iu.test(subject+' '+body))errors.push('Do not use the word story in the message');
   if(/\b(?:sorry|apologi[sz]e|can I tell|may I tell|permission to)\b/i.test(subject+' '+body))errors.push('Remove apology or permission-seeking hook');
   if(card.truth_class==='HYPOTHETICAL'&&!/(?:^|\n\s*|[.!?]\s+)(?:Suppose|Imagine|Iedomāsimies|Iedomājieties|Pieņemsim|Представьте|Допустим|Елестетіңіз)(?=$|[^\p{L}\p{N}_])/iu.test(body))errors.push('Frame the imagined example explicitly');
-  if(card.truth_class==='REAL-BORROWED'&&!/(?:public|according to|reported by|you may remember|well-known|publiski|saskaņā|piemērs no|публичн|по данным|известн|дерег|жария)/iu.test(body))errors.push('Attribute the borrowed case; never imply involvement');
+  if(card.truth_class==='REAL-BORROWED'&&!/(?:public|according to|reported by|you may remember|well-known|publiski|saskaņā|piemērs no|публичн|по данным|известн|помните|согласно|atceraties|есіңізде|естеріңізде|дерег|жария)/iu.test(body))errors.push('Attribute the borrowed case; never imply involvement');
   if(channel!=='connection')for(const point of [card.when,card.where,card.hero_role,card.hero_wanted,card.challenge,...card.conflict_beats,card.resolution,card.feeling_line,card.key_number,card.lesson].filter(Boolean))if(!norm.includes(clean(point)))errors.push('Preserve card fact: '+point);
   if(card.quote&&card.quote_mode==='verbatim'&&/[“"«]/.test(body)&&!body.includes(card.quote))errors.push('Do not alter the approved quotation');
   const first=body.split(/\n\s*\n/).filter(Boolean).find(p=>words(p)>4)||'';if(card.resolution&&(clean(subject).includes(clean(card.resolution))||clean(first).startsWith(clean(card.resolution))))errors.push('Do not reveal the outcome in the hook');
