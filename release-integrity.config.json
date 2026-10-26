@@ -38,7 +38,8 @@
       "writing_workspace_version": "20261023-v1",
       "conversation_monitoring_version": "supervised-follow-up-v1",
       "conversation_poll_interval_minutes": 60,
-      "writing_assistant_outcome_version": "outcome-first-v1"
+      "writing_assistant_outcome_version": "outcome-first-v1",
+      "company_materials_version": "company-materials-v1"
     }
   },
   "smokeChecks": [
@@ -4878,6 +4879,66 @@
       "status": 200,
       "contains": [
         "admin-entry=20261026-v1"
+      ]
+    },
+    {
+      "id": "company-materials-upload-ui",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "Company materials, references and success stories",
+        "5 PDFs + 10 images",
+        "company-materials.js?v=20261026-v1"
+      ]
+    },
+    {
+      "id": "company-materials-runtime",
+      "type": "text",
+      "url": "/customer/company-materials.js?v=20261026-v1",
+      "status": 200,
+      "contains": [
+        "/api/company-materials",
+        "/company-material-upload",
+        "Ready references are selected automatically"
+      ]
+    },
+    {
+      "id": "company-materials-authentication",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/company-materials?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "storyselling-interface",
+      "type": "text",
+      "url": "/customer/storyselling-ui.js?v=20261026-v1",
+      "status": 200,
+      "contains": [
+        "Manage story bank",
+        "Approve for use",
+        "Prepare from company reference"
+      ]
+    },
+    {
+      "id": "storyselling-authentication",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/story-bank?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "storyselling-backend-version",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+      "status": 200,
+      "contains": [
+        "\"storyselling_version\":\"storyselling-v1\""
       ]
     }
   ],
