@@ -1,9 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom');
 const {mounted}=require('./helpers/message-runtime.js');
 const {mountWritingAssistant}=require('../writing-assistant-ui.js');
-test('Messages offers only four protected styles and no duplicate AI creation controls',()=>{const h=mounted({selected:'original'});try{
+test('Messages offers four protected styles plus Storyselling and no duplicate AI creation controls',()=>{const h=mounted({selected:'original'});try{
  const d=h.w.document,body=h.q('outreach-email-body').value;
- assert.deepEqual([...d.querySelectorAll('#mw-style-options [data-writing-style]')].map(b=>b.dataset.writingStyle),['professional','curiosity','friendly','brutal']);
+ assert.deepEqual([...d.querySelectorAll('#mw-style-options [data-writing-style]')].map(b=>b.dataset.writingStyle),['professional','curiosity','friendly','brutal','storyselling']);
  assert.equal(h.q('mw-generate-another').hidden,true);assert.equal(h.q('message-generate').hidden,true);
  assert.equal(d.querySelector('#mw-tools-drawer #mw-ai-length'),null);
  assert.match(d.querySelector('#mw-writing-assistant-launcher').textContent,/create|new message/i);
