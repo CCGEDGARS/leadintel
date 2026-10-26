@@ -72,3 +72,16 @@ sqliteTest('authenticated progress stream reports real research and persists the
  const saved=db.raw.prepare("SELECT content,metadata_json FROM copilot_messages WHERE role='assistant'").get();assert.match(saved.content,/\n\n/);assert.equal(JSON.parse(saved.metadata_json).research_status,'complete');assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,2);
  const denied=req('/api/copilot/chat?workspace_id=w1',{method:'POST',body:{message:'Research'}});denied.headers.set('Accept','text/event-stream');assert.equal((await handleCopilotRoute(denied,env,{})).status,401);
 });
+
+// Speed burst (2026-10-26): the stream result and the saved message both carry the turn's timings, so a slow answer can be read from D1 afterwards.
+sqliteTest('the progress stream result and the persisted assistant message carry the turn timings and call counts',async()=>{
+ const {env,token,db}=await fixture();env.COPILOT_TEST_PROVIDER={search:async()=>{throw new Error('no research expected');},generate:async()=>({provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Step 1 is where the company profile lives.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}})};
+ const request=req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'What does this page do?'}});request.headers.set('Accept','text/event-stream');
+ const response=await handleCopilotRoute(request,env,{});const stream=await response.text();
+ const result=JSON.parse(stream.split('event: result\ndata: ')[1].split('\n\n')[0]);
+ for(const key of ['context','memories','provider','plan','search','generate','total','route_prelude','server_total'])assert.ok(Number.isInteger(result.timings_ms?.[key])&&result.timings_ms[key]>=0,`stream result reports ${key}`);
+ assert.ok(result.timings_ms.server_total>=result.timings_ms.total,'server total includes the turn');assert.equal(result.model_calls,1);assert.equal(result.search_calls,0);
+ const saved=JSON.parse(db.raw.prepare("SELECT metadata_json FROM copilot_messages WHERE role='assistant'").get().metadata_json);
+ for(const key of ['context','memories','provider','plan','search','generate','total','route_prelude'])assert.ok(Number.isInteger(saved.timings_ms?.[key]),`saved metadata reports ${key}`);
+ assert.equal(saved.model_calls,1);assert.equal(saved.search_calls,0);
+});

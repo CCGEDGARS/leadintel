@@ -75,3 +75,30 @@ test('copilot unwraps fenced JSON responses before rendering the answer',async()
   assert.equal(result.answer,'Public pages are accessible; paid database access is not proven.');
   assert.doesNotMatch(result.answer,/```|\{"answer"/);
 });
+// Speed burst (2026-10-26): the founder measured 10–15 s per answer and wants 2–3 s. Before anything changes, every turn says where its time went.
+test('a direct answer reports its timings: context, memories, provider, planning, search, answer and total, with call counts',async()=>{
+  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));let generates=0;
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async search(){throw new Error('no research expected for stable product help');},
+    async generate(){generates++;await wait(12);return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Step 4 lets you review the market strategy.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
+  }};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  const t=result.timings_ms;
+  assert.deepEqual(Object.keys(t).sort(),['context','generate','memories','plan','provider','search','total']);
+  for(const [key,value] of Object.entries(t))assert.ok(Number.isInteger(value)&&value>=0,`${key} is a whole number of milliseconds, got ${value}`);
+  assert.ok(t.generate>=10,`the answer call is measured (${t.generate} ms)`);assert.ok(t.total>=t.generate,'total covers the answer call');
+  assert.equal(t.plan,0,'product help never plans research');assert.equal(t.search,0);
+  assert.equal(result.model_calls,1);assert.equal(result.search_calls,0);assert.equal(generates,1);
+});
+
+test('a planned answer that is reused counts one model call under planning, not under the answer',async()=>{
+  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));let generates=0;
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async search(){throw new Error('an empty research_query means no search');},
+    async generate(){generates++;await wait(12);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Start with Latvia, where the profile already has references.',memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
+  }};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(generates,1);assert.equal(result.model_calls,1);assert.equal(result.search_calls,0);
+  assert.ok(result.timings_ms.plan>=10,`planning is measured (${result.timings_ms.plan} ms)`);assert.equal(result.timings_ms.generate,0,'no second answer call happened');
+  assert.ok(result.timings_ms.total>=result.timings_ms.plan);
+});
