@@ -1,8 +1,8 @@
 # Mandatory AI rules for LeadIntel core templates
 
-## Storyselling style entry — 26 October 2026
+## Native Storyselling correction — 26 October 2026
 
-The user explicitly approved a fifth visible Storyselling button in Choose your style. It opens the existing Storyselling assistant with approved-card selection, rather than registering another protected core template. This supersedes only the earlier four-button UI inventory: Professional, NLP, Friendly and Brutal Honesty remain the four canonical masters. Storyselling previews, working drafts, factual/sharing approval, source provenance, Apply and Save follow `storyselling-implementation.md`. No style selection authorizes sending.
+The user explicitly corrected the separate card/bank interface. Storyselling is a normal fifth style with mandatory Email, LinkedIn and Phone call templates. Its separate new authority is `customer/storyselling-native.js`, shared by customer rendering and server catalogue; this does not alter the four canonical masters or their field permissions. Paid LinkedIn uses its own four-stage InMail sequence. The ordinary Writing Assistant retains up to three optional books and normal relevant company-material revisions. Cards and card approval are not prerequisites. Preserve legacy records and provenance. Without a source-backed case, an explicitly hypothetical explanation/two-roads scene is required; never present invented events as an actual customer outcome. Edit, Undo, Save, approval and sending retain their existing boundaries. See `storyselling-implementation.md`.
 
 ## User-approved interface consolidation — 24 October 2026
 

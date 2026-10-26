@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),M=require('../message-studio.js');
 const e={sender:'Alex',company:'PracticeCo',offer:'contract review',target:'legal teams',problem:'slow reviews',value:'simpler reviews',meetingValue:'review requirements',calendly:'https://calendly.com/alex/30min'};
 test('LinkedIn core styles are protected, supported and independent from email styles',()=>{
- assert.ok(M.linkedinDefaults?.length===3,'Three protected LinkedIn core styles required');
+ assert.ok(M.linkedinDefaults?.length===4,'Three existing protected LinkedIn styles plus the separate native style required');
  for(const mode of ['professional','curiosity','friendly']){const s=M.normalize({linkedinMode:mode,mode:'brutal'},e);assert.equal(s.linkedinMode,mode);assert.equal(s.mode,'brutal');const p=M.prompt(s,{channel:'linkedin',buyerName:'Sam',buyerCompany:'BuyerCo'}),body=JSON.parse(p.prompt);assert.equal(body.template.id,mode);assert.equal(body.template.subject,'');assert.equal(body.template.isPersonal,false);assert.match(p.system,/1200/);assert.match(p.system,/20-minute Zoom/);assert.match(p.system,/manually|automatic sending/);assert.equal(M.normalize(JSON.parse(JSON.stringify(M.storageState(s)))).linkedinMode,mode);}
  assert.equal(M.normalize({linkedinMode:'brutal'},e).linkedinMode,'original');assert.ok(Object.isFrozen(M.linkedinDefaults[0]));
 });

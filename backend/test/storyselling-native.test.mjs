@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import Native from '../../customer/storyselling-native.js';
+import {coreScripts,validateScript} from '../src/script-library-routes.js';
+import {prepareAssistantRequest} from '../src/writing-assistant.js';
+import {storageFixture} from './writing-reference-fixture.mjs';
+test('new native masters share exact source across server catalogue and customer rendering',async()=>{const env=storageFixture();env.DB.raw.exec('CREATE TABLE core_script_registry(id TEXT PRIMARY KEY,payload_json TEXT,revision INTEGER)');const rows=await coreScripts(env.DB);for(const master of [...Native.seeds,Native.inmail]){const row=rows.find(r=>r.id===master.id);assert.deepEqual(row,master);assert.equal(validateScript(row,{core:true}).style,'storyselling');}});
+test('native assistant works without story cards, keeps normal book/reference retrieval and internal fourteen types',async()=>{const env=storageFixture();const p=await prepareAssistantRequest(env,{workspaceId:'w1'},{instruction:'Revise the selected message',intent:'preview',context:{style:'storyselling',channel:'email',recipient:{name:'Lee',firstName:'Lee',company:'Buyer'},seller:{sender:'Ada Smith',company:'Acme'},currentDraft:{subject:'When the handover stalls',message:''}},sourceRefs:[]});assert.equal(p.storyselling,null);assert.match(p.system,/No approved card is required/);assert.match(p.system,/website only supports capabilities/);assert.equal(JSON.parse(p.prompt).storyTypeGuidance.length,14);assert.equal(p.sources.sourceRefs.length,0);});

@@ -1,4 +1,5 @@
 (function(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageStudio=api;})(typeof globalThis==='object'?globalThis:this,function(root){
+ const Native=typeof module==='object'&&module.exports?require('./storyselling-native.js'):root.LeadIntelStorysellingNative;
  const Originals=typeof module==='object'&&module.exports?require('./original-scripts.js'):root.LeadIntelOriginalScripts;
  const Library=typeof module==='object'&&module.exports?require('./personal-template-library.js'):root.LeadIntelPersonalTemplates;
  const Evidence=typeof module==='object'&&module.exports?require('./message-evidence.js'):root.LeadIntelMessageEvidence;
@@ -7,7 +8,8 @@
  const linkedinDefaults=Object.freeze([
  {id:'professional',name:'Professional Template',subject:'',body:'Hi {{firstName}},\n\n{{developmentContext}}\n\nI’m {{sender}} from {{company}}. {{offer}} {{value}}\n\n{{proof}}\n\nWould you be open to a 20-minute Zoom conversation? {{meetingValue}}\n{{calendly}}'},
  {id:'curiosity',name:'NLP Template',subject:'',body:'Hi {{firstName}},\n\n{{developmentContext}} {{roleQuestion}}\n\nI’m {{sender}} from {{company}}. {{offer}}\n\nWhat could {{value}} mean for your team?\n\nLet’s compare your requirements in a 20-minute Zoom conversation. {{meetingValue}}\n{{calendly}}'},
- {id:'friendly',name:'Friendly Template',subject:'',body:'Hi {{firstName}},\n\n{{friendlyOpening}}\n\nI’m {{sender}} from {{company}}. {{offer}}\n\nIf {{value}} would be helpful, I’d enjoy a conversation. {{proof}}\n\nWould you have 20 minutes for a Zoom conversation? {{meetingValue}}\n{{calendly}}'}
+ {id:'friendly',name:'Friendly Template',subject:'',body:'Hi {{firstName}},\n\n{{friendlyOpening}}\n\nI’m {{sender}} from {{company}}. {{offer}}\n\nIf {{value}} would be helpful, I’d enjoy a conversation. {{proof}}\n\nWould you have 20 minutes for a Zoom conversation? {{meetingValue}}\n{{calendly}}'},
+ {id:'storyselling',name:'Storyselling',...Native.patterns.linkedin}
  ].map(t=>Object.freeze({...t,isPersonal:false})));
  function linkedinTemplate(studio){return linkedinDefaults.find(t=>t.id===studio.linkedinMode)||(studio.linkedinTemplates[studio.linkedinMode]?{...studio.linkedinTemplates[studio.linkedinMode],isPersonal:true}:null);}
  const meetingLabels=Object.freeze({zoom:'Zoom',teams:'Microsoft Teams',google_meet:'Google Meet'});
@@ -17,6 +19,7 @@
  const fields=['meetingDateOne','meetingDateTwo','meetingPlatform','target','problem','value','offer','proof','difference','approach','meetingValue','nextAction','sender','senderRole','company','calendly','language'];
  // Working subject sets are distinct by tone; approved verbatim document stays untouched.
  const subjectGroups=Object.freeze({
+  storyselling:Native.subjects,
   professional:Object.freeze([
    {id:'relevance',name:'Offer and project',pattern:'{{subjectOffer}} for {{subjectProject}}',original:'Steel and installation for Malmberget'},
    {id:'introduction',name:'Name and company',pattern:'{{senderFullName}}. {{senderCompany}}',original:'Edgars Untals. Ercon'},
@@ -225,7 +228,8 @@
  {id:'professional',name:'Professional Template',subject:'{{senderFullName}}. {{senderCompany}}',body:Approved.professionalPattern()},
  {id:'curiosity',name:'NLP Template',subject:'Keep what works. Compare what’s possible.',body:Approved.approvedPattern('curiosity')},
  {id:'friendly',name:'Friendly Template',subject:'What could we build together?',body:Approved.approvedPattern('friendly')},
- {id:'brutal',name:'Brutal Honesty',subject:'LeadIntel. On behalf of {{sender}}',body:Approved.approvedPattern('brutal')}];
+ {id:'brutal',name:'Brutal Honesty',subject:'LeadIntel. On behalf of {{sender}}',body:Approved.approvedPattern('brutal')},
+ {id:'storyselling',name:'Storyselling',...Native.patterns.email}];
  function seed(main={},scenario={},accountName=''){const a=main.answers||{},p=main.profile||{},b=main.brandIdentity||{};return {offer:a.priority_offers||scenario.offer||p.priorityOffers||'',target:a.ideal_customer||scenario.segment||p.idealCustomer||'',problem:a.buying_outcomes||a.customer_problem||p.customerPainPoints||p.customerProblem||'',value:a.value_proposition||scenario.valueProposition||p.valueProposition||a.differentiation||p.differentiation||'',proof:a.proof_points||p.proofPoints||'',difference:a.differentiation||p.differentiation||'',approach:a.delivery_approach||p.deliveryApproach||'',sender:b.senderName||accountName||'',senderRole:b.senderTitle||'',company:b.companyDisplayName||p.companyName||'',meetingValue:a.meeting_value||p.meetingValue||'',nextAction:defaultAction,calendly:'',language:scenario.resolvedLanguage||(scenario.language==='auto'?'en':scenario.language)||'en'};}
  defaults.forEach(Object.freeze);Object.freeze(defaults);
  const customStyleIds=Object.freeze(['professional','curiosity','friendly','brutal']);
