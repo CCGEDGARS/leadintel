@@ -102,3 +102,16 @@ test('a planned answer that is reused counts one model call under planning, not 
   assert.ok(result.timings_ms.plan>=10,`planning is measured (${result.timings_ms.plan} ms)`);assert.equal(result.timings_ms.generate,0,'no second answer call happened');
   assert.ok(result.timings_ms.total>=result.timings_ms.plan);
 });
+
+// Speed burst fix 1 (2026-10-26): live baseline with timings showed the model call is 92–97 % of each answer (plan 16.9 s of 17.4; answer 8.9 s of 9.6)
+// at the model's default reasoning level. Both copilot model calls now ask for low effort, as the web-search calls already do.
+test('both copilot model calls run at low reasoning effort',async()=>{
+  const efforts=[];
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async search(){throw new Error('no research expected');},
+    async generate(options){efforts.push(options.reasoningEffort);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short answer.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
+  }};
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.deepEqual(efforts,['low','low'],'the planning call and the main answer call both ask for low effort');
+});
