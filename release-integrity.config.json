@@ -4950,6 +4950,36 @@
         ".wa-conversation:has(.story-bank[open])",
         ".wa-conversation:has([data-story-options]:not([hidden])){overflow-y:auto}"
       ]
+    },
+    {
+      "id": "storyselling-style-entry",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "value:'storyselling'",
+        "leadintel:storyselling-open"
+      ]
+    },
+    {
+      "id": "storyselling-style-wiring",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "leadintel:storyselling-open",
+        "openStoryselling()",
+        "storysellingApplied:"
+      ]
+    },
+    {
+      "id": "storyselling-library-pass-through",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "['original','storyselling'].includes(b.dataset.writingStyle)"
+      ]
     }
   ],
   "retry": {

@@ -203,7 +203,7 @@ test('single strongest buying trigger replaces multi-option picker without losin
  {url:'https://lkab.com/one',kind:'event',summary:'LKAB has announced a sorting plant investment.'},
  {url:'https://lkab.com/two',kind:'event',summary:'LKAB has announced another investment.'}]});
  assert.equal(document.querySelectorAll('#mw-trigger-options .mw-trigger-choice').length,1);
- assert.equal(document.querySelectorAll('#mw-style-options .mw-style').length,4);
+ assert.equal(document.querySelectorAll('#mw-style-options .mw-style').length,5);
  assert.ok(document.getElementById('mw-subject-options'));
  assert.ok(document.getElementById('mw-original-peek'));
  assert.ok(document.getElementById('mw-business-context'));

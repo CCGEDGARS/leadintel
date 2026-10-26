@@ -1,5 +1,9 @@
 # Mandatory AI rules for LeadIntel core templates
 
+## Storyselling style entry — 26 October 2026
+
+The user explicitly approved a fifth visible Storyselling button in Choose your style. It opens the existing Storyselling assistant with approved-card selection, rather than registering another protected core template. This supersedes only the earlier four-button UI inventory: Professional, NLP, Friendly and Brutal Honesty remain the four canonical masters. Storyselling previews, working drafts, factual/sharing approval, source provenance, Apply and Save follow `storyselling-implementation.md`. No style selection authorizes sending.
+
 ## User-approved interface consolidation — 24 October 2026
 
 The visible AI Generated style choice is retired. Professional, NLP, Friendly and Brutal Honesty remain the email template choices. Writing Assistant owns new free-form drafts and requested working-copy edits. Preserve internal `original` modes, existing saved AI drafts, history and CRM snapshots; this UI change never rewrites or reclassifies them automatically. Legacy original-generation compatibility is not permission to reintroduce its retired style button.
