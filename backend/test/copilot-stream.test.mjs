@@ -46,3 +46,13 @@ test('when redaction changes text already sent, the emitter rewrites the whole a
   gate.push('Header: bearer ');gate.push('abcdefghijkl done');gate.end();
   const rewrite=events.find(event=>event.replace);assert.ok(rewrite,'a rewrite event is emitted');assert.match(rewrite.text,/\[redacted\]/);assert.doesNotMatch(rewrite.text,/abcdefghijkl/);
 });
+
+// Live finding (26.10, research path): after web research the model sometimes answers in prose instead of the JSON envelope; the service then uses the raw
+// text as the answer, so the stream must do the same instead of staying silent.
+test('an output that does not start as JSON streams as plain text from the first character',()=>{
+  const out=[];const stream=createAnswerStream(text=>out.push(text));
+  stream.push('Jonathan, the latest ');stream.push('news:\n\n- **October 20:** revenue');stream.end();
+  assert.equal(out.join(''),'Jonathan, the latest news:\n\n- **October 20:** revenue');
+  const fenced=[];const code=createAnswerStream(text=>fenced.push(text));code.push('  \n```json\n{"answer":"Inside."}\n```');code.end();assert.equal(fenced.join(''),'Inside.');
+  const object=[];const json=createAnswerStream(text=>object.push(text));json.push('  {"research_query":"","answer":"Tabbed."}');json.end();assert.equal(object.join(''),'Tabbed.');
+});

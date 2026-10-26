@@ -71,3 +71,16 @@ test('context is bounded before model use by truncating large arrays and text',a
   assert.ok(context.crmSummary.topCompanies.length<=10);
   assert.ok(JSON.stringify(context).length<70000);
 });
+
+// Speed burst step 3 (2026-10-26): the workspace context used to run about twenty database reads one after another (375–924 ms live).
+// Independent reads now run concurrently; the shape of the context is unchanged.
+test('independent context reads run concurrently instead of one after another',async()=>{
+  class SlowDB extends FakeDB{constructor(){super();this.inFlight=0;this.maxInFlight=0;}prepare(sql){this.queries.push(sql);const db=this;return {args:[],bind(...args){this.args=args;return this;},async first(){return db.slow(()=>db.first(sql,this.args));},async all(){return {results:await db.slow(()=>db.all(sql,this.args))};}};}async slow(run){this.inFlight++;this.maxInFlight=Math.max(this.maxInFlight,this.inFlight);await new Promise(resolve=>setTimeout(resolve,8));try{return run();}finally{this.inFlight--;}}}
+  const db=new SlowDB();const started=Date.now();
+  const context=await buildCopilotWorkspaceContext({DB:db},{workspaceId:'w1',role:'owner',currentScreen:{step:4,label:'Market Strategy'}});
+  const elapsed=Date.now()-started;
+  assert.ok(db.queries.length>=10,`many reads happen (${db.queries.length})`);
+  assert.ok(db.maxInFlight>=8,`most reads are in flight at once (max in flight ${db.maxInFlight}; the sequential version peaked at the five credit checks)`);
+  assert.ok(elapsed<60,`a few rounds of 8 ms, not one per read (${elapsed} ms for ${db.queries.length} reads; sequential was over 100 ms)`);
+  assert.equal(context.workspace.id,'w1');assert.equal(context.crmSummary.total,12);assert.ok(Array.isArray(context.integrationStatus));assert.ok(context.supportUsage.period);
+});

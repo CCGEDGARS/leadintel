@@ -14,7 +14,9 @@ export async function proxyRequest(request,fetchImpl=fetch){
   for(const cookie of response.headers.getSetCookie())out.append('Set-Cookie',cookie);
   return new Response(response.body,{status:response.status,headers:out});
 }
-export default async function handler(req,res){
+// Speed burst step 3 (2026-10-26): the Worker streams assistant answers; the proxy forwards every chunk as it arrives (it used to buffer the whole body).
+export const config={supportsResponseStreaming:true};
+export function createHandler(fetchImpl=fetch){return async function handler(req,res){
   try{
     const headers=new Headers();for(const [name,value] of Object.entries(req.headers))if(value!==undefined)headers.set(name,Array.isArray(value)?value.join(','):value);
     let body;
@@ -24,9 +26,13 @@ export default async function handler(req,res){
     }
     const incoming=new URL(req.url,'https://leadintel.ccgroup.lv');
     if(req.query?.route)incoming.searchParams.set('route',String(req.query.route));
-    const response=await proxyRequest(new Request(incoming,{method:req.method,headers,...(body!==undefined?{body}:{})}));
+    const response=await proxyRequest(new Request(incoming,{method:req.method,headers,...(body!==undefined?{body}:{})}),fetchImpl);
     res.statusCode=response.status;for(const [name,value] of response.headers)if(name!=='set-cookie')res.setHeader(name,value);
     const cookies=response.headers.getSetCookie();if(cookies.length)res.setHeader('Set-Cookie',cookies);
-    res.end(Buffer.from(await response.arrayBuffer()));
-  }catch{res.statusCode=502;res.setHeader('Cache-Control','no-store');res.end('LeadIntel backend unavailable');}
-}
+    if(!response.body){res.end();return;}
+    const reader=response.body.getReader();
+    try{while(true){const {value,done}=await reader.read();if(done)break;if(value&&value.length)res.write(Buffer.from(value));}}finally{reader.releaseLock();}
+    res.end();
+  }catch{if(res.headersSent){res.end();return;}res.statusCode=502;res.setHeader('Cache-Control','no-store');res.end('LeadIntel backend unavailable');}
+};}
+export default createHandler();

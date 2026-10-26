@@ -15,6 +15,8 @@ export function createAnswerStream(onText){
     for(const ch of String(chunk||'')){
       if(phase==='done')break;
       if(phase==='seek'){
+        // The first non-blank character decides: an object or a fence is a JSON envelope; anything else is prose, streamed as it is.
+        if(!seek.trim()&&!/\s/.test(ch)&&ch!=='{'&&ch!=='`'){phase='raw';out+=ch;continue;}
         seek+=ch;const at=seek.indexOf(KEY);
         if(at<0){if(seek.length>KEY.length*2)seek=seek.slice(-KEY.length);continue;}
         const rest=seek.slice(at+KEY.length);
@@ -22,6 +24,7 @@ export function createAnswerStream(onText){
         else if(!/^\s*(?::\s*)?$/.test(rest))phase='done';
         continue;
       }
+      if(phase==='raw'){out+=ch;continue;}
       if(unicode!==null){unicode+=ch;if(unicode.length===4){const code=parseInt(unicode,16);if(!Number.isNaN(code))out+=String.fromCharCode(code);unicode=null;}continue;}
       if(escaped){escaped=false;if(ch==='u'){unicode='';continue;}out+=ESCAPES[ch]??ch;continue;}
       if(ch==='\\'){escaped=true;continue;}

@@ -38,9 +38,12 @@ function safeSignal(item){const value=object(redactProtectedData(item));return {
 function safeResearchItem(item){const value=object(redactProtectedData(item));return {name:clean(value.name||value.title,280),summary:clean(value.summary||value.description||value.hypothesis,2400),score:Math.max(0,Math.min(100,safeNumber(value.score?.total??value.score))),sourceUrl:clean(value.sourceUrl||value.source_url||value.url,1200)};}
 
 async function crmSummary(env,workspaceId){
-  const counts=await firstSafe(env,`SELECT COUNT(*) AS total,SUM(CASE WHEN pipeline_stage IS NOT NULL THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN lifecycle_status='customer' THEN 1 ELSE 0 END) AS customers FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL`,workspaceId)||{};
-  const pipelineRows=await allSafe(env,`SELECT COALESCE(pipeline_stage,'None') AS pipeline_stage,COUNT(*) AS count FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL GROUP BY pipeline_stage ORDER BY count DESC`,workspaceId);
-  const companies=await allSafe(env,`SELECT id,company_name,website,country,industry,pipeline_stage,opportunity_score,confidence,updated_at FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL ORDER BY COALESCE(opportunity_score,0) DESC,updated_at DESC LIMIT 10`,workspaceId);
+  // Speed burst step 3 (2026-10-26): independent reads run concurrently.
+  const [countsRow,pipelineRows,companies]=await Promise.all([
+    firstSafe(env,`SELECT COUNT(*) AS total,SUM(CASE WHEN pipeline_stage IS NOT NULL THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN lifecycle_status='customer' THEN 1 ELSE 0 END) AS customers FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL`,workspaceId),
+    allSafe(env,`SELECT COALESCE(pipeline_stage,'None') AS pipeline_stage,COUNT(*) AS count FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL GROUP BY pipeline_stage ORDER BY count DESC`,workspaceId),
+    allSafe(env,`SELECT id,company_name,website,country,industry,pipeline_stage,opportunity_score,confidence,updated_at FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL ORDER BY COALESCE(opportunity_score,0) DESC,updated_at DESC LIMIT 10`,workspaceId)
+  ]);const counts=countsRow||{};
   return {
     total:safeNumber(counts.total),active:safeNumber(counts.active),customers:safeNumber(counts.customers),
     pipeline:pipelineRows.slice(0,12).map(row=>({stage:clean(row.pipeline_stage,80),count:safeNumber(row.count)})),
@@ -49,9 +52,11 @@ async function crmSummary(env,workspaceId){
 }
 
 async function integrationStatus(env,workspaceId){
-  const gmail=await firstSafe(env,`SELECT 'gmail' AS provider,status,connected_at,updated_at FROM gmail_connections WHERE workspace_id=? LIMIT 1`,workspaceId);
-  const ai=await firstSafe(env,`SELECT provider,active,verified_at,last_used_at,updated_at FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`,workspaceId);
-  const service=await firstSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 1`,workspaceId);
+  const [gmail,ai,service]=await Promise.all([
+    firstSafe(env,`SELECT 'gmail' AS provider,status,connected_at,updated_at FROM gmail_connections WHERE workspace_id=? LIMIT 1`,workspaceId),
+    firstSafe(env,`SELECT provider,active,verified_at,last_used_at,updated_at FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`,workspaceId),
+    firstSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 1`,workspaceId)
+  ]);
   const items=[];
   if(gmail)items.push({provider:'gmail',state:clean(gmail.status||'connected',80),connectedAt:clean(gmail.connected_at,80),updatedAt:clean(gmail.updated_at,80)});
   if(ai)items.push({provider:clean(ai.provider,80),state:ai.active===0?'inactive':'connected',verifiedAt:clean(ai.verified_at,80),lastUsedAt:clean(ai.last_used_at,80),updatedAt:clean(ai.updated_at,80)});
@@ -60,9 +65,11 @@ async function integrationStatus(env,workspaceId){
 }
 
 async function supportUsage(env,workspaceId){
- const consumption=await allSafe(env,`SELECT entity_id AS provider,json_extract(metadata_json,'$.model') AS model,COUNT(*) AS requests,SUM(COALESCE(json_extract(metadata_json,'$.input_tokens'),0)) AS input_tokens,SUM(COALESCE(json_extract(metadata_json,'$.output_tokens'),0)) AS output_tokens FROM audit_events WHERE workspace_id=? AND event_type IN ('ai.generation_completed','ai.web_search_completed') AND created_at>=datetime('now','-30 days') GROUP BY entity_id,json_extract(metadata_json,'$.model') LIMIT 20`,workspaceId);
- const rows=await allSafe(env,`SELECT provider,json_extract(metadata_json,'$.remaining_credits') AS remaining_credits,verified_at FROM workspace_service_integrations WHERE workspace_id=?`,workspaceId);
- const issues=await Promise.all(['openai','anthropic','firecrawl','apollo','hunter'].map(async provider=>({provider,issue:await providerCreditIssue(env,workspaceId,provider)})));
+ const [consumption,rows,issues]=await Promise.all([
+  allSafe(env,`SELECT entity_id AS provider,json_extract(metadata_json,'$.model') AS model,COUNT(*) AS requests,SUM(COALESCE(json_extract(metadata_json,'$.input_tokens'),0)) AS input_tokens,SUM(COALESCE(json_extract(metadata_json,'$.output_tokens'),0)) AS output_tokens FROM audit_events WHERE workspace_id=? AND event_type IN ('ai.generation_completed','ai.web_search_completed') AND created_at>=datetime('now','-30 days') GROUP BY entity_id,json_extract(metadata_json,'$.model') LIMIT 20`,workspaceId),
+  allSafe(env,`SELECT provider,json_extract(metadata_json,'$.remaining_credits') AS remaining_credits,verified_at FROM workspace_service_integrations WHERE workspace_id=?`,workspaceId),
+  Promise.all(['openai','anthropic','firecrawl','apollo','hunter'].map(async provider=>({provider,issue:await providerCreditIssue(env,workspaceId,provider)})))
+ ]);
  return {period:'last 30 days',coverage:'Recorded AI generation/search only; incomplete total spend. Copilot tokens are recorded in message metadata. Subscriptions, enrichment, retries and currency conversion need separate evidence.',consumption:consumption.map(row=>({provider:clean(row.provider,80),model:clean(row.model,120),requests:safeNumber(row.requests),inputTokens:safeNumber(row.input_tokens),outputTokens:safeNumber(row.output_tokens)})),balances:rows.map(row=>({provider:clean(row.provider,80),remainingCredits:row.remaining_credits!=null&&Number.isFinite(Number(row.remaining_credits))?Number(row.remaining_credits):null,verifiedAt:clean(row.verified_at,80),live:false})),creditIssues:issues.filter(row=>row.issue),pricesVerified:false};
 }
 
@@ -106,7 +113,9 @@ async function deliveryActivity(env,workspaceId){
 
 export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role,user}={}){
   const id=clean(workspaceId,160);if(!id)throw new Error('workspaceId is required');
-  const state=await getCustomerState(env,id);const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
+  // Speed burst step 3 (2026-10-26): the workspace state and the six summaries do not depend on each other; they load together.
+  const [state,crm,integrations,usage,dossiers,activities,delivery]=await Promise.all([getCustomerState(env,id),crmSummary(env,id),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id)]);
+  const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
   const markets=array(main.targetMarkets||main.profile?.targetMarkets,20).map(item=>clean(item,300)).filter(Boolean);
   const icps=array(market.icps||main.icps,MAX_ICP).map(safeIcp);
   const signals=array(market.signals||main.signals,MAX_SIGNALS).map(safeSignal);
@@ -125,18 +134,18 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     signals,
     research:{items:researchItems,count:researchItems.length},
     discoverySummary:discoverySummary(payload),
-    crmSummary:await crmSummary(env,id),
+    crmSummary:crm,
     outreachSummary:outreachSummary(payload),
-    integrationStatus:await integrationStatus(env,id),
-    supportUsage:await supportUsage(env,id),
+    integrationStatus:integrations,
+    supportUsage:usage,
     readiness:readiness(main,{icps,signals,markets}),
     intake:intakeAnswers(main),
     brand:brandSummary(main),
     goals:goalsSummary(main),
     references:referencesSummary(main),
-    dossiers:await dossierSummary(env,id),
-    crmActivities:await crmActivities(env,id),
-    deliveryActivity:await deliveryActivity(env,id)
+    dossiers,
+    crmActivities:activities,
+    deliveryActivity:delivery
   };
   const sanitized=redactProtectedData(context);
   assertModelSafe(sanitized);
