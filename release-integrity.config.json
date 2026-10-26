@@ -4940,6 +4940,16 @@
       "contains": [
         "\"storyselling_version\":\"storyselling-v1\""
       ]
+    },
+    {
+      "id": "storyselling-scrollable-controls",
+      "type": "text",
+      "url": "/customer/writing-assistant.css",
+      "status": 200,
+      "contains": [
+        ".wa-conversation:has(.story-bank[open])",
+        ".wa-conversation:has([data-story-options]:not([hidden])){overflow-y:auto}"
+      ]
     }
   ],
   "retry": {
