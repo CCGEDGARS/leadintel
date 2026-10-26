@@ -43,6 +43,39 @@
   },
   "smokeChecks": [
     {
+      "id": "kazakhstan-country-preset",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "data-target-market=\"Kazakhstan\"",
+        "kazakhstan-support=20261024-v1"
+      ]
+    },
+    {
+      "id": "kazakhstan-discovery-geography",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "code:\"kz\"",
+        "\u049a\u0430\u0437\u0430\u049b\u0441\u0442\u0430\u043d",
+        "\u041a\u0430\u0437\u0430\u0445\u0441\u0442\u0430\u043d",
+        ".xn--80ao21a"
+      ]
+    },
+    {
+      "id": "kazakhstan-message-languages",
+      "type": "text",
+      "url": "/customer/content-language.js",
+      "status": 200,
+      "contains": [
+        "kk:'Kazakh'",
+        "ru:'Russian'",
+        "Campaign localization changed currency facts"
+      ]
+    },
+    {
       "id": "explicit-edit-restores-formatting",
       "type": "text",
       "url": "/customer/message-workspace.js",
@@ -3156,7 +3189,7 @@
       "contains": [
         "Your instructions",
         "data-wa-books",
-        "Writing books · Optional",
+        "Writing books \u00b7 Optional",
         "activateBook(card.id)",
         "Books optional"
       ]

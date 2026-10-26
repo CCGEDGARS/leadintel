@@ -10,7 +10,7 @@
     "priority_offers","ideal_customer","buyer_roles","exclusions","buying_outcomes",
     "buying_triggers","value_proposition","differentiation","proof_points","objections"
   ];
-  const COUNTRIES=["Latvia","Estonia","Lithuania","Finland","Sweden","Norway","Denmark","Iceland","Poland","Germany","France","Netherlands","Belgium","Luxembourg","Spain","Italy","United Kingdom","Ireland","United States","Canada","Austria","Switzerland","Czech Republic","Slovakia","Hungary"];
+  const COUNTRIES=["Latvia","Estonia","Lithuania","Finland","Sweden","Norway","Denmark","Iceland","Poland","Germany","France","Netherlands","Belgium","Luxembourg","Spain","Italy","United Kingdom","Ireland","United States","Canada","Austria","Switzerland","Czech Republic","Slovakia","Hungary","Kazakhstan"];
   const MARKET_REGIONS=Object.freeze({
     Baltics:["Latvia","Lithuania","Estonia"],
     Nordics:["Sweden","Finland","Norway","Denmark","Iceland"],
@@ -62,6 +62,7 @@
   }
   function canonicalMarket(value){
     const item=clean(value).slice(0,100);if(!item)return "";
+    if(/^(?:kz|kazakhstan|kazakstan|kazahstan|kazahstāna|казахстан|қазақстан)$/i.test(item))return "Kazakhstan";
     const country=COUNTRIES.find(name=>name.toLowerCase()===item.toLowerCase());if(country)return country;
     const region=Object.keys(MARKET_REGIONS).find(name=>name.toLowerCase()===item.toLowerCase());if(region)return region;
     return item;

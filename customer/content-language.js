@@ -27,11 +27,11 @@
     const selected=String(requested||'auto').trim().toLowerCase();
     if(selected!=='auto'&&EMAIL_LANGUAGES[selected])return {language:selected,source:'manual',confidence:'confirmed',requiresConfirmation:false};
     const location=String(country||market||'').trim().toLowerCase();
-    if(['kazakhstan','казахстан','қазақстан','kazahstāna','kazahstan'].includes(location))return {language:'ru',source:'market',confidence:'medium',requiresConfirmation:true};
+    if(['kz','kazakhstan','kazakstan','казахстан','қазақстан','kazahstāna','kazahstan'].includes(location))return {language:'ru',source:'market',confidence:'medium',requiresConfirmation:true};
     const marketLanguage=MARKET_LANGUAGES[location];
     if(marketLanguage)return {language:marketLanguage,source:'market',confidence:'high',requiresConfirmation:false};
     const host=String(domain||'').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').split(/[/?#]/)[0];const suffix=host.split('.').pop();
-    if(suffix==='kz')return {language:'ru',source:'domain',confidence:'low',requiresConfirmation:true};
+    if(['kz','қаз','xn--80ao21a'].includes(suffix))return {language:'ru',source:'domain',confidence:'low',requiresConfirmation:true};
     if(DOMAIN_LANGUAGES[suffix])return {language:DOMAIN_LANGUAGES[suffix],source:'domain',confidence:'medium',requiresConfirmation:false};
     return {language:'en',source:'fallback',confidence:'low',requiresConfirmation:true};
   }
@@ -71,6 +71,7 @@
     for(const field of CAMPAIGN_FIELDS){
       if(output[field].length>12000)throw Error('Campaign localization is too long');
       if(!sameNumericFacts(source[field],output[field]))throw Error('Campaign localization changed numeric facts');
+      const currencies=text=>(String(text||'').match(/\p{Sc}/gu)||[]).sort();if(JSON.stringify(currencies(source[field]))!==JSON.stringify(currencies(output[field])))throw Error('Campaign localization changed currency facts');
       const before=placeholders(source[field]).sort(),after=placeholders(output[field]).sort();if(JSON.stringify(before)!==JSON.stringify(after))throw Error('Campaign localization changed placeholders');
     }
     const localizedText=CAMPAIGN_FIELDS.map(field=>String(output[field]||'')).join('\n');

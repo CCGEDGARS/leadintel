@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ function statements(sql){
 }
 test('storage migration and authenticated status execute in the actual Workers D1 runtime',async()=>{
  const code="import {handleStorageRoute} from './src/workspace-storage-billing.js'; export default {fetch(request,env){return handleStorageRoute(request,env);}};";
- const built=await build({stdin:{contents:code,resolveDir:new URL('..',import.meta.url).pathname,sourcefile:'storage-worker.js'},bundle:true,write:false,format:'esm',platform:'browser',conditions:['workerd','worker','browser'],logLevel:'silent'});
+ const built=await build({stdin:{contents:code,resolveDir:fileURLToPath(new URL('..',import.meta.url)),sourcefile:'storage-worker.js'},bundle:true,write:false,format:'esm',platform:'browser',conditions:['workerd','worker','browser'],logLevel:'silent'});
  const mf=new Miniflare(convertV4MiniflareOptions({cf:false,modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-20',d1Databases:{DB:'storage-test'}}));
  try{
   const DB=await mf.getD1Database('DB'),dir=new URL('../migrations/',import.meta.url);
