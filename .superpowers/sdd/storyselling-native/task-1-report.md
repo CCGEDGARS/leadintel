@@ -79,3 +79,27 @@ Exact targeted evidence:
 9. `npm run build` — passed after the final implementation/cache refresh; standalone discovery bootstrap/startup checks passed. `git diff --check` is clean. Base-to-head source diffs for the four canonical master/seed files remain empty.
 
 No known failing targeted check remains. No redundant local full-suite run, push, merge, publication or production claim was made; parent owns exact-head full GitHub CI, review and authenticated release proof.
+
+## Actual-production acceptance correction — legacy original-reference authority
+
+Parent observed a real browser failure on production `5a559bfffcef484d9b2218f277bf9a4178592465` (tree equal to local `11f0df3e`): selecting native Email Storyselling threw `Choose a core style and supported language` before the mandatory body could render. Root-cause tracing confirmed that `OriginalScriptsUI.render` inferred translation-store authority from expanded `MessageStudio.defaults`. Storyselling is a native template, but the legacy original-reference store intentionally supports only the four existing email styles and three existing direct LinkedIn styles. The same invalid catalogue-membership assumption also occurred in translation reference selection.
+
+Fix:
+
+- `OriginalScripts.supports(channel, style)` now exposes its existing immutable supported-style authority. Its strict key validation uses that same authority; supported styles, write permissions and canonical wording are unchanged. Native Storyselling is deliberately still rejected by legacy get/save operations.
+- Original-reference UI rendering now hides/returns for styles outside that authority, before calling the strict store. Native selection therefore proceeds without broad exception swallowing, while saved originals and unsaved owner reference drafts remain intact.
+- Translation reference selection uses the same supported authority. Native Email and direct LinkedIn translation uses its actual message source without treating native templates as a legacy approved language reference. Existing reference revision/race checks remain intact for supported legacy styles.
+- The shared mounted-runtime harness now loads the real `original-scripts.js` and `original-scripts-ui.js`, so actual Email and library-backed direct LinkedIn click tests include the production boundary that earlier fixtures omitted. Added owner-reference preservation, strict authority and both-channel native translation regressions.
+- Refreshed both original-module import query keys with `native-reference-boundary=20261026-v1` and the outreach → discovery → index chain with `native-storyselling=20261026-v4`, preserving Discovery's original `?v=` prefix. Three mandatory smoke checks now verify supported authority, UI boundary and translation/import wiring; production-watch serves these real assets.
+
+The enumeration audit traced every production `OriginalScripts.get` call. UI rendering and translation reference selection were the two catalogue-based assumptions; explicit owner save/unlock/restore remains correctly guarded by the strict store. Other all-default enumerations do not invoke this restricted reference store.
+
+Exact tests:
+
+- Red: `node --test --test-concurrency=2 customer/test/storyselling-native.test.js customer/test/storyselling-entry.test.js customer/test/message-translation-flow.test.js customer/test/original-scripts.test.js` — 26 tests, 20 passed, 6 failed. With real original modules loaded, this reproduced the actual native Email/direct LinkedIn style-click failures, native translation failure and absent supported-authority contract.
+- Green: same command — 26 passed, 0 failed. Actual native clicks, no general AI call, manual Undo/CRM history, saved/unsaved original preservation and legacy permission/revision protections passed.
+- Green after extending native translation coverage to both Email and LinkedIn and adding release smoke checks: `node --test --test-concurrency=2 customer/test/message-translation-flow.test.js customer/test/discovery-production-watch.test.js customer/test/writing-assistant-release.test.js` — 21 passed, 0 failed. Existing stale-reference and cross-workspace translation safeguards also passed.
+- `npm run build` — passed after final module/cache/smoke changes; standalone discovery bootstrap/startup checks passed.
+- `git diff --check` — clean; canonical master/seed source files remain unchanged.
+
+No push, merge, deployment or production completion claim was made. Parent owns the new PR, exact-head CI, production proof and real browser acceptance recheck.
