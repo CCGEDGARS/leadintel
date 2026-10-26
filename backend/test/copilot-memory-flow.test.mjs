@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {sha256} from '../src/security.js';
-import {runCopilotTurn} from '../src/copilot-service.js';
+import {runCopilotTurn,memoryCue} from '../src/copilot-service.js';
 import {handleCopilotRoute} from '../src/copilot-routes.js';
 
 // B3 (CTO, 2026-10-25): the assistant remembers. Memories the model proposes are normalized, saved per workspace,
@@ -22,12 +22,17 @@ test('the prompt carries the workspace memories and the system instruction tells
   assert.deepEqual(result.memory_candidates,[{kind:'decision',value:'Target dairy processors first.',due:''}]);
 });
 
+test('a memory cue (a decision, a preference, "remind me") in any supported language sends the turn to the main prompt with the full memory rules',()=>{
+  for(const q of ['Lēmums: sākam ar piena pārstrādi.','Atgādini man 3. novembrī pajautāt Edgaram.','Remind me on Monday to call them.','From now on we prefer expansion signals.','Please remember that we never target retail.'])assert.equal(memoryCue(q),true,q);
+  for(const q of ['Explain anchoring in negotiation','What does this button do?','Find recent Latvian expansion signals'])assert.equal(memoryCue(q),false,q);
+});
+
 test('a conversational question (answered without private workspace data) still knows the person, the trail and the memories, and can create a reminder',async()=>{
   const prompts=[];
   const env={COPILOT_TEST_CONTEXT:{workspace:{id:'w1'},screen:{step:1,label:'Setup'},user:{name:'Jonathan Collins',firstName:'Jonathan'},activity:[{at:'2026-10-25T21:30:00Z',kind:'step',step:1,label:'Setup'}],company:{name:'Seller'},markets:['Latvia'],profile:{private_notes:'PRIVATE-NOTE'},icps:[],signals:[],research:{items:[],count:0},crmSummary:{topCompanies:[{name:'PRIVATE-CRM'}]},integrationStatus:[],readiness:{}},
     COPILOT_TEST_MEMORIES:[{id:'m1',kind:'preference',value:'Prefers expansion signals over tenders.',due:'',updated_at:'2026-10-20 10:00:00'}],
     COPILOT_TEST_PROVIDER:{async generate(options){prompts.push(options.prompt);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Noted, Jonathan: dairy first. I will remind you on 3 November.',memory_candidates:[{kind:'decision',value:'Start with dairy processors in Latvia.'},{kind:'reminder',value:'Ask Edgars about the pilot decision.',due:'2026-11-03'}]})};},async search(){throw new Error('must not search');}}};
-  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Lēmums: sākam ar piena pārstrādi Latvijā. Atgādini man 3. novembrī pajautāt Edgaram par pilota lēmumu.',currentScreen:{step:1}});
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Kā vislabāk sākt sarunu ar piena pārstrādes uzņēmumu?',currentScreen:{step:1}});
   assert.equal(prompts.length,1,'one reasoning call for a conversational turn');
   const payload=JSON.parse(prompts[0]);
   assert.deepEqual(payload.user,{name:'Jonathan Collins',firstName:'Jonathan'});assert.deepEqual(payload.activity_trail.map(item=>item.kind),['step']);
@@ -99,4 +104,17 @@ sqliteTest('memories can be listed and forgotten only inside the workspace; boot
   response=await handleCopilotRoute(req('/api/copilot/memories?workspace_id=w1'),env,{});body=await response.json();
   assert.deepEqual(body.memories.map(item=>item.id).sort(),['m-fact','m-later']);assert.deepEqual(body.reminders_due,[]);
   assert.equal(db.raw.prepare("SELECT archived_at FROM copilot_memories WHERE id='m-due'").get().archived_at!==null,true,'forgetting archives, it does not delete');
+});
+
+test('a cued turn skips the planning shortcut: one main-prompt call with full context and memory rules, candidates come back',async()=>{
+  const prompts=[],systems=[];
+  const env={COPILOT_TEST_CONTEXT:{workspace:{id:'w1'},screen:{step:1,label:'Setup'},user:{name:'Jonathan Collins',firstName:'Jonathan'},activity:[],company:{name:'Seller'},markets:['Latvia'],profile:{notes:'WORKSPACE-NOTE'},icps:[],signals:[],research:{items:[],count:0},crmSummary:{topCompanies:[]},integrationStatus:[],readiness:{}},
+    COPILOT_TEST_MEMORIES:[],
+    COPILOT_TEST_PROVIDER:{async generate(options){prompts.push(options.prompt);systems.push(options.system);return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Jonathan, sākam ar pienu; 3. novembrī atgādināšu.',action_proposals:[],memory_candidates:[{kind:'decision',value:'Sākam ar piena pārstrādes uzņēmumiem Latvijā.'},{kind:'reminder',value:'Pajautāt Edgaram par pilota lēmumu.',due:'2026-11-03'}]})};},async search(){throw new Error('must not search');}}};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Lēmums: sākam ar piena pārstrādes uzņēmumiem Latvijā. Lūdzu atgādini man 3. novembrī pajautāt Edgaram par pilota lēmumu.',currentScreen:{step:1}});
+  assert.equal(prompts.length,1,'no planning call, one main call');
+  const payload=JSON.parse(prompts[0]);
+  assert.ok(payload.workspace_context,'the main prompt carries the workspace');assert.ok(Array.isArray(payload.workspace_memories));assert.deepEqual(payload.user,{name:'Jonathan Collins',firstName:'Jonathan'});
+  assert.doesNotMatch(systems[0],/planning bounded public research/);
+  assert.deepEqual(result.memory_candidates,[{kind:'decision',value:'Sākam ar piena pārstrādes uzņēmumiem Latvijā.',due:''},{kind:'reminder',value:'Pajautāt Edgaram par pilota lēmumu.',due:'2026-11-03'}]);
 });
