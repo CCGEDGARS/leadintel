@@ -30,7 +30,7 @@
   const LOW_QUALITY_DISCOVERY_TITLE=/\b(?:\d+\s+top|top\s+\d+|top\s+(?:manufacturing|industrial|technology|business|company)\s+companies|best\s+(?:manufacturing|industrial|technology|business|company)\s+companies|companies\s+in\s+(?:sweden|sverige|finland|norway|denmark)|list\s+of\s+(?:top\s+)?\d+\s+companies|company\s+directory)\b/i;
   const LOW_QUALITY_DISCOVERY_HOSTS=["f6s.com","crunchbase.com","tracxn.com"];
   const MARKET_RULES=[
-    {code:"kz",suffixes:[".kz"],searchNames:["Kazakhstan","Казахстан","Қазақстан"],aliases:["kazakhstan","kazahstan","казахстан","қазақстан","kazahstāna","kazahstānas"]},
+    {code:"kz",suffixes:[".kz",".xn--80ao21a",".қаз"],searchNames:["Kazakhstan","Қазақстан","Казахстан"],aliases:["kazakhstan","kazakstan","kazahstan","kazakh","қазақстан","казахстан","kazahstāna","kazahstānas"]},
     {code:"se",suffixes:[".se"],searchNames:["Sweden","Sverige"],aliases:["sweden","swedish","sverige","svenska","zviedrija","zviedrijas","zviedru"]},
     {code:"fi",suffixes:[".fi"],searchNames:["Finland","Suomi"],aliases:["finland","finnish","suomi","somija","somijas","somu"]},
     {code:"no",suffixes:[".no"],searchNames:["Norway","Norge"],aliases:["norway","norwegian","norge","norsk","norvēģija","norvēģijas","norvēģu"]},
@@ -100,7 +100,7 @@
     const unrelated=industrial&&splitList(stored).some(role=>/\b(sales|commercial leadership|hr|learning and development|team leadership)\b/i.test(role)&&!approvedCoreRoles.has(role.toLowerCase()));
     return withEvent(!stored||stored===profileRoles||unrelated?coreRoles:stored);
   }
-  function slug(value){return clean(value).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"item";}
+  function slug(value){const text=clean(value).toLowerCase();return text.replace(/\p{Script=Cyrillic}/u.test(text)?/[^\p{L}\p{N}]+/gu:/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"item";}
   function normalizeUrl(value){try{const u=new URL(clean(value));return ["http:","https:"].includes(u.protocol)?u.href:"";}catch{return "";}}
   function normalizeLinkedInUrl(value){
     const url=normalizeUrl(value);if(!url)return "";
@@ -566,7 +566,7 @@
     return displayFromDomain(domain);
   }
   function keywords(value){
-    return [...new Set(clean(value).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūžäöåüß\s-]/g," ").split(/\s+/).filter(word=>word.length>=4&&!STOPWORDS.has(word)))];
+    return [...new Set(clean(value).toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu," ").split(/\s+/).filter(word=>word.length>=4&&!STOPWORDS.has(word)))];
   }
   function evidenceText(item){return `${clean(item.title)} ${clean(item.description)} ${clean(item.text)}`.toLowerCase();}
   function marketScore(marketState,market){
@@ -575,7 +575,7 @@
   }
   function marketRule(value){
     const normalized=clean(value).toLowerCase();
-    return MARKET_RULES.find(rule=>rule.aliases.some(alias=>normalized===alias||normalized.includes(alias)))||null;
+    return MARKET_RULES.find(rule=>rule.code===normalized||rule.aliases.some(alias=>normalized===alias||normalized.includes(alias)))||null;
   }
   function domainCountryRule(domain){
     const normalized=clean(domain).toLowerCase();
@@ -625,14 +625,14 @@
     const name=cleanCompanyName(value);
     if(name.length<2||name.length>90||name.split(/\s+/).length>6)return false;
     if(/^(?:sweden|sverige|company|companies|industry|business|the company|the group|we|our|unique|new|official|to|priority market)$/i.test(name))return false;
-    return /[a-zåäöāčēģīķļņšūž]/i.test(name);
+    return /\p{L}/u.test(name);
   }
-  function normalizedIdentity(value){return clean(value).toLowerCase().normalize('NFKD').replace(/\p{M}/gu,'').replace(/ß/g,'ss').replace(/ø/g,'o').replace(/[^a-z0-9]+/g,'');}
+  function normalizedIdentity(value){return clean(value).toLowerCase().normalize('NFKD').replace(/\p{M}/gu,'').replace(/ß/g,'ss').replace(/ø/g,'o').replace(/[^\p{L}\p{N}]+/gu,'');}
   // Legal-form tokens distinguish nothing: "Nasdaq, Inc.", "NASDAQ Inc" and "Nasdaq" are one company and must cost one resolution check.
   // Distinct brands stay apart: "Nasdaq Baltic" keeps its own key.
-  const LEGAL_FORM_TOKENS=new Set(["the","inc","incorporated","corp","corporation","co","company","ltd","limited","llc","plc","gmbh","ag","sa","nv","bv","oy","oyj","ab","as","asa","aps","uab","sia","ou","kft","srl","sro","spa","se","kg","mbh","pte","pty","llp","lp"]);
+  const LEGAL_FORM_TOKENS=new Set(["the","inc","incorporated","corp","corporation","co","company","ltd","limited","llc","plc","gmbh","ag","sa","nv","bv","oy","oyj","ab","as","asa","aps","uab","sia","ou","kft","srl","sro","spa","se","kg","mbh","pte","pty","llp","lp","тоо","жшс","ао"]);
   function companyMentionKey(value){
-    const base=clean(value).toLowerCase().normalize("NFKD").replace(/\p{M}/gu,"").replace(/ß/g,"ss").replace(/ø/g,"o").replace(/\ba\/s\b/g,"as").replace(/(?<=[a-z])\.(?=[a-z])/g,"").replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+    const base=clean(value).toLowerCase().normalize("NFKD").replace(/\p{M}/gu,"").replace(/ß/g,"ss").replace(/ø/g,"o").replace(/\ba\/s\b/g,"as").replace(/(?<=[a-z])\.(?=[a-z])/g,"").replace(/&/g," and ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
     const tokens=base.split(" ").filter(Boolean);
     while(tokens.length>1&&LEGAL_FORM_TOKENS.has(tokens[tokens.length-1]))tokens.pop();
     while(tokens.length>1&&LEGAL_FORM_TOKENS.has(tokens[0]))tokens.shift();
@@ -651,8 +651,8 @@
   function extractCompanyMentions(results=[],maxCompanies=10){
     const limit=Math.max(1,Math.min(60,Number(maxCompanies)||10));
     const seen=new Set();const mentions=[];
-    const action="(?:operates?|provides?|runs?|serves?|employs?|manufactures?|produces?|supplies|develops?|specializes? in|intends?|plans?|announc(?:es|ed|ing)?|invest(?:s|ed|ing)?|is investing|will build|builds?|expands?|opens?|launch(?:es|ed|ing)?|establishes?|hires?|unveil(?:s|ed|ing)?|introduc(?:es|ed|ing)|receiv(?:es|ed)|secures?|wins?|won|inaugurat(?:es|ed)|complet(?:es|ed)|planerar|investerar|bygger|utökar|öppnar|lanserar|etablerar|anställer|avslöjar|plāno|investē|būvē|paplašina|atver|izveido)";
-    const pattern=new RegExp(`(?:^|[.!?]\\s+|\\n)([A-ZÅÄÖĀČĒĢĪĶĻŅŠŪŽ][A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9&.'’-]*(?:\\s+[A-ZÅÄÖĀČĒĢĪĶĻŅŠŪŽ][A-Za-zÀ-ÖØ-öø-ÿĀ-ž0-9&.'’-]*){0,5})\\s+${action}\\b`,"g");
+    const action="(?:operates?|provides?|runs?|serves?|employs?|manufactures?|produces?|supplies|develops?|specializes? in|intends?|plans?|announc(?:es|ed|ing)?|invest(?:s|ed|ing)?|is investing|will build|builds?|expands?|opens?|launch(?:es|ed|ing)?|establishes?|hires?|unveil(?:s|ed|ing)?|introduc(?:es|ed|ing)|receiv(?:es|ed)|secures?|wins?|won|inaugurat(?:es|ed)|complet(?:es|ed)|planerar|investerar|bygger|utökar|öppnar|lanserar|etablerar|anställer|avslöjar|plāno|investē|būvē|paplašina|atver|izveido|открывает|расширяет|инвестирует|ашады|кеңейтеді)";
+    const pattern=new RegExp(`(?:^|[.!?]\\s+|\\n)([\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'’-]*(?:\\s+[\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'’-]*){0,5})\\s+${action}(?![\\p{L}\\p{N}])`,"gu");
     for(const item of results||[]){
       const sourceUrl=normalizeUrl(item?.url);if(!sourceUrl)continue;
       const market=clean(item?.market);const fields=[clean(item?.description),clean(item?.title),clean(item?.text).slice(0,5000)];
@@ -909,7 +909,7 @@
   }
   function prioritizeCompanyMentions(mentions=[],evidence=[],profile={},limit=30){
     const context=discoverySearchContext(profile,{}),seen=new Set(),rows=[];
-    const namePatterns=[...new Set(mentions.map(row=>companyMentionKey(row?.company)).filter(Boolean))].sort((a,b)=>b.length-a.length).map(key=>({key,pattern:new RegExp('(?<![a-z0-9])'+key.split(' ').join('[\\s\\p{P}]+')+'(?![a-z0-9])','giu')}));
+    const namePatterns=[...new Set(mentions.map(row=>companyMentionKey(row?.company)).filter(Boolean))].sort((a,b)=>b.length-a.length).map(key=>({key,pattern:new RegExp('(?<![\\p{L}\\p{N}])'+key.split(' ').join('[\\s\\p{P}]+')+'(?![\\p{L}\\p{N}])','giu')}));
     const attributed=new Map();
     const attributedSentences=(source,key)=>{
       if(!source)return '';
@@ -974,9 +974,20 @@
     return [];
   }
 
+  function officialLocalIdentity(source={},company='',domain=''){
+    const name=companyMentionKey(company),url=normalizeUrl(source.url||source.metadata?.sourceURL);
+    if(!/\p{Script=Cyrillic}/u.test(name)||!url||companyIdentityDomain(url)!==companyIdentityDomain(domain)||!EvidencePolicy.usable(source))return false;
+    const path=new URL(url).pathname;
+    if(path!=='/'&&!/(?:about|company|contact|o-kompanii|%D0%BE-%D0%BA|компания|байланыс|biz-turaly)/i.test(path))return false;
+    const title=cleanEvidenceText(source.title||source.metadata?.title),body=cleanEvidenceText(source.markdown||source.content||source.text||'');
+    if(body.length<120||!evidenceContainsTerm(companyMentionKey(title),name))return false;
+    const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').split(' ').join('\\s+');
+    return new RegExp('(?:^|[^\\p{L}\\p{N}])(?:ТОО|ЖШС|АО|АҚ|LLP|JSC)\\s*[«"“]?'+escaped+'(?![\\p{L}\\p{N}])','iu').test(body.normalize('NFKD').replace(/\p{M}/gu,''));
+  }
+  function officialIdentityKeys(results=[]){return new Set(results.filter(row=>officialLocalIdentity(row,row.company,row.domain||row.url)).map(row=>companyIdentityDomain(row.domain||row.url)+'|'+companyMentionKey(row.company)));}
   function officialIdentityFromResult(item,domain,requestedName){
     const requested=cleanCompanyName(requestedName);
-    if(domainMatchesCompany(domain,requested))return {company:requested,previousNames:[]};
+    if(domainMatchesCompany(domain,requested)||officialLocalIdentity(item,requested,domain))return {company:requested,previousNames:[]};
     // Renames must be explicitly stated on the candidate's own domain, not inferred by an AI or a publisher.
     const texts=[item.title,item.description,item.snippet,item.markdown,item.content,item.text].filter(Boolean).map(cleanEvidenceText);
     const escaped=requested.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -1052,7 +1063,7 @@
     const output=[];const seen=new Set();
     for(const official of resolved||[]){
       const domain=companyIdentityDomain(official?.domain||official?.url);const company=cleanCompanyName(official?.company);
-      if(!domain||!validCompanyName(company)||!domainMatchesCompany(domain,company))continue;
+      if(!domain||!validCompanyName(company)||!domainMatchesCompany(domain,company)&&!officialLocalIdentity(official,company,domain))continue;
       const officialUrl=normalizeUrl(official?.url);const officialKey=`${domain}|${officialUrl}`;
       if(officialUrl&&!seen.has(officialKey)){seen.add(officialKey);output.push({...official,domain,company,market:clean(official?.market)});}
       for(const link of [company,...(official.previousNames||[])].flatMap(name=>linksByCompany.get(normalizedIdentity(name))||[])){
@@ -1203,13 +1214,13 @@
 
   function mergeCompanyCandidates(results=[],profile={},marketState={},maxCandidates=12){
     const candidateLimit=Math.max(1,Math.min(50,Number(maxCandidates)||12));
-    const grouped=new Map();
+    const grouped=new Map(),officialIdentities=officialIdentityKeys(results);
     for(const item of results||[]){
       const domain=companyIdentityDomain(item?.domain||item?.url);
       if(!domain||isBlockedDomain(domain)||!normalizeUrl(item?.url))continue;
       if(isExcludedDiscoverySource(item,profile,marketState))continue;
       const company=clean(item.company)||displayFromDomain(domain);
-      if(!domainMatchesCompany(domain,company)||!evidenceBelongsToCompany(item,company,domain)&&!(item.previousNames||[]).some(name=>attributedCompanyEvidence(item,name)))continue;
+      if(!domainMatchesCompany(domain,company)&&!officialIdentities.has(domain+'|'+companyMentionKey(company))||!evidenceBelongsToCompany(item,company,domain)&&!(item.previousNames||[]).some(name=>attributedCompanyEvidence(item,name)))continue;
       const current=grouped.get(domain)||{domain,company,market:clean(item.market),website:`https://${domain}/`,previousNames:item.previousNames||[],evidence:[]};
       if(!current.market&&item.market)current.market=clean(item.market);
       current.previousNames=[...new Set([...current.previousNames,...(item.previousNames||[])])].slice(0,3);
@@ -1254,11 +1265,11 @@
   function buildPotentialCompanyCandidates(results=[],profile={},marketState={},qualifiedCandidates=[],maxCandidates=12){
     const limit=Math.max(1,Math.min(50,Number(maxCandidates)||12));
     const qualifiedDomains=new Set((qualifiedCandidates||[]).map(candidate=>companyIdentityDomain(candidate?.domain||candidate?.website)).filter(Boolean));
-    const grouped=new Map();
+    const grouped=new Map(),officialIdentities=officialIdentityKeys(results);
     for(const item of results||[]){
       const domain=companyIdentityDomain(item?.domain||item?.url);
       const company=cleanCompanyName(item?.company)||companyFromTitle(item?.title,domain);
-      if(!domain||!normalizeUrl(item?.url)||isBlockedDomain(domain)||!validCompanyName(company)||!domainMatchesCompany(domain,company)||!evidenceBelongsToCompany(item,company,domain)&&!(item.previousNames||[]).some(name=>attributedCompanyEvidence(item,name)))continue;
+      if(!domain||!normalizeUrl(item?.url)||isBlockedDomain(domain)||!validCompanyName(company)||!domainMatchesCompany(domain,company)&&!officialIdentities.has(domain+'|'+companyMentionKey(company))||!evidenceBelongsToCompany(item,company,domain)&&!(item.previousNames||[]).some(name=>attributedCompanyEvidence(item,name)))continue;
       if(qualifiedDomains.has(domain)||isExcludedDiscoverySource(item,profile,marketState))continue;
       const candidate=grouped.get(domain)||{domain,company,market:clean(item?.market),website:`https://${domain}/`,previousNames:item.previousNames||[],evidence:[]};
       if(!candidate.market&&item.market)candidate.market=clean(item.market);
@@ -1334,7 +1345,7 @@
     return Boolean(aliases[r]?.some(alias=>t===alias||t.includes(alias)));
   }
   function roleSpecificTokens(value){
-    return clean(value).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūžäöåüß\s-]/g," ").split(/\s+/).filter(token=>token.length>=3&&!ROLE_GENERIC_WORDS.has(token));
+    return clean(value).toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu," ").split(/\s+/).filter(token=>token.length>=3&&!ROLE_GENERIC_WORDS.has(token));
   }
   function isExecutiveBuyer(person={}){
     const title=clean(person.title);
@@ -1899,7 +1910,7 @@
     if(!full||person.identityStatus==='pending'||person.nameVerification==='pending')blocked.push('Full identity unresolved');
     if(person.opportunityScope?.status==='review_required')blocked.push(person.opportunityScope.reason||'Opportunity responsibility requires review');
     if(['recruitment_contact','conflict'].includes(person.roleReview?.status)||person.roleReview?.status==='unconfirmed'&&isExecutiveBuyer(person))blocked.push(person.roleReview.reason||'Current buying role requires confirmation');
-    const normalizeMarket=value=>clean(value).toLowerCase().replace(/^(?:uk|great britain|england|scotland|wales)$/,'united kingdom').replace(/^sverige$/,'sweden');
+    const normalizeMarket=value=>{const normalized=clean(value).toLowerCase().replace(/^(?:uk|great britain|england|scotland|wales)$/,'united kingdom').replace(/^sverige$/,'sweden');return marketRule(normalized)?.code||normalized;};
     const market=normalizeMarket(candidate.market),country=normalizeMarket(person.country||(/^UK\b/i.test(clean(person.title))?'United Kingdom':''));
     if(market&&country&&market!==country)blocked.push('Buyer country differs from target market; opportunity responsibility must be reviewed');
     if(!employer)blocked.push('Employer mismatch');if(!source&&!directory)blocked.push('Identity source missing');if(!match)blocked.push('Required role not matched');
@@ -2618,7 +2629,7 @@
     const official=evidence.filter(e=>EvidencePolicy.firstParty(e.url,domain)&&EvidencePolicy.researchText(e.text||e.description).length>=120);
     const independent=new Set(evidence.map(e=>companyIdentityDomain(e.url))).size;
     const fit=commercialFit(candidate,profile);
-    if(!domain||!domainMatchesCompany(domain,candidate.company)||!official.length)gaps.push('Verify company identity with readable official evidence');
+    if(!domain||(!domainMatchesCompany(domain,candidate.company)&&!official.some(source=>officialLocalIdentity(source,candidate.company,domain)))||!official.length)gaps.push('Verify company identity with readable official evidence');
     if(!evidenceSupportsTargetMarket(candidate))gaps.push('Verify target-market presence');
     if(fit.fit<MINIMUM_DISCOVERY_FIT_SCORE&&!verifiedBuyerFit(candidate,profile))gaps.push('Verify commercial fit to the confirmed offers');
     if(isSameServiceSeller(candidate,profile))gaps.push('Company offers the same service rather than the required buyer profile');
