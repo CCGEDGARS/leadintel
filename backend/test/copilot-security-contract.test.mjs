@@ -33,5 +33,5 @@ test('model-safety assertion rejects protected nested fields instead of trusting
 
 test('Backend CI syntax-checks every Copilot backend module',()=>{
   const workflow=fs.readFileSync(new URL('../../.github/workflows/backend-ci.yml',import.meta.url),'utf8');
-  for(const file of ['copilot-security.js','copilot-context.js','copilot-knowledge.js','copilot-skills.js','copilot-diagnostics.js','copilot-memory.js','copilot-actions.js','copilot-service.js','copilot-routes.js'])assert.match(workflow,new RegExp(`node --check src/${file.replace('.','\\.')}`));
+  for(const file of ['copilot-security.js','copilot-context.js','copilot-knowledge.js','copilot-skills.js','copilot-diagnostics.js','copilot-memory.js','copilot-actions.js','copilot-service.js','copilot-routes.js','copilot-stream.js'])assert.match(workflow,new RegExp(`node --check src/${file.replace('.','\\.')}`));
 });

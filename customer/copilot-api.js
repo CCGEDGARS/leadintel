@@ -2,9 +2,9 @@ const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const DEFAULT_TIMEOUT_MS=12000;
 const CHAT_TIMEOUT_MS=125000;
 
-export async function readCopilotStream(response,onProgress=()=>{}){
+export async function readCopilotStream(response,onProgress=()=>{},onDelta=()=>{}){
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
-  const consume=frame=>{let event='';const data=[];for(const line of frame.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();if(line.startsWith('data:'))data.push(line.slice(5).trimStart());}if(!data.length)return;const value=JSON.parse(data.join('\n'));if(event==='error')throw new Error(value.error||'Assistant request failed');if(event==='progress')onProgress(value);if(event==='result')result=value;};
+  const consume=frame=>{let event='';const data=[];for(const line of frame.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();if(line.startsWith('data:'))data.push(line.slice(5).trimStart());}if(!data.length)return;const value=JSON.parse(data.join('\n'));if(event==='error')throw new Error(value.error||'Assistant request failed');if(event==='progress')onProgress(value);if(event==='delta')onDelta({text:String(value.text||'')});if(event==='rewrite')onDelta({text:String(value.text||''),replace:true});if(event==='result')result=value;};
   try{while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done}).replace(/\r\n/g,'\n');if(buffer.length>100000)throw new Error('Assistant response exceeded the limit');let boundary;while((boundary=buffer.indexOf('\n\n'))>=0){consume(buffer.slice(0,boundary));buffer=buffer.slice(boundary+2);}if(done)break;}if(buffer.trim())consume(buffer);if(!result)throw new Error('Assistant response ended before completion');return result;}finally{reader.releaseLock();}
 }
 
@@ -17,7 +17,7 @@ export async function requestCopilot(path,options={}){
   const timeoutMs=Math.max(1000,Math.min(CHAT_TIMEOUT_MS,Number(options.timeoutMs)||DEFAULT_TIMEOUT_MS));const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const response=await fetch(withWorkspace(path,workspaceId),{method:options.method||'GET',credentials:'include',headers:{Accept:'application/json',...(options.body!==undefined?{'Content-Type':'application/json'}:{}),...(options.headers||{})},body:options.body===undefined?undefined:JSON.stringify(options.body),signal:controller.signal});
-    if(response.ok&&response.headers.get('Content-Type')?.includes('text/event-stream'))return await readCopilotStream(response,options.onProgress);
+    if(response.ok&&response.headers.get('Content-Type')?.includes('text/event-stream'))return await readCopilotStream(response,options.onProgress,options.onDelta);
     const payload=await response.json().catch(()=>({}));if(!response.ok){const error=new Error(String(payload?.error||`Copilot request failed (${response.status})`).slice(0,240));error.status=response.status;error.payload=payload;throw error;}return payload;
   }finally{clearTimeout(timer);}
 }
@@ -27,7 +27,7 @@ export function listCopilotConversations(){return requestCopilot('/api/copilot/c
 export function listCopilotMemories(){return requestCopilot('/api/copilot/memories',{timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function forgetCopilotMemory(id){return requestCopilot(`/api/copilot/memories/${encodeURIComponent(id)}/archive`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function getCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{timeoutMs:DEFAULT_TIMEOUT_MS});}
-export function sendCopilotMessage(payload,{onProgress}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:payload||{},headers:{Accept:'text/event-stream'},onProgress,timeoutMs:CHAT_TIMEOUT_MS});}
+export function sendCopilotMessage(payload,{onProgress,onDelta}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:payload||{},headers:{Accept:'text/event-stream'},onProgress,onDelta,timeoutMs:CHAT_TIMEOUT_MS});}
 export function confirmCopilotAction(id,idempotencyKey){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/confirm`,{method:'POST',headers:{'Idempotency-Key':String(idempotencyKey||'')},body:{idempotency_key:String(idempotencyKey||'')},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function rejectCopilotAction(id){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/reject`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 

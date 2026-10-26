@@ -240,6 +240,64 @@ async function verifyGeminiCredential(options,fetchImpl){
   return {provider:'gemini',model:options.model,text};
 }
 
+
+// ---- Token streaming (speed burst step 2, 2026-10-26) ------------------------------------------------------------------------
+// generateTextStream returns the same shape as generateText and calls onDelta(text) as output text arrives. A reply that is not an
+// event stream (tests, proxies) is delivered as one delta. Errors are sanitized exactly like generateText.
+function applyEffort(options,reasoningEffort){if(['none','minimal','low'].includes(reasoningEffort)){if(/^gpt-[56]/.test(options.model))options.reasoningEffort=reasoningEffort;else if(options.provider==='gemini')options.reasoningEffort='low';}return options;}
+function isEventStream(response){return /text\/event-stream/i.test(response?.headers?.get?.('Content-Type')||'');}
+async function readSse(response,onEvent){
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+  const dispatch=frame=>{let event='';const data=[];for(const line of frame.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();else if(line.startsWith('data:'))data.push(line.slice(5).trimStart());}if(!data.length)return;const raw=data.join('\n');if(raw==='[DONE]')return;let payload;try{payload=JSON.parse(raw);}catch{return;}onEvent(event||String(payload?.type||''),payload);};
+  try{while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');let at;while((at=buffer.indexOf('\n\n'))>=0){dispatch(buffer.slice(0,at));buffer=buffer.slice(at+2);}if(done)break;}if(buffer.trim())dispatch(buffer);}finally{reader.releaseLock();}
+}
+function providerFailure(error,options,signal){
+  if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)return new Error(`${PROVIDER_LABELS[options.provider]} request timed out`);
+  const message=String(error?.message||'');
+  if(/request failed \(\d+\)/.test(message)||/returned no text$/.test(message)||/^(Gemini response exceeded output token limit|Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(message))return error;
+  return new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
+}
+async function openAiStream(options,fetchImpl,onDelta){
+  const response=await fetchImpl('https://api.openai.com/v1/responses',{method:'POST',signal:options.signal,headers:{'Content-Type':'application/json','Accept':'text/event-stream',Authorization:`Bearer ${options.apiKey}`},body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,...(options.reasoningEffort?{reasoning:{effort:options.reasoningEffort}}:{}),store:false,stream:true})});
+  if(!response.ok){const payload=await parseJson(response);throw sanitizedUpstreamError('openai',response.status,payload);}
+  if(!isEventStream(response)||!response.body){const payload=await parseJson(response);const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');onDelta(text);return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};}
+  let text='',used=usage(),failed=false;
+  await readSse(response,(event,payload)=>{const type=String(payload?.type||event);if(type==='response.output_text.delta'){const delta=String(payload?.delta||'');if(delta){text+=delta;onDelta(delta);}}else if(type==='response.completed'||type==='response.incomplete'){used=usage(payload?.response?.usage?.input_tokens,payload?.response?.usage?.output_tokens);}else if(type==='response.failed'||type==='error')failed=true;});
+  if(failed)throw new Error('OpenAI request failed (502)');if(!text.trim())throw new Error('OpenAI returned no text');
+  return {provider:'openai',model:options.model,text:text.trim(),usage:used};
+}
+async function anthropicStream(options,fetchImpl,onDelta){
+  const body={model:options.model,max_tokens:options.maxOutputTokens,messages:[{role:'user',content:options.prompt}],stream:true};if(options.system)body.system=options.system;if(/^claude-(sonnet|opus|fable)-5/.test(options.model)){body.thinking={type:'adaptive'};body.output_config={effort:'low'};}
+  const response=await fetchImpl('https://api.anthropic.com/v1/messages',{method:'POST',signal:options.signal,headers:{'Content-Type':'application/json','Accept':'text/event-stream','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify(body)});
+  if(!response.ok){const payload=await parseJson(response);throw sanitizedUpstreamError('anthropic',response.status,payload);}
+  if(!isEventStream(response)||!response.body){const payload=await parseJson(response);const text=textFromAnthropic(payload);if(!text)throw new Error('Anthropic returned no text');onDelta(text);return {provider:'anthropic',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};}
+  let text='',input=0,output=0,failed=false;
+  await readSse(response,(event,payload)=>{const type=String(payload?.type||event);if(type==='message_start'){input=Number(payload?.message?.usage?.input_tokens)||0;output=Number(payload?.message?.usage?.output_tokens)||0;}else if(type==='content_block_delta'&&payload?.delta?.type==='text_delta'){const delta=String(payload.delta.text||'');if(delta){text+=delta;onDelta(delta);}}else if(type==='message_delta'){output=Number(payload?.usage?.output_tokens)||output;}else if(type==='error')failed=true;});
+  if(failed)throw new Error('Anthropic request failed (502)');if(!text.trim())throw new Error('Anthropic returned no text');
+  return {provider:'anthropic',model:options.model,text:text.trim(),usage:usage(input,output)};
+}
+async function geminiStream(options,fetchImpl,onDelta){
+  const body={contents:[{role:'user',parts:[{text:options.prompt}]}],generationConfig:{maxOutputTokens:options.maxOutputTokens}};
+  if(options.reasoningEffort==='low'){if(/^gemini-[34](?:[.-])/.test(options.model))body.generationConfig.thinkingConfig={thinkingLevel:'low'};else if(/^gemini-2\.5(?:[.-])/.test(options.model))body.generationConfig.thinkingConfig={thinkingBudget:1024};}
+  if(options.system)body.systemInstruction={parts:[{text:options.system}]};
+  const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:streamGenerateContent?alt=sse`,{method:'POST',signal:options.signal,headers:{'Content-Type':'application/json','Accept':'text/event-stream','x-goog-api-key':options.apiKey},body:JSON.stringify(body)});
+  if(!response.ok){const payload=await parseJson(response);throw sanitizedUpstreamError('gemini',response.status,payload);}
+  if(!isEventStream(response)||!response.body){const payload=await parseJson(response);const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');onDelta(text);return {provider:'gemini',model:options.model,text,usage:usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount)};}
+  let text='',used=usage(),failed=false;
+  await readSse(response,(_event,payload)=>{if(payload?.promptFeedback?.blockReason)failed=true;const candidate=Array.isArray(payload?.candidates)?payload.candidates[0]:null;for(const part of Array.isArray(candidate?.content?.parts)?candidate.content.parts:[]){const delta=String(part?.text||'');if(delta){text+=delta;onDelta(delta);}}if(payload?.usageMetadata)used=usage(payload.usageMetadata.promptTokenCount,payload.usageMetadata.candidatesTokenCount);});
+  if(failed)throw new Error('Gemini request failed (502)');if(!text.trim())throw new Error('Gemini returned no text');
+  return {provider:'gemini',model:options.model,text:text.trim(),usage:used};
+}
+export async function generateTextStream({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,fetchImpl=fetch,onDelta=()=>{}}){
+  const options=applyEffort(validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal}),reasoningEffort);
+  const deliver=typeof onDelta==='function'?onDelta:()=>{};
+  try{
+    if(options.provider==='openai')return await openAiStream(options,fetchImpl,deliver);
+    if(options.provider==='anthropic')return await anthropicStream(options,fetchImpl,deliver);
+    return await geminiStream(options,fetchImpl,deliver);
+  }catch(error){throw providerFailure(error,options,signal);}
+}
+
 export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,responseFormat,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal});
   // `none`/`minimal`/`low` reach OpenAI gpt-5/6 verbatim (a model that does not support the value answers 400 and the caller falls back);

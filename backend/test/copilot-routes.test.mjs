@@ -85,3 +85,14 @@ sqliteTest('the progress stream result and the persisted assistant message carry
  for(const key of ['context','memories','provider','plan','search','generate','total','route_prelude'])assert.ok(Number.isInteger(saved.timings_ms?.[key]),`saved metadata reports ${key}`);
  assert.equal(saved.model_calls,1);assert.equal(saved.search_calls,0);
 });
+
+// Speed burst step 2 (2026-10-26): the progress stream carries answer text deltas before the final result.
+sqliteTest('the progress stream emits delta events with answer text before the result',async()=>{
+ const {env,token}=await fixture();const chunks=['{"answer":"Step 1 is ','the profile.","action_proposals":[],"memory_candidates":[]}'];
+ env.COPILOT_TEST_PROVIDER={key:'openai:test',search:async()=>{throw new Error('no research expected');},generate:async(options)=>{for(const chunk of chunks)options.onDelta?.(chunk);return {provider:'openai',model:'gpt-test',text:chunks.join(''),usage:{input_tokens:1,output_tokens:1}};}};
+ const request=req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'What does this page do?'}});request.headers.set('Accept','text/event-stream');
+ const stream=await (await handleCopilotRoute(request,env,{})).text();
+ const deltaAt=stream.indexOf('event: delta'),resultAt=stream.indexOf('event: result');assert.ok(deltaAt>=0&&resultAt>deltaAt,'delta events precede the result');
+ const texts=[...stream.matchAll(/event: delta\ndata: (\{.*\})\n/g)].map(match=>JSON.parse(match[1]).text);assert.equal(texts.join(''),'Step 1 is the profile.');
+ const result=JSON.parse(stream.split('event: result\ndata: ')[1].split('\n\n')[0]);assert.equal(result.answer,'Step 1 is the profile.');
+});

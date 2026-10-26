@@ -265,3 +265,29 @@ test('reasoningEffort none reaches OpenAI verbatim and becomes the lowest safe l
   await generateText({provider:'anthropic',apiKey:'fixture',model:'claude-sonnet-5-5',prompt:'Short',reasoningEffort:'none',fetchImpl:claude});
   assert.deepEqual(anthropic.output_config,{effort:'low'});
 });
+
+// Speed burst step 2 (2026-10-26): token streaming for the three providers. A fetch stub answers with text/event-stream; deltas arrive in order; the
+// returned shape matches generateText; a JSON (non-stream) response still works; upstream errors stay sanitized.
+import {generateTextStream} from '../src/ai-provider.js';
+function sse(frames,headers={'Content-Type':'text/event-stream'}){const bytes=new TextEncoder().encode(frames.join(''));const body=new ReadableStream({start(controller){for(let i=0;i<bytes.length;i+=7)controller.enqueue(bytes.slice(i,i+7));controller.close();}});return new Response(body,{status:200,headers});}
+test('OpenAI Responses streaming delivers output_text deltas in order and usage from the completed event',async()=>{
+  let body;const fetchImpl=async(_url,options)=>{body=JSON.parse(options.body);return sse(['event: response.created\ndata: {"type":"response.created"}\n\n','event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"{\\"answer\\":\\"Hel"}\n\n','event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"lo\\"}"}\n\n','event: response.completed\ndata: {"type":"response.completed","response":{"usage":{"input_tokens":12,"output_tokens":5}}}\n\n']);};
+  const deltas=[];const result=await generateTextStream({provider:'openai',apiKey:'fixture',model:'gpt-6-luna',system:'s',prompt:'p',reasoningEffort:'none',fetchImpl,onDelta:text=>deltas.push(text)});
+  assert.equal(body.stream,true);assert.deepEqual(body.reasoning,{effort:'none'});
+  assert.deepEqual(deltas,['{"answer":"Hel','lo"}']);assert.equal(result.text,'{"answer":"Hello"}');assert.deepEqual(result.usage,{input_tokens:12,output_tokens:5});assert.equal(result.provider,'openai');assert.equal(result.model,'gpt-6-luna');
+});
+test('Anthropic streaming delivers text_delta events and usage from message_start and message_delta',async()=>{
+  let body;const fetchImpl=async(_url,options)=>{body=JSON.parse(options.body);return sse(['event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":30,"output_tokens":1}}}\n\n','event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}\n\n','event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hidden"}}\n\n','event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\\"answer\\":\\"A"}}\n\n','event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"B\\"}"}}\n\n','event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}\n\n','event: message_stop\ndata: {"type":"message_stop"}\n\n']);};
+  const deltas=[];const result=await generateTextStream({provider:'anthropic',apiKey:'fixture',model:'claude-sonnet-5-5',system:'s',prompt:'p',reasoningEffort:'none',fetchImpl,onDelta:text=>deltas.push(text)});
+  assert.equal(body.stream,true);assert.deepEqual(deltas,['{"answer":"A','B"}']);assert.equal(result.text,'{"answer":"AB"}');assert.deepEqual(result.usage,{input_tokens:30,output_tokens:9});
+});
+test('Gemini streaming uses streamGenerateContent with alt=sse and concatenates candidate parts, taking the last usage',async()=>{
+  let url;const fetchImpl=async(requestUrl)=>{url=String(requestUrl);return sse(['data: {"candidates":[{"content":{"parts":[{"text":"{\\"answer\\":\\"Sv"}]}}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":2}}\n\n','data: {"candidates":[{"content":{"parts":[{"text":"eiki\\"}"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":6}}\n\n']);};
+  const deltas=[];const result=await generateTextStream({provider:'gemini',apiKey:'fixture',model:'gemini-3.8-flash',system:'s',prompt:'p',reasoningEffort:'none',fetchImpl,onDelta:text=>deltas.push(text)});
+  assert.match(url,/:streamGenerateContent\?alt=sse$/);assert.deepEqual(deltas,['{"answer":"Sv','eiki"}']);assert.equal(result.text,'{"answer":"Sveiki"}');assert.deepEqual(result.usage,{input_tokens:8,output_tokens:6});
+});
+test('a non-stream JSON reply and an upstream error behave like generateText',async()=>{
+  const deltas=[];const result=await generateTextStream({provider:'openai',apiKey:'fixture',model:'gpt-6-luna',prompt:'p',fetchImpl:async()=>Response.json({output_text:'plain'}),onDelta:text=>deltas.push(text)});
+  assert.equal(result.text,'plain');assert.deepEqual(deltas,['plain'],'the whole text is delivered once as a single delta');
+  await assert.rejects(generateTextStream({provider:'openai',apiKey:'fixture',model:'gpt-6.1-sol',prompt:'p',fetchImpl:async()=>Response.json({error:{message:'Unsupported value: none'}},{status:400}),onDelta(){}}),/OpenAI request failed \(400\)/);
+});

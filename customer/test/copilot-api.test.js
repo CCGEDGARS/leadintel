@@ -32,3 +32,12 @@ test('research transport parses fragmented progress and Unicode answers and reje
  await assert.rejects(api.readCopilotStream(new Response('event: progress\ndata: {"phase":"thinking"}\n\n')),/before completion/);
  await assert.rejects(api.readCopilotStream(new Response('event: error\ndata: {"error":"Try again"}\n\n')),/Try again/);
 });
+
+// Speed burst step 2 (2026-10-26): answer text streams as delta events; a rewrite event replaces everything shown so far.
+test('the transport delivers delta and rewrite events to onDelta before the result',async()=>{
+ const api=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);const deltas=[],progress=[];
+ const text='event: progress\ndata: {"phase":"answering"}\n\nevent: delta\ndata: {"text":"Sveiki, "}\n\nevent: delta\ndata: {"text":"Jonathan."}\n\nevent: rewrite\ndata: {"text":"Sveiki, [redacted]."}\n\nevent: result\ndata: {"answer":"Sveiki, [redacted]."}\n\n';
+ const result=await api.readCopilotStream(new Response(text),x=>progress.push(x.phase),x=>deltas.push(x));
+ assert.deepEqual(result,{answer:'Sveiki, [redacted].'});assert.deepEqual(progress,['answering']);assert.deepEqual(deltas,[{text:'Sveiki, '},{text:'Jonathan.'},{text:'Sveiki, [redacted].',replace:true}]);
+ assert.match(source,/sendCopilotMessage\(payload,\{onProgress,onDelta\}/);
+});

@@ -149,3 +149,16 @@ test('the models the vendor documents as rejecting no-reasoning start at low eff
   const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.deepEqual(efforts,['low']);assert.equal(result.model_calls,1);assert.equal(result.provider.effort,'low');
 });
+
+// Speed burst step 2 (2026-10-26): a turn can stream its answer. The provider's raw JSON chunks become answer text deltas, redacted on the accumulated text.
+test('the answer is streamed out of the model JSON as deltas that add up to the final answer',async()=>{
+  const chunks=['{"research_query":"","answer":"Start with ','Latvia, then ','Estonia.","action_proposals":[],','"memory_candidates":[]}'];
+  const provider={key:'openai:test-stream',async search(){throw new Error('no research expected');},async generate(options){for(const chunk of chunks)options.onDelta?.(chunk);return {provider:'openai',model:'gpt-test',text:chunks.join(''),usage:{input_tokens:1,output_tokens:1}};}};
+  const deltas=[];const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'},onDelta:event=>deltas.push(event)});
+  assert.equal(result.answer,'Start with Latvia, then Estonia.');assert.ok(deltas.length>=2,'text arrived in more than one piece');assert.equal(deltas.map(event=>event.text).join(''),'Start with Latvia, then Estonia.');assert.ok(deltas.every(event=>!event.replace));
+});
+test('without a delta listener the turn behaves as before',async()=>{
+  const provider={key:'openai:test-no-stream',async search(){throw new Error('no research expected');},async generate(options){assert.equal(options.onDelta,undefined,'no listener is forwarded');return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}};
+  const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(result.answer,'Short.');
+});

@@ -96,3 +96,37 @@ test('actual drawer displays research progress, prevents duplicate requests and 
   finish({answer:'**Fact** [1](https://company.example/project).\n\nPractical implication. [fake](https://invented.example)',sources:[{title:'Official project',url:'https://company.example/project',date:'2026-10-11'}],research_used:true,research_status:'complete'});await new Promise(resolve=>setImmediate(resolve));assert.match(panel.querySelector('.copilot-message.is-assistant').textContent,/Fact \[1\].\n\n/);assert.doesNotMatch(panel.querySelector('.copilot-message.is-assistant .copilot-message-text').textContent,/invented|\*\*/);assert.equal(panel.querySelector('.copilot-source').textContent,'[1] Official project');assert.match(panel.querySelector('.copilot-source-date').textContent,/2026-10-11/);assert.equal(panel.querySelector('.copilot-send').disabled,false);
  }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });
+
+// Speed burst step 2 (2026-10-26): the answer appears while it is being written, then the final result takes its place.
+test('streamed answer text appears in a draft bubble as it arrives and the final result replaces it',async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};const ui=await import(`data:text/javascript;base64,${Buffer.from(source+'\n//streaming-test').toString('base64')}`);let finish,handlers;
+  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:1})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async(payload,callbacks)=>{handlers=callbacks;callbacks.onProgress({phase:'answering'});return new Promise(resolve=>finish=resolve);}}});
+  panel.querySelector('textarea').value='Which market first?';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(panel.querySelector('[data-copilot-status]').textContent,'Preparing your answer…');
+  handlers.onDelta({text:'Start with '});handlers.onDelta({text:'Latvia'});
+  const draft=panel.querySelector('.copilot-message.is-assistant[data-copilot-streaming]');assert.ok(draft,'a streaming draft bubble exists');assert.equal(draft.querySelector('.copilot-message-text').textContent,'Start with Latvia');assert.equal(panel.querySelector('[data-copilot-status]').textContent,'');assert.equal(draft.querySelector('.copilot-copy'),null,'no copy button on a draft');
+  handlers.onDelta({text:'Start with [redacted]',replace:true});assert.equal(draft.querySelector('.copilot-message-text').textContent,'Start with [redacted]');
+  finish({answer:'Start with [redacted], then Estonia.',sources:[],research_status:'not_needed'});await new Promise(resolve=>setImmediate(resolve));
+  const finals=panel.querySelectorAll('.copilot-message.is-assistant');assert.equal(finals.length,1,'the draft is replaced, not duplicated');assert.equal(finals[0].hasAttribute('data-copilot-streaming'),false);assert.equal(finals[0].querySelector('.copilot-message-text').textContent,'Start with [redacted], then Estonia.');assert.ok(finals[0].querySelector('.copilot-copy'));
+ }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
+});
+
+test('a new progress phase after streamed text drops the superseded draft',async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};const ui=await import(`data:text/javascript;base64,${Buffer.from(source+'\n//streaming-drop-test').toString('base64')}`);let finish,handlers;
+  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:1})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async(payload,callbacks)=>{handlers=callbacks;return new Promise(resolve=>finish=resolve);}}});
+  panel.querySelector('textarea').value='Latest Tele2 news?';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setImmediate(resolve));
+  handlers.onDelta({text:'Draft that will be superseded'});assert.ok(panel.querySelector('[data-copilot-streaming]'));
+  handlers.onProgress({phase:'researching'});assert.equal(panel.querySelector('[data-copilot-streaming]'),null,'the draft is gone');assert.equal(panel.querySelector('[data-copilot-status]').textContent,'Researching public sources…');
+  finish({answer:'Verified answer.',sources:[],research_status:'complete',research_used:true});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(panel.querySelectorAll('.copilot-message.is-assistant').length,1);assert.equal(panel.querySelector('.copilot-message.is-assistant .copilot-message-text').textContent,'Verified answer.');
+ }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
+});
+
+test('the loader fetches the streaming-capable transport and drawer modules',()=>{
+  assert.match(loader,/copilot-api\.js\?v=[^'"]*&streaming=20261026-v1['"]/);
+  assert.match(loader,/copilot-ui\.js\?v=[^'"]*&streaming=20261026-v1['"]/);
+});

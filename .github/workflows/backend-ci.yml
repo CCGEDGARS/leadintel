@@ -102,3 +102,4 @@ jobs:
           node --check src/copilot-actions.js
           node --check src/copilot-service.js
           node --check src/copilot-routes.js
+          node --check src/copilot-stream.js
