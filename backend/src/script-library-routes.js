@@ -20,6 +20,23 @@ function appliedAssistant(value,workspace){
  // This is historical attribution for the saved text, never current evidence or activation authority.
  return value;
 }
+function validateInMailSequence(record,workspace,{historical=false}={}){
+ const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
+ if(!object(record)||historical&&(Object.hasOwn(record,'previousSequences')||Object.hasOwn(record,'tailoredOriginal')))fail('Invalid InMail sequence history');
+ const {previousSequences,tailoredOriginal,...current}=record;
+ if(![...styles,'original'].includes(current.style)||!['initial','connection','followup','calendar'].includes(current.stage)||!object(current.stages)||!object(current.values)||!object(current.checks)||JSON.stringify(current).length>30000)fail('Invalid InMail draft');
+ for(const [id,draft] of Object.entries(current.stages)){
+  if(!['initial','connection','followup','calendar'].includes(id)||!object(draft)||typeof draft.subject!=='string'||typeof draft.message!=='string'||draft.message.length>12000||draft.subject.length>500||id!=='initial'&&draft.subject)fail('Invalid InMail stage');
+  const assistant=appliedAssistant(draft.writingAssistant,workspace);if(assistant)draft.writingAssistant=assistant;else delete draft.writingAssistant;
+ }
+ for(const [key,value] of Object.entries(current.values))if(!/^[A-Za-z][A-Za-z0-9]*$/.test(key)||typeof value!=='string'||value.length>3000)fail('Invalid InMail fact');
+ if(!historical){
+  if(previousSequences!==undefined&&(!Array.isArray(previousSequences)||previousSequences.length>5))fail('Invalid InMail sequence history');
+  if(previousSequences)current.previousSequences=previousSequences.map(snapshot=>validateInMailSequence(snapshot,workspace,{historical:true}));
+  if(tailoredOriginal!==undefined)current.tailoredOriginal=validateInMailSequence(tailoredOriginal,workspace,{historical:true});
+ }
+ return current;
+}
 export function platformScriptOwner(env,user){return Boolean(env.ADMIN_EMAIL&&user?.email&&String(env.ADMIN_EMAIL).trim().toLowerCase()===String(user.email).trim().toLowerCase());}
 export function validateScript(input,{core=false}={}){
  if(!input||!channels.includes(input.channel))fail('Choose a supported channel');
@@ -76,7 +93,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   return json({canManage,core:await coreScripts(env.DB),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
- const maximumPayload=path==='/api/script-library/draft'?500000:40000;
+ const maximumPayload=path==='/api/script-library/draft'?500000:path==='/api/script-library/inmail-draft'?250000:40000;
  if(Number(request.headers.get('Content-Length'))>maximumPayload)fail('Script payload too large',413);
  const body=write?await request.json().catch(()=>null):null;
  if(write&&(!body||JSON.stringify(body).length>maximumPayload))fail('Invalid script payload');
@@ -115,10 +132,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   const keys=['workspace_id','user_id','company_id','contact_id'],values=[workspace,user.id,companyId,contactId];
   if(request.method==='GET'){const row=await env.DB.prepare('SELECT payload_json,revision FROM inmail_script_drafts WHERE workspace_id=? AND user_id=? AND company_id=? AND contact_id=?').bind(...values).first();return json({draft:row?{...JSON.parse(row.payload_json),revision:row.revision}:null},200,cors);}
   if(request.method!=='PUT')fail('Method not allowed',405);
-  const record=body.record;if(!record||typeof record!=='object'||Array.isArray(record)||![...styles,'original'].includes(record.style)||!['initial','connection','followup','calendar'].includes(record.stage)||!record.stages||!record.values||!record.checks||JSON.stringify(record).length>30000)fail('Invalid InMail draft');
-  for(const [id,draft] of Object.entries(record.stages))if(!['initial','connection','followup','calendar'].includes(id)||typeof draft?.subject!=='string'||typeof draft?.message!=='string'||draft.message.length>12000||draft.subject.length>500||id!=='initial'&&draft.subject)fail('Invalid InMail stage');
-  for(const draft of Object.values(record.stages)){const assistant=appliedAssistant(draft.writingAssistant,workspace);if(assistant)draft.writingAssistant=assistant;else delete draft.writingAssistant;}
-  for(const [key,value] of Object.entries(record.values))if(!/^[A-Za-z][A-Za-z0-9]*$/.test(key)||typeof value!=='string'||value.length>3000)fail('Invalid InMail fact');
+  const record=validateInMailSequence(body.record,workspace);
   const saved=await cas(env.DB,'inmail_script_drafts',keys,values,{record,savedAt:new Date().toISOString()},body.expectedRevision);return json({draft:saved},200,cors);
  }
  if(kind==='draft'){

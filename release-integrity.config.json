@@ -1432,7 +1432,7 @@
       "contains": [
         "Choose a style to apply it automatically.",
         "libraryContent.append(q('message-generate')",
-        "q('mw-undo-rewrite').hidden=true",
+        "q('mw-undo-rewrite').hidden=!editor.canUndo",
         "We found two versions of your workspace."
       ]
     },
@@ -4967,8 +4967,8 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "storyselling-native.js?v=20261026-native-v2",
-        "native-storyselling=20261026-v2"
+        "storyselling-native.js?v=20261026-native-v3",
+        "native-storyselling=20261026-v3"
       ]
     },
     {
