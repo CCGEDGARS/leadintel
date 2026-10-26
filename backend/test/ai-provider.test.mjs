@@ -249,3 +249,19 @@ test('text-generation timeouts retain their cause instead of reporting an upstre
 test('writing analysis can request low reasoning without changing normal generation',async()=>{
  let body;await generateText({provider:'openai',apiKey:'fixture',model:'gpt-6.1-sol',prompt:'Analyse source',reasoningEffort:'low',fetchImpl:async(url,options)=>{body=JSON.parse(options.body);return Response.json({output_text:'ok'});}});assert.deepEqual(body.reasoning,{effort:'low'});
 });
+
+// Speed burst step 1 (2026-10-26): the copilot asks for no reasoning. OpenAI gpt-5/6 models get the value verbatim (an unsupported model answers 400 and the
+// caller falls back); Gemini 3.8 Flash rejects `minimal`, so Gemini takes `low`; Anthropic's lowest level is `low`.
+test('reasoningEffort none reaches OpenAI verbatim and becomes the lowest safe level elsewhere',async()=>{
+  let body;const openai=async(_url,options)=>{body=JSON.parse(options.body);return Response.json({output_text:'ok'});};
+  await generateText({provider:'openai',apiKey:'fixture',model:'gpt-6-luna',prompt:'Short',reasoningEffort:'none',fetchImpl:openai});
+  assert.deepEqual(body.reasoning,{effort:'none'});
+  await generateText({provider:'openai',apiKey:'fixture',model:'gpt-4.1',prompt:'Short',reasoningEffort:'none',fetchImpl:openai});
+  assert.equal(body.reasoning,undefined,'models outside gpt-5/6 take no reasoning parameter');
+  const bodies=[];const gemini=async(_url,options)=>{bodies.push(JSON.parse(options.body));return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'ok'}]}}]});};
+  await generateText({provider:'gemini',apiKey:'fixture',model:'gemini-3.8-flash',prompt:'Short',reasoningEffort:'none',fetchImpl:gemini});
+  assert.deepEqual(bodies[0].generationConfig.thinkingConfig,{thinkingLevel:'low'});
+  let anthropic;const claude=async(_url,options)=>{anthropic=JSON.parse(options.body);return Response.json({content:[{type:'text',text:'ok'}]});};
+  await generateText({provider:'anthropic',apiKey:'fixture',model:'claude-sonnet-5-5',prompt:'Short',reasoningEffort:'none',fetchImpl:claude});
+  assert.deepEqual(anthropic.output_config,{effort:'low'});
+});

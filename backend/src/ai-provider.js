@@ -242,7 +242,9 @@ async function verifyGeminiCredential(options,fetchImpl){
 
 export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,responseFormat,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal});
-  if(reasoningEffort==='low'&&(/^gpt-[56]/.test(options.model)||options.provider==='gemini'))options.reasoningEffort='low';
+  // `none`/`minimal`/`low` reach OpenAI gpt-5/6 verbatim (a model that does not support the value answers 400 and the caller falls back);
+  // Gemini takes `low` (Gemini 3.8 Flash rejects `minimal`); Anthropic's lowest level is `low` and is set per model in anthropicRequest.
+  if(['none','minimal','low'].includes(reasoningEffort)){if(/^gpt-[56]/.test(options.model))options.reasoningEffort=reasoningEffort;else if(options.provider==='gemini')options.reasoningEffort='low';}
   if(options.provider==='gemini'&&responseFormat==='json')options.responseFormat='json';
   try{
     if(options.provider==='openai')return await openAiRequest(options,fetchImpl);

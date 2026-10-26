@@ -105,7 +105,7 @@ test('a planned answer that is reused counts one model call under planning, not 
 
 // Speed burst fix 1 (2026-10-26): live baseline with timings showed the model call is 92–97 % of each answer (plan 16.9 s of 17.4; answer 8.9 s of 9.6)
 // at the model's default reasoning level. Both copilot model calls now ask for low effort, as the web-search calls already do.
-test('both copilot model calls run at low reasoning effort',async()=>{
+test('both copilot model calls ask for no reasoning first',async()=>{
   const efforts=[];
   const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
     async search(){throw new Error('no research expected');},
@@ -113,5 +113,39 @@ test('both copilot model calls run at low reasoning effort',async()=>{
   }};
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
-  assert.deepEqual(efforts,['low','low'],'the planning call and the main answer call both ask for low effort');
+  assert.deepEqual(efforts,['none','none'],'the planning call and the main answer call both start without reasoning');
+});
+
+// Speed burst step 1 (2026-10-26), founder decisions: answers are at most eighty words by default, and the model is asked for no reasoning first.
+// Live rounds A/B/C showed the model call is 92–97 % of each answer and that answer length is the variable left after effort and model.
+test('the system instruction keeps answers to eighty words by default and reaches both the planning and the answer call',async()=>{
+  const systems=[];
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{key:'openai:test-prompt',async search(){throw new Error('no research expected');},async generate(options){systems.push(options.system);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}}};
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(systems.length,2);
+  for(const system of systems){assert.match(system,/at most 80 words by default/);assert.match(system,/Go longer only when the person asks/);}
+});
+
+test('a provider that rejects no-reasoning with 400 answers once more at low effort, and that model is remembered',async()=>{
+  const efforts=[];
+  const provider={key:'openai:test-rejects-none',async search(){throw new Error('no research expected');},async generate(options){efforts.push(options.reasoningEffort);if(options.reasoningEffort==='none')throw new Error('OpenAI request failed (400)');return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Step 4 is the market strategy.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}};
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider};
+  const first=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.deepEqual(efforts,['none','low']);assert.equal(first.model_calls,2);assert.equal(first.provider.effort,'low');assert.match(first.answer,/market strategy/);
+  const second=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.deepEqual(efforts,['none','low','low'],'the rejection is remembered for that provider and model');assert.equal(second.model_calls,1);
+});
+
+test('other provider failures are not retried at low effort',async()=>{
+  let calls=0;const provider={key:'openai:test-other-failure',async search(){throw new Error('no research expected');},async generate(){calls++;throw new Error('OpenAI request failed (503)');}};
+  const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(calls,1);assert.match(result.answer,/temporarily unavailable/);
+});
+
+test('the models the vendor documents as rejecting no-reasoning start at low effort without a wasted call',async()=>{
+  const efforts=[];
+  const provider={key:'openai:gpt-6.1-sol',async search(){throw new Error('no research expected');},async generate(options){efforts.push(options.reasoningEffort);return {provider:'openai',model:'gpt-6.1-sol',text:JSON.stringify({answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}};
+  const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.deepEqual(efforts,['low']);assert.equal(result.model_calls,1);assert.equal(result.provider.effort,'low');
 });
