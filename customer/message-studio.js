@@ -1,10 +1,12 @@
 (function(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageStudio=api;})(typeof globalThis==='object'?globalThis:this,function(root){
+ const Native=typeof module==='object'&&module.exports?require('./storyselling-native.js'):root.LeadIntelStorysellingNative;
  const Originals=typeof module==='object'&&module.exports?require('./original-scripts.js'):root.LeadIntelOriginalScripts;
  const Library=typeof module==='object'&&module.exports?require('./personal-template-library.js'):root.LeadIntelPersonalTemplates;
  const Evidence=typeof module==='object'&&module.exports?require('./message-evidence.js'):root.LeadIntelMessageEvidence;
  const Approved=typeof module==='object'&&module.exports?require('./approved-reference-scripts.js'):root.LeadIntelApprovedReferences;
  const Translations=typeof module==='object'&&module.exports?require('./message-translations.js'):root.LeadIntelMessageTranslations;
  const linkedinDefaults=Object.freeze([
+ {id:"storyselling",name:"Storyselling",...Native.patterns.linkedin},
  {id:'professional',name:'Professional Template',subject:'',body:'Hi {{firstName}},\n\n{{developmentContext}}\n\nI’m {{sender}} from {{company}}. {{offer}} {{value}}\n\n{{proof}}\n\nWould you be open to a 20-minute Zoom conversation? {{meetingValue}}\n{{calendly}}'},
  {id:'curiosity',name:'NLP Template',subject:'',body:'Hi {{firstName}},\n\n{{developmentContext}} {{roleQuestion}}\n\nI’m {{sender}} from {{company}}. {{offer}}\n\nWhat could {{value}} mean for your team?\n\nLet’s compare your requirements in a 20-minute Zoom conversation. {{meetingValue}}\n{{calendly}}'},
  {id:'friendly',name:'Friendly Template',subject:'',body:'Hi {{firstName}},\n\n{{friendlyOpening}}\n\nI’m {{sender}} from {{company}}. {{offer}}\n\nIf {{value}} would be helpful, I’d enjoy a conversation. {{proof}}\n\nWould you have 20 minutes for a Zoom conversation? {{meetingValue}}\n{{calendly}}'}
@@ -17,6 +19,7 @@
  const fields=['meetingDateOne','meetingDateTwo','meetingPlatform','target','problem','value','offer','proof','difference','approach','meetingValue','nextAction','sender','senderRole','company','calendly','language'];
  // Working subject sets are distinct by tone; approved verbatim document stays untouched.
  const subjectGroups=Object.freeze({
+  storyselling:Native.subjects,
   professional:Object.freeze([
    {id:'relevance',name:'Offer and project',pattern:'{{subjectOffer}} for {{subjectProject}}',original:'Steel and installation for Malmberget'},
    {id:'introduction',name:'Name and company',pattern:'{{senderFullName}}. {{senderCompany}}',original:'Edgars Untals. Ercon'},
@@ -222,12 +225,13 @@
  const approvedBrutalOriginal="Subject: LeadIntel. On behalf of Edgars\nHi Joakim,\nI should say this first: I’m LeadIntel, an AI-powered system. Edgars at ERCON asked me to research potential business partners and write to relevant people on his behalf.\nMy research brought me to LKAB’s new sorting plant in Malmberget. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could help keep the project running smoothly, this may be worth a conversation.\nERCON’s team brings more than 30 years of metalworking experience, including international projects. They provide drawing development, manufacturing, installation and qualified workforce solutions—with a focus on consistent quality, controlled costs and reliable delivery.\nHere are some projects they are proud of: [reference link].\nIf something catches your eye, would you be open to a 30-minute Zoom conversation with Edgars?\nHe’ll bring relevant production data and lessons from previous projects. You can share your requirements and explore where ERCON could help simplify delivery, protect your margins and support this project or future work.\nI’m writing the introduction. Edgars will be there for the conversation.\nChoose a suitable time here: [Calendly link].\nAnd if steelwork sits with someone else, I’d appreciate a pointer in the right direction.\nWarm regards,\n LeadIntel\n On behalf of Edgars. ERCON\n(Edgars linkedin profile)";
  function originalText(style,channel='email'){if(channel==='email'&&Approved.records[style])return Approved.originalText(style);const core=(channel==='linkedin'?linkedinDefaults:defaults).find(t=>t.id===style);return core?[core.subject,core.body].filter(Boolean).join('\n\n'):'';}
  const defaults=[
+ {id:'storyselling',name:'Storyselling',...Native.patterns.email},
  {id:'professional',name:'Professional Template',subject:'{{senderFullName}}. {{senderCompany}}',body:Approved.professionalPattern()},
  {id:'curiosity',name:'NLP Template',subject:'Keep what works. Compare what’s possible.',body:Approved.approvedPattern('curiosity')},
  {id:'friendly',name:'Friendly Template',subject:'What could we build together?',body:Approved.approvedPattern('friendly')},
  {id:'brutal',name:'Brutal Honesty',subject:'LeadIntel. On behalf of {{sender}}',body:Approved.approvedPattern('brutal')}];
  function seed(main={},scenario={},accountName=''){const a=main.answers||{},p=main.profile||{},b=main.brandIdentity||{};return {offer:a.priority_offers||scenario.offer||p.priorityOffers||'',target:a.ideal_customer||scenario.segment||p.idealCustomer||'',problem:a.buying_outcomes||a.customer_problem||p.customerPainPoints||p.customerProblem||'',value:a.value_proposition||scenario.valueProposition||p.valueProposition||a.differentiation||p.differentiation||'',proof:a.proof_points||p.proofPoints||'',difference:a.differentiation||p.differentiation||'',approach:a.delivery_approach||p.deliveryApproach||'',sender:b.senderName||accountName||'',senderRole:b.senderTitle||'',company:b.companyDisplayName||p.companyName||'',meetingValue:a.meeting_value||p.meetingValue||'',nextAction:defaultAction,calendly:'',language:scenario.resolvedLanguage||(scenario.language==='auto'?'en':scenario.language)||'en'};}
- defaults.forEach(Object.freeze);Object.freeze(defaults);
+ defaults.push(defaults.shift());defaults.forEach(Object.freeze);Object.freeze(defaults);
  const customStyleIds=Object.freeze(['professional','curiosity','friendly','brutal']);
  function personalStyles(value={}){const result={};for(const id of customStyleIds){const item=value?.[id];if(!item||typeof item!=='object')continue;const body=String(item.body||'').trim().slice(0,12000),subject=String(item.subject||'').trim().slice(0,500);if(!body||!subject)continue;const history=(Array.isArray(item.history)?item.history:[]).slice(-5).map(h=>({body:String(h.body||'').slice(0,12000),subject:String(h.subject||'').slice(0,500),revision:Number(h.revision)||0})).filter(h=>h.body&&h.subject);result[id]={body,subject,active:item.active===true,revision:Math.max(1,Number(item.revision)||1),history};}return result;}
  function savePersonalStyle(studio,id,input={}){

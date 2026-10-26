@@ -352,5 +352,6 @@ const records=[
   }
 ];
 function freeze(v){if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;}
-const api=freeze({records});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelApprovedInMail=api;
+const Native=typeof module==='object'&&module.exports?require('./storyselling-native.js'):root.LeadIntelStorysellingNative;
+const api=freeze({records:[...records,Native.inmail]});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelApprovedInMail=api;
 })(typeof window==='object'?window:globalThis);

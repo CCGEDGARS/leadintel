@@ -1,3 +1,9 @@
+# Native Storyselling correction
+
+The 26 October user correction supersedes the separate bank workflow described below. Storyselling now uses mandatory channel templates through the ordinary style selection and working-copy flow, plus the ordinary Writing Assistant with optional books. No story card, card approval, purpose/example selector or objection field is required. Shared authority: `customer/storyselling-native.js`. Email/direct LinkedIn/phone and paid LinkedIn InMail stages are supported. Normal relevant company evidence and attribution checks apply during explicit assistant revisions. Historical bank APIs and saved provenance are retained.
+
+See `../plans/2026-10-26-storyselling-native-correction.md` for the current design. The following records the superseded v1 implementation for compatibility context only.
+
 # Storyselling v1
 
 The user-supplied 26 October 2026 master is preserved in storyselling-source-v1.md and its fourteen template sections are included in the server generation context.

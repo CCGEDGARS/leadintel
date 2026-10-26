@@ -1,3 +1,4 @@
+import StorysellingNative from '../../customer/storyselling-native.js';
 import {validCompanyMaterialAttribution} from './company-materials-context.js';
 import RichText from '../../customer/rich-text.js';
 import {storageErrorResponse} from './workspace-storage.js';
@@ -5,7 +6,7 @@ import {cookieValue,sha256} from './security.js';
 import {inmailScriptSeeds} from './inmail-script-seeds.js';
 import {coreScriptSeeds} from './core-script-seeds.js';
 import {phoneScriptSeeds} from './phone-script-seeds.js';
-const channels=['email','linkedin','phone'],styles=['professional','curiosity','friendly','brutal'];
+const channels=['email','linkedin','phone'],styles=['professional','curiosity','friendly','brutal','storyselling'];
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
 function appliedAssistant(value,workspace){
@@ -22,7 +23,7 @@ function appliedAssistant(value,workspace){
 export function platformScriptOwner(env,user){return Boolean(env.ADMIN_EMAIL&&user?.email&&String(env.ADMIN_EMAIL).trim().toLowerCase()===String(user.email).trim().toLowerCase());}
 export function validateScript(input,{core=false}={}){
  if(!input||!channels.includes(input.channel))fail('Choose a supported channel');
- if(core&&!styles.includes(input.style))fail('Choose one of the four core styles');
+ if(core&&!styles.includes(input.style))fail('Choose a supported core style');
  const out={};for(const [key,max] of [['name',80],['subject',500],['body',12000]]){if(typeof input[key]!=='string'||input[key].length>max)fail('Invalid '+key);out[key]=input[key].trim();}
  if(!out.name||!out.body||input.channel==='email'&&!out.subject)fail('Name and script are required; email also requires a subject');
  if(!core&&input.channel==='email'&&input.bodyHtml!==undefined){if(typeof input.bodyHtml!=='string'||input.bodyHtml.length>RichText.MAX_HTML)fail('Invalid template formatting');const html=RichText.matchingHtml(out.body,input.bodyHtml);if(input.bodyHtml&&!html)fail('Formatting does not match the template');if(html)out.bodyHtml=html;}
@@ -39,7 +40,7 @@ export function validateScript(input,{core=false}={}){
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
 export async function coreScripts(db){
- const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...coreScriptSeeds,...inmailScriptSeeds,...phoneScriptSeeds].map(r=>[r.id,r]));
+ const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...StorysellingNative.seeds,StorysellingNative.inmail,...coreScriptSeeds,...inmailScriptSeeds,...phoneScriptSeeds].map(r=>[r.id,r]));
  for(const row of result.results||[]){
   const saved=JSON.parse(row.payload_json),master=rows.get(row.id);
   // Upgrade obsolete built-in copies, never an owner's separately edited master
@@ -75,14 +76,15 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   return json({canManage,core:await coreScripts(env.DB),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
- if(Number(request.headers.get('Content-Length'))>40000)fail('Script payload too large',413);
+ const maximumPayload=path==='/api/script-library/draft'?500000:40000;
+ if(Number(request.headers.get('Content-Length'))>maximumPayload)fail('Script payload too large',413);
  const body=write?await request.json().catch(()=>null):null;
- if(write&&(!body||JSON.stringify(body).length>40000))fail('Invalid script payload');
+ if(write&&(!body||JSON.stringify(body).length>maximumPayload))fail('Invalid script payload');
  const match=path.match(/^\/api\/script-library\/(core|personal|primary|draft|inmail-draft|inmail-primary)(?:\/([^/]+))?$/);if(!match)fail('Not found',404);const [,kind,encoded]=match,id=decodeURIComponent(encoded||'');
  if(kind==='core'){
   if(!canManage)fail('Only the platform owner can manage core scripts',403);
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
-  if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal)$/.test(id))fail('Invalid core script');
+  if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal|storyselling)$/.test(id))fail('Invalid core script');
   const existing=(await coreScripts(env.DB)).find(r=>r.id===id);
   let next;if(request.method==='DELETE'){if(!existing||existing.deleted)fail('Script not found',404);next={...existing,deleted:true};}else{next={...validateScript(body,{core:true}),deleted:false,builtin:false,...(existing?.masterVersion?{masterVersion:existing.masterVersion}:{})};if(id!==(next.mode==='inmail'?'linkedin-inmail':next.channel)+':'+next.style)fail('Script channel or style mismatch');}
   // Revisions preserve prior approved wording; AI paths have no access to these writes.
@@ -113,7 +115,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   const keys=['workspace_id','user_id','company_id','contact_id'],values=[workspace,user.id,companyId,contactId];
   if(request.method==='GET'){const row=await env.DB.prepare('SELECT payload_json,revision FROM inmail_script_drafts WHERE workspace_id=? AND user_id=? AND company_id=? AND contact_id=?').bind(...values).first();return json({draft:row?{...JSON.parse(row.payload_json),revision:row.revision}:null},200,cors);}
   if(request.method!=='PUT')fail('Method not allowed',405);
-  const record=body.record;if(!record||typeof record!=='object'||Array.isArray(record)||!['professional','curiosity','friendly','brutal','original'].includes(record.style)||!['initial','connection','followup','calendar'].includes(record.stage)||!record.stages||!record.values||!record.checks||JSON.stringify(record).length>30000)fail('Invalid InMail draft');
+  const record=body.record;if(!record||typeof record!=='object'||Array.isArray(record)||![...styles,'original'].includes(record.style)||!['initial','connection','followup','calendar'].includes(record.stage)||!record.stages||!record.values||!record.checks||JSON.stringify(record).length>30000)fail('Invalid InMail draft');
   for(const [id,draft] of Object.entries(record.stages))if(!['initial','connection','followup','calendar'].includes(id)||typeof draft?.subject!=='string'||typeof draft?.message!=='string'||draft.message.length>12000||draft.subject.length>500||id!=='initial'&&draft.subject)fail('Invalid InMail stage');
   for(const draft of Object.values(record.stages)){const assistant=appliedAssistant(draft.writingAssistant,workspace);if(assistant)draft.writingAssistant=assistant;else delete draft.writingAssistant;}
   for(const [key,value] of Object.entries(record.values))if(!/^[A-Za-z][A-Za-z0-9]*$/.test(key)||typeof value!=='string'||value.length>3000)fail('Invalid InMail fact');
@@ -128,7 +130,10 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
   const script=validateScript({channel:'phone',subject:'',name:'Phone script',body:body.message,style:body.style});
   if(/\{\{|\}\}/.test(script.body))fail('Complete missing script fields before saving');
   const assistant=appliedAssistant(body.writingAssistant,workspace);
-  const saved=await cas(env.DB,'phone_script_drafts',keys,values,{message:script.body,style:script.style,savedAt:new Date().toISOString(),sourceId:String(body.sourceId||'').slice(0,120),...(assistant?{writingAssistant:assistant}:{})},body.expectedRevision);return json({draft:saved},200,cors);
+  const historical=value=>{if(!value||typeof value.message!=='string'||value.message.length>12000||!['original',...styles].includes(value.style))fail('Invalid phone script history');const attribution=appliedAssistant(value.writingAssistant,workspace);return {message:value.message,style:value.style,sourceId:String(value.sourceId||'').slice(0,120),...(attribution?{writingAssistant:attribution}:{})};};
+  if(body.previousDrafts!==undefined&&(!Array.isArray(body.previousDrafts)||body.previousDrafts.length>20))fail('Invalid phone script history');
+  const history={...(body.previousDrafts?{previousDrafts:body.previousDrafts.map(historical)}:{}),...(body.tailoredOriginal?{tailoredOriginal:historical(body.tailoredOriginal)}:{})};
+  const saved=await cas(env.DB,'phone_script_drafts',keys,values,{...history,message:script.body,style:script.style,savedAt:new Date().toISOString(),sourceId:String(body.sourceId||'').slice(0,120),...(assistant?{writingAssistant:assistant}:{})},body.expectedRevision);return json({draft:saved},200,cors);
  }
  fail('Method not allowed',405);
  }catch(error){const storage=storageErrorResponse(error,cors);if(storage)return storage;if(!error.status)throw error;return json({error:error.message},error.status,cors);}

@@ -4915,12 +4915,11 @@
     {
       "id": "storyselling-interface",
       "type": "text",
-      "url": "/customer/storyselling-ui.js?v=20261026-v1",
+      "url": "/customer/writing-assistant-ui.js",
       "status": 200,
       "contains": [
-        "Manage story bank",
-        "Approve for use",
-        "Prepare from company reference"
+        "data-wa-instruction",
+        "intent:'auto'"
       ]
     },
     {
@@ -4944,21 +4943,22 @@
     {
       "id": "storyselling-scrollable-controls",
       "type": "text",
-      "url": "/customer/writing-assistant.css",
+      "url": "/customer/storyselling-native.js",
       "status": 200,
       "contains": [
-        ".wa-conversation:has(.story-bank[open])",
-        ".wa-conversation:has([data-story-options]:not([hidden])){overflow-y:auto}"
+        "Suppose",
+        "Then",
+        "storyselling-native-20261026-v1"
       ]
     },
     {
       "id": "storyselling-style-entry",
       "type": "text",
-      "url": "/customer/message-workspace.js",
+      "url": "/customer/message-studio.js",
       "status": 200,
       "contains": [
-        "value:'storyselling'",
-        "leadintel:storyselling-open"
+        "id:'storyselling'",
+        "Native.patterns.email"
       ]
     },
     {
@@ -4967,9 +4967,8 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "leadintel:storyselling-open",
-        "openStoryselling()",
-        "storysellingApplied:"
+        "storyselling-native.js?v=20261026-native-v2",
+        "native-storyselling=20261026-v2"
       ]
     },
     {
@@ -4978,7 +4977,8 @@
       "url": "/customer/channel-scripts.js",
       "status": 200,
       "contains": [
-        "['original','storyselling'].includes(b.dataset.writingStyle)"
+        "storyselling:'Storyselling'",
+        "LeadIntelStorysellingNative.render"
       ]
     }
   ],

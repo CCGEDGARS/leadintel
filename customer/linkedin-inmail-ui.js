@@ -3,7 +3,7 @@
 function mount(document,a){
  if(document.getElementById('inmail-workspace'))return root.LeadIntelInMail;
  const I=root.LeadIntelInMailEngine,q=id=>document.getElementById(id),rail=document.querySelector('#message-studio .mw-rail'),step=q('step-6');if(!rail||!I)return null;
- const names={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty',original:'Saved AI draft'},titles={initial:'Initial InMail',connection:'Connection request',followup:'After acceptance',calendar:'After interest'};
+ const names={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty',storyselling:'Storyselling',original:'Saved AI draft'},titles={initial:'Initial InMail',connection:'Connection request',followup:'After acceptance',calendar:'After interest'};
  let typeScope='',mode='direct',scope='',record=empty(),revision=0,loaded=false,dirty=false,busy=false,generation=0,contextKey='',editorScope='',catalogueKey='',loadingPromise=null,loadingScope='';const copies=new Map();
  function empty(){return {style:'professional',stage:'initial',values:{},stages:{},checks:{},origin:'manual'};}
  const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};

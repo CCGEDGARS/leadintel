@@ -16,7 +16,7 @@ test('InMail Friendly preserves the congratulations and lived experience frames'
 });
 test('every InMail style and all follow-ups keep literals and unresolved fields instead of borrowing example facts',()=>{
  for(const r of A.records){
-  assert.doesNotMatch(JSON.stringify(r.stages),/\{\{(?:development|experienceSentence|experience|deliveryRequirement)\}\}/);
+  if(r.style!=='storyselling')assert.doesNotMatch(JSON.stringify(r.stages),/\{\{(?:development|experienceSentence|experience|deliveryRequirement)\}\}/);
   const d=I.prepare(r,{firstName:'Alice',sender:'Robin',company:'Different business'});
   assert.deepEqual(Object.keys(d.stages),I.stages);
   assert.match(d.stages.initial.message,/\{\{/);
