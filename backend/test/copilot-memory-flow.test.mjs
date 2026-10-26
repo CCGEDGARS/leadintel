@@ -84,8 +84,8 @@ sqliteTest('a chat turn saves the valid memory candidates for the workspace and 
   const rows=db.raw.prepare('SELECT kind,value_json,due_at,workspace_id FROM copilot_memories ORDER BY kind').all();
   assert.deepEqual(rows.map(row=>[row.kind,JSON.parse(row.value_json).value,row.due_at,row.workspace_id]),[['decision','Target dairy processors first.',null,'w1'],['reminder','Ask Edgars for the pilot decision.','2026-11-03','w1']]);
   assert.doesNotMatch(JSON.stringify(rows),/sk-live/);
-  const message=db.raw.prepare("SELECT metadata_json FROM copilot_messages WHERE role='assistant'").get();
-  assert.equal(JSON.parse(message.metadata_json).memory_ids.length,2,'the answer records which memories it created');
+  const message=db.raw.prepare("SELECT metadata_json FROM copilot_messages WHERE role='assistant'").get();const meta=JSON.parse(message.metadata_json);
+  assert.equal(meta.memory_ids.length,2,'the answer records which memories it created');assert.equal(meta.memory_candidates_returned,3);assert.equal(meta.memory_candidates_kept,2);
 });
 
 sqliteTest('memories can be listed and forgotten only inside the workspace; bootstrap surfaces due reminders',async()=>{
@@ -117,4 +117,5 @@ test('a cued turn skips the planning shortcut: one main-prompt call with full co
   assert.ok(payload.workspace_context,'the main prompt carries the workspace');assert.ok(Array.isArray(payload.workspace_memories));assert.deepEqual(payload.user,{name:'Jonathan Collins',firstName:'Jonathan'});
   assert.doesNotMatch(systems[0],/planning bounded public research/);
   assert.deepEqual(result.memory_candidates,[{kind:'decision',value:'Sākam ar piena pārstrādes uzņēmumiem Latvijā.',due:''},{kind:'reminder',value:'Pajautāt Edgaram par pilota lēmumu.',due:'2026-11-03'}]);
+  assert.equal(result.memory_candidates_returned,2,'the turn reports how many candidates the model returned before normalization');
 });
