@@ -4968,7 +4968,7 @@
       "status": 200,
       "contains": [
         "storyselling-native.js?v=20261026-native-v3",
-        "native-storyselling=20261026-v3"
+        "native-storyselling=20261026-v4"
       ]
     },
     {
@@ -4979,6 +4979,38 @@
       "contains": [
         "storyselling:'Storyselling'",
         "LeadIntelStorysellingNative.render"
+      ]
+    },
+    {
+      "id": "native-original-reference-authority",
+      "type": "text",
+      "url": "/customer/original-scripts.js?native-reference-boundary=20261026-v1",
+      "status": 200,
+      "contains": [
+        "const supports=(channel,style)",
+        "email:Object.freeze(['professional','curiosity','friendly','brutal'])",
+        "linkedin:Object.freeze(['professional','curiosity','friendly'])"
+      ]
+    },
+    {
+      "id": "native-original-reference-ui-boundary",
+      "type": "text",
+      "url": "/customer/original-scripts-ui.js?native-reference-boundary=20261026-v1",
+      "status": 200,
+      "contains": [
+        "const core=root.LeadIntelOriginalScripts.supports(channel,style)",
+        "panel.hidden=!core;if(!core)return;"
+      ]
+    },
+    {
+      "id": "native-translation-reference-boundary",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "referenceSupported=globalThis.LeadIntelOriginalScripts.supports(channel,mode)",
+        "original-scripts.js?v=20261007-quality-v1&native-reference-boundary=20261026-v1",
+        "original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1&native-reference-boundary=20261026-v1"
       ]
     }
   ],
