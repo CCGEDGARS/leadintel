@@ -4763,7 +4763,7 @@
       "status": 200,
       "contains": [
         "conversation-ui.js?v=20261023-v1",
-        "conversation.css?v=20261023-v1"
+        "conversation.css?v=20261027-workflows-v1"
       ]
     },
     {
