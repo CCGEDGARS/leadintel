@@ -107,7 +107,7 @@
   senderCard.querySelector('.mw-sender-heading').append(q('mw-edit-sender'));
   settings.querySelector('summary').hidden=true;
   settings.addEventListener('toggle',()=>{if(settings.open&&q('brand-identity-body')?.hidden)q('brand-identity-toggle')?.click();});
-  source.id='mw-business-context';source.open=false;source.querySelector('summary').textContent='Business context';
+  source.id='mw-business-context';source.hidden=true;source.open=false;source.querySelector('summary').textContent='Business context';
   q('message-pitch-preview').hidden=true;
   source.append(q('mw-business-value'),q('mw-proof-value'));q('mw-value-proof').remove();senderCard.append(source);
   const editContext=node('button','text-btn','Edit business profile');editContext.type='button';editContext.onclick=()=>root.LeadIntelCustomerNavigation?.setStep?.(2);source.append(editContext);

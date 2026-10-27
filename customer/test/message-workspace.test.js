@@ -55,7 +55,7 @@ test('sender settings separate meeting options and show business facts once',()=
  assert.ok(!document.getElementById('mw-settings').contains(document.getElementById('message-meetingDateOne')));
  assert.equal(document.getElementById('message-meetingDateOne').closest('label').hidden,true);
  assert.equal(document.getElementById('message-pitch-preview').hidden,true);
- assert.equal(document.getElementById('mw-business-context').querySelector('summary').textContent,'Business context');
+ assert.equal(document.getElementById('mw-business-context').hidden,true);
  assert.ok(document.querySelector('.mw-sender-heading #mw-edit-sender'));
 });
 test('sender Edit remains visible and closed identity settings occupy no blank card',()=>{

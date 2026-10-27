@@ -33,3 +33,11 @@ test('removing an inactive language preserves the exact displayed draft, and leg
  const translated=T.activate(T.translated(item,'lv',lv),'en'),removed=T.removeLanguage(translated,'lv');assert.deepEqual(removed.drafts,translated.drafts);
  const legacy={...item,localizationProvenance:{language:'lv'}};assert.throws(()=>T.removeLanguage(legacy,'lv'),/cannot be removed/);assert.throws(()=>T.changeSettings({},'default','xx',item),/supported language/);
 });
+
+ test('market defaults survive normalization while explicit English and other language choices win',()=>{
+ const hint={language:'sv',source:'market',requiresConfirmation:false};
+ const prefs=T.settings({},item,hint);assert.equal(prefs.defaultLanguage,'sv');assert.equal(prefs.targetLanguage,'sv');assert.ok(prefs.languages.includes('sv'));
+ assert.equal(T.settings(JSON.parse(JSON.stringify(prefs)),item,hint).defaultLanguage,'sv');
+ for(const code of ['en','lv']){let manual=T.changeSettings(prefs,'add',code,item);manual=T.changeSettings(manual,'default',code,item);const restored=T.settings(JSON.parse(JSON.stringify(manual)),item,hint);assert.equal(restored.defaultLanguage,code);assert.equal(restored.targetLanguage,code);}
+ assert.equal(T.settings({},item,{language:'ru',requiresConfirmation:true}).defaultLanguage,'en');assert.equal(item.drafts.emailBody,T.source(item).message);
+ });
