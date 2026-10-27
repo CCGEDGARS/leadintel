@@ -164,3 +164,4 @@
 
 /* Keep both generation controls and long card forms reachable in the fixed dialog. */
 .wa-conversation:has(.story-bank[open]),.wa-conversation:has([data-story-options]:not([hidden])){overflow-y:auto}
+.wa-skill-selection{margin-top:16px;padding-top:16px;border-top:1px solid #dce4df;display:flex;gap:8px;flex-wrap:wrap}.wa-skill-selection[hidden]{display:none}.wa-skill-selection>strong,.wa-skill-selection>small{flex-basis:100%}.wa-skill-selection>small{color:#62776a}.wa-skill-choice{padding:8px 12px;border:1px solid #c8dacf;border-radius:18px;background:#fff;color:#304e3c;font:inherit;cursor:pointer}.wa-skill-choice[aria-pressed=true]{background:#f5eddb;border-color:#c6a35d;color:#57451f}

@@ -1,0 +1,2 @@
+// Historical attribution is bounded metadata, never permission to use or activate a skill.
+export function validSkillAttribution(refs){return refs===undefined||Array.isArray(refs)&&refs.length<=3&&new Set(refs.map(r=>r?.id)).size===refs.length&&refs.every(r=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.keys(r).every(k=>['id','revision'].includes(k))&&typeof r.id==='string'&&r.id.length>0&&r.id.length<=120&&Number.isSafeInteger(r.revision)&&r.revision>0);}

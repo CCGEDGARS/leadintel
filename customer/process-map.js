@@ -40,7 +40,7 @@
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1&app-dialogs=20261017-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
  * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1&qualification=20261003-qualified-v2&app-dialogs=20261017-v1';
- * import './copilot-loader.js?v=20261011-business-research-v1';
+ * import './copilot-loader.js?v=20261011-business-research-v1&book-skills=20261027-v1';
  */
 
 (()=>{

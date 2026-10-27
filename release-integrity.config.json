@@ -40,10 +40,63 @@
       "conversation_poll_interval_minutes": 60,
       "writing_assistant_outcome_version": "outcome-first-v1",
       "company_materials_version": "company-materials-v1",
-      "copilot_mentor_version": "20261027-mentor-v1"
+      "copilot_mentor_version": "20261027-mentor-v1",
+      "workspace_skills_version": "20261027-book-skills-v1",
+      "workspace_skills_limit": 30
     }
   },
   "smokeChecks": [
+    {
+      "id": "book-skill-library-controls",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "Turn to skill",
+        "Create skill",
+        "data-library-tab=\"skills\"",
+        "Download ZIP",
+        "Saved skills stay available independently."
+      ]
+    },
+    {
+      "id": "skill-library-private-api",
+      "type": "text",
+      "url": "/api/workspace-skills?workspace_id=edgars-latvia",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "book-skills-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "book-skills=20261027-v1"
+      ]
+    },
+    {
+      "id": "book-skills-writer-selection",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "Skills for this request",
+        "waSkill"
+      ]
+    },
+    {
+      "id": "book-skills-copilot-use",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "Skills used: ",
+        "skills_used"
+      ]
+    },
     {
       "id": "copilot-mentor-copy",
       "type": "text",

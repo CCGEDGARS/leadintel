@@ -5,7 +5,7 @@
   const sourceRefs=matching?(refs.sourceRefs||[]).map(ref=>({id:ref.id,revision:ref.revision})):[];
   const ready=sourceRefs.every(ref=>typeof ref.id==='string'&&Number.isSafeInteger(ref.revision)&&ref.revision>0&&(!refs.cards||refs.cards.some(card=>card.id===ref.id&&card.status==='Ready')));
   const context={writingContext:'general',channel:'general',language,currentDraft:{subject:'',message:''},maximumWords:null};
-  return {scope:JSON.stringify([workspaceId||'',userId||'','general']),fingerprint:JSON.stringify(context),context,sourceRefs,referenceRevision:revision,usable:Boolean(workspaceId&&userId&&revision!==null&&ready)};
+  return {scope:JSON.stringify([workspaceId||'',userId||'','general']),fingerprint:JSON.stringify(context),context,skillRefs:refs?.workspaceId===workspaceId?(refs.skillRefs||[]):[],sourceRefs,referenceRevision:revision,usable:Boolean(workspaceId&&userId&&revision!==null&&ready)};
  }
  function createWritingWorkspaceApi({workspaceId,fetchImpl=root.fetch?.bind(root)}={}){
   if(!workspaceId)throw Error('Sign in and choose a workspace.');
