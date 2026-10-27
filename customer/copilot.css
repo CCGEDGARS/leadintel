@@ -19,9 +19,19 @@ html.leadintel-copilot-ready body{transition:padding-right .28s cubic-bezier(.2,
 
 /* B1 (CTO, 2026-10-25): History and New in the header, the description folds, the composer stays put and only the conversation scrolls; Copy and Save as PDF. */
 .copilot-header{position:relative;top:auto}
-.copilot-head-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
-.copilot-head-btn{border:1px solid rgba(148,163,184,.28);background:transparent;color:#cbd5e1;font:600 12px "DM Sans",sans-serif;padding:7px 10px;border-radius:999px;cursor:pointer}
-.copilot-head-btn:hover,.copilot-head-btn[aria-expanded="true"]{background:#273047;color:#f8fafc}
+.leadintel-copilot-drawer .copilot-header{display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:14px 10px;padding:18px;flex-shrink:0}
+.leadintel-copilot-drawer .copilot-title-row{align-items:flex-start;flex-direction:column;gap:5px}
+.leadintel-copilot-drawer .copilot-pill{white-space:nowrap;padding:3px 8px;border-radius:6px;font-size:10px;line-height:1.4}
+.leadintel-copilot-drawer .copilot-head-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
+.leadintel-copilot-drawer .copilot-head-btn{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:40px;margin:0;padding:9px 8px;border:1px solid #3e4a60;border-radius:9px;background:#242e43;color:#e2e8f0;font:600 12px/1.25 "DM Sans",sans-serif;letter-spacing:0;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.leadintel-copilot-drawer .copilot-head-btn:hover,.leadintel-copilot-drawer .copilot-head-btn[aria-expanded="true"]{background:#303e50;border-color:#599481;color:#fff}
+.leadintel-copilot-drawer .copilot-head-btn[data-copilot-action="new"]{background:#bc8f2a;border-color:#bc8f2a;color:#13201c}
+.leadintel-copilot-drawer .copilot-head-btn[data-copilot-action="new"]:hover{background:#d0a444;border-color:#d0a444;color:#13201c}
+.leadintel-copilot-drawer .copilot-close{box-sizing:border-box;display:grid;place-items:center;align-self:start;width:38px;height:38px;min-width:38px;min-height:38px;margin:0;padding:0;border:1px solid #3e4a60;border-radius:9px;background:transparent;font:400 25px/1 "DM Sans",sans-serif;color:#b7c3d5}
+.leadintel-copilot-drawer .copilot-close:hover{background:#303e50;border-color:#599481;color:#fff}
+.leadintel-copilot-drawer .copilot-head-btn:focus-visible,.leadintel-copilot-drawer .copilot-close:focus-visible{outline:2px solid #e5c270;outline-offset:3px}
+@media(max-width:360px){.leadintel-copilot-drawer .copilot-header{padding:14px;gap:12px 8px}.leadintel-copilot-drawer .copilot-head-actions{gap:6px}.leadintel-copilot-drawer .copilot-head-btn{font-size:11px;padding:9px 5px}}
+@media(prefers-reduced-motion:reduce){.leadintel-copilot-drawer .copilot-head-btn{transition:none}}
 .copilot-history{position:absolute;left:0;right:0;top:100%;max-height:min(60vh,520px);overflow:auto;padding:8px;background:#1c2338;border-bottom:1px solid rgba(148,163,184,.18);box-shadow:0 18px 40px rgba(2,6,23,.4);z-index:3}
 .copilot-history[hidden]{display:none}
 .copilot-history-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
