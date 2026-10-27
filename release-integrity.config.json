@@ -5183,21 +5183,29 @@
       "type": "text",
       "url": "/customer/app-shell.css",
       "status": 200,
-      "contains": [".page-shell .workspace{grid-template-columns:322px minmax(0,1fr)"]
+      "contains": [
+        ".page-shell .workspace{grid-template-columns:322px minmax(0,1fr)"
+      ]
     },
     {
       "id": "wider-navigation-messages",
       "type": "text",
       "url": "/customer/message-workspace.css",
       "status": 200,
-      "contains": ["body:has(#step-6.active) .workspace{grid-template-columns:322px minmax(0,1fr)"]
+      "contains": [
+        "body:has(#step-6.active) .workspace{grid-template-columns:322px minmax(0,1fr)"
+      ]
     },
     {
       "id": "gemini-book-engine",
       "type": "text",
       "url": "/customer/writing-references-ui.js",
       "status": 200,
-      "contains": ["Next analysis engine:", "Gemini is not connected", "Primary for books and skills"]
+      "contains": [
+        "Next analysis engine:",
+        "Gemini is not connected",
+        "Primary for books and skills"
+      ]
     },
     {
       "id": "single-pass-book-progress",
@@ -5209,6 +5217,38 @@
         "Estimating remaining time",
         "without another AI analysis pass",
         "Could not update library progress"
+      ]
+    },
+    {
+      "id": "conversation-workflow-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "conversation-workflow-ui.js?v=20261027-v1",
+        "conversation.css?v=20261027-workflows-v1"
+      ]
+    },
+    {
+      "id": "conversation-workflow-controls",
+      "type": "text",
+      "url": "/customer/conversation-workflow-ui.js",
+      "status": 200,
+      "contains": [
+        "Approve & save preset",
+        "Take over",
+        "Review & resume automation",
+        "/api/conversation-workflows",
+        "data-wf-count"
+      ]
+    },
+    {
+      "id": "conversation-workflow-private-api",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/conversation-workflows?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Authentication required"
       ]
     }
   ],
