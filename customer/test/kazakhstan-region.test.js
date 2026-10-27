@@ -6,7 +6,7 @@ test('Kazakhstan preset toggles, deduplicates local spellings and survives save/
  const w=new JSDOM(fs.readFileSync(require.resolve('../index.html'),'utf8')).window;
  try{
   const button=w.document.querySelector('[data-target-market="Kazakhstan"]');assert.ok(button);
-  const state={targetMarkets:[]},stored=[];const ctx={state,document:w.document,LeadIntelProfile:P,$:id=>w.document.getElementById(id),esc:s=>s,invalidateStrategicOutputs(){},saveState(){stored.push(JSON.stringify(state));}};
+  const state={targetMarkets:[]},stored=[];const ctx={state,window:w,CustomEvent:w.CustomEvent,document:w.document,LeadIntelProfile:P,$:id=>w.document.getElementById(id),esc:s=>s,invalidateStrategicOutputs(){},saveState(){stored.push(JSON.stringify(state));}};
   vm.createContext(ctx);const source=fs.readFileSync(require.resolve('../app.js'),'utf8');vm.runInContext(source.slice(source.indexOf('function renderTargetMarkets()'),source.indexOf('function addCustomTargetMarket()')),ctx);
   ctx.toggleTargetMarket('Kazakhstan');assert.equal(button.getAttribute('aria-pressed'),'true');assert.deepEqual(JSON.parse(stored.at(-1)).targetMarkets,['Kazakhstan']);
   assert.deepEqual(P.expandTargetMarkets(['Kazakhstan','KZ','ҚазақСТАН','Казахстан','Kazahstan','Kazahstāna']),['Kazakhstan']);

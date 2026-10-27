@@ -26,8 +26,8 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, privateSettingsStatus=401,storageStatus=401 }) {
   return async url => {
     const parsed = new URL(String(url));
-    if(['/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
-    if(['/api/company-materials','/api/story-bank','/api/workspace-skills'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
+    if(['/customer/language-pack-catalogue.js','/customer/message-translation-ui.js','/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(['/api/language-packs','/api/integrations/translation/google','/api/company-materials','/api/story-bank','/api/workspace-skills'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/rich-text.js','/customer/rich-text-editor.js','/customer/rich-text.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/api/integrations/google-calendar/status')return response({status:401,json:{error:'Sign in to connect your calendar'}});
     if(parsed.pathname==='/customer/message-draft-history.js')return response({text:fs.readFileSync(path.join(root,'customer/message-draft-history.js'),'utf8')});

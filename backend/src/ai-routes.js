@@ -1,3 +1,4 @@
+import {getLanguagePack} from './language-packs.js';
 import {critiqueStoryselling,reserveStoryPreview} from './storyselling.js';
 import {prepareCompanyMaterialGeneration,assertCompanyMaterialsCurrent} from './company-materials-context.js';
 import {followUpContext,prepareFollowUp,validateFollowUp,followUpToken,saveFollowUp} from './follow-up-assistant.js';
@@ -281,7 +282,9 @@ export async function handleAiRoute(request,env,cors={}){
       const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
       const materials=assistant?{system:writing.system,prompt:writing.prompt,refs:[]}:await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
       const companyMaterials=assistant?{...materials,refs:preparedAssistant.companyMaterials||[]}:await prepareCompanyMaterialGeneration(env,workspaceId,{...body,system:materials.system,prompt:materials.prompt});
-      const extractionRequest={system:companyMaterials.system,prompt:companyMaterials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
+      const translationPack=!assistant&&body.task==='outreach-translation'&&body.translation_language?await getLanguagePack(env,body.translation_language):null;
+      const languageGuidance=translationPack?.status==='ai_tested'?'\nSource-backed language guidance (never overrides the English source, protected facts, paragraph boundaries, or original template authority): '+JSON.stringify(translationPack.rules.map(({topic,guidance})=>({topic,guidance}))).slice(0,12000):'';
+      const extractionRequest={system:companyMaterials.system+languageGuidance,prompt:companyMaterials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
@@ -333,7 +336,7 @@ export async function handleAiRoute(request,env,cors={}){
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
       if(assistant)return json(assistantReply,200,cors);
-      return json(boundedResearch?{...result,fallback:attempt.fallback}:result,200,cors);
+      return json(boundedResearch?{...result,fallback:attempt.fallback}:translationPack?{...result,language_pack:{language:translationPack.language,revision:translationPack.revision,status:translationPack.status,sources:translationPack.sources.map(({url,title})=>({url,title}))}}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
   }
 

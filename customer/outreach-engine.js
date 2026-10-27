@@ -36,7 +36,7 @@
   function tokenize(value){return clean(value).toLowerCase().split(/[^a-z0-9āčēģīķļņšūž]+/i).filter(x=>x.length>=3);}
   function unique(items){return [...new Set(items.filter(Boolean))];}
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
-  function campaignLanguage(value){const language=clean(value).toLowerCase();return ContentLanguage?.EMAIL_LANGUAGES?.[language]?language:['auto','en','lv'].includes(language)?language:'auto';}
+  function campaignLanguage(value){const raw=clean(value),language=Object.keys(ContentLanguage?.EMAIL_LANGUAGES||{}).find(code=>code.toLowerCase()===raw.toLowerCase())||raw.toLowerCase();return ContentLanguage?.EMAIL_LANGUAGES?.[language]?language:['auto','en','lv'].includes(language)?language:'auto';}
   function languageCompatible(value,language){const text=clean(value);if(!text)return false;const latvian=/[āčēģīķļņšūž]/i.test(text)||/\b(?:kā|var|palīdzēt|izmaksas|darba|klienta|risks)\b/i.test(text);return isLv(language)?latvian:!latvian;}
   function profileFingerprint(profile={}){
     profile=profile&&typeof profile==='object'?profile:{};

@@ -15,8 +15,8 @@ test('the core workspace is English-only and has no global translation controls'
   assert.doesNotMatch(html,/id=["']language-select["']/);
   assert.doesNotMatch(html,/src=["']language\.js/);
   for(const source of [app,discovery,outreach,delivery])assert.match(source,/workspaceContentLanguage/);
-  assert.doesNotMatch(app,/localizeMarketGeneratedContent|leadintel:language-changed|LeadIntelLanguage/);
-  for(const source of [discovery,outreach,delivery])assert.doesNotMatch(source,/leadintel:language-changed|LeadIntelLanguage/);
+  assert.doesNotMatch(app,/localizeMarketGeneratedContent|leadintel:language-changed|LeadIntelLanguage(?!Packs)/);
+  for(const source of [discovery,outreach,delivery])assert.doesNotMatch(source,/leadintel:language-changed|LeadIntelLanguage(?!Packs)/);
 });
 
 test('translation is an explicit Campaign Studio action',()=>{
