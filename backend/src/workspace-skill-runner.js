@@ -1,33 +1,34 @@
 import {skillFailure,SKILL_MAX_ATTEMPTS} from './workspace-skill-errors.js';
 import {skillStmt,cleanupWorkspaceSkill} from './workspace-skill-store.js';
-import {chunkWritingReference} from './writing-reference-analysis.js';
+import {skillWorkItems,SKILL_OUTPUTS_SQL,SKILL_SAVED_SECTIONS_SQL} from './workspace-skill-plan.js';
 import {generateSkillModule} from './workspace-skill-generation.js';
 import {buildSkillPackage} from './workspace-skill-export.js';
-import {workspaceSkillGenerator} from './workspace-skill-provider.js';
+import {workspaceSkillGenerator,SKILL_REQUEST_TIMEOUT_MS} from './workspace-skill-provider.js';
 async function releaseInput(env,row){if(!row.input_key)return;await env.WRITING_REFERENCES_BUCKET.delete(row.input_key);await skillStmt(env,"UPDATE workspace_skills SET input_key='' WHERE id=? AND status='Ready' AND input_key=?",row.id,row.input_key).run();}
 const guard="id=? AND lease_id=? AND status='Processing'";
-export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=2,generate,clock=Date.now}={}){
+export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=4,generate,clock=Date.now}={}){
  if(!env.WRITING_REFERENCES_BUCKET)return [];
- const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 5").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
+ const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 1").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
  // A lost upload request must not leave a permanent Preparing record.
  await skillStmt(env,"UPDATE workspace_skills SET status='Failed',error='Snapshot interrupted. Delete this skill and create it again.',revision=revision+1 WHERE status='Preparing' AND created_at<datetime('now','-10 minutes')").run();
  const released=await skillStmt(env,"SELECT id,input_key FROM workspace_skills WHERE status='Ready' AND input_key<>'' LIMIT 5").all();for(const row of released.results)await releaseInput(env,row).catch(()=>null);
- const unused=await skillStmt(env,"SELECT o.object_key FROM workspace_skill_objects o JOIN workspace_skills s ON s.id=o.skill_id WHERE s.status IN ('Ready','Failed','Deleted') AND o.object_key<>s.package_key AND NOT EXISTS(SELECT 1 FROM workspace_skill_chunks c WHERE c.object_key=o.object_key) LIMIT 6").all();for(const row of unused.results){try{await env.WRITING_REFERENCES_BUCKET.delete(row.object_key);await skillStmt(env,'DELETE FROM workspace_skill_objects WHERE object_key=?',row.object_key).run();}catch{/* durable cleanup obligation remains */}}
+ const unused=await skillStmt(env,"SELECT o.object_key FROM workspace_skill_objects o JOIN workspace_skills s ON s.id=o.skill_id WHERE s.status IN ('Ready','Failed','Deleted') AND o.object_key<>s.package_key AND NOT EXISTS(SELECT 1 FROM workspace_skill_chunks c WHERE c.object_key=o.object_key) AND NOT EXISTS(SELECT 1 FROM workspace_skill_parts p WHERE p.object_key=o.object_key) LIMIT 6").all();for(const row of unused.results){try{await env.WRITING_REFERENCES_BUCKET.delete(row.object_key);await skillStmt(env,'DELETE FROM workspace_skill_objects WHERE object_key=?',row.object_key).run();}catch{/* durable cleanup obligation remains */}}
  const outcomes=[];
  for(let n=0;n<maxJobs;n++){
-  const lease=crypto.randomUUID(),job=await skillStmt(env,`UPDATE workspace_skills SET lease_id=?,lease_until=? WHERE id=(SELECT id FROM workspace_skills WHERE status='Processing' AND lease_until<? AND next_at<=? ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,now+180000,now,now,now).first();if(!job)break;
+  const lease=crypto.randomUUID(),job=await skillStmt(env,`UPDATE workspace_skills SET lease_id=?,lease_until=? WHERE id=(SELECT id FROM workspace_skills WHERE status='Processing' AND lease_until<? AND next_at<=? ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,Math.max(now,clock())+maxChunks*SKILL_REQUEST_TIMEOUT_MS+60000,now,now,now).first();if(!job)break;
   let calls=0,phase='load_book',consecutiveFailures=Number(job.retry_attempts)||0;
   try{
-   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text()),chunks=chunkWritingReference(input.extracted);phase='connect_ai';const run=generate||await workspaceSkillGenerator(env,job.workspace_id);
-   for(const [index,chunk] of chunks.entries()){
-    if(calls>=maxChunks)break;phase='read_progress';if(await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? AND chunk_index=?',job.id,index).first())continue;
+   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text());phase='read_progress';const legacy=await skillStmt(env,'SELECT chunk_index FROM workspace_skill_chunks WHERE skill_id=?',job.id).all(),chunks=skillWorkItems(input.extracted,legacy.results);await skillStmt(env,`UPDATE workspace_skills SET total=? WHERE ${guard}`,chunks.length,job.id,lease).run();const prior=await skillStmt(env,'SELECT chunk_index,part_index FROM workspace_skill_parts WHERE skill_id=?',job.id).all(),savedParts=new Set(prior.results.map(p=>`${p.chunk_index}:${p.part_index}`));phase='connect_ai';const run=generate||await workspaceSkillGenerator(env,job.workspace_id);
+   for(const work of chunks){
+    const {index,part,chunk}=work;if(work.legacy)continue;
+    if(calls>=maxChunks)break;phase='read_progress';if(savedParts.has(`${index}:${part}`))continue;
     if(!await skillStmt(env,`SELECT id FROM workspace_skills WHERE ${guard}`,job.id,lease).first())break;
-    phase='generate_section';calls++;const module=await generateSkillModule({chunk,index,catalogue:input.catalogue,generate:run}),key=`skills/${job.workspace_id}/${job.id}/${module.id}-${lease}.json`;
+    phase='generate_section';calls++;const module=await generateSkillModule({chunk,index,catalogue:input.catalogue,generate:run});module.id=part===0?`method-${index+1}`:`method-${index+1}-part-${part+1}`;const key=`skills/${job.workspace_id}/${job.id}/${module.id}-${lease}.json`;
     phase='save_section';const reserved=await skillStmt(env,`INSERT INTO workspace_skill_objects(skill_id,object_key) SELECT ?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard})`,job.id,key,job.id,lease).run();if(!reserved.meta.changes)break;
     await env.WRITING_REFERENCES_BUCKET.put(key,JSON.stringify(module));
-    const saved=await skillStmt(env,`INSERT INTO workspace_skill_chunks(skill_id,chunk_index,object_key) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard}) ON CONFLICT DO NOTHING`,job.id,index,key,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);else{consecutiveFailures=0;await skillStmt(env,`UPDATE workspace_skills SET retry_attempts=0,error='',error_code='',error_phase='' WHERE ${guard}`,job.id,lease).run();}
+    const saved=await skillStmt(env,`INSERT INTO workspace_skill_parts(skill_id,chunk_index,part_index,object_key) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard}) ON CONFLICT DO NOTHING`,job.id,index,part,key,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);else{consecutiveFailures=0;await skillStmt(env,`UPDATE workspace_skills SET retry_attempts=0,error='',error_code='',error_phase='' WHERE ${guard}`,job.id,lease).run();}
    }
-   phase='assemble_skill';const completed=await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? ORDER BY chunk_index',job.id).all();
+   phase='assemble_skill';const completed=await skillStmt(env,SKILL_OUTPUTS_SQL,job.id,job.id).all();
    if(completed.results.length===chunks.length){
     const modules=[];for(const row of completed.results){const value=await env.WRITING_REFERENCES_BUCKET.get(row.object_key);if(!value)throw Error('MODULE_MISSING');modules.push(JSON.parse(await value.text()));}
     phase='publish_skill';const pkg=buildSkillPackage(input,modules),key=`skills/${job.workspace_id}/${job.id}/package-${lease}.json`;
@@ -38,7 +39,7 @@ export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChu
   }catch(error){
    const diagnostic=skillFailure(error,phase),attempt=consecutiveFailures+1,retry=diagnostic.retryable&&attempt<SKILL_MAX_ATTEMPTS;
    const message=diagnostic.message+(retry?` Will retry automatically (${attempt}/${SKILL_MAX_ATTEMPTS}).`:`${attempt>=SKILL_MAX_ATTEMPTS?' Automatic retries stopped after three attempts.':''} Completed sections are saved.`);
-   const progress=await skillStmt(env,'SELECT count(*) AS n FROM workspace_skill_chunks WHERE skill_id=?',job.id).first().catch(()=>null);
+   const progress=await skillStmt(env,`SELECT ${SKILL_SAVED_SECTIONS_SQL} AS n FROM workspace_skills s WHERE id=?`,job.id).first().catch(()=>null);
    const nextAt=retry?Math.max(now,clock())+30000*2**(attempt-1):0;
    const saved=await skillStmt(env,`UPDATE workspace_skills SET status=?,error=?,error_code=?,error_phase=?,retry_attempts=?,completed=?,next_at=?,lease_until=0,revision=revision+1 WHERE ${guard}`,retry?'Processing':'Failed',message,diagnostic.code,phase,attempt,Number(progress?.n??job.completed)||0,nextAt,job.id,lease).run();
    if(saved.meta.changes)console.warn('workspace_skill_failure',JSON.stringify({skillId:job.id,code:diagnostic.code,phase,attempt,retry}));

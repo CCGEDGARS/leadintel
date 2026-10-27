@@ -43,7 +43,7 @@
       "copilot_mentor_version": "20261027-mentor-v1",
       "workspace_skills_version": "20261027-book-skills-v1",
       "workspace_skills_limit": 30,
-      "workspace_skills_resilience_version": "20261027-v1"
+      "workspace_skills_resilience_version": "20261027-v2"
     }
   },
   "smokeChecks": [

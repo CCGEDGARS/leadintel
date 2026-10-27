@@ -1,5 +1,5 @@
 import {getWritingReference} from './writing-reference-store.js';
-import {chunkWritingReference} from './writing-reference-analysis.js';
+import {skillWorkItems,SKILL_SAVED_SECTIONS_SQL} from './workspace-skill-plan.js';
 export const WORKSPACE_SKILLS_VERSION='20261027-book-skills-v1';
 export const SKILL_LIMIT=30;
 export const skillStmt=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
@@ -7,8 +7,8 @@ export const skillFail=(message,status=409)=>{throw Object.assign(Error(message)
 function scoped(scope){if(!scope?.workspaceId)skillFail('Authenticated workspace required',401);}
 function decode(row){return {...row,enabled:Boolean(row.enabled),coverage:JSON.parse(row.coverage_json||'{}'),routing:JSON.parse(row.routing_json||'[]')};}
 export function publicSkill(row){return {id:row.id,title:row.title,status:row.status,enabled:row.enabled,revision:row.revision,description:row.description,coverage:row.coverage,completed:Number(row.saved_sections??row.completed)||0,total:row.total,error:!row.error_code&&row.error==='Skill creation was interrupted. Completed sections are saved. Check your AI connection and retry.'?'Skill creation stopped, but its original failure detail was not recorded. Completed sections are preserved. Retry creation to continue.':row.error,errorCode:row.error_code||'',errorPhase:row.error_phase||'',retryAttempts:Number(row.retry_attempts)||0,nextRetryAt:Number(row.next_at)||0,sourceId:row.source_id,sourceFilename:row.source_filename,createdAt:row.created_at};}
-export async function listWorkspaceSkills(env,scope){scoped(scope);const rows=await skillStmt(env,"SELECT s.*,(SELECT count(*) FROM workspace_skill_chunks c WHERE c.skill_id=s.id) AS saved_sections FROM workspace_skills s WHERE workspace_id=? AND status NOT IN ('Deleted','Deleting') ORDER BY created_at,id",scope.workspaceId).all();return rows.results.map(decode);}
-export async function getWorkspaceSkill(env,scope,id){scoped(scope);const row=await skillStmt(env,"SELECT s.*,(SELECT count(*) FROM workspace_skill_chunks c WHERE c.skill_id=s.id) AS saved_sections FROM workspace_skills s WHERE workspace_id=? AND id=? AND status NOT IN ('Deleted','Deleting')",scope.workspaceId,id).first();if(!row)skillFail('Skill not found',404);return decode(row);}
+export async function listWorkspaceSkills(env,scope){scoped(scope);const rows=await skillStmt(env,`SELECT s.*,${SKILL_SAVED_SECTIONS_SQL} AS saved_sections FROM workspace_skills s WHERE workspace_id=? AND status NOT IN ('Deleted','Deleting') ORDER BY created_at,id`,scope.workspaceId).all();return rows.results.map(decode);}
+export async function getWorkspaceSkill(env,scope,id){scoped(scope);const row=await skillStmt(env,`SELECT s.*,${SKILL_SAVED_SECTIONS_SQL} AS saved_sections FROM workspace_skills s WHERE workspace_id=? AND id=? AND status NOT IN ('Deleted','Deleting')`,scope.workspaceId,id).first();if(!row)skillFail('Skill not found',404);return decode(row);}
 export async function createWorkspaceSkill(env,scope,{sourceId,expectedRevision}){
  scoped(scope);if(!Number.isInteger(expectedRevision))skillFail('Book revision is required',400);
  const source=await getWritingReference(env,scope,sourceId);
@@ -18,7 +18,7 @@ export async function createWorkspaceSkill(env,scope,{sourceId,expectedRevision}
  const prior=await skillStmt(env,"SELECT * FROM workspace_skills WHERE workspace_id=? AND source_hash=? AND status NOT IN ('Deleted','Deleting')",scope.workspaceId,source.content_hash).first();if(prior)return decode(prior);
  const [textObject,catalogueObject]=await Promise.all([env.WRITING_REFERENCES_BUCKET.get(source.text_key),env.WRITING_REFERENCES_BUCKET.get(source.catalogue_key)]);
  if(!textObject||!catalogueObject)skillFail('The complete analysed book content is unavailable. Upload and analyse the book again.',422);
- const extracted=JSON.parse(await textObject.text()),catalogue=JSON.parse(await catalogueObject.text()),chunks=chunkWritingReference(extracted);
+ const extracted=JSON.parse(await textObject.text()),catalogue=JSON.parse(await catalogueObject.text()),chunks=skillWorkItems(extracted);
  if(!chunks.length||!Array.isArray(catalogue.techniques)||!catalogue.techniques.length)skillFail('Book analysis contains no usable methods. Review or retry analysis.',422);
  const id=crypto.randomUUID(),inputKey=`skills/${scope.workspaceId}/${id}/input.json`,title=String(source.presentation?.title||source.filename||'Untitled').replace(/\.(pdf|txt|md|markdown)$/i,'').trim().slice(0,240);
  let inserted;
@@ -34,9 +34,30 @@ export async function createWorkspaceSkill(env,scope,{sourceId,expectedRevision}
 }
 export async function cleanupWorkspaceSkill(env,id){
  const row=await skillStmt(env,"SELECT * FROM workspace_skills WHERE id=? AND status='Deleting'",id).first();if(!row)return;
- const chunks=await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?',id,id).all();
- for(const key of new Set([row.input_key,row.package_key,...chunks.results.map(c=>c.object_key)].filter(Boolean)))await env.WRITING_REFERENCES_BUCKET.delete(key);
- await env.DB.batch([skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=?',id),skillStmt(env,'DELETE FROM workspace_skill_chunks WHERE skill_id=?',id),skillStmt(env,"UPDATE workspace_skills SET status='Deleted',title='',source_id='',source_filename='',description='',routing_json='[]',input_key='',package_key='',coverage_json='{}',error='' WHERE id=? AND status='Deleting'",id)]);
+ // Bound each pass, and forget a key only after its physical deletion succeeds.
+ // This prevents large skills from restarting the same exhausted deletion loop.
+ const keys=await skillStmt(env,`SELECT object_key FROM (
+  SELECT input_key AS object_key FROM workspace_skills WHERE id=?
+  UNION SELECT package_key FROM workspace_skills WHERE id=?
+  UNION SELECT object_key FROM workspace_skill_chunks WHERE skill_id=?
+  UNION SELECT object_key FROM workspace_skill_parts WHERE skill_id=?
+  UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?
+ ) WHERE object_key<>'' LIMIT 40`,id,id,id,id,id).all();
+ for(const {object_key:key} of keys.results){
+  await env.WRITING_REFERENCES_BUCKET.delete(key);
+  await env.DB.batch([
+   skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,'DELETE FROM workspace_skill_parts WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,'DELETE FROM workspace_skill_chunks WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,"UPDATE workspace_skills SET input_key=CASE WHEN input_key=? THEN '' ELSE input_key END,package_key=CASE WHEN package_key=? THEN '' ELSE package_key END WHERE id=? AND status='Deleting'",key,key,id)
+  ]);
+ }
+ const remaining=await skillStmt(env,`SELECT 1 FROM workspace_skill_objects WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skill_parts WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skill_chunks WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skills WHERE id=? AND (input_key<>'' OR package_key<>'') LIMIT 1`,id,id,id,id).first();
+ if(remaining)return;
+ await skillStmt(env,"UPDATE workspace_skills SET status='Deleted',title='',source_id='',source_filename='',description='',routing_json='[]',coverage_json='{}',error='' WHERE id=? AND status='Deleting'",id).run();
 }
 export async function mutateWorkspaceSkill(env,scope,id,body){
  const row=await getWorkspaceSkill(env,scope,id);if(!Number.isInteger(body.expectedRevision)||row.revision!==body.expectedRevision)skillFail('Skill changed. Refresh and try again.');
