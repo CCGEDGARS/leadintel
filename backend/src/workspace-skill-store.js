@@ -1,3 +1,4 @@
+import {finishSkillWrite,discardSkillObject} from './workspace-skill-objects.js';
 import {processingProgress} from './book-processing.js';
 import {getWritingReference} from './writing-reference-store.js';
 import {skillWorkItems,SKILL_SAVED_SECTIONS_SQL} from './workspace-skill-plan.js';
@@ -27,10 +28,11 @@ export async function createWorkspaceSkill(env,scope,{sourceId,expectedRevision}
  catch(error){if(/limit is 30/i.test(error.message)){const duplicate=await skillStmt(env,"SELECT * FROM workspace_skills WHERE workspace_id=? AND source_hash=? AND status NOT IN ('Deleted','Deleting')",scope.workspaceId,source.content_hash).first();if(duplicate)return decode(duplicate);skillFail('Your Skill Library is full (30 skills). Download and delete a skill to make room.');}throw error;}
  if(!inserted.meta.changes){const duplicate=await skillStmt(env,"SELECT * FROM workspace_skills WHERE workspace_id=? AND source_hash=? AND status NOT IN ('Deleted','Deleting')",scope.workspaceId,source.content_hash).first();if(duplicate)return decode(duplicate);skillFail('Book changed. Refresh and try again.');}
  try{
-  await env.WRITING_REFERENCES_BUCKET.put(inputKey,JSON.stringify({title,filename:source.filename,hash:source.content_hash,coverage:source.coverage,extracted,catalogue}));
+  const reserved=await skillStmt(env,"INSERT INTO workspace_skill_objects(skill_id,object_key,pending_until) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE id=? AND status='Preparing')",id,inputKey,Date.now()+900000,id).run();if(!reserved.meta.changes)skillFail('Skill creation was cancelled.');
+  await env.WRITING_REFERENCES_BUCKET.put(inputKey,JSON.stringify({title,filename:source.filename,hash:source.content_hash,coverage:source.coverage,extracted,catalogue}));await finishSkillWrite(env,id,inputKey);
   const saved=await skillStmt(env,"UPDATE workspace_skills SET status='Processing',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='Preparing'",id).run();
-  if(!saved.meta.changes){await env.WRITING_REFERENCES_BUCKET.delete(inputKey);skillFail('Skill creation was cancelled.');}
- }catch(error){await skillStmt(env,"UPDATE workspace_skills SET status='Failed',error='The book snapshot could not be saved. Delete this skill and try again.',revision=revision+1 WHERE id=? AND status='Preparing'",id).run();throw error;}
+  if(!saved.meta.changes){await discardSkillObject(env,id,inputKey);skillFail('Skill creation was cancelled.');}
+ }catch(error){await finishSkillWrite(env,id,inputKey).catch(()=>null);await skillStmt(env,"UPDATE workspace_skills SET status='Failed',error='The book snapshot could not be saved. Delete this skill and try again.',revision=revision+1 WHERE id=? AND status='Preparing'",id).run();throw error;}
  return getWorkspaceSkill(env,scope,id);
 }
 export async function cleanupWorkspaceSkill(env,id){
@@ -45,9 +47,10 @@ export async function cleanupWorkspaceSkill(env,id){
   UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?
  ) WHERE object_key<>'' LIMIT 40`,id,id,id,id,id).all();
  for(const {object_key:key} of keys.results){
+  const tracking=await skillStmt(env,'SELECT cleanup_version,pending_until FROM workspace_skill_objects WHERE skill_id=? AND object_key=?',id,key).first();
   await env.WRITING_REFERENCES_BUCKET.delete(key);
   await env.DB.batch([
-   skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=? AND object_key=? AND cleanup_version=? AND pending_until<=?',id,key,Number(tracking?.cleanup_version)||0,Date.now()),
    skillStmt(env,'DELETE FROM workspace_skill_parts WHERE skill_id=? AND object_key=?',id,key),
    skillStmt(env,'DELETE FROM workspace_skill_chunks WHERE skill_id=? AND object_key=?',id,key),
    skillStmt(env,"UPDATE workspace_skills SET input_key=CASE WHEN input_key=? THEN '' ELSE input_key END,package_key=CASE WHEN package_key=? THEN '' ELSE package_key END WHERE id=? AND status='Deleting'",key,key,id)

@@ -64,3 +64,27 @@ test('maximum-size multilingual routing stays below D1 row limits without droppi
  const {skillRouting}=await import('../src/workspace-skill-plan.js');const methods=Array.from({length:1000},(_,n)=>({id:'method-'+n,title:'方'.repeat(200),purpose:'方'.repeat(1200),triggers:Array(20).fill('方'.repeat(120))}));
  const routing=skillRouting(methods);assert.equal(routing.length,1000);assert.equal(routing.at(-1).id,'method-999');assert.ok(new TextEncoder().encode(JSON.stringify(routing)).byteLength<1600000);
 });
+test('a marked prepared book with absent cached methods cannot start another paid analysis',async()=>{
+ for(const absent of [undefined,null]){const {env,row}=await source();await runWritingReferenceJobs(env,{generate:moduleResult});const book=await getWritingReference(env,scope,row.id),catalogue=JSON.parse(env.objects.get(book.catalogue_key));catalogue.preparedSkill=absent;env.objects.set(book.catalogue_key,JSON.stringify(catalogue));const skill=await createWorkspaceSkill(env,scope,{sourceId:row.id,expectedRevision:book.revision});let calls=0;await runWorkspaceSkillJobs(env,{generate:async input=>{calls++;return moduleResult(input);}});assert.equal(calls,0);assert.equal((await getWorkspaceSkill(env,scope,skill.id)).status,'Failed');}
+});
+test('book summary presents distinct methods instead of repeating one title for every principle',async()=>{
+ const {env,row}=await source();let n=0;await runWritingReferenceJobs(env,{generate:async input=>{const value=JSON.parse(moduleResult(input).text);value.title='Distinct method '+(++n);value.principles=Array.from({length:5},(_,i)=>'Principle '+i);return {text:JSON.stringify(value)};}});
+ const book=await getWritingReference(env,scope,row.id);assert.match(book.summary,/Distinct method 2/);assert.equal((book.summary.match(/Distinct method 1/g)||[]).length,1);
+});
+test('late method and package writes retain cleanup after deletion and a failed compensating delete',async()=>{
+ for(const stage of ['method','package']){
+  const {skillFixture}=await import('./workspace-skill-fixture.mjs');const {mutateWorkspaceSkill}=await import('../src/workspace-skill-store.js');const {env,source:book}=await skillFixture();const skill=await createWorkspaceSkill(env,scope,{sourceId:book.id,expectedRevision:1});
+  const put=env.WRITING_REFERENCES_BUCKET.put.bind(env.WRITING_REFERENCES_BUCKET),del=env.WRITING_REFERENCES_BUCKET.delete.bind(env.WRITING_REFERENCES_BUCKET);let started,release,target,fail=false;
+  const start=new Promise(r=>started=r),hold=new Promise(r=>release=r);
+  env.WRITING_REFERENCES_BUCKET.put=async(key,value)=>{if(!target&&key.includes('/'+stage+'-')){target=key;started();await hold;}return put(key,value);};
+  env.WRITING_REFERENCES_BUCKET.delete=async key=>{if(key===target&&fail){fail=false;throw Error('temporary storage outage');}return del(key);};
+  const running=runWorkspaceSkillJobs(env,{maxChunks:30,generate:moduleResult});await start;
+  const current=await getWorkspaceSkill(env,scope,skill.id);await mutateWorkspaceSkill(env,scope,skill.id,{expectedRevision:current.revision,delete:true});fail=true;release();await running;
+  await runWorkspaceSkillJobs(env,{generate:moduleResult});assert.equal(env.objects.has(target),false,stage+' object must not be orphaned');assert.equal(env.DB.raw.prepare('SELECT count(*) n FROM workspace_skill_objects WHERE skill_id=?').get(skill.id).n,0);
+ }
+});
+test('background cleanup preserves the independent snapshot of a failed skill for owner retry',async()=>{
+ const {skillFixture}=await import('./workspace-skill-fixture.mjs');const {mutateWorkspaceSkill}=await import('../src/workspace-skill-store.js');const {env,source:book}=await skillFixture();const skill=await createWorkspaceSkill(env,scope,{sourceId:book.id,expectedRevision:1});
+ await runWorkspaceSkillJobs(env,{generate:async()=>{throw Error('OpenAI request failed (400)');}});await runWorkspaceSkillJobs(env,{generate:moduleResult});
+ assert.ok(await env.WRITING_REFERENCES_BUCKET.get(skill.input_key));const failed=await getWorkspaceSkill(env,scope,skill.id);await mutateWorkspaceSkill(env,scope,skill.id,{expectedRevision:failed.revision,retry:true});await runWorkspaceSkillJobs(env,{generate:moduleResult});assert.equal((await getWorkspaceSkill(env,scope,skill.id)).status,'Ready');
+});

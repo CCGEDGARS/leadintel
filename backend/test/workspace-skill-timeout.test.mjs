@@ -111,7 +111,7 @@ test('a 440-page book advances with bounded database work in every batch',async(
 
 test('large skill deletion makes durable progress within a bounded per-invocation budget',async()=>{
  const {env,skill}=await pending();
- for(let n=0;n<880;n++){const key=`skills/w1/${skill.id}/method-${n}.json`;env.objects.set(key,'{}');env.DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run(skill.id,n,0,key);env.DB.raw.prepare('INSERT INTO workspace_skill_objects VALUES(?,?)').run(skill.id,key);}
+ for(let n=0;n<880;n++){const key=`skills/w1/${skill.id}/method-${n}.json`;env.objects.set(key,'{}');env.DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run(skill.id,n,0,key);env.DB.raw.prepare('INSERT INTO workspace_skill_objects(skill_id,object_key) VALUES(?,?)').run(skill.id,key);}
  env.DB.raw.prepare("UPDATE workspace_skills SET status='Deleting' WHERE id=?").run(skill.id);
  const originalDelete=env.WRITING_REFERENCES_BUCKET.delete.bind(env.WRITING_REFERENCES_BUCKET);let deletes=0;
  env.WRITING_REFERENCES_BUCKET.delete=async key=>{if(++deletes>40)throw Error('invocation budget exhausted');return originalDelete(key);};
@@ -130,7 +130,7 @@ test('880-method deletion completes through the real quota meter under a D1 invo
  for(let n=0;n<880;n++){
   const key=`skills/storage-w1/${id}/method-${n}-lease.json`;objects.set(key,'{}');
   DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run(id,n,0,key);
-  DB.raw.prepare('INSERT INTO workspace_skill_objects VALUES(?,?)').run(id,key);
+  DB.raw.prepare('INSERT INTO workspace_skill_objects(skill_id,object_key) VALUES(?,?)').run(id,key);
   DB.raw.prepare("INSERT INTO workspace_storage_objects(object_key,workspace_id,byte_size,state) VALUES(?,'storage-w1',2,'ready')").run(key);
  }
  const env=withWorkspaceStorage({DB,WORKSPACE_STORAGE_ENABLED:'true',WRITING_REFERENCES_BUCKET:{

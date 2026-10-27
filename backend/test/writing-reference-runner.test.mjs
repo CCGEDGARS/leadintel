@@ -25,6 +25,7 @@ test('analysis failures identify confirmed quota, rate limits, timeout and inval
   ['OpenAI request failed (429) · code: rate_limit_exceeded',/rate limit/],
   ['OpenAI request timed out',/timed out/],
   ['Technique response must be valid JSON',/invalid analysis output/],
+  ['WORKSPACE_STORAGE_FULL private document',/storage is full/],
   ['private document text sk-secret-value',/unexpected error/]
  ]){const {env}=await fixture();await runner.runWritingReferenceJobs(env,{generate:async()=>{throw Error(message);}});const row=(await listWritingReferences(env,scope))[0];assert.match(row.error_code,expected);assert.ok(!row.error_code.includes('sk-secret-value'));assert.ok(!row.error_code.includes('private document'));}
 });

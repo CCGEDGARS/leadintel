@@ -17,7 +17,7 @@ export const SKILL_SAVED_SECTIONS_SQL=`COALESCE(s.prepared_count,0)+(SELECT coun
 export const SKILL_OUTPUTS_SQL=`SELECT chunk_index,-1 AS part_index,object_key FROM workspace_skill_chunks WHERE skill_id=? UNION ALL SELECT chunk_index,part_index,object_key FROM workspace_skill_parts WHERE skill_id=? ORDER BY chunk_index,part_index`;
 
 export function preparedSkillModules(input){
- const cache=input.catalogue?.preparedSkill;if(!cache)return null;
+ const cache=input.catalogue?.preparedSkill;if(!cache){if(input.extracted?.coverage?.methodPlan===BOOK_METHODS_VERSION||input.coverage?.skillPrepared)throw Error('Invalid prepared skill catalogue');return null;}
  const plan=skillWorkItems(input.extracted);
  if(cache.version!==BOOK_METHODS_VERSION||!Array.isArray(cache.modules)||cache.modules.length!==plan.length)throw Error('Invalid prepared skill catalogue');
  return plan.map((work,n)=>{const raw=cache.modules[n],id=skillModuleId(work.index,work.part);if(raw?.id!==id)throw Error('Invalid prepared skill catalogue');return {...validateSkillModule(raw,{chunk:work.chunk,index:work.index}),id};});

@@ -10,6 +10,7 @@ import {importAesKey,decryptSecret} from './oauth.js';
 import {generateText} from './ai-provider.js';
 import {creditFailure} from './provider-credit-health.js';
 function analysisFailure(error){
+ if(/WORKSPACE_STORAGE_FULL/.test(String(error?.message||'')))return 'Workspace storage is full. Completed sections are saved. Free space or upgrade storage, then retry.';
  const message=String(error?.message||''),http=message.match(/request failed \((\d+)\)/),status=Number(http?.[1]||0);
  if(creditFailure(status,message))return 'Analysis stopped: the AI provider reported exhausted credits or billing quota. Check billing for your active AI provider, then retry.';
  if(error?.name==='TimeoutError'||error?.name==='AbortError'||/timed out/i.test(message))return 'Analysis timed out. Completed sections are saved; retry to continue.';

@@ -20,7 +20,10 @@ test('one deeper pass finds a published decision-maker email and the second run 
  assert.equal(c.people[0].publicEmail,'anna.andersson@example.com');assert.equal(c.publicResearch.accountability.status,'complete');assert.ok(queries.some(q=>q.includes('filetype:pdf')));assert.equal(reads.length,2);
  const n=queries.length;await D.runMandatoryBuyerResearch(c,{search,readPage});assert.equal(queries.length,n);assert.ok(c.publicResearch.accountability.reusedChecks>=4);
 });
-test('an upstream ignoring cancellation cannot exceed the shared contact budget or mutate late',async()=>{
+test('an upstream ignoring cancellation cannot exceed the shared contact budget or mutate late',async t=>{
+ // Hold the observed clock steady so CPU contention cannot exhaust the budget before the upstream starts.
+ // The real bounded-operation timer still expires and late completion must remain inert.
+ const base=Date.now();t.mock.method(Date,'now',()=>base);
  const c=company();let release;const search=()=>new Promise(resolve=>{release=resolve;});
  await D.runMandatoryBuyerResearch(c,{search,maxDurationMs:15});assert.equal(c.publicResearch.accountability.stopReason,'time_budget');assert.equal(c.publicResearch.accountability.status,'partial');
  const saved=JSON.stringify(c);release([{url:'https://example.com/team',markdown:'Anna Andersson — Head of Procurement — Example anna.andersson@example.com'}]);await new Promise(resolve=>setTimeout(resolve,5));assert.equal(JSON.stringify(c),saved);

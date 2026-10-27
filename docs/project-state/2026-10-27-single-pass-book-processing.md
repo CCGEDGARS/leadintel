@@ -21,3 +21,9 @@ Controlled scheduling benchmark:24 simulated20ms requests took586ms with one wor
 Full frontend initially3932/3932passed; two additional confirmation/race cases pass separately. Final backend/full CI counts and production proof are verified at release. One pre-existing context-concurrency test failed only its elapsed<60ms gate under competing suite CPU load; its >=8 concurrent I/O and context-output assertions remain, while the nondeterministic elapsed gate is removed.
 
 Authenticated customer/provider verification is unavailable while the originating browser connection is absent. Do not claim the customer's book reached Ready or a measured production speed-up from synthetic fixtures. Exact-SHA status belongs to release-proof.json.
+
+## Independent review corrections
+
+Reject absent/null prepared caches for version-marked books instead of silently charging for fresh AI analysis. Keep legacy fallback for old books only. Deletion retains reservations for in-flight writes, with a15-minute scheduled-invocation grace and version-fenced cleanup; late methods, packages and snapshot failures remain durable cleanup obligations even if compensation fails. Tests reproduce both method/package delete races. Derive review summaries from distinct modules and their purposes instead of repeated per-principle titles.
+
+A separate local frontend cancellation test could exhaust its15ms deadline before starting the upstream under CPU load, leaving its release callback undefined. Its observed clock is now held constant during setup while the real operation timeout still fires; all timeout/partial-state/late-mutation assertions remain. Production research logic is unchanged.

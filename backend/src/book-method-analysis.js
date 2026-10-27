@@ -9,5 +9,6 @@ export function methodCatalogue(extracted,work,rows){
  const byId=new Map(rows.map(row=>[row.chunk_id,JSON.parse(row.techniques_json)]));
  const modules=work.map(w=>({...validateSkillModule(byId.get(w.id)?.module,{chunk:w.chunk,index:w.index}),id:w.id}));
  const techniques=modules.flatMap(m=>m.principles.map((principle,n)=>({id:m.id+':'+n,name:m.title,principle:principle.slice(0,1000),uses:m.triggers.slice(0,10),cautions:m.cautions.slice(0,10).map(s=>s.slice(0,500)),pattern:m.steps.join(' ').slice(0,1000),locations:m.locations})));
- return {...aggregateWritingReference([techniques]),preparedSkill:{version:BOOK_METHODS_VERSION,modules}};
+ const summary=[...new Map(modules.map(m=>[m.title.toLowerCase(),m])).values()].slice(0,5).map(m=>m.title+' — '+m.purpose.slice(0,180)).join('; ');
+ return {...aggregateWritingReference([techniques]),summary,preparedSkill:{version:BOOK_METHODS_VERSION,modules}};
 }
