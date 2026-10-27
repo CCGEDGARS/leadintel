@@ -1,3 +1,4 @@
+import {enrollConversationWorkflows} from './conversation-workflows.js';
 import {handleLanguagePackRoute} from './language-pack-routes.js';
 import {runLanguagePackJobs} from './language-packs.js';
 import {handleGoogleTranslationRoute} from './google-translation-routes.js';
@@ -121,7 +122,7 @@ export default {
     const storageEnv=env;env=withWorkspaceStorage(env);
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
     if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()}),runLanguagePackJobs(env,{now:now.getTime()})]));return;}
-    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
+    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>enrollConversationWorkflows(env,{now}).catch(cause=>console.error('Conversation workflow enrollment cycle failed',cause))).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
       runDueSourceHealthChecks(env,now),

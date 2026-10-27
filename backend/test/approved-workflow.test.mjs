@@ -41,6 +41,7 @@ test('native research through one confirmed send, reply-stop and CRM reopening u
     const storageSchema=fs.readFileSync(new URL('../migrations/0031_workspace_storage.sql',import.meta.url),'utf8');
     env.DB.raw.exec(storageSchema.slice(0,storageSchema.indexOf('INSERT INTO workspace_storage_accounts')));
     env.DB.raw.exec(fs.readFileSync(new URL('../migrations/0049_supervised_follow_up.sql',import.meta.url),'utf8'));
+    env.DB.raw.exec(fs.readFileSync(new URL('../migrations/0063_conversation_workflows.sql',import.meta.url),'utf8'));
     const scope={workspaceId:'w1',userId:'u1',role:'owner'},message=env.DB.raw.prepare("SELECT * FROM gmail_messages WHERE status='sent'").get();
     assert.equal(message.recipient,'alex@nordicmachines.se');
     assert.equal(env.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='c1'").get().pipeline_stage,'Contacted');
