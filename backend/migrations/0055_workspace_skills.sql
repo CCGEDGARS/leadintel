@@ -18,3 +18,7 @@ CREATE TABLE workspace_skill_chunks (
  skill_id TEXT NOT NULL REFERENCES workspace_skills(id), chunk_index INTEGER NOT NULL,
  object_key TEXT NOT NULL, PRIMARY KEY(skill_id,chunk_index)
 );
+-- Reserve every generated object before writing it, including unpublished outputs.
+CREATE TABLE workspace_skill_objects (
+ skill_id TEXT NOT NULL REFERENCES workspace_skills(id), object_key TEXT PRIMARY KEY
+);
