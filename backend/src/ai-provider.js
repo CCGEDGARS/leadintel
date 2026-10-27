@@ -226,7 +226,9 @@ async function geminiRequest(options,fetchImpl){
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status,payload);
   if(options.responseFormat==='json'&&payload?.candidates?.[0]?.finishReason==='MAX_TOKENS')throw new Error('Gemini response exceeded output token limit');
   const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');
-  return {provider:'gemini',model:options.model,text,usage:usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount)};
+  const used=usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount);
+  if(Number(payload?.usageMetadata?.thoughtsTokenCount)>0)used.reasoning_tokens=Number(payload.usageMetadata.thoughtsTokenCount);
+  return {provider:'gemini',model:options.model,text,usage:used};
 }
 
 async function verifyGeminiCredential(options,fetchImpl){

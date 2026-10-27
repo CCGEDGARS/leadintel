@@ -42,7 +42,7 @@ export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChu
      if(!saved.meta.changes)await discardSkillObject(env,job.id,key);
      else{consecutiveFailures=0;await skillStmt(env,`UPDATE workspace_skills SET retry_attempts=0,error='',error_code='',error_phase='',last_progress_at=? WHERE ${guard}`,Math.max(start,clock()),job.id,lease).run();}
     }catch(error){if(key)await finishSkillWrite(env,job.id,key).catch(()=>null);error.skillPhase=localPhase;error.sectionAttempts=sectionAttempts;throw error;}
-   },{clock,deadline:start+BOOK_WINDOW_MS});
+   },{clock,deadline:start+BOOK_WINDOW_MS,budget:env.bookInvocationBudget,cost:32});
    if(outcome.errors.length)throw outcome.errors.find(e=>!skillFailure(e,e.skillPhase).retryable)||outcome.errors[0];
    phase='assemble_skill';const completed=await skillStmt(env,SKILL_OUTPUTS_SQL,job.id,job.id).all();
    if(fastCached||completed.results.length===chunks.length){

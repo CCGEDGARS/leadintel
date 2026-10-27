@@ -1,0 +1,29 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {storageDb} from './workspace-storage-fixture.mjs';import {withWorkspaceStorage,reconcileStorageObjects} from '../src/workspace-storage-objects.js';
+import {putWritingReference} from '../src/writing-reference-store.js';import {runWritingReferenceJobs} from '../src/writing-reference-runner.js';import {runWorkspaceSkillJobs} from '../src/workspace-skill-runner.js';
+import {runCompanyMaterialJobs} from '../src/company-materials-analysis.js';import {runLanguagePackJobs} from '../src/language-packs.js';import {moduleResult} from './workspace-skill-fixture.mjs';
+const mod=await import('../src/book-invocation-budget.js').catch(()=>({}));
+test('real minute scheduler shares the budget across quota cleanup and both Gemini engines',async t=>{
+ const {raw,DB,queries}=await fixture({deletion:true,peer:true});const {importAesKey,encryptSecret}=await import('../src/oauth.js');
+ raw.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,7).toString('base64');const encrypted=await encryptSecret('test-only-provider-key',await importAesKey(raw.OAUTH_TOKEN_ENCRYPTION_KEY));
+ for(const workspace of ['storage-w1','storage-w2'])DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'gemini',?,'test','gemini-3.8-flash',0)").run(workspace,encrypted);
+ let calls=0;t.mock.method(globalThis,'fetch',async(url,request)=>{assert.match(url,/googleapis/);calls++;const b=JSON.parse(request.body),result=moduleResult({prompt:b.contents[0].parts[0].text});return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:result.text}]}}]});});
+ const app=(await import('../src/app.js')).default,waits=[];await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},raw,{waitUntil:p=>waits.push(p)});await Promise.all(waits);
+ assert.ok(calls>0);assert.ok(queries()<900,`real scheduled invocation used ${queries()} statements`);assert.equal(DB.raw.prepare("SELECT status FROM workspace_skills WHERE id='pending'").get().status,'Processing');assert.ok(DB.raw.prepare("SELECT count(*) n FROM workspace_skill_parts WHERE skill_id='pending'").get().n<60);
+});
+async function fixture({deletion=false,peer=false}={}){
+ const DB=storageDb(),objects=new Map(),text='Specific useful method. '.repeat(16000),key='skills/storage-w1/pending/input.json';
+ objects.set(key,JSON.stringify({title:'Book',extracted:{sections:[{location:'page:1',text}]},catalogue:{techniques:[]}}));
+ DB.raw.prepare("INSERT INTO workspace_skills(id,workspace_id,title,source_hash,status,input_key) VALUES('pending','storage-w1','Book','book','Processing',?)").run(key);
+ if(deletion){DB.raw.exec("INSERT INTO workspace_skills(id,workspace_id,title,source_hash,status) VALUES('deleting','storage-w1','Old book','old','Deleting')");for(let n=0;n<40;n++){const k=`skills/storage-w1/deleting/method-${n}-lease.json`;objects.set(k,'{}');DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run('deleting',n,0,k);DB.raw.prepare('INSERT INTO workspace_skill_objects(skill_id,object_key) VALUES(?,?)').run('deleting',k);DB.raw.prepare("INSERT INTO workspace_storage_objects(object_key,workspace_id,byte_size,state) VALUES(?,'storage-w1',2,'ready')").run(k);}}
+ const raw={DB,WORKSPACE_STORAGE_ENABLED:'true',WRITING_REFERENCES_BUCKET:{async get(k){const v=objects.get(k);return v===undefined?null:{text:async()=>v};},async head(k){return objects.has(k)?{size:new TextEncoder().encode(objects.get(k)).length}:null;},async put(k,v){objects.set(k,v);},async delete(k){objects.delete(k);}}};
+ if(peer)await putWritingReference(withWorkspaceStorage(raw),{workspaceId:'storage-w2',userId:'storage-owner'},{slot:1,expectedRevision:0,filename:'Peer.txt',document:{bytes:new TextEncoder().encode(text),mime:'text/plain',sha256:'peer',extracted:{sections:[{location:'page:1',text}],coverage:{total:1,readable:1,unreadable:0,methodPlan:'20261027-single-pass-v1'}}}});
+ const prepare=DB.prepare.bind(DB);let actualQueries=0;DB.prepare=sql=>{actualQueries++;return prepare(sql);};return {raw,DB,queries:()=>actualQueries};
+}
+test('production storage metering is included in bounded book generation admission',async()=>{assert.equal(typeof mod.withBookInvocationBudget,'function');const {raw,DB,queries}=await fixture();const metered=mod.withBookInvocationBudget(raw),env=withWorkspaceStorage(metered);let calls=0;await runWorkspaceSkillJobs(env,{generate:async input=>{calls++;return moduleResult(input);}});assert.ok(calls>24&&calls<=60);assert.ok(queries()<800);assert.equal(metered.bookInvocationBudget.used,queries());assert.equal(DB.raw.prepare("SELECT status FROM workspace_skills WHERE id='pending'").get().status,'Processing');});
+test('cleanup, quota recovery and another workspace book share one scheduled invocation budget',async()=>{
+ assert.equal(typeof mod.withBookInvocationBudget,'function');const {raw,DB,queries}=await fixture({deletion:true,peer:true}),metered=mod.withBookInvocationBudget(raw),env=withWorkspaceStorage(metered);let sourceCalls=0,skillCalls=0;
+ const settled=await Promise.allSettled([reconcileStorageObjects(metered),runWritingReferenceJobs(env,{generate:async input=>{sourceCalls++;return moduleResult(input);}}),runWorkspaceSkillJobs(env,{generate:async input=>{skillCalls++;return moduleResult(input);}}),runCompanyMaterialJobs(env),runLanguagePackJobs(env)]);
+ assert.ok(settled.every(r=>r.status==='fulfilled'));assert.ok(queries()<900,`shared scheduled work used ${queries()} statements`);assert.equal(metered.bookInvocationBudget.used,queries());assert.ok(sourceCalls>0);assert.ok(skillCalls<60);assert.equal(DB.raw.prepare("SELECT count(*) n FROM workspace_skill_parts WHERE skill_id='deleting'").get().n,0);
+ assert.equal(DB.raw.prepare("SELECT status FROM workspace_skills WHERE id='pending'").get().status,'Processing');
+});

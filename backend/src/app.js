@@ -36,6 +36,7 @@ import {handleWritingReferenceRoute} from './writing-reference-routes.js';
 import {handleWorkspaceSkillRoute} from './workspace-skill-routes.js';
 import {runWorkspaceSkillJobs} from './workspace-skill-runner.js';
 import {runWritingReferenceJobs} from './writing-reference-runner.js';
+import {withBookInvocationBudget} from './book-invocation-budget.js';
 import {handleStoryBankRoute} from './storyselling.js';
 import {handleCompanyMaterialsRoute} from './company-materials.js';
 import {runCompanyMaterialJobs} from './company-materials-analysis.js';
@@ -116,6 +117,7 @@ export default {
   },
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
+    if(controller.cron==='* * * * *')env=withBookInvocationBudget(env);
     const storageEnv=env;env=withWorkspaceStorage(env);
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
     if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()}),runLanguagePackJobs(env,{now:now.getTime()})]));return;}

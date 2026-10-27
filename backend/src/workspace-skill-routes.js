@@ -1,3 +1,4 @@
+import {bookEngineMetadata} from './book-engine.js';
 import {cookieValue,sha256} from './security.js';
 import {writingReferencesEnabled} from './writing-reference-routes.js';
 import {storageErrorResponse} from './workspace-storage.js';
@@ -24,6 +25,6 @@ export async function handleWorkspaceSkillRoute(request,env,cors={}){
    else if(id&&action==='retry'&&request.method==='POST')await mutateWorkspaceSkill(env,scope,id,{expectedRevision:body.expectedRevision,retry:true});
    else return json({error:'Method not allowed'},405,cors);
   }
-  return json({skills:(await listWorkspaceSkills(env,scope)).map(publicSkill),limit:SKILL_LIMIT,canManage:member.role==='owner'},request.method==='POST'&&!id?201:200,cors);
+  return json({skills:(await listWorkspaceSkills(env,scope)).map(publicSkill),limit:SKILL_LIMIT,canManage:member.role==='owner',engine:await bookEngineMetadata(env,workspaceId)},request.method==='POST'&&!id?201:200,cors);
  }catch(error){return storageErrorResponse(error,cors)||json({error:error.status?error.message:'Skill operation failed. Refresh and try again.'},error.status||503,cors);}
 }

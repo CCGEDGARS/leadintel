@@ -47,6 +47,7 @@ export async function cleanupWorkspaceSkill(env,id){
   UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?
  ) WHERE object_key<>'' LIMIT 40`,id,id,id,id,id).all();
  for(const {object_key:key} of keys.results){
+  if(env.bookInvocationBudget&&!env.bookInvocationBudget.hasRoom(64))break;
   const tracking=await skillStmt(env,'SELECT cleanup_version,pending_until FROM workspace_skill_objects WHERE skill_id=? AND object_key=?',id,key).first();
   await env.WRITING_REFERENCES_BUCKET.delete(key);
   await env.DB.batch([

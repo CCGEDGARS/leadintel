@@ -1,15 +1,18 @@
 export const BOOK_CONCURRENCY=3;
-export const BOOK_BATCH_SIZE=24;
+export const BOOK_BATCH_SIZE=60;
 export const BOOK_WINDOW_MS=240000;
 export const BOOK_LEASE_MS=420000;
-export async function boundedBookWork(items,perform,{concurrency=BOOK_CONCURRENCY,clock=Date.now,deadline=Infinity}={}){
- const errors=[];let started=0,completed=0;
- for(let at=0;at<items.length&&clock()<deadline;at+=concurrency){
-  const wave=items.slice(at,at+concurrency);started+=wave.length;
-  const settled=await Promise.allSettled(wave.map(perform));
-  for(const result of settled)if(result.status==='fulfilled')completed++;else errors.push(result.reason);
-  if(errors.length)break; // Drain the current wave; do not launch more paid work after a failure.
- }
+export async function boundedBookWork(items,perform,{concurrency=BOOK_CONCURRENCY,clock=Date.now,deadline=Infinity,budget,cost=32}={}){
+ const errors=[];let started=0,completed=0,next=0;
+ if(!Number.isInteger(concurrency)||concurrency<1||concurrency>BOOK_CONCURRENCY)throw Error('Invalid book concurrency');
+ async function worker(){while(!errors.length&&next<items.length&&clock()<deadline){
+  if(budget&&!budget.admit(cost))return;
+  const item=items[next++];started++;
+  try{await perform(item);completed++;}catch(error){errors.push(error);}finally{budget?.release(cost);}
+ }}
+ // Each slot takes the next section immediately; an error stops new launches,
+ // while already-started requests finish and retain their checkpoints.
+ await Promise.all(Array.from({length:Math.min(concurrency,items.length)},worker));
  return {started,completed,errors};
 }
 export async function acquireBookLock(env,workspaceId,ownerId,now,until){
