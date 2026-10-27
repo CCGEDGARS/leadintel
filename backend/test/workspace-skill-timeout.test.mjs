@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {skillFixture,moduleResult} from './workspace-skill-fixture.mjs';
-import {createWorkspaceSkill,getWorkspaceSkill,mutateWorkspaceSkill} from '../src/workspace-skill-store.js';
+import {createWorkspaceSkill,getWorkspaceSkill,mutateWorkspaceSkill,cleanupWorkspaceSkill} from '../src/workspace-skill-store.js';
 import {runWorkspaceSkillJobs} from '../src/workspace-skill-runner.js';
 import {skillPackage} from '../src/workspace-skill-export.js';
 import {readFileSync} from 'node:fs';
+import {storageDb} from './workspace-storage-fixture.mjs';
+import {withWorkspaceStorage} from '../src/workspace-storage-objects.js';
 const scope={workspaceId:'w1',userId:'u1'};
 async function pending(){const {env,source}=await skillFixture();return {env,skill:await createWorkspaceSkill(env,scope,{sourceId:source.id,expectedRevision:1})};}
 
@@ -84,4 +86,62 @@ test('the upgrade resumes only timed-out failed jobs and keeps their source snap
  assert.ok(await env.WRITING_REFERENCES_BUCKET.get(row.input_key));
  assert.equal((await getWorkspaceSkill(env,scope,'billing')).status,'Failed');
  await runWorkspaceSkillJobs(env,{maxChunks:30,generate:moduleResult});assert.equal((await getWorkspaceSkill(env,scope,skill.id)).status,'Ready');
+});
+
+test('a 440-page book advances with bounded database work in every batch',async()=>{
+ const {env,skill}=await pending(),snapshot=JSON.parse(env.objects.get(skill.input_key));
+ snapshot.extracted.sections=Array.from({length:440},(_,n)=>({location:`page:${n+1}`,text:(`Distinct page ${n+1}: compare evidence and assumptions. `).repeat(87)+` END OF PAGE ${n+1}`}));
+ snapshot.coverage={total:446,readable:440,unreadable:6};env.objects.set(skill.input_key,JSON.stringify(snapshot));
+ const prepare=env.DB.prepare.bind(env.DB);let queries=0,maxQueries=0;env.DB.prepare=sql=>{queries++;return prepare(sql);};
+ const pages=new Set(),tails=new Set();let row,now=Date.now();
+ for(let batch=0;batch<400;batch++){
+  const before=queries;
+  await runWorkspaceSkillJobs(env,{now,clock:()=>now,maxChunks:4,generate:async input=>{
+   const {chunk}=JSON.parse(input.prompt);assert.ok(chunk.sections.reduce((n,s)=>n+s.text.length,0)<=4000);
+   for(const s of chunk.sections){pages.add(s.location);if(s.text.includes('END OF PAGE'))tails.add(s.location);}
+   return moduleResult(input);
+  }});
+  maxQueries=Math.max(maxQueries,queries-before);row=await getWorkspaceSkill(env,scope,skill.id);
+  if(row.status==='Ready')break;assert.equal(row.status,'Processing');now+=60000;
+ }
+ assert.equal(row.status,'Ready');assert.equal(pages.size,440);assert.equal(tails.size,440);
+ assert.ok(maxQueries<50,`a batch used ${maxQueries} D1 calls; saved parts must be loaded in one query`);
+ const pkg=await skillPackage(env,scope,skill.id);assert.equal(pkg.modules.length,row.total);
+});
+
+test('large skill deletion makes durable progress within a bounded per-invocation budget',async()=>{
+ const {env,skill}=await pending();
+ for(let n=0;n<880;n++){const key=`skills/w1/${skill.id}/method-${n}.json`;env.objects.set(key,'{}');env.DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run(skill.id,n,0,key);env.DB.raw.prepare('INSERT INTO workspace_skill_objects VALUES(?,?)').run(skill.id,key);}
+ env.DB.raw.prepare("UPDATE workspace_skills SET status='Deleting' WHERE id=?").run(skill.id);
+ const originalDelete=env.WRITING_REFERENCES_BUCKET.delete.bind(env.WRITING_REFERENCES_BUCKET);let deletes=0;
+ env.WRITING_REFERENCES_BUCKET.delete=async key=>{if(++deletes>40)throw Error('invocation budget exhausted');return originalDelete(key);};
+ for(let batch=0;batch<40;batch++){
+  deletes=0;await cleanupWorkspaceSkill(env,skill.id);
+  if(env.DB.raw.prepare('SELECT status FROM workspace_skills WHERE id=?').get(skill.id).status==='Deleted')break;
+ }
+ assert.equal(env.DB.raw.prepare('SELECT status FROM workspace_skills WHERE id=?').get(skill.id).status,'Deleted');
+ assert.ok(![...env.objects.keys()].some(k=>k.startsWith('skills/')));
+ assert.equal(env.DB.raw.prepare('SELECT count(*) AS n FROM workspace_skill_parts WHERE skill_id=?').get(skill.id).n,0);
+});
+
+test('880-method deletion completes through the real quota meter under a D1 invocation cap',async()=>{
+ const DB=storageDb(),objects=new Map(),id='large-skill';
+ DB.raw.prepare("INSERT INTO workspace_skills(id,workspace_id,title,source_hash,status) VALUES(?,'storage-w1','Large book','large-book-hash','Deleting')").run(id);
+ for(let n=0;n<880;n++){
+  const key=`skills/storage-w1/${id}/method-${n}-lease.json`;objects.set(key,'{}');
+  DB.raw.prepare('INSERT INTO workspace_skill_parts VALUES(?,?,?,?)').run(id,n,0,key);
+  DB.raw.prepare('INSERT INTO workspace_skill_objects VALUES(?,?)').run(id,key);
+  DB.raw.prepare("INSERT INTO workspace_storage_objects(object_key,workspace_id,byte_size,state) VALUES(?,'storage-w1',2,'ready')").run(key);
+ }
+ const env=withWorkspaceStorage({DB,WORKSPACE_STORAGE_ENABLED:'true',WRITING_REFERENCES_BUCKET:{
+  async head(key){return objects.has(key)?{size:2}:null;},async get(){return null;},async delete(key){objects.delete(key);}
+ }});
+ const prepare=DB.prepare.bind(DB);let queries=0;DB.prepare=sql=>{if(++queries>600)throw Error('D1 invocation cap exceeded');return prepare(sql);};
+ for(let batch=0;batch<30;batch++){
+  queries=0;await cleanupWorkspaceSkill(env,id);
+  if(DB.raw.prepare('SELECT status FROM workspace_skills WHERE id=?').get(id).status==='Deleted')break;
+ }
+ assert.equal(DB.raw.prepare('SELECT status FROM workspace_skills WHERE id=?').get(id).status,'Deleted');
+ assert.equal(objects.size,0);assert.equal(DB.raw.prepare("SELECT files_bytes FROM workspace_storage_accounts WHERE workspace_id='storage-w1'").get().files_bytes,0);
+ assert.equal(DB.raw.prepare('SELECT count(*) n FROM workspace_skill_objects WHERE skill_id=?').get(id).n,0);
 });

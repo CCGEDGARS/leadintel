@@ -34,9 +34,30 @@ export async function createWorkspaceSkill(env,scope,{sourceId,expectedRevision}
 }
 export async function cleanupWorkspaceSkill(env,id){
  const row=await skillStmt(env,"SELECT * FROM workspace_skills WHERE id=? AND status='Deleting'",id).first();if(!row)return;
- const chunks=await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? UNION SELECT object_key FROM workspace_skill_parts WHERE skill_id=? UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?',id,id,id).all();
- for(const key of new Set([row.input_key,row.package_key,...chunks.results.map(c=>c.object_key)].filter(Boolean)))await env.WRITING_REFERENCES_BUCKET.delete(key);
- await env.DB.batch([skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=?',id),skillStmt(env,'DELETE FROM workspace_skill_parts WHERE skill_id=?',id),skillStmt(env,'DELETE FROM workspace_skill_chunks WHERE skill_id=?',id),skillStmt(env,"UPDATE workspace_skills SET status='Deleted',title='',source_id='',source_filename='',description='',routing_json='[]',input_key='',package_key='',coverage_json='{}',error='' WHERE id=? AND status='Deleting'",id)]);
+ // Bound each pass, and forget a key only after its physical deletion succeeds.
+ // This prevents large skills from restarting the same exhausted deletion loop.
+ const keys=await skillStmt(env,`SELECT object_key FROM (
+  SELECT input_key AS object_key FROM workspace_skills WHERE id=?
+  UNION SELECT package_key FROM workspace_skills WHERE id=?
+  UNION SELECT object_key FROM workspace_skill_chunks WHERE skill_id=?
+  UNION SELECT object_key FROM workspace_skill_parts WHERE skill_id=?
+  UNION SELECT object_key FROM workspace_skill_objects WHERE skill_id=?
+ ) WHERE object_key<>'' LIMIT 40`,id,id,id,id,id).all();
+ for(const {object_key:key} of keys.results){
+  await env.WRITING_REFERENCES_BUCKET.delete(key);
+  await env.DB.batch([
+   skillStmt(env,'DELETE FROM workspace_skill_objects WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,'DELETE FROM workspace_skill_parts WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,'DELETE FROM workspace_skill_chunks WHERE skill_id=? AND object_key=?',id,key),
+   skillStmt(env,"UPDATE workspace_skills SET input_key=CASE WHEN input_key=? THEN '' ELSE input_key END,package_key=CASE WHEN package_key=? THEN '' ELSE package_key END WHERE id=? AND status='Deleting'",key,key,id)
+  ]);
+ }
+ const remaining=await skillStmt(env,`SELECT 1 FROM workspace_skill_objects WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skill_parts WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skill_chunks WHERE skill_id=?
+  UNION ALL SELECT 1 FROM workspace_skills WHERE id=? AND (input_key<>'' OR package_key<>'') LIMIT 1`,id,id,id,id).first();
+ if(remaining)return;
+ await skillStmt(env,"UPDATE workspace_skills SET status='Deleted',title='',source_id='',source_filename='',description='',routing_json='[]',coverage_json='{}',error='' WHERE id=? AND status='Deleting'",id).run();
 }
 export async function mutateWorkspaceSkill(env,scope,id,body){
  const row=await getWorkspaceSkill(env,scope,id);if(!Number.isInteger(body.expectedRevision)||row.revision!==body.expectedRevision)skillFail('Skill changed. Refresh and try again.');

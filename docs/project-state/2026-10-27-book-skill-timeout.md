@@ -27,13 +27,19 @@ repeated the same work without a smaller conversion unit.
 - Migration 0058 gives existing Failed/AI_TIMEOUT jobs with retained snapshots
   one fresh bounded retry budget. Processing jobs continue automatically. Other
   terminal diagnostic categories remain owner-controlled.
+- Preload saved child indices once per batch instead of querying every saved
+  section again. Delete at most forty objects per pass, clearing each durable
+  pointer only after successful physical deletion; process one deleting skill
+  per scheduler call. This keeps large books below D1 invocation limits and
+  makes deletion converge across interruptions.
 - Backend health resilience version: `20261027-v2`.
 
 ## Validation and limits
 
 Regression coverage demonstrates long-book completion with a transport that
 rejects oversized sections, complete source coverage, partial checkpoint resume,
-legacy checkpoint reuse, unique portable reference files, a response beyond the
+legacy checkpoint reuse, 440-page completion with bounded D1 work per batch,
+880-method bounded resumable deletion, unique portable reference files, a response beyond the
 old sixty-second deadline, exclusion of concurrent batch claims, and one-time
 recovery without retrying billing failures. Existing provider error sanitization,
 quota cleanup, book independence, source deletion, owner isolation, revision

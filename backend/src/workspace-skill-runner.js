@@ -8,7 +8,7 @@ async function releaseInput(env,row){if(!row.input_key)return;await env.WRITING_
 const guard="id=? AND lease_id=? AND status='Processing'";
 export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=4,generate,clock=Date.now}={}){
  if(!env.WRITING_REFERENCES_BUCKET)return [];
- const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 5").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
+ const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 1").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
  // A lost upload request must not leave a permanent Preparing record.
  await skillStmt(env,"UPDATE workspace_skills SET status='Failed',error='Snapshot interrupted. Delete this skill and create it again.',revision=revision+1 WHERE status='Preparing' AND created_at<datetime('now','-10 minutes')").run();
  const released=await skillStmt(env,"SELECT id,input_key FROM workspace_skills WHERE status='Ready' AND input_key<>'' LIMIT 5").all();for(const row of released.results)await releaseInput(env,row).catch(()=>null);
@@ -18,10 +18,10 @@ export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChu
   const lease=crypto.randomUUID(),job=await skillStmt(env,`UPDATE workspace_skills SET lease_id=?,lease_until=? WHERE id=(SELECT id FROM workspace_skills WHERE status='Processing' AND lease_until<? AND next_at<=? ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,Math.max(now,clock())+maxChunks*SKILL_REQUEST_TIMEOUT_MS+60000,now,now,now).first();if(!job)break;
   let calls=0,phase='load_book',consecutiveFailures=Number(job.retry_attempts)||0;
   try{
-   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text());phase='read_progress';const legacy=await skillStmt(env,'SELECT chunk_index FROM workspace_skill_chunks WHERE skill_id=?',job.id).all(),chunks=skillWorkItems(input.extracted,legacy.results);await skillStmt(env,`UPDATE workspace_skills SET total=? WHERE ${guard}`,chunks.length,job.id,lease).run();phase='connect_ai';const run=generate||await workspaceSkillGenerator(env,job.workspace_id);
+   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text());phase='read_progress';const legacy=await skillStmt(env,'SELECT chunk_index FROM workspace_skill_chunks WHERE skill_id=?',job.id).all(),chunks=skillWorkItems(input.extracted,legacy.results);await skillStmt(env,`UPDATE workspace_skills SET total=? WHERE ${guard}`,chunks.length,job.id,lease).run();const prior=await skillStmt(env,'SELECT chunk_index,part_index FROM workspace_skill_parts WHERE skill_id=?',job.id).all(),savedParts=new Set(prior.results.map(p=>`${p.chunk_index}:${p.part_index}`));phase='connect_ai';const run=generate||await workspaceSkillGenerator(env,job.workspace_id);
    for(const work of chunks){
     const {index,part,chunk}=work;if(work.legacy)continue;
-    if(calls>=maxChunks)break;phase='read_progress';if(await skillStmt(env,'SELECT object_key FROM workspace_skill_parts WHERE skill_id=? AND chunk_index=? AND part_index=?',job.id,index,part).first())continue;
+    if(calls>=maxChunks)break;phase='read_progress';if(savedParts.has(`${index}:${part}`))continue;
     if(!await skillStmt(env,`SELECT id FROM workspace_skills WHERE ${guard}`,job.id,lease).first())break;
     phase='generate_section';calls++;const module=await generateSkillModule({chunk,index,catalogue:input.catalogue,generate:run});module.id=part===0?`method-${index+1}`:`method-${index+1}-part-${part+1}`;const key=`skills/${job.workspace_id}/${job.id}/${module.id}-${lease}.json`;
     phase='save_section';const reserved=await skillStmt(env,`INSERT INTO workspace_skill_objects(skill_id,object_key) SELECT ?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard})`,job.id,key,job.id,lease).run();if(!reserved.meta.changes)break;
