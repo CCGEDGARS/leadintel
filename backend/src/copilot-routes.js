@@ -47,9 +47,17 @@ export async function handleCopilotRoute(request,env,cors={}){
     const memoryId=clean(decodeURIComponent(memoryMatch[1]),180);const result=await archiveCopilotMemory(env,{workspaceId,memoryId});if(!result.archived)return error('Memory not found',404,cors);return json({archived:true,id:memoryId},200,cors);
   }
   if(path==='/api/copilot/conversations'&&request.method==='GET'){
-    const {results=[]}=await env.DB.prepare(`SELECT id,title,created_at,updated_at FROM copilot_conversations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 50`).bind(workspaceId).all();return json({conversations:results},200,cors);
+    const {results=[]}=await env.DB.prepare(`SELECT id,title,created_at,updated_at FROM copilot_conversations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 50`).bind(workspaceId).all();return json({conversations:results,canDelete:String(access.member.role).toLowerCase()==='owner'},200,cors);
   }
   const conversationMatch=path.match(/^\/api\/copilot\/conversations\/([^/]+)$/);
+  if(request.method==='DELETE'&&(path==='/api/copilot/conversations'||conversationMatch)){
+    if(String(access.member.role).toLowerCase()!=='owner')return error('Only the workspace owner can delete chat history',403,cors);
+    // One atomic statement: messages cascade; saved memories retain their values with source set to NULL.
+    const id=conversationMatch?decodeURIComponent(conversationMatch[1]):'';
+    const result=await (id?env.DB.prepare('DELETE FROM copilot_conversations WHERE workspace_id=? AND id=?').bind(workspaceId,id):env.DB.prepare('DELETE FROM copilot_conversations WHERE workspace_id=?').bind(workspaceId)).run();
+    const deleted=Number(result.meta?.changes)||0;if(id&&!deleted)return error('Copilot conversation not found',404,cors);
+    return json({deleted,memoriesPreserved:true},200,cors);
+  }
   if(conversationMatch&&request.method==='GET'){
     const id=decodeURIComponent(conversationMatch[1]);const row=await conversation(env,workspaceId,id);if(!row)return error('Copilot conversation not found',404,cors);return json({conversation:row,messages:await messages(env,workspaceId,id)},200,cors);
   }

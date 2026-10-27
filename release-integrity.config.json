@@ -44,6 +44,37 @@
   },
   "smokeChecks": [
     {
+      "id": "copilot-chat-deletion-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "history=20261027-v2"
+      ]
+    },
+    {
+      "id": "copilot-chat-deletion-controls",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "copilotClearHistory",
+        "Delete this chat?",
+        "Clear all chat history?",
+        "Saved memories and CRM data will be kept."
+      ]
+    },
+    {
+      "id": "copilot-chat-deletion-transport",
+      "type": "text",
+      "url": "/customer/copilot-api.js",
+      "status": 200,
+      "contains": [
+        "export function deleteCopilotConversation(id)",
+        "export function clearCopilotHistory()"
+      ]
+    },
+    {
       "id": "kazakhstan-country-preset",
       "type": "text",
       "url": "/customer/",
@@ -4777,7 +4808,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261026-v1&activity=20261026-v1&memory=20261026-v1&attention=20261026-v1&streaming=20261026-v1"
+        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261027-v2&activity=20261026-v1&memory=20261026-v1&attention=20261026-v1&streaming=20261026-v1"
       ]
     },
     {
@@ -4789,7 +4820,7 @@
         "data-copilot-history",
         "Save as PDF",
         "copilotCopy",
-        "copilot.css?v=20261026-classic-v4&history=20261026-v1"
+        "copilot.css?v=20261026-classic-v4&history=20261027-v2"
       ]
     },
     {
@@ -4798,7 +4829,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261026-v1"
+        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261027-v2"
       ]
     },
     {
@@ -4818,7 +4849,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "history=20261026-v1&activity=20261026-v1"
+        "history=20261027-v2&activity=20261026-v1"
       ]
     },
     {
@@ -4830,7 +4861,7 @@
         "data-copilot-memories",
         "Remembers ",
         "copilotForget",
-        "copilot.css?v=20261026-classic-v4&history=20261026-v1&memory=20261026-v1"
+        "copilot.css?v=20261026-classic-v4&history=20261027-v2&memory=20261026-v1"
       ]
     },
     {

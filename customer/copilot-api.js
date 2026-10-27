@@ -27,8 +27,10 @@ export function listCopilotConversations(){return requestCopilot('/api/copilot/c
 export function listCopilotMemories(){return requestCopilot('/api/copilot/memories',{timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function forgetCopilotMemory(id){return requestCopilot(`/api/copilot/memories/${encodeURIComponent(id)}/archive`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function getCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{timeoutMs:DEFAULT_TIMEOUT_MS});}
+export function deleteCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{method:'DELETE',timeoutMs:DEFAULT_TIMEOUT_MS});}
+export function clearCopilotHistory(){return requestCopilot('/api/copilot/conversations',{method:'DELETE',timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function sendCopilotMessage(payload,{onProgress,onDelta}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:payload||{},headers:{Accept:'text/event-stream'},onProgress,onDelta,timeoutMs:CHAT_TIMEOUT_MS});}
 export function confirmCopilotAction(id,idempotencyKey){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/confirm`,{method:'POST',headers:{'Idempotency-Key':String(idempotencyKey||'')},body:{idempotency_key:String(idempotencyKey||'')},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function rejectCopilotAction(id){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/reject`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 
-if(typeof window!=='undefined')window.LeadIntelCopilotApi={requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,listCopilotMemories,forgetCopilotMemory,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};
+if(typeof window!=='undefined')window.LeadIntelCopilotApi={requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,deleteCopilotConversation,clearCopilotHistory,listCopilotMemories,forgetCopilotMemory,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};
