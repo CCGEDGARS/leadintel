@@ -115,7 +115,7 @@
   const invitation=node('details','meeting-invitation');invitation.innerHTML='<summary>Meeting invitation</summary><p>Save changes to reuse your booking link and invitation.</p>';
   for(const id of ['message-meetingDateOne','message-meetingDateTwo']){const label=q(id)?.closest('label');if(label){label.hidden=true;meeting.append(label);}}
   for(const id of ['message-nextAction','message-calendly']){const label=q(id)?.closest('label');if(label){label.firstChild.textContent=id==='message-nextAction'?'Invitation text':'Booking link';invitation.append(label);}}
-  invitation.append(q('message-save-core'));meeting.append(invitation);drafts.before(meeting);
+  invitation.append(q('message-save-core'));meeting.append(invitation);drafts.after(meeting);
   const oldHelp=settings.querySelector('.message-essentials + p');if(oldHelp)oldHelp.hidden=true;
   installEditorSizing(document);
 

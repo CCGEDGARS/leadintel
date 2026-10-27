@@ -679,5 +679,12 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 /* Draft recovery and version previews share the email editor's readable width. */
 .mw-history-dialog{width:min(800px,calc(100vw - 40px));max-height:85vh;overflow:auto}.mw-history-dialog [data-history-version]{display:block;width:100%;text-align:left;margin:8px 0;white-space:normal}.mw-history-body{padding:16px;border:1px solid #dce5df;border-radius:8px;overflow-wrap:anywhere;max-height:45vh;overflow:auto}.mw-history-dialog section{margin:20px 0}.mw-history-dialog [data-history-restore]{margin-top:16px}#mw-draft-recovery{font-size:13px;color:#725417}#mw-draft-recovery[hidden]{display:none}
 
-/* Keep the translation action within Languages & translations, aligned right. */
-#message-studio .mw-language-tools .mw-language-quick{justify-content:flex-end;margin:0;padding:0}
+/* Surface translation remains available when language settings are collapsed. */
+#message-studio #mw-language-tools>summary{position:relative;padding-right:220px;min-height:48px}
+#message-studio #mw-language-tools>summary .mw-language-quick{position:absolute;right:0;top:0;width:auto;justify-content:flex-end;margin:0;padding:0}
+#message-studio #mw-language-tools>summary .mw-language-quick[hidden]{display:none}
+#message-studio #mw-language-tools>summary .mw-language-quick button{white-space:normal}
+@media(max-width:620px){
+ #message-studio #mw-language-tools>summary{padding-right:0}
+ #message-studio #mw-language-tools>summary .mw-language-quick{position:static;margin-top:12px}
+}
