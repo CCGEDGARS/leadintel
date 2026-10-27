@@ -11,6 +11,45 @@ class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec(`PRAG
 async function fixture({member=true,role='owner'}={}){const db=new DB();const token='copilot-test-token';const hash=await sha256(token);db.raw.prepare('INSERT INTO users VALUES(?,?,?,?)').run('u1','owner@example.com','Owner',role);db.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(hash,'u1');if(member)db.raw.prepare('INSERT INTO workspace_members VALUES(?,?,?)').run('w1','u1',role);return {db,env:{DB:db,COPILOT_TEST_CONTEXT:{workspace:{id:'w1',role},screen:{step:1,label:'Company & Market'},company:{website:'https://acme.example'},markets:['Latvia'],profile:{},icps:[],signals:[],research:{count:0},discoverySummary:{},crmSummary:{},outreachSummary:{},integrationStatus:[],readiness:{}},COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{async generate(){return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Safe answer',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};},async search(){return {results:[],usage:{input_tokens:0,output_tokens:0}};}}},token};}
 function req(path,{method='GET',token,body}={}){return new Request(`https://api.example.test${path}`,{method,headers:{Cookie:token?`leadintel_session=${token}`:'','Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
 
+sqliteTest('deleting one chat removes messages, preserves saved memories and cannot resurrect on reopen',async()=>{
+ const {env,token,db}=await fixture();
+ db.raw.exec(`INSERT INTO copilot_conversations(id,workspace_id,title) VALUES('delete-me','w1','Old'),('keep-me','w1','Keep'),('other','w2','Other');
+ INSERT INTO copilot_messages(id,workspace_id,conversation_id,role,content) VALUES('old-message','w1','delete-me','user','Old text');
+ INSERT INTO copilot_memories(id,workspace_id,kind,fingerprint,value_json,source_conversation_id) VALUES('saved','w1','preference','saved','{"value":"Keep this memory"}','delete-me');`);
+ const response=await handleCopilotRoute(req('/api/copilot/conversations/delete-me?workspace_id=w1',{method:'DELETE',token}),env,{});
+ assert.equal(response.status,200);assert.equal((await response.json()).deleted,1);
+ assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,0);
+ assert.equal(db.raw.prepare("SELECT source_conversation_id FROM copilot_memories WHERE id='saved'").get().source_conversation_id,null);
+ assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_conversations').get().n,2);
+ assert.equal((await handleCopilotRoute(req('/api/copilot/conversations/delete-me?workspace_id=w1',{token}),env,{})).status,404);
+ const boot=await (await handleCopilotRoute(req('/api/copilot/bootstrap?workspace_id=w1',{token}),env,{})).json();assert.equal(boot.latestConversation.id,'keep-me');
+ const retry=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{conversation_id:'delete-me',message:'Late reply'}}),env,{});assert.equal(retry.status,404);
+});
+
+sqliteTest('clear all history removes every chat beyond the list limit and preserves other workspaces and memories',async()=>{
+ const {env,token,db}=await fixture();
+ for(let i=0;i<55;i++)db.raw.prepare('INSERT INTO copilot_conversations(id,workspace_id) VALUES(?,?)').run('chat-'+i,'w1');
+ db.raw.exec(`INSERT INTO copilot_conversations(id,workspace_id) VALUES('other','w2');
+ INSERT INTO copilot_messages(id,workspace_id,conversation_id,role,content) VALUES('other-message','w2','other','user','Keep');
+ INSERT INTO copilot_memories(id,workspace_id,kind,fingerprint,value_json,source_conversation_id) VALUES('saved','w1','preference','saved','{"value":"Keep"}','chat-0');`);
+ const response=await handleCopilotRoute(req('/api/copilot/conversations?workspace_id=w1',{method:'DELETE',token}),env,{});assert.equal(response.status,200);assert.equal((await response.json()).deleted,55);
+ assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_conversations').get().n,1);
+ assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,1);
+ assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_memories').get().n,1);
+ const boot=await (await handleCopilotRoute(req('/api/copilot/bootstrap?workspace_id=w1',{token}),env,{})).json();assert.equal(boot.latestConversation,null);
+ assert.deepEqual((await (await handleCopilotRoute(req('/api/copilot/conversations?workspace_id=w1',{token}),env,{})).json()).conversations,[]);
+});
+
+sqliteTest('history deletion is owner-only, authenticated and workspace scoped',async()=>{
+ for(const role of ['owner','researcher','sales']){
+  const {env,token,db}=await fixture({role});db.raw.exec(`INSERT INTO copilot_conversations(id,workspace_id) VALUES('other','w2'),('mine','w1');`);
+  assert.equal((await handleCopilotRoute(req('/api/copilot/conversations?workspace_id=w1',{method:'DELETE'}),env,{})).status,401);
+  assert.equal((await handleCopilotRoute(req('/api/copilot/conversations/other?workspace_id=w1',{method:'DELETE',token}),env,{})).status,role==='owner'?404:403);
+  if(role!=='owner')assert.equal((await handleCopilotRoute(req('/api/copilot/conversations?workspace_id=w1',{method:'DELETE',token}),env,{})).status,403);
+  assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_conversations').get().n,2);
+ }
+});
+
 sqliteTest('copilot routes require explicit workspace id and authentication',async()=>{
   const {env,token}=await fixture();
   let response=await handleCopilotRoute(req('/api/copilot/bootstrap',{token}),env,{});assert.equal(response.status,400);
