@@ -128,7 +128,7 @@ test('no stylesheet gives the workspace grid a third column above 720px now that
   }
   assert.deepEqual(offenders,[]);
   const step6=read('message-workspace.css');
-  assert.match(step6,/body:has\(#step-6\.active\) \.workspace\{grid-template-columns:280px minmax\(0,1fr\)\}/);
+  assert.match(step6,/body:has\(#step-6\.active\) \.workspace\{grid-template-columns:322px minmax\(0,1fr\)\}/);
   assert.doesNotMatch(step6,/body:has\(#step-6\.active\) \.workspace\{[^}]*(258px|max-width)/);
 });
 
