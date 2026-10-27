@@ -23,10 +23,11 @@ test('Ask LeadIntel is a plain fixed button bottom-right: no mascot, no animatio
   assert.doesNotMatch(entry,/<svg|copilot-pupil|copilot-entry-hint|aria-describedby/);
   assert.match(loader,/copilot-entry-title">Ask LeadIntel</);
   assert.doesNotMatch(loader,/<svg|pupil|pointermove|bindMascot|aria-describedby|document\.body|MutationObserver/);
-  // Same button as everywhere else (Edgars/Jonathan 2026-10-26): the platform's .primary-btn supplies colour, radius, shadow, font and hover; copilot.css only positions it.
+  // Edgars 2026-10-27: retain the platform button and positioning, with a larger gold launcher.
   assert.match(loader,/className='leadintel-copilot-entry primary-btn'/);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*position:fixed[^}]*right:\d+px[^}]*bottom:\d+px/s);
-  assert.doesNotMatch(css,/\.leadintel-copilot-entry\{[^}]*(border-radius|background|font)/s,'no own look: the platform button rule decides');
+  assert.match(css,/\.leadintel-copilot-entry\.primary-btn\{[^}]*min-height:48px[^}]*padding:14px 22px[^}]*background:var\(--accent,#bc8f2a\)[^}]*color:var\(--ink,#13201c\)/s);
+  assert.match(css,/\.leadintel-copilot-entry \.copilot-entry-title\{font-size:15px\}/);
   assert.match(read('styles.css'),/\.primary-btn\{background:var\(--ink\);color:white;border-radius:10px/);
   assert.match(css,/\.copilot-entry-subtitle\{[^}]*clip:rect\(0 0 0 0\)/s,'the subtitle stays for screen readers and the release smoke check only');
   assert.doesNotMatch(css,/@keyframes|copilot-mascot|copilot-eye|copilot-pupil|copilot-entry-hint|copilot-suggestion|copilot-message-avatar|copilot-header-mascot/);
