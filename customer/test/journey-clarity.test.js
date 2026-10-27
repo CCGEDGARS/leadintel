@@ -128,3 +128,5 @@ test('keyboard stage activation remains distinct from nested substep and channel
  const stage=w.document.querySelector('li');stage.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.deepEqual(opened,['6']);
  stage.querySelector('button').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.deepEqual(opened,['6']);w.close();
 });
+
+test('active sidebar names the missing requirement and offers its existing review action',()=>{const input=messages();input.outreach.items[0].approved=false;const model=Journey.buildJourneyModel(input),{w,ctx}=renderer(model);ctx.syncProcessMap();const button=w.document.querySelector('[data-workflow-stage="6"] [data-sidebar-next-action]');assert.equal(button.hidden,false);assert.match(button.textContent,/Review and approve/);assert.equal(button.dataset.sidebarSubstep,'approval');assert.equal(button.dataset.stageId,'6');w.close();});

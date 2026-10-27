@@ -51,7 +51,7 @@ test('composer mounts once, preserves canonical fields/listeners and keeps setti
 test('sender settings separate meeting options and show business facts once',()=>{
  const {document}=mounted();
  assert.ok(document.getElementById('mw-meeting-options'));
- assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.querySelector('.outreach-drafts').nextElementSibling.id,'mw-meeting-options');
+ assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.className,'mw-message-footer');
  assert.ok(!document.getElementById('mw-settings').contains(document.getElementById('message-meetingDateOne')));
  assert.equal(document.getElementById('message-meetingDateOne').closest('label').hidden,true);
  assert.equal(document.getElementById('message-pitch-preview').hidden,true);

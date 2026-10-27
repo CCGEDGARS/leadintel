@@ -12,7 +12,7 @@ const ready={ready:true,authenticated:true,hasDraft:true,senderIdentityReady:tru
 test('a saved draft blocked by a pending update has a visible explanation and working update action beside the flow button',()=>{
  const {document,w}=mounted(),q=id=>document.getElementById(id);let updates=0;q('message-generate').onclick=null;q('message-generate').addEventListener('click',()=>updates++);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true});
- assert.equal(q('mw-flow-readiness')?.hidden,false);assert.match(q('mw-flow-readiness')?.textContent||'',/Update.*Save/i);assert.equal(q('mw-flow-resolve')?.hidden,false);q('mw-flow-resolve').click();assert.equal(updates,1);assert.equal(q('mw-add-flow').disabled,true);
+ assert.equal(q('mw-flow-readiness')?.hidden,false);assert.match(q('mw-flow-readiness')?.textContent||'',/Update.*Save/i);assert.equal(q('mw-flow-resolve')?.hidden,false);q('mw-flow-resolve').click();assert.equal(updates,0);q('message-generate').click();assert.equal(updates,1);assert.equal(q('mw-add-flow').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('mw-flow-resolve').hidden,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,inFlow:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('mw-add-flow').textContent,'Continue to Delivery →');w.close();
 });

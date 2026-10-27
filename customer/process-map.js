@@ -194,6 +194,12 @@ function renderSidebarSteps(marker,stage,expanded){
     replaceJourneyChildren(channels,['email','linkedin','phone'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent={email:'Email',linkedin:'LinkedIn',phone:'Phone call'}[channel];button.disabled=!stage.available&&!stage.active;if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
   }
 
+  let nextAction=marker.querySelector('[data-sidebar-next-action]');
+  if(!nextAction){nextAction=document.createElement('button');nextAction.type='button';nextAction.className='sidebar-expand sidebar-next-action';nextAction.dataset.sidebarNextAction='true';marker.append(nextAction);}
+  nextAction.hidden=!stage.active||!stage.nextTarget;
+  nextAction.textContent='Next: '+stage.nextAction;
+  if(stage.nextTarget){nextAction.dataset.stageId=stage.nextTarget.stageId;nextAction.dataset.sidebarSubstep=stage.nextTarget.itemId;}
+  else {delete nextAction.dataset.stageId;delete nextAction.dataset.sidebarSubstep;}
   let toggle=marker.querySelector('[data-sidebar-expand]');
   if(!toggle){
     toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-expand';toggle.dataset.sidebarExpand='true';
@@ -297,7 +303,7 @@ function reviewMiniStep(stageId,itemId){
     3:{icps:'#icp-list',signals:'#signal-designer',opportunities:'#strategy-market-summary',strategy:'#activate-market-strategy'},
     4:{scope:'#discovery-target-count',companies:'#run-company-discovery',review:'#company-candidates',pipeline:'#company-candidates'},
     5:{'buyer-quality':'.buyer-quality-supervisor',people:'.selected-prospect-row'},
-    6:{brand:'#brand-identity-toggle',scenario:'#step-6.message-workspace #message-offer, #step-6:not(.message-workspace) #core-scenario-summary',company:'#outreach-company-select',dossier:'#build-opportunity-dossier',scripts:'#outreach-email-body',approval:'#approve-outreach'},
+    6:{brand:'#brand-identity-toggle',scenario:'#step-6.message-workspace #message-offer, #step-6:not(.message-workspace) #core-scenario-summary',company:'#outreach-company-select',dossier:'#build-opportunity-dossier',scripts:'#outreach-email-body',approval:'#step-6.message-workspace #mw-flow-readiness, #step-6:not(.message-workspace) #approve-outreach'},
     7:{package:'#delivery-company-select',sent:'#confirm-delivery-sent',reply:'#reply-text',outcome:'#delivery-outcomes',learning:'#delivery-activity'}
   };
   const selector=targets[stageId]?.[itemId];

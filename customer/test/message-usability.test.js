@@ -46,3 +46,5 @@ test('an unresolved preview blocks both the footer and direct handoff handler',a
 test('approved messages explain why language controls are locked and how to unlock them',()=>{
  const h=mounted();try{h.w.LeadIntelMessageTranslationUI.render(h.w.document,{...h.item(),approved:true},{usable:true,languageSettings:{languages:['en','lv'],defaultLanguage:'en',targetLanguage:'lv'}});assert.equal(h.q('message-translate').disabled,true);assert.match(h.q('message-translation-status').textContent,/approved.*Edit.*Save.*translat/i);}finally{h.w.close();}
 });
+
+test('meeting setup precedes Delivery and missing facts explain a disabled Continue',()=>{const h=mounted();try{const d=h.w.document,meeting=h.q('mw-meeting-options'),footer=d.querySelector('.mw-message-footer');assert.equal(meeting.nextElementSibling,footer);assert.ok(h.q('mw-tools-drawer').contains(h.q('mw-follow-up-host')));show(h,{missingFacts:['project milestone']});assert.equal(h.q('mw-add-flow').disabled,true);assert.match(h.q('mw-flow-readiness-text').textContent,/project milestone/);assert.equal(h.q('mw-flow-resolve').hidden,false);}finally{h.w.close();}});
