@@ -39,10 +39,32 @@
       "conversation_monitoring_version": "supervised-follow-up-v1",
       "conversation_poll_interval_minutes": 60,
       "writing_assistant_outcome_version": "outcome-first-v1",
-      "company_materials_version": "company-materials-v1"
+      "company_materials_version": "company-materials-v1",
+      "copilot_mentor_version": "20261027-mentor-v1"
     }
   },
   "smokeChecks": [
+    {
+      "id": "copilot-mentor-copy",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "Your AI business mentor. Every step of the way.",
+        "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move\u2014with advice tailored to your business.",
+        "Explore capabilities",
+        "I never change your settings"
+      ]
+    },
+    {
+      "id": "copilot-mentor-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "mentor=20261027-v1"
+      ]
+    },
     {
       "id": "copilot-chat-deletion-entry",
       "type": "text",
@@ -884,7 +906,7 @@
       "url": "/customer/copilot-ui.js",
       "status": 200,
       "contains": [
-        "Your AI business assistant.",
+        "Your AI business mentor. Every step of the way.",
         "Researching public sources",
         "Please describe the problem in text."
       ],

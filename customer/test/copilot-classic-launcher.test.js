@@ -8,11 +8,10 @@ import fs from 'node:fs';
 const read=(path)=>fs.readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
 const html=read('index.html'),css=read('copilot.css'),loader=read('copilot-loader.js'),ui=read('copilot-ui.js');
 export const INTRO={
-  title:'Your AI business assistant.',
-  copy:'Ask about your workspace, companies, markets, sales strategy or tools. LeadIntel can research public sources, explain findings and help you decide your next step.',
-  what:'It answers in your language, knows which step you are on, researches public sources when a question needs facts, and shows where each fact comes from. It gives advice only: it never changes your workspace or sends anything.',
-  tasks:['Explain what the current step expects and what is still missing.','Summarise a company, market or buyer from your workspace and public sources.','Check a trigger, a message or a plan before you act on it.','Help you choose the next commercial action.'],
-  when:'When a step is unclear, when you want a second opinion on evidence or a message before sending, or when something in the workspace looks wrong and you want to understand why. Changes themselves are made in the steps.'
+ title:'Your AI business mentor. Every step of the way.',
+ copy:'Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move—with advice tailored to your business.',
+ what:'Answers, drafts and recommendations only. I never change your settings, code, workflows, CRM records or approved templates, and never send anything.',
+ tasks:['Journey support: explain steps, spot missing information and check quality and connections.','Business research: analyse public websites, companies, decision-makers, markets and statistics.','Business advice: compare options, explore scenarios and create drafts tailored to your goals.']
 };
 
 test('Ask LeadIntel is a plain fixed button bottom-right: no mascot, no animation, no hover hint',()=>{
@@ -37,8 +36,8 @@ test('Ask LeadIntel is a plain fixed button bottom-right: no mascot, no animatio
 });
 
 test('the drawer opens with a description of the assistant instead of a greeting and suggested questions',()=>{
-  for(const text of [INTRO.title,INTRO.copy,INTRO.what,INTRO.when,...INTRO.tasks])assert.ok(ui.includes(text),text);
-  for(const heading of ['What it does','Typical tasks','When to open it'])assert.ok(ui.includes(`'${heading}'`),heading);
+  for(const text of [INTRO.title,INTRO.copy,INTRO.what,...INTRO.tasks])assert.ok(ui.includes(text),text);
+  for(const heading of ['How I can help','You stay in control'])assert.ok(ui.includes(`'${heading}'`),heading);
   assert.doesNotMatch(ui,/How can I help you today|copilot-suggestion|Suggested questions|mascotAvatar|copilot-greeting|copilot-subtitle/);
   assert.match(ui,/copilot-intro-list/);
   assert.match(css,/\.copilot-intro\[hidden\]\{display:none\}/);
@@ -63,7 +62,7 @@ test('the intro is visible when the drawer opens and stays while the conversatio
     const intro=panel.querySelector('[data-copilot-intro]');
     assert.equal(intro.hidden,false);
     assert.equal(intro.querySelector('.copilot-intro-title').textContent,INTRO.title);
-    assert.deepEqual([...intro.querySelectorAll('.copilot-intro-heading')].map(el=>el.textContent),['What it does','Typical tasks','When to open it']);
+    assert.deepEqual([...intro.querySelectorAll('.copilot-intro-heading')].map(el=>el.textContent),['How I can help','You stay in control']);
     assert.deepEqual([...intro.querySelectorAll('.copilot-intro-list li')].map(el=>el.textContent),INTRO.tasks);
     assert.equal(panel.querySelector('.copilot-suggestion'),null);assert.equal(panel.querySelector('.copilot-header svg'),null);
     panel.querySelector('textarea').value='What does this step expect?';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));

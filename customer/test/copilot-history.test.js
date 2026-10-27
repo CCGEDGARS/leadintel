@@ -73,8 +73,8 @@ test('opening the assistant brings the latest conversation back from the server 
     assert.equal(panel.querySelector('.copilot-source').textContent,'[1] Official page');
     const intro=panel.querySelector('[data-copilot-intro]');
     assert.equal(intro.hidden,false);assert.ok(intro.classList.contains('is-collapsed'),'with a conversation present the description folds');
-    assert.equal(intro.querySelector('[data-copilot-intro-toggle]').textContent,'More');
-    intro.querySelector('[data-copilot-intro-toggle]').click();assert.ok(!intro.classList.contains('is-collapsed'));assert.equal(intro.querySelector('[data-copilot-intro-toggle]').textContent,'Less');
+    assert.equal(intro.querySelector('[data-copilot-intro-toggle]').textContent,'Explore capabilities');
+    intro.querySelector('[data-copilot-intro-toggle]').click();assert.ok(!intro.classList.contains('is-collapsed'));assert.equal(intro.querySelector('[data-copilot-intro-toggle]').textContent,'Hide capabilities');
     const bar=panel.querySelector('[data-copilot-conversation-bar]');
     assert.equal(bar.hidden,false);assert.match(bar.textContent,/2 messages/);
     const body=panel.querySelector('[data-copilot-body]');
@@ -83,11 +83,11 @@ test('opening the assistant brings the latest conversation back from the server 
   }finally{restore();}
 });
 
-test('an empty workspace opens with the description unfolded and no conversation bar',async()=>{
+test('an empty workspace opens with the compact description and no conversation bar',async()=>{
   const {panel,calls,restore}=await mount({latest:null});
   try{
     assert.deepEqual(calls.get,[]);
-    assert.ok(!panel.querySelector('[data-copilot-intro]').classList.contains('is-collapsed'));
+    assert.ok(panel.querySelector('[data-copilot-intro]').classList.contains('is-collapsed'));
     assert.equal(panel.querySelector('[data-copilot-conversation-bar]').hidden,true);
   }finally{restore();}
 });

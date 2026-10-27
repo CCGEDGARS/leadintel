@@ -59,3 +59,7 @@ User instruction, 22 October 2026: Buyers and Messages must use one source-backe
 ## Multilingual research and outreach
 
 For language selection, Russian/Kazakh outreach, Kazakhstan research, translation or language persistence, use `.agents/skills/leadintel-multilingual-outreach/SKILL.md`. Preserve the protected core-template and release-integrity rules.
+
+## Ask LeadIntel is advisory only
+
+User instruction, 27 October 2026: Ask LeadIntel explains every journey step, diagnoses missing information and connections, checks quality, creates drafts and recommends solutions as a business mentor. It must never change code, interface elements, settings, workflows, processes, CRM records, approved templates or operational data, even when requested in chat. It must never send, approve, activate or execute. Use dedicated app controls for operational changes; chat history, memories and explicitly managed skills remain separate. Public website reads and research are permitted; retain actual execution receipts, sources, access gaps and uncertainty. Do not advertise book-created skills or paid contact enrichment inside Ask LeadIntel until those capabilities are genuinely connected and verified.
