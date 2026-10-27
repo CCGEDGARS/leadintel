@@ -1,3 +1,6 @@
+import {handleLanguagePackRoute} from './language-pack-routes.js';
+import {runLanguagePackJobs} from './language-packs.js';
+import {handleGoogleTranslationRoute} from './google-translation-routes.js';
 import {handleGoogleCalendarRoute} from './google-calendar.js';
 import {handleScriptLibraryRoute} from './script-library-routes.js';
 import {handleWritingWorkspaceRoute} from './writing-workspace-routes.js';
@@ -76,6 +79,8 @@ export default {
       });
     }
     try{
+      const languagePack=await handleLanguagePackRoute(request,env,cors,ctx);if(languagePack)return languagePack;
+      const translation=await handleGoogleTranslationRoute(request,env,cors);if(translation)return translation;
       const calendar=await handleGoogleCalendarRoute(request,env,cors);if(calendar)return calendar;
       const researchCosts=await handleResearchCostsRoute(request,env,cors);if(researchCosts)return researchCosts;
       const access=await handleAccessRoute(request,env,cors);if(access)return access;
@@ -113,7 +118,7 @@ export default {
     const now=new Date(controller.scheduledTime||Date.now());
     const storageEnv=env;env=withWorkspaceStorage(env);
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
-    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()})]));return;}
+    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()}),runLanguagePackJobs(env,{now:now.getTime()})]));return;}
     const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),

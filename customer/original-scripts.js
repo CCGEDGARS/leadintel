@@ -3,7 +3,7 @@
  const clone=v=>JSON.parse(JSON.stringify(v));
  const supportedStyles=Object.freeze({email:Object.freeze(['professional','curiosity','friendly','brutal']),linkedin:Object.freeze(['professional','curiosity','friendly'])});
  const supports=(channel,style)=>Object.hasOwn(supportedStyles,channel)&&supportedStyles[channel].includes(style);
- const key=(channel,style,language)=>{if(!supports(channel,style)||! /^[a-z]{2}$/.test(language))throw Error('Choose a core style and supported language');return `${channel}:${style}:${language}`;};
+ const key=(channel,style,language)=>{if(!supports(channel,style)||! /^(?:[a-z]{2}|zh-CN|zh-TW)$/.test(language))throw Error('Choose a core style and supported language');return `${channel}:${style}:${language}`;};
  function normalize(value={}){const out={};for(const [id,r] of Object.entries(value||{})){try{const [channel,style,language]=id.split(':');if(key(channel,style,language)!==id||language==='en'||typeof r.body!=='string'||!r.body.trim()||r.body.length>12000)continue;out[id]={body:r.body,locked:r.locked!==false,revision:Math.max(1,Number(r.revision)||1),updatedAt:String(r.updatedAt||''),history:Array.isArray(r.history)?clone(r.history):[]};}catch{}}return out;}
  function get(value,channel,style,language){return normalize(value)[key(channel,style,language)]||null;}
  function owner(options){if(options?.role!=='owner')throw Error('Only the workspace owner can manage original scripts');}

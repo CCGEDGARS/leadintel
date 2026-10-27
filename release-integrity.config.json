@@ -45,10 +45,52 @@
       "workspace_skills_limit": 30,
       "workspace_skills_resilience_version": "20261027-v2",
       "book_processing_version": "20261027-single-pass-v1",
-      "book_processing_concurrency": 3
+      "book_processing_concurrency": 3,
+      "language_packs_version": "country-language-v1",
+      "google_translation_version": "google-translation-v1"
     }
   },
   "smokeChecks": [
+    {
+      "id": "country-language-catalogue",
+      "type": "text",
+      "url": "/customer/language-pack-catalogue.js",
+      "status": 200,
+      "contains": [
+        "resolveCountry",
+        "Turkish",
+        "zh-CN"
+      ]
+    },
+    {
+      "id": "translation-preview-controls",
+      "type": "text",
+      "url": "/customer/message-translation-ui.js",
+      "status": 200,
+      "contains": [
+        "Apply translation",
+        "Undo translation",
+        "Google Translate"
+      ]
+    },
+    {
+      "id": "country-language-api-auth",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/language-packs?workspace_id=smoke&language=sv",
+      "status": 401,
+      "type": "text",
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "google-translation-api-auth",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/translation/google?workspace_id=smoke",
+      "status": 401,
+      "type": "text",
+      "contains": [
+        "Authentication required"
+      ]
+    },
     {
       "id": "book-skill-failure-diagnostics",
       "type": "text",

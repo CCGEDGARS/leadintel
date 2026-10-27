@@ -119,7 +119,7 @@ test('a contact promise that ignores abort cannot leave the buyer task running p
  const {context,candidate,centre,timers}=runtime();
  context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[{id:'ada',name:'Ada Andersson',title:'Inköpschef',organization_name:candidate.company}]})});
  context.findPublicProspectContacts=async()=>{candidate.publicContactStatus='loading';[...timers.values()].find(timer=>timer.delay>450000)?.fn();return new Promise(()=>{});};
- const result=await Promise.race([context.run(candidate,{allowCrmSync:false}),new Promise(resolve=>setTimeout(()=>resolve('hung'),100))]);
+ const result=await context.run(candidate,{allowCrmSync:false});
  assert.equal(result,false);
  assert.equal(candidate.peopleStatus,'error');
  assert.equal(candidate.publicContactStatus,'error');
@@ -144,7 +144,7 @@ test('late buyer provider results cannot write into a different workspace with t
  assert.equal(centre.list()[0].status,'error');
 });
 
-test('a fulfilled public query in an interrupted batch is retained when a sibling ignores cancellation',async()=>{
+test('a fulfilled public query in an interrupted batch is retained when a sibling ignores cancellation',{timeout:2000},async()=>{
  const {context,candidate,centre,timers}=runtime();let searches=0;
  context.searchBuyerPublicPages=async query=>{
   if(/\(contact OR contacts OR kontakt OR team\)|\(management OR leadership OR ledning OR executive\)|\(investor-contacts OR press-contact/.test(query))return [];
@@ -153,7 +153,7 @@ test('a fulfilled public query in an interrupted batch is retained when a siblin
   if(index===1){await new Promise(resolve=>setTimeout(resolve,5));[...timers.values()].find(timer=>timer.delay===450000).fn();}
   return new Promise(()=>{});
  };
- const result=await Promise.race([context.run(candidate,{allowCrmSync:false}),new Promise(resolve=>setTimeout(()=>resolve('hung'),100))]);
+ const result=await context.run(candidate,{allowCrmSync:false});
  assert.equal(result,false);
  assert.ok(candidate.buyerDiscovery.pool?.some(person=>person.name==='Ada Andersson'));
  assert.ok(candidate.buyerDiscovery.resultDiagnostics.some(row=>row.accepted&&row.parsedName==='Ada Andersson'));

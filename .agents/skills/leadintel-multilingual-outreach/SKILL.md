@@ -20,3 +20,10 @@ Store translated versions independently. Preserve history, Undo and stale-source
 
 ## Verification
 Test selectors, manual override, Kazakhstan suggestion/confirmation, source preservation, protected tokens, CRM save/reopen, stale translations, invalid provider responses and context races. Deterministic checks cannot prove semantic equivalence or native fluency. Review output for mixed-language sentences, calques and meaning drift. Verify actual provider execution separately from offline tests. Follow release-integrity before making production claims.
+
+## Country-triggered language packs — 27 October 2026
+Country selection queues public language guidance, never message translation. Ambiguous markets require explicit language choice; unknown regions must not queue every language. Explicit English preferences remain authoritative. Country packs are separate from the 30 book-derived skills. Shared packs contain only public successfully read language references, dates, quotes and bounded AI checks; no workspace seller/buyer data or private examples. Preserve baseline/queued/preparing/ai_tested/unavailable honestly; AI-tested is not native-reviewed. Durable jobs checkpoint source reads, candidate rules and review under leases and bounded retries. Never count snippets as source reads.
+
+English is always primary and required before translation. Translate previews from the existing saved English version, even when another language is active. Apply updates a working copy; Save/approval/send remain separate. Cancel preserves current work. Undo is scoped to the same message/channel, retains recoverable translated history and never overwrites unrelated scripts. Case-preserve BCP47 Chinese variants through CRM/provenance and approved language references.
+
+Google Cloud Translation is a separate encrypted per-workspace API integration, never an alias for Gemini/Gmail. It remains optional and unavailable until connected. Do not silently substitute providers. Record translator, reviewer and language-pack revision/status separately. Native fluency and real-provider success require separate evidence beyond mocked regression tests.
