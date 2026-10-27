@@ -11,11 +11,11 @@ import {creditFailure} from './provider-credit-health.js';
 function analysisFailure(error){
  if(/WORKSPACE_STORAGE_FULL/.test(String(error?.message||'')))return 'Workspace storage is full. Completed sections are saved. Free space or upgrade storage, then retry.';
  const message=String(error?.message||''),http=message.match(/request failed \((\d+)\)/),status=Number(http?.[1]||0);
- if(creditFailure(status,message))return 'Analysis stopped: the AI provider reported exhausted credits or billing quota. Check billing for your active AI provider, then retry.';
+ if(creditFailure(status,message))return 'Analysis stopped: the AI provider reported exhausted credits or billing quota. Check billing for your saved book-analysis provider, then retry.';
  if(error?.name==='TimeoutError'||error?.name==='AbortError'||/timed out/i.test(message))return 'Analysis timed out. Completed sections are saved; retry to continue.';
  if(status===429)return 'Analysis paused by the AI provider rate limit. Wait briefly, then retry; this does not confirm exhausted credits.';
- if(status===401||status===403)return 'Analysis stopped: the AI provider rejected access. Check your active AI connection in Settings, then retry.';
- if(status===400||status===404)return 'Analysis stopped: the AI provider rejected the model or request. Check your active model in Settings, then retry.';
+ if(status===401||status===403)return 'Analysis stopped: the AI provider rejected access. Check your saved book-analysis connection in Settings, then retry.';
+ if(status===400||status===404)return 'Analysis stopped: the AI provider rejected the model or request. Check your saved book-analysis model in Settings, then retry.';
  if(status)return `Analysis stopped: AI provider request failed (${status}). Completed sections are saved; retry to continue.`;
  if(error?.status===503&&/active AI provider/.test(message))return message;
  if(/^(Technique response must be valid JSON|Invalid technique|Invalid technique response|Invalid skill module)/.test(message))return 'The AI provider returned invalid analysis output. Completed sections are saved; retry to continue.';
@@ -72,7 +72,7 @@ export async function runWritingReferenceJobs(env,{now=Date.now(),maxJobs=1,maxC
     catch(error){error.sectionAttempts=Number(prior?.attempts||0)+1;throw error;}
     const saved=await stmt(env,`UPDATE writing_reference_chunks SET status='Complete',techniques_json=? WHERE source_id=? AND chunk_id=? AND ${guard}`,JSON.stringify(value),source.id,work.id,source.id,job.lease_id).run();
     if(saved.meta.changes)await stmt(env,'UPDATE writing_reference_jobs SET last_progress_at=? WHERE source_id=? AND lease_id=?',Math.max(start,clock()),source.id,job.lease_id).run();
-   },{clock,deadline:start+BOOK_WINDOW_MS});
+   },{clock,deadline:start+BOOK_WINDOW_MS,budget:env.bookInvocationBudget,cost:12});
    if(outcome.errors.length)throw outcome.errors.find(e=>!skillFailure(e,'generate_section').retryable)||outcome.errors[0];
    const completed=await stmt(env,"SELECT chunk_id,techniques_json FROM writing_reference_chunks WHERE source_id=? AND status='Complete'",source.id).all();
    if(completed.results.length===chunks.length){

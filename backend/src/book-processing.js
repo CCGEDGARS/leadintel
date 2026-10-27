@@ -2,12 +2,13 @@ export const BOOK_CONCURRENCY=3;
 export const BOOK_BATCH_SIZE=60;
 export const BOOK_WINDOW_MS=240000;
 export const BOOK_LEASE_MS=420000;
-export async function boundedBookWork(items,perform,{concurrency=BOOK_CONCURRENCY,clock=Date.now,deadline=Infinity}={}){
+export async function boundedBookWork(items,perform,{concurrency=BOOK_CONCURRENCY,clock=Date.now,deadline=Infinity,budget,cost=32}={}){
  const errors=[];let started=0,completed=0,next=0;
  if(!Number.isInteger(concurrency)||concurrency<1||concurrency>BOOK_CONCURRENCY)throw Error('Invalid book concurrency');
  async function worker(){while(!errors.length&&next<items.length&&clock()<deadline){
+  if(budget&&!budget.admit(cost))return;
   const item=items[next++];started++;
-  try{await perform(item);completed++;}catch(error){errors.push(error);}
+  try{await perform(item);completed++;}catch(error){errors.push(error);}finally{budget?.release(cost);}
  }}
  // Each slot takes the next section immediately; an error stops new launches,
  // while already-started requests finish and retain their checkpoints.

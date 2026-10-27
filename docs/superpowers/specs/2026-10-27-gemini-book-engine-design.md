@@ -4,7 +4,7 @@ User authorization: “install gemini as primary engine for books and skills and
 
 Use connected Gemini and its saved model for book analysis and unfinished skill generation independently of the workspace active chat/writing provider. If Gemini is absent, preserve compatibility with the active provider and clearly label that fallback. Do not switch providers after a billed failure, create credentials, change active settings, or repeat completed work. Prepared skills require no AI connection.
 
-Replace synchronized waves with three continuously occupied worker slots, bounded by the same workspace lock, launch deadline, section attempts and batch bounds. Increase the invocation cap from 24 to 60 sections, with a tested D1 budget below 500 queries for remaining skill generation, to reduce scheduler round trips. Stop scheduling on first failure and drain started work. This removes waiting for the slowest section of every wave without increasing concurrency.
+Replace synchronized waves with three continuously occupied worker slots, bounded by the same workspace lock, launch deadline, section attempts and batch bounds. Increase the invocation cap from 24 to 60 sections, with admission based on the complete scheduled invocation including actual storage metering and cleanup, to reduce scheduler round trips. Stop scheduling on first failure and drain started work. This removes waiting for the slowest section of every wave without increasing concurrency.
 
 Display configured next-batch engine and fallback reason in both library tabs. Retain honest percentage/speed/ETA and usage disclosure. General assistant and writing routes are unchanged.
 

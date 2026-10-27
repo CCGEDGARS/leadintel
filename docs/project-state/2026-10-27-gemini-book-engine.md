@@ -8,7 +8,7 @@ Both Books and Skills show the configured next-batch engine/model. This is confi
 ## Scheduling
 Three worker slots now take the next section as soon as their previous section is saved. Unlike synchronized waves, fast sections do not wait for the slowest sibling. After the first observed error no new work launches; in-flight successes are checkpointed. Existing workspace lock, per-section attempt limits, cancellation guards and deadlines remain.
 
-The invocation cap increases from24 to60 sections; a four-minute launch window and120-second request deadline still end an invocation below its seven-minute lease. More work per invocation reduces minute-scheduler round trips when the provider is fast. A controlled60-section skill batch stays under500D1 prepare calls; existing440-page resumability and quota-bound cleanup coverage remains. This relies on the existing paid Worker/D1 architecture, not the50-query Free tier (https://developers.cloudflare.com/d1/platform/limits/). No extra queue or paid priority tier was installed.
+The invocation cap increases from24 to60 sections; a four-minute launch window and120-second request deadline still end an invocation below its seven-minute lease. More work per invocation reduces minute-scheduler round trips when the provider is fast. The real scheduled invocation shares one conservative counter across both book engines, quota metering/recovery and companion jobs. It counts D1 prepare statements (including statements later batched), reserves32per skill section/12per analysis section and stops new admission/cleanup around700 while leaving300for finalization and other bounded cron work. Thus60is a maximum, not a promise to consume60everyinvocation. Existing440-page resumability and quota-bound cleanup coverage remains. This relies on the existing paid Worker/D1 architecture, not the50-query Free tier (https://developers.cloudflare.com/d1/platform/limits/). No extra queue or paid priority tier was installed.
 
 ## Reproducible comparison
 Operator tool: `backend/scripts/compare-book-providers.mjs`.
@@ -28,3 +28,10 @@ No paid live comparison or authenticated customer-book completion has been obser
 
 ## Validation
 Gemini inactive preference, tenant isolation, active fallback, no silent error failover, actual book-runner integration, zero-call cached skill behavior, worker refill/failure/deadline,60-section boundedD1budget, engine display/escaping and controlled3provider comparison are covered by regressions. Full suite/build/review and exact-SHA release proof are final release gates.
+
+## Independent review corrections
+The fresh review found that the original unmetered60-section fixture omitted five storage-accounting statements per write. A real pending40-object deletion plus60sections and a peer book reproduced1236statements with the scheduler admission budget disabled. The real-scheduler regression now passes under900statements, using the complete migration fixture, actual quota wrapper, encrypted Gemini credentials with controlled transport, both workspaces, cleanup, recovery and companion jobs. A second direct shared-invocation regression passes under900; ordinary metered generation passes under800. No paid provider calls were made.
+
+The comparison originally inherited zero defaults for absent usage. It now captures actual presence from provider response metadata before structural validation; absent/partial counters remain unknown/null. Diagnostics point to the saved book-analysis connection rather than the globally active chat provider.
+
+Review limits accepted: credential validity, real billing/rate limits, actual scheduling/storage stalls, semantic completeness, provider speed, whole-book visual fidelity and private customer acceptance require real runtime observations. This release promises scoped routing, preserved checkpoints and bounded scheduling, not those unobserved outcomes. No deferred code-review findings remain.

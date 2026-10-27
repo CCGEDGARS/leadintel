@@ -11,7 +11,13 @@ export async function compareBookProviders({workItems,credentials,fetchImpl=fetc
  await boundedBookWork(jobs.map((job,index)=>({...job,index})),async({credential,work,index})=>{
   const started=clock(),receipt={provider:credential.provider,model:credential.model,locations:work.chunk.locations,elapsedMs:0,usage:null};
   try{
-   const module=await generateSkillModule({chunk:work.chunk,index:work.index,generate:async input=>{const value=await generateText({...input,provider:credential.provider,apiKey:credential.apiKey,model:credential.model,reasoningEffort:'low',responseFormat:'json',signal:AbortSignal.timeout(120000),fetchImpl});receipt.usage=value.usage||null;return value;}});
+   const module=await generateSkillModule({chunk:work.chunk,index:work.index,generate:input=>generateText({...input,provider:credential.provider,apiKey:credential.apiKey,model:credential.model,reasoningEffort:'low',responseFormat:'json',signal:AbortSignal.timeout(120000),fetchImpl:async(...args)=>{
+    const response=await fetchImpl(...args);
+    if(response.ok){try{const payload=await response.clone().json(),raw=credential.provider==='gemini'?payload.usageMetadata:payload.usage,count=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
+     receipt.usage={input_tokens:count(credential.provider==='gemini'?raw?.promptTokenCount:raw?.input_tokens),output_tokens:count(credential.provider==='gemini'?raw?.candidatesTokenCount:raw?.output_tokens),reasoning_tokens:count(credential.provider==='gemini'?raw?.thoughtsTokenCount:raw?.output_tokens_details?.reasoning_tokens)};
+    }catch{/* An unusable response provides no trustworthy usage receipt. */}}
+    return response;
+   }})});
    results[index]={...receipt,status:'valid',module};
   }catch(error){results[index]={...receipt,status:'failed',errorCode:skillFailure(error,'generate_section').code};}
   results[index].elapsedMs=Math.max(0,Math.round(clock()-started));
