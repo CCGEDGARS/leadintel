@@ -42,10 +42,22 @@
       "company_materials_version": "company-materials-v1",
       "copilot_mentor_version": "20261027-mentor-v1",
       "workspace_skills_version": "20261027-book-skills-v1",
-      "workspace_skills_limit": 30
+      "workspace_skills_limit": 30,
+      "workspace_skills_resilience_version": "20261027-v1"
     }
   },
   "smokeChecks": [
+    {
+      "id": "book-skill-failure-diagnostics",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "Diagnostic: ",
+        "sections saved",
+        "original failure detail was not recorded"
+      ]
+    },
     {
       "id": "book-skill-library-controls",
       "type": "text",

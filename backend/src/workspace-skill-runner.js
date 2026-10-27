@@ -1,3 +1,4 @@
+import {skillFailure,SKILL_MAX_ATTEMPTS} from './workspace-skill-errors.js';
 import {skillStmt,cleanupWorkspaceSkill} from './workspace-skill-store.js';
 import {chunkWritingReference} from './writing-reference-analysis.js';
 import {generateSkillModule} from './workspace-skill-generation.js';
@@ -5,7 +6,7 @@ import {buildSkillPackage} from './workspace-skill-export.js';
 import {workspaceSkillGenerator} from './workspace-skill-provider.js';
 async function releaseInput(env,row){if(!row.input_key)return;await env.WRITING_REFERENCES_BUCKET.delete(row.input_key);await skillStmt(env,"UPDATE workspace_skills SET input_key='' WHERE id=? AND status='Ready' AND input_key=?",row.id,row.input_key).run();}
 const guard="id=? AND lease_id=? AND status='Processing'";
-export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=2,generate}={}){
+export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=2,generate,clock=Date.now}={}){
  if(!env.WRITING_REFERENCES_BUCKET)return [];
  const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 5").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
  // A lost upload request must not leave a permanent Preparing record.
@@ -15,26 +16,34 @@ export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChu
  const outcomes=[];
  for(let n=0;n<maxJobs;n++){
   const lease=crypto.randomUUID(),job=await skillStmt(env,`UPDATE workspace_skills SET lease_id=?,lease_until=? WHERE id=(SELECT id FROM workspace_skills WHERE status='Processing' AND lease_until<? AND next_at<=? ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,now+180000,now,now,now).first();if(!job)break;
-  let calls=0;
+  let calls=0,phase='load_book',consecutiveFailures=Number(job.retry_attempts)||0;
   try{
-   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text()),chunks=chunkWritingReference(input.extracted),run=generate||await workspaceSkillGenerator(env,job.workspace_id);
+   const object=await env.WRITING_REFERENCES_BUCKET.get(job.input_key);if(!object)throw Error('SNAPSHOT_MISSING');const input=JSON.parse(await object.text()),chunks=chunkWritingReference(input.extracted);phase='connect_ai';const run=generate||await workspaceSkillGenerator(env,job.workspace_id);
    for(const [index,chunk] of chunks.entries()){
-    if(calls>=maxChunks)break;if(await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? AND chunk_index=?',job.id,index).first())continue;
+    if(calls>=maxChunks)break;phase='read_progress';if(await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? AND chunk_index=?',job.id,index).first())continue;
     if(!await skillStmt(env,`SELECT id FROM workspace_skills WHERE ${guard}`,job.id,lease).first())break;
-    calls++;const module=await generateSkillModule({chunk,index,catalogue:input.catalogue,generate:run}),key=`skills/${job.workspace_id}/${job.id}/${module.id}-${lease}.json`;
-    const reserved=await skillStmt(env,`INSERT INTO workspace_skill_objects(skill_id,object_key) SELECT ?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard})`,job.id,key,job.id,lease).run();if(!reserved.meta.changes)break;
+    phase='generate_section';calls++;const module=await generateSkillModule({chunk,index,catalogue:input.catalogue,generate:run}),key=`skills/${job.workspace_id}/${job.id}/${module.id}-${lease}.json`;
+    phase='save_section';const reserved=await skillStmt(env,`INSERT INTO workspace_skill_objects(skill_id,object_key) SELECT ?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard})`,job.id,key,job.id,lease).run();if(!reserved.meta.changes)break;
     await env.WRITING_REFERENCES_BUCKET.put(key,JSON.stringify(module));
-    const saved=await skillStmt(env,`INSERT INTO workspace_skill_chunks(skill_id,chunk_index,object_key) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard}) ON CONFLICT DO NOTHING`,job.id,index,key,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);
+    const saved=await skillStmt(env,`INSERT INTO workspace_skill_chunks(skill_id,chunk_index,object_key) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard}) ON CONFLICT DO NOTHING`,job.id,index,key,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);else{consecutiveFailures=0;await skillStmt(env,`UPDATE workspace_skills SET retry_attempts=0,error='',error_code='',error_phase='' WHERE ${guard}`,job.id,lease).run();}
    }
-   const completed=await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? ORDER BY chunk_index',job.id).all();
+   phase='assemble_skill';const completed=await skillStmt(env,'SELECT object_key FROM workspace_skill_chunks WHERE skill_id=? ORDER BY chunk_index',job.id).all();
    if(completed.results.length===chunks.length){
     const modules=[];for(const row of completed.results){const value=await env.WRITING_REFERENCES_BUCKET.get(row.object_key);if(!value)throw Error('MODULE_MISSING');modules.push(JSON.parse(await value.text()));}
-    const pkg=buildSkillPackage(input,modules),key=`skills/${job.workspace_id}/${job.id}/package-${lease}.json`;
+    phase='publish_skill';const pkg=buildSkillPackage(input,modules),key=`skills/${job.workspace_id}/${job.id}/package-${lease}.json`;
     const reserved=await skillStmt(env,`INSERT INTO workspace_skill_objects(skill_id,object_key) SELECT ?,? WHERE EXISTS(SELECT 1 FROM workspace_skills WHERE ${guard})`,job.id,key,job.id,lease).run();if(!reserved.meta.changes){outcomes.push({id:job.id,status:'Discarded',calls});continue;}
     await env.WRITING_REFERENCES_BUCKET.put(key,JSON.stringify(pkg));
-    const saved=await skillStmt(env,`UPDATE workspace_skills SET status='Ready',package_key=?,routing_json=?,description=?,completed=?,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE ${guard}`,key,JSON.stringify(modules.map(m=>({id:m.id,title:m.title,purpose:m.purpose.slice(0,300),triggers:m.triggers}))),modules.slice(0,3).map(m=>m.purpose).join(' ').slice(0,1000),chunks.length,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);else await releaseInput(env,job).catch(()=>null);outcomes.push({id:job.id,status:saved.meta.changes?'Ready':'Discarded',calls});
+    const saved=await skillStmt(env,`UPDATE workspace_skills SET status='Ready',retry_attempts=0,error='',error_code='',error_phase='',package_key=?,routing_json=?,description=?,completed=?,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE ${guard}`,key,JSON.stringify(modules.map(m=>({id:m.id,title:m.title,purpose:m.purpose.slice(0,300),triggers:m.triggers}))),modules.slice(0,3).map(m=>m.purpose).join(' ').slice(0,1000),chunks.length,job.id,lease).run();if(!saved.meta.changes)await env.WRITING_REFERENCES_BUCKET.delete(key);else await releaseInput(env,job).catch(()=>null);outcomes.push({id:job.id,status:saved.meta.changes?'Ready':'Discarded',calls});
    }else{await skillStmt(env,`UPDATE workspace_skills SET completed=?,lease_until=0,next_at=? WHERE ${guard}`,completed.results.length,now+1000,job.id,lease).run();outcomes.push({id:job.id,status:'Processing',calls});}
-  }catch(error){const message=/WORKSPACE_STORAGE_FULL/.test(error.message)?'Workspace storage is full. Free space or upgrade storage, then retry. Completed sections are saved.':error.status===503&&/active AI provider/.test(error.message)?'Connect an active AI provider in Settings, then retry.':/quota|billing|insufficient_quota/i.test(error.message)?'Your AI provider reported a billing or quota issue. Check your provider account, then retry.':/Invalid skill module/.test(error.message)?'The AI returned incomplete skill content. Completed sections are saved; retry to continue.':'Skill creation was interrupted. Completed sections are saved. Check your AI connection and retry.';await skillStmt(env,`UPDATE workspace_skills SET status='Failed',error=?,lease_until=0,revision=revision+1 WHERE ${guard}`,message,job.id,lease).run();outcomes.push({id:job.id,status:'Failed',calls});}
+  }catch(error){
+   const diagnostic=skillFailure(error,phase),attempt=consecutiveFailures+1,retry=diagnostic.retryable&&attempt<SKILL_MAX_ATTEMPTS;
+   const message=diagnostic.message+(retry?` Will retry automatically (${attempt}/${SKILL_MAX_ATTEMPTS}).`:`${attempt>=SKILL_MAX_ATTEMPTS?' Automatic retries stopped after three attempts.':''} Completed sections are saved.`);
+   const progress=await skillStmt(env,'SELECT count(*) AS n FROM workspace_skill_chunks WHERE skill_id=?',job.id).first().catch(()=>null);
+   const nextAt=retry?Math.max(now,clock())+30000*2**(attempt-1):0;
+   const saved=await skillStmt(env,`UPDATE workspace_skills SET status=?,error=?,error_code=?,error_phase=?,retry_attempts=?,completed=?,next_at=?,lease_until=0,revision=revision+1 WHERE ${guard}`,retry?'Processing':'Failed',message,diagnostic.code,phase,attempt,Number(progress?.n??job.completed)||0,nextAt,job.id,lease).run();
+   if(saved.meta.changes)console.warn('workspace_skill_failure',JSON.stringify({skillId:job.id,code:diagnostic.code,phase,attempt,retry}));
+   outcomes.push({id:job.id,status:saved.meta.changes?(retry?'Processing':'Failed'):'Discarded',calls,error_code:diagnostic.code});
+  }
  }
  return outcomes;
 }
