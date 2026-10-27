@@ -1,5 +1,5 @@
 /* Focused message workspace: one recipient, one composer, one next action. */
-body:has(#step-6.active) .workspace{grid-template-columns:225px minmax(0,1fr)}
+body:has(#step-6.active) .workspace{grid-template-columns:280px minmax(0,1fr)}
 body:has(#step-6.active) .content{max-width:none;padding:24px 32px 60px}
 body:has(#step-6.active) .process-map{margin-bottom:20px;padding-bottom:14px}
 body:has(#step-6.active) .journey-stage-guide,body:has(#step-6.active) .stage-mini-steps,body:has(#step-6.active) .journey-what-now{display:none}
