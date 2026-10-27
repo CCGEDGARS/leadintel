@@ -18,7 +18,7 @@
   .page-shell .progress-panel .steps,.page-shell .progress-panel .steps>*{min-width:0;max-width:100%}
   /* The tools column is gone: Settings lives in the account menu, Workspace status in the top bar. */
   .page-shell .utility-panel{display:none}
-  .page-shell .workspace{grid-template-columns:250px minmax(0,1fr);max-width:none;margin:0}
+  .page-shell .workspace{grid-template-columns:280px minmax(0,1fr);max-width:none;margin:0}
   .page-shell main.content{max-width:none;margin:0;padding:36px 48px 90px;overscroll-behavior:none}
   /* The content column's scrollbar: thin, rounded, ink-green, shorter than the column. */
   .page-shell main.content::-webkit-scrollbar{width:6px}
