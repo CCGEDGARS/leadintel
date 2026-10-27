@@ -31,7 +31,7 @@ test('a long book reaches Ready with bounded requests and no readable source tex
 test('each small section is checkpointed and a retry never regenerates a saved part',async()=>{
  const {env,skill}=await pending();let calls=0;const seen=[];
  await runWorkspaceSkillJobs(env,{maxChunks:30,generate:async input=>{if(++calls===2)throw Error('OpenAI request timed out');seen.push(input.prompt);return moduleResult(input);}});
- let row=await getWorkspaceSkill(env,scope,skill.id);assert.equal(row.status,'Processing');assert.equal(row.saved_sections,1);
+ let row=await getWorkspaceSkill(env,scope,skill.id);assert.equal(row.status,'Processing');assert.equal(row.saved_sections,2);
  await runWorkspaceSkillJobs(env,{now:row.next_at,maxChunks:30,generate:async input=>{assert.ok(!seen.includes(input.prompt),'saved first part must not be generated again');return moduleResult(input);}});
  row=await getWorkspaceSkill(env,scope,skill.id);assert.equal(row.status,'Ready');assert.ok(row.total>=4);
  await mutateWorkspaceSkill(env,scope,skill.id,{expectedRevision:row.revision,delete:true});

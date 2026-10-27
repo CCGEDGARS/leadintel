@@ -43,7 +43,9 @@
       "copilot_mentor_version": "20261027-mentor-v1",
       "workspace_skills_version": "20261027-book-skills-v1",
       "workspace_skills_limit": 30,
-      "workspace_skills_resilience_version": "20261027-v2"
+      "workspace_skills_resilience_version": "20261027-v2",
+      "book_processing_version": "20261027-single-pass-v1",
+      "book_processing_concurrency": 3
     }
   },
   "smokeChecks": [
@@ -5129,6 +5131,18 @@
         "referenceSupported=globalThis.LeadIntelOriginalScripts.supports(channel,mode)",
         "original-scripts.js?v=20261007-quality-v1&native-reference-boundary=20261026-v1",
         "original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1&native-reference-boundary=20261026-v1"
+      ]
+    },
+    {
+      "id": "single-pass-book-progress",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "Last saved",
+        "Estimating remaining time",
+        "without another AI analysis pass",
+        "Could not update library progress"
       ]
     }
   ],

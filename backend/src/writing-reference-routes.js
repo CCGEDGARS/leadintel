@@ -1,3 +1,4 @@
+import {BOOK_METHODS_VERSION} from './workspace-skill-plan.js';
 import {workspaceCredential,observeSpecialist,extractGeminiPdf} from './ai-task-routing.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {sha256,cookieValue,randomToken} from './security.js';
@@ -17,7 +18,7 @@ async function uploadForm(form,env,scope,settings,cors,ctx,signal){
  const filename=file.name,mime=/\.(md|markdown)$/i.test(filename)?'text/markdown':file.type||(/\.pdf$/i.test(filename)?'application/pdf':'text/plain');
  let document;try{document=await validateWritingReference({bytes:new Uint8Array(await file.arrayBuffer()),mime,filename,signal,nativeExtractor:async input=>{const credential=await workspaceCredential(env,scope.workspaceId,'gemini');if(!credential)throw Error('Gemini document specialist is not connected');return observeSpecialist(env,scope.workspaceId,credential,'native_pdf_extraction',()=>extractGeminiPdf({...input,...credential,signal:AbortSignal.any([AbortSignal.timeout(45000),...(signal?[signal]:[])])}));}});}catch{return json({error:'Unable to read source. Use a text-readable, unencrypted PDF, UTF-8 TXT or Markdown file within the document limits.'},422,cors);}
  signal?.throwIfAborted();
- await putWritingReference(env,scope,{...settings,filename,document});/* The minute scheduler owns analysis: HTTP background work is limited to 30 seconds. */return json(await snapshot(env,scope),201,cors);
+ document.extracted.coverage={...document.extracted.coverage,methodPlan:BOOK_METHODS_VERSION};await putWritingReference(env,scope,{...settings,filename,document});/* The minute scheduler owns analysis: HTTP background work is limited to 30 seconds. */return json(await snapshot(env,scope),201,cors);
 }
 export async function handleWritingReferenceRoute(request,env,cors={},ctx){
  const url=new URL(request.url);
