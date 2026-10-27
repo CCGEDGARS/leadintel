@@ -95,9 +95,9 @@ test('a planned answer that is reused counts one model call under planning, not 
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));let generates=0;
   const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
     async search(){throw new Error('an empty research_query means no search');},
-    async generate(){generates++;await wait(12);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Start with Latvia, where the profile already has references.',memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
+    async generate(){generates++;await wait(12);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Positioning explains the value for a specific customer.',memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
   }};
-  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.equal(generates,1);assert.equal(result.model_calls,1);assert.equal(result.search_calls,0);
   assert.ok(result.timings_ms.plan>=10,`planning is measured (${result.timings_ms.plan} ms)`);assert.equal(result.timings_ms.generate,0,'no second answer call happened');
   assert.ok(result.timings_ms.total>=result.timings_ms.plan);
@@ -111,7 +111,7 @@ test('both copilot model calls ask for no reasoning first',async()=>{
     async search(){throw new Error('no research expected');},
     async generate(options){efforts.push(options.reasoningEffort);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short answer.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
   }};
-  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.deepEqual(efforts,['none','none'],'the planning call and the main answer call both start without reasoning');
 });
@@ -121,7 +121,7 @@ test('both copilot model calls ask for no reasoning first',async()=>{
 test('the system instruction keeps answers to eighty words by default and reaches both the planning and the answer call',async()=>{
   const systems=[];
   const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{key:'openai:test-prompt',async search(){throw new Error('no research expected');},async generate(options){systems.push(options.system);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}}};
-  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.equal(systems.length,2);
   for(const system of systems){assert.match(system,/at most 80 words by default/);assert.match(system,/Go longer only when the person asks/);}
@@ -154,11 +154,11 @@ test('the models the vendor documents as rejecting no-reasoning start at low eff
 test('the answer is streamed out of the model JSON as deltas that add up to the final answer',async()=>{
   const chunks=['{"research_query":"","answer":"Start with ','Latvia, then ','Estonia.","action_proposals":[],','"memory_candidates":[]}'];
   const provider={key:'openai:test-stream',async search(){throw new Error('no research expected');},async generate(options){for(const chunk of chunks)options.onDelta?.(chunk);return {provider:'openai',model:'gpt-test',text:chunks.join(''),usage:{input_tokens:1,output_tokens:1}};}};
-  const deltas=[];const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'},onDelta:event=>deltas.push(event)});
+  const deltas=[];const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'},onDelta:event=>deltas.push(event)});
   assert.equal(result.answer,'Start with Latvia, then Estonia.');assert.ok(deltas.length>=2,'text arrived in more than one piece');assert.equal(deltas.map(event=>event.text).join(''),'Start with Latvia, then Estonia.');assert.ok(deltas.every(event=>!event.replace));
 });
 test('without a delta listener the turn behaves as before',async()=>{
   const provider={key:'openai:test-no-stream',async search(){throw new Error('no research expected');},async generate(options){assert.equal(options.onDelta,undefined,'no listener is forwarded');return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}};
-  const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'Which markets should we start with?',currentScreen:{step:4,label:'Market Strategy'}});
+  const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.equal(result.answer,'Short.');
 });

@@ -1,5 +1,8 @@
 export const COPILOT_SKILLS=Object.freeze([
-  {id:'business_adviser',name:'Conversational Business Assistant',instruction:'Answer broader questions naturally using general knowledge and reasoning. Use LeadIntel context only when relevant. Research named entities, changing facts and unfamiliar subjects instead of guessing. Explain the practical implications without turning every question into product support.'},
+  {id:'business_adviser',name:'Business Mentor & Adviser',instruction:'Answer broader questions naturally using general knowledge and reasoning. Tailor business advice to the supplied company profile, goals, priorities and memories. Challenge weak assumptions respectfully, compare practical alternatives and recommend the next action. Use LeadIntel context only when relevant. Research named entities, changing facts and unfamiliar subjects instead of guessing.'},
+  {id:'statistics_comparison',name:'Statistics & Comparison Analyst',instruction:'Compare like with like: period, geography, sample, definition, units, currency and denominator. Source each material figure, explain calculations and distinguish percentage change from percentage points. Identify missing or incompatible data instead of inventing a comparison.'},
+  {id:'business_scenarios',name:'Business Scenario Adviser',instruction:'Assess business trends and possible outcomes using sourced evidence, explicit assumptions and a time horizon. Give base, upside and downside scenarios when useful, leading indicators, uncertainty and a practical response. Never promise future events or invent probabilities.'},
+  {id:'website_analysis',name:'Public Website Analyst',instruction:'Use actual public-page extracts when available. Explain the offer, customer fit, positioning, evidence, gaps and useful next actions. Cite the page for factual claims and distinguish observation from interpretation. Never claim a page was scraped or read without a successful page-read receipt.'},
   {id:'product_help',name:'LeadIntel Product Guide',instruction:'Explain the visible LeadIntel product, field, button, workflow or terminology accurately and in user-facing language. Distinguish current product behavior from planned functionality.'},
   {id:'technical_setup',name:'Technical Setup & Integrations',instruction:'Explain safe setup and integration concepts, user-granted permissions and visible connection states. Never request or reveal credentials in chat. Verify freshness-dependent provider instructions before presenting them as current.'},
   {id:'workspace_diagnostic',name:'Workspace Diagnostic',instruction:'Assess completeness, consistency, quality, evidence and readiness. Prefer deterministic gaps where available and clearly distinguish strategic judgment from verified facts.'},
@@ -26,13 +29,16 @@ export function routeCopilotSkills(question,context={}){
   if(/missing|weak|gap|ready|readiness|complete|quality|contradict|diagnos|what should i do next/.test(q))add(selected,'workspace_diagnostic');
   if(/\bicp\b|ideal customer|target customer|poor quality|wrong leads|exclusion|lookalike/.test(q))add(selected,'icp','workspace_diagnostic');
   if(/signal|trigger|monitor|buying event|poor quality|wrong leads/.test(q))add(selected,'signal_trigger','workspace_diagnostic');
-  if(/market research|market intelligence|source|evidence|research depth/.test(q))add(selected,'market_intelligence');
+  if(/market research|market intelligence|market analy|source|evidence|research depth|market statistic|market growth|market trend/.test(q))add(selected,'market_intelligence');
+  if(/statistic|compare|comparison|benchmark|growth rate|percentage point/.test(q))add(selected,'statistics_comparison');
+  if(/forecast|predict|scenario|outlook|future demand|emerging opportunit/.test(q))add(selected,'business_scenarios','market_intelligence');
+  if(/(?:website|web page|landing page).*(?:analy|review|scrap|audit)|(?:analy|review|scrap|read).*https?:\/\//.test(q))add(selected,'website_analysis');
   if(/score|scored|qualification|qualified|poor quality|wrong leads|fit|intent/.test(q))add(selected,'lead_qualification');
   if(/decision.?maker|buyer role|procurement director|contact role/.test(q))add(selected,'decision_maker');
   if(/outreach|email|message|follow.?up|objection|personalization/.test(q))add(selected,'outreach');
   if(/crm|pipeline|stalled|stage|opportunity/.test(q))add(selected,'crm_pipeline');
   if(/performance|conversion|reply rate|meeting rate|results/.test(q))add(selected,'performance');
-  if(/credits?|billing|balance|cost|expenses?|budget|forecast|predict|top.?up/.test(q))add(selected,'cost_planning','technical_setup','troubleshooting');
+  if(/credits?|billing|balance|cost|expenses?|budget|top.?up/.test(q))add(selected,'cost_planning','technical_setup','troubleshooting');
   if(/error|failed|not working|problem|why can.?t|diagnose/.test(q))add(selected,'troubleshooting');
   if(/add|update|apply|change|edit|set|remove|execute/.test(q))add(selected,'action_safety');
   if(!selected.size)add(selected,'business_adviser');

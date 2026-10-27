@@ -34,9 +34,9 @@ test('chat uses safe screen context without preset prompt chips',()=>{
 });
 
 test('copilot introduces itself before the conversation',()=>{
-  assert.match(source,/Your AI business assistant\./);
-  assert.match(source,/research public sources/i);
-  assert.match(source,/help you decide your next step/i);
+  assert.match(source,/Your AI business mentor\. Every step of the way\./);
+  assert.match(source,/Research companies and markets/i);
+  assert.match(source,/advice tailored to your business/i);
   const introIndex=source.indexOf('copilot-intro');
   const messagesIndex=source.indexOf('copilot-messages');
   assert.ok(introIndex>=0&&messagesIndex>=0&&introIndex<messagesIndex,'intro must be created before messages');
