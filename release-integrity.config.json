@@ -5183,14 +5183,14 @@
       "type": "text",
       "url": "/customer/app-shell.css",
       "status": 200,
-      "contains": [".page-shell .workspace{grid-template-columns:280px minmax(0,1fr)"]
+      "contains": [".page-shell .workspace{grid-template-columns:322px minmax(0,1fr)"]
     },
     {
       "id": "wider-navigation-messages",
       "type": "text",
       "url": "/customer/message-workspace.css",
       "status": 200,
-      "contains": ["body:has(#step-6.active) .workspace{grid-template-columns:280px minmax(0,1fr)"]
+      "contains": ["body:has(#step-6.active) .workspace{grid-template-columns:322px minmax(0,1fr)"]
     },
     {
       "id": "gemini-book-engine",
