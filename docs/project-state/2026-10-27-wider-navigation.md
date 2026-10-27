@@ -1,3 +1,5 @@
 # Wider navigation — 27 October 2026
 
 User requested a slightly wider left navigation panel in the Messages screenshot. Desktop navigation is280px across the workspace (previous shell250px, Messages-specific override225px). Update both controlling selectors so Messages cannot retain the narrow override. Existing mobile/tablet stacking, independent scrolling, card styles, click behavior and content min-width remain. Cache-bust the shell stylesheet plus the discovery→outreach→message-stylesheet loading chain, preserving existing query contracts. Existing Messages layout expectation updated; no new tests for this low-impact CSS adjustment. Validate existing shell/sidebar/layout regressions, build and exact-SHA production release proof.
+
+Full CI caught two additional asset contracts: Admin must mirror the workspace shell URL exactly, and the release-verifier transport fixture must serve the newly checked shell stylesheet. Existing failing tests reproduced both locally; update the Admin URL and extend the explicit static-fixture allowlist, preserving production verification gates. Full customer suite is required before finalizing this correction.
