@@ -30,6 +30,8 @@ import {handleBrandAssetRoute} from './brand-assets.js';
 import {handleCalendlyWebhook,handleCalendlyIntegrationRoute} from './calendly-integration.js';
 import {handleContentMaterialsRoute} from './content-materials.js';
 import {handleWritingReferenceRoute} from './writing-reference-routes.js';
+import {handleWorkspaceSkillRoute} from './workspace-skill-routes.js';
+import {runWorkspaceSkillJobs} from './workspace-skill-runner.js';
 import {runWritingReferenceJobs} from './writing-reference-runner.js';
 import {handleStoryBankRoute} from './storyselling.js';
 import {handleCompanyMaterialsRoute} from './company-materials.js';
@@ -85,6 +87,7 @@ export default {
       const storyBank=await handleStoryBankRoute(request,env,cors);if(storyBank)return storyBank;
       const companyMaterials=await handleCompanyMaterialsRoute(request,env,cors);if(companyMaterials)return companyMaterials;
       const materials=await handleContentMaterialsRoute(request,env,cors);if(materials)return materials;
+      const skills=await handleWorkspaceSkillRoute(request,env,cors);if(skills)return skills;
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
       const brandAsset=await handleBrandAssetRoute(request,env,cors);if(brandAsset)return brandAsset;
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
@@ -110,7 +113,7 @@ export default {
     const now=new Date(controller.scheduledTime||Date.now());
     const storageEnv=env;env=withWorkspaceStorage(env);
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
-    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()})]));return;}
+    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()})]));return;}
     const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),

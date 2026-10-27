@@ -1,3 +1,4 @@
+import {validSkillAttribution} from './workspace-skill-attribution.js';
 import StorysellingNative from '../../customer/storyselling-native.js';
 import {validCompanyMaterialAttribution} from './company-materials-context.js';
 import RichText from '../../customer/rich-text.js';
@@ -12,9 +13,10 @@ const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});}
 function appliedAssistant(value,workspace){
  if(value===null||value===undefined)return null;
  const object=v=>v&&typeof v==='object'&&!Array.isArray(v),bounded=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max,revision=v=>Number.isSafeInteger(v)&&v>0;
- if(!object(value)||JSON.stringify(value).length>8000||Object.keys(value).some(k=>!['workspaceId','referenceRevision','sourceRefs','citations','appliedAt','writingContext','sourceSelection','companyMaterialRefs'].includes(k))||value.workspaceId!==workspace||!Number.isSafeInteger(value.referenceRevision)||value.referenceRevision<0||!Array.isArray(value.sourceRefs)||value.sourceRefs.length>3||!Array.isArray(value.citations)||value.citations.length>8||!bounded(value.appliedAt,40)||!Number.isFinite(Date.parse(value.appliedAt)))fail('Invalid applied writing-source attribution');
+ if(!object(value)||JSON.stringify(value).length>8000||Object.keys(value).some(k=>!['workspaceId','referenceRevision','sourceRefs','skillRefs','citations','appliedAt','writingContext','sourceSelection','companyMaterialRefs'].includes(k))||value.workspaceId!==workspace||!Number.isSafeInteger(value.referenceRevision)||value.referenceRevision<0||!Array.isArray(value.sourceRefs)||value.sourceRefs.length>3||!Array.isArray(value.citations)||value.citations.length>8||!bounded(value.appliedAt,40)||!Number.isFinite(Date.parse(value.appliedAt)))fail('Invalid applied writing-source attribution');
  if(!validCompanyMaterialAttribution(value.companyMaterialRefs))fail('Invalid company reference attribution');
  if(value.writingContext!==undefined&&!['general','customer'].includes(value.writingContext)||value.sourceSelection!==undefined&&!['session','active'].includes(value.sourceSelection))fail('Invalid writing-source context');
+ if(!validSkillAttribution(value.skillRefs))fail('Invalid historical skill references');
  const refs=value.sourceRefs;if(refs.some(r=>!object(r)||Object.keys(r).some(k=>!['id','revision'].includes(k))||!bounded(r.id,120)||!revision(r.revision))||new Set(refs.map(r=>r.id)).size!==refs.length)fail('Invalid applied writing-source references');
  for(const citation of value.citations)if(!object(citation)||Object.keys(citation).some(k=>!['passageId','sourceId','revision','filename','location','role'].includes(k))||!refs.some(r=>r.id===citation.sourceId&&r.revision===citation.revision)||!bounded(citation.filename,256)||!bounded(citation.location,80)||!/^(page|line):\d+$/.test(citation.location)||!['guidance','seller','customer'].includes(citation.role)||citation.passageId!==undefined&&!bounded(citation.passageId,200))fail('Invalid applied writing-source citation');
  // This is historical attribution for the saved text, never current evidence or activation authority.

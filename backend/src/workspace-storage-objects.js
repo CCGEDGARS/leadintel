@@ -1,6 +1,6 @@
 const stmt=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 const fail=(message,status=503)=>Object.assign(Error(message),{status});
-function objectWorkspace(key){const match=String(key).match(/^(?:writing|materials)\/([A-Za-z0-9_-]{1,160})\/[A-Za-z0-9_-]+\/(original|text\.json|catalogue\.json)$/);if(!match)throw fail('Private storage key is invalid',400);return match[1];}
+function objectWorkspace(key){const match=String(key).match(/^(?:writing|materials)\/([A-Za-z0-9_-]{1,160})\/[A-Za-z0-9_-]+\/(original|text\.json|catalogue\.json)$/);const skill=String(key).match(/^skills\/([A-Za-z0-9_-]{1,160})\/[A-Za-z0-9_-]+\/(?:input\.json|method-\d+-[A-Za-z0-9-]+\.json|package-[A-Za-z0-9-]+\.json)$/);if(!match&&!skill)throw fail('Private storage key is invalid',400);return (match||skill)[1];}
 function byteSize(value){if(typeof value==='string')return new TextEncoder().encode(value).byteLength;if(value instanceof ArrayBuffer)return value.byteLength;if(ArrayBuffer.isView(value))return value.byteLength;throw fail('Upload size must be known before storage',400);}
 export async function reconcileStorageObjects(env,{workspaceId=null,limit=12,now=Math.floor(Date.now()/1000)}={}){
  if(!env.WRITING_REFERENCES_BUCKET)return;
