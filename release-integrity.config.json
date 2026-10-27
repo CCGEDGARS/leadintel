@@ -5197,6 +5197,17 @@
       ]
     },
     {
+      "id": "message-text-space",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        "body:has(#step-6.active) .content{max-width:none;padding:24px 48px 60px}",
+        "box-sizing:border-box;width:100%;padding:24px 32px;line-height:1.65;max-width:100%",
+        "body:has(#step-6.active) .content{padding:20px 16px 40px}"
+      ]
+    },
+    {
       "id": "gemini-book-engine",
       "type": "text",
       "url": "/customer/writing-references-ui.js",
