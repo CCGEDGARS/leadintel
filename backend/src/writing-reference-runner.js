@@ -6,8 +6,7 @@ import {boundedBookWork,acquireBookLock,releaseBookLock,processingProgress,BOOK_
 import {readableWritingCoverage} from './writing-reference-coverage.js';
 import {chunkWritingReference,analyseWritingReferenceChunk,aggregateWritingReference} from './writing-reference-analysis.js';
 import {getWritingReference,cleanupWritingReference,recoverWritingReferenceUploads} from './writing-reference-store.js';
-import {importAesKey,decryptSecret} from './oauth.js';
-import {generateText} from './ai-provider.js';
+import {workspaceSkillGenerator} from './workspace-skill-provider.js';
 import {creditFailure} from './provider-credit-health.js';
 function analysisFailure(error){
  if(/WORKSPACE_STORAGE_FULL/.test(String(error?.message||'')))return 'Workspace storage is full. Completed sections are saved. Free space or upgrade storage, then retry.';
@@ -18,7 +17,7 @@ function analysisFailure(error){
  if(status===401||status===403)return 'Analysis stopped: the AI provider rejected access. Check your active AI connection in Settings, then retry.';
  if(status===400||status===404)return 'Analysis stopped: the AI provider rejected the model or request. Check your active model in Settings, then retry.';
  if(status)return `Analysis stopped: AI provider request failed (${status}). Completed sections are saved; retry to continue.`;
- if(message==='Connect an active AI provider in Settings')return message;
+ if(error?.status===503&&/active AI provider/.test(message))return message;
  if(/^(Technique response must be valid JSON|Invalid technique|Invalid technique response|Invalid skill module)/.test(message))return 'The AI provider returned invalid analysis output. Completed sections are saved; retry to continue.';
  if(message==='Extracted source is unavailable')return 'The extracted source is unavailable. Upload the source again.';
  return 'Analysis stopped because of an unexpected error. Completed sections are saved; retry to continue.';
@@ -37,12 +36,6 @@ export async function writingReferenceProgress(env,scope,id){
 const guard=`EXISTS(SELECT 1 FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id JOIN writing_reference_slots p ON p.source_id=s.id WHERE j.source_id=? AND j.lease_id=? AND s.status='Processing')`;
 export async function claimWritingReferenceJob(env,{now=Date.now(),leaseId=crypto.randomUUID(),leaseUntil=now+BOOK_LEASE_MS}={}){
  return stmt(env,`UPDATE writing_reference_jobs SET state='Running',lease_id=?,lease_until=?,attempts=attempts+1 WHERE source_id=(SELECT j.source_id FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id WHERE s.status='Processing' AND j.state IN ('Pending','Running') AND j.lease_until<? AND j.next_at<=? ORDER BY j.next_at LIMIT 1) AND lease_until<? RETURNING *`,leaseId,leaseUntil,now,now,now).first();
-}
-async function workspaceGenerate(env,workspaceId){
- const row=await stmt(env,'SELECT provider,model,encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1',workspaceId).first();
- if(!row||!env.OAUTH_TOKEN_ENCRYPTION_KEY)throw Error('Connect an active AI provider in Settings');
- const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(row.encrypted_api_key,key);
- return input=>generateText({provider:row.provider,model:row.model,apiKey,...input,reasoningEffort:'low',signal:AbortSignal.timeout(120000)});
 }
 export async function retryWritingReference(env,scope,{id,expectedRevision}){
  const row=await getWritingReference(env,scope,id);if(row.revision!==Number(expectedRevision)||row.status!=='Failed')throw Object.assign(Error('Source changed or cannot be retried'),{status:409});
@@ -69,8 +62,9 @@ export async function runWritingReferenceJobs(env,{now=Date.now(),maxJobs=1,maxC
    const prior=await stmt(env,'SELECT * FROM writing_reference_chunks WHERE source_id=?',source.id).all(),byId=new Map(prior.results.map(r=>[r.chunk_id,r]));
    const baseline=prior.results.filter(r=>r.status==='Complete').length;
    await stmt(env,`UPDATE writing_reference_jobs SET total=?,progress_baseline=CASE WHEN started_at=0 THEN ? ELSE progress_baseline END,started_at=CASE WHEN started_at=0 THEN ? ELSE started_at END WHERE source_id=? AND lease_id=?`,chunks.length,baseline,start,source.id,job.lease_id).run();
-   const run=generate||await workspaceGenerate(env,job.workspace_id);
-   const outcome=await boundedBookWork(chunks.filter(w=>byId.get(w.id)?.status!=='Complete').slice(0,maxChunks),async work=>{
+   const remaining=chunks.filter(w=>byId.get(w.id)?.status!=='Complete');
+   const run=remaining.length?(generate||await workspaceSkillGenerator(env,job.workspace_id)):null;
+   const outcome=await boundedBookWork(remaining.slice(0,maxChunks),async work=>{
     const prior=byId.get(work.id);if(Number(prior?.attempts||0)>=3)throw Error('Analysis retry limit reached');
     const reserved=await stmt(env,`INSERT INTO writing_reference_chunks(source_id,chunk_id,status,attempts) SELECT ?,?,'Running',1 WHERE ${guard} ON CONFLICT(source_id,chunk_id) DO UPDATE SET status='Running',attempts=attempts+1 WHERE attempts<3`,source.id,work.id,source.id,job.lease_id).run();
     if(!reserved.meta.changes)return;

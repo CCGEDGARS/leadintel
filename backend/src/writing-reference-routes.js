@@ -1,3 +1,4 @@
+import {bookEngineMetadata} from './book-engine.js';
 import {BOOK_METHODS_VERSION} from './workspace-skill-plan.js';
 import {workspaceCredential,observeSpecialist,extractGeminiPdf} from './ai-task-routing.js';
 import {storageErrorResponse} from './workspace-storage.js';
@@ -8,7 +9,7 @@ import {writingReferenceProgress,retryWritingReference} from './writing-referenc
 const json=(value,status,cors)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 export function writingReferencesEnabled(env,workspaceId){return env.WORKSPACE_STORAGE_ENABLED==='true'||String(env.WRITING_REFERENCES_ALLOWED_WORKSPACES||'').split(',').map(s=>s.trim()).includes(workspaceId);}
 function safeCard(row){return {id:row.id,slot:row.slot,revision:row.revision,filename:row.filename,presentation:row.presentation,status:row.status,active:row.active,instruction:row.instruction,role:row.role||'guidance',coverage:row.coverage,summary:row.summary,techniques:row.techniques,error:row.error_code};}
-async function snapshot(env,scope){for(let attempt=0;attempt<3;attempt++){const before=await writingReferenceRevision(env,scope),cards=await Promise.all((await listWritingReferences(env,scope)).map(async row=>({...safeCard(row),...(row.status==='Processing'?{progress:await writingReferenceProgress(env,scope,row.id)}:{})}))),slotRevisions=await writingReferenceSlots(env,scope),referenceRevision=await writingReferenceRevision(env,scope);if(before===referenceRevision)return {cards,slotRevisions,referenceRevision};}throw Object.assign(Error('Writing references changed. Refresh and try again.'),{status:409});}
+async function snapshot(env,scope){for(let attempt=0;attempt<3;attempt++){const before=await writingReferenceRevision(env,scope),cards=await Promise.all((await listWritingReferences(env,scope)).map(async row=>({...safeCard(row),...(row.status==='Processing'?{progress:await writingReferenceProgress(env,scope,row.id)}:{})}))),slotRevisions=await writingReferenceSlots(env,scope),referenceRevision=await writingReferenceRevision(env,scope);if(before===referenceRevision)return {cards,slotRevisions,referenceRevision,engine:await bookEngineMetadata(env,scope.workspaceId)};}throw Object.assign(Error('Writing references changed. Refresh and try again.'),{status:409});}
 async function uploadForm(form,env,scope,settings,cors,ctx,signal){
  if(!Number.isInteger(settings.slot)||settings.slot<1||settings.slot>3)return json({error:'Choose a source slot from 1 to 3'},400,cors);
  const prior=await env.DB.prepare('SELECT source_id,revision FROM writing_reference_slots WHERE workspace_id=? AND slot=?').bind(scope.workspaceId,settings.slot).first();

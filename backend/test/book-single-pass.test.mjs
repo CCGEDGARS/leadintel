@@ -6,6 +6,13 @@ import {createWorkspaceSkill,getWorkspaceSkill} from '../src/workspace-skill-sto
 import {runWorkspaceSkillJobs} from '../src/workspace-skill-runner.js';import {skillPackage} from '../src/workspace-skill-export.js';
 import {readFileSync} from 'node:fs';
 const scope={workspaceId:'w1',userId:'u1'};
+test('fast remaining skill sections finish sixty per invocation within a bounded database budget',async()=>{
+ const {skillFixture}=await import('./workspace-skill-fixture.mjs');const {env,source:book}=await skillFixture();const skill=await createWorkspaceSkill(env,scope,{sourceId:book.id,expectedRevision:1});
+ const snapshot=JSON.parse(env.objects.get(skill.input_key));snapshot.extracted.sections=[{location:'page:1',text:'Useful method. '.repeat(25000)}];env.objects.set(skill.input_key,JSON.stringify(snapshot));
+ const prepare=env.DB.prepare.bind(env.DB);let queries=0,calls=0;env.DB.prepare=sql=>{queries++;return prepare(sql);};
+ await runWorkspaceSkillJobs(env,{generate:async input=>{calls++;return moduleResult(input);}});
+ assert.equal(calls,60);assert.ok(queries<500,'bounded batch must stay comfortably within paid D1 query limits');assert.equal((await getWorkspaceSkill(env,scope,skill.id)).saved_sections,60);
+});
 async function source(){const env=storageFixture();for(const name of ['0055_workspace_skills.sql','0057_workspace_skill_diagnostics.sql','0058_workspace_skill_parts.sql','0060_skill_processing_progress.sql'])env.DB.raw.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));const text='Distinct substantive methods and evidence. '.repeat(500);const row=await putWritingReference(env,scope,{slot:1,expectedRevision:0,filename:'A Book.pdf',document:{bytes:new TextEncoder().encode(text),mime:'text/plain',sha256:'single-pass',extracted:{sections:[{location:'page:1',text}],coverage:{total:1,readable:1,unreadable:0,methodPlan:'20261027-single-pass-v1'}}}});return {env,row};}
 test('one deep upload pass supplies summary and complete independent skill without a second AI pass',async()=>{
  const {env,row}=await source();let calls=0,peak=0,active=0;
@@ -19,8 +26,8 @@ test('one deep upload pass supplies summary and complete independent skill witho
  const pkg=await skillPackage(env,scope,skill.id);assert.equal(pkg.modules.length,calls);assert.equal(new Set(pkg.modules.map(m=>m.id)).size,calls);
 });
 test('parallel skill workers keep successful checkpoints when a sibling hits a rate limit',async()=>{
- const {skillFixture}=await import('./workspace-skill-fixture.mjs');const {env,source:book}=await skillFixture();const skill=await createWorkspaceSkill(env,scope,{sourceId:book.id,expectedRevision:1});let active=0,peak=0,n=0;
- await runWorkspaceSkillJobs(env,{maxChunks:24,generate:async input=>{const num=n++;peak=Math.max(peak,++active);await new Promise(r=>setImmediate(r));active--;if(num===1)throw Error('OpenAI request failed (429)');return moduleResult(input);}});
+ const {skillFixture}=await import('./workspace-skill-fixture.mjs');const {env,source:book}=await skillFixture();const skill=await createWorkspaceSkill(env,scope,{sourceId:book.id,expectedRevision:1});let active=0,peak=0,n=0,release;const allStarted=new Promise(r=>release=r);
+ await runWorkspaceSkillJobs(env,{maxChunks:24,generate:async input=>{const num=n++;peak=Math.max(peak,++active);if(n===3)release();await allStarted;active--;if(num===1)throw Error('OpenAI request failed (429)');return moduleResult(input);}});
  const row=await getWorkspaceSkill(env,scope,skill.id);assert.equal(peak,3);assert.equal(n,3);assert.equal(row.saved_sections,2);assert.equal(row.status,'Processing');assert.equal(row.error_code,'AI_RATE_LIMIT');assert.ok(row.next_at>Date.now());
 });
 test('prepared methods require exact full coverage, unique IDs and source locations',async()=>{

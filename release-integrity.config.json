@@ -46,6 +46,9 @@
       "workspace_skills_resilience_version": "20261027-v2",
       "book_processing_version": "20261027-single-pass-v1",
       "book_processing_concurrency": 3,
+      "book_engine_version": "20261027-gemini-first-v1",
+      "book_engine_primary": "gemini",
+      "book_processing_batch_size": 60,
       "language_packs_version": "country-language-v1",
       "google_translation_version": "google-translation-v1"
     }
@@ -5174,6 +5177,13 @@
         "original-scripts.js?v=20261007-quality-v1&native-reference-boundary=20261026-v1",
         "original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1&native-reference-boundary=20261026-v1"
       ]
+    },
+    {
+      "id": "gemini-book-engine",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": ["Next analysis engine:", "Gemini is not connected", "Primary for books and skills"]
     },
     {
       "id": "single-pass-book-progress",
