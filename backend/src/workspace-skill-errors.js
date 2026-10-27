@@ -4,6 +4,7 @@ export function skillFailure(error,phase){
  const message=String(error?.message||'');
  const result=(code,detail,retryable=false)=>({code,message:detail,retryable});
  if(/WORKSPACE_STORAGE_FULL/.test(message))return result('WORKSPACE_STORAGE_FULL','Workspace storage is full. Free space or upgrade storage, then retry.');
+ if(message==='SKILL_SECTION_RETRY_LIMIT')return result('AI_RETRY_LIMIT','This section reached its three-attempt limit. Completed sections are saved. Retry creation to try again.');
  if(message==='SNAPSHOT_MISSING')return result('BOOK_SNAPSHOT_MISSING','The saved book content is unavailable. Keep your original book and recreate this skill.');
  if(message==='MODULE_MISSING')return result('SKILL_SECTION_MISSING','A saved skill section is unavailable. Keep your original book and contact support.');
  if(error?.status===503&&/active AI provider/.test(message))return result('AI_NOT_CONNECTED','Connect an active AI provider in Settings, then retry.');
