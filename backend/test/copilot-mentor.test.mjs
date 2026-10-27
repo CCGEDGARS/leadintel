@@ -17,6 +17,12 @@ test('personal business mentoring uses saved goals and profile rather than the c
  let prompt;const result=await run({generate:async options=>{prompt=JSON.parse(options.prompt);return generated({answer:'Start with the twelve-meeting objective.'});},search:async()=>{throw Error('No search required');}},'How should we grow our business?');
  assert.equal(prompt.workspace_context.goals.successOutcome,'Twelve qualified meetings');assert.equal(result.research_used,false);assert.deepEqual(result.action_proposals,[]);
 });
+test('first-person singular and non-English mentoring receive saved context too',async()=>{
+ for(const question of ['How can I grow the business?','Help me choose a business strategy.','Kā man attīstīt savu uzņēmumu?','Как мне развивать бизнес?','Explain how to grow this business.','What is the right strategy for this business?']){
+  let prompt;await run({generate:async options=>{prompt=JSON.parse(options.prompt);return generated({answer:'A tailored recommendation.',research_query:''});},search:async()=>({results:[]})},question);
+  assert.ok(prompt.workspace_context,question);assert.equal(prompt.workspace_context.goals.successOutcome,'Twelve qualified meetings',question);
+ }
+});
 test('tailored mentoring follows each seller context across unrelated industries and company names',async()=>{
  for(const [name,description,goal] of [['Orchid Care','Dental practice','Eight new consultations'],['Northwind Systems','Industrial automation','Three factory pilots'],['Renamed Seller','Industrial automation','Three factory pilots']]){
   const seller={...context,company:{name,website:'https://seller.example'},profile:{description},goals:{successOutcome:goal}};let payload;
@@ -39,4 +45,8 @@ test('blocked direct-page reads remain explicit and do not fabricate extraction 
 });
 test('explicit no-browse requests perform no page reads or searches',async()=>{
  let reads=0,searches=0;const result=await run({read:async()=>{reads++;},search:async()=>{searches++;},generate:async()=>generated({answer:'Here is a framework using the supplied facts only.'})},'Without web search, suggest questions about https://company.example');assert.equal(reads,0);assert.equal(searches,0);assert.equal(result.research_used,false);
+});
+test('an ungrounded provider result never becomes a successful search receipt or invented evidence',async()=>{
+ const result=await run({read:async url=>({url,title:'Page',description:'Actual page evidence',evidenceKind:'page_extract'}),search:async()=>({provider:'gemini',model:'grounded-model',web_search:false,results:[{url:'https://invented.example/',title:'Not grounded'}],routing:{role:'research_specialist',reason:'primary_unavailable'},warning:'No grounding evidence returned'}),generate:async()=>generated({answer:'Only the page was read [1].',research_query:''})},'Read https://company.example/team and compare market statistics');
+ const receipt=result.research_tools.find(t=>t.operation==='web_search');assert.equal(receipt.status,'not_executed');assert.equal(receipt.web_search,false);assert.equal(receipt.provider,'gemini');assert.equal(receipt.model,'grounded-model');assert.equal(receipt.routing.reason,'primary_unavailable');assert.match(receipt.warning,/grounding/);assert.equal(result.research_status,'incomplete');assert.ok(!result.sources.some(s=>s.url==='https://invented.example/'));
 });

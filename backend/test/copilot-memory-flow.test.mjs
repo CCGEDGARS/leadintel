@@ -27,12 +27,12 @@ test('a memory cue (a decision, a preference, "remind me") in any supported lang
   for(const q of ['Explain anchoring in negotiation','What does this button do?','Find recent Latvian expansion signals'])assert.equal(memoryCue(q),false,q);
 });
 
-test('a conversational question (answered without private workspace data) still knows the person, the trail and the memories, and can create a reminder',async()=>{
+test('a standalone conceptual question (answered without private workspace data) still knows the person, the trail and the memories, and can create a reminder',async()=>{
   const prompts=[];
   const env={COPILOT_TEST_CONTEXT:{workspace:{id:'w1'},screen:{step:1,label:'Setup'},user:{name:'Jonathan Collins',firstName:'Jonathan'},activity:[{at:'2026-10-25T21:30:00Z',kind:'step',step:1,label:'Setup'}],company:{name:'Seller'},markets:['Latvia'],profile:{private_notes:'PRIVATE-NOTE'},icps:[],signals:[],research:{items:[],count:0},crmSummary:{topCompanies:[{name:'PRIVATE-CRM'}]},integrationStatus:[],readiness:{}},
     COPILOT_TEST_MEMORIES:[{id:'m1',kind:'preference',value:'Prefers expansion signals over tenders.',due:'',updated_at:'2026-10-20 10:00:00'}],
     COPILOT_TEST_PROVIDER:{async generate(options){prompts.push(options.prompt);return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Noted, Jonathan: dairy first. I will remind you on 3 November.',memory_candidates:[{kind:'decision',value:'Start with dairy processors in Latvia.'},{kind:'reminder',value:'Ask Edgars about the pilot decision.',due:'2026-11-03'}]})};},async search(){throw new Error('must not search');}}};
-  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Kā vislabāk sākt sarunu ar piena pārstrādes uzņēmumu?',currentScreen:{step:1}});
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Explain anchoring in negotiation',currentScreen:{step:1}});
   assert.equal(prompts.length,1,'one reasoning call for a conversational turn');
   const payload=JSON.parse(prompts[0]);
   assert.deepEqual(payload.user,{name:'Jonathan Collins',firstName:'Jonathan'});assert.deepEqual(payload.activity_trail.map(item=>item.kind),['step']);
