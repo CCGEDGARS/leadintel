@@ -6,7 +6,7 @@ import {buildSkillPackage} from './workspace-skill-export.js';
 import {workspaceSkillGenerator} from './workspace-skill-provider.js';
 async function releaseInput(env,row){if(!row.input_key)return;await env.WRITING_REFERENCES_BUCKET.delete(row.input_key);await skillStmt(env,"UPDATE workspace_skills SET input_key='' WHERE id=? AND status='Ready' AND input_key=?",row.id,row.input_key).run();}
 const guard="id=? AND lease_id=? AND status='Processing'";
-export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=2,generate}={}){
+export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChunks=2,generate,clock=Date.now}={}){
  if(!env.WRITING_REFERENCES_BUCKET)return [];
  const pendingDeletes=await skillStmt(env,"SELECT id FROM workspace_skills WHERE status='Deleting' LIMIT 5").all();for(const row of pendingDeletes.results)await cleanupWorkspaceSkill(env,row.id).catch(()=>null);
  // A lost upload request must not leave a permanent Preparing record.
@@ -39,7 +39,7 @@ export async function runWorkspaceSkillJobs(env,{now=Date.now(),maxJobs=1,maxChu
    const diagnostic=skillFailure(error,phase),attempt=consecutiveFailures+1,retry=diagnostic.retryable&&attempt<SKILL_MAX_ATTEMPTS;
    const message=diagnostic.message+(retry?` Will retry automatically (${attempt}/${SKILL_MAX_ATTEMPTS}).`:`${attempt>=SKILL_MAX_ATTEMPTS?' Automatic retries stopped after three attempts.':''} Completed sections are saved.`);
    const progress=await skillStmt(env,'SELECT count(*) AS n FROM workspace_skill_chunks WHERE skill_id=?',job.id).first().catch(()=>null);
-   const nextAt=retry?now+30000*2**(attempt-1):0;
+   const nextAt=retry?Math.max(now,clock())+30000*2**(attempt-1):0;
    const saved=await skillStmt(env,`UPDATE workspace_skills SET status=?,error=?,error_code=?,error_phase=?,retry_attempts=?,completed=?,next_at=?,lease_until=0,revision=revision+1 WHERE ${guard}`,retry?'Processing':'Failed',message,diagnostic.code,phase,attempt,Number(progress?.n??job.completed)||0,nextAt,job.id,lease).run();
    if(saved.meta.changes)console.warn('workspace_skill_failure',JSON.stringify({skillId:job.id,code:diagnostic.code,phase,attempt,retry}));
    outcomes.push({id:job.id,status:saved.meta.changes?(retry?'Processing':'Failed'):'Discarded',calls,error_code:diagnostic.code});
