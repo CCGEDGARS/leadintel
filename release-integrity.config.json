@@ -4317,7 +4317,8 @@
       "url": "/customer/additional-contact-services.js",
       "status": 200,
       "contains": [
-        "title:'Confirm data'",
+        "title:phoneOnly?'Confirm phone':'Confirm data'",
+        "includeEmail=!phoneOnly",
         "email_lookup:includeEmail",
         "phone_approved:includePhone",
         "This action does not send messages."
