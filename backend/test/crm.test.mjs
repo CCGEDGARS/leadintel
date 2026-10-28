@@ -60,6 +60,8 @@ sqliteTest('paid profile data survives stale research replacement, empty rosters
  detail=await getCrmCompany(db,ctx(),company.id);
  assert.equal(detail.contactData[0].profile.city,'Riga');assert.equal(detail.contactData[0].profile.title,'Procurement Director');assert.equal(detail.contactData[0].phone.number,'+37120000001');
  assert.equal(detail.contactData[0].lastAttempt.status,'partial');
+ await appendCrmActivity(db,ctx(),{companyId:company.id,type:'contact.enriched',metadata:{contact_data:{...data,checkedAt:'2026-10-21T11:00:00Z',status:'partial',lastAttempt:{phone:'error',phoneReason:'Treg usage limit reached'},phone:{...data.phone}}},occurredAt:'2026-10-21T11:00:00Z'});
+ detail=await getCrmCompany(db,ctx(),company.id);assert.equal(detail.contactData[0].phone.number,data.phone.number);assert.equal(detail.contactData[0].lastAttempt.phone,'error');assert.equal(detail.contactData[0].lastAttempt.phoneReason,'Treg usage limit reached');
  await assert.rejects(getCrmCompany(db,ctx('other-workspace'),company.id),/not found/i);
  await upsertCrmCompany(db,ctx(),{...pack,intelligence:{research_snapshot:{buyerResearch:{buyers:[{...buyer,name:'Different Person'}]}}}});
  detail=await getCrmCompany(db,ctx(),company.id);assert.ok(!detail.intelligence.research_snapshot.buyerResearch.buyers[0].contactData);

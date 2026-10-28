@@ -1,0 +1,9 @@
+# Paid phone lookup errors and retained evidence
+
+Customer reported Klas Nilsson at Stegra showing Phone: Not found alongside Phone: error. The screenshot proves a failed paid check, not absence of a phone. The later research overview reports one usable priority email and completed AI review but incomplete research; it does not establish phone success.
+
+Reproduced defects: buyerContactRows ignored retained contactData.phone and used older public-search completion despite a paid error. Treg refresh replaced same-identity prior phone evidence with an error/empty result. CRM history projection retained earlier fields but its latest-attempt projection discarded the new phone failure diagnostic.
+
+Fix: show identity-scoped saved provider numbers without upgrading verification; show incomplete/error reason instead of a false negative; preserve prior phone and timestamp through refresh; preserve latest failure independently through CRM projection and client normalization. Existing paid approvals, provider caps, idempotency keys and workspace/identity guards remain unchanged. No new paid lookup was executed.
+
+Focused customer/CRM/provider tests and static build pass. Tests reproduce phone errors, saved number presentation, identity rejection and save/reload diagnostics. Live root cause and recovery remain unverified: this environment has no authenticated customer browser or Cloudflare/D1 credentials. No historical number has been inspected or recovered. Public search found masked directory entries and an official Stegra supplier document without a direct phone; neither establishes a complete current number. Need the selected buyer's exact paid-phone error and authenticated CRM evidence, including contact.enriched activities and provider receipts, before claiming commercial acceptance.

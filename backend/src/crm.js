@@ -52,7 +52,7 @@ async function retainedContactData(db,workspaceId,companyId,domain){
     // A later inconclusive result must not erase an earlier returned field.
     const profile={...(prior?.profile||{}),...(data.profile?.status==='provider_reported'?Object.fromEntries(Object.entries(data.profile).filter(([,v])=>v!==''&&v!==null&&v!==undefined)):prior?.profile?.status==='provider_reported'?{}:data.profile||{})};
     const phone=data.phone?.number?data.phone:prior?.phone?.number?prior.phone:data.phone;
-    people.set(String(data.personId),{...prior,...data,profile,phone,lastAttempt:{status:data.status,checkedAt:data.checkedAt,profile:data.profile?.status,phone:data.phone?.status},status:profile.status==='provider_reported'||phone?.number||prior?.status==='updated'?'updated':data.status});
+    people.set(String(data.personId),{...prior,...data,profile,phone,lastAttempt:{status:data.status,checkedAt:data.checkedAt,profile:data.profile?.status,phone:data.lastAttempt?.phone||data.phone?.status,phoneReason:data.lastAttempt?.phoneReason||data.phone?.reason||''},status:profile.status==='provider_reported'||phone?.number||prior?.status==='updated'?'updated':data.status});
   }
   return [...people.values()];
 }
