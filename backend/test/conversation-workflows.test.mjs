@@ -1,4 +1,7 @@
-import test from 'node:test';
+import test,{mock} from 'node:test';
+// Keep the real-time pre-send guard deterministic alongside the explicit fixture dates.
+test.before(()=>mock.method(Date,'now',()=>Date.parse('2026-10-23T08:00:00Z')));
+test.after(()=>mock.restoreAll());
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fixture,fetchThread,msg,initial} from './conversation-fixture.mjs';
