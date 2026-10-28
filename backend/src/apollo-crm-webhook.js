@@ -67,11 +67,11 @@ export async function handleApolloCrmWebhook(request,env,corsOverride={}){
   }
 
   if(contact){
-    await env.DB.prepare(`UPDATE crm_contacts SET phone_number=?,phone_status=?,verification_provider='Apollo',verified_at=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(phone||contact.phone_number||null,phone?'Verified':'Not found',phone?receivedAt:contact.verified_at||null,receivedAt,contact.id,row.workspace_id).run();
+    await env.DB.prepare(`UPDATE crm_contacts SET phone_number=?,phone_status=?,verification_provider='Apollo',verified_at=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(phone||contact.phone_number||null,phone?'Verified':contact.phone_number?contact.phone_status||'unverified':'Not found',phone?receivedAt:contact.verified_at||null,receivedAt,contact.id,row.workspace_id).run();
     contact=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE id=? AND workspace_id=?`).bind(contact.id,row.workspace_id).first();
   }
 
-  const finalStatus=phone||contact?.normalized_email?'verified':'not_found';
+  const finalStatus=phone?'verified':contact?.normalized_email?'phone_not_found':'not_found';
   const summary={status:clean(body.status,80)||null,total_requested_enrichments:Number(body.total_requested_enrichments)||0,unique_enriched_records:Number(body.unique_enriched_records)||0,missing_records:Number(body.missing_records)||0,phone_found:Boolean(phone),credits_consumed:callbackCredits};
   await env.DB.prepare(`UPDATE crm_enrichment_requests SET status=?,credits_used=?,response_summary_json=?,webhook_received_at=?,completed_at=?,updated_at=? WHERE id=? AND webhook_received_at IS NULL`).bind(finalStatus,totalCredits,JSON.stringify(summary),receivedAt,receivedAt,receivedAt,row.id).run();
 
