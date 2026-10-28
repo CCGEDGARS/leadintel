@@ -1,3 +1,4 @@
+import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
@@ -178,7 +179,8 @@ export async function requireWorkspaceServiceCredential(env,workspaceId,provider
 
 export async function withWorkspaceServiceCredentials(request,env){
   const runtime=Object.create(env);runtime.APOLLO_API_KEY='';
-  runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||'';
+  runtime.APOLLO_WEBHOOK_SECRET=apolloWebhookSigningSecret(env);
+  runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;
   try{
     const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return runtime;
     const access=await requireMember(request,env,workspaceId);if(access.error)return runtime;
