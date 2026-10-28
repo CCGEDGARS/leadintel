@@ -564,9 +564,9 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
   await context.__findPublicProspectContacts('boliden.com');
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.ok(publicSearches<=12,'reconciling the mandatory LinkedIn result must avoid a redundant lookup');
+  assert.ok(publicSearches<=14,'two Buyer Agent queries plus reconciling the mandatory LinkedIn result must avoid a redundant lookup');
   const checks=context.__discoveryState().selectedProspects[0].people[0].contactResearch.checks;
-  for(const [key,count] of [['direct_email',2],['gmail',3],['linkedin',1]]){
+  for(const [key,count] of [['direct_email',2],['gmail',3],['linkedin',1],['buyer_agent',2]]){
     assert.equal(checks[key].status,'complete');assert.equal(checks[key].queryLog.length,count);
     for(const receipt of checks[key].queryLog){assert.equal(receipt.status,'complete');assert.ok(publicQueries.includes(receipt.query));}
   }

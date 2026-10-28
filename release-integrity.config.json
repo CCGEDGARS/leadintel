@@ -5290,6 +5290,30 @@
         ".wa-book-discussion"
       ],
       "type": "text"
+    },
+    {
+      "id": "buyer-agent-evidence-engine",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "buyer-agent-20261028-v1",
+        "function assessBuyerAgent(",
+        "function buyerAgentContext(",
+        "buyer_agent"
+      ]
+    },
+    {
+      "id": "buyer-agent-interface",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function buyerAgentHtml(",
+        "Recheck with Buyer Agent",
+        "Identity / employer:",
+        "Company trigger:"
+      ]
     }
   ],
   "retry": {

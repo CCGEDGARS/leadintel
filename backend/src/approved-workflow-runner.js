@@ -2,6 +2,7 @@ import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-co
 import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import '../../customer/company-dossier-ui.js';
+import '../../customer/research-brief.js';
 import {readOwnedPayload} from './workspace-record-store.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
@@ -64,9 +65,9 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,account
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[]){
+export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={}){
   await discovery.runOfficialContactResearch(candidate,{search,guard,rows,readPage:async(...args)=>{const page=await readPage(...args);for(const entry of page?.researchTrace||[])discovery.recordBuyerResearchTool(candidate.publicResearch?.accountability,entry);return page;}});
-  return discovery.runMandatoryBuyerResearch(candidate,{search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+  return discovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
 }
 
 export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
@@ -121,11 +122,12 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows);
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile);
   candidate.publicResearch={...candidate.publicResearch,checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.publicResearch.accountability?.status!=='complete'||candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
   await guard();
-  const review=await reviewWorkspaceBuyerEvidence(env,workspaceId,{company:candidate.company,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,email:p.publicEmail,email_source:p.publicEmailUrl,checks:p.contactResearch?.checks})),evidence:discovery.buyerSupervisorEvidence(candidate.people,research.rows),quality:{depth:discovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:accountability.status,checked_people:accountability.checkedPeople,official_pages:accountability.officialPages}},{userId});
+  if(candidate.publicResearch.buyerAgent)candidate.publicResearch.buyerAgent.inputSignature=discovery.buyerReviewSignature(candidate);
+  const review=await reviewWorkspaceBuyerEvidence(env,workspaceId,{buyerAgent:candidate.publicResearch?.buyerAgent,company:candidate.company,people:candidate.people.map(p=>({employer:p.organization,linkedin:p.publicLinkedinUrl||p.linkedin_url,id:p.id,name:p.publicName||p.name,role:p.title,email:p.publicEmail,email_source:p.publicEmailUrl,checks:p.contactResearch?.checks})),evidence:discovery.buyerSupervisorEvidence(candidate.people,research.rows),quality:{depth:discovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:accountability.status,checked_people:accountability.checkedPeople,official_pages:accountability.officialPages}},{userId});
   await guard();
   candidate.publicResearch.aiReview=discovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider,checkedAt:new Date().toISOString(),inputSignature:discovery.buyerReviewSignature(candidate),reviewedPersonIds:review.supervisor?.reviewedPersonIds,conflicts:review.conflicts,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason});
   candidate.publicResearch.conflicts=review.conflicts||[];
@@ -167,8 +169,9 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
+  const agentIdentityReady=person=>{const agent=discovery.safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),row=agent?.people.find(row=>row.personId===String(person.id));return Boolean(agent&&agent.inputSignature===discovery.buyerReviewSignature(candidate)&&row?.identity==='supported'&&row.checks==='complete');};
   if((paidPolicy.enabled||paidPolicy.phoneEnabled)&&paidPolicy.provider==='treg'){
-    const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1});
+    const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1}).filter(agentIdentityReady);
     const targetPerson=targets[0],review=candidate.publicResearch.aiReview;
     const affects=entry=>!entry.person_id||String(entry.person_id)===String(targetPerson?.id);
     if(targetPerson&&review?.status==='complete'&&review.reviewedPersonIds?.includes(String(targetPerson.id))&&!review.findings?.some(affects)&&!review.conflicts?.some(affects)){
@@ -185,6 +188,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   if(config.buyers.confirmationLevel==='public_confirmed'){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
     for(const person of candidate.people.slice(0,10)){
+        if(!agentIdentityReady(person))continue;
       await guard();
       if(!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
       const findings=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
@@ -204,6 +208,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       await env.DB.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').bind(workspaceId).run();
       const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
       for(const person of candidate.people.slice(0,10)){
+        if(!agentIdentityReady(person))continue;
         await guard();
         if(person.identityStatus==='pending'||!discovery.hasFullBuyerName(person.publicName||person.name)||!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
         // Public-derived IDs cannot be sent to Apollo. Resolve an attributable
