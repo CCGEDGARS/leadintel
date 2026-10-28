@@ -57,3 +57,16 @@ test('official company inventory cannot merge two different exact profiles shari
  const a={id:'a',name:'Alex Smith',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/a',companyContactSource:'official_staff',publicLinkedinUrl:'https://linkedin.com/in/alex-a',publicEmail:'alex.a@example.com'},b={...a,id:'b',publicNameUrl:'https://example.com/team/b',publicLinkedinUrl:'https://linkedin.com/in/alex-b',publicEmail:'alex.b@example.com'};
  const merged=D.mergeCompanyContacts([a],[b],{company:'Example',domain:'example.com'});assert.equal(merged.length,2);assert.equal(merged.find(p=>p.id==='a').publicEmail,'alex.a@example.com');
 });
+
+test('complete name boundaries and historical event years prevent wrong or obsolete identity support',()=>{
+ const c=candidate();c.people=[{id:'alex',name:'Alex Smith',title:'Procurement Director',organization:'Stegra'}];
+ for(const row of [source('Alex Smithson, Procurement Director at Stegra.'),{...source('Alex Smith, Procurement Director at Stegra.','https://industry.example/events/2016/speakers/alex'),title:'Speakers 2016'}])assert.equal(D.assessBuyerAgent(c,[row]).people[0].identity,'needs_review');
+ c.people[0].name='Ann Lee';assert.equal(D.assessBuyerAgent(c,[source('Joann Lee, Procurement Director at Stegra.')]).people[0].identity,'needs_review');
+});
+test('company facts and opportunity changes invalidate reviews while unchanged saved evidence remains stable',()=>{
+ const c=D.normalizeDiscoveryState({selectedProspects:[candidate()]}).selectedProspects[0];c.publicResearch={buyerAgent:D.assessBuyerAgent(c,[])};const signature=D.buyerReviewSignature(c);
+ const restored=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(D.buyerReviewSignature(restored),signature);assert.equal(D.buyerAgentContext(restored).trigger.quote,D.buyerAgentContext(c).trigger.quote);
+ for(const field of ['company','fitDescription']){const changed=structuredClone(c);changed[field]='Changed';assert.notEqual(D.buyerReviewSignature(changed),signature);}
+ const changed=structuredClone(c);changed.evidence[0].text='The planned project has been cancelled.';assert.notEqual(D.buyerReviewSignature(changed),signature);
+ const sellerContext=D.buyerAgentContext(c,{priorityOffers:'A different offer'});assert.equal(D.buyerQualityAssessment(c,{agentContext:sellerContext}).requirements.find(r=>r.id==='buyer_agent').passed,false);
+});
