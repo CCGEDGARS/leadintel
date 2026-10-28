@@ -110,7 +110,7 @@ test('public contact runner emits source checkpoints while retaining independent
  assert.ok(reports.includes('Verifying public contact evidence · 0/1 people checked'));
  assert.ok(reports.includes('Verifying public contact evidence · 1/1 people checked'));
  assert.equal(reports.includes('Cross-checking public contact evidence with grounded research'),false,'known identities use the mandatory pass without repeating the legacy research pipeline');
- assert.ok(reports.includes('AI supervisor: checking research coverage and person–contact evidence'));
+ assert.ok(reports.includes('AI supervisor: checking research coverage · Buyer Agent evidence'));
  assert.equal(owner.people[0].emailResearch.status,'complete');
  assert.equal(owner.buyerDiscovery.pool[0].emailResearch.status,'complete');
 });
@@ -253,12 +253,12 @@ for(const shadowList of ['', 'selectedProspects', 'candidates'])test(`pipeline c
  vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+source.slice(source.indexOf('async function runPublicProspectContacts('),source.indexOf('function scheduleSavedBuyerPublicChecks(')),context);
  assert.equal(await context.run(candidate,{pipeline:true,allowCrmSync:false}),true);
  const saved=context.discovery.pipeline[0];
- assert.equal(saved.people[0].emailResearch.status,'complete');assert.equal(saved.people[0].emailResearch.searches,11);
+ assert.equal(saved.people[0].emailResearch.status,'complete');assert.equal(saved.people[0].emailResearch.searches,13);
  assert.equal(saved.buyerDiscovery.pool[0].emailResearch.status,'complete');
  assert.equal(saved.publicContactVersion,'test');assert.notEqual(saved.publicContactStatus,'loading');
  assert.equal(centre.list()[0].status,'complete');
  const restored=D.normalizeDiscoveryState({pipeline:[saved]}).pipeline[0];
- assert.equal(restored.people[0].emailResearch.status,'complete');assert.equal(restored.buyerDiscovery.pool[0].emailResearch.searches,11);
+ assert.equal(restored.people[0].emailResearch.status,'complete');assert.equal(restored.buyerDiscovery.pool[0].emailResearch.searches,13);
  if(shadowList)assert.equal(context.discovery[shadowList][0].people.length,0);
 });
 

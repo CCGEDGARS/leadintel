@@ -67,3 +67,11 @@ test('a primary reviewer ignoring cancellation cannot consume the fallback deadl
  const result=await Promise.race([reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]},{signal:new AbortController().signal,maxDurationMs:60,generate:async options=>{calls.push(options.provider);if(options.provider==='gemini')return new Promise(()=>{});assert.equal(options.reasoningEffort,'low');return {text:JSON.stringify({reviewed_person_ids:['a'],conflicts:[]})};}}),new Promise(resolve=>setTimeout(()=>resolve({hung:true}),200))]);
  assert.equal(result.hung,undefined);assert.deepEqual(calls,['gemini','openai']);assert.equal(result.provider,'openai');
 });
+
+test('independent reviewer receives the company trigger, employer and exact profile with targeted-check receipts',async()=>{
+ const body={company:'Stegra',people:[{id:'klas',name:'Klas Nilsson',role:'Procurement Director',employer:'Stegra',linkedin:'https://linkedin.com/in/klas-stegra',checks:{direct_email:{status:'complete'},buyer_agent:{status:'partial'}}}],evidence:[{url:'https://stegra.com/team',excerpt:'Klas Nilsson, Procurement Director at Stegra.'}],buyerAgent:{version:'buyer-agent-20261028-v1',context:{company:'Stegra',domain:'stegra.com',seller:'Steel supplier',trigger:{quote:'Our first plant is under construction in Boden.',url:'https://stegra.com/project'},facts:[],gaps:['Project responsibility not confirmed']}}};
+ await reviewContactEvidence({body,generate:async options=>{
+  const input=JSON.parse(options.prompt);assert.equal(input.people[0].employer,'Stegra');assert.equal(input.people[0].linkedin,'https://linkedin.com/in/klas-stegra');assert.equal(input.people[0].checks.buyer_agent,'partial');assert.equal(input.people[0].checks.direct_email,'complete');assert.match(input.buyerAgent.trigger.quote,/Boden/);assert.match(options.system,/place name is not an employer/);assert.match(options.system,/shared name is never enough/);assert.match(options.system,/no web access/);
+  return {text:JSON.stringify({reviewed_person_ids:['klas'],conflicts:[],findings:[]})};
+ }});
+});
