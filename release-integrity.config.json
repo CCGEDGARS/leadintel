@@ -5314,6 +5314,18 @@
         "Identity / employer:",
         "Company trigger:"
       ]
+    },
+    {
+      "id": "apollo-phone-lifecycle-state",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function phoneLookupState(",
+        "function safePhoneEnrichment(",
+        "person_provider_id",
+        "pending_phone"
+      ]
     }
   ],
   "retry": {

@@ -159,3 +159,75 @@ sqliteTest('valid Apollo phone webhook stores a verified phone once, adds actual
   assert.equal(Number(rowAfter.credits_used),9);
   assert.equal(env.DB.raw.prepare(`SELECT COUNT(*) count FROM crm_activities WHERE company_id=? AND activity_type='contact.phone_enriched'`).get(company.id).count,1);
 });
+
+async function phoneFixture(){
+ const f=await fixture('owner',{APOLLO_WEBHOOK_URL:'https://api.example.test/api/webhooks/apollo/crm-contact',APOLLO_WEBHOOK_SECRET:'fixture-secret'});
+ f.company=(await (await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token:f.token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),f.env,{})).json()).company;
+ f.request=(person='fixture-person')=>req(`/api/crm/companies/${f.company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token:f.token,body:{person_id:person,name:'Alex Buyer',title:'Procurement Director',phone_lookup:true}});return f;
+}
+const apolloPerson=()=>({request_id:'fixture-request',person:{id:'fixture-person',name:'Alex Buyer',title:'Procurement Director',email:'alex@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});
+const phoneCallback=(phones=true)=>({status:'success',credits_consumed:phones?8:0,people:[{id:'fixture-person',phone_numbers:phones?[{sanitized_number:'+12025550142',status_cd:'valid_number',type_cd:'work_direct'}]:[]}]});
+const callbackRequest=(url,body)=>new Request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+
+sqliteTest('concurrent phone lookups atomically reserve once and call the paid endpoint once',async()=>{
+ const f=await phoneFixture();let calls=0,release;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;await new Promise(r=>release=r);return Response.json(apolloPerson());};
+ try{const first=handleCrmRoute(f.request(),f.env,{}),second=handleCrmRoute(f.request(),f.env,{});await new Promise(r=>setTimeout(r,15));assert.equal(calls,1);release();const p=await Promise.all((await Promise.all([first,second])).map(r=>r.json()));assert.equal(p.filter(r=>r.duplicate).length,1);assert.equal(f.env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_enrichment_requests').get().n,1);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('early and concurrent callbacks preserve phone and actual credits exactly once',async()=>{
+ const f=await phoneFixture();const original=globalThis.fetch;let callbackUrl;
+ globalThis.fetch=async url=>{callbackUrl=new URL(url).searchParams.get('webhook_url');const results=await Promise.all([1,2].map(()=>CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{})));assert.ok(results.every(r=>r.status===200));return Response.json(apolloPerson());};
+ try{const p=await (await handleCrmRoute(f.request(),f.env,{})).json();assert.equal(p.contact.phone_number,'+12025550142');assert.equal(p.contact.phone_status,'Verified');assert.equal(p.request.status,'verified');assert.equal(p.request.credits_used,9);assert.equal(f.env.DB.raw.prepare("SELECT COUNT(*) n FROM crm_activities WHERE activity_type='contact.phone_enriched'").get().n,1);assert.equal((await (await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{})).json()).duplicate,true);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('no-number callback is terminal without downgrading email and repeat lookup respects cooldown',async()=>{
+ const f=await phoneFixture();let calls=0,callbackUrl;const original=globalThis.fetch;globalThis.fetch=async url=>{calls++;callbackUrl=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ try{await handleCrmRoute(f.request(),f.env,{});const callback=await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback(false)),f.env,{});assert.equal(callback.status,200);assert.equal((await callback.json()).request.status,'not_found');assert.equal((await (await handleCrmRoute(f.request(),f.env,{})).json()).duplicate,true);assert.equal(calls,1);const c=f.env.DB.raw.prepare('SELECT * FROM crm_contacts').get();assert.equal(c.phone_status,'Not found');assert.equal(c.email_status,'Verified');}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('uncertain dispatch timeout retains reservation and blocks another paid attempt',async()=>{
+ const f=await phoneFixture();let calls=0;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;throw Error('connection lost after dispatch');};
+ try{const r=await handleCrmRoute(f.request(),f.env,{});assert.equal(r.status,202);assert.equal((await r.json()).reason,'apollo_outcome_unknown');assert.equal((await (await handleCrmRoute(f.request(),f.env,{})).json()).duplicate,true);assert.equal(calls,1);assert.equal(f.env.DB.raw.prepare('SELECT credits_reserved FROM crm_enrichment_requests').get().credits_reserved,9);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('distinct concurrent phone requests cannot overbook the workspace budget',async()=>{
+ const f=await phoneFixture();f.env.DB.raw.exec("UPDATE enrichment_policies SET daily_credit_limit=9 WHERE workspace_id='w1'");let calls=0;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;return Response.json(apolloPerson());};
+ try{const results=await Promise.all([handleCrmRoute(f.request(),f.env,{}),handleCrmRoute(f.request('other-person'),f.env,{})]);assert.equal(calls,1);assert.equal(results.filter(r=>r.status===429).length,1);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('callback identity mismatch cannot settle another person or mutate a contact',async()=>{
+ const f=await phoneFixture();let callbackUrl;const original=globalThis.fetch;globalThis.fetch=async url=>{callbackUrl=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ try{await handleCrmRoute(f.request(),f.env,{});const body=phoneCallback();body.people[0].id='wrong-person';const r=await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,body),f.env,{});assert.equal(r.status,422);assert.equal(f.env.DB.raw.prepare('SELECT status FROM crm_enrichment_requests').get().status,'pending_phone');}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('callback inbox survives a projection failure and CRM refresh repairs it without a second lookup',async()=>{
+ const f=await phoneFixture();let callbackUrl,calls=0;const original=globalThis.fetch;globalThis.fetch=async url=>{calls++;callbackUrl=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ try{await handleCrmRoute(f.request(),f.env,{});const prepare=f.env.DB.prepare.bind(f.env.DB);let failed=false;f.env.DB.prepare=sql=>{if(!failed&&sql.includes('UPDATE crm_contacts SET phone_number=CASE')){failed=true;throw Error('simulated write interruption');}return prepare(sql);};
+ await assert.rejects(CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{}),/simulated/);f.env.DB.prepare=prepare;
+ const saved=f.env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(saved.credits_used,9);assert.ok(saved.webhook_received_at);
+ const refresh=await handleCrmRoute(req(`/api/crm/companies/${f.company.id}?workspace_id=w1`,{token:f.token}),f.env,{}),detail=await refresh.json();assert.equal(refresh.status,200);assert.equal(detail.contacts[0].phone_number,'+12025550142');assert.equal(detail.phoneRequests[0].status,'verified');assert.equal(calls,1);
+ const retry=await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{});assert.equal((await retry.json()).duplicate,true);assert.equal(f.env.DB.raw.prepare('SELECT credits_used FROM crm_enrichment_requests').get().credits_used,9);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('an interim callback cannot turn unfinished phone research into not found',async()=>{
+ const f=await phoneFixture();let callbackUrl;const original=globalThis.fetch;globalThis.fetch=async url=>{callbackUrl=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ try{await handleCrmRoute(f.request(),f.env,{});const partial={...phoneCallback(false),status:'processing'};assert.equal((await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,partial),f.env,{})).status,202);assert.equal(f.env.DB.raw.prepare('SELECT webhook_received_at FROM crm_enrichment_requests').get().webhook_received_at,null);assert.equal((await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{})).status,200);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('an early callback for another Apollo person cannot write their phone or email onto the selected buyer',async()=>{
+ const f=await phoneFixture(),{upsertCrmContacts}=await import('../src/crm.js');const target=(await upsertCrmContacts(f.env.DB,{workspaceId:'w1',userId:'u1',role:'owner'},f.company.id,[{name:'Alice Buyer',external_person_id:'public-alice',source:'public',work_email:'alice@acme.example',email_status:'verified'}]))[0];
+ const original=globalThis.fetch;globalThis.fetch=async url=>{const callbackUrl=new URL(url).searchParams.get('webhook_url');const response=await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{});assert.equal(response.status,200);assert.equal(f.env.DB.raw.prepare('SELECT phone_number FROM crm_contacts WHERE id=?').get(target.id).phone_number,null);return Response.json(apolloPerson());};
+ try{const response=await handleCrmRoute(req(`/api/crm/companies/${f.company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token:f.token,body:{person_id:'fixture-person',contact_id:target.id,name:'Alice Buyer',phone_lookup:true}}),f.env,{});assert.equal(response.status,202);const saved=f.env.DB.raw.prepare('SELECT * FROM crm_contacts WHERE id=?').get(target.id);assert.equal(saved.normalized_email,'alice@acme.example');assert.equal(saved.phone_number,null);assert.equal(f.env.DB.raw.prepare('SELECT status FROM crm_enrichment_requests').get().status,'pending_phone');}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('duplicate callbacks preserve a later customer phone correction',async()=>{
+ const f=await phoneFixture();let callbackUrl;const original=globalThis.fetch;globalThis.fetch=async url=>{callbackUrl=new URL(url).searchParams.get('webhook_url');return Response.json(apolloPerson());};
+ try{await handleCrmRoute(f.request(),f.env,{});await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{});f.env.DB.raw.exec("UPDATE crm_contacts SET phone_number='+12025550199',phone_status='Manual',verification_provider='Manual',updated_at='2099-01-01'");await CrmRoutes.handleApolloCrmWebhook(callbackRequest(callbackUrl,phoneCallback()),f.env,{});const contact=f.env.DB.raw.prepare('SELECT * FROM crm_contacts').get();assert.equal(contact.phone_number,'+12025550199');assert.equal(contact.phone_status,'Manual');assert.equal(contact.updated_at,'2099-01-01');}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('a partial response without exact provider identity cannot overwrite the selected contact',async()=>{
+ const f=await phoneFixture(),{upsertCrmContacts}=await import('../src/crm.js');const target=(await upsertCrmContacts(f.env.DB,{workspaceId:'w1',userId:'u1',role:'owner'},f.company.id,[{name:'Alice Buyer',external_person_id:'public-alice',source:'public',work_email:'alice@acme.example',email_status:'verified'}]))[0];
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({person:{name:'Bob Buyer',email:'bob@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});
+ try{await handleCrmRoute(req(`/api/crm/companies/${f.company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token:f.token,body:{person_id:'fixture-person',contact_id:target.id,name:'Alice Buyer',phone_lookup:true}}),f.env,{});const saved=f.env.DB.raw.prepare('SELECT * FROM crm_contacts WHERE id=?').get(target.id);assert.equal(saved.normalized_email,'alice@acme.example');assert.equal(saved.verification_provider,null);assert.equal(saved.phone_number,null);}finally{globalThis.fetch=original;}
+});

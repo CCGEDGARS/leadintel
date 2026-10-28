@@ -18,3 +18,8 @@ test('Apollo webhook signing uses a dedicated secret when present and safely fal
   assert.match(crmRoutes,/apolloWebhookSigningSecret\(env\)/);
   assert.match(webhookSource,/apolloWebhookSigningSecret\(env\)/);
 });
+
+test('workspace provider keys cannot replace the server callback signing identity',()=>{
+ assert.equal(ApolloWebhook.apolloWebhookSigningSecret({APOLLO_WEBHOOK_SERVER_BOUND:true,APOLLO_WEBHOOK_SECRET:'server-key',APOLLO_API_KEY:'workspace-key'}),'server-key');
+ assert.equal(ApolloWebhook.apolloWebhookSigningSecret({APOLLO_WEBHOOK_SERVER_BOUND:true,APOLLO_WEBHOOK_SECRET:'',APOLLO_API_KEY:'workspace-key'}),'');
+});

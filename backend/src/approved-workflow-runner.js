@@ -151,20 +151,25 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   const crmContext={workspaceId,userId,role:'owner'};
   const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
+  const agentIdentityReady=person=>{const agent=discovery.safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),row=agent?.people.find(row=>row.personId===String(person.id));return Boolean(agent&&agent.inputSignature===discovery.buyerReviewSignature(candidate)&&row?.identity==='supported'&&row.checks==='complete');};
   // The Buyer Agent owns the identity gate; providers may enrich but never waive it.
   // Keep a trace for every selected buyer, including policy skips and provider failures.
   const complete=async initialContact=>{
     let contact=initialContact;
     const trace=[];
+    const samePeople=candidate.people.filter(p=>String(p.id)===String(contact.external_person_id)||buyerName(p)===buyerName(contact));
+    const selected=samePeople.length===1?samePeople[0]:null;
+    const identityReady=Boolean(selected&&agentIdentityReady(selected));
     const hasUsablePhone=()=>Boolean(String(contact.phone_number||'').trim())&&['verified','provider_listed'].includes(String(contact.phone_status||'').toLowerCase());
-    const record=(provider,status,reason)=>trace.push({provider,status,reason,checkedAt:new Date().toISOString()});
+    const record=(provider,status,reason,requestId='')=>trace.push({provider,status,reason,requestId,checkedAt:new Date().toISOString()});
     const commitTrace=()=>{
-      candidate.buyerDiscovery.phoneEnrichment={contactId:contact.id,events:trace,status:hasUsablePhone()?'available':trace.some(t=>t.status==='failed')?'failed':trace.some(t=>t.status==='requested')?'pending':'unavailable',checkedAt:new Date().toISOString()};
+      candidate.buyerDiscovery.phoneEnrichment={contactId:contact.id,events:trace,status:hasUsablePhone()?'available':trace.some(t=>t.status==='requested')?'pending':trace.some(t=>t.status==='failed')?'failed':'unavailable',checkedAt:new Date().toISOString()};
     };
     if(hasUsablePhone()){
       record('existing','available','Retained verified or provider-listed number');
+    }else if(!identityReady){
+      record('buyer_agent','skipped','Current buyer identity evidence is incomplete or ambiguous');
     }else if(paidPolicy.provider==='treg'&&paidPolicy.phoneEnabled){
-      const selected=candidate.people.find(p=>String(p.id)===String(contact.external_person_id)||buyerName(p)===buyerName(contact));
       if(!selected||!contact.company_id){
         record('treg','skipped','Buyer identity or company reference unavailable');
       }else{
@@ -186,11 +191,12 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     }
     // Apollo fallback is an independent, explicit phone approval, even if Treg is
     // selected for first-pass discovery. CRM enforces capability, credits and webhook.
-    if(!hasUsablePhone()){
+    if(!hasUsablePhone()&&identityReady){
       if(config.buyers.confirmPhone!==true){
         record('apollo','skipped','Phone lookup not approved in workflow');
       }else{
-        const matches=directoryPeople.filter(p=>buyerName(p)===buyerName(contact)&&String(p.organization||p.company||candidate.company).trim().toLowerCase()===String(candidate.company).trim().toLowerCase());
+        const selectedProfile=discovery.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url||contact.public_linkedin_url||contact.linkedin_url);
+        const matches=directoryPeople.filter(p=>buyerName(p)===buyerName(contact)&&String(p.organization||p.company||'').trim().toLowerCase()===String(candidate.company).trim().toLowerCase()&&(!selectedProfile||!discovery.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url)||selectedProfile===discovery.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url)));
         const directoryIds=[...new Set(matches.map(p=>String(p.id||p.external_person_id||'').trim()).filter(id=>id&&!/^(public-|person-)/.test(id)))];
         const existingApolloId=String(contact.source||'').toLowerCase()==='apollo'?String(contact.external_person_id||''):'';
         const personId=directoryIds.length===1?directoryIds[0]:directoryIds.length===0&&existingApolloId&&!/^(public-|person-)/.test(existingApolloId)?existingApolloId:'';
@@ -203,13 +209,13 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
             if(!credential.configured){
               record('apollo','skipped','Apollo is not configured');
             }else{
-              const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
-              const response=await enrichCrmContact(new Request('https://leadintel.invalid/internal-phone',{method:'POST',body:JSON.stringify({person_id:personId,name:contact.name,title:contact.title,phone_lookup:true})}),runtime,{}, {context:crmContext},contact.company_id);
+              const runtime=Object.create(env);runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||env.APOLLO_API_KEY||'';runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;runtime.APOLLO_API_KEY=credential.apiKey;
+              const response=await enrichCrmContact(new Request('https://leadintel.invalid/internal-phone',{method:'POST',body:JSON.stringify({person_id:personId,contact_id:contact.id,name:contact.name,title:contact.title,phone_lookup:true})}),runtime,{}, {context:crmContext},contact.company_id);
               await guard();
               const payload=await response.json();
               if(response.ok){
                 if(payload.contact)contact={...contact,...payload.contact};
-                record('apollo',hasUsablePhone()?'available':payload.request?.status==='processing'?'requested':'not_found',payload.request?.status||'Apollo request completed');
+                record('apollo',hasUsablePhone()?'available':['processing','pending_phone'].includes(payload.request?.status)?'requested':payload.request?.status==='failed'?'failed':'not_found',payload.request?.status||'Apollo request completed',payload.request?.id);
               }else{
                 record('apollo','failed',payload.code||'provider_rejected');
                 candidate.buyerDiscovery.issues.push(payload.error||'Apollo phone enrichment unavailable');
@@ -234,7 +240,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
-  const agentIdentityReady=person=>{const agent=discovery.safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),row=agent?.people.find(row=>row.personId===String(person.id));return Boolean(agent&&agent.inputSignature===discovery.buyerReviewSignature(candidate)&&row?.identity==='supported'&&row.checks==='complete');};
+
   if((paidPolicy.enabled||paidPolicy.phoneEnabled)&&paidPolicy.provider==='treg'){
     const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1}).filter(agentIdentityReady);
     const targetPerson=targets[0],review=candidate.publicResearch.aiReview;
@@ -271,7 +277,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       const crmContext={workspaceId,userId,role:'owner'};
       const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
       await env.DB.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').bind(workspaceId).run();
-      const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
+      const runtime=Object.create(env);runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||env.APOLLO_API_KEY||'';runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;runtime.APOLLO_API_KEY=credential.apiKey;
       for(const person of candidate.people.slice(0,10)){
         if(!agentIdentityReady(person))continue;
         await guard();
