@@ -165,3 +165,46 @@
 /* Keep both generation controls and long card forms reachable in the fixed dialog. */
 .wa-conversation:has(.story-bank[open]),.wa-conversation:has([data-story-options]:not([hidden])){overflow-y:auto}
 .wa-skill-selection{margin-top:16px;padding-top:16px;border-top:1px solid #dce4df;display:flex;gap:8px;flex-wrap:wrap}.wa-skill-selection[hidden]{display:none}.wa-skill-selection>strong,.wa-skill-selection>small{flex-basis:100%}.wa-skill-selection>small{color:#62776a}.wa-skill-choice{padding:8px 12px;border:1px solid #c8dacf;border-radius:18px;background:#fff;color:#304e3c;font:inherit;cursor:pointer}.wa-skill-choice[aria-pressed=true]{background:#f5eddb;border-color:#c6a35d;color:#57451f}
+
+/* Skills guide writing; one collapsed book supplies discussion knowledge. */
+.wa-skill-selection{display:grid;gap:7px;margin:4px 0 8px;padding:0;border:0;min-width:0}
+.wa-skill-heading{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.wa-skill-heading>strong{margin-right:auto;font-size:14px}
+.wa-skill-heading>small,.wa-skill-selection>small{font-size:11px;color:var(--wa-muted)}
+.wa-skill-heading button{font-size:11px;min-height:28px;padding:3px 6px;text-decoration:underline;border-color:transparent}
+.wa-selected-skills{display:flex;gap:5px;flex-wrap:wrap}
+.wa-selected-skills:empty{display:none}
+.wa-selected-skills button{font-size:11px;min-height:26px;padding:3px 8px;border-radius:16px;background:#e9f2ec}
+.wa-skill-list{max-height:240px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;border:1px solid var(--wa-line);border-radius:9px}
+.wa-skill-list>p{font-size:12px;padding:12px;margin:0;color:var(--wa-muted)}
+.wa-dialog .wa-skill-choice{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--wa-line);border-radius:0;padding:9px 12px;background:#fff;color:var(--wa-ink)}
+.wa-dialog .wa-skill-choice:last-child{border-bottom:0}
+.wa-dialog .wa-skill-choice[aria-pressed=true]{background:#edf5ef;color:var(--wa-ink)}
+.wa-skill-choice>span:nth-child(2){display:grid;gap:2px;flex:1;min-width:0}
+.wa-skill-choice strong{font-size:12px;overflow-wrap:anywhere}
+.wa-skill-choice small{font-size:11px;font-weight:400;color:var(--wa-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wa-skill-cover{display:grid;place-items:center;width:28px;height:38px;flex:none;background:#e8efe7;border-radius:3px;color:#315b45;overflow:hidden}
+.wa-skill-cover img{height:100%;width:100%;object-fit:contain}
+.wa-skill-check{width:17px;height:17px;border:1px solid #9eb8a9;border-radius:4px;flex:none;text-align:center;font-size:12px}
+[aria-pressed=true]>.wa-skill-check{background:#24523d;color:white;border-color:#24523d}
+.wa-question-footer [data-wa-generate]{flex:1}
+.wa-question>.wa-mentors{border-top:1px solid var(--wa-line);padding-top:10px;margin-top:5px}
+.wa-mentors>summary{cursor:pointer;font-size:13px;font-weight:600}
+.wa-mentors>summary span{font-size:11px;font-weight:400;color:var(--wa-muted)}
+.wa-knowledge-note{font-size:11px;color:var(--wa-muted);margin:6px 0}
+.wa-mentors .wa-books{display:grid;grid-template-columns:1fr;gap:5px}
+.wa-dialog .wa-mentors .wa-book{display:flex;flex-direction:row;text-align:left;gap:10px;padding:7px 9px;box-shadow:none;min-height:48px}
+.wa-mentors .wa-book>strong{flex:1;font-size:12px}
+.wa-mentors .wa-book-cover{width:25px;height:35px;padding:3px;flex:none;box-shadow:none}
+.wa-mentors .wa-book-cover small{display:none}
+.wa-mentors .wa-book-cover strong{font-size:5px}
+.wa-mentors .wa-book-activation{min-height:24px;font-size:11px;padding:3px 7px}
+.wa-mentors .wa-mentor-heading{margin:8px 0}
+.wa-mentors .wa-mentor-note{border:0;padding:0}
+.wa-book-discussion{padding:12px 18px;border-bottom:1px solid var(--wa-line);font-size:12px;display:grid;gap:7px}
+.wa-book-discussion label{display:grid;gap:5px}
+.wa-book-discussion textarea{width:100%;box-sizing:border-box;border:1px solid #c8dacf;border-radius:8px;padding:9px;font:inherit;resize:vertical}
+.wa-conversation{overflow-y:auto}
+.wa-conversation>.wa-question{flex-shrink:0}
+.wa-conversation-stream{flex:none;min-height:100px;overflow:visible}
+@media(max-height:740px) and (min-width:721px){.wa-skill-list{max-height:170px}}

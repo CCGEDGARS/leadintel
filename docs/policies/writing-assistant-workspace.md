@@ -2,7 +2,15 @@
 
 Version: writing-workspace=20261023-v1. User-approved 23 October 2026.
 
-## Use
+## Skills-first direct improvement — 28 October 2026
+
+User approved retaining the two-column modal with Writing skills as the main source selector. All saved skills appear in a bounded scroll list; up to three Ready enabled skills can be selected. Selected chips remain visible. Selections alone do not change text; they stay for this working session until deselected or the existing context/session reset.
+
+**Improve draft** replaces the isolated working copy immediately after the existing source freshness and draft validation checks. It preserves Undo and applied provenance. Instructions are optional for existing text, required to define a topic when the draft is blank. General writing can create or improve text without customer context. Repeated improvement works from the latest copy; identical responses do not create a new Undo revision. Saving, approval and sending remain explicit separate operations.
+
+**Book knowledge** is collapsed initially and provides one-book advisory discussion using the current permitted context. Book advice never edits the draft. Skill-based improvement excludes discussion books; book discussion excludes selected writing skills. The earlier preview/Apply and three-book main-card instructions below are historical and superseded for the primary assistant flow. Existing preview APIs remain available to other callers. Voice discussion is not implemented by this interface change.
+
+## Historical use
 
 1. Open Writing Assistant in Messages. Choose **Current customer** to use that recipient's sender/research context, or **General writing** to work independently. General is available without a selected buyer.
 2. Keep/edit the loaded working copy, paste another script, use **Load script**, or **Clear draft**. Clear empties subject and body; Undo restores the prior copy.
