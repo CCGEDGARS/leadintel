@@ -163,7 +163,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     const hasUsablePhone=()=>Boolean(String(contact.phone_number||'').trim())&&['verified','provider_listed'].includes(String(contact.phone_status||'').toLowerCase());
     const record=(provider,status,reason,requestId='')=>trace.push({provider,status,reason,requestId,checkedAt:new Date().toISOString()});
     const commitTrace=()=>{
-      candidate.buyerDiscovery.phoneEnrichment={contactId:contact.id,events:trace,status:hasUsablePhone()?'available':trace.some(t=>t.status==='requested')?'pending':trace.some(t=>t.status==='failed')?'failed':'unavailable',checkedAt:new Date().toISOString()};
+      candidate.buyerDiscovery.phoneEnrichment={contactId:contact.id,personId:selected?.id||'',identityName:selected?.publicName||selected?.name||'',identityLinkedinUrl:selected?.publicLinkedinUrl||selected?.linkedin_url||'',events:trace,status:hasUsablePhone()?'available':trace.some(t=>t.status==='requested')?'pending':trace.some(t=>t.status==='failed')?'failed':'unavailable',checkedAt:new Date().toISOString()};
     };
     if(hasUsablePhone()){
       record('existing','available','Retained verified or provider-listed number');
