@@ -142,7 +142,7 @@
       "url": "/customer/writing-assistant-ui.js",
       "status": 200,
       "contains": [
-        "Skills for this request",
+        "Writing skills",
         "waSkill"
       ]
     },
@@ -2095,22 +2095,19 @@
       "id": "workspace-storage-private-status",
       "type": "text",
       "url": "/api/storage/status?workspace_id=release-check",
-      "status": 401,
-      "contains": []
+      "status": 401
     },
     {
       "id": "workspace-storage-checkout-method",
       "type": "text",
       "url": "/api/storage/checkout?workspace_id=release-check",
-      "status": 405,
-      "contains": []
+      "status": 405
     },
     {
       "id": "workspace-storage-webhook-registration",
       "type": "text",
       "url": "/api/webhooks/stripe/storage",
-      "status": 405,
-      "contains": []
+      "status": 405
     },
     {
       "id": "workspace-storage-alert-boundary",
@@ -2146,7 +2143,7 @@
         "AbortController",
         "reconcileDraft",
         "loadCurrentDraft",
-        "m.sourceKey===sourceKey(c)",
+        "m.sourceKey===sourceKey(requestSources)",
         "workingAssistant",
         "contextKey",
         "workingVersion"
@@ -2165,7 +2162,7 @@
         "showModal",
         "Load current script",
         "Keep assistant copy",
-        "Writing with your customer research",
+        "Using your selected customer context",
         "controller.contextKey?.()!==loadContext",
         "state.workingAssistant"
       ]
@@ -2608,15 +2605,13 @@
       "id": "step6-followup-private-context",
       "type": "text",
       "url": "/api/follow-up-assistant/context?workspace_id=release-check",
-      "status": 401,
-      "contains": []
+      "status": 401
     },
     {
       "id": "step6-followup-private-save",
       "type": "text",
       "url": "/api/follow-up-assistant/save?workspace_id=release-check",
-      "status": 401,
-      "contains": []
+      "status": 401
     },
     {
       "id": "step6-new-cache-entry",
@@ -3355,9 +3350,9 @@
       "contains": [
         "Your instructions",
         "data-wa-books",
-        "Writing books \u00b7 Optional",
+        "Book knowledge",
         "activateBook(card.id)",
-        "Books optional"
+        "Writing skills"
       ]
     },
     {
@@ -4721,7 +4716,7 @@
         "data-wa-save-draft",
         "data-wa-generate",
         "Preview changes",
-        "Activate",
+        "Discuss",
         "resetBooks()"
       ]
     },
@@ -5261,6 +5256,40 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "skills-first-direct-improvement",
+      "url": "/customer/writing-assistant.js",
+      "status": 200,
+      "contains": [
+        "async function improveDraft",
+        "writingOnly:true",
+        "await applyPreview()"
+      ],
+      "type": "text"
+    },
+    {
+      "id": "skills-first-workspace",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "Writing skills",
+        "Book knowledge",
+        "Improve draft",
+        "wa-skill-list"
+      ],
+      "type": "text"
+    },
+    {
+      "id": "skills-first-compact-layout",
+      "url": "/customer/writing-assistant.css",
+      "status": 200,
+      "contains": [
+        ".wa-skill-list",
+        ".wa-selected-skills",
+        ".wa-book-discussion"
+      ],
+      "type": "text"
     }
   ],
   "retry": {
