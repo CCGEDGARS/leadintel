@@ -52,3 +52,8 @@ test('Buyer Agent panel exposes the explicit recheck, evidence and separate oppo
  const dom=new JSDOM(context.buyerAgentHtml(c)),doc=dom.window.document;
  assert.equal(doc.querySelector('[data-find-public-contacts]').textContent,'Recheck with Buyer Agent');assert.match(doc.body.textContent,/Identity \/ employer: supported/);assert.match(doc.body.textContent,/Opportunity: hypothesis/);assert.match(doc.body.textContent,/Boden/);assert.equal(doc.querySelector('a').href,'https://stegra.com/project');dom.window.close();
 });
+
+test('official company inventory cannot merge two different exact profiles sharing a name',()=>{
+ const a={id:'a',name:'Alex Smith',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/a',companyContactSource:'official_staff',publicLinkedinUrl:'https://linkedin.com/in/alex-a',publicEmail:'alex.a@example.com'},b={...a,id:'b',publicNameUrl:'https://example.com/team/b',publicLinkedinUrl:'https://linkedin.com/in/alex-b',publicEmail:'alex.b@example.com'};
+ const merged=D.mergeCompanyContacts([a],[b],{company:'Example',domain:'example.com'});assert.equal(merged.length,2);assert.equal(merged.find(p=>p.id==='a').publicEmail,'alex.a@example.com');
+});

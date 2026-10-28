@@ -2097,7 +2097,10 @@
     for(const person of [...previous,...incoming]){
       if(malformedBuyerRole(person.title))continue;
       if(!hasFullBuyerName(person.publicName||person.name)||!companyNameMatches(person.organization,candidate.company))continue;
-      const key=clean(person.publicName||person.name).toLowerCase(),old=contacts.get(key)||{};
+      let key=clean(person.publicName||person.name).toLowerCase();
+      const existing=contacts.get(key),profile=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),existingProfile=normalizeLinkedInUrl(existing?.publicLinkedinUrl||existing?.linkedin_url);
+      if(profile&&existingProfile&&profile!==existingProfile)key+='|'+profile;
+      const old=contacts.get(key)||{};
       if(!validCompanyContactSource(person)&&!validCompanyContactSource(old))continue;
       const next={...old,...person,id:old.id||person.id,companyContactSource:validCompanyContactSource(person)||validCompanyContactSource(old)};
       for(const field of ['publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicNameUrl','publicLinkedinUrl','corporateRoleEvidence'])if(!next[field]&&old[field])next[field]=old[field];
