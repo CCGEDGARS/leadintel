@@ -1084,7 +1084,7 @@ function buyerContactRows(person={},candidate={},result={}){
   const source=url=>url?` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:'';
   const found=[...(person.patternFindings||[])];
   if(person.publicEmail&&!found.some(row=>row.email===person.publicEmail.toLowerCase()))found.unshift({email:person.publicEmail.toLowerCase(),url:person.publicEmailUrl});
-  const savedData=LeadIntelDiscovery.safeContactData(person.contactData,person,canonicalDomain(candidate.domain));
+  const savedData=LeadIntelDiscovery.safeContactData?.(person.contactData,person,canonicalDomain(candidate.domain));
   const savedPhone=savedData?.phone?.status==='provider_listed'&&/^\+[1-9]\d{6,14}$/.test(savedData.phone.number||'')?savedData.phone.number:'';
   const state=channel=>{
     const row=channel==='gmail'?person.contactResearch?.checks?.gmail||{status:'not_searched'}:person.contactResearch?.channels?.[channel]||person.contactResearch?.checks?.[channel]||{status:channel==='company'?person.emailResearch?.status||'not_searched':'not_searched'};
@@ -2391,7 +2391,7 @@ async function saveBuyerAndProceed(domain,index,{button}={}){
 
 function prospectContactControls(candidate,person){
   const key=selectedBuyerKey(candidate,person),result=enrichmentResults.get(key),pending=enrichmentPending.has(key),automatic=buyerAutomaticMode();
-  const index=candidate.people.findIndex(item=>LeadIntelDiscovery.buyerIdentity(item)===LeadIntelDiscovery.buyerIdentity(person)),phone=result?.contact?.phone_number||LeadIntelDiscovery.safeContactData(person.contactData,person,canonicalDomain(candidate.domain))?.phone?.number,verified=Boolean(verifiedBuyerEmail(candidate,person,result?.contact||{})),linkedinReady=['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status);
+  const index=candidate.people.findIndex(item=>LeadIntelDiscovery.buyerIdentity(item)===LeadIntelDiscovery.buyerIdentity(person)),phone=result?.contact?.phone_number||LeadIntelDiscovery.safeContactData?.(person.contactData,person,canonicalDomain(candidate.domain))?.phone?.number,verified=Boolean(verifiedBuyerEmail(candidate,person,result?.contact||{})),linkedinReady=['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status);
   const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate),hold=!qualification.eligible?'Review buyer qualification before continuing: '+qualification.gaps[0]:'';
   const selecting=buyerSelectionPending.has(key),syncConflict=bridge()?.conflict===true;
   const active=loadMeta().selectedEmailBuyer,selected=active?.workspaceId===bridge()?.workspace?.id&&active?.domain===canonicalDomain(candidate.domain)&&String(active?.personId)===String(person.id);
