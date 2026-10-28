@@ -2045,7 +2045,8 @@
     if(contact?.phone_number&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase()))return 'verified';
     const request=requests.find(row=>contact?.id&&row.contact_id===contact.id||personId&&row.person_provider_id===personId);
     if(request)return ['processing','pending_phone'].includes(request.status)?'pending_phone':request.status==='failed'?'failed':'not_found';
-    return contact?.phone_status==='Not found'?'not_found':'pending_phone';
+    const status=String(contact?.phone_status||'').toLowerCase();
+    return status==='not found'?'not_found':['pending','pending_phone','processing'].includes(status)?'pending_phone':status==='failed'?'failed':'not_requested';
   }
   function normalizeBuyerDiscovery(value={},domain=""){
     const safeProvider=row=>({sources:(row?.sources||[]).filter(value=>['firecrawl','grounded','public_web'].includes(value)).slice(0,3),status:['pending','complete','partial','unavailable','failed','timeout','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0),accepted:row?.accepted!=null?clamp(Number(row.accepted)||0,0,200,0):null,failures:(Array.isArray(row?.failures)?row.failures:[]).slice(0,50).map(failure=>({status:clean(failure.status).slice(0,80),code:clean(failure.code).slice(0,120),message:clean(failure.message).slice(0,1000),query:clean(failure.query).slice(0,500)}))});
