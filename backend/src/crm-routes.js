@@ -55,6 +55,23 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
   if(existing&&!phoneRequested)return json({request:{status:'already_verified',credits_used:0},contact:existing,duplicate:true},200,cors);
 
+  // Idempotency: do not buy the same phone reveal again while a previous
+  // request is active, or after an actual number has already been returned.
+  // Scope both checks to the authenticated workspace and exact Apollo person.
+  if(phoneRequested){
+    const prior=await env.DB.prepare(`SELECT * FROM crm_enrichment_requests
+      WHERE workspace_id=? AND company_id=? AND provider='apollo'
+        AND person_provider_id=? AND phone_requested=1
+        AND status IN ('processing','pending_phone')
+      ORDER BY created_at DESC LIMIT 1`).bind(access.context.workspaceId,companyId,personId).first();
+    if(prior)return json({request:{id:prior.id,status:prior.status,provider_request_id:prior.provider_request_id||null,credits_used:Number(prior.credits_used)||0,credits_reserved:Number(prior.credits_reserved)||0},duplicate:true,reason:'phone_request_already_pending'},200,cors);
+    const savedPhone=await env.DB.prepare(`SELECT * FROM crm_contacts
+      WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=?
+      AND archived_at IS NULL AND phone_number IS NOT NULL AND TRIM(phone_number)<>''
+      AND LOWER(phone_status) IN ('verified','provider_listed')
+      ORDER BY updated_at DESC LIMIT 1`).bind(access.context.workspaceId,companyId,personId).first();
+    if(savedPhone)return json({request:{status:'already_verified',credits_used:0},contact:savedPhone,duplicate:true,reason:'existing_verified_phone'},200,cors);
+  }
   const capabilities=await apolloCapabilities(env,access.context.workspaceId);
   if(phoneRequested?!capabilities.phone:!capabilities.email)return error('Enable Apollo '+(phoneRequested?'phone':'email')+' enrichment in Settings before using credits',409,cors,'CRM_APOLLO_CAPABILITY_DISABLED');
   const reserved=phoneRequested?9:1;const usage=await crmEnrichmentUsage(env.DB,access.context.workspaceId);
