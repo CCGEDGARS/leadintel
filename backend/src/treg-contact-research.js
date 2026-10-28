@@ -113,6 +113,8 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   }catch(error){data.phone={status:'error',reason:clean(error.message)};}
  }
  data.status=[data.profile,data.phone].some(x=>['error','conflict'].includes(x.status))?'partial':data.profile.status==='provider_reported'||data.phone.number||!existingContact&&emailResult.contact?.work_email?'updated':'no_new_data';
+ data.lastAttempt={status:data.status,checkedAt,phone:data.phone.status,phoneReason:data.phone.reason||'',profile:data.profile.status};
+ if(includePhone&&!data.phone.number&&previousData?.phone?.number){data.phone={...previousData.phone,checkedAt:previousData.phone.checkedAt||previousData.checkedAt};}
  data.costMicro=total;data.callIds=[...new Set(callIds)];
  await guard();
  let contact=emailResult.contact;

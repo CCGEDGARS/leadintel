@@ -68,3 +68,14 @@ test('standalone contact resume starts at contact evidence without claiming to r
  const doc=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'complete',publicContactStatus:'loading'}));assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/Checking public contact evidence/);assert.equal(doc.querySelector('li.active').textContent.trim(),'5Contact evidence');assert.match(doc.querySelector('.buyer-research-progress-head b').textContent,/5\/5/);
  const discovery=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'loading',publicContactStatus:'loading'}));assert.equal(discovery.querySelector('li.active').textContent.trim(),'1Verify company');
 });
+
+test('paid phone error overrides an older completed public search without claiming not found',()=>{
+ const {ctx,person,candidate}=runtime();person.contactResearch.channels.phone={status:'complete'};
+ person.contactData={version:1,domain:candidate.domain,personId:person.id,identityName:person.name,status:'partial',phone:{status:'error',reason:'Treg usage limit reached.'}};
+ const doc=documentFor(ctx.buyerContactRows(person,candidate)),field=doc.querySelector('[data-contact-channel="phone"]');assert.equal(field.dataset.contactStatus,'incomplete');assert.match(field.textContent,/Treg usage limit/);assert.doesNotMatch(visibleText(field),/Not found/);
+});
+test('retained same-identity paid phone is visible even when CRM contact lacks phone_number',()=>{
+ const {ctx,person,candidate}=runtime();person.contactData={version:1,domain:candidate.domain,personId:person.id,identityName:person.name,phone:{status:'provider_listed',number:'+37120000001',source:'Treg'}};
+ let doc=documentFor(ctx.buyerContactRows(person,candidate)),field=doc.querySelector('[data-contact-channel="phone"]');assert.match(field.textContent,/\+37120000001/);assert.equal(field.dataset.contactStatus,'found');assert.doesNotMatch(field.textContent,/Provider verified/);
+ person.contactData.identityName='Someone Else';doc=documentFor(ctx.buyerContactRows(person,candidate));assert.doesNotMatch(doc.querySelector('[data-contact-channel="phone"]').textContent,/\+37120000001/);
+});

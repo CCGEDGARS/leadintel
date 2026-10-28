@@ -112,3 +112,10 @@ test('phone-only lookup cannot relabel retained profile data from another identi
   assert.equal(result.contactData.identityName,person.name);assert.equal(result.contactData.profile.title,undefined);assert.equal(result.contactData.profile.city,undefined);assert.equal(result.contactData.profile.status,'not_requested');assert.equal(result.contactData.phone.number,'+37120000001');
  }
 });
+
+test('failed phone refresh preserves same-identity paid number and records latest failure',async()=>{
+ const f=await fixture();f.deps.saveData=async()=>{};f.deps.fetch=async()=>new Response('{}',{status:429});
+ const prior={version:1,domain:candidate.domain,personId:person.id,identityName:person.name,checkedAt:'2026-10-01T10:00:00Z',phone:{status:'provider_listed',number:'+37120000001',source:'earlier-provider'}};
+ const r=await f.mod.findTregWorkEmail({},ctx,candidate,{...person,contactData:prior},'c',{attemptKey:'recover',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
+ assert.equal(r.contactData.phone.number,prior.phone.number);assert.equal(r.contactData.phone.source,'earlier-provider');assert.equal(r.contactData.lastAttempt.phone,'error');assert.match(r.contactData.lastAttempt.phoneReason,/limit/i);assert.equal(r.contactData.status,'partial');
+});
