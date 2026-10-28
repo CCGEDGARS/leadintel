@@ -79,3 +79,7 @@ test('retained same-identity paid phone is visible even when CRM contact lacks p
  let doc=documentFor(ctx.buyerContactRows(person,candidate)),field=doc.querySelector('[data-contact-channel="phone"]');assert.match(field.textContent,/\+37120000001/);assert.equal(field.dataset.contactStatus,'found');assert.doesNotMatch(field.textContent,/Provider verified/);
  person.contactData.identityName='Someone Else';doc=documentFor(ctx.buyerContactRows(person,candidate));assert.doesNotMatch(doc.querySelector('[data-contact-channel="phone"]').textContent,/\+37120000001/);
 });
+test('legacy paid-contact hold cannot look like a completed phone search',()=>{
+ const {ctx,person,candidate}=runtime();person.contactResearch.channels.phone={status:'complete'};person.contactVerification={status:'error',checkedAt:'2026-10-28T10:00:00Z',issues:['Treg · error: Additional-services lookup limit reached or approval was revoked']};
+ const field=documentFor(ctx.buyerContactRows(person,candidate)).querySelector('[data-contact-channel="phone"]');assert.equal(field.dataset.contactStatus,'incomplete');assert.match(field.textContent,/blocked|needs review/i);assert.doesNotMatch(visibleText(field),/Not found/);
+});

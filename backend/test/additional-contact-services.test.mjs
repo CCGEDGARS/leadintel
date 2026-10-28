@@ -155,3 +155,22 @@ test('canonical contact reuse cannot attach a different identity, role or confli
   await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',contact_id:'saved',provider:'treg',approved:true,data_lookup:true,phone_approved:true,email_lookup:false},f.deps),/saved contact|identity/i);
  }
 });
+test('company quota reports the exact application hold without dispatching a provider',async()=>{
+ const f=fixture();await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,dailyLimit:5,monthlyLimit:30,maxPerCompany:1});
+ f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,status) VALUES('w','c','other',?,'not_found')").run(new Date().toISOString().slice(0,7));
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_COMPANY_LIMIT'&&/1\/1/.test(e.message)&&/No provider lookup/.test(e.message));assert.equal(f.calls.length,0);
+});
+test('Treg retry retains its reservation and persists the recovered result',async()=>{
+ const f=fixture(),month=new Date().toISOString().slice(0,7);f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider) VALUES('w',1,1,'treg')");f.deps.credential=async()=>({configured:true});
+ f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider,status) VALUES('w','c','p0',?,'treg','retryable')").run(month);
+ f.deps.findTreg=async()=>({contact:null,request:{status:'not_found'},research:{status:'not_found'}});
+ await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true,data_lookup:true,phone_approved:true},f.deps);
+ const row=f.raw.prepare("SELECT status,result_json FROM additional_contact_attempts WHERE person_id='p0'").get();assert.equal(row?.status,'not_found');assert.match(row.result_json,/not_found/);
+});
+test('daily and monthly app limits identify the exhausted scope without provider calls',async()=>{
+ for(const scope of ['daily','monthly']){
+  const f=fixture();await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,dailyLimit:1,monthlyLimit:1,maxPerCompany:2});
+  f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,status,created_at) VALUES('w','different','other',?,'not_found',?)").run(new Date().toISOString().slice(0,7),scope==='daily'?new Date().toISOString().slice(0,10)+' 01:00:00':'2000-01-01 00:00:00');
+  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_'+scope.toUpperCase()+'_LIMIT');assert.equal(f.calls.length,0);
+ }
+});

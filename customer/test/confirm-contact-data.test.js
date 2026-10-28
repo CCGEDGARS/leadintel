@@ -23,3 +23,14 @@ test('contact data survives normalization without turning a listed phone into ve
 });
 
 test('manual Treg data confirmation requires its own saved Treg policy',async()=>{const f=await fixture(true,'apollo');await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.p,{dataLookup:true});assert.equal(f.calls.length,0);f.dom.window.close();});
+test('Confirm phone explicitly excludes email and profile purchases',async()=>{
+ const f=await fixture();await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.p,{dataLookup:true,phoneOnly:true});assert.equal(f.calls.length,1);assert.equal(f.calls[0].email_lookup,false);assert.equal(f.calls[0].phone_approved,true);assert.match(f.prompts[0].message,/€0\.20/);f.dom.window.close();
+});
+test('blocked paid phone checks retain scoped error metadata through reload and keep the newer error visible',async()=>{
+ const f=await fixture();f.p.contactData={version:1,personId:'p',domain:'example.com',status:'partial',checkedAt:'2026-10-28T08:53:00Z',phone:{status:'error',reason:'Treg rejected the saved team token.'}};
+ f.w.fetch=async()=>({ok:false,json:async()=>({error:'LeadIntel company lookup limit reached (1/1). No provider lookup was started.',code:'ADDITIONAL_CONTACT_COMPANY_LIMIT'})});
+ await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.p,{dataLookup:true,phoneOnly:true});
+ assert.equal(f.p.contactVerification.lookup.code,'ADDITIONAL_CONTACT_COMPANY_LIMIT');assert.equal(f.p.contactVerification.lookup.phone,true);assert.equal(f.p.contactVerification.lookup.email,false);
+ const restored=D.normalizeDiscoveryState({selectedProspects:[{...f.c,buyerSearchMode:'user_selected_target'}]}).selectedProspects[0].people[0];assert.equal(restored.contactVerification.lookup.code,'ADDITIONAL_CONTACT_COMPANY_LIMIT');
+ assert.match(f.w.LeadIntelAdditionalContacts.card(f.c,f.p),/company lookup limit reached/);f.dom.window.close();
+});
