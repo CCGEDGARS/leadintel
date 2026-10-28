@@ -223,6 +223,14 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       }
     }
     commitTrace();
+    // Keep the Buyer Agent's provider outcomes in the workspace CRM snapshot.
+    // Enrichment request status and later webhook results remain authoritative.
+    try{
+      await guard();
+      await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
+    }catch(error){
+      candidate.buyerDiscovery.issues.push('Phone diagnostics could not be saved');
+    }
     return {...contact,email:contact.normalized_email||contact.work_email};
   };
   if(eligible[0])return complete(eligible[0]);
