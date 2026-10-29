@@ -119,3 +119,8 @@ test('failed phone refresh preserves same-identity paid number and records lates
  const r=await f.mod.findTregWorkEmail({},ctx,candidate,{...person,contactData:prior},'c',{attemptKey:'recover',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
  assert.equal(r.contactData.phone.number,prior.phone.number);assert.equal(r.contactData.phone.source,'earlier-provider');assert.equal(r.contactData.lastAttempt.phone,'error');assert.match(r.contactData.lastAttempt.phoneReason,/limit/i);assert.equal(r.contactData.status,'partial');
 });
+test('email-only research preserves the separate saved phone failure without a new phone call',async()=>{
+ const f=await fixture();f.deps.saveData=async()=>{};const old='2026-10-01T10:00:00Z',p={...person,contactData:{version:1,domain:'example.com',personId:person.id,identityName:person.name,checkedAt:old,phone:{status:'error',reason:'Saved phone attempt failed'}}};
+ const r=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'separate',dataLookup:true,includePhone:false,includeEmail:true},f.deps);
+ assert.equal(r.contactData.phone.status,'error');assert.equal(r.contactData.phone.checkedAt,old);assert.equal(f.calls.some(call=>call.url.includes('phone.find')),false);
+});

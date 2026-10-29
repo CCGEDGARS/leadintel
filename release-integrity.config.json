@@ -4270,9 +4270,14 @@
       "url": "/customer/service-settings-extension.js",
       "status": 200,
       "contains": [
-        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg','hunter'].includes(config.provider))",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider))",
         "for(const config of SETTINGS_PROVIDERS)",
-        "Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional"
+        "data-paid-contact-settings",
+        "Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions"
+      ],
+      "notContains": [
+        "data-hunter-enabled",
+        "name:'Hunter'"
       ]
     },
     {
@@ -5338,6 +5343,19 @@
         "entry.providers",
         "planned_sources_checked",
         "shortLast"
+      ]
+    },
+    {
+      "id": "independent-paid-contact-controls",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "function mountSettings()",
+        "phoneOnly",
+        "emailOnly",
+        "trigger!=='research_completed'",
+        "including in manual delivery mode"
       ]
     }
   ],

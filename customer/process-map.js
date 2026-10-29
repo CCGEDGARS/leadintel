@@ -14,8 +14,8 @@
  * import './server-bridge.js?v=20260925-apollo-buyer-search-v1&research-recovery=20261020-v1&workspace-save=20261020-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1&app-dialogs=20261017-v1';
- * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1';
- * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1';
+ * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1';
+ * import './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
  * import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';

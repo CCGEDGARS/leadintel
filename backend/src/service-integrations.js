@@ -154,7 +154,8 @@ export function hunterVerificationEnabled(row){
 }
 export async function hunterVerificationPolicy(env,workspaceId){
   const row=await integrationRow(env,workspaceId,'hunter');
-  return {enabled:hunterVerificationEnabled(row),configured:Boolean(row)};
+  let tregPrimary=false;try{tregPrimary=(await env.DB.prepare('SELECT provider FROM additional_contact_policies WHERE workspace_id=?').bind(workspaceId).first())?.provider==='treg';}catch(error){if(!/no such table/i.test(String(error.message)))throw error;}
+  return {enabled:!tregPrimary&&hunterVerificationEnabled(row),configured:Boolean(row)};
 }
 
 export async function resolveWorkspaceServiceCredential(env,workspaceId,provider){

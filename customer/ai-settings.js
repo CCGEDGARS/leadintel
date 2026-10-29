@@ -186,7 +186,6 @@ function activeToolItemsFrom({active,integrations={},serviceRows=[],calendly=nul
   const firecrawl=integrations.firecrawl;
   if(firecrawl?firecrawl.source==='customer'&&firecrawl.state==='good':customerGood(row('firecrawl')))items.push({name:'Firecrawl',detail:'Research · your connection',state:'READY'});
   if(customerGood(row('treg')))items.push({name:'Treg',detail:'Buyer e-mails · your connection',state:'READY'});
-  if(customerGood(row('hunter')))items.push({name:'Hunter',detail:'E-mail finding · your connection',state:'READY'});
   if(customerGood(row('apollo')))items.push({name:'Apollo.io',detail:'Enrichment · your connection',state:'READY'});
   if(calendly?.connected)items.push({name:'Calendly',detail:'Meeting bookings',state:'CONNECTED'});
   if(integrations.gmail?.state==='good')items.push({name:'Gmail',detail:'Mail delivery',state:'CONNECTED'});
