@@ -2,7 +2,11 @@
 
 Version: writing-workspace=20261023-v1. User-approved 23 October 2026.
 
-## Toolbar and delivery return — 29 October 2026
+## Three direct actions and automatic save — 29 October 2026, revised
+
+This supersedes the earlier toolbar layout below. Customer work shows Reload script, Clear draft and Save as template directly. Continue to delivery automatically saves changes before closing and returning focus to the main delivery action. Exact persisted copies (including formatting and attribution) skip duplicate saving. The footer remains clickable to explain readiness issues and is disabled while saving. Reload confirms replacement of edits and preserves Undo. General writing keeps Load script and independent Save & close. Approval, sending and all workspace/context guards remain separate.
+
+## Earlier toolbar and delivery return — 29 October 2026
 
 The draft is directly editable. Load script, secondary Save draft, and More sit at the top. More holds Save as template, Restore original, Clear draft, and general-writing Copy. The single editor Undo/Redo controls cover manual and AI revisions, including formatting and source attribution.
 

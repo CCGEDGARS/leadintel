@@ -69,8 +69,8 @@ test('assistant render evaluates readiness once and refreshes all buttons togeth
  const controller={state:()=>({messages:[],busy:false,scope:'scope',working:{subject:'Subject',message:'Draft'},workingStyle:'original',original:{subject:'Subject',message:'Draft'}}),ask(){},applyPreview(){},discardPreview(){},cancel(){}};
  const ui=api.mountWritingAssistant(w.document,controller,{usable:()=>{checks++;return ready;}});
  const before=checks;ready=false;ui.render();assert.equal(checks-before,1);
- for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template],[data-wa-save-draft]'))assert.equal(button.disabled,true);
- ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-save-draft]').disabled,false);ui.destroy();w.close();
+ for(const button of w.document.querySelectorAll('[data-wa-action],[data-wa-save-template]' ))assert.equal(button.disabled,true);
+ assert.equal(w.document.querySelector('[data-wa-continue]').disabled,false);ready=true;ui.render();assert.equal(w.document.querySelector('[data-wa-continue]').disabled,false);ui.destroy();w.close();
 });
 
 test('deferred closed assistant avoids context work and renders fresh preserved state on opening',()=>{

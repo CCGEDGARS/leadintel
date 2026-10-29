@@ -16,7 +16,7 @@ test('draft is directly editable without a separate Edit action or generation',(
 });
 test('manual edits retain exact text through autosave and reopen while leaving the original and delivery separate',async()=>{
  const f=fixture();try{const draft={subject:'My exact subject',message:'My own text\n\nSecond paragraph — unchanged.'};for(const [selector,key]of [['[data-wa-edit-subject]','subject'],['[data-wa-edit-body]','message']]){const el=f.d.querySelector(selector);el.value=draft[key];el.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));}
- assert.deepEqual(f.c.state().working,draft);assert.deepEqual(f.c.state().original,f.original);assert.equal(f.requests,0);assert.equal(f.used,undefined);const reopened=f.make();reopened.syncContext();assert.deepEqual(reopened.state().working,draft);reopened.destroy();f.d.querySelector('[data-wa-save-draft]').click();await new Promise(r=>setImmediate(r));assert.deepEqual(f.used,draft);assert.equal(f.requests,0);
+ assert.deepEqual(f.c.state().working,draft);assert.deepEqual(f.c.state().original,f.original);assert.equal(f.requests,0);assert.equal(f.used,undefined);const reopened=f.make();reopened.syncContext();assert.deepEqual(reopened.state().working,draft);reopened.destroy();f.d.querySelector('[data-wa-continue]').click();await new Promise(r=>setImmediate(r));assert.deepEqual(f.used,draft);assert.equal(f.requests,0);
  }finally{f.close();}
 });
 test('direct editing follows busy/cancel state and works for an empty general-writing draft',async()=>{

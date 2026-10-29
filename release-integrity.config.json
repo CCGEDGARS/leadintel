@@ -257,7 +257,7 @@
       "status": 200,
       "contains": [
         "Describe the outcome",
-        "Save draft",
+        "Continue to delivery",
         "Apply changes",
         "intent:'auto'",
         "Apply or discard the preview before saving.",
@@ -2553,7 +2553,7 @@
         "data-wa-attach",
         "data-wa-edit-body",
         "data-wa-load-selected",
-        "Save draft",
+        "Continue to delivery",
         "Describe the outcome",
         "intent:'auto'"
       ]
@@ -4721,7 +4721,7 @@
       "status": 200,
       "contains": [
         "data-wa-context-mode",
-        "data-wa-save-draft",
+        "data-wa-continue",
         "data-wa-generate",
         "Preview changes",
         "Discuss",
