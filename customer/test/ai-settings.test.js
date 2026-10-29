@@ -15,8 +15,8 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads AI Settings plus the customer-owned service extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1['"]/);
-  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
   assert.match(js,/id="open-settings"/);
@@ -162,7 +162,7 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
 
 test('Settings clearly changes data integrations from platform-only to customer-owned without managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
-  assert.match(extension,/Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional/);
+  assert.match(extension,/Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions/);
   assert.match(extension,/No shared paid-service fallback is available/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
@@ -255,10 +255,10 @@ test('Active tools lists every customer-owned tool that is ready, from the fast 
   const rows=[{provider:'apollo',configured:false,source:'none',state:'neutral'},{provider:'firecrawl',configured:true,source:'customer',state:'good'},{provider:'hunter',configured:true,source:'customer',state:'good'},{provider:'treg',configured:true,source:'customer',state:'good'}];
   const active={name:'OpenAI',model:'gpt-6.1-sol'};
   const cold=helper({active,integrations:{},serviceRows:rows,calendly:{connected:true}});
-  assert.deepEqual(cold.map(i=>i.name),['OpenAI','Firecrawl','Treg','Hunter','Calendly']);
-  assert.deepEqual(cold.map(i=>i.state),['ACTIVE','READY','READY','READY','CONNECTED']);
+  assert.deepEqual(cold.map(i=>i.name),['OpenAI','Firecrawl','Treg','Calendly']);
+  assert.deepEqual(cold.map(i=>i.state),['ACTIVE','READY','READY','CONNECTED']);
   const verifiedBad=helper({active,integrations:{firecrawl:{source:'customer',state:'bad'}},serviceRows:rows,calendly:null});
-  assert.deepEqual(verifiedBad.map(i=>i.name),['OpenAI','Treg','Hunter'],'a failed verification hides Firecrawl even when the cached row says good');
+  assert.deepEqual(verifiedBad.map(i=>i.name),['OpenAI','Treg'],'a failed verification hides Firecrawl even when the cached row says good');
   const platform=helper({active:null,integrations:{gmail:{state:'good'}},serviceRows:[{provider:'apollo',configured:true,source:'platform',state:'good'}],calendly:{connected:false}});
   assert.deepEqual(platform.map(i=>i.name),['Gmail'],'platform-owned rows are not the customer\'s tools');
   const apollo=helper({active:null,integrations:{},serviceRows:[{provider:'apollo',configured:true,source:'customer',state:'good'}],calendly:null});

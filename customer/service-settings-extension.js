@@ -4,13 +4,11 @@ const SETTINGS_VERSION='20261012-visible-apollo-key-v1';
 const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
-  {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Finds and verifies buyers’ work e-mail addresses on demand, paid per use from a prepaid Treg balance. Open Treg, sign in, and paste your team token here'},
-  {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
-  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Manually approved email finding and additional delivery verification using your Hunter credits'}
+  {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Finds and verifies work e-mails and researches business phones, with separate paid-search permissions and a prepaid Treg balance. Open Treg, sign in, and paste your team token here'},
+  {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'}
 ]);
-// Settings offers Firecrawl, Treg (primary paid e-mail path) and Hunter (optional, for customers who already hold
-// Hunter credits; its runtime gates in Buyers and Delivery are unchanged). Apollo stays a legacy runtime-only provider.
-const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg','hunter'].includes(config.provider));
+// Treg is the customer-facing paid contact provider; saved legacy provider evidence remains available.
+const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider));
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
 let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
@@ -44,7 +42,7 @@ function serviceControls(config,row){
   const meta=configured?`Saved key ${esc(row.key_hint||'')} · ${sourceLabel(row)}`:'';
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
-    ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Treg work without Hunter. Enabling adds a delivery check before sending. When no confirmed work e-mail is found, Find email can separately ask your approval to use Hunter credits. No provider guarantees 100% accuracy.</small>`:''}
+    ${config.provider==='treg'?'<section data-paid-contact-settings><strong>Paid contact research</strong><div data-paid-settings-controls></div><small>Email and phone have separate permissions. Phone OFF prevents new paid phone requests. Saving preferences does not send messages.</small></section>':''}
     <label class="ai-settings-field">${config.provider==='treg'?'Team token':'API key'}<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
@@ -70,7 +68,6 @@ function serviceDetail(config,row,current){
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
   if(config.provider==='treg')return 'Team '+(row.metadata?.team||'connected')+' · '+(Number.isFinite(row.metadata?.balance_usd)?'$'+Number(row.metadata.balance_usd).toFixed(4)+' prepaid balance':'Pay per use')+(row.last_used_at?' · last used '+shortDate(row.last_used_at):'');
-  if(config.provider==='hunter')return `Customer-owned credential${Number.isFinite(Number(row?.metadata?.remaining_verifications))&&row.metadata.remaining_verifications!==null?` · ${Number(row.metadata.remaining_verifications)} verifications remaining`:''}${row.verified_at?` · checked ${shortDate(row.verified_at)}`:''}`;
   return `Customer-owned credential${row.verified_at?` · verified ${shortDate(row.verified_at)}`:''}${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
 }
 function connectGoogle(){
@@ -106,10 +103,11 @@ function decorateGoogleCard(){
 function decorateCards(){
   if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
+  grid.querySelector('[data-integration="hunter"]')?.remove();
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional for customers who already hold Hunter credits. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
   for(const config of SETTINGS_PROVIDERS){
-    let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&['treg','hunter'].includes(config.provider)){card=document.createElement('article');card.className='integration-card';card.dataset.integration=config.provider;card.innerHTML=`<div class="integration-card-head"><div><strong>${esc(config.name)}</strong><small>${config.provider==='hunter'?'Optional · only if you already use Hunter':'Buyer work e-mail finding and verification'}</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>${window.LeadIntelToolAccountLinks?.html(config.provider)||''}`;grid.appendChild(card);}if(!card)continue;
+    let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&config.provider==='treg'){card=document.createElement('article');card.className='integration-card';card.dataset.integration=config.provider;card.innerHTML=`<div class="integration-card-head"><div><strong>${esc(config.name)}</strong><small>Buyer work e-mail and phone research</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>${window.LeadIntelToolAccountLinks?.html(config.provider)||''}`;grid.appendChild(card);}if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
@@ -121,7 +119,7 @@ function decorateCards(){
     const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing){const expanded=Boolean(existing.querySelector('[data-apollo-settings]')?.open);existing.outerHTML=html;if(expanded)card.querySelector('[data-apollo-settings]')?.setAttribute('open','');}else card.insertAdjacentHTML('beforeend',html);
   }
   const communication=document.getElementById('integration-communication-grid');if(communication){const current=communication.querySelector('[data-integration="calendly"]');const html=calendlyCard();if(current)current.outerHTML=html;else communication.insertAdjacentHTML('beforeend',html);}
-  decorateGoogleCard();decorateReadiness();
+  window.LeadIntelAdditionalContacts?.mountSettings?.();decorateGoogleCard();decorateReadiness();
 }
 function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
@@ -167,12 +165,7 @@ async function disconnectService(provider){
   busy=provider;queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';credentialChanged(provider);await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
-async function saveHunterPolicy(enabled){
-  const workspaceId=workspace()?.id;busy='hunter';errors.hunter='';queueDecorate(true);
-  try{const {response,payload}=await api('/api/integrations/services/hunter/settings',{method:'PUT',body:JSON.stringify({enabled})});if(!response.ok)throw new Error(payload.error||'Could not save Hunter preference');if(workspace()?.id!==workspaceId)return;await refreshServiceStatus(false);window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}
-  catch(error){errors.hunter=String(error.message||error);}finally{busy='';queueDecorate(true);}
-}
-window.LeadIntelServiceSettings={refresh:refreshServiceStatus,confirmationLevel:()=>serviceStatus.workspace_id===workspace()?.id?confirmationLevel:'provider_verified',apolloEnabled:kind=>serviceStatus.workspace_id===workspace()?.id&&providerState('apollo')?.metadata?.[kind==='phone'?'phone_enrichment_enabled':'email_enrichment_enabled']===true,hunterEnabled:()=>serviceStatus.workspace_id===workspace()?.id&&providerState('hunter')?.metadata?.additional_verification_enabled===true};
+window.LeadIntelServiceSettings={refresh:refreshServiceStatus,confirmationLevel:()=>serviceStatus.workspace_id===workspace()?.id?confirmationLevel:'provider_verified',apolloEnabled:kind=>serviceStatus.workspace_id===workspace()?.id&&providerState('apollo')?.metadata?.[kind==='phone'?'phone_enrichment_enabled':'email_enrichment_enabled']===true,hunterEnabled:()=>false};
 function handleClick(event){
   const button=event.target.closest('[data-service-action]');if(!button)return;
   if(button.dataset.serviceAction==='apollo-policy'){
@@ -186,7 +179,7 @@ function handleClick(event){
   if(button.dataset.serviceAction==='save')saveService(provider,button);else if(button.dataset.serviceAction==='disconnect')disconnectService(provider);
 }
 function bind(){
-  if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);document.addEventListener('change',event=>{if(event.target.matches?.('[data-hunter-enabled]'))void saveHunterPolicy(event.target.checked);});
+  if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);
   const observer=new MutationObserver(()=>{if(needsDecoration())queueDecorate();});observer.observe(document.body,{childList:true,subtree:true});
   window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));window.addEventListener('leadintel:integration-health',()=>queueDecorate(true));
   document.addEventListener('click',event=>{if(event.target.closest('#open-settings'))setTimeout(()=>refreshServiceStatus(false),0);if(event.target.closest('#test-all-integrations'))setTimeout(()=>refreshServiceStatus(true),0);});

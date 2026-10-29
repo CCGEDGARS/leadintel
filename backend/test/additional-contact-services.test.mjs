@@ -140,6 +140,7 @@ test('Treg ignores attempts to bypass disabled email or phone permissions in man
 test('phone-only saved consent permits automatic strongest-buyer lookup with a saved email and no email purchase',async()=>{
  const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,max_per_company) VALUES('w',0,1,'treg',1)");
  f.detail.intelligence.research_snapshot.qualification.score=85;
+ f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),reviewedPersonIds:['p0'],findings:[],conflicts:[]};
  f.detail.contacts=[{id:'saved',external_person_id:'p0',name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified',source:'treg',verification_provider:'Treg'}];
  f.deps.credential=async()=>({configured:true});let called;
  f.deps.findTreg=async(e,c,candidate,person,id,options)=>{called=options;return {contact:f.detail.contacts[0],contactData:{phone:{status:'provider_listed',number:'+37120000001'}},research:{status:'verified'}};};
@@ -173,4 +174,17 @@ test('daily and monthly app limits identify the exhausted scope without provider
   f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,status,created_at) VALUES('w','different','other',?,'not_found',?)").run(new Date().toISOString().slice(0,7),scope==='daily'?new Date().toISOString().slice(0,10)+' 01:00:00':'2000-01-01 00:00:00');
   await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_'+scope.toUpperCase()+'_LIMIT');assert.equal(f.calls.length,0);
  }
+});
+test('explicit manual Treg lookups can research each selected buyer while preserving daily limits',async()=>{
+ const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company) VALUES('w',1,1,'treg',2,30,1)");f.deps.credential=async()=>({configured:true});let calls=0;f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
+ for(const id of ['p0','p1'])await lookupAdditionalEmail(f.env,f.context,'c',{person_id:id,provider:'treg',approved:true,data_lookup:true,phone_approved:false},f.deps);
+ assert.equal(calls,2);await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p2',provider:'treg',approved:true,data_lookup:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_DAILY_LIMIT');assert.equal(calls,2);
+});
+test('a retained Hunter preference cannot add a hidden verification requirement to the Treg workflow',async()=>{
+ const {hunterVerificationPolicy}=await import('../src/service-integrations.js'),f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider) VALUES('w',1,'treg');INSERT INTO workspace_service_integrations VALUES('w','hunter','{\"additional_verification_enabled\":true}')");f.raw.exec('ALTER TABLE workspace_service_integrations ADD COLUMN encrypted_api_key TEXT;ALTER TABLE workspace_service_integrations ADD COLUMN key_hint TEXT;ALTER TABLE workspace_service_integrations ADD COLUMN verified_at TEXT;ALTER TABLE workspace_service_integrations ADD COLUMN last_used_at TEXT;');const policy=await hunterVerificationPolicy(f.env,'w');assert.equal(policy.enabled,false);assert.equal(policy.configured,true);
+});
+test('automatic Treg research requires a completed current AI review of the selected buyer before spending',async()=>{
+ const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,max_per_company) VALUES('w',1,'treg',1)");f.detail.intelligence.research_snapshot.qualification.score=85;f.deps.credential=async()=>({configured:true});let calls=0;f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_REVIEW_REQUIRED');assert.equal(calls,0);
+ f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),reviewedPersonIds:['p0'],findings:[],conflicts:[]};await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps);assert.equal(calls,1);
 });

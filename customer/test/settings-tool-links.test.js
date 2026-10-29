@@ -15,13 +15,14 @@ async function mounted(provider="",authenticated=true){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- // Apollo stays a runtime-only legacy provider; Hunter returned to Settings as an optional card (CTO decision, 2026-10-25).
+ // The customer-facing contact controls use Treg; legacy evidence stays intact.
  assert.equal(w.document.querySelector('[data-integration="apollo"], [data-service-provider="apollo"], [data-tool-links="apollo"]'),null,'apollo paid settings must be absent');
- assert.ok(w.document.querySelector('[data-integration="hunter"] [data-service-provider="hunter"]'),'hunter optional card with its key controls');
+ assert.equal(w.document.querySelector('[data-integration="hunter"], [data-service-provider="hunter"], [data-tool-links="hunter"]'),null);
+ assert.ok(w.document.querySelector('[data-paid-contact-settings]'));
  assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Apollo/);
- assert.match(w.document.querySelector('[data-integration="hunter"]').textContent,/Optional · only if you already use Hunter/);
- for(const id of ['openai','anthropic','gemini','firecrawl','hunter','calendly','personal-linkedin','zoom']){
-  const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=2,`${id} account and setup links missing`);
+ assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Hunter/);
+ for(const id of ['openai','anthropic','gemini','firecrawl','treg','calendly','personal-linkedin','zoom']){
+  const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=(id==='treg'?1:2),`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }
  for(const id of ['gmail','microsoft-mail'])assert.equal(w.document.querySelector(`[data-integration="${id}"] a`),null);
