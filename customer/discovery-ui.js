@@ -1856,7 +1856,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
       enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)}});return true;
     }catch(error){showToast(error.message||'Unable to refresh phone');return false;}finally{enrichmentPending.delete(key);renderAll();}
   }
-  if(kind==='phone'&&!both&&window.LeadIntelAdditionalContacts?.policy?.()?.provider==='treg')return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:true,phoneOnly:true});
+  if(kind==='phone'&&!both&&typeof window.LeadIntelAdditionalContacts?.confirm==='function')return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:true,phoneOnly:true});
   if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:dataLookup||!automatic,emailOnly:true,freeConfirm:()=>confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,dataLookup})});
   const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
   const workspaceId=bridge()?.workspace?.id;if(!workspaceId)return false;

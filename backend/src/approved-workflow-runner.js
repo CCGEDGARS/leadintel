@@ -185,8 +185,8 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     // Apollo fallback is an independent, explicit phone approval, even if Treg is
     // selected for first-pass discovery. CRM enforces capability, credits and webhook.
     if(!hasUsablePhone()&&identityReady){
-      if(config.buyers.confirmPhone!==true){
-        record('apollo','skipped','Phone lookup not approved in workflow');
+      if(config.buyers.confirmPhone!==true||paidPolicy.provider==='treg'&&!paidPolicy.phoneEnabled){
+        record('apollo','skipped',paidPolicy.provider==='treg'&&!paidPolicy.phoneEnabled?'Paid phone research is OFF in Settings':'Phone lookup not approved in workflow');
       }else{
         const selectedProfile=discovery.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url||contact.public_linkedin_url||contact.linkedin_url);
         const matches=directoryPeople.filter(p=>buyerName(p)===buyerName(contact)&&String(p.organization||p.company||'').trim().toLowerCase()===String(candidate.company).trim().toLowerCase()&&(!selectedProfile||!discovery.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url)||selectedProfile===discovery.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url)));
