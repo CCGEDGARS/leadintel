@@ -25,7 +25,7 @@ test('split workspace places only the Writing Assistant launcher directly below 
  const {document,w}=mounted();const drafts=document.querySelector('.mw-editor .outreach-drafts'),tools=document.getElementById('mw-tools-drawer');
  assert.equal(document.getElementById('mw-style-options').closest('section').nextElementSibling.id,'mw-writing-assistant-launcher');
  assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-writing-assistant-launcher')));assert.equal(document.getElementById('mw-writing-assistant').hidden,true);
- assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.className,'mw-message-footer');assert.ok(tools.contains(document.getElementById('mw-follow-up-host')));
+ assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.id,'mw-tools-drawer');assert.ok(tools.contains(document.getElementById('mw-follow-up-host')));
  assert.ok(drafts.compareDocumentPosition(tools)&4);assert.equal(tools.open,false);
  assert.ok(tools.contains(document.getElementById('mw-default-template')));
  assert.ok(tools.contains(document.querySelector('.message-advanced')));

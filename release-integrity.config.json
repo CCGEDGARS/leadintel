@@ -73,7 +73,9 @@
       "contains": [
         "Apply translation",
         "Undo translation",
-        "Google Translate"
+        "Google Translate",
+        "languageTools.className='mw-language-tools mw-disclosure'",
+        "drafts.prepend(languageTools)"
       ]
     },
     {
@@ -369,7 +371,9 @@
       "status": 200,
       "contains": [
         "mw-meeting-options",
-        "Business context"
+        "Business context",
+        "nextStep.before(meeting,libraryTools)",
+        "libraryContent.prepend(q('mw-header-actions'))"
       ]
     },
     {
@@ -982,7 +986,9 @@
         "@media(max-width:720px)",
         "[hidden]{display:none!important}",
         ".mw-subject-picker>summary:focus-visible",
-        ".mw-subject-picker .mw-subject-status"
+        ".mw-subject-picker .mw-subject-status",
+        "#mw-language-tools.mw-disclosure",
+        "#mw-tools-drawer.mw-disclosure"
       ]
     },
     {

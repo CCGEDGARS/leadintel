@@ -695,3 +695,13 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 .meeting-connection-help{font-size:12px;color:#4d6557}
 .meeting-connection-help>summary{cursor:pointer;font-weight:600}
 .meeting-connection-help p{margin-top:10px}
+
+/* Step 6: consistent disclosure fields, optional tools, then one final action. */
+#message-studio #mw-settings.mw-disclosure,#message-studio #mw-language-tools.mw-disclosure,#message-studio #mw-meeting-options.mw-disclosure,#message-studio #mw-tools-drawer.mw-disclosure{box-sizing:border-box;width:100%;min-width:0;min-height:82px;margin:16px 0;padding:16px;border:1px solid #dce5df;border-radius:14px;background:#fafcfb}
+#message-studio #mw-settings.mw-disclosure>summary,#message-studio #mw-language-tools.mw-disclosure>summary,#message-studio #mw-meeting-options.mw-disclosure>summary,#message-studio #mw-tools-drawer.mw-disclosure>summary{box-sizing:border-box;min-height:48px;padding:0;cursor:pointer;color:#305944;font:600 13px/20px 'DM Sans',sans-serif}
+#message-studio #mw-language-tools.mw-disclosure>summary>span:not(.mw-language-quick),#message-studio #mw-meeting-options.mw-disclosure>summary>span,#message-studio #mw-tools-drawer.mw-disclosure>summary>span{display:block;margin:6px 0 0;font-size:12px;font-weight:400;line-height:18px;color:#53695d}
+#message-studio #mw-language-tools.mw-disclosure>summary{padding-right:220px}
+#message-studio #mw-tools-drawer #mw-header-actions{justify-content:flex-start;margin:16px 0;gap:8px}
+#message-studio #mw-tools-drawer #mw-header-actions #mw-save-message:not(:disabled){background:#fff!important;color:#285a42!important;border-color:#b9d0c2!important}
+#message-studio .mw-message-footer{margin-top:20px}
+@media(max-width:720px){#message-studio #mw-language-tools.mw-disclosure>summary{padding-right:0}#message-studio #mw-tools-drawer #mw-header-actions{width:100%}}
