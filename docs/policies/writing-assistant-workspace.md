@@ -2,6 +2,12 @@
 
 Version: writing-workspace=20261023-v1. User-approved 23 October 2026.
 
+## Toolbar and delivery return — 29 October 2026
+
+The draft is directly editable. Load script, secondary Save draft, and More sit at the top. More holds Save as template, Restore original, Clear draft, and general-writing Copy. The single editor Undo/Redo controls cover manual and AI revisions, including formatting and source attribution.
+
+The fixed dialog footer offers **Save & continue to delivery** for customer email. It uses the same validated save callback as Save draft and closes only after confirmed persistence of the unchanged draft in the same open session. It scrolls/highlights the existing main delivery control; it never clicks it, approves, activates, or sends. A disabled main control retains its readiness explanation. General writing, phone and LinkedIn offer **Save & close**. Failed/local-only/stale saves preserve the editor. Device recovery is labeled separately from an explicit LeadIntel save.
+
 ## Skills-first direct improvement — 28 October 2026
 
 User approved retaining the two-column modal with Writing skills as the main source selector. All saved skills appear in a bounded scroll list; up to three Ready enabled skills can be selected. Selected chips remain visible. Selections alone do not change text; they stay for this working session until deselected or the existing context/session reset.

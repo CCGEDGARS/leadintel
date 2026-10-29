@@ -208,3 +208,25 @@
 .wa-conversation>.wa-question{flex-shrink:0}
 .wa-conversation-stream{flex:none;min-height:100px;overflow:visible}
 @media(max-height:740px) and (min-width:721px){.wa-skill-list{max-height:170px}}
+
+/* One top toolbar and one footer action; the footer never enters the mobile scroll area. */
+.wa-editor-heading{align-items:center;position:relative;z-index:4}
+.wa-editor-heading>.wa-actions{gap:7px}
+.wa-dialog [data-wa-save-draft]{background:#fff;color:var(--wa-ink);border-color:#c8dacf}
+.wa-more{position:relative}
+.wa-more>summary{list-style:none;cursor:pointer;min-height:38px;box-sizing:border-box;padding:9px 13px;border:1px solid #c8dacf;border-radius:8px;background:#fff;font-size:13px;font-weight:600;white-space:nowrap}
+.wa-more>summary::-webkit-details-marker{display:none}
+.wa-more>summary::after{content:' ▾';color:var(--wa-muted)}
+.wa-more[open]>summary{background:#edf4ef;border-color:#9cbca9}
+.wa-more-actions{position:absolute;right:0;top:calc(100% + 7px);z-index:5;display:grid;gap:3px;min-width:182px;max-height:38dvh;overflow:auto;padding:6px;border:1px solid #bfd1c7;border-radius:10px;background:#fff;box-shadow:0 8px 24px #15332326}
+.wa-dialog .wa-more-actions button{text-align:left;border:0;border-radius:6px;width:100%}
+.wa-dialog .wa-more-actions [data-wa-clear]{color:#9d4135;border-top:1px solid var(--wa-line);border-radius:0 0 6px 6px}
+.wa-dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;min-width:0;padding:14px 0 0;border-top:1px solid var(--wa-line);background:#f4f7f4}
+.wa-footer-status{flex:1;min-width:0;color:var(--wa-muted);font-size:12px;line-height:1.5}
+.wa-footer-status small{font-size:12px}
+.wa-footer-status [data-wa-work-status]{margin:3px 0 0;font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.wa-footer-status [data-wa-work-status]:empty{display:none}
+.wa-dialog [data-wa-continue]{flex:none;min-height:44px;padding:11px 20px}
+.wa-revision-toolbar{display:flex;gap:6px}
+.wa-delivery-highlight{outline:3px solid #b99545!important;outline-offset:5px;box-shadow:0 0 0 8px #b9954522!important;scroll-margin-block:60px}
+@media(max-width:720px){.wa-dialog .mw-writing-assistant{flex:1;overflow-y:auto;overscroll-behavior:contain}.wa-dialog-footer{align-items:stretch;flex-direction:column;gap:7px;padding-top:10px}.wa-dialog [data-wa-continue]{width:100%}.wa-footer-status small{font-size:11px}.wa-editor-heading>.wa-actions{justify-content:flex-start}.wa-editor-heading h3{flex-basis:100%}.wa-more-actions{left:auto;right:0}.wa-workspace{overflow:visible}.wa-draft-tools span{font-size:10px}}
