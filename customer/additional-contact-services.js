@@ -180,7 +180,7 @@
           }finally{if(current()){adapter.pending(candidate,person,false);adapter.render();}}
         }
         return false;
-      }catch(error){if(current()){record(candidate,person,error.message,{status:'error',lookup:{provider:policy?.provider||'unknown',phone:phoneOnly||dataLookup&&policy?.phoneEnabled===true,email:!phoneOnly,code:error.code||'CONTACT_CHECK_BLOCKED'}});adapter.toast?.(error.message);}return false;}
+      }catch(error){if(current()){record(candidate,person,error.message,{status:'error',lookup:{provider:policy?.provider||'unknown',phone:!emailOnly&&(phoneOnly||dataLookup&&policy?.phoneEnabled===true),email:!phoneOnly&&(emailOnly||policy?.provider!=='treg'||policy?.enabled===true),code:error.code||'CONTACT_CHECK_BLOCKED'}});adapter.toast?.(error.message);}return false;}
       finally{if(current()){adapter.pending(candidate,person,false);adapter.render();}}
     })();running.set(identity,execute);try{return await execute;}finally{running.delete(identity);}
   }

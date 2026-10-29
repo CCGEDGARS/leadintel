@@ -31,3 +31,6 @@ test('automatic research reuses saved email and phone rather than buying complet
  const phone=await fixture({email:true,phone:true,savedEmail:true});await phone.w.LeadIntelAdditionalContacts.auto(phone.candidate,{trigger:'research_completed'});const lookup=phone.calls.find(r=>r.kind==='lookup');assert.equal(lookup.body.email_lookup,false);assert.equal(lookup.body.phone_approved,true);phone.dom.window.close();
  const complete=await fixture({email:true,phone:true,savedEmail:true,savedPhone:true});await complete.w.LeadIntelAdditionalContacts.auto(complete.candidate,{trigger:'research_completed'});assert.equal(complete.calls.filter(r=>r.kind==='lookup').length,0);complete.dom.window.close();
 });
+test('blocked manual email research does not mark the separate phone channel as failed',async()=>{
+ const f=await fixture({email:false,phone:true});await f.w.LeadIntelAdditionalContacts.confirm(f.candidate,f.person,{dataLookup:true,emailOnly:true});assert.equal(f.calls.filter(r=>r.kind==='lookup').length,0);assert.equal(f.person.contactVerification.lookup.phone,false);assert.equal(f.person.contactVerification.lookup.email,true);f.dom.window.close();
+});
