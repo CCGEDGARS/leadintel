@@ -56,6 +56,6 @@
   }
   root.addEventListener('leadintel:page-quality',event=>render(event.detail));
   root.addEventListener('leadintel:server-ready',()=>Q.refresh());
-  const css=root.document.createElement('link');css.rel='stylesheet';css.href='page-quality.css?v=20261010-v1';root.document.head.appendChild(css);
+  const css=root.document.createElement('link');css.rel='stylesheet';css.href='page-quality.css?v=20261029-spacing-v1';root.document.head.appendChild(css);
   Q.refresh();
 })(window);
