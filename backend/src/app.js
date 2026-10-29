@@ -2,6 +2,7 @@ import {enrollConversationWorkflows} from './conversation-workflows.js';
 import {handleLanguagePackRoute} from './language-pack-routes.js';
 import {runLanguagePackJobs} from './language-packs.js';
 import {handleGoogleTranslationRoute} from './google-translation-routes.js';
+import {handleMicrosoftCalendarRoute} from './microsoft-calendar.js';
 import {handleGoogleCalendarRoute} from './google-calendar.js';
 import {handleScriptLibraryRoute} from './script-library-routes.js';
 import {handleWritingWorkspaceRoute} from './writing-workspace-routes.js';
@@ -83,6 +84,7 @@ export default {
     try{
       const languagePack=await handleLanguagePackRoute(request,env,cors,ctx);if(languagePack)return languagePack;
       const translation=await handleGoogleTranslationRoute(request,env,cors);if(translation)return translation;
+      const microsoftCalendar=await handleMicrosoftCalendarRoute(request,env,cors);if(microsoftCalendar)return microsoftCalendar;
       const calendar=await handleGoogleCalendarRoute(request,env,cors);if(calendar)return calendar;
       const researchCosts=await handleResearchCostsRoute(request,env,cors);if(researchCosts)return researchCosts;
       const access=await handleAccessRoute(request,env,cors);if(access)return access;

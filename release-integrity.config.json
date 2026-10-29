@@ -5371,6 +5371,28 @@
         "personIds:[String(person.id)],force:true",
         "A confirmed company or personal email for this person"
       ]
+    },
+    {
+      "id": "calendar-provider-connection-links",
+      "type": "text",
+      "url": "/customer/message-meeting-options.js",
+      "status": 200,
+      "contains": [
+        "Connect Microsoft Calendar",
+        "meeting-provider",
+        "Each person connects their own account.",
+        "App administrator: enable Google Calendar API",
+        "https://myapps.microsoft.com/"
+      ]
+    },
+    {
+      "id": "microsoft-calendar-auth-required",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/microsoft-calendar/status?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Sign in to connect your calendar"
+      ]
     }
   ],
   "retry": {
