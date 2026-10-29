@@ -3519,6 +3519,7 @@ window.LeadIntelAdditionalContacts?.register({
   email:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{}),
   publicSource:(c,p)=>publicBuyerSource(c,p),
   baseEmail:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{},{skipAdditional:true}),
+  phone:(c,p)=>{const contact=enrichmentResults.get(personKey(c,p))?.contact;return Boolean(contact?.phone_number&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase())||p.contactData?.phone?.status==='provider_listed'&&p.contactData.phone.number);},
   saveHunter:async(c,p,email,check)=>{
     const workspaceId=bridge()?.workspace?.id,personId=p.id;
     const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c)&&c.people?.some(row=>String(row.id)===String(personId));

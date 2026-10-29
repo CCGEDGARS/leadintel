@@ -117,6 +117,7 @@
       finally{if(workspace()===id){adapter.pending(candidate,person,false);adapter.render();}}
     })();running.set(identity,task);try{return await task;}finally{running.delete(identity);}
   }
+  function savedPhone(candidate,person){return Boolean(adapter?.phone?.(candidate,person)||person.contactData?.phone?.status==='provider_listed'&&person.contactData.phone.number);}
   async function run(candidate,person,{automatic=false,dataLookup=false,phoneOnly=false,emailOnly=false}={}){
     const identity=key(candidate,person);if(running.has(identity))return running.get(identity);
     const execute=(async()=>{
@@ -138,8 +139,9 @@
           check();const name=service==='treg'?'Treg':service==='apollo'?'Apollo':'Hunter';
           if(phoneOnly&&!policy.phoneEnabled)throw Error('Paid phone search is off. Activate it in Setup.');
           if(emailOnly&&!policy.enabled)throw Error('Paid email search is off. Activate it in Step 1 or Settings.');
-          const includePhone=!emailOnly&&service==='treg'&&policy.phoneEnabled===true,includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true);
-          const lookupData=dataLookup||includePhone;
+          const includePhone=!emailOnly&&service==='treg'&&policy.phoneEnabled===true&&(!automatic||!savedPhone(candidate,person)),includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true)&&(!automatic||!adapter.email(candidate,person));
+          if(!includeEmail&&!includePhone)return true;
+          const lookupData=automatic?includePhone:dataLookup||includePhone;
           if(dataLookup&&!automatic){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
             const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${includeEmail?'research work email and professional profile':'phone only; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
@@ -189,7 +191,7 @@
       if(!treg?.configured||treg.source!=='customer')return;
       if(trigger!=='research_completed')return;
     }else if(!provider?.configured||provider.source!=='customer'||provider.metadata?.email_enrichment_enabled!==true)return;
-    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.provider==='treg'?1:policy.maxPerCompany,confirmedEmail:p=>policy.phoneEnabled?'':adapter.email(candidate,p)});
+    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.provider==='treg'?1:policy.maxPerCompany,confirmedEmail:p=>policy.provider==='treg'?(!policy.enabled||adapter.email(candidate,p))&&(!policy.phoneEnabled||savedPhone(candidate,p))?'complete':'':adapter.email(candidate,p)});
     for(const person of targets){
       const fingerprint=[key(candidate,person),person.emailResearch?.checkedAt,policy.updatedAt,Boolean(policy.enabled),Boolean(policy.phoneEnabled)].join('|');
       if(automaticAttempts.has(fingerprint))continue;automaticAttempts.add(fingerprint);
