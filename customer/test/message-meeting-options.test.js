@@ -43,3 +43,7 @@ test('changing calendar provider clears stale availability and routes all reads 
  await f.controller.refresh();const check=f.controller.check(),select=doc.getElementById('meeting-provider');assert.ok(select);select.value='microsoft';select.dispatchEvent(new f.dom.window.Event('change'));await new Promise(r=>setTimeout(r,0));finish({slots:[{start:'2026-10-29T12:00:00Z',end:'2026-10-29T12:20:00Z'}],checkedAt:new Date().toISOString()});await check;
  assert.ok(calls.some(([action,p])=>action==='status'&&p==='microsoft'));assert.equal(doc.querySelectorAll('[data-meeting-slot]').length,0);assert.match(doc.getElementById('meeting-connection').textContent,/microsoft@example.com/);f.dom.window.close();
 });
+
+test('missing application setup gives guidance instead of navigating users to a broken connection',async()=>{
+ let calls=0;const f=fixture({request:async()=>({connected:false,configured:false}),connect:()=>calls++});await f.controller.refresh();f.dom.window.document.getElementById('meeting-connect').click();assert.equal(calls,0);assert.match(f.dom.window.document.getElementById('meeting-status').textContent,/app administrator/);f.dom.window.close();
+});
