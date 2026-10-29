@@ -5,6 +5,7 @@
   let runtimeErrors=[],lastProviderStatus=null;
   let runtimeErrorSequence=0;
   let refreshTimer=0;
+  let drawerOpener=null;
   let lastItems=[];
   let providerIssues=[];
   let connectionIssues=[];
@@ -20,6 +21,30 @@
     drawer=document.createElement('aside');drawer.id='workspace-attention-drawer';drawer.className='attention-drawer';drawer.hidden=true;drawer.setAttribute('role','dialog');drawer.setAttribute('aria-modal','true');drawer.setAttribute('aria-labelledby','attention-title');
     drawer.innerHTML='<header><div><span class="eyebrow">Workspace status</span><h2 id="attention-title">Workspace status</h2></div><button class="attention-close" type="button" aria-label="Close Attention">×</button></header><section class="workspace-sync-section" aria-labelledby="workspace-sync-title"><h3 id="workspace-sync-title">Sync status</h3><p data-workspace-sync aria-live="polite">Checking workspace…</p></section><button type="button" class="attention-action" data-recheck-providers>Recheck tools</button><p data-provider-check-message role="status"></p><div class="attention-list" aria-live="polite"></div><div id="workspace-task-activity"></div>';
     document.documentElement.appendChild(drawer);if(root.CustomEvent)document.dispatchEvent(new root.CustomEvent('leadintel:workspace-status-ready'));drawer.querySelector('.attention-close').addEventListener('click',close);drawer.querySelector('[data-recheck-providers]')?.addEventListener('click',()=>void refreshProviderCredits({force:true}));return drawer;
+  }
+  function renderSyncReview(drawer){
+    let review=drawer.querySelector('[data-sync-review]');
+    if(!review&&!root.LeadIntelServerBridge?.conflict)return;
+    if(!review){
+      review=document.createElement('div');review.dataset.syncReview='';review.hidden=true;
+      const note=document.createElement('p');note.dataset.syncReviewNote='';review.append(note);
+      const actions=document.createElement('div');actions.className='workspace-sync-actions';
+      for(const [id,label] of [['server-keep-local','Keep my local changes'],['server-use-server','Use server version'],['server-sync-recovery','Download recovery copy']]){
+        const button=document.createElement('button');button.type='button';button.className='attention-action';button.dataset.syncChoice=id;button.textContent=label;
+        button.addEventListener('click',()=>{const bridge=root.LeadIntelServerBridge,original=document.getElementById(id);if(!bridge?.conflict||bridge.resolvingSync||!original||original.hidden||original.disabled)return;original.click();});actions.append(button);
+      }
+      review.append(actions);drawer.querySelector('.workspace-sync-section').append(review);
+    }
+    const bridge=root.LeadIntelServerBridge;review.hidden=!bridge?.conflict;
+    const note=review.querySelector('[data-sync-review-note]');
+    note.textContent=bridge?.resolvingSync?'Saving your choice. Please wait; both versions are preserved.':'Your browser and LeadIntel have different changes. Both versions are preserved. Keep local to retain your edits, or use the server version to prefer its changes. Unrelated changes are combined when a saved baseline is available. Download a recovery copy before choosing if needed.';
+    review.setAttribute('aria-busy',String(Boolean(bridge?.resolvingSync)));
+    for(const button of review.querySelectorAll('[data-sync-choice]')){
+      const original=document.getElementById(button.dataset.syncChoice);
+      button.hidden=!original||original.hidden;button.disabled=Boolean(bridge?.resolvingSync||original?.disabled);
+    }
+    // Hide legacy header choices only after their replacement is mounted.
+    const top=document.querySelector('.top-actions');if(top)top.dataset.syncReviewReady='1';
   }
   function syncState(){
     const bridge=root.LeadIntelServerBridge,persistence=root.LeadIntelWorkspacePersistence;
@@ -48,24 +73,25 @@
     }catch{if(root.LeadIntelServerBridge?.workspace?.id===workspaceId){providerStatusError='Tool status could not be checked. The last confirmed billing alerts are retained.';render();}}
     finally{providerCheckBusy=false;const message=document.querySelector('[data-provider-check-message]');if(message)message.textContent=providerStatusError||'Tool status checked. Research tasks may still need retrying.';}
   }
-  function actionLabel(item){if(item.target.type==='stage')return 'Open stage';if(item.target.type==='tasks')return 'Review task';if(item.target.type==='save')return 'Save workspace';if(item.target.type==='settings')return 'Open AI & Tools';if(item.target.type==='ai-billing')return 'Open OpenAI billing';return 'Reload workspace';}
+  function actionLabel(item){if(item.target.type==='stage')return 'Open stage';if(item.target.type==='tasks')return 'Review task';if(item.target.type==='sync-review')return 'Review sync';if(item.target.type==='save')return root.LeadIntelServerBridge?.conflict?'Review sync':'Save workspace';if(item.target.type==='settings')return 'Open AI & Tools';if(item.target.type==='ai-billing')return 'Open OpenAI billing';return 'Reload workspace';}
   function render(){
     const trigger=document.getElementById('workspace-attention');if(!trigger)return;
     const sync=syncState(),tasks=root.LeadIntelTaskCentre?.list?.()||[],active=tasks.filter(task=>['running','queued'].includes(task.status));
-    lastItems=collect();if(sync.issue){const overLimit=/exceeds sync limit/i.test(sync.detail);lastItems.unshift({id:'workspace-sync',severity:'recommendation',title:'Workspace sync needs attention',detail:overLimit?sync.detail+' Clear older company search results in Companies to bring the workspace under the 500 KB sync limit, then save again.':sync.detail,target:overLimit?{type:'stage',id:4}:{type:'save'}});}const actionableItems=lastItems.filter(item=>item.severity==='error'||item.severity==='recommendation');const count=trigger.querySelector('[data-attention-count]'),summary=trigger.querySelector('[data-attention-summary]');
+    lastItems=collect();if(sync.issue){lastItems=lastItems.filter(item=>item.id!=='unsaved-workspace');const overLimit=/exceeds sync limit/i.test(sync.detail);lastItems.unshift({id:'workspace-sync',severity:'recommendation',title:'Workspace sync needs attention',detail:overLimit?sync.detail+' Clear older company search results in Companies to bring the workspace under the 500 KB sync limit, then save again.':sync.detail,target:overLimit?{type:'stage',id:4}:root.LeadIntelServerBridge?.conflict?{type:'sync-review'}:{type:'save'}});}const actionableItems=lastItems.filter(item=>item.severity==='error'||item.severity==='recommendation');const count=trigger.querySelector('[data-attention-count]'),summary=trigger.querySelector('[data-attention-summary]');
     const health=root.LeadIntelAttentionModel.healthSummary(actionableItems);trigger.dataset.healthStatus=health.status;
     if(count){const total=actionableItems.length+active.filter(task=>!actionableItems.some(item=>item.id==='task-'+task.id)).length;count.textContent=String(total);count.hidden=!total;}
     trigger.dataset.activityStatus=active.length?'running':'idle';
     if(summary)summary.textContent=sync.issue?`${sync.label}${active.length?' · '+active.length+' running':''}`:actionableItems.length?`${health.text}${active.length?' · '+active.length+' running':''}`:`${sync.label} · ${active.length?(active.length===1?clean(active[0].stage,80):active.length+' tasks running'):'Ready'}`;
+    renderSyncReview(createDrawer());
     const syncCopy=createDrawer().querySelector('[data-workspace-sync]');if(syncCopy)syncCopy.textContent=sync.detail;
     const list=createDrawer().querySelector('.attention-list');list.replaceChildren();
     if(!actionableItems.length){const empty=document.createElement('div');empty.className='attention-empty is-healthy';empty.innerHTML='<strong>Workspace healthy</strong><span>No current billing issues or attention items were detected.</span>';list.appendChild(empty);return;}
     actionableItems.forEach(item=>{const card=document.createElement('article');card.className=`attention-item is-${item.severity}`;const copy=document.createElement('div');const title=document.createElement('strong');title.textContent=item.title;const detail=document.createElement('p');detail.textContent=item.detail;copy.append(title,detail);const button=document.createElement('button');button.type='button';button.className='attention-action';button.textContent=actionLabel(item);button.addEventListener('click',()=>activate(item));card.append(copy,button);list.appendChild(card);});
   }
   function schedule(){clearTimeout(refreshTimer);refreshTimer=setTimeout(render,50);}
-  function open(){const drawer=createDrawer(),trigger=document.getElementById('workspace-attention');render();drawer.hidden=false;trigger?.setAttribute('aria-expanded','true');drawer.querySelector('.attention-close')?.focus();}
-  function close(){const drawer=document.getElementById('workspace-attention-drawer'),trigger=document.getElementById('workspace-attention');if(drawer)drawer.hidden=true;trigger?.setAttribute('aria-expanded','false');trigger?.focus();}
-  function activate(item){if(item.target.type==='tasks'){open();const cards=Array.from(document.querySelectorAll('[data-task-card]'));const card=cards.find(node=>node.dataset.taskCard===item.id.replace(/^task-/,''));card?.scrollIntoView?.({block:'nearest'});card?.focus();return;}close();if(item.target.type==='stage')root.LeadIntelJourney?.open?.(item.target.id);else if(item.target.type==='save')document.getElementById('save-workspace')?.click();else if(item.target.type==='settings')document.getElementById('open-settings')?.click();else if(item.target.type==='ai-billing')root.open?.(OPENAI_BILLING_URL,'_blank','noopener,noreferrer');else root.location.reload();}
+  function open(){const drawer=createDrawer(),trigger=document.getElementById('workspace-attention');if(drawer.hidden)drawerOpener=document.activeElement;render();drawer.hidden=false;trigger?.setAttribute('aria-expanded','true');drawer.querySelector('.attention-close')?.focus();}
+  function close(){const drawer=document.getElementById('workspace-attention-drawer'),trigger=document.getElementById('workspace-attention');if(drawer)drawer.hidden=true;trigger?.setAttribute('aria-expanded','false');const focus=drawerOpener?.isConnected&&!drawerOpener.hidden?drawerOpener:document.getElementById('topbar-workspace-status')||trigger;focus?.focus();drawerOpener=null;}
+  function activate(item){if(item.target.type==='sync-review'||item.target.type==='save'&&root.LeadIntelServerBridge?.conflict){open();return;}if(item.target.type==='tasks'){open();const cards=Array.from(document.querySelectorAll('[data-task-card]'));const card=cards.find(node=>node.dataset.taskCard===item.id.replace(/^task-/,''));card?.scrollIntoView?.({block:'nearest'});card?.focus();return;}close();if(item.target.type==='stage')root.LeadIntelJourney?.open?.(item.target.id);else if(item.target.type==='save')document.getElementById('save-workspace')?.click();else if(item.target.type==='settings')document.getElementById('open-settings')?.click();else if(item.target.type==='ai-billing')root.open?.(OPENAI_BILLING_URL,'_blank','noopener,noreferrer');else root.location.reload();}
   function rememberError(error,fallback=''){
     const text=clean(error?.message||fallback||error);if(!text)return;
     runtimeErrors=[...runtimeErrors,{id:`${Date.now()}-${++runtimeErrorSequence}`,message:text,workspaceId:error?.workspaceId||root.LeadIntelServerBridge?.workspace?.id||'',bridge:root.LeadIntelServerBridge,code:error?.code||'',requestPath:error?.requestPath||'',transient:error?.transient===true}].slice(-3);schedule();
@@ -80,7 +106,7 @@
   }
   function mount(){
     const trigger=document.getElementById('workspace-attention');if(!trigger||trigger.dataset.attentionBound==='1')return;trigger.dataset.attentionBound='1';trigger.addEventListener('click',()=>{const drawer=createDrawer();if(drawer.hidden)open();else close();});
-    ['leadintel:storage-status-changed','leadintel:tasks-changed','leadintel:workspace-changed','leadintel:workspace-dirty','leadintel:server-synced','leadintel:server-conflict','leadintel:sync-status-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready','leadintel:company-research-updated'].forEach(name=>root.addEventListener(name,()=>{schedule();if(name==='leadintel:server-ready'||name==='leadintel:tasks-changed'||name==='leadintel:company-research-updated')void refreshProviderCredits();}));
+    ['leadintel:storage-status-changed','leadintel:tasks-changed','leadintel:workspace-changed','leadintel:workspace-dirty','leadintel:server-synced','leadintel:server-conflict','leadintel:sync-status-changed','leadintel:sync-resolving','leadintel:sync-settled','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready','leadintel:company-research-updated'].forEach(name=>root.addEventListener(name,()=>{schedule();if(name==='leadintel:server-ready'||name==='leadintel:tasks-changed'||name==='leadintel:company-research-updated')void refreshProviderCredits();}));
     root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];providerIssues=[];connectionIssues=[];providerStatusError='';checkedWorkspace='';lastProviderCheck=0;root.LeadIntelJourney?.refresh?.();render();});
     root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.error,event.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
