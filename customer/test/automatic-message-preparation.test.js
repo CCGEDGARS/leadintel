@@ -64,7 +64,7 @@ test('Use on a saved template applies that template instead of keeping the previ
 test('the page quality contract checks actual core assembly, accepts deliberate edits and preserves Save intent',()=>{
  const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
  vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);
- vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ vm.runInContext(source.slice(source.indexOf('function deliveryReviewContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
  h.studio=S.normalize({mode:'friendly',essentials:e});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
  const session={ready:true,authenticated:true,workspaceId:'w1'},report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session});
  assert.equal(Q.allowed(report(),'approve'),false);assert.equal(report().checks.find(row=>row.id==='placeholders-resolved').status,'fail');assert.equal(Q.allowed(report(),'flow'),false);const before=JSON.stringify(h.item);
@@ -75,7 +75,7 @@ test('the page quality contract checks actual core assembly, accepts deliberate 
 });
 test('a page check cannot confirm a recipient from another workspace or an unverified selected event',()=>{
  const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
- vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function deliveryReviewContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
  h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);h.workspace='another';h.c.handoffContact.personId='wrong';const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'another'}});assert.equal(Q.allowed(report,'approve'),false);assert.equal(report.checks.find(row=>row.id==='recipient-confirmed').status,'fail');
  h.workspace='w1';h.c.handoffContact.personId='sam';h.item.messageStudioDraft.editorOrigin='manual';h.item.dossier.selectedTrigger.verification='unverified';const unchecked=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(unchecked.checks.find(row=>row.id==='trigger-verified').status,'fail');assert.equal(Q.allowed(unchecked,'approve'),false);
 });
@@ -262,7 +262,7 @@ test('real combined Swedish heading and mine excerpt use the same project as the
 
 test('saved event changes require Update even when the name, dates and stand stay the same',()=>{
  const Q=require('../page-quality.js'),Events=require('../event-campaigns.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};h.c.LeadIntelEventCampaigns=Events;
- vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function deliveryReviewContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
  const event=Events.normalizeCampaign({id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare services.'}),draft=Events.draft(event,e,{firstName:'Sam'});h.item.drafts={emailSubject:draft.subject,emailBody:draft.message};h.item.messageStudioDraft={eventSnapshot:event,essentials:h.studio.essentials};let saved=event;h.c.mainState=()=>({eventCampaigns:{campaigns:[saved]}});
  const report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(Q.allowed(report(),'approve'),true);const before=JSON.stringify(h.item);
  for(const patch of [{location:'Hamburg'},{visitValue:'A different reason to visit.'},{availability:'Tuesday afternoon'}]){saved={...event,...patch};assert.equal(Q.allowed(report(),'approve'),false);assert.equal(report().checks.find(row=>row.id==='template-context').status,'fail');assert.equal(JSON.stringify(h.item),before);}

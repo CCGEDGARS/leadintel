@@ -5,9 +5,9 @@ const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(r=>setImmediate(r));
 const click=(h,style)=>{if(style==='original'){h.q('message-mode').value=style;h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));}else h.w.document.querySelector(`[data-writing-style="${style}"]`).click();};
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
-test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
+test('header groups editor actions while optional template restoration stays secondary',()=>{
  const h=mounted({selected:'professional'});try{
- assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save draft','Version history','Save as template','Copy email']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save draft','Version history','Save as template','Copy email']);assert.ok(h.q('message-generate').classList.contains('secondary-btn'));
  assert.equal(h.q('mw-update-help').textContent,'Choose a style to apply it automatically.');
  assert.ok(h.q('mw-update-help').closest('.mw-editor-head'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
  assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save draft','Version history','Save as template']);assert.equal(h.q('mw-undo-rewrite').hidden,true);

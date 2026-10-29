@@ -46,3 +46,19 @@ for(const boundary of ['approval','persistence'])test('invalidating approval dur
  const pending=h.ctx.addCurrentMessageToFlow();await new Promise(resolve=>setImmediate(resolve));h.active={...h.active,approved:false,approvedAt:''};finish();await pending;
  assert.equal(h.events.length,0);assert.equal(h.ctx.messageInFlow(h.active),false);
 });
+
+test('Continue saves the visible edit once and opens Delivery without sending or rewriting',async()=>{
+ const h=flowHarness();let saves=0;h.active.drafts.emailBody='My finished visible message';h.ctx.messageEditor.state=()=>({editing:true});h.ctx.messageEditor.save=async()=>{saves++;h.active={...h.active,messageStudioDraft:{...h.active.messageStudioDraft,scriptSavedAt:'now',savedDraft:Editor.workingDraft(h.active)}};return true;};
+ assert.equal(await h.ctx.addCurrentMessageToFlow(),true);assert.equal(saves,1);assert.equal(h.active.drafts.emailBody,'My finished visible message');assert.equal(h.events.at(-1)?.type,'leadintel:message-flow-ready');assert.equal(h.queued,0);
+});
+test('a failed Continue save or account switch cannot approve or open Delivery',async()=>{
+ for(const changed of [false,true]){const h=flowHarness();h.active.drafts.emailBody='Unpersisted message';h.ctx.messageEditor.save=async()=>{if(changed)h.bridge.workspace.id='other';return changed;};assert.equal(await h.ctx.addCurrentMessageToFlow(),false);assert.equal(h.approved,0);assert.equal(h.events.length,0);assert.equal(h.queued,0);}
+});
+
+
+test('a user switch inside the same workspace cannot complete Continue',async()=>{
+ const h=flowHarness();h.bridge.session={user:{id:'first-user'}};let finish;
+ h.ctx.loadDeliveryModules=()=>new Promise(resolve=>finish=resolve);
+ const pending=h.ctx.addCurrentMessageToFlow();h.bridge.session.user.id='second-user';finish();await pending;
+ assert.equal(h.events.length,0);assert.equal(h.approved,0);assert.equal(h.queued,0);
+});

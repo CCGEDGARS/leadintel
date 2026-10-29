@@ -1,5 +1,9 @@
 # Mandatory AI rules for LeadIntel core templates
 
+## Direct Messages continuation — 29 October 2026
+
+The owner approved a single Continue to Delivery action for the displayed working email. Continue may save that exact working copy and record the user's deliberate acceptance for the current user, workspace, recipient, language, facts and text. Optional template/style selection differences do not force regeneration. A changed scope or text invalidates that acceptance. This is working-copy review only: canonical masters, first tailored originals, source attribution and recovery history remain unchanged. Missing facts/placeholders, unconfirmed recipient or language, invalid/stale translations, invalid event details, sync conflicts and failed persistence still block the handoff. Delivery retains its sending review; Continue never sends, queues or activates automation.
+
 ## Native Storyselling correction — 26 October 2026
 
 The user explicitly corrected the separate card/bank interface. Storyselling is a normal fifth style with mandatory Email, LinkedIn and Phone call templates. Its separate new authority is `customer/storyselling-native.js`, shared by customer rendering and server catalogue; this does not alter the four canonical masters or their field permissions. Paid LinkedIn uses its own four-stage InMail sequence. The ordinary Writing Assistant retains up to three optional books and normal relevant company-material revisions. Cards and card approval are not prerequisites. Preserve legacy records and provenance. Without a source-backed case, an explicitly hypothetical explanation/two-roads scene is required; never present invented events as an actual customer outcome. Edit, Undo, Save, approval and sending retain their existing boundaries. See `storyselling-implementation.md`.

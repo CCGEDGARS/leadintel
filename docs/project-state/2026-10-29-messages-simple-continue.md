@@ -1,0 +1,9 @@
+# Messages: one Continue action and equal fields
+
+Owner-approved implementation: preserve the displayed working email, place collapsed Meeting & calendar and Tools below it, and finish with one primary Continue to Delivery action. Languages and the lower disclosures share a container, width, border, padding, radius and spacing; expanded content retains its natural height. Optional template restoration stays secondary inside Tools.
+
+The previous footer treated template-context differences and unsaved edits as navigation prerequisites. It demanded a separate update/review/save cycle even when the user wanted to keep the displayed message. Continue now saves the exact current draft when needed, persists a current-text review receipt, uses the existing package approval contract and opens Delivery. That receipt is bound to user/workspace, recipient/company, full preparation scope, active language and exact plain/HTML text; it cannot be reused for another buyer or another user's action. Canonical originals, editor origin, evidence and history are preserved. Legacy packages still retain their language/provenance requirements. No sending or automation is authorized by this change.
+
+Regression coverage includes exact-text save and real readiness/approval/handoff, optional template selections, missing facts/placeholders, pending previews, failed/local-only persistence, duplicate Continue, context switches and same-workspace user switches. Chromium local fixture checks at 1440px and 390px measure matching disclosure widths/left edges/padding/radii/borders, exercise the native calendar/Tools disclosures and check horizontal overflow and page/resource errors. These fixture checks do not establish authenticated production behavior.
+
+Implementation and validation are separate from release. The owner has requested implementation of this change; a new production deployment requires explicit authorization and exact-SHA release-integrity proof.

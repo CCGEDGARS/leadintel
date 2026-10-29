@@ -25,7 +25,7 @@ test('split workspace places only the Writing Assistant launcher directly below 
  const {document,w}=mounted();const drafts=document.querySelector('.mw-editor .outreach-drafts'),tools=document.getElementById('mw-tools-drawer');
  assert.equal(document.getElementById('mw-style-options').closest('section').nextElementSibling.id,'mw-writing-assistant-launcher');
  assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-writing-assistant-launcher')));assert.equal(document.getElementById('mw-writing-assistant').hidden,true);
- assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.className,'mw-message-footer');assert.ok(tools.contains(document.getElementById('mw-follow-up-host')));
+ assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.id,'mw-tools-drawer');assert.ok(tools.contains(document.getElementById('mw-follow-up-host')));
  assert.ok(drafts.compareDocumentPosition(tools)&4);assert.equal(tools.open,false);
  assert.ok(tools.contains(document.getElementById('mw-default-template')));
  assert.ok(tools.contains(document.querySelector('.message-advanced')));
@@ -49,8 +49,9 @@ for(const [width,columns] of [[1440,1],[768,3],[600,3],[390,2]])test(`mounted co
  assert.equal(css(document.getElementById('mw-style-options')).gridTemplateColumns,columns===1?'minmax(0,1fr)':`repeat(${columns},minmax(0,1fr))`);
  assert.equal(css(document.querySelector('.mw-style')).textAlign,width>900?'left':'center');
  const settings=css(document.getElementById('mw-settings')),languages=css(document.getElementById('mw-language-tools'));
- assert.equal(settings.minHeight,languages.minHeight);assert.equal(settings.padding,languages.padding);assert.equal(settings.margin,languages.margin);
- assert.equal(css(document.getElementById('mw-sender-card')).gridTemplateColumns,width<=720?'minmax(0,1fr)':'repeat(2,minmax(0,1fr))');
+ assert.ok(document.querySelector('.outreach-drafts').contains(document.getElementById('mw-sender-card')));assert.equal(settings.minHeight,languages.minHeight);assert.equal(settings.padding,languages.padding);assert.equal(settings.margin,languages.margin);
+ for(const id of ['mw-meeting-options','mw-tools-drawer']){const field=css(document.getElementById(id));for(const key of ['width','minHeight','padding','margin','borderRadius','border'])assert.equal(field[key],languages[key],id+' '+key);}
+ assert.equal(css(document.getElementById('mw-sender-card')).gridTemplateColumns,'minmax(0,1fr)');
  assert.equal(css(document.getElementById('outreach-email-body')).maxHeight,'none');assert.equal(css(document.getElementById('outreach-email-body')).overflowY,'hidden');
  assert.equal(css(document.querySelector('.mw-tools-content')).display,'none');
  assert.equal(document.getElementById('mw-settings').open,false);assert.equal(document.getElementById('mw-language-tools').open,false);
