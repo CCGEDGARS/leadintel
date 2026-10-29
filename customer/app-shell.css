@@ -81,3 +81,10 @@
 #ai-settings-backdrop{opacity:0;transition:opacity .28s ease}
 #ai-settings-backdrop.is-open{opacity:1}
 @media(prefers-reduced-motion:reduce){#ai-settings-drawer,#ai-settings-backdrop{transition:none}}
+
+/* Recovery belongs to Workspace status; retain the original handlers and fallback UI. */
+.top-actions[data-sync-review-ready="1"] #server-conflict-actions,.top-actions[data-sync-review-ready="1"] #server-sync-recovery{display:none!important}
+.workspace-sync-actions{display:flex;flex-wrap:wrap;gap:8px}
+.workspace-sync-actions .attention-action{white-space:normal;max-width:100%}
+[data-sync-review][hidden],.workspace-sync-actions [hidden],.topbar-save[hidden]{display:none!important}
+.topbar-save:disabled,.workspace-sync-actions button:disabled{opacity:.6;cursor:wait}

@@ -5393,6 +5393,38 @@
       "contains": [
         "Sign in to connect your calendar"
       ]
+    },
+    {
+      "id": "sync-review-topbar",
+      "type": "text",
+      "url": "/customer/topbar.js",
+      "status": 200,
+      "contains": [
+        "'Review sync'",
+        "LeadIntelAttention?.open?.()",
+        "resolvingSync"
+      ]
+    },
+    {
+      "id": "sync-review-choices",
+      "type": "text",
+      "url": "/customer/attention-centre.js",
+      "status": 200,
+      "contains": [
+        "data-sync-choice",
+        "syncReviewReady",
+        "item.target.type==='sync-review'"
+      ]
+    },
+    {
+      "id": "sync-review-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "topbar.js?v=20261025-v1&save-now=20261025-v1&admin-entry=20261026-v1&sync-review=20261029-v1",
+        "message-quality=20261027-v1&sync-review=20261029-v1"
+      ]
     }
   ],
   "retry": {

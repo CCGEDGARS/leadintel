@@ -35,9 +35,9 @@
     const status=doc.getElementById('topbar-status');
     if(status){
       const persistence=text(doc.querySelector('.top-actions>.autosave'))||text(doc.getElementById('workspace-save-state'));
-      const state=statusFor(text(doc.getElementById('server-sync-status')),persistence);status.textContent=state.label;status.dataset.tone=state.tone;
+      const state=root.LeadIntelServerBridge?.resolvingSync?{label:'Saving…',tone:'busy'}:statusFor(text(doc.getElementById('server-sync-status')),persistence);status.textContent=state.label;status.dataset.tone=state.tone;
       const save=doc.getElementById('topbar-save');
-      if(save){save.hidden=!(state.label==='Unsynced changes'||state.label==='Needs attention');save.textContent=text(doc.getElementById('save-workspace'))||'Save now';}
+      if(save){save.hidden=!(state.label==='Unsynced changes'||state.label==='Needs attention');save.textContent=root.LeadIntelServerBridge?.conflict?'Review sync':text(doc.getElementById('save-workspace'))||'Save now';save.disabled=Boolean(root.LeadIntelServerBridge?.resolvingSync||doc.getElementById('save-workspace')?.disabled);save.setAttribute('aria-controls',root.LeadIntelServerBridge?.conflict?'workspace-attention-drawer':'save-workspace');}
     }
     const attention=doc.getElementById('workspace-attention');const ws=doc.getElementById('topbar-workspace-status');
     if(ws){const count=Number(text(attention?.querySelector('[data-attention-count]')))||0;const badge=ws.querySelector('[data-topbar-badge]');badge.textContent=String(count);badge.hidden=count===0;ws.hidden=!attention;ws.title=text(attention?.querySelector('[data-attention-summary]'))||'Workspace status';}
@@ -51,7 +51,7 @@
       const anchor=doc.getElementById('open-crm')||actions.firstElementChild;
       const status=doc.createElement('span');status.id='topbar-status';status.className='topbar-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
       const save=doc.createElement('button');save.type='button';save.id='topbar-save';save.className='topbar-save';save.hidden=true;save.textContent='Save now';
-      save.addEventListener('click',()=>doc.getElementById('save-workspace')?.click());
+      save.addEventListener('click',()=>{if(root.LeadIntelServerBridge?.conflict){root.LeadIntelAttention?.open?.();return;}doc.getElementById('save-workspace')?.click();});
       const ws=doc.createElement('button');ws.type='button';ws.id='topbar-workspace-status';ws.className='topbar-ws';ws.setAttribute('aria-haspopup','dialog');ws.innerHTML='<span>Workspace status</span><span class="topbar-badge" data-topbar-badge hidden>0</span>';
       ws.addEventListener('click',()=>doc.getElementById('workspace-attention')?.click());
       const account=doc.createElement('div');account.id='topbar-account';account.className='account-menu';
@@ -63,6 +63,7 @@
       doc.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
       panel.addEventListener('click',event=>{const item=event.target.closest('[data-topbar-action]');if(!item)return;close();const target={settings:'open-settings',signout:'server-signout',reset:'reset-workspace'}[item.dataset.topbarAction];doc.getElementById(target)?.click();});
       if(anchor&&anchor.parentElement===actions)anchor.after(status,save,ws,account);else actions.append(status,save,ws,account);
+      for(const name of ['leadintel:server-ready','leadintel:server-conflict','leadintel:server-synced','leadintel:sync-status-changed','leadintel:sync-resolving','leadintel:sync-settled'])root.addEventListener(name,update);
       if(typeof root.MutationObserver==='function'){
         const observe=el=>{if(el)new root.MutationObserver(update).observe(el,{childList:true,characterData:true,subtree:true,attributes:true});};
         observe(doc.getElementById('server-account'));observe(doc.getElementById('workspace-attention'));observe(doc.querySelector('.top-actions>.autosave'));observe(doc.getElementById('save-workspace'));

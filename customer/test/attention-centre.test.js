@@ -106,9 +106,9 @@ test('workspace health identifies every confirmed provider credit issue without 
 
 test('Workspace Health polls provider status and clears recovered credit alerts',async()=>{
   const source=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
-  const makeElement=()=>({children:[],dataset:{},hidden:false,textContent:'',classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);},replaceChildren(...children){this.children=children;},querySelector(){return null;}});
-  const trigger=makeElement(),list=makeElement();trigger.querySelector=selector=>selector==='[data-attention-count]'?makeElement():selector==='[data-attention-summary]'?makeElement():null;
-  const document={readyState:'complete',documentElement:{appendChild(){}},getElementById:id=>id==='workspace-attention'?trigger:null,createElement(){const node=makeElement();node.querySelector=()=>list;return node;},addEventListener(){},querySelector(){return null;}};
+  const {JSDOM}=require('jsdom');
+  const dom=new JSDOM('<button id="workspace-attention"><b data-attention-count></b><em data-attention-summary></em></button>');
+  const document=dom.window.document;
   let exhausted=true;
   const handlers={};const window={document,LeadIntelAttentionModel:Attention,LeadIntelServerBridge:{workspace:{id:'workspace-1'},session:{authenticated:true}},localStorage:{getItem(key){return key==='leadintel_customer_v2_discovery'?JSON.stringify({searchFailures:[{status:402}]}):null;}},LeadIntelJourney:{getModel(){return [];}},LeadIntelTaskCentre:{list(){return [];}},addEventListener(name,fn){handlers[name]=fn;},setInterval(){},fetch:async url=>({ok:true,json:async()=>url.includes('/ai/status')?{providers:[{provider:'gemini',configured:true,credit_issue:exhausted?{code:'credits_exhausted',source:'customer'}:null}]}:{providers:[]}})};
   vm.runInNewContext(source,{window,setTimeout,clearTimeout,Date,Promise});
@@ -120,6 +120,7 @@ test('Workspace Health polls provider status and clears recovered credit alerts'
   handlers['leadintel:server-ready']();await new Promise(resolve=>setImmediate(resolve));
   assert.ok(!window.LeadIntelAttention.list().some(item=>item.severity==='error'));
   await window.LeadIntelAttention.recheck();assert.ok(!window.LeadIntelAttention.list().some(item=>item.provider==='firecrawl'||item.severity==='error'));
+  dom.window.close();
 });
 
 test('workspace health identifies exhausted OpenAI API credits and clears after successful synthesis',()=>{
