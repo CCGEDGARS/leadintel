@@ -10,7 +10,7 @@
     const id=workspace();if(!id||!bridge()?.session?.authenticated)throw Error('Sign in to configure additional services.');
     const response=await fetch(`${API}${path}${path.includes('?')?'&':'?'}workspace_id=${encodeURIComponent(id)}`,{credentials:'include',...options,headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(options.body?.includes('\"data_lookup\":true')?240000:60000)});
     const result=await response.json();if(workspace()!==id)throw Error('Workspace changed; retry in the current workspace.');
-    if(!response.ok)throw Error(result.error||'Additional services are unavailable.');return result;
+    if(!response.ok)throw Object.assign(Error(result.error||'Additional services are unavailable.'),{code:result.code});return result;
   }
   function status(message){const node=document.getElementById('additional-contact-status');if(node)node.textContent=message;}
   function mountPaidSearch(card=document.getElementById('delivery-setup')){
@@ -62,15 +62,17 @@
     }catch(error){if(workspace()===id){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
   }
   function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
-  function record(candidate,person,message,{status='not_verified',append=false}={}){
+  function record(candidate,person,message,{status='not_verified',append=false,lookup=null}={}){
     outcomes.set(key(candidate,person),message);
-    person.contactVerification={status,checkedAt:new Date().toISOString(),issues:[...(append?person.contactVerification?.issues||[]:[]),message].slice(-12)};
+    person.contactVerification={status,lookup,checkedAt:new Date().toISOString(),issues:[...(append?person.contactVerification?.issues||[]:[]),message].slice(-12)};
     adapter?.saveOutcome?.(candidate,person);adapter?.render?.();
   }
   function card(candidate,person){
     if(person.contactData){
-      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status||'not_requested').replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Phone · '+String(phone.status||'not_requested').replaceAll('_',' ')+(phone.reason?' · '+phone.reason:'')];
-      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Some checks need review':'No new data')+' · '+esc(d.checkedAt)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>Latest check needs review; previously found details retained.':'')+'</p>';
+      const latest=person.contactVerification?.status==='error'&&Date.parse(person.contactVerification.checkedAt)>Date.parse(person.contactData.checkedAt||'1970-01-01')?' · Newer saved attempt: '+(person.contactVerification.issues||[]).join(' · '):'';
+      const help=/rejected the saved team token/i.test(JSON.stringify(person.contactData))?' Saved token failure: reconnect Treg in Settings, then explicitly retry the saved lookup. This record does not test the new connection.':'';
+      const d=person.contactData,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status||'not_requested').replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Saved phone check · '+String(phone.status||'not_requested').replaceAll('_',' ')+(phone.reason?' · '+phone.reason:'')];
+      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Saved checks need review':'No new data')+' · '+esc(d.checkedAt)+esc(help)+esc(latest)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>Latest check needs review; previously found details retained.':'')+'</p>';
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');
@@ -79,7 +81,7 @@
   }
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
-  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false}={}){
+  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,phoneOnly=false}={}){
     const identity=key(candidate,person);if(publicChecking.has(identity))return publicChecking.get(identity);
     const id=workspace(),personId=String(person.id),domain=candidate.domain;
     const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId);
@@ -93,7 +95,7 @@
       person=candidate.people.find(p=>String(p.id)===personId);
       if(!dataLookup&&adapter?.email?.(candidate,person))return true;
       if(!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
-      return run(candidate,person,{automatic,dataLookup});
+      return run(candidate,person,{automatic,dataLookup,phoneOnly});
     }catch(error){if(workspace()===id){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
     publicChecking.set(identity,task);try{return await task;}finally{publicChecking.delete(identity);}
   }
@@ -113,7 +115,7 @@
       finally{if(workspace()===id){adapter.pending(candidate,person,false);adapter.render();}}
     })();running.set(identity,task);try{return await task;}finally{running.delete(identity);}
   }
-  async function run(candidate,person,{automatic=false,dataLookup=false}={}){
+  async function run(candidate,person,{automatic=false,dataLookup=false,phoneOnly=false}={}){
     const identity=key(candidate,person);if(running.has(identity))return running.get(identity);
     const execute=(async()=>{
       const id=workspace(),domain=candidate.domain,personId=person.id,identitySnapshot=JSON.stringify([person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
@@ -132,11 +134,12 @@
         if(!tregReady&&!apolloReady&&!hunterReady)throw Error('Connect Treg in Settings before paid email research.');
         for(const service of [...(tregReady?['treg']:[]),...(apolloReady?['apollo']:[]),...(hunterReady?['hunter']:[])]){
           check();const name=service==='treg'?'Treg':service==='apollo'?'Apollo':'Hunter';
-          const includePhone=service==='treg'&&policy.phoneEnabled===true,includeEmail=service!=='treg'||policy.enabled===true;
+          if(phoneOnly&&!policy.phoneEnabled)throw Error('Paid phone search is off. Activate it in Setup.');
+          const includePhone=service==='treg'&&policy.phoneEnabled===true,includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true);
           const lookupData=dataLookup||includePhone;
           if(dataLookup&&!automatic){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
-            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${includeEmail?'research work email and professional profile':'reuse saved email; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
+            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${includeEmail?'research work email and professional profile':'reuse saved email; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
             if(!choice||!current())return false;
           }
           if(!dataLookup&&!automatic&&!(service==='treg'&&policy.enabled)){
@@ -167,12 +170,12 @@
             record(candidate,person,receipts.join(' · '));
           }catch(error){
             if(!current())return false;
-            receipts.push(`${name} · error: ${error.message}`);record(candidate,person,receipts.join(' · '),{status:'error'});
+            receipts.push(`${/^ADDITIONAL_CONTACT_(?:DAILY|MONTHLY|COMPANY)_LIMIT$/.test(error.code||'')?'LeadIntel · blocked':name+' · error'}: ${error.message}`);record(candidate,person,receipts.join(' · '),{status:'error',lookup:{provider:service,phone:includePhone,email:includeEmail,code:error.code||'PROVIDER_ERROR'}});
             // A failed provider is visible and does not impersonate a successful zero-result search.
           }finally{if(current()){adapter.pending(candidate,person,false);adapter.render();}}
         }
         return false;
-      }catch(error){if(current()){record(candidate,person,error.message,{status:'error'});adapter.toast?.(error.message);}return false;}
+      }catch(error){if(current()){record(candidate,person,error.message,{status:'error',lookup:{provider:policy?.provider||'unknown',phone:phoneOnly||dataLookup&&policy?.phoneEnabled===true,email:!phoneOnly,code:error.code||'CONTACT_CHECK_BLOCKED'}});adapter.toast?.(error.message);}return false;}
       finally{if(current()){adapter.pending(candidate,person,false);adapter.render();}}
     })();running.set(identity,execute);try{return await execute;}finally{running.delete(identity);}
   }

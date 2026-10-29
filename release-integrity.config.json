@@ -4317,7 +4317,8 @@
       "url": "/customer/additional-contact-services.js",
       "status": 200,
       "contains": [
-        "title:'Confirm data'",
+        "title:phoneOnly?'Confirm phone':'Confirm data'",
+        "includeEmail=!phoneOnly",
         "email_lookup:includeEmail",
         "phone_approved:includePhone",
         "This action does not send messages."
@@ -5325,6 +5326,18 @@
         "function safePhoneEnrichment(",
         "person_provider_id",
         "pending_phone"
+      ]
+    },
+    {
+      "id": "buyer-research-orchestration",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "options.crossCheck",
+        "entry.providers",
+        "planned_sources_checked",
+        "shortLast"
       ]
     }
   ],
