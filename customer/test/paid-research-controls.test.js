@@ -23,3 +23,6 @@ test('manual data and phone buttons request only their own channel and respect p
  const f=await fixture({email:true,phone:true});await f.w.LeadIntelAdditionalContacts.confirm(f.candidate,f.person,{dataLookup:true,emailOnly:true});await f.w.LeadIntelAdditionalContacts.confirm(f.candidate,f.person,{dataLookup:true,phoneOnly:true});const rows=f.calls.filter(r=>r.kind==='lookup');assert.equal(rows[0].body.email_lookup,true);assert.equal(rows[0].body.phone_approved,false);assert.equal(rows[1].body.email_lookup,false);assert.equal(rows[1].body.phone_approved,true);f.dom.window.close();
  const off=await fixture();await off.w.LeadIntelAdditionalContacts.confirm(off.candidate,off.person,{dataLookup:true,phoneOnly:true});assert.equal(off.calls.filter(r=>r.kind==='lookup').length,0);off.dom.window.close();
 });
+test('Settings and paid-research entry scripts receive the new cache version together',()=>{
+ const html=fs.readFileSync(require.resolve('../index.html'),'utf8');for(const file of ['ai-settings','additional-contact-services']){const match=html.match(new RegExp(file+'\\.js\\?([^"\\s]+)'));assert.ok(match);assert.ok(match[1].includes('paid-controls=20261029-v1'),file+' cache marker missing');}
+});
