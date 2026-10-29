@@ -51,7 +51,7 @@ test('composer mounts once, preserves canonical fields/listeners and keeps setti
 test('sender settings separate meeting options and show business facts once',()=>{
  const {document}=mounted();
  assert.ok(document.getElementById('mw-meeting-options'));
- assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.className,'mw-message-footer');
+ assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.id,'mw-tools-drawer');
  assert.ok(!document.getElementById('mw-settings').contains(document.getElementById('message-meetingDateOne')));
  assert.equal(document.getElementById('message-meetingDateOne').closest('label').hidden,true);
  assert.equal(document.getElementById('message-pitch-preview').hidden,true);
@@ -278,7 +278,7 @@ test('automatic preparation preserves the single script and exposes an inline Up
  w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').disabled,false);assert.equal(document.getElementById('mw-auto-update'),null);
  const proposal={draft:{subject:'Northport steel',message:'Updated facts and approved wording'}};
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal});
- assert.equal(document.getElementById('mw-auto-update'),null);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('mw-add-flow').disabled,true);assert.equal(document.getElementById('message-generate').hidden,false);
+ assert.equal(document.getElementById('mw-auto-update'),null);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('mw-add-flow').disabled,false);assert.equal(document.getElementById('message-generate').hidden,false);
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Restore selected template');
 });
 

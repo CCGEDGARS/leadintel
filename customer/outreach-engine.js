@@ -316,9 +316,9 @@
     if(item.channel==='linkedin')return {...item,approved:false,error:'LinkedIn direct-message drafts are reviewed and copied separately from email delivery.'};
     const options=arguments[3]&&typeof arguments[3]==="object"?arguments[3]:{};
     if(item.contextNeedsRefresh)return {...item,approved:false,error:'Your commercial profile changed. Regenerate the dossier and scripts before approval.'};
-    const drafts={commercialContext:item.drafts?.commercialContext||{},emailSubject:clean(editedDrafts.emailSubject),emailBody:String(editedDrafts.emailBody??"").trim(),linkedinMessage:String(editedDrafts.linkedinMessage??"").trim(),callOpener:String(editedDrafts.callOpener??item?.drafts?.callOpener??"").trim(),followUp:String(editedDrafts.followUp??item?.drafts?.followUp??"").trim(),objectionReply:String(editedDrafts.objectionReply??item?.drafts?.objectionReply??"").trim(),tone:clean(editedDrafts.tone||item?.drafts?.tone||"consultative")};
+    const drafts={commercialContext:item.drafts?.commercialContext||{},emailSubject:options.preserveWorkingText===true?String(editedDrafts.emailSubject??''):clean(editedDrafts.emailSubject),emailBody:options.preserveWorkingText===true?String(editedDrafts.emailBody??''):String(editedDrafts.emailBody??"").trim(),linkedinMessage:String(editedDrafts.linkedinMessage??"").trim(),callOpener:String(editedDrafts.callOpener??item?.drafts?.callOpener??"").trim(),followUp:String(editedDrafts.followUp??item?.drafts?.followUp??"").trim(),objectionReply:String(editedDrafts.objectionReply??item?.drafts?.objectionReply??"").trim(),tone:clean(editedDrafts.tone||item?.drafts?.tone||"consultative")};
     if(item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())throw Error('Event validation unavailable');EventCampaigns().validateDraft(item.messageStudioDraft.eventSnapshot,{subject:drafts.emailSubject,message:drafts.emailBody},item.messageStudioDraft.essentials||{});}catch(e){return {...item,drafts,approved:false,error:e.message};}}
-    if(!drafts.emailSubject||!drafts.emailBody)return {...item,drafts,approved:false,error:"Email subject and email body are required before approval."};
+    if(!drafts.emailSubject.trim()||!drafts.emailBody.trim())return {...item,drafts,approved:false,error:"Email subject and email body are required before approval."};
     if(item.localizationApprovalBlocked||!['native','complete'].includes(clean(item.localizationStatus)))return {...item,drafts,approved:false,error:clean(item.localizationMessage)||"Resolve and confirm the recipient email language before approval."};
     const sourceScenario=options.campaignScenario||item.campaignScenario;const sourceProvenance=item.localizationProvenance&&typeof item.localizationProvenance==='object'?item.localizationProvenance:null;
     if(!sourceScenario||!sourceProvenance||!clean(sourceProvenance.provider)||!clean(sourceProvenance.model)||!clean(sourceProvenance.selectionSource)||!sourceProvenance.language||campaignLanguage(sourceProvenance.language)==='auto')return {...item,drafts,approved:false,error:"Complete campaign language provider provenance is required before approval."};
@@ -329,9 +329,12 @@
     }
     const generatedBodies=[item?.drafts?.emailBody,item?.contentVariants?.drafts?.en?.emailBody,item?.contentVariants?.drafts?.lv?.emailBody].map(value=>String(value??"")).filter(Boolean);
     const generated=generatedBodies.includes(drafts.emailBody);
-    if(brandSnapshot&&generated)drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
+    if(brandSnapshot&&generated){
+      if(options.preserveWorkingText===true){if(removeGeneratedSenderPlaceholder(drafts.emailBody)!==drafts.emailBody.trim())return {...item,drafts,approved:false,error:'Complete the sender placeholder in your working message before continuing.'};}
+      else drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
+    }
     Object.assign(drafts,Rich()?.fields(drafts.emailBody,editedDrafts.emailBodyHtml,'emailBodyHtml'));
-    const approvedSource=freezeCopy(drafts);
+    const approvedSource=freezeCopy({...drafts,...(options.preserveWorkingText===true?{preserveWorkingText:true}:{})});
     const approvedEmail=freezeCopy(renderEmail(approvedSource,brandSnapshot));
     const campaignSnapshot=freezeCopy(normalizeCampaignScenario(sourceScenario,{},sourceScenario.language||'en'));
     const localizationSnapshot=freezeCopy({provider:clean(sourceProvenance.provider),model:clean(sourceProvenance.model),language:campaignLanguage(sourceProvenance.language),selectionSource:clean(sourceProvenance.selectionSource)});
@@ -345,8 +348,8 @@
   }
   function removeGeneratedSenderPlaceholder(value){return String(value??"").replace(/^[ \t]*\[(?:Your name|Jūsu vārds)\][ \t]*(?:\r?\n)?/gim,"").trim();}
   function renderEmail(source={},brandSnapshot=null){
-    const subject=clean(source.emailSubject);
-    const bodyText=String(source.emailBody??"").trim();
+    const subject=source.preserveWorkingText===true?String(source.emailSubject??''):clean(source.emailSubject);
+    const bodyText=source.preserveWorkingText===true?String(source.emailBody??''):String(source.emailBody??"").trim();
     const bodyHtml=Rich()?.matchingHtml(bodyText,source.emailBodyHtml)||'';
     if(!brandSnapshot||!BrandIdentity?.renderEmail)return {subject,textBody:bodyText,htmlBody:bodyHtml||null};
     return BrandIdentity.renderEmail({subject,bodyText,bodyHtml,brandSnapshot});
@@ -417,7 +420,7 @@
     const reapprovalRequired=Boolean(item.reapprovalRequired)||corruptedSnapshot;
     const approved=requestedApproval&&!reapprovalRequired;
     const sourceInput=item.approvedSource&&typeof item.approvedSource==="object"?item.approvedSource:drafts;
-    const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:clean(sourceInput.emailSubject)||drafts.emailSubject,emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),...Rich()?.fields(String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),sourceInput.emailBodyHtml??drafts.emailBodyHtml,'emailBodyHtml'),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
+    const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:sourceInput.preserveWorkingText===true?String(sourceInput.emailSubject??drafts.emailSubject):clean(sourceInput.emailSubject)||drafts.emailSubject,...(sourceInput.preserveWorkingText===true?{preserveWorkingText:true}:{}),emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),...Rich()?.fields(String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),sourceInput.emailBodyHtml??drafts.emailBodyHtml,'emailBodyHtml'),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
     const approvedEmail=approved?freezeCopy(renderEmail(approvedSource||drafts,brandSnapshot)):null;
     const approvalBrandMode=brandedProvenance?'branded':clean(item.approvalBrandMode).toLowerCase()==='plain'?'plain':brandSnapshot?'branded':'legacy-plain';
     const campaignScenario=item.campaignScenario?normalizeCampaignScenario(item.campaignScenario,{},item.campaignScenario.language||'en'):null;const campaignSnapshot=approved&&item.campaignSnapshot?freezeCopy(normalizeCampaignScenario(item.campaignSnapshot,{},item.campaignSnapshot.language||'en')):null;

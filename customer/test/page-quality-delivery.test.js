@@ -11,3 +11,9 @@ test('delivery checks the exact approved text and selected buyer email without c
 test('stale approvals and already recorded sends cannot pass delivery readiness',()=>{
  for(const change of ['stale','sent','missing-approval']){const h=harness();if(change==='stale')h.pkg.contextNeedsRefresh=true;if(change==='sent')h.record.sentAt='2026-10-10';if(change==='missing-approval')delete h.pkg.approvedSource;assert.equal(Q.allowed(h.report(),'send'),false);}
 });
+
+
+test('Delivery accepts the exact preserved working copy and rejects a later edit',()=>{
+ const h=harness();h.pkg.drafts.emailSubject='  Subject  ';h.pkg.drafts.emailBody='  Body\n';h.pkg.approvedSource={...h.pkg.drafts,preserveWorkingText:true};
+ assert.equal(Q.allowed(h.report(),'send'),true);h.pkg.drafts.emailBody+='Later edit';assert.equal(Q.allowed(h.report(),'send'),false);
+});

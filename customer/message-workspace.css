@@ -695,3 +695,16 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 .meeting-connection-help{font-size:12px;color:#4d6557}
 .meeting-connection-help>summary{cursor:pointer;font-weight:600}
 .meeting-connection-help p{margin-top:10px}
+
+/* Equal main-field geometry, with natural heights for expanded content. */
+#message-studio .mw-sender-card{grid-template-columns:minmax(0,1fr)}
+#message-studio .mw-field,#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{box-sizing:border-box;width:100%;min-width:0;min-height:92px;margin:0 0 16px;padding:18px 20px;border:1px solid #dce5df;border-radius:14px;background:#fff}
+#message-studio .mw-field>summary,#message-studio .mw-sender-card>#mw-settings>summary{font-size:14px;font-weight:650;line-height:1.5;padding:0;color:#315d4c;cursor:pointer}
+#message-studio .mw-field>summary>span{font-size:12px;font-weight:400;line-height:1.5;color:#687c6e}
+#message-studio .mw-field input:not([type=checkbox]):not([type=radio]),#message-studio .mw-field select{box-sizing:border-box;min-height:42px;border:1px solid #cedbd1;border-radius:8px;padding:10px 12px;font:inherit;max-width:100%}
+#message-studio .outreach-drafts>.mw-message-footer{margin-top:0;padding-top:20px}
+#message-studio .mw-tools-drawer #message-generate{background:#fff;color:#315d4c;border:1px solid #cedbd1;box-shadow:none}
+@media(max-width:720px){#message-studio .mw-field,#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{padding:16px;min-height:72px}}
+
+#message-studio .mw-field>summary{min-height:48px}
+#message-studio .mw-field>summary>span:not(.mw-language-quick){display:block;margin:6px 0 0}

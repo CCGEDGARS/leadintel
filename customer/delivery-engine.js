@@ -30,8 +30,9 @@
   function buildGmailComposeUrl(packageItem,recipient){
     const to=normalizeEmail(recipient);
     const frozen=Outreach?.buildApprovedSendPayload?.(packageItem,to);
-    const subject=clean(frozen?.subject??packageItem?.drafts?.emailSubject);
-    const body=cleanMultiline(frozen?.textBody??packageItem?.drafts?.emailBody);
+    const preserve=packageItem?.approvedSource?.preserveWorkingText===true;
+    const subject=preserve?String(frozen?.subject??packageItem?.drafts?.emailSubject??''):clean(frozen?.subject??packageItem?.drafts?.emailSubject);
+    const body=preserve?String(frozen?.textBody??packageItem?.drafts?.emailBody??''):cleanMultiline(frozen?.textBody??packageItem?.drafts?.emailBody);
     if(!packageItem?.approved||!to||!subject||!body)return "";
     const url=new URL("https://mail.google.com/mail/");
     url.searchParams.set("view","cm");

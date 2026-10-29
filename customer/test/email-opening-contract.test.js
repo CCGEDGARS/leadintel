@@ -38,8 +38,8 @@ test('runtime refuses a core pattern that reintroduces a whole-paragraph slot',(
  vm.runInNewContext(fs.readFileSync(require.resolve('../message-editor'),'utf8'),{module,require:name=>name==='./message-studio.js'?S:{...A,approvedPattern:()=> 'Hi {{firstName}},\n\n{{development}}'}});
  assert.throws(()=>module.exports.referencePattern('curiosity'),/Core paragraph slots are forbidden/);
 });
-test('an incomplete project opening uses its declared omission and the exact working copy survives reopen',()=>{
- const h=mounted({selected:'curiosity'});try{h.q('message-generate').click();assert.doesNotMatch(h.q('outreach-email-body').value,/\[Add verified (?:milestone|opening-year)\]/);assert.equal(h.q('mw-add-flow').disabled,true);const snapshot=JSON.parse(h.w.localStorage.getItem('leadintel_customer_v2_outreach')),r=mounted({outreachSnapshot:snapshot});try{assert.equal(r.q('outreach-email-body').value,h.q('outreach-email-body').value);assert.equal(r.q('mw-add-flow').disabled,true);}finally{r.w.close();}}finally{h.w.close();}
+test('a declared opening omission preserves the exact copy and permits Delivery after preparation',()=>{
+ const h=mounted({selected:'curiosity'});try{h.q('message-generate').click();assert.doesNotMatch(h.q('outreach-email-body').value,/\[Add verified (?:milestone|opening-year)\]/);assert.equal(h.q('mw-add-flow').disabled,true);const snapshot=JSON.parse(h.w.localStorage.getItem('leadintel_customer_v2_outreach')),r=mounted({outreachSnapshot:snapshot});try{assert.equal(r.q('outreach-email-body').value,h.q('outreach-email-body').value);assert.equal(r.q('mw-add-flow').disabled,false);}finally{r.w.close();}}finally{h.w.close();}
 });
 test('official milestone wording fills factual atoms without composing a new paragraph',()=>{
  // LKAB press release 2026-08-25: /en/press/milestone-lkab-lays-the-foundation-for-gallivares-future/

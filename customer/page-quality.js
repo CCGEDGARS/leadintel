@@ -9,7 +9,7 @@
   const PAGES=['setup','profile','strategy','companies','buyers','messages','delivery','crm'];
   const LABELS={ready:'Ready',preparing:'Preparing',review:'Needs review',blocked:'Blocked'};
   const reportKeys=new WeakMap();
-  const ACTIONS={setup:['prepare','advance'],profile:['prepare','research','approve','advance'],strategy:['prepare','research','approve','advance'],companies:['prepare','research','target-research','advance'],buyers:['prepare','research','advance'],messages:['prepare','generate','save','library','approve','flow','send'],delivery:['prepare','send','advance'],crm:['prepare','read','write']};
+  const ACTIONS={setup:['prepare','advance'],profile:['prepare','research','approve','advance'],strategy:['prepare','research','approve','advance'],companies:['prepare','research','target-research','advance'],buyers:['prepare','research','advance'],messages:['prepare','generate','save','library','approve','flow','send','delivery'],delivery:['prepare','send','advance'],crm:['prepare','read','write']};
   function check(id,label,passed,message,{actions=['*'],state='review',target=null}={}){
     return {id,label,status:passed===true?'pass':passed===null?'pending':'fail',message,actions,state,target};
   }

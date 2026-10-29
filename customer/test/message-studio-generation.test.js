@@ -3,7 +3,7 @@ const M=require('../message-studio.js'),O=require('../outreach-engine.js');const
 test('approval accepts only the current sender profile and preserves manually edited subjects',async()=>{
  for(const allowed of [true,false]){const h=harness('brutal'),c=h.ctx,url='https://www.linkedin.com/in/alex-lane/';let reached=false;
  h.item.messageStudioDraft={essentials:c.readStudio().essentials};h.item.drafts.emailSubject='My edited subject';h.item.drafts.emailBody='20-minute Zoom https://calendly.com/alex/30min '+(allowed?url:'https://www.linkedin.com/in/other-person/');
- c.studioState=c.readStudio;c.mainState=()=>({answers:{},brandIdentity:{linkedinUrl:url}});c.renderDossier=()=>{};
+ c.currentDeliveryReview=()=>false;c.studioState=c.readStudio;c.mainState=()=>({answers:{},brandIdentity:{linkedinUrl:url}});c.renderDossier=()=>{};
  c.LeadIntelOutreach={...O,approveOutreachItem:(item,drafts)=>{reached=true;assert.equal(drafts.emailSubject,'My edited subject');return {...item,approved:false,error:'Test stops before CRM approval'};}};
  vm.runInContext(source.slice(source.indexOf('async function approveOutreach('),source.indexOf('function renderApprovedPreview(')),c);await c.approveOutreach();assert.equal(reached,allowed);}
 });

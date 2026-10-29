@@ -18,7 +18,7 @@ test('Messages has one footer next step; sending and legacy navigation stay outs
  }finally{h.w.close();}
 });
 test('unsaved and blocked states never inherit a ready badge from earlier flow membership',()=>{
- const h=mounted();try{show(h,{inFlow:true,savedDraft:false,editorState:{editing:true}});assert.equal(h.q('mw-draft-badge').textContent,'Unsaved changes');assert.equal(h.q('mw-add-flow').disabled,true);assert.equal(h.q('mw-flow-readiness').hidden,false);show(h,{generationError:true});assert.equal(h.q('mw-retry-message').hidden,false);assert.equal(h.q('mw-updating-notice').hidden,false);}finally{h.w.close();}
+ const h=mounted();try{show(h,{inFlow:true,savedDraft:false,editorState:{editing:true}});assert.equal(h.q('mw-draft-badge').textContent,'Unsaved changes');assert.equal(h.q('mw-add-flow').disabled,false);assert.equal(h.q('mw-flow-readiness').hidden,false);show(h,{generationError:true});assert.equal(h.q('mw-retry-message').hidden,false);assert.equal(h.q('mw-updating-notice').hidden,false);}finally{h.w.close();}
 });
 test('language summary separates the displayed message from an untranslated selected target',()=>{
  const h=mounted();try{
@@ -47,4 +47,11 @@ test('approved messages explain why language controls are locked and how to unlo
  const h=mounted();try{h.w.LeadIntelMessageTranslationUI.render(h.w.document,{...h.item(),approved:true},{usable:true,languageSettings:{languages:['en','lv'],defaultLanguage:'en',targetLanguage:'lv'}});assert.equal(h.q('message-translate').disabled,true);assert.match(h.q('message-translation-status').textContent,/approved.*Edit.*Save.*translat/i);}finally{h.w.close();}
 });
 
-test('meeting setup precedes Delivery and missing facts explain a disabled Continue',()=>{const h=mounted();try{const d=h.w.document,meeting=h.q('mw-meeting-options'),footer=d.querySelector('.mw-message-footer');assert.equal(meeting.nextElementSibling,footer);assert.ok(h.q('mw-tools-drawer').contains(h.q('mw-follow-up-host')));show(h,{missingFacts:['project milestone']});assert.equal(h.q('mw-add-flow').disabled,true);assert.match(h.q('mw-flow-readiness-text').textContent,/project milestone/);assert.equal(h.q('mw-flow-resolve').hidden,false);}finally{h.w.close();}});
+test('meeting setup precedes Delivery and missing facts explain a disabled Continue',()=>{const h=mounted();try{const d=h.w.document,meeting=h.q('mw-meeting-options'),footer=d.querySelector('.mw-message-footer');assert.equal(meeting.nextElementSibling,h.q('mw-tools-drawer'));assert.equal(h.q('mw-tools-drawer').nextElementSibling,footer);assert.ok(h.q('mw-tools-drawer').contains(h.q('mw-follow-up-host')));show(h,{missingFacts:['project milestone']});assert.equal(h.q('mw-add-flow').disabled,true);assert.match(h.q('mw-flow-readiness-text').textContent,/project milestone/);assert.equal(h.q('mw-flow-resolve').hidden,false);}finally{h.w.close();}});
+
+test('calendar, collapsed Tools and the single Continue action follow the email in order',()=>{
+ const h=mounted();try{show(h);const meeting=h.q('mw-meeting-options'),tools=h.q('mw-tools-drawer'),footer=h.q('mw-add-flow').closest('.mw-message-footer');assert.match(meeting.querySelector('summary').textContent,/Meeting & calendar/);assert.equal(meeting.nextElementSibling,tools);assert.equal(tools.nextElementSibling,footer);assert.equal(tools.open,false);assert.equal(h.q('message-generate').classList.contains('primary-btn'),false);assert.equal(h.q('mw-language-tools').classList.contains('mw-field'),true);assert.equal(meeting.classList.contains('mw-field'),true);assert.equal(tools.classList.contains('mw-field'),true);}finally{h.w.close();}
+});
+test('a saved ready message can continue despite optional template changes without a second review button',()=>{
+ const h=mounted();try{show(h,{pendingSelections:true,unpersonalizedDraft:true,selectedStyle:'friendly',appliedStyle:'professional'});assert.equal(h.q('mw-add-flow').disabled,false);assert.equal(h.q('mw-flow-resolve').hidden,true);assert.doesNotMatch(h.q('mw-flow-readiness-text').textContent,/Update message|Review message update/);show(h,{savedDraft:false,editorState:{editing:true}});assert.equal(h.q('mw-add-flow').disabled,false);assert.match(h.q('mw-flow-readiness-text').textContent,/saved|save/i);}finally{h.w.close();}
+});
