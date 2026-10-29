@@ -43,7 +43,7 @@ export async function groundedContactSearch({apiKey,model,company,domain,person,
     const chunk=chunks[index]?.web;if(!chunk?.uri)continue;
     const normalize=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
     const excerpt=supported.get(index)||'',text=normalize(excerpt),professional=/industry|conference|speaker|supplier|association|interview|director|procurement|leadership|president|ceo/i.test(excerpt);
-    const external=professional&&text.includes(normalize(name))&&text.includes(normalize(organization));
+    const external=professional&&(' '+text+' ').includes(' '+normalize(name)+' ')&&(' '+text+' ').includes(' '+normalize(organization)+' ');
     const url=await citationUrl(chunk.uri,host,fetchImpl,signal,external);
     if(url&&!results.some(row=>row.url===url))results.push({url,title:clean(chunk.title,220),description:supported.get(index)||'',evidenceKind:'model_summary'});
   }

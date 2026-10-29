@@ -35,7 +35,7 @@ async function search(env,workspaceId,query,guard){
 }
 async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,accountability){
   const rows=[],issues=[],providerStatus={firecrawl:{status:'pending',results:0,queries:0,failures:[]},grounded:{status:'pending',results:0},identity:{status:'pending',results:0}};
-  const sourceSearch=createBuyerSourceSearch(env,workspaceId,{guard,observe:entry=>discovery.recordBuyerResearchTool(accountability,entry)});
+  const sourceSearch=createBuyerSourceSearch(env,workspaceId,{guard,observe:entry=>{if(accountability.status==='running'&&!accountability.completedAt)discovery.recordBuyerResearchTool(accountability,entry);}});
   const plan=discovery.buyerResearchPlan(candidate,{decisionMakers:roles.join('; ')});
   for(const query of plan.queries.slice(0,6)){
     await guard();
