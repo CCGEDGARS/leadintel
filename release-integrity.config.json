@@ -4162,7 +4162,7 @@
         "Read this source first",
         "Official sources read",
         "data-official-contact-url",
-        "if(candidate.buyerDiscovery?.checkedAt||candidate.publicResearch?.checkedAt)continue;"
+        "if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;"
       ]
     },
     {
