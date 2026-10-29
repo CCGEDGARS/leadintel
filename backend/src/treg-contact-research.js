@@ -42,8 +42,10 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const found=await call('find','treg.people.email.find',{full_name:name,first_name:parts[0],last_name:parts.slice(1).join(' '),domain,...(person.publicLinkedinUrl||person.linkedin_url?{linkedin_url:person.publicLinkedinUrl||person.linkedin_url}:{})});
  const output=object(found.output),raw=object(found.raw),record=object(raw.data||raw),email=String(output.email||record.email||'').trim().toLowerCase();
  if(!email)return result('not_found','Treg returned no work email for this buyer.');
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@')[1]!==domain||/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/.test(email))return result('unconfirmed','The result was not a personal work email on this company domain.');
+ const personal=/@(gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|live\.com|yahoo\.[a-z.]+|icloud\.com|proton\.me|protonmail\.com|aol\.com)$/i.test(email);
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.split('@')[1]!==domain&&!personal||/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/.test(email))return result('unconfirmed','The result was not a personal work email on this company domain.');
  const returnedName=output.full_name||output.fullName||record.full_name||record.fullName||[output.first_name||record.first_name,output.last_name||record.last_name].filter(Boolean).join(' ');
+ if(personal&&identity(returnedName)!==identity(name))return result('unconfirmed','Personal email requires exact returned person ownership.');
  if(returnedName&&identity(returnedName)!==identity(name))return result('unconfirmed','Treg returned a different buyer identity.');
  const returnedProfile=record.employee_linkedin||record.linkedin_url||record.linkedin;
  const expectedProfile=person.publicLinkedinUrl||person.linkedin_url;
@@ -62,7 +64,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  if(returnedEmail&&returnedEmail!==email)return result('unconfirmed','Verification returned a different email address.');
  const verdict=String(v.status||v.result||r.result||r.status||'').toLowerCase();
  const flags=[v.is_accept_all,v.accept_all,r.is_accept_all,r.accept_all];
- const unsafe=flags.some(x=>x===true||x==='true')||[v,r].some(x=>x.is_disposable===true||x.is_free===true||x.is_role===true||x.block===true);
+ const unsafe=flags.some(x=>x===true||x==='true')||[v,r].some(x=>x.is_disposable===true||!personal&&x.is_free===true||x.is_role===true||x.block===true);
  if(!['valid','deliverable'].includes(verdict)||unsafe||!flags.some(x=>x===false||x==='false'))return result(task&&['pending','processing','unknown',''].includes(verdict)?'processing':'unconfirmed','Mailbox verification is pending or inconclusive. No recipient was approved.');
  await guard();const checkedAt=new Date().toISOString();
  const evidence={status:'valid',deliverability:'deliverable',checked_at:checkedAt,provider:'Treg',served_by:checked._treg?.provider||'bounceban'};
@@ -73,11 +75,11 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   await guard();
   const contacts=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name,title:person.title,work_email:email,email_status:'verified',source:'treg',linkedin_url:expectedProfile}]);
   const contact=contacts[0];if(!contact)throw fail('Verified Treg contact could not be saved.');
-  await env.DB.prepare("UPDATE crm_contacts SET email_status='verified',email_type='work',match_confidence='verified',verification_provider='Treg',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(checkedAt,checkedAt,contact.id,context.workspaceId,companyId).run();
+  await env.DB.prepare("UPDATE crm_contacts SET email_status='verified',email_type=?,match_confidence='verified',verification_provider='Treg',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(personal?'personal':'work',checkedAt,checkedAt,contact.id,context.workspaceId,companyId).run();
   await appendCrmActivity(env.DB,context,{companyId,contactId:contact.id,type:'contact.enriched',summary:'Treg verified a named buyer’s work email',metadata:{provider:'Treg',call_ids:callIds,cost_micro:total}});
   return {...contact,email_status:'verified',verification_provider:'Treg',verified_at:checkedAt};
  });
- return {...result('verified','Work email verified.'),contact:await save(email,evidence),verification:evidence};
+ return {...result('verified','Work email verified.'),contact:{...await save(email,evidence),email_type:personal?'personal':'work',external_person_id:person.id},verification:evidence};
  }; // Email verification is independent of profile and phone availability.
  const emailResult=existingContact?{...result('verified','Saved company email reused.'),contact:existingContact,cached:true}:includeEmail?await emailLookup():result('not_requested','Paid email search is off.');
  if(!dataLookup)return emailResult;

@@ -527,7 +527,7 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async (_company,person,options)=>{calls.push(options.phoneLookup?'apollo-phone':'apollo-email');return {ok:true,contact:{name:person.name,...(options.phoneLookup?{phone_number:'+371 2000 0000'}:{work_email:'marta.berzina@example.lv'})}};}},
     fetchImpl:async(url)=>{
-      const target=String(url);calls.push(target.includes('approved-workflow')?'approval':target.includes('/status?')?'hunter-status':target.includes('find-email')?'hunter-finder':'hunter-verifier');
+      const target=String(url);calls.push(target.includes('approved-workflow')?'approval':target.includes('/status?')?'hunter-status':target.includes('find-email')?'hunter-finder':target.includes('verify-email')?'hunter-verifier':'public-research');
       if(target.includes('approved-workflow'))return {ok:true,json:async()=>({status:'manual',config:{buyers:{confirmContacts:false}}})};
       if(target.includes('/status?'))return {ok:true,json:async()=>({providers:[{provider:'hunter',source:'customer'}]})};
       if(target.includes('find-email'))return {ok:true,json:async()=>({email:'marta.berzina@example.lv'})};
@@ -541,7 +541,7 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.deepEqual(calls,[]); // Free-first automation never initiates a provider credit request.
+  assert.ok(calls.every(call=>call==='public-research')); // Public checks may run; no paid provider may execute.
   assert.equal(Object.keys(candidate.people[0].hunterChecks||{}).length,0);
   assert.equal(candidate.people[0].flowEmailCompletedFor,'');
   assert.equal(candidate.people[0].flowPhoneCompletedFor,'');
@@ -1249,7 +1249,7 @@ test('Save buyer saves in CRM, survives reload, and Unsave preserves CRM history
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].kept,true);assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].kept,true);
  context.__renderPipeline();const html=context.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/data-keep-buyer[^>]*aria-pressed="false"[^>]*disabled/);assert.match(html,/Select &amp; proceed/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
+ assert.match(html,/data-keep-buyer[^>]*aria-pressed="false"[^>]*disabled/);assert.match(html,/Proceed/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
  assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
 test('Save buyer fails closed when CRM save fails',async()=>{
@@ -1332,7 +1332,7 @@ test('ranked buyer controls retain the original candidate index after ranking cl
  ctx.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/jane'}]}]});
  ctx.__renderPipeline();
  const html=ctx.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/data-review-linkedin="example.com" data-person-index="0"/);
+ assert.match(html,/data-recheck-buyer="example.com" data-person-index="0"/);
  assert.doesNotMatch(html,/data-person-index="-1"/);
 });
 
@@ -1374,7 +1374,7 @@ test('a rejected official source persists and stops a cached listing from showin
  await assert.rejects(ctx.__confirmPublicBuyerSource(candidate,person),/did not confirm/);
  assert.equal(person.publicEmailSourceCheck.status,'failed');
  ctx.__renderPipeline();const html=ctx.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/Official email source needs rechecking/);assert.match(html,/Recheck public source/);
+ assert.match(html,/Official email source needs rechecking/);assert.match(html,/data-recheck-buyer/);
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].publicEmailSourceCheck.status,'failed');
@@ -1458,7 +1458,7 @@ test('default contact research attempts all ten, retains four recommendations an
  const roundtrip=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(roundtrip.publicResearch.researchedPersonIds.length,10);assert.equal(roundtrip.people[0].gmailCandidates.length,3);
  queries.length=0;assert.equal(await context.__findPublicProspectContacts('example.com',{personIds:['p7'],force:true}),true);
  c=context.__discoveryState().selectedProspects[0];assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,10);assert.ok(queries.some(q=>q.includes('Anna Hotel')));assert.ok(!queries.some(q=>/Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|India|Juliet/.test(q)));
- const before=queries.length;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.equal(queries.length,before);
+ const before=queries.length;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.ok(queries.slice(before).every(query=>!/Anna (Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliet)/.test(query)),'Entry may resume missing company evidence while completed person checks are reused');
 });
 
 test('one failed contact source does not prevent research for the other nine and retry skips completed checks',async()=>{
@@ -2134,7 +2134,7 @@ test('the Buyers page keeps four existing cards without a separate published-con
  assert.equal(dom.window.document.querySelectorAll('.published-company-contacts').length,0);
  assert.equal(dom.window.document.querySelectorAll('.selected-prospect-person').length,4);
  assert.equal(dom.window.document.querySelectorAll('[data-prospect-enrich-email]').length,4);
- for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'Confirm data');
+ for(const button of dom.window.document.querySelectorAll('[data-prospect-enrich-email]'))assert.equal(button.textContent,'E-mail');
  assert.equal(candidate.buyerDiscovery.companyContacts[0].publicEmail,'staff@northstar.com');dom.window.close();
 });
 

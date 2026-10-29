@@ -1444,7 +1444,7 @@ async function openVerifiedBuyerScripts(choice){
    if(!active())return false;
    q('outreach-linkedin')?.scrollIntoView?.({block:'center',behavior:'smooth'});q('outreach-linkedin')?.focus?.();return true;
  }
- const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(c.work_email||c.normalized_email||'').toLowerCase().endsWith('@'+choice.domain));if(!contact)return false;
+ const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.())));if(!contact)return false;
  const target=(outreach.items||[]).find(i=>i.domain===choice.domain),local=target?.selectedPersonId===person.id&&target.channel==='email'?target:LeadIntelOutreach.savedBuyerDraft(outreach,candidate.domain,person.id,'email');
  const stamp=JSON.stringify(local);let saved=null;
  if(!local?.drafts?.emailBody?.trim()){
