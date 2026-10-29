@@ -133,7 +133,7 @@ const boundedDiscoveryRuntime = [
   'function rankedCheckedCompanies(){ function companyCandidateCardHtml( company-other-results Show other companies · shortlist-display=20261020-v1',
   'const deferredMentions= const followUpProfile= function renderSearchPreferences() company-search-preferences profileForQueries.searchFeedback= search-relevance=20261020-v1',
   'all-style-facts=20261022-v1',
-  'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
+  'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready >Proceed data-recheck-buyer >E-mail >Phone async function recheckBuyerContact( Researching available free sources personIds:[String(person.id)],force:true A confirmed company or personal email for this person',
   'buyer-selection=20261005-bridge-v1 function selectedEmailBuyer( Synchronization conflict: recipient selection was not saved. scriptBuyer:choice,activeJourneyStage:6,visibleStep:6 data-buyer-selection-check await loadOutreachModules();',
   'const supplied=LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows) buyerResearchCandidates automatic contact research for all retained people top 4 ranked recommendations Contact checks complete: data-research-buyer data-research-remaining Unverified email patterns Profile matched automatically Phone source needs rechecking function matchBuyerRoleEvidence( publicPhoneSourceCheck',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
