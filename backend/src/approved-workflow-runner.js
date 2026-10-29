@@ -1,3 +1,4 @@
+import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
 import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
@@ -15,7 +16,7 @@ import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.j
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities,fetchDirectPublicPage,readPublicBuyerPage} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain,getCrmCompany} from './crm.js';
-import {reviewWorkspaceBuyerEvidence,searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
+import {reviewWorkspaceBuyerEvidence,searchWorkspaceWeb,searchWorkspaceBuyerContact,generateWorkspaceResearch} from './ai-routes.js';
 import {enrichCrmContact} from './crm-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
 const discovery=globalThis.LeadIntelDiscovery;
@@ -34,40 +35,32 @@ async function search(env,workspaceId,query,guard){
 }
 async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,accountability){
   const rows=[],issues=[],providerStatus={firecrawl:{status:'pending',results:0,queries:0,failures:[]},grounded:{status:'pending',results:0},identity:{status:'pending',results:0}};
-  const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const url='https://api.firecrawl.dev/v2/search';
-  const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
+  const sourceSearch=createBuyerSourceSearch(env,workspaceId,{guard,observe:entry=>discovery.recordBuyerResearchTool(accountability,entry)});
   const plan=discovery.buyerResearchPlan(candidate,{decisionMakers:roles.join('; ')});
   for(const query of plan.queries.slice(0,6)){
     await guard();
     try{
-      const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query,limit:10,scrapeOptions:{formats:['markdown']}})});
-      const found=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];rows.push(...found.map(row=>({...row,buyerSource:'firecrawl'})));providerStatus.firecrawl.results+=found.length;discovery.recordBuyerResearchTool(accountability,{provider:'firecrawl',operation:'search',status:'succeeded',results:found.length});
-    }catch(error){discovery.recordBuyerResearchTool(accountability,{provider:'firecrawl',operation:'search',status:'failed',reason:'Buyer identity search failed'});issues.push(error.message);providerStatus.firecrawl.failures.push({message:error.message,query});}
+      const found=await sourceSearch(query,{limit:10});rows.push(...found);providerStatus.firecrawl.results+=found.length;providerStatus.firecrawl.sources=[...new Set([...(providerStatus.firecrawl.sources||[]),...(found.searchProviders||[]),...found.map(row=>row.searchProvider)])];
+    }catch(error){issues.push(error.message);providerStatus.firecrawl.failures.push({message:error.message,query});}
     providerStatus.firecrawl.queries++;await guard();
   }
   await guard();
   providerStatus.firecrawl.status=providerStatus.firecrawl.failures.length===Math.min(6,plan.queries.length)?'unavailable':providerStatus.firecrawl.failures.length?'partial':'complete';
   try{const grounded=await searchWorkspaceWeb(env,workspaceId,plan.followUp);discovery.recordBuyerResearchTool(accountability,{provider:'grounded',operation:'search',status:grounded.status==='complete'?'succeeded':'failed',results:(grounded.results||[]).length});rows.push(...(grounded.results||[]).map(row=>({...row,buyerSource:'grounded'})));providerStatus.grounded={status:grounded.status==='complete'?'complete':'unavailable',results:(grounded.results||[]).length};if(grounded.status!=='complete')issues.push('Grounded buyer discovery unavailable');}catch(error){discovery.recordBuyerResearchTool(accountability,{provider:'grounded',operation:'search',status:'failed',reason:'Grounded buyer discovery unavailable'});issues.push('Grounded buyer discovery unavailable');providerStatus.grounded={status:'failed',results:0,failures:[{message:error.message}]};}
   await guard();
-  const searchIdentityRows=async query=>{
-    await guard();
-    try{const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query,limit:8,scrapeOptions:{formats:['markdown']}})});
-    await guard();const found=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];discovery.recordBuyerResearchTool(accountability,{provider:'firecrawl',operation:'search',status:'succeeded',results:found.length});return found;}
-    catch(error){discovery.recordBuyerResearchTool(accountability,{provider:'firecrawl',operation:'search',status:'failed',reason:'Public contact search unavailable'});throw error;}
-  };
+  const searchIdentityRows=query=>sourceSearch(query,{limit:8});
   const buyerProfile={decisionMakers:plan.roles.join('; '),companyDomain:candidate.domain};
   const initial=discovery.tracePublicBuyers(rows,candidate.company,buyerProfile),coverage=discovery.buyerCoveragePlan(initial.people,buyerProfile,candidate);
   let coverageFailed=0,coverageResults=0;
-  for(let i=0;i<coverage.queries.length;i+=2){await guard();const outcomes=await Promise.allSettled(coverage.queries.slice(i,i+2).map(searchIdentityRows));for(const outcome of outcomes){if(outcome.status==='fulfilled'){rows.push(...outcome.value.map(row=>({...row,buyerSource:'firecrawl'})));coverageResults+=outcome.value.length;}else{coverageFailed++;issues.push('Missing buyer-function follow-up unavailable');}}}
+  for(let i=0;i<coverage.queries.length;i+=2){await guard();const outcomes=await Promise.allSettled(coverage.queries.slice(i,i+2).map(searchIdentityRows));for(const outcome of outcomes){if(outcome.status==='fulfilled'){rows.push(...outcome.value.map(row=>({...row,buyerSource:row.searchProvider||'firecrawl'})));coverageResults+=outcome.value.length;}else{coverageFailed++;issues.push('Missing buyer-function follow-up unavailable');}}}
   const coverageFollowUp={status:coverageFailed?'partial':'complete',queries:coverage.queries.length,results:coverageResults,missing:coverage.missing,checkedAt:new Date().toISOString()};
   const trace=discovery.tracePublicBuyers(rows,candidate.company,buyerProfile);
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={}){
+export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={},options={}){
   await discovery.runOfficialContactResearch(candidate,{search,guard,rows,readPage:async(...args)=>{const page=await readPage(...args);for(const entry of page?.researchTrace||[])discovery.recordBuyerResearchTool(candidate.publicResearch?.accountability,entry);return page;}});
-  return discovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+  return discovery.runMandatoryBuyerResearch(candidate,{...options,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
 }
 
 export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
@@ -122,7 +115,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile);
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile,{crossCheck:async person=>{await guard();const result=await searchWorkspaceBuyerContact(env,workspaceId,{company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}});await guard();return result;}});
   candidate.publicResearch={...candidate.publicResearch,checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.publicResearch.accountability?.status!=='complete'||candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
   await guard();

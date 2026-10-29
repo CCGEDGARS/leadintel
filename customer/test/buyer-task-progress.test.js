@@ -13,7 +13,7 @@ function runtime(){
  const candidate={company:'Example Mining',domain:'example.com',website:'https://example.com',market:'Sweden',buyerFit:{purchase:'plant equipment installation project procurement'},people:[]};
  const context={AbortController,Date,console,setTimeout:(fn,delay)=>{timers.set(++timerId,{fn,delay});return timerId;},clearTimeout:id=>timers.delete(id),DISCOVERY_REQUEST_TIMEOUT_MS:25000,
   window:{LeadIntelTaskCentre:centre,LeadIntelFirstPartyResearch:{collectWebsiteEvidence:async()=>{now+=75000;return {pages:[]};}}},
-  LeadIntelDiscovery:D,mainState:()=>({profile:{decisionMakers:'Procurement Director; Engineering Director'}}),canonicalDomain:D.canonicalDomain,showToast:()=>{},saveDiscovery:()=>{},renderAll:()=>{},discovery:{pipeline:[],selectedProspects:[candidate]},LEADINTEL_API:'https://api.example',BUYER_RESEARCH_VERSION:'test',PUBLIC_NAME_CHECK_VERSION:'test',confirmResearchedPublicEmails:async()=>{},crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,
+  LeadIntelDiscovery:D,groundedGeminiPersonSearch:async()=>({status:'not_configured',provider:'gemini',results:[],reason:'Fixture has no Google connection'}),mainState:()=>({profile:{decisionMakers:'Procurement Director; Engineering Director'}}),canonicalDomain:D.canonicalDomain,showToast:()=>{},saveDiscovery:()=>{},renderAll:()=>{},discovery:{pipeline:[],selectedProspects:[candidate]},LEADINTEL_API:'https://api.example',BUYER_RESEARCH_VERSION:'test',PUBLIC_NAME_CHECK_VERSION:'test',confirmResearchedPublicEmails:async()=>{},crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,
   bridge:()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>({ok:true,people:[]})}),
   searchBuyerPublicPages:async()=>{if(searches++%4===0)now+=25000;return [];},
   fetchBuyerResearch:async()=>{now+=60000;const task=centre.list()[0];snapshots.push({task,card:{...candidate.buyerResearchProgress},attention:buildAttentionItems({tasks:centre.list(),workspaceStarted:false,now})});return {ok:true,json:async()=>({results:[]})};},
@@ -97,7 +97,7 @@ test('public contact runner emits source checkpoints while retaining independent
  const owner={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:[person]};
  const reports=[];let at=Date.now();
  class Clock extends Date{static now(){return at;}}
- const context={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,Date:Clock,URL,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,PUBLIC_NAME_CHECK_VERSION:'test',
+ const context={LeadIntelDiscovery:D,groundedGeminiPersonSearch:async()=>({status:'not_configured',provider:'gemini',results:[],reason:'Fixture has no Google connection'}),canonicalDomain:D.canonicalDomain,Date:Clock,URL,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,PUBLIC_NAME_CHECK_VERSION:'test',
   discovery:{selectedProspects:[owner]},mainState:()=>({}),bridge:()=>({workspace:{id:'workspace'}}),confirmResearchedPublicEmails:async()=>{},crmAuthenticated:()=>false,saveDiscovery:()=>{},renderPipeline:()=>{},renderCandidates:()=>{},showToast:()=>{},
   searchBuyerEmailPatterns:async(candidate,rows,signal,{onProgress})=>{
    candidate.people[0].emailResearch={status:'partial',searches:1,failed:0};onProgress();
@@ -165,7 +165,7 @@ function publicCrmRuntime(boundary){
  const person={id:'ada',name:'Ada Andersson',title:'Procurement Director',organization:'Old company',publicLinkedinUrl:'https://linkedin.com/in/ada-andersson'};
  const owner={company:'Old company',domain:'example.com',buyerRoles:'Procurement Director',people:[person]};
  const calls=[],events=[],parent=new AbortController();let savesAfterSwitch=0;
- const context={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,Date,URL,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,PUBLIC_NAME_CHECK_VERSION:'test',CustomEvent:class{},
+ const context={LeadIntelDiscovery:D,groundedGeminiPersonSearch:async()=>({status:'not_configured',provider:'gemini',results:[],reason:'Fixture has no Google connection'}),canonicalDomain:D.canonicalDomain,Date,URL,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,PUBLIC_NAME_CHECK_VERSION:'test',CustomEvent:class{},
   discovery:{selectedProspects:[owner]},mainState:()=>({}),confirmResearchedPublicEmails:async()=>{},crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,
   saveDiscovery:()=>{if(bridge.workspace.id!=='old-workspace')savesAfterSwitch++;},renderPipeline:()=>{},renderCandidates:()=>{},showToast:()=>{},
   window:{LeadIntelCrm:{mapContacts:people=>people,mapDiscoveryCandidateToCrm:c=>({company:c.company})},dispatchEvent:event=>events.push(event)},
