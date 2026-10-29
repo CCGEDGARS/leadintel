@@ -18,7 +18,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
 test('top actions mount once; Edit unlocks fields, Save persists exact text, Cancel restores baseline',async()=>{
  const {w,document,item,saved}=mounted(),q=id=>document.getElementById(id);
  for(const id of ['mw-save-message','mw-edit-message','mw-rewrite-message','mw-restore-original'])assert.equal(document.querySelectorAll('#'+id).length,1);
- assert.ok(q('mw-save-message').compareDocumentPosition(q('outreach-email-body'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.ok(q('mw-tools-drawer').contains(q('mw-save-message')));assert.ok(q('outreach-email-body').compareDocumentPosition(q('mw-save-message'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
  assert.equal(q('outreach-email-body').readOnly,true);q('mw-edit-message').click();assert.equal(q('outreach-email-body').readOnly,false);assert.equal(q('approve-outreach').disabled,true);
  q('outreach-email-subject').value='  Subject spacing  ';q('outreach-email-body').value='  Exact message\n\nTrailing spaces  ';q('outreach-email-body').dispatchEvent(new w.Event('input'));
  assert.equal(saved.length,0);assert.equal(item().drafts.emailBody,'Existing working message');q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.equal(saved[0].drafts.emailBody,'  Exact message\n\nTrailing spaces  ');assert.equal(saved[0].drafts.emailSubject,'  Subject spacing  ');assert.equal(q('outreach-email-body').readOnly,true);assert.equal(q('approve-outreach').disabled,false);

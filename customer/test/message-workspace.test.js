@@ -51,7 +51,7 @@ test('composer mounts once, preserves canonical fields/listeners and keeps setti
 test('sender settings separate meeting options and show business facts once',()=>{
  const {document}=mounted();
  assert.ok(document.getElementById('mw-meeting-options'));
- assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.className,'mw-message-footer');
+ assert.equal(document.getElementById('mw-meeting-options').open,false);assert.equal(document.getElementById('mw-meeting-options').nextElementSibling.id,'mw-tools-drawer');
  assert.ok(!document.getElementById('mw-settings').contains(document.getElementById('message-meetingDateOne')));
  assert.equal(document.getElementById('message-meetingDateOne').closest('label').hidden,true);
  assert.equal(document.getElementById('message-pitch-preview').hidden,true);
@@ -292,11 +292,11 @@ test('a failed style change identifies the displayed draft rather than claiming 
  w.LeadIntelMessageWorkspace.render(document,{...base,busy:true});assert.match(document.getElementById('mw-style-help').textContent,/Preparing NLP/);
 });
 
-test('moving language tools below sender settings retains one editor and language control listeners',()=>{
+test('aligned language tools above the draft retain one editor and language control listeners',()=>{
  const {document,w}=mounted();w.LeadIntelMessageTranslations=require('../message-translations.js');w.eval(read('message-translation-ui.js'));
  let saves=0;w.LeadIntelMessageTranslationUI.mount(document,{save:()=>saves++,target(){},activate(){},restore(){},translate(){}});
  const settings=document.getElementById('mw-settings'),languages=document.getElementById('mw-language-tools');
- assert.equal(settings.nextElementSibling,languages);assert.equal(languages.parentElement.id,'mw-sender-card');
+ assert.equal(languages.parentElement,document.querySelector('.mw-editor .outreach-drafts'));assert.ok(languages.compareDocumentPosition(document.querySelector('.mw-editor-head'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
  document.getElementById('message-save-language').click();assert.equal(saves,1);
  w.LeadIntelMessageTranslationUI.mount(document,{});assert.equal(document.querySelectorAll('#mw-language-tools').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
