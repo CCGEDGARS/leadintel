@@ -10,17 +10,17 @@ test('a saved profile update stays green without misrepresenting email verificat
  const {context,person,candidate}=runtime();
  person.contactData={version:1,domain:candidate.domain,personId:person.id,status:'updated',checkedAt:'2026-10-21T18:00:00Z',profile:{status:'provider_reported',city:'Riga'},phone:{status:'not_requested'}};
  const html=context.prospectContactControls(candidate,person);
- assert.match(html,/class="[^"]*buyer-data-updated[^"]*"[^>]*data-prospect-enrich-email[^>]*>Data updated ✓/);
+ assert.match(html,/class="[^"]*buyer-confirm-needed[^"]*"[^>]*data-prospect-enrich-email[^>]*>E-mail/);
  assert.match(html,/data-prospect-enrich-email[^>]*aria-pressed="false"/);
  assert.match(html,/data-keep-buyer[^>]*disabled/);
 });
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
- assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm data','Confirm phone','Confirm LinkedIn','Select &amp; proceed'])assert.ok(html.includes(label));
+ assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['E-mail','Phone','Recheck','Proceed'])assert.ok(html.includes(label));
  assert.ok(!html.includes('data-save-buyer-only'));assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic workflow still allows explicit manual data confirmation without claiming verification',()=>{
- const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="false"[^>]*>Confirm data/);assert.match(html,/verification is required/);
+ const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="false"[^>]*>E-mail/);assert.match(html,/confirmed company or personal email/);
 });
 test('LinkedIn confirmation applies only to the reviewed exact profile',()=>{
  const {context,person}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;assert.equal(context.buyerLinkedInStatus(person),'Manually reviewed');person.publicLinkedinUrl='https://linkedin.com/in/another';assert.equal(context.buyerLinkedInStatus(person),'Public match');
@@ -45,7 +45,7 @@ test('stale workspace/profile review cannot confirm a changed match',async()=>{
 
 test('save and proceed stays disabled until verified company email exists',()=>{
  const {context,person,candidate}=runtime();
- assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Select &amp; proceed/);
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Proceed/);
  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});
@@ -63,7 +63,7 @@ test('save and proceed awaits save, stops on failure and never toggles an alread
 
 test('explicit automatic selection overrides a retained manual policy for email controls',()=>{
  const {context,person,candidate}=runtime(false);context.document.querySelector=()=>({value:'automatic'});
- assert.match(context.prospectContactControls(candidate,person),/aria-pressed="false"[^>]*>Confirm data/);
+ assert.match(context.prospectContactControls(candidate,person),/aria-pressed="false"[^>]*>E-mail/);
 });
 
 test('ranked display copies keep actions attached to the original buyer index',()=>{
@@ -77,7 +77,7 @@ test('ranked display copies keep actions attached to the original buyer index',(
 test('confirmed LinkedIn never unlocks the email proceed button or email/phone confirmation',async()=>{
  const {context,person,candidate}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;
  const html=context.prospectContactControls(candidate,person);
- assert.match(html,/data-keep-buyer[^>]*disabled>Select &amp; proceed/);
+ assert.match(html,/data-keep-buyer[^>]*disabled>Proceed/);
  assert.match(html,/class="secondary-btn small buyer-confirm-needed"[^>]*data-prospect-enrich-email/);
  assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
  Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},saveBuyerLinkedInReview:async()=>{throw Error('LinkedIn must stay separate');},startLinkedInBuyerMessage:async()=>{throw Error('LinkedIn must stay separate');}});
@@ -101,7 +101,7 @@ test('proceed keeps its label through ready, selecting and selected states with 
   context.loadMeta=()=>state==='selected'?{selectedEmailBuyer:{workspaceId:'w1',domain:candidate.domain,personId:person.id}}:{};
   if(state==='selecting')context.buyerSelectionPending.add(person.id);
   const html=context.prospectContactControls(candidate,person);
-  assert.match(html,/data-keep-buyer[^>]*>Select &amp; proceed/);
+  assert.match(html,/data-keep-buyer[^>]*>Proceed/);
   assert.doesNotMatch(html,/Selected ✓ · Continue below|Selecting…/);
   if(state==='selected')assert.match(html,/data-buyer-selection-check/);
  }
@@ -114,26 +114,26 @@ test('unconfirmed public listing cannot unlock proceed even under public confirm
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
 });
 
-test('Confirm LinkedIn opens review even for an already verified buyer and waits for Proceed',async()=>{
+test('Recheck opens review even for an already verified buyer and waits for Proceed',async()=>{
  const person={id:'p1',name:'Sam Buyer',organization:'Example',title:'Procurement Director',linkedin_url:'https://linkedin.com/in/sam',linkedinConfirmedUrl:'https://linkedin.com/in/sam'},candidate={domain:'example.com',company:'Example',people:[person]};let dialogs=0,starts=0;const handlers={};const dialog={querySelector:selector=>({addEventListener:(_,f)=>{handlers[selector]=f;},value:'',textContent:''}),close(){}};
  const ctx={discovery:{selectedProspects:[candidate]},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'w1'}}),buyerReviewDialog:()=>{dialogs++;return dialog;},esc:String,crmAuthenticated:()=>true,saveBuyerLinkedInReview:async()=>true,startLinkedInBuyerMessage:async()=>{starts++;return true;},showToast(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function reviewBuyerLinkedIn('),source.indexOf('function selectedEmailBuyer(')),ctx);await ctx.reviewBuyerLinkedIn(candidate.domain,0);assert.equal(dialogs,1);assert.equal(starts,0);await handlers['[data-review-message]']({target:{disabled:false}});assert.equal(starts,1);
 });
 
 
-test('confirmed email keeps green eligibility while Confirm data remains available',()=>{
+test('confirmed email keeps green eligibility while E-mail remains available',()=>{
  const {JSDOM}=require('jsdom');
  for(const automatic of [false,true]){
   const {context,person,candidate}=runtime(automatic);
   context.window.LeadIntelAdditionalContacts={label:()=> 'Find email with additional services'};
   let dom=new JSDOM(context.prospectContactControls(candidate,person));
-  assert.equal(dom.window.document.querySelector('[data-prospect-enrich-email]').textContent,'Confirm data');dom.window.close();
+  assert.equal(dom.window.document.querySelector('[data-prospect-enrich-email]').textContent,'E-mail');dom.window.close();
   context.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');
   vm.runInContext("buyerConfirmationLevel='public_confirmed';confirmationPolicyWorkspace='w1';",context);
   const saved=JSON.parse(JSON.stringify({name:person.name,work_email:'anna@example.com',email_status:'public_confirmed',verification_provider:'Public source',public_email_url:'https://example.com/team',verified_at:new Date().toISOString()}));
   context.enrichmentResults.set(person.id,{contact:saved});
   dom=new JSDOM('<style>'+fs.readFileSync(require.resolve('../discovery.css'),'utf8')+'</style>'+context.prospectContactControls(candidate,person));
   const button=dom.window.document.querySelector('[data-prospect-enrich-email]');
-  assert.equal(button.textContent,'Confirm data');assert.equal(button.getAttribute('aria-pressed'),'true');
+  assert.equal(button.textContent,'E-mail');assert.equal(button.getAttribute('aria-pressed'),'true');
   assert.equal(dom.window.getComputedStyle(button).backgroundColor,'rgb(13, 100, 83)');
   assert.equal(dom.window.document.querySelector('[data-keep-buyer]').disabled,false);dom.window.close();
  }
@@ -142,12 +142,12 @@ test('an unconfirmed public address or another person’s saved email never pain
  const {context,person,candidate}=runtime();person.publicEmail='anna@example.com';person.publicEmailUrl='https://example.com/team';
  context.enrichmentResults.set('different-person',{contact:{work_email:'other@example.com',email_status:'verified'}});
  const html=context.prospectContactControls(candidate,person);
- assert.match(html,/data-prospect-enrich-email[^>]*>Confirm data<\/button>/);
+ assert.match(html,/data-prospect-enrich-email[^>]*>E-mail<\/button>/);
  assert.doesNotMatch(html,/buyer-email-confirmed|>Email confirmed</);
 });
 
-test('Confirm data stays available after email confirmation and data-updated never grants an email recipient',()=>{
+test('E-mail stays available after email confirmation and data-updated never grants an email recipient',()=>{
  const {context,person,candidate}=runtime();context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
- let html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>Confirm data/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*disabled/);
- context.enrichmentResults.clear();person.contactData={status:'updated',profile:{city:'Riga'}};html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>Data updated/);assert.match(html,/data-keep-buyer[^>]*disabled/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
+ let html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*disabled/);
+ context.enrichmentResults.clear();person.contactData={status:'updated',profile:{city:'Riga'}};html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.match(html,/data-keep-buyer[^>]*disabled/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
 });

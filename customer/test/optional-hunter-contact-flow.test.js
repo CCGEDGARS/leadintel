@@ -5,7 +5,8 @@ function flow({enabled=false,cached=false,automatic=false,approved=true}={}){
  if(cached)results.set('p',{contact:{work_email:'anna@example.com',email_status:'verified'}});
  const ctx={LEADINTEL_API:'https://api.example',console,Date,Promise,CONTACT_CONFIRM_VERSION:'v11',enrichmentPending:new Set(),enrichmentResults:results,LeadIntelDiscovery:{qualifyBuyer:()=>({eligible:true}),buyerQualityAssessment:()=>({researchPassed:true}),buyerResearchCoveragePassed:()=>true},crmCompanyByDomain:()=>null,crmAuthenticated:()=>true,personKey:()=> 'p',renderAll(){},buyerAutomaticMode:()=>false,verifiedBuyerEmail:(c,p,x)=>x.email_status==='verified'?x.work_email:'',resolveApolloBuyer:async(c,p)=>p,ensureCrmCompany:async()=>({id:'c'}),canonicalDomain:x=>x,saveDiscovery(){},refreshCrmState:async()=>{},showToast(){},CustomEvent:class{},window:{dispatchEvent(){},LeadIntelDialogs:{confirm:async()=>{calls.push('credit-approval');return approved;}},LeadIntelCrm:{mapContacts:()=>[{}]}},bridge:()=>({workspace:{id:'w'},enrichCrmContact:async()=>{calls.push('apollo');return {ok:true,contact:{work_email:'anna@example.com',email_status:'verified'}};},saveCrmContacts:async()=>({ok:true})}),fetch:async url=>{calls.push(String(url));return {ok:true,json:async()=>String(url).includes('approved-workflow')?{status:approved?'automatic':'manual',config:{buyers:{confirmContacts:true}}}:String(url).includes('verify-email')?{status:'valid',deliverability:'deliverable',checked_at:new Date().toISOString()}:{providers:[{provider:'hunter',source:'customer',metadata:{additional_verification_enabled:enabled}}]}};}};
  vm.runInNewContext(source.slice(source.indexOf('async function confirmBuyerContact('),source.indexOf('const contactFlowPromises=')),ctx);
- return {ctx,calls,run:()=>ctx.confirmBuyerContact(candidate,0,{automatic}),person};
+ ctx.discovery={selectedProspects:[candidate]};
+ return {ctx,calls,candidate,run:()=>ctx.confirmBuyerContact(candidate,0,{automatic}),person};
 }
 test('connected Hunter stays unused by default and Apollo runs first',async()=>{const f=flow();assert.equal(await f.run(),true);assert.deepEqual(f.calls.slice(0,2),['credit-approval','apollo']);assert.equal(f.calls.some(c=>c.includes('/hunter/')),false);assert.equal(f.person.contactVerification.status,'verified');});
 test('verified cached contacts avoid another Apollo lookup',async()=>{const f=flow({cached:true});await f.run();assert.equal(f.calls.includes('apollo'),false);assert.equal(f.calls.some(c=>c.includes('/hunter/')),false);});
@@ -34,7 +35,7 @@ test('qualification holds block both paid providers',async()=>{
 });
 test('additional email services do not intercept an explicitly approved phone lookup',async()=>{
  const f=flow();f.ctx.window.LeadIntelAdditionalContacts={};
- await f.ctx.confirmBuyerContact({domain:'example.com',people:[f.person]},0,{kind:'phone'});
+ await f.ctx.confirmBuyerContact(f.candidate,0,{kind:'phone'});
  assert.equal(f.calls.includes('apollo'),true);assert.equal(f.calls.includes('credit-approval'),true);
 });
 

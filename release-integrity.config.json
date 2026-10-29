@@ -818,8 +818,10 @@
         "buyer-actions=20261005-email-gate-v1",
         "buyer-confirm-needed",
         "buyer-proceed-ready",
-        "Select &amp; proceed",
-        "LinkedIn messages are created inside Confirm LinkedIn."
+        ">Proceed",
+        "data-recheck-buyer",
+        ">E-mail",
+        ">Phone"
       ],
       "notContains": [
         "!verified&&!linkedinReady"
@@ -4160,7 +4162,7 @@
         "Read this source first",
         "Official sources read",
         "data-official-contact-url",
-        "if(candidate.buyerDiscovery?.checkedAt||candidate.publicResearch?.checkedAt)continue;"
+        "if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;"
       ]
     },
     {
@@ -5356,6 +5358,18 @@
         "emailOnly",
         "trigger!=='research_completed'",
         "including in manual delivery mode"
+      ]
+    },
+    {
+      "id": "buyer-actions-free-entry-personal-email",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function recheckBuyerContact(",
+        "Researching available free sources",
+        "personIds:[String(person.id)],force:true",
+        "A confirmed company or personal email for this person"
       ]
     }
   ],

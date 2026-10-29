@@ -136,3 +136,21 @@ test('one missing buyer cannot loosen the automatic full-roster research gate',(
  const P=require('../additional-contact-policy.js'),c=fixture();c.people.pop();
  assert.equal(P.readiness(c,c.people[0]).eligible,true);assert.equal(P.readiness(c,c.people[0],{automatic:true}).eligible,false);assert.deepEqual(P.targets(c),[]);
 });
+
+for(const channel of ['email','phone'])test(`manual ${channel} searches only its requested Treg channel`,async()=>{
+ const f=runtime();await f.loaded;
+ f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled:true,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified'}}};};
+ await f.w.LeadIntelAdditionalContacts.load();
+ await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel,dataLookup:channel==='phone'});
+ const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);
+ const body=JSON.parse(requests[0][1].body);assert.equal(body.phone_approved,channel==='phone');assert.equal(body.email_lookup,channel==='email');f.close();
+});
+
+for(const phoneEnabled of [false,true])test(`automatic Treg phone lookup follows Setup switch ${phoneEnabled?'ON':'OFF'}`,async()=>{
+ const f=runtime();await f.loaded;f.w.LeadIntelDiscovery=D;f.w.LeadIntelOutreachAutomationUI={getPolicy:()=>({mode:'automatic'})};
+ f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified'}}};};
+ await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
+ const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);
+ const body=JSON.parse(requests[0][1].body);assert.equal(body.phone_approved,phoneEnabled);assert.equal(body.email_lookup,true);assert.equal(body.automatic,true);assert.equal(f.calls.includes('confirm'),false);f.close();
+});
+

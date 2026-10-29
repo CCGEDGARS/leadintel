@@ -119,6 +119,13 @@ test('failed phone refresh preserves same-identity paid number and records lates
  const r=await f.mod.findTregWorkEmail({},ctx,candidate,{...person,contactData:prior},'c',{attemptKey:'recover',dataLookup:true,includePhone:true,includeEmail:false},f.deps);
  assert.equal(r.contactData.phone.number,prior.phone.number);assert.equal(r.contactData.phone.source,'earlier-provider');assert.equal(r.contactData.lastAttempt.phone,'error');assert.match(r.contactData.lastAttempt.phoneReason,/limit/i);assert.equal(r.contactData.status,'partial');
 });
+
+test('Treg accepts a deliverable personal mailbox only with exact returned person ownership',async()=>{
+ const find={...finder,output:{email:'anna@gmail.com',full_name:person.name}},verify={...verifier,output:{email:'anna@gmail.com',status:'valid'},raw:{email:'anna@gmail.com',is_free:true,is_accept_all:false}};
+ const f=await fixture({find,verify});const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'personal-a'},f.deps);
+ assert.equal(result.contact?.work_email,'anna@gmail.com');assert.equal(result.contact?.email_type,'personal');assert.equal(result.contact?.external_person_id,person.id);
+ assert.equal(globalThis.LeadIntelContactPolicy.accepted(result.contact,'example.com'),true);
+});
 test('email-only research preserves the separate saved phone failure without a new phone call',async()=>{
  const f=await fixture();f.deps.saveData=async()=>{};const old='2026-10-01T10:00:00Z',p={...person,contactData:{version:1,domain:'example.com',personId:person.id,identityName:person.name,checkedAt:old,phone:{status:'error',reason:'Saved phone attempt failed'}}};
  const r=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'separate',dataLookup:true,includePhone:false,includeEmail:true},f.deps);

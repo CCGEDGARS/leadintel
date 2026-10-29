@@ -26,7 +26,7 @@ test('unsaved and failed-sync selections cannot open the next step',async()=>{
 });
 test('rendered contact controls have one next action and no enrichment checkboxes',()=>{
  const block=source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts('));
- assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/optional phone/);
+ assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/>Recheck</);
  const outreach=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');assert.match(outreach,/find\(p=>p.id===choice\?\.personId\)/);assert.match(outreach,/if\(crmAuthenticated\(\)&&\(!handoffContact/);
 });
 test('pending identity and changed buying roles cannot open Messages even with a verified email',async()=>{
@@ -129,7 +129,7 @@ test('sync conflict keeps confirmed email evidence but disables proceed until re
  h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  vm.runInContext(source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts(')),h.ctx);
  const html=h.ctx.prospectContactControls(h.candidate,h.person);
- assert.doesNotMatch(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/Company email is ready.*synchronization conflict/);
+ assert.doesNotMatch(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/synchronization conflict/);
  const proceed=html.match(/<button[^>]*data-keep-buyer[^>]*>/)[0];assert.match(proceed,/disabled/);
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.ctx.selectedEmailBuyer(),null);assert.equal(h.checks,0);assert.equal(h.events.length,0);
 });

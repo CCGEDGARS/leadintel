@@ -83,7 +83,7 @@
   }
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
-  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,phoneOnly=false,emailOnly=false}={}){
+  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
     const identity=key(candidate,person);if(publicChecking.has(identity))return publicChecking.get(identity);
     const id=workspace(),personId=String(person.id),domain=candidate.domain;
     const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId);
@@ -118,7 +118,7 @@
     })();running.set(identity,task);try{return await task;}finally{running.delete(identity);}
   }
   function savedPhone(candidate,person){return Boolean(adapter?.phone?.(candidate,person)||person.contactData?.phone?.status==='provider_listed'&&person.contactData.phone.number);}
-  async function run(candidate,person,{automatic=false,dataLookup=false,phoneOnly=false,emailOnly=false}={}){
+  async function run(candidate,person,{automatic=false,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
     const identity=key(candidate,person);if(running.has(identity))return running.get(identity);
     const execute=(async()=>{
       const id=workspace(),domain=candidate.domain,personId=person.id,identitySnapshot=JSON.stringify([person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
