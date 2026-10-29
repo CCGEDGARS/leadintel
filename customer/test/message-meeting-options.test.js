@@ -31,3 +31,15 @@ test('meeting insertion preserves existing rich formatting and keeps the previou
  const draft=M.insertDraft(before,'20 min · Europe/Riga\n26 Oct 2026, 10:00','Alex');assert.match(draft.messageHtml,/<strong>Sam<\/strong>/);assert.match(draft.messageHtml,/<ul>/);assert.ok(Rich.matchingHtml(draft.message,draft.messageHtml));
  const item={channel:'email',domain:'example.com',drafts:{emailSubject:before.subject,emailBody:before.message,emailBodyHtml:before.messageHtml},messageStudioDraft:{}};const changed=Editor.apply(item,draft,{templateUpdate:true,origin:'manual'});assert.ok(changed.drafts.emailBodyHtml);const undo=Editor.undoTemplateUpdate(changed);assert.equal(undo.drafts.emailBody,before.message);assert.equal(undo.drafts.emailBodyHtml,Rich.sanitize(before.messageHtml));
 });
+
+test('both calendar connection links use the selected user account flow and protect unfinished edits',()=>{
+ const connected=[],f=fixture({connect:provider=>connected.push(provider),connectionUrl:provider=>'/api/integrations/'+provider+'-calendar/start?workspace_id=mine'}),doc=f.dom.window.document;
+ const google=doc.getElementById('meeting-connect'),microsoft=doc.getElementById('meeting-connect-microsoft');assert.ok(microsoft);assert.equal(google.tagName,'A');assert.match(google.href,/google-calendar\/start/);assert.match(microsoft.href,/microsoft-calendar\/start/);
+ google.click();microsoft.click();assert.deepEqual(connected,['google','microsoft']);f.context.canConnect=false;microsoft.click();assert.equal(connected.length,2);assert.match(doc.getElementById('meeting-status').textContent,/Save or cancel/);
+ assert.match(doc.body.textContent,/app administrator/);assert.ok(doc.querySelector('a[href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"]'));f.dom.window.close();
+});
+test('changing calendar provider clears stale availability and routes all reads to that provider',async()=>{
+ const calls=[];let finish;const pending=new Promise(r=>finish=r),f=fixture({request:async(action,body,provider)=>{calls.push([action,provider]);if(action==='status')return {connected:true,email:provider+'@example.com'};if(action==='calendars')return {calendars:[{id:provider,primary:true}]};return pending;}}),doc=f.dom.window.document;
+ await f.controller.refresh();const check=f.controller.check(),select=doc.getElementById('meeting-provider');assert.ok(select);select.value='microsoft';select.dispatchEvent(new f.dom.window.Event('change'));await new Promise(r=>setTimeout(r,0));finish({slots:[{start:'2026-10-29T12:00:00Z',end:'2026-10-29T12:20:00Z'}],checkedAt:new Date().toISOString()});await check;
+ assert.ok(calls.some(([action,p])=>action==='status'&&p==='microsoft'));assert.equal(doc.querySelectorAll('[data-meeting-slot]').length,0);assert.match(doc.getElementById('meeting-connection').textContent,/microsoft@example.com/);f.dom.window.close();
+});

@@ -688,3 +688,10 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
  #message-studio #mw-language-tools>summary{padding-right:0}
  #message-studio #mw-language-tools>summary .mw-language-quick{position:static;margin-top:12px}
 }
+.meeting-provider-label{display:grid;gap:6px;margin-top:10px;font-size:12px;color:#4d6557}
+#message-studio #meeting-provider{width:100%;max-width:320px;min-height:40px;padding:8px 12px;border:1px solid #cedbd1;border-radius:8px;background:#fff;font:inherit}
+.meeting-actions a.secondary-btn{display:inline-flex;align-items:center;text-decoration:none}
+.meeting-actions a[aria-disabled=true]{opacity:.6;cursor:default}
+.meeting-connection-help{font-size:12px;color:#4d6557}
+.meeting-connection-help>summary{cursor:pointer;font-weight:600}
+.meeting-connection-help p{margin-top:10px}
