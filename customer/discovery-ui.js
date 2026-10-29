@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261028-v2";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261029-v2";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2&buyer-company-actions=20261021-v2&writing-workspace=20261023-v1&rich-text=20261025-v1&skills-writing=20261028-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1098,7 +1098,9 @@ function buyerContactRows(person={},candidate={},result={}){
       const paid=result.request.status,publicNote=row.status==='complete'?' Public-source searches completed without a direct phone.':'';
       return {status:['pending_phone','processing'].includes(paid)?'running':paid==='failed'?'partial':'complete',reason:(paid==='not_found'?'Apollo completed without a usable direct phone.':paid==='failed'?'Phone lookup failed; checks incomplete.':'Apollo phone lookup pending; refresh to check the saved result.')+publicNote,paid:true};
     }
-    if(channel==='phone'&&['error','conflict'].includes(savedData?.lastAttempt?.phone||savedData?.phone?.status))return {status:'partial',reason:savedData?.lastAttempt?.phoneReason||savedData?.phone?.reason||'Paid phone lookup needs review. No new number confirmed.'};
+    const check=person.contactVerification,lookup=check?.lookup,legacyHold=check?.status==='error'&&!lookup&&(check.issues||[]).some(issue=>/Additional-services lookup limit reached|Treg.*(?:error|rejected|limit)/i.test(issue));
+    if(['phone','company'].includes(channel)&&check?.status==='error'&&(legacyHold||lookup?.[channel==='phone'?'phone':'email']))return {status:'partial',reason:'Paid contact checks were blocked or failed; the saved result needs review. '+(check.issues||[]).join(' · ')+(check.checkedAt?' · Saved attempt '+check.checkedAt:'')};
+    if(channel==='phone'&&['error','conflict'].includes(savedData?.lastAttempt?.phone==='not_requested'?savedData?.phone?.status:savedData?.lastAttempt?.phone||savedData?.phone?.status))return {status:'partial',reason:'Last saved phone attempt'+(savedData?.phone?.checkedAt||savedData?.checkedAt?' · '+(savedData.phone.checkedAt||savedData.checkedAt):'')+' · '+(savedData?.lastAttempt?.phoneReason||savedData?.phone?.reason||'Paid phone lookup needs review. No new number confirmed.')};
     if(channel==='gmail'&&row.status==='complete'&&(row.queryLog?.length!==3||row.queryLog.some(entry=>entry.status!=='complete')))return {...row,status:'partial',reason:'Expanded three-search Gmail research needs refreshing'};
     if(channel==='company'&&row.status==='complete'&&person.contactResearch?.checks?.direct_email?.status!=='complete')return {...row,status:'partial',reason:'Mandatory direct-email discovery needs refreshing'};
     return row;
@@ -1862,14 +1864,11 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
     if(!LeadIntelDiscovery.buyerResearchCoveragePassed({...candidate,people:[person]},{allowPartialRoster:true})||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible){showToast('Complete this buyer’s qualification and free research before paid phone lookup.');return false;}
     index=candidate.people.indexOf(person);
     if(window.LeadIntelAdditionalContacts?.policy?.()?.provider==='treg'){
-      await window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:true,channel:'phone'});
-      if(bridge()?.workspace?.id!==workspaceId||bridge()?.conflict)return false;
-      const result=enrichmentResults.get(personKey(candidate,person));
-      if(result?.contact?.phone_number||result?.request?.status==='pending_phone'||LeadIntelDiscovery.safeContactData?.(person.contactData,person,canonicalDomain(candidate.domain))?.phone?.number)return true;
+      return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:true,channel:'phone',phoneOnly:true});
     }
     return confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true});
   }
-  if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup,channel:'email',freeConfirm:()=>confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,dataLookup})});
+  if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:dataLookup||!automatic,channel:'email',emailOnly:true,freeConfirm:()=>confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,dataLookup})});
   const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
   const workspaceId=bridge()?.workspace?.id;if(!workspaceId)return false;
   const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
@@ -2680,7 +2679,7 @@ async function groundedGeminiPersonSearch(candidate,person,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id)return {status:'unavailable',results:[]};
   try{
     const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/grounded-contact-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}}),signal,timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)});
-    return response.ok?await response.json():{status:'unavailable',results:[]};
+    if(!response.ok)return {status:'unavailable',results:[],reason:'Independent Google search failed'};const result=await response.json();return result.status==='unavailable'&&/not configured/i.test(result.reason||'')?{...result,status:'not_configured'}:result;
   }catch(error){if(signal?.aborted)throw error;return {status:'unavailable',results:[]};}
 }
 function officialLinksFromMarkdown(markdown,source,domain){
@@ -2808,7 +2807,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
         accountability.status=accountability.gaps.length?'partial':'complete';return mandatoryResult;
       }
       armDeadline(LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs+DISCOVERY_REQUEST_TIMEOUT_MS);
-      const evidence=[...existingRows,...additionalRows],report=await LeadIntelDiscovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:LeadIntelDiscovery.buyerAgentContext(candidate,mainState().profile||{}),search:query=>searchBuyerPublicPages(query,5,controller.signal),readPage:async url=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false,publicFirst:true},{signal:controller.signal});const payload=await response.json();if(!response.ok)throw new Error('Source extraction unavailable');return payload.data||payload;},signal:controller.signal,rows:evidence,accountability,force,observeTools:false,guard:()=>{if(!ownerIsCurrent())controller.abort();if(controller.signal.aborted)throw Object.assign(new Error('Research context changed'),{code:'CANCELED'});},onProgress:detail=>{progress();onProgress?.(detail);}});
+      const evidence=[...existingRows,...additionalRows],report=await LeadIntelDiscovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:LeadIntelDiscovery.buyerAgentContext(candidate,mainState().profile||{}),crossCheck:person=>groundedGeminiPersonSearch(candidate,person,controller.signal),search:query=>searchBuyerPublicPages(query,5,controller.signal),readPage:async url=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false,publicFirst:true},{signal:controller.signal});const payload=await response.json();if(!response.ok)throw new Error('Source extraction unavailable');return payload.data||payload;},signal:controller.signal,rows:evidence,accountability,force,observeTools:false,guard:()=>{if(!ownerIsCurrent())controller.abort();if(controller.signal.aborted)throw Object.assign(new Error('Research context changed'),{code:'CANCELED'});},onProgress:detail=>{progress();onProgress?.(detail);}});
       armDeadline(Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*9,LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs));
       qualityEvidenceRows=evidence;
       if(report.status!=='complete')candidate.publicContactStatus='error';
@@ -2983,6 +2982,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     if(!canContinue())return false;
     finishing=true;
     owner.buyerDiscovery={...(owner.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(owner.buyerDiscovery?.pool||[],owner.people||[],{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles||[]).join('; ')||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)})};commit();saveDiscovery();renderPipeline();renderCandidates();
+    if(ownerIsCurrent()&&!controller.signal.aborted&&typeof window.LeadIntelAdditionalContacts?.auto==='function')void window.LeadIntelAdditionalContacts.auto(owner,{trigger:'research_completed'}).catch(error=>showToast(error.message||'Automatic paid research needs attention'));
   }finally{
     clearTimeout(timeout);signal?.removeEventListener('abort',cancel);controller.signal.removeEventListener('abort',closeCanceled);
     if((controller.signal.aborted||!ownerIsCurrent())&&ownerExists()){owner.publicContactStatus='error';saveDiscovery();renderPipeline();renderCandidates();}
@@ -3252,7 +3252,7 @@ async function findExecutiveBuyer(domain){
 function renderSelectedProspects(prospects){
   if(!prospects.length)return "";
   const cards=prospects.map(candidate=>{
-    if(window.LeadIntelAdditionalContacts)queueMicrotask(()=>void window.LeadIntelAdditionalContacts.auto(candidate));
+
     const domain=canonicalDomain(candidate.domain);
     let people=(Array.isArray(candidate.people)?candidate.people:[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending');
     const ranked=LeadIntelDiscovery.rankedBuyerShortlist(people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);
@@ -3533,6 +3533,7 @@ window.LeadIntelAdditionalContacts?.register({
   email:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{}),
   publicSource:(c,p)=>publicBuyerSource(c,p),
   baseEmail:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{},{skipAdditional:true}),
+  phone:(c,p)=>{const contact=enrichmentResults.get(personKey(c,p))?.contact;return Boolean(contact?.phone_number&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase())||p.contactData?.phone?.status==='provider_listed'&&p.contactData.phone.number);},
   saveHunter:async(c,p,email,check)=>{
     const workspaceId=bridge()?.workspace?.id,personId=p.id;
     const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c)&&c.people?.some(row=>String(row.id)===String(personId));

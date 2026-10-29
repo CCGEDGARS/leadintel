@@ -259,9 +259,7 @@ export async function handleAiRoute(request,env,cors={}){
     if(!body||String(body.company||'').length>160||String(body.domain||'').length>180||String(body.person?.name||'').length>120||String(body.person?.title||'').length>120)return error('Contact search payload is invalid',400,cors);
     const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
     try{
-      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await groundedContactSearch({apiKey,model:integration.model,company:body.company,domain:body.domain,person:body.person,signal:request.signal});
-      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='gemini'`).bind(workspaceId).run();
+      const result=await searchWorkspaceBuyerContact(env,workspaceId,{...body,signal:request.signal});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.grounded_contact_searched',provider:'gemini',metadata:{model:integration.model,query_count:result.query_count,result_count:result.results.length}});
       return json(result,200,cors);
     }catch(cause){console.error('Gemini grounded contact search unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Grounded contact search unavailable');}
@@ -344,6 +342,16 @@ export async function handleAiRoute(request,env,cors={}){
 }
 
 // Server-side approved research uses the same encrypted workspace OpenAI connection.
+export async function searchWorkspaceBuyerContact(env,workspaceId,{company,domain,person,signal=AbortSignal.timeout(25000)}={}){
+  const missing=reason=>({status:'not_configured',provider:'gemini',web_search:false,results:[],reason});
+  if(!encryptionConfigured(env))return missing('AI credential encryption is not configured');
+  let integration;try{integration=await geminiIntegration(env,workspaceId);}catch(error){if(!/no such table/i.test(String(error.message)))throw error;return missing('Gemini is not configured');}if(!integration)return missing('Gemini is not configured');
+  const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+  const result=await groundedContactSearch({apiKey,model:integration.model,company,domain,person,signal});
+  await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='gemini'`).bind(workspaceId).run();
+  return result;
+}
+
 export async function searchWorkspaceWeb(env,workspaceId,query){
   if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
   const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',signal:AbortSignal.timeout(25000)});

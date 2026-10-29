@@ -21,13 +21,13 @@ async function mount({hunterPayment=false,connection=false,aiPayment=false,saveE
  w.eval('(function(){'+read('service-settings-extension.js').replace(/^import .*;\s*$/gm,'').replace(/^export .*;\s*$/gm,'window.refreshServicesForTest=refreshServiceStatus;')+'})()');
  w.document.getElementById('open-settings').click();await settle();return {w,recover:()=>{payment=false;}};
 }
-test('optional Hunter card stays local: its payment problem never becomes the workspace-wide alert, through refresh and reopen',async()=>{
- // 2026-10-25: Hunter is back in Settings as an optional card. A Hunter credit problem shows on that card only;
+test('removed Hunter stays absent and cannot create workspace alerts through refresh and reopen',async()=>{
+ // Removed legacy providers remain absent; their historical credit state must not block the main providers.
  // the system-health summary keeps reporting the critical checks (AI engine, sign-in, mailbox, Firecrawl).
  const {w,recover}=await mount({hunterPayment:true,connection:true});try{
-  const check=()=>{assert.ok(w.document.querySelector('[data-integration="hunter"]'),'optional Hunter card present');assert.equal(w.document.querySelector('[data-integration="apollo"]'),null);assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.doesNotMatch(w.document.querySelector('.integration-summary-copy strong').textContent,/Hunter|Apollo/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
+  const check=()=>{assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);assert.equal(w.document.querySelector('[data-integration="apollo"]'),null);assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.doesNotMatch(w.document.querySelector('.integration-summary-copy strong').textContent,/Hunter|Apollo/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
   await w.refreshServicesForTest();await settle();check();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await settle();check();
-  recover();await w.refreshServicesForTest();await settle();assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.ok(w.document.querySelector('[data-integration="hunter"]'));
+  recover();await w.refreshServicesForTest();await settle();assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);
  }finally{w.close();}
 });
 test('connection-only failures are yellow throughout integration cards and summary',async()=>{

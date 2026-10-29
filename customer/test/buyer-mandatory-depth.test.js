@@ -125,3 +125,22 @@ test('upgrading the Gmail policy preserves the previous tool audit without treat
  assert.equal(saved.publicResearch.accountability.tools.find(row=>row.provider==='firecrawl').results,3);
  assert.equal(D.buyerResearchCoveragePassed(saved),false);
 });
+test('resume retries only failed queries within a partially completed check',async()=>{
+ const c=company();let failedQuery='';const calls=[];
+ await D.runMandatoryBuyerResearch(c,{search:async q=>{if(!failedQuery&&q.includes('"anna.andersson@gmail.com"')){failedQuery=q;throw Error('temporary failure');}return [];},readPage:async()=>({markdown:'Example company official team and business information.'})});
+ assert.ok(failedQuery);await D.runMandatoryBuyerResearch(c,{search:async q=>{calls.push(q);return [];}});assert.deepEqual(calls,[failedQuery]);assert.equal(c.people[0].contactResearch.checks.gmail.status,'complete');
+});
+test('known identities receive independent grounded cross-checks and save honest per-query receipts',async()=>{
+ const c=company();let cross=0;await D.runMandatoryBuyerResearch(c,{search:async()=>[],crossCheck:async person=>{cross++;assert.equal(person.name,'Anna Andersson');return {status:'complete',provider:'gemini',web_search:true,results:[]};},readPage:async()=>({markdown:'Example company official team and business information.'})});
+ assert.equal(cross,1);assert.equal(c.people[0].contactResearch.checks.independent.status,'complete');
+ assert.equal(c.people[0].contactResearch.checks.independent.queryLog[0].providers[0],'gemini');
+ const p=D.normalizeDiscoveryState({selectedProspects:[{...c,buyerSearchMode:'user_selected_target'}]}).selectedProspects[0].people[0];assert.deepEqual(p.contactResearch.checks.independent.queryLog[0].providers,['gemini']);
+ await D.runMandatoryBuyerResearch(c,{search:async()=>[],crossCheck:async()=>{cross++;throw Error('must reuse');}});assert.equal(cross,1);
+});
+test('compound surname hypotheses retain both the full surname and its short variant without changing identity',()=>{
+ const person={name:'Chris Van Den Berg'},guesses=D.rankedEmailGuesses(person,'example.com',[]).map(row=>row.email);assert.ok(guesses.includes('chris.vandenberg@example.com'));assert.ok(guesses.includes('chris.berg@example.com'));assert.equal(person.name,'Chris Van Den Berg');
+});
+test('failed independent research stays unfinished while an unconfigured source is explicitly skipped',async()=>{
+ for(const configured of [true,false]){const c=company();const report=await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Example official company business website.'}),crossCheck:async()=>configured?{status:'unavailable',reason:'Google unavailable',results:[]}:{status:'not_configured',reason:'No Google connection',results:[]}});
+ assert.equal(c.people[0].contactResearch.checks.independent.status,configured?'partial':'not_needed');assert.equal(report.status,configured?'partial':'complete');const google=report.tools.find(row=>row.provider==='gemini');assert.equal(configured?google.failed:google.skipped,1);if(!configured)assert.notEqual(report.stopReason,'public_sources_exhausted');}
+});

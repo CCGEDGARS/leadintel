@@ -1,0 +1,9 @@
+# Treg paid email and phone controls
+
+User request: remove Hunter from Settings, run approved paid research automatically from Step 1 consent independently of delivery mode, provide separately approved manual paid results for selected buyers, and expose independent phone permission in main Settings and a Buyers button.
+
+Hunter cards, setup links and active-tool entries are removed from Settings. Legacy evidence and credentials remain; a retained Hunter verification preference cannot add a hidden requirement when Treg is the selected provider.
+
+Step 1 and the Treg Settings card share one persisted email/phone policy. Phone OFF blocks new paid phone requests, including legacy Apollo fallback and reveal routes when Treg is the selected primary provider. Existing callback/CRM reads remain available. Activation does not start lookups or sending. Eligible public research completion explicitly triggers automatic Treg research, including when delivery is Manual, within one automatic buyer per company and existing daily/monthly limits. Loading, rendering, or reopening saved buyers does not trigger paid research. Manual email/profile and phone buttons use separate channel payloads and explicit cost approval. Automatic research reuses saved email and phone channels and requests only missing channels. Selected manual Treg buyers are not constrained by the automatic one-buyer company cap; daily/monthly atomic caps remain enforced. Independent email research retains prior phone results/errors.
+
+Regression coverage uses mocked provider results: Settings/Step 1 save and reload, automatic research in manual delivery mode, no spend on activation/load/render, channel separation, phone revocation, selected manual contacts, aggregate budget caps, workspace changes and historical evidence retention. No live paid lookup, outreach, policy or credential change was performed during implementation. Production requires exact-SHA proof.

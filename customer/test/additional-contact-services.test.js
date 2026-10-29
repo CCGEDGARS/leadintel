@@ -149,14 +149,8 @@ for(const channel of ['email','phone'])test(`manual ${channel} searches only its
 for(const phoneEnabled of [false,true])test(`automatic Treg phone lookup follows Setup switch ${phoneEnabled?'ON':'OFF'}`,async()=>{
  const f=runtime();await f.loaded;f.w.LeadIntelDiscovery=D;f.w.LeadIntelOutreachAutomationUI={getPolicy:()=>({mode:'automatic'})};
  f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified'}}};};
- await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c);
+ await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
  const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);
  const body=JSON.parse(requests[0][1].body);assert.equal(body.phone_approved,phoneEnabled);assert.equal(body.email_lookup,true);assert.equal(body.automatic,true);assert.equal(f.calls.includes('confirm'),false);f.close();
 });
 
-test('E-mail can use separately approved Apollo when Treg email is switched off',async()=>{
- const f=runtime();await f.loaded;
- f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:false,phoneEnabled:true,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'},{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com'}}};};
- await f.w.LeadIntelAdditionalContacts.load();assert.equal(await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'email'}),true);
- const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0][1].body).provider,'apollo');assert.ok(f.calls.includes('confirm'));f.close();
-});

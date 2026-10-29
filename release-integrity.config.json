@@ -818,8 +818,10 @@
         "buyer-actions=20261005-email-gate-v1",
         "buyer-confirm-needed",
         "buyer-proceed-ready",
-        "Select &amp; proceed",
-        "LinkedIn messages are created inside Confirm LinkedIn."
+        ">Proceed",
+        "data-recheck-buyer",
+        ">E-mail",
+        ">Phone"
       ],
       "notContains": [
         "!verified&&!linkedinReady"
@@ -4270,9 +4272,14 @@
       "url": "/customer/service-settings-extension.js",
       "status": 200,
       "contains": [
-        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg','hunter'].includes(config.provider))",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider))",
         "for(const config of SETTINGS_PROVIDERS)",
-        "Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails; Hunter is optional"
+        "data-paid-contact-settings",
+        "Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions"
+      ],
+      "notContains": [
+        "data-hunter-enabled",
+        "name:'Hunter'"
       ]
     },
     {
@@ -4317,7 +4324,8 @@
       "url": "/customer/additional-contact-services.js",
       "status": 200,
       "contains": [
-        "title:'Confirm data'",
+        "title:phoneOnly?'Confirm phone':'Confirm data'",
+        "includeEmail=!phoneOnly",
         "email_lookup:includeEmail",
         "phone_approved:includePhone",
         "This action does not send messages."
@@ -5325,6 +5333,43 @@
         "function safePhoneEnrichment(",
         "person_provider_id",
         "pending_phone"
+      ]
+    },
+    {
+      "id": "buyer-research-orchestration",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "options.crossCheck",
+        "entry.providers",
+        "planned_sources_checked",
+        "shortLast"
+      ]
+    },
+    {
+      "id": "independent-paid-contact-controls",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "function mountSettings()",
+        "phoneOnly",
+        "emailOnly",
+        "trigger!=='research_completed'",
+        "including in manual delivery mode"
+      ]
+    },
+    {
+      "id": "buyer-actions-free-entry-personal-email",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function recheckBuyerContact(",
+        "Researching available free sources",
+        "personIds:[String(person.id)],force:true",
+        "A confirmed company or personal email for this person"
       ]
     }
   ],

@@ -1270,6 +1270,7 @@ test('optional contact-review timeout preserves a completed core contact pass an
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:30,
   bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
   fetchImpl:async url=>{
+  if(String(url).includes('/grounded-contact-search'))return {ok:true,json:async()=>({status:'unavailable',provider:'gemini',web_search:false,reason:'Gemini is not configured',results:[]})};
    if(String(url).includes('contact-evidence-review'))return new Promise(()=>{});
    if(String(url).includes('web-search'))return {ok:true,json:async()=>({results:[]})};
    if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Anna Buyer COO contact team'}})};
@@ -1444,6 +1445,7 @@ test('default contact research attempts all ten, retains four recommendations an
  const queries=[],savedSnapshots=[];
  const bridgeImpl={session:{authenticated:true},workspace:{id:'w1'},listCrmCompanies:async()=>({ok:true,companies:[{id:'c1',normalized_domain:'example.com'}]}),saveCrmContacts:async()=>({ok:true}),saveCrmCompany:async row=>{savedSnapshots.push(row);return {ok:true};}};
  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl,fetchImpl:async(url,options)=>{
+  if(String(url).includes('/grounded-contact-search'))return {ok:true,json:async()=>({status:'unavailable',provider:'gemini',web_search:false,reason:'Gemini is not configured',results:[]})};
   if(/firecrawl(?:-search|\/search)/.test(String(url)))queries.push(JSON.parse(options.body).query);
   if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Official Example company team and business contact information.'}})};
   return {ok:true,json:async()=>({data:[]})};
@@ -1486,6 +1488,7 @@ test('pending role edits do not start contact research automatically before the 
 });
 test('evidence-disqualified top pick is replaced by the next researched buyer, within ten candidates',async()=>{
  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  if(String(url).includes('/grounded-contact-search'))return {ok:true,json:async()=>({status:'unavailable',provider:'gemini',web_search:false,reason:'Gemini is not configured',results:[]})};
   if(String(url).includes('/contact-evidence-review')){const people=JSON.parse(options.body).people;return {ok:true,json:async()=>({status:'complete',conflicts:people.some(p=>p.id==='p0')?[{person_id:'p0',reason:'Different employer'}]:[]})};}
   if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{markdown:'Example leadership team and business contacts.'}})};
   if(/firecrawl(?:-search|\/search)/.test(String(url)))return {ok:true,json:async()=>({data:[{url:'https://example.com/team',markdown:'Example leadership team and business contacts.'}]})};

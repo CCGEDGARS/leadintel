@@ -127,9 +127,9 @@ test('Delivery tab separates the sign-in account from the sending mailbox; Data 
   assert.match(settings,/providerCardClass\('google'\)/);assert.match(settings,/providerCardClass\('microsoft'\)/);
   assert.match(settings,/\?\(authProvider\(\)===provider\?'is-active':'is-alternate'\):''/);
   assert.doesNotMatch(settings,/Optional outbound delivery|Optional human-approved outbound/);
-  assert.match(extension,/\['firecrawl','treg','hunter'\]\.includes\(config\.provider\)/);
-  assert.match(extension,/\['treg','hunter'\]\.includes\(config\.provider\)\)\{card=document\.createElement\('article'\)/);
-  assert.match(extension,/Optional · only if you already use Hunter/);
+  assert.match(extension,/\['firecrawl','treg'\]\.includes\(config\.provider\)/);
+  assert.match(extension,/config\.provider==='treg'\)\{card=document\.createElement\('article'\)/);
+  assert.match(extension,/data-paid-contact-settings/);
   assert.match(extension,/const meta=configured\?`Saved key \$\{esc\(row\.key_hint\|\|''\)\} · \$\{sourceLabel\(row\)\}`:'';/);
   assert.match(css,/#integration-platform-grid\{grid-template-columns:1fr\}/);
   assert.match(css,/#ai-settings-drawer \.ai-provider-actions\{display:flex;flex-wrap:nowrap/);

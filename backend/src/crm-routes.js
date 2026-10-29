@@ -49,6 +49,9 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   const personalRequested=Boolean(body.allow_personal_email);if(personalRequested&&access.context.role!=='owner')return error('Only the workspace owner can approve a personal-email exception',403,cors,'CRM_PERSONAL_EMAIL_OWNER_ONLY');
   const personalApproved=personalRequested&&Boolean(policy.allow_personal_email);
   const phoneRequested=Boolean(body.phone_lookup||body.phoneLookup);
+  if(phoneRequested){
+    try{const consent=await env.DB.prepare('SELECT provider,phone_enabled FROM additional_contact_policies WHERE workspace_id=?').bind(access.context.workspaceId).first();if(consent?.provider==='treg'&&consent.phone_enabled!==1)return error('Paid phone research is OFF. Enable it in Step 1 or Settings before requesting a phone.',409,cors,'CRM_PHONE_LOOKUP_DISABLED');}catch(cause){if(!/no such table/i.test(String(cause.message)))throw cause;}
+  }
   if(phoneRequested&&String(policy.phone_lookup_mode||'on_request')==='disabled')return error('Phone enrichment is disabled by workspace policy',409,cors,'CRM_PHONE_LOOKUP_DISABLED');
   if(phoneRequested&&!isHttpsUrl(env.APOLLO_WEBHOOK_URL))return error('Apollo phone enrichment requires a configured HTTPS webhook',409,cors,'CRM_APOLLO_WEBHOOK_REQUIRED');
   const webhookSecret=apolloWebhookSigningSecret(env);

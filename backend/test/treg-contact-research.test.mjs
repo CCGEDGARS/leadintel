@@ -126,3 +126,8 @@ test('Treg accepts a deliverable personal mailbox only with exact returned perso
  assert.equal(result.contact?.work_email,'anna@gmail.com');assert.equal(result.contact?.email_type,'personal');assert.equal(result.contact?.external_person_id,person.id);
  assert.equal(globalThis.LeadIntelContactPolicy.accepted(result.contact,'example.com'),true);
 });
+test('email-only research preserves the separate saved phone failure without a new phone call',async()=>{
+ const f=await fixture();f.deps.saveData=async()=>{};const old='2026-10-01T10:00:00Z',p={...person,contactData:{version:1,domain:'example.com',personId:person.id,identityName:person.name,checkedAt:old,phone:{status:'error',reason:'Saved phone attempt failed'}}};
+ const r=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'separate',dataLookup:true,includePhone:false,includeEmail:true},f.deps);
+ assert.equal(r.contactData.phone.status,'error');assert.equal(r.contactData.phone.checkedAt,old);assert.equal(f.calls.some(call=>call.url.includes('phone.find')),false);
+});
