@@ -129,3 +129,12 @@ test('completed CRM recovery cannot retain its failure heading or retry after re
  const restored=TaskCentre.createTaskCentre({storage});restored.registerActions('crm-refresh:w1',{retry(){}});
  const task=restored.get('crm-refresh:w1');assert.equal(task.title,'CRM connection refreshed');assert.equal(task.canRetry,false);assert.equal(task.canResume,false);assert.equal(task.error,'');assert.equal(task.resultCount,7);
 });
+
+test('double retry cannot start overlapping recovery attempts or turn a completed attempt into running',async()=>{
+ const c=TaskCentre.createTaskCentre({storage:memoryStorage()});const finishes=[];let calls=0;
+ c.start({id:'crm-refresh:w1',type:'crm-refresh',total:1});c.fail('crm-refresh:w1','Timeout');
+ c.registerActions('crm-refresh:w1',{retry:()=>{calls++;return new Promise(resolve=>{finishes.push(resolve);});}});
+ const first=c.retry('crm-refresh:w1'),second=c.retry('crm-refresh:w1'),overlapping=calls;
+ finishes.forEach(resolve=>resolve(true));const results=await Promise.all([first,second]);
+ assert.equal(overlapping,1);assert.equal(results[1],false);assert.equal(c.get('crm-refresh:w1').status,'complete');assert.equal(await c.retry('crm-refresh:w1'),false);assert.equal(calls,1);
+});

@@ -14,7 +14,7 @@ Reproduction found:
 
 ## Fix and prevention
 
-Normalize completed CRM task presentation and terminal capabilities, including persisted history and handler rebinding. Use outcome-dependent buyer-quality labels. Refresh page/journey checks on conflict and synchronization events; route recovery to the visible Workspace status surface. Prioritize sync recovery over downstream quality actions and provide the same recovery action beside blocked buyer controls.
+Normalize completed CRM task presentation and terminal capabilities, including persisted history and handler rebinding. Retry/Resume reject active or completed tasks, and active task cards hide recovery buttons; double clicks cannot launch overlapping recoveries. Use outcome-dependent buyer-quality labels. Refresh page/journey checks on conflict and synchronization events; route recovery to the visible Workspace status surface. Prioritize sync recovery over downstream quality actions and provide the same recovery action beside blocked buyer controls.
 
 Treat absent baseline arrays as empty only for approved keyed-record lists. Live deletion, duplicate/unknown identities, competing identity/email evidence, missing/wrong-workspace baselines and recovery-backup failures remain protected conflicts. Reproduce 409 -> backup -> merged PUT -> acknowledged snapshot -> reload with both buyers retained.
 
