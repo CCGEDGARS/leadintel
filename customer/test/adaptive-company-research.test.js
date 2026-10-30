@@ -64,3 +64,12 @@ test('the entire allowed discovery queue survives reload rather than dropping so
  for(let pass=0;pass<6;pass++){await D.runOfficialContactResearch(candidate,options);if(candidate.buyerDiscovery.officialContactInventory.research.status==='complete')break;candidate=D.normalizeDiscoveryState({selectedProspects:[candidate]}).selectedProspects[0];}
  assert.equal(candidate.buyerDiscovery.officialContactInventory.research.status,'complete');assert.equal(new Set(reads).size,101);assert.equal(reads.length,101);
 });
+test('an expired complete inventory rereads sources rather than renewing old receipts without research',async()=>{
+ const f=scenario(),reads=[],queries=[];const options={search:async q=>{queries.push(q);return q.includes('news.cision.com')?[{url:f.release}]:[]},readPage:async url=>{reads.push(url);return {...f.pages.get(url),url}}};await D.runOfficialContactResearch(f.candidate,options);f.candidate.buyerDiscovery.officialContactInventory.checkedAt=new Date(Date.now()-31*86400000).toISOString();f.candidate=D.normalizeDiscoveryState({selectedProspects:[f.candidate]}).selectedProspects[0];reads.length=0;queries.length=0;await D.runOfficialContactResearch(f.candidate,options);assert.ok(reads.includes('https://stegra.com/'));assert.equal(queries.length,6);
+});
+test('refreshing expired evidence retains a fresh research ledger until all pending sources finish',async()=>{
+ let candidate={company:'Acme',domain:'acme.example',website:'https://acme.example/',people:[],buyerSearchMode:'user_selected_target'},reads=[];const urls=Array.from({length:30},(_,i)=>'https://acme.example/contact/'+i),options={search:async()=>[],readPage:async url=>{reads.push(url);return {url,markdown:url==='https://acme.example/'?'# Acme\n'+urls.map(u=>'[Contact]('+u+')').join('\n'):'Company contact info@acme.example +46 70 123 4567'}}};
+ await D.runOfficialContactResearch(candidate,options);const old=new Date(Date.now()-31*86400000).toISOString();candidate.buyerDiscovery.officialContactInventory.checkedAt=old;candidate.buyerDiscovery.officialContactInventory.research.startedAt=old;reads=[];
+ for(let i=0;i<3;i++){candidate=D.normalizeDiscoveryState({selectedProspects:[candidate]}).selectedProspects[0];await D.runOfficialContactResearch(candidate,options);if(candidate.buyerDiscovery.officialContactInventory.research.status==='complete')break;}
+ assert.equal(candidate.buyerDiscovery.officialContactInventory.research.status,'complete');assert.equal(reads.length,31);assert.equal(new Set(reads).size,31);
+});

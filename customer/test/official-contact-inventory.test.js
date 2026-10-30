@@ -123,3 +123,11 @@ test('official source controls reject foreign URLs before research and retain th
  for(const sourceUrl of ['https://unrelated.example/team','javascript:alert(1)','https://name:secret@atlascopcogroup.com/team'])assert.equal(await ctx.refreshOfficialCompanyContacts(company.domain,{sourceUrl}),false);
  assert.equal(reads.length,0);assert.equal(await ctx.refreshOfficialCompanyContacts(company.domain,{sourceUrl:pages[0].url}),true);assert.equal(reads[0],pages[0].url);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,3);assert.equal(candidate.publicContactStatus,'idle');
 });
+test('manual company contact action resumes a partial current-policy queue and refreshes completed or explicitly supplied sources',async()=>{
+ const vm=require('node:vm'),fs=require('node:fs'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+ for(const [status,sourceUrl,expectedForce]of [['partial','',false],['complete','',true],['partial','https://atlascopcogroup.com/contact',true]]){
+  const candidate={...company,publicContactStatus:'idle',buyerDiscovery:{officialContactInventory:{research:{status,policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version}}}},state={selectedProspects:[candidate]},b={workspace:{id:'w1'},session:{user:{id:'u1'}}},flags=[];
+  const ctx={URL,AbortController,LeadIntelDiscovery:{...D,runOfficialContactResearch:async(c,options)=>{flags.push(options.force);await options.guard();}},canonicalDomain:D.canonicalDomain,selectedProspects:()=>[candidate],discovery:state,bridge:()=>b,crmAuthenticated:()=>true,crmCompanyByDomain:()=>null,saveDiscovery(){},renderAll(){},showToast(){}};
+  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function refreshOfficialCompanyContacts('),source.indexOf('function companyContactDossierHtml(')),ctx);assert.equal(await ctx.refreshOfficialCompanyContacts(company.domain,{sourceUrl}),true);assert.deepEqual(flags,[expectedForce]);assert.equal(candidate.publicContactStatus,'idle');
+ }
+});
