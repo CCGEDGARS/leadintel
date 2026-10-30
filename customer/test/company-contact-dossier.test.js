@@ -41,7 +41,7 @@ test('registry birth-year annotations cannot hide the published CEO identity',()
 });
 test('the company record exposes all sourced people and published emails without calling them confirmed buyers',()=>{
  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');const start=source.indexOf('function companyContactDossierHtml(');assert.ok(start>=0,'company contact record must be rendered');const end=source.indexOf('\nfunction ',start+10),context={LeadIntelDiscovery:D,esc:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')};vm.createContext(context);vm.runInContext(source.slice(start,end)+'\nthis.render=companyContactDossierHtml;',context);
- const html=context.render({...company,people:[],buyerDiscovery:{companyContacts:D.discoverCompanyContacts([staff,registry],company)}});assert.match(html,/All company contacts \(7\)/);assert.match(html,/johnny@wernedal-co.se/);assert.match(html,/catrin@wernedal-co.se/);assert.match(html,/Additional company contact/);assert.doesNotMatch(html,/confirmed decision-maker/i);
+ const html=context.render({...company,people:[],buyerDiscovery:{companyContacts:D.discoverCompanyContacts([staff,registry],company)}});assert.match(html,/7 staff records/);assert.match(html,/johnny@wernedal-co.se/);assert.match(html,/catrin@wernedal-co.se/);assert.match(html,/Additional company contact/);assert.doesNotMatch(html,/confirmed decision-maker/i);
 });
 test('software and professional-service staff are retained without manufacturing-specific titles',()=>{
  const target={company:'Independent Advisory',domain:'advisory.example',market:'United Kingdom'};

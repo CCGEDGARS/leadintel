@@ -1956,7 +1956,7 @@
     return Boolean(workspaceId&&choice.workspaceId===workspaceId&&choice.personId===person.id&&choice.domain===canonicalDomain(candidate.domain)&&person.kept&&profile&&['automatic','manual'].includes(linkedInVerification(person,candidate).status)&&profile===normalizeLinkedInUrl(choice.linkedinUrl)&&qualifyBuyer(person,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:person.matchedBuyerRole||person.title)},candidate).eligible);
   }
   function gmailGuessCandidates(person={}){
-    return emailLocalPatterns(person).filter(row=>['first.last','firstlast','last.first'].includes(row.format))
+    return emailLocalPatterns(person).filter(row=>['first.last','firstlast','last.first'].includes(row.format)&&/^[a-z0-9]+(?:\.[a-z0-9]+)*$/.test(row.local)&&row.local.replace(/\./g,'').length>=6&&row.local.replace(/\./g,'').length<=30)
       .slice(0,3).map(row=>({email:row.local+'@gmail.com',status:'guessed'}));
   }
   function buyerFunction(role=''){
@@ -2141,17 +2141,44 @@
     }
     return [...contacts.values()].slice(0,60);
   }
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261021-official-contacts-v4',maxPages:12,maxDurationMs:90000,concurrency:3,queries:3});
+  function contactResearchUrl(value){
+    try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port&&u.port!=='443'||!u.hostname.includes('.')||/^(?:\d+\.){3}\d+$|[:\[\]]|(?:^|\.)(?:localhost|local|internal|test)$/i.test(u.hostname)||[...u.searchParams.keys()].some(key=>/token|credential|signature|api.?key|authorization/i.test(key)))return '';u.hash='';u.searchParams.delete('nav');u.searchParams.delete('cookie-settings');return u.href;}catch{return '';}
+  }
+  function companyContactLinks(row){
+    const base=row.url||row.metadata?.sourceURL,body=String(row.markdown||row.content||'');
+    return [...[...body.matchAll(/\[([^\]]*)\]\(([^\s)]+)\)/g)].map(match=>({href:match[2],label:match[1]})),...(row.links||[]).map(link=>typeof link==='string'?{href:link,label:''}:{href:link.url||link.href,label:link.text||''})].flatMap(link=>{try{const url=contactResearchUrl(new URL(link.href,base).href);return url?[{url,label:clean(link.label).slice(0,160)}]:[];}catch{return [];}});
+  }
+  function companyPublicationUrl(url,candidate){
+    const safe=contactResearchUrl(url);if(!safe)return false;
+    const u=new URL(safe),brand=clean(candidate.company).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),domainBrand=companyIdentityDomain(candidate.domain).split('.')[0];
+    return u.hostname==='news.cision.com'&&[brand,domainBrand].filter(Boolean).some(name=>u.pathname.toLowerCase().startsWith('/'+name+'/r/')||u.pathname.split('/')[1]?.replace(/-/g,'')===name.replace(/-/g,'')&&u.pathname.split('/')[2]==='r');
+  }
+  function companyContactSource(row,candidate){
+    const url=contactResearchUrl(row.url||row.metadata?.sourceURL),domain=companyIdentityDomain(candidate.domain);if(!url||row.sourceRead!==true||row.evidenceKind==='model_summary')return null;
+    if(companyIdentityDomain(url)===domain)return {url,kind:'official',linkedFrom:'',linkQuote:''};
+    const evidence=row.sourceEvidence;
+    if(evidence?.kind==='company_linked'&&companyIdentityDomain(evidence.linkedFrom)===domain&&contactResearchUrl(evidence.linkedFrom)&&companyContactLinks({url:evidence.linkedFrom,markdown:evidence.linkQuote}).some(link=>link.url===url))return {url,kind:'company_linked',linkedFrom:contactResearchUrl(evidence.linkedFrom),linkQuote:String(evidence.linkQuote).slice(0,1000)};
+    if(companyPublicationUrl(url,candidate)){
+      const body=String(row.markdown||row.content||''),heading=body.split('\n').find(line=>/^#\s/.test(line))||'',brand=clean(candidate.company).toLowerCase(),domainBrand=domain.split('.')[0];
+      if([brand,domainBrand].filter(Boolean).some(name=>heading.toLowerCase().includes(name))&&companyContactLinks(row).some(link=>companyIdentityDomain(link.url)===domain))return {url,kind:'company_publication',linkedFrom:'',linkQuote:heading.slice(0,500)+'\n[Company website](https://'+domain+'/)'};
+    }
+    return null;
+  }
+  function savedCompanyContactSource(evidence,candidate){
+    if(!evidence)return null;
+    return companyContactSource({url:evidence.url,sourceRead:true,sourceEvidence:evidence,markdown:evidence.kind==='company_publication'?evidence.linkQuote:''},candidate);
+  }
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v5',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
   function officialCompanyContactInventory(rows=[],candidate={}){
-    const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),sourcePages=[];
-    const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries)(?:[._+-]|$)/i;
+    const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),routes=new Map(),sourcePages=[],sourceEvidence=[];
+    const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
     const emailValid=value=>/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)&&value.length<=254&&!/@(?:gmail|googlemail|outlook|hotmail|yahoo)\./i.test(value);
     const nameValid=name=>hasFullBuyerName(name)&&/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(name)&&!/(?:contact|relations|president|manager|officer|director|group|board|organization|management|team|privacy|sustainability|media|governance|business)/i.test(name);
     const roleValid=role=>namedStaffRole(role)&&/\b(?:CEO|CFO|COO|CTO|CIO|CMO|CHRO)\b|president|officer|manager|director|chief|head|engineer|owner|founder|partner|consultant|specialist|chef|direktör|vadītāj/i.test(role);
     for(const row of rows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
-      if(!url||companyIdentityDomain(url)!==domain||row.sourceRead!==true||row.evidenceKind==='model_summary')continue;
-      sourcePages.push(url);
+      const provenance=companyContactSource(row,candidate);if(!provenance)continue;
+      sourcePages.push(url);sourceEvidence.push(provenance);
       const body=decodePublishedEmailText(String(row.markdown||row.content||row.text||'')).slice(0,60000);
       const lines=body.replace(/^([ \t]*#{1,6})[ \t]*\n+[ \t]*([^\n]+)/gm,'$1 $2').split(/\r?\n/),plain=line=>line.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*#{1,6}\s*|\*\*/g,'').trim();
       const roleStart=/\b(?:Senior(?: Executive)? (?:Vice )?President|Vice President|President|Chief|CEO|CFO|COO|CTO|CIO|CMO|CHRO|General Counsel|Head of|Managing Director|Director|Manager)\b/i;
@@ -2174,7 +2201,7 @@
       const cards=headings.map(item=>{const before=adjacent(item.index,-1),after=adjacent(item.endIndex,1),role=roleBefore?before:after;return {...item,title:item.inlineTitle||(roleValid(role.text)?role.text:''),roleIndex:item.inlineTitle?item.index:role.index};}).filter(item=>item.title);
       const addChannel=(value,personName='',quote='')=>{
         value=value.toLowerCase();if(!emailValid(value))return null;
-        const channel={kind:'email',value,url,status:'published_listing',type:shared.test(value)?'shared_department':personName?'named_work_listing':'company_channel',emailDomain:value.split('@')[1],quote:clean(quote).slice(0,700)};
+        const channel={kind:'email',value,url,status:'published_listing',type:shared.test(value)?'shared_department':personName?'named_work_listing':'company_channel',purpose:/^invoices?[._@]/i.test(value)?'invoices':/^account(?:ing|s)?[._@]/i.test(value)?'finance':/^press[._@]/i.test(value)?'press':/^web[._@]/i.test(value)?'website_privacy':'company_contact',sourceKind:provenance.kind,emailDomain:value.split('@')[1],quote:clean(quote).slice(0,700)};
         const key=value+'|'+url;if(!channels.has(key))channels.set(key,channel);return channel;
       };
       for(let i=0;i<cards.length;i++){
@@ -2193,54 +2220,92 @@
         merged.companyChannels=[...new Map([...(prior?.companyChannels||[]),...companyChannels].map(channel=>[channel.value+'|'+channel.url,channel])).values()];
         contacts.set(key,merged);
       }
-      // Shared organization routes remain useful even without a named staff card.
+      // General company channels do not require a named employee card.
+      for(const match of body.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi))if(companyIdentityDomain(match[0].split('@')[1])===domain)addChannel(match[0],'',body.slice(Math.max(0,match.index-100),match.index+300));
       if(/contact|kontakt|investor|sustainability|media|support/i.test(url+' '+body.slice(0,120)))for(const match of body.matchAll(/\[([^\]]+)\]\(mailto:([^?)\s]+)(?:[^)]*)\)/gi))if(shared.test(match[2]))addChannel(match[2],'',body.slice(Math.max(0,match.index-100),match.index+250));
+      const route=(kind,value,purpose,quote='')=>{value=clean(value);const key=kind+'|'+value;if(!routes.has(key))routes.set(key,{kind,value,url,purpose,status:'published_listing',sourceKind:provenance.kind,quote:clean(quote).slice(0,700)});};
+      for(const match of body.matchAll(/\+\d[\d(). \u00a0-]{6,24}\d/g)){
+        const value=match[0].trim(),start=body.lastIndexOf('\n\n',match.index)+2,next=body.indexOf('\n\n',match.index),paragraph=body.slice(Math.max(0,start),next<0?body.length:next);
+        if(provenance.kind==='company_publication'){
+          const emails=[...paragraph.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)].sort((a,b)=>Math.abs(start+a.index-match.index)-Math.abs(start+b.index-match.index));
+          if(emails.length?companyIdentityDomain(emails[0][0].split('@')[1])!==domain:!paragraph.toLowerCase().includes(clean(candidate.company).toLowerCase()))continue;
+        }
+        if(value.replace(/\D/g,'').length<=15)route('phone',value,provenance.kind==='company_publication'?'press':'company_contact',body.slice(Math.max(0,match.index-100),match.index+180));
+      }
+      for(const link of companyContactLinks(row)){
+        const u=new URL(link.url);
+        if(provenance.kind!=='company_publication'&&(/(?:^|\.)typeform\.com$/.test(u.hostname)&&/^\/to\//.test(u.pathname)||u.hostname==='forms.monday.com'&&/^\/forms\//.test(u.pathname))){
+          const at=body.indexOf(link.url),context=at<0?link.label:body.slice(Math.max(0,at-450),at),sections=[...context.matchAll(/(?:^|\n)(?:#{1,6}\s*)?(General questions|Press|Sales|Boden inquiries|Contact the finance team|Finance|Supplier registration)\s*(?:\n|$)/gi)],section=sections.at(-1)?.[1]||'';
+          const purpose=/supplier|register|intresseanmälan/i.test(link.label)||/Boden inquiries|Supplier registration/i.test(section)?'supplier_registration':/finance|account/i.test(section+' '+link.label)?'finance':/Press/i.test(section)?'press':/Sales/i.test(section)?'sales':'company_contact';route('form',link.url,purpose,link.label);
+        }
+        if(provenance.kind==='official'&&/(?:^|\.)linkedin\.com$/.test(u.hostname)&&/^\/company\//.test(u.pathname))route('linkedin',link.url,'company_profile',link.label);
+      }
     }
     const unique=new Map();for(const channel of channels.values())if(!unique.has(channel.value))unique.set(channel.value,channel);
-    return {version:1,domain,checkedAt:new Date().toISOString(),sourcePages:[...new Set(sourcePages)].slice(0,12),contacts:[...contacts.values()].slice(0,60),channels:[...unique.values()].slice(0,40)};
+    return {version:1,domain,companyName:clean(candidate.company).slice(0,120),checkedAt:new Date().toISOString(),sourcePages:[...new Set(sourcePages)].slice(0,24),sourceEvidence,contacts:[...contacts.values()].slice(0,60),channels:[...unique.values()].slice(0,80),routes:[...routes.values()].slice(0,60)};
   }
   function safeOfficialContactInventory(value,domain){
     if(value?.version!==1||value.domain!==companyIdentityDomain(domain))return null;
-    const official=url=>normalizeUrl(url)&&companyIdentityDomain(url)===companyIdentityDomain(domain);
-    const channel=row=>row?.kind==='email'&&official(row.url)&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(row.value)&&!/@(?:gmail|googlemail|outlook|hotmail|yahoo)\./i.test(row.value)?{kind:'email',value:clean(row.value).toLowerCase().slice(0,254),url:normalizeUrl(row.url),status:'published_listing',type:['shared_department','named_work_listing','company_channel'].includes(row.type)?row.type:'company_channel',emailDomain:clean(row.value).split('@')[1].toLowerCase(),quote:clean(row.quote).slice(0,700)}:null;
-    const research=value.research?{policyVersion:clean(value.research.policyVersion),pendingUrls:(value.research.pendingUrls||[]).filter(official).map(normalizeUrl).slice(0,24),status:['complete','partial','error'].includes(value.research.status)?value.research.status:'partial',retainedPrevious:value.research.retainedPrevious===true,checkedAt:clean(value.research.checkedAt).slice(0,40),readPages:Number(value.research.readPages)||0,queries:(value.research.queries||[]).slice(0,3).map(row=>({query:clean(row.query).slice(0,500),status:row.status==='complete'?'complete':'failed',results:Number(row.results)||0})),failures:(value.research.failures||[]).map(clean).slice(0,20),stopReason:clean(value.research.stopReason).slice(0,120)}:null;
-    return {version:1,domain:companyIdentityDomain(domain),checkedAt:clean(value.checkedAt).slice(0,40),sourcePages:(value.sourcePages||[]).filter(official).map(normalizeUrl).slice(0,12),contacts:(value.contacts||[]).filter(p=>hasFullBuyerName(p.name)&&official(p.publicNameUrl)).slice(0,60).map(p=>({...safeBuyer(p,domain),companyChannels:(p.companyChannels||[]).map(channel).filter(Boolean)})),channels:(value.channels||[]).slice(0,40).map(channel).filter(Boolean),...(research?{research}:{})};
+    const candidate={domain,company:clean(value.companyName)||companyIdentityDomain(domain).split('.')[0]},sourceEvidence=(value.sourceEvidence||[]).slice(0,120).map(row=>savedCompanyContactSource(row,candidate)).filter(Boolean),sources=new Set(sourceEvidence.map(row=>row.url));
+    const accepted=url=>Boolean(contactResearchUrl(url)&&(companyIdentityDomain(url)===companyIdentityDomain(domain)||sources.has(contactResearchUrl(url))));
+    const channel=row=>row?.kind==='email'&&accepted(row.url)&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(row.value)&&!/@(?:gmail|googlemail|outlook|hotmail|yahoo)\./i.test(row.value)?{kind:'email',value:clean(row.value).toLowerCase().slice(0,254),url:contactResearchUrl(row.url),status:'published_listing',type:['shared_department','named_work_listing','company_channel'].includes(row.type)?row.type:'company_channel',purpose:clean(row.purpose||'company_contact').slice(0,80),sourceKind:sourceEvidence.find(x=>x.url===contactResearchUrl(row.url))?.kind||'official',emailDomain:clean(row.value).split('@')[1].toLowerCase(),quote:clean(row.quote).slice(0,700)}:null;
+    const routes=(value.routes||[]).slice(0,60).filter(row=>accepted(row.url)&&['phone','form','linkedin'].includes(row.kind)&&(row.kind==='phone'?/^\+\d[\d(). \u00a0-]{6,24}\d$/.test(row.value):Boolean(contactResearchUrl(row.value)))).map(row=>({kind:row.kind,value:clean(row.value).slice(0,1500),url:contactResearchUrl(row.url),purpose:clean(row.purpose).slice(0,80),status:'published_listing',sourceKind:sourceEvidence.find(x=>x.url===contactResearchUrl(row.url))?.kind||'official',quote:clean(row.quote).slice(0,700)}));
+    const pendingSources=(value.research?.pendingSources||[]).slice(0,120).map(row=>savedCompanyContactSource(row,candidate)).filter(Boolean);
+    const research=value.research?{policyVersion:clean(value.research.policyVersion),completedUrls:(value.research.completedUrls||[]).filter(accepted).map(contactResearchUrl).slice(0,120),pendingUrls:(value.research.pendingUrls||[]).filter(url=>accepted(url)||companyPublicationUrl(url,candidate)||pendingSources.some(p=>p.url===url)).map(contactResearchUrl).slice(0,120),pendingSources,discoveryTruncated:value.research.discoveryTruncated===true,status:['complete','partial','error'].includes(value.research.status)?value.research.status:'partial',retainedPrevious:value.research.retainedPrevious===true,checkedAt:clean(value.research.checkedAt).slice(0,40),readPages:Number(value.research.readPages)||0,queries:(value.research.queries||[]).slice(0,6).map(row=>({query:clean(row.query).slice(0,600),status:row.status==='complete'?'complete':'failed',results:Number(row.results)||0,...(row.reused?{reused:true}:{})})),reads:(value.research.reads||[]).slice(0,120).map(row=>({url:contactResearchUrl(row.url),status:['complete','failed','rejected'].includes(row.status)?row.status:'failed',reason:clean(row.reason).slice(0,220)})).filter(row=>row.url),failures:(value.research.failures||[]).map(clean).slice(0,20),stopReason:clean(value.research.stopReason).slice(0,120)}:null;
+    return {version:1,domain:companyIdentityDomain(domain),companyName:candidate.company,checkedAt:clean(value.checkedAt).slice(0,40),sourcePages:(value.sourcePages||[]).filter(accepted).map(contactResearchUrl).slice(0,24),sourceEvidence,contacts:(value.contacts||[]).filter(p=>hasFullBuyerName(p.name)&&accepted(p.publicNameUrl)).slice(0,60).map(p=>({...safeBuyer(p,domain),companyChannels:(p.companyChannels||[]).map(channel).filter(Boolean)})),channels:(value.channels||[]).slice(0,80).map(channel).filter(Boolean),routes,...(research?{research}:{})};
   }
   async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},force=false,seedUrls=[],maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
-    const previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),fresh=previous?.research?.policyVersion===OFFICIAL_CONTACT_RESEARCH_POLICY.version&&previous.research.status==='complete'&&Boolean(previous.contacts.length||previous.channels.length)&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000;
+    const policy=OFFICIAL_CONTACT_RESEARCH_POLICY,previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),fresh=previous?.research?.policyVersion===policy.version&&previous.research.status==='complete'&&Boolean(previous.contacts.length||previous.channels.length||previous.routes.length)&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000;
     if(fresh&&!force)return {inventory:previous,rows};
     const controller=new AbortController();onSignal(controller.signal);const cancel=()=>controller.abort(),timer=setTimeout(cancel,maxDurationMs);signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
-    const ensure=async()=>{if(controller.signal.aborted)throw new Error('Official contact research stopped');await guard();if(controller.signal.aborted)throw new Error('Official contact research stopped');};
-    const bounded=async operation=>{await ensure();let abort;const stopped=new Promise((_,reject)=>{abort=()=>reject(new Error('Official contact research stopped'));controller.signal.addEventListener('abort',abort,{once:true});});try{const result=await Promise.race([operation(),stopped]);await ensure();return result;}finally{controller.signal.removeEventListener('abort',abort);}};
-    const domain=companyIdentityDomain(candidate.domain),official=row=>companyIdentityDomain(row.url||row.metadata?.sourceURL)===domain;
-    const knownUrls=[...new Set([...seedUrls,...(previous?.research?.pendingUrls||[]),...(candidate.evidence||[]).map(row=>row.url).filter(url=>/contact|kontakt|management|leadership|team|investor|media|sustainability/i.test(url||''))].map(normalizeUrl).filter(url=>url&&official({url})))];let planned=[...knownUrls];
-    const retained=rows.filter(row=>official(row)&&row.sourceRead===true&&row.evidenceKind!=='model_summary'),read=new Map(retained.map(row=>[normalizeUrl(row.url||row.metadata?.sourceURL),row])),failures=[],receipts=[],found=[];
+    const ensure=async()=>{if(controller.signal.aborted)throw new Error('Company contact research stopped');await guard();if(controller.signal.aborted)throw new Error('Company contact research stopped');};
+    const bounded=async operation=>{await ensure();let abort;const stopped=new Promise((_,reject)=>{abort=()=>reject(new Error('Company contact research stopped'));controller.signal.addEventListener('abort',abort,{once:true});});try{const result=await Promise.race([operation(),stopped]);await ensure();return result;}finally{controller.signal.removeEventListener('abort',abort);}};
+    const domain=companyIdentityDomain(candidate.domain),official=url=>Boolean(contactResearchUrl(url)&&companyIdentityDomain(url)===domain),read=new Map(),queue=new Map(),attempted=new Set(),failures=[],receipts=[],reads=[],completed=new Set(!force&&previous?.research?.policyVersion===policy.version?(previous.research.completedUrls||previous.sourcePages):[]);let sourceLimit=!force&&previous?.research?.discoveryTruncated===true;
+    const priority=url=>/\.pdf(?:$|\?)/i.test(url)?0:/contact|kontakt|get-in-touch/i.test(url)?1:/supplier|procurement|invoice|privacy/i.test(url)?2:companyPublicationUrl(url,candidate)?3:/management|leadership|team|investor/i.test(url)?4:5;
+    const add=(url,source=null,first=false)=>{url=contactResearchUrl(url);if(!url||read.has(url)||completed.has(url)||queue.has(url))return;if(queue.size+completed.size>=120){sourceLimit=true;return;}if(official(url)||url.startsWith('https:')&&(savedCompanyContactSource(source,candidate)||companyPublicationUrl(url,candidate)))queue.set(url,{url,source,priority:(first?-1:priority(url))+(previous?.research?.reads?.some(row=>row.url===url&&row.status==='failed')?20:0)});};
+    const links=row=>{
+      if(!official(row.url))return;
+      for(const link of companyContactLinks(row)){
+        const u=new URL(link.url);if(/\.(?:jpg|jpeg|png|svg|zip|mp4|woff2?)(?:$|\?)/i.test(u.pathname)||/linkedin\.com|typeform\.com|forms\.monday\.com/.test(u.hostname))continue;
+        if(official(link.url)){if(/contact|kontakt|get-in-touch|about-us|management|leadership|ledning|team|investor|sustainability|supplier|procurement|media|privacy|press|invoice|documents|\.pdf/i.test(u.pathname))add(link.url);}
+        else if(/\.pdf(?:$|\?)|contact|supplier|invoice|press|media|document/i.test(link.url+' '+link.label))add(link.url,{url:link.url,kind:'company_linked',linkedFrom:row.url,linkQuote:'['+(link.label||'Company-linked document')+']('+link.url+')'});
+      }
+    };
+    if(!force)for(const row of rows){const source=companyContactSource(row,candidate);if(source){read.set(source.url,{...row,url:source.url});links(row);}}
+    for(const url of [...seedUrls,...(previous?.research?.pendingUrls||[])])add(url,previous?.research?.pendingSources?.find(source=>source.url===url),true);
+    add(candidate.website||'https://'+domain+'/');
     const queries=[`site:${domain} (contact OR contacts OR kontakt OR team) (email OR phone OR LinkedIn)`,`site:${domain} (management OR leadership OR ledning OR executive)`,`site:${domain} (investor-contacts OR press-contact OR sustainability-contact OR supplier OR procurement)`];
-    const unfinished=()=>[...new Set([...planned,...found.map(row=>normalizeUrl(row.url||row.metadata?.sourceURL))])].filter(url=>url&&official({url})&&!read.has(url)).slice(0,24);
-    const retainPartial=inventory=>{
-      if(inventory.research.status!=='partial'||!previous)return;
-      inventory.contacts=mergeCompanyContacts(previous.contacts,inventory.contacts,candidate);
-      inventory.channels=[...new Map([...previous.channels,...inventory.channels].map(row=>[row.value,row])).values()].slice(0,40);
-      inventory.sourcePages=[...new Set([...inventory.sourcePages,...previous.sourcePages])].slice(0,12);
-      inventory.checkedAt=previous.checkedAt;inventory.research.retainedPrevious=true;
+    const company=clean(candidate.company).replace(/"/g,'').slice(0,100),brand=company.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    const followUps=[`"${company}" (supplier OR procurement OR contact OR kontakt) (email OR e-post OR phone OR filetype:pdf)`,`site:news.cision.com/${brand||domain.split('.')[0]} (contact OR email OR phone)`,`site:${domain} (privacy OR invoices OR accounting OR supplier) (email OR contact OR filetype:pdf)`];
+    const discover=async plan=>{await bounded(async()=>{await Promise.all(plan.map(async query=>{try{const prior=!force&&Boolean(previous?.contacts.length||previous?.channels.length||previous?.routes.length)&&previous?.research?.policyVersion===policy.version&&previous.research.queries.find(row=>row.query===query&&row.status==='complete');if(prior){receipts.push({...prior,reused:true});return;}const result=await search(query,controller.signal);await ensure();receipts.push({query,status:'complete',results:result.length});for(const row of result)add(row.url||row.metadata?.sourceURL);}catch(error){if(controller.signal.aborted)throw error;receipts.push({query,status:'failed',results:0});failures.push('Contact search failed: '+query);}}));});};
+    const fetchOne=async entry=>{
+      attempted.add(entry.url);
+      try{const page=await bounded(()=>readPage(entry.url,controller.signal)),actual=contactResearchUrl(page.url||page.metadata?.sourceURL||page.metadata?.url||entry.url),body=String(page.markdown||page.content||page.text||'');
+        if(!actual||(!official(actual)&&actual!==entry.url)||!body.trim()||/^(?:access denied|just a moment|verify you are human)/i.test(body.trim()))throw new Error('Source unavailable or redirected outside its attribution');
+        const row={...page,url:actual,markdown:body,sourceRead:true,...(entry.source?{sourceEvidence:entry.source}:{})},source=companyContactSource(row,candidate);if(!source)throw new Error('Company attribution could not be established');
+        read.set(actual,row);completed.add(actual);rows.push(row);queue.delete(entry.url);reads.push({url:actual,status:'complete',reason:''});links(row);onProgress({label:`Reading company contact sources · ${read.size}/${policy.maxPages}`});
+      }catch(error){if(controller.signal.aborted)throw error;failures.push('Could not read '+entry.url+': '+error.message);reads.push({url:entry.url,status:'failed',reason:String(error.message).slice(0,220)});}
+    };
+    const finish=stopped=>{
+      let inventory=officialCompanyContactInventory([...read.values()],candidate);
+      if(previous){inventory.contacts=mergeCompanyContacts(previous.contacts,inventory.contacts,candidate);inventory.channels=[...new Map([...previous.channels,...inventory.channels].map(row=>[row.value,row])).values()].slice(0,80);inventory.routes=[...new Map([...previous.routes,...inventory.routes].map(row=>[row.kind+'|'+row.value,row])).values()].slice(0,60);inventory.sourceEvidence=[...new Map([...previous.sourceEvidence,...inventory.sourceEvidence].map(row=>[row.url,row])).values()].slice(0,120);inventory.sourcePages=[...new Set([...previous.sourcePages,...inventory.sourcePages])].slice(0,24);}
+      const pending=[...queue.values()].filter(entry=>!read.has(entry.url));
+      inventory.research={policyVersion:policy.version,status:stopped||sourceLimit||failures.length||pending.length||!completed.size&&!read.size?'partial':'complete',completedUrls:[...new Set([...completed,...read.keys()])].slice(0,120),pendingUrls:pending.map(row=>row.url).slice(0,120),pendingSources:pending.map(row=>row.source).filter(Boolean).slice(0,120),discoveryTruncated:sourceLimit,checkedAt:inventory.checkedAt,readPages:new Set([...completed,...read.keys()]).size,queries:receipts,reads:[...new Map([...(previous?.research?.reads||[]),...reads].map(row=>[row.url,row])).values()].slice(0,120),failures,stopReason:stopped?'deadline_or_context':sourceLimit?'source_discovery_limit':failures.length?'sources_unavailable':pending.length?'page_limit':'planned_sources_checked'};
+      if(previous&&inventory.research.status==='partial'){inventory.checkedAt=previous.checkedAt;inventory.research.retainedPrevious=true;}
+      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};return {inventory,rows};
     };
     try{
-      if(!read.size){try{const url=knownUrls[0]||candidate.website||`https://${domain}/`,page=await bounded(()=>readPage(url,controller.signal)),actual=normalizeUrl(page.url||page.metadata?.sourceURL||page.metadata?.url||url);if(!official({url:actual}))throw new Error('Official site redirected');const row={...page,url:actual,markdown:page.markdown||page.content||page.text||'',sourceRead:true};if(row.markdown.trim()){read.set(actual,row);retained.push(row);rows.push(row);}}catch(error){if(controller.signal.aborted)throw error;failures.push('Company homepage unavailable');}}
-      await bounded(async()=>{await Promise.all(queries.map(async query=>{try{const results=await search(query,controller.signal);found.push(...results.filter(official));receipts.push({query,status:'complete',results:results.length});}catch(error){if(controller.signal.aborted)throw error;receipts.push({query,status:'failed',results:0});failures.push('Official contact discovery unavailable');}}));});
-      const urls=new Set([...knownUrls,candidate.website||`https://${domain}/`,...found.map(row=>row.url||row.metadata?.sourceURL)]);
-      for(const row of [...retained,...found])for(const link of [...(row.links||[]),...String(row.markdown||row.content||'').matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)].map(item=>typeof item==='string'?item:item.url||item[1])){try{const url=new URL(link,row.url);if(official({url:url.href})&&/contact|kontakt|management|leadership|ledning|team|investor|sustainability|supplier|procurement|media/i.test(url.pathname)&&! /privacy|legal|cookie|subscribe|\/in\//i.test(url.pathname))urls.add(url.href);}catch{}}
-      const category=url=>/investor.contacts/i.test(url)?'investor':/press.contact/i.test(url)?'media':/sustainability.contact/i.test(url)?'sustainability':/management|leadership|ledning/i.test(url)?'leadership':/contact|kontakt|team/i.test(url)?'contact':/supplier|procurement/i.test(url)?'supplier':'other';
-      const covered=new Set([...read.keys()].map(category)),pending=[...urls].filter(url=>!read.has(url)&&official({url})&&!/\.(?:jpg|png|svg|zip|mp4)(?:$|\?)/i.test(url));
-      pending.sort((a,b)=>Number(covered.has(category(a)))-Number(covered.has(category(b)))||Number(category(a)==='other')-Number(category(b)==='other')||a.length-b.length);
-      const chosen=[],categories=new Set(covered);for(const url of pending)if(!categories.has(category(url))){chosen.push(url);categories.add(category(url));}chosen.push(...pending.filter(url=>!chosen.includes(url)));
-      const priority=knownUrls.filter(url=>!read.has(url));chosen.unshift(...priority.filter(url=>!chosen.includes(url)));chosen.sort((a,b)=>Number(knownUrls.includes(b))-Number(knownUrls.includes(a)));planned=[...chosen];
-      let index=0;const queue=chosen.slice(0,Math.max(0,12-read.size));
-      await bounded(async()=>{await Promise.all(Array.from({length:3},async()=>{while(index<queue.length){const url=queue[index++];try{const page=await readPage(url,controller.signal);await ensure();const actual=normalizeUrl(page.url||page.metadata?.sourceURL||page.metadata?.url||url),body=String(page.markdown||page.content||page.text||'');if(!official({url:actual})||!body.trim()||/^(?:access denied|just a moment|verify you are human)/i.test(body.trim()))throw new Error('Official contact source unavailable');const row={...page,url:actual,markdown:body,sourceRead:true};read.set(actual,row);rows.push(row);onProgress({label:`Reading official contact pages · ${read.size}/12`});}catch(error){if(controller.signal.aborted)throw error;failures.push('Could not read '+url);}}}));});
-      await ensure();
-      const inventory=officialCompanyContactInventory([...read.values()],candidate);inventory.research={policyVersion:OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:failures.length||!read.size?'partial':'complete',pendingUrls:unfinished(),checkedAt:inventory.checkedAt,readPages:read.size,queries:receipts,failures,stopReason:failures.length?'sources_unavailable':chosen.length>queue.length?'page_limit':'planned_sources_checked'};
-      retainPartial(inventory);
-      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};return {inventory,rows};
-    }catch(error){if(signal?.aborted)return {inventory:previous,rows,canceled:true};try{await guard();}catch{return {inventory:previous,rows,canceled:true};}const inventory=officialCompanyContactInventory([...read.values()],candidate);inventory.research={policyVersion:OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'partial',pendingUrls:unfinished(),checkedAt:inventory.checkedAt,readPages:read.size,queries:receipts,failures:[...failures,error.message],stopReason:'deadline_or_context'};retainPartial(inventory);candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};return {inventory,rows};}
+      if(!read.size){const first=[...queue.values()].sort((a,b)=>a.priority-b.priority)[0];if(first)await fetchOne(first);}
+      await discover(queries);let followed=false;
+      while(attempted.size<policy.maxPages){
+        const inventory=officialCompanyContactInventory([...read.values()],candidate);
+        let pending=[...queue.values()].filter(entry=>!attempted.has(entry.url)&&!read.has(entry.url)).sort((a,b)=>a.priority-b.priority);
+        if(!followed&&(read.size>=4||attempted.size>=4||!pending.length)){followed=true;await discover(followUps);pending=[...queue.values()].filter(entry=>!attempted.has(entry.url)&&!read.has(entry.url)).sort((a,b)=>a.priority-b.priority);}
+        if(!pending.length)break;
+        await bounded(()=>Promise.all(pending.slice(0,Math.min(policy.concurrency,policy.maxPages-attempted.size)).map(fetchOne)));
+      }
+      await ensure();return finish(false);
+    }catch(error){if(signal?.aborted)return {inventory:previous,rows,canceled:true};try{await guard();}catch{return {inventory:previous,rows,canceled:true};}failures.push(String(error.message||error));return finish(true);}
     finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
   }
   function discoverCompanyContacts(rows=[],candidate={},previous=[]){

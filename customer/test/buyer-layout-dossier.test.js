@@ -15,7 +15,8 @@ test('company actions are in the header beneath qualification, followed by dossi
  assert.ok(header.contains(doc.querySelector('.selected-prospect-actions')),'actions belong in company header');
  assert.equal(doc.querySelector('.selected-prospect-signal').nextElementSibling.className,'selected-prospect-actions');
  assert.equal(header.nextElementSibling.classList.contains('company-dossier'),true);
- assert.equal(header.nextElementSibling.nextElementSibling.classList.contains('selected-prospect-buyers'),true);
+ assert.equal(header.nextElementSibling.nextElementSibling.classList.contains('company-contact-dossier'),true);
+ assert.equal(header.nextElementSibling.nextElementSibling.nextElementSibling.classList.contains('selected-prospect-buyers'),true);
  assert.equal(doc.querySelector('.selected-prospect-buyers > .buyer-shortlist-group > ol').children.length,4);
  assert.equal(doc.querySelector('.selected-prospect-buyers').querySelector('.buyer-quality-supervisor'),null);dom.window.close();
 });
@@ -23,7 +24,7 @@ test('other contacts and research controls start collapsed below priority contac
  const {dom,doc}=render(),other=doc.querySelector('details.buyer-other-contacts'),research=doc.querySelector('details.buyer-research-details');
  assert.ok(other,'remaining candidates have a single disclosure');assert.equal(other.open,false);assert.match(other.querySelector('summary').textContent,/Show other contacts \(2\)/);
  assert.equal(other.querySelectorAll('.buyer-potential-list > li').length,2);assert.ok(research);assert.equal(research.open,false);
- assert.ok(research.querySelector('[data-prospect-buyer-roles]'));assert.ok(research.querySelector('.buyer-quality-supervisor'));assert.ok(research.querySelector('.company-contact-dossier'));
+ assert.ok(research.querySelector('[data-prospect-buyer-roles]'));assert.ok(research.querySelector('.buyer-quality-supervisor'));assert.equal(research.querySelector('.company-contact-dossier'),null);assert.equal(doc.querySelector('.company-contact-dossier').parentElement,doc.querySelector('.selected-prospect-row'));
  assert.equal(doc.querySelectorAll('[data-find-prospect-buyers]').length,1);assert.equal(doc.querySelectorAll('[data-save-buyer-research]').length,1);assert.equal(doc.querySelectorAll('[data-remove-buyer-company]').length,1);
  dom.window.close();
 });

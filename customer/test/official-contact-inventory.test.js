@@ -27,7 +27,7 @@ test('official inventory survives workspace and CRM snapshots without promoting 
 test('shared bounded official scan discovers official sections and actually reads sources',async()=>{
  const candidate={...company},queries=[],read=[];let active=0,maximum=0;
  const result=await D.runOfficialContactResearch(candidate,{rows:[],search:async q=>{queries.push(q);return pages.map(p=>({url:p.url}));},readPage:async url=>{active++;maximum=Math.max(maximum,active);await new Promise(r=>setImmediate(r));read.push(url);active--;return pages.find(p=>p.url===url)||{markdown:'Atlas Copco official website. [Contact](/en/investors/investor-contacts)'};}});
- assert.equal(queries.length,3);assert.ok(read.length<=12);assert.ok(maximum<=3);assert.ok(result.rows.every(p=>p.sourceRead===true));assert.equal(candidate.buyerDiscovery.officialContactInventory.channels.filter(c=>c.kind==='email').length,3);assert.equal(candidate.buyerDiscovery.officialContactInventory.research.status,'complete');
+ assert.equal(queries.length,D.OFFICIAL_CONTACT_RESEARCH_POLICY.queries);assert.ok(read.length<=12);assert.ok(maximum<=3);assert.ok(result.rows.every(p=>p.sourceRead===true));assert.equal(candidate.buyerDiscovery.officialContactInventory.channels.filter(c=>c.kind==='email').length,3);assert.equal(candidate.buyerDiscovery.officialContactInventory.research.status,'complete');
 });
 test('canceled and replaced research cannot overwrite company evidence with late results',async()=>{
  const candidate={...company},controller=new AbortController();let resolve;const task=D.runOfficialContactResearch(candidate,{signal:controller.signal,search:()=>new Promise(r=>resolve=r),readPage:async()=>pages[0]});controller.abort();await task;resolve?.(pages);await new Promise(r=>setImmediate(r));assert.equal(candidate.buyerDiscovery,undefined);
@@ -80,7 +80,7 @@ test('a partial refresh retains earlier sourced contacts when only the homepage 
  const previous=D.officialCompanyContactInventory(pages,company),candidate={...company,buyerDiscovery:{officialContactInventory:previous}};
  await D.runOfficialContactResearch(candidate,{force:true,search:async()=>{throw new Error('Search unavailable');},readPage:async()=>({markdown:'Atlas Copco official homepage'})});
  const inventory=candidate.buyerDiscovery.officialContactInventory;
- assert.equal(inventory.research.status,'partial');assert.equal(inventory.research.retainedPrevious,true);assert.equal(inventory.contacts.length,7);assert.equal(inventory.channels.length,3);assert.equal(inventory.checkedAt,previous.checkedAt);assert.equal(inventory.research.queries.length,3);
+ assert.equal(inventory.research.status,'partial');assert.equal(inventory.research.retainedPrevious,true);assert.equal(inventory.contacts.length,7);assert.equal(inventory.channels.length,3);assert.equal(inventory.checkedAt,previous.checkedAt);assert.equal(inventory.research.queries.length,D.OFFICIAL_CONTACT_RESEARCH_POLICY.queries);
 });
 test('split first and last names remain one official staff heading',()=>{
  const rows=[page('management','## Group management\n### Rickard\nGustafson\nPresident and Chief Executive Officer\n### Susanne\nLarsson\nChief Financial Officer')];
@@ -102,7 +102,7 @@ test('a fresh cached inventory seeds buyer discovery even when raw source bodies
 test('a completed empty inventory is rechecked instead of suppressing new evidence for thirty days',async()=>{
  const inventory=D.officialCompanyContactInventory([],company);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete'};const candidate={...company,buyerDiscovery:{officialContactInventory:inventory}};let searches=0;
  await D.runOfficialContactResearch(candidate,{search:async()=>{searches++;return pages.map(p=>({url:p.url}));},readPage:async url=>pages.find(p=>p.url===url)||{markdown:'Official company homepage'}});
- assert.equal(searches,3);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,7);
+ assert.equal(searches,D.OFFICIAL_CONTACT_RESEARCH_POLICY.queries);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,7);
 });
 test('a supplied official page is read before the homepage and unrelated source URLs are rejected',async()=>{
  const candidate={...company},read=[];
