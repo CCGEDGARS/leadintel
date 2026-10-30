@@ -5462,6 +5462,26 @@
         "[data-wa-continue]",
         "outline-offset:3px!important;"
       ]
+    },
+    {
+      "id": "recording-review-styles",
+      "type": "text",
+      "url": "/customer/premium.css",
+      "status": 200,
+      "contains": [
+        ".page-shell .candidate-actions button{min-height:44px",
+        "@media(pointer:coarse)",
+        ".page-shell .steps .sidebar-substeps button{min-height:36px"
+      ]
+    },
+    {
+      "id": "recording-review-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "recording-review=20261030-v1"
+      ]
     }
   ],
   "retry": {
