@@ -51,7 +51,7 @@
       "book_processing_batch_size": 60,
       "language_packs_version": "country-language-v1",
       "google_translation_version": "google-translation-v1",
-      "public_contact_research_version": "20261030-adaptive-company-sources-v5",
+      "public_contact_research_version": "20261030-adaptive-company-sources-v6",
       "public_pdf_extraction_version": "20261030-native-public-pdf-v1"
     }
   },
@@ -4160,7 +4160,7 @@
         "function officialCompanyContactInventory(",
         "function safeOfficialContactInventory(",
         "async function runOfficialContactResearch(",
-        "20261030-adaptive-company-sources-v5",
+        "20261030-adaptive-company-sources-v6",
         "function companyContactSource(",
         "company_publication",
         "pendingSources",
