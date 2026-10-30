@@ -44,3 +44,12 @@ test('Find email starts public research before credits when mandatory evidence i
  f.ctx.findPublicProspectContacts=async()=>{f.calls.push('public-research');f.ctx.enrichmentResults.set('p',{contact:{work_email:'anna@example.com',email_status:'verified'}});return true;};
  assert.equal(await f.run(),true);assert.equal(f.calls[0],'public-research');assert.equal(f.calls.includes('apollo'),false);
 });
+
+test('manual Email keeps the selected stable buyer after reorder and scopes public research to that buyer',async()=>{
+ const f=flow(),selected=f.person,other={id:'other',name:'Other Buyer'};let options,request;
+ f.candidate.people.push(other);f.ctx.window.LeadIntelAdditionalContacts={confirm:async(_c,p,o)=>{assert.equal(p.id,selected.id);options=o;f.candidate.people.reverse();await o.freeConfirm();return false;},policy:()=>({provider:'treg'})};
+ f.ctx.LeadIntelDiscovery.buyerResearchCoveragePassed=()=>false;
+ f.ctx.findPublicProspectContacts=async(_domain,o)=>{request=o;return false;};
+ await f.run();assert.deepEqual(Array.from(request.personIds),[selected.id]);assert.equal(request.manualContact,true);
+ assert.equal(f.candidate.people[0].id,'other');
+});

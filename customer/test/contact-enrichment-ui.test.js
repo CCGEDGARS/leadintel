@@ -35,7 +35,7 @@ test('verified enrichment stays out of local Discovery state and is rendered fro
 test('selected buyer card shows Apollo outcome and makes another lookup explicit',()=>{
   assert.match(ui,/\$\{enrichmentResultHtml\(enrichmentResults\.get\(personKey\(candidate,person\)\),\{hideContacts:true\}\)\}<\/div>\$\{prospectContactControls/);
   assert.match(ui,/>E-mail</);
-  assert.match(ui,/confirmBuyerContact\(candidate,Number\(button\.dataset\.personIndex\),\{kind:"email",dataLookup:true\}\)/);
+  assert.match(ui,/confirmBuyerContact\(candidate,Number\(button\.dataset\.personIndex\),\{kind:"email",dataLookup:true,personId:button\.dataset\.personId\}\)/);
   assert.match(ui,/Apollo check failed/);
 });
 

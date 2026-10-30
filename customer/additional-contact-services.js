@@ -86,8 +86,8 @@
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
   async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
     const identity=key(candidate,person);if(publicChecking.has(identity))return publicChecking.get(identity);
-    const id=workspace(),personId=String(person.id),domain=candidate.domain;
-    const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId);
+    const id=workspace(),personId=String(person.id),domain=candidate.domain,identitySnapshot=JSON.stringify([person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
+    const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===personId&&JSON.stringify([p.publicName||p.name,p.title,p.publicLinkedinUrl||p.linkedin_url])===identitySnapshot);
     const task=(async()=>{try{
       if(!current())return false;
       if(!dataLookup&&adapter?.email?.(candidate,person))return true;
@@ -99,7 +99,7 @@
       if(!dataLookup&&adapter?.email?.(candidate,person))return true;
       if(!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
       return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly});
-    }catch(error){if(workspace()===id){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
+    }catch(error){if(current()){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
     publicChecking.set(identity,task);try{return await task;}finally{publicChecking.delete(identity);}
   }
   async function verifyHunter(candidate,person){
@@ -123,8 +123,8 @@
     const identity=key(candidate,person);if(running.has(identity))return running.get(identity);
     const execute=(async()=>{
       const id=workspace(),domain=candidate.domain,personId=person.id,identitySnapshot=JSON.stringify([person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
-      const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===String(personId)&&(!dataLookup||JSON.stringify([p.publicName||p.name,p.title,p.publicLinkedinUrl||p.linkedin_url])===identitySnapshot));
-      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason);};
+      const current=()=>workspace()===id&&!bridge()?.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&candidate.domain===domain&&candidate.people?.some(p=>String(p.id)===String(personId)&&JSON.stringify([p.publicName||p.name,p.title,p.publicLinkedinUrl||p.linkedin_url])===identitySnapshot);
+      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason);};
       const receipts=[];
       try{
         check();
@@ -160,13 +160,15 @@
             const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
             if(result.error)throw Error(result.error);
+            check();
+            if(result.contact?.external_person_id&&String(result.contact.external_person_id)!==String(personId)||result.contactData&&(String(result.contactData.personId)!==String(personId)||result.contactData.domain!==domain))throw Object.assign(Error('Contact result identity does not match the selected buyer; result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
             if(result.contactData){person.contactData=result.contactData;adapter?.saveOutcome?.(candidate,person);}
             const cost=result.research?.costMicro;
             const outcome=result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
             receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${result.reason?': '+result.reason:''}`);
             if(result.contact){
               await adapter.accept(candidate,person,result);
-              if(!current())return false;
+              if(!current())return false;person=candidate.people.find(p=>String(p.id)===String(personId));
               record(candidate,person,receipts.join(' · '),{status:adapter.email(candidate,person)?'verified':'not_verified'});
               if(service==='hunter'&&result.verification)await adapter.saveHunter?.(candidate,person,result.contact.work_email,result.verification);
               if(!dataLookup&&adapter.baseEmail?.(candidate,person)&&!adapter.email(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
@@ -186,6 +188,9 @@
     })();running.set(identity,execute);try{return await execute;}finally{running.delete(identity);}
   }
   async function auto(candidate,{trigger}={}){
+    // A selected buyer's manual confirmation owns this company until settled.
+    const prefix=[workspace(),candidate.domain,''].join('|');
+    if([...publicChecking.keys()].some(identity=>identity.startsWith(prefix)))return;
     if(trigger==='research_completed'&&(loadedWorkspace!==workspace()||!policy))await load();
     if(busyPolicy||!adapter||loadedWorkspace!==workspace()||!(policy?.enabled||policy?.phoneEnabled))return;
     if(policy.provider==='treg'){

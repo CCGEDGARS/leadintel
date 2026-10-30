@@ -5551,6 +5551,36 @@
       "contains": [
         "status-recovery=20261030-v1"
       ]
+    },
+    {
+      "id": "buyer-routing-manual-scope",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "manualContact:!automatic",
+        "if(!manualContact&&ownerIsCurrent()",
+        "personId:button.dataset.personId"
+      ]
+    },
+    {
+      "id": "buyer-routing-paid-identity",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "CONTACT_IDENTITY_MISMATCH",
+        "publicChecking.keys()"
+      ]
+    },
+    {
+      "id": "buyer-routing-routing-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-routing=20261030-v1"
+      ]
     }
   ],
   "retry": {
