@@ -91,3 +91,20 @@ body{font-size:var(--type-body)}.brand small{font-size:var(--type-micro)}.autosa
 @media(max-width:820px){.progress-panel{overflow-y:visible}.steps{align-items:flex-start}.steps li[data-workflow-stage]{flex:0 0 215px}}
 
 .steps .message-channel-nav{padding:5px 0 5px 25px;gap:4px}.steps .message-channel-nav button{font-size:12px;padding:8px 10px}.steps .message-channel-nav button[aria-current=page]{background:#dceee5;color:#075541;font-weight:700;box-shadow:inset 3px 0 #0d684f}
+
+/* Recording review, 30 October: quieter guidance and accessible navigation. */
+.page-shell .journey-stage-guide{background:#fff;box-shadow:none}
+.page-shell .stage-mini-step-link{min-height:44px;font-size:13px}
+.page-shell .stage-mini-step-link>strong{font-size:12px;line-height:1.45}
+.page-shell .journey-stage-guide header>span{color:#405b50;background:#f0f4f1}
+.page-shell .steps .sidebar-expand{min-height:36px;padding:8px 4px}
+.page-shell .steps .sidebar-substeps button{min-height:36px;align-items:center;font-size:12px;line-height:1.5}
+.page-shell .steps .message-channel-nav button{min-height:40px}
+.page-shell .candidate-actions{gap:10px;flex-wrap:wrap}
+.page-shell .candidate-actions button{min-height:44px;padding:10px 16px;white-space:normal;line-height:1.4}
+.page-shell :is(.topbar-save,.topbar-ws,.account-menu-btn){min-height:40px}
+.page-shell :is(.topbar-save,.topbar-ws,.account-menu-btn,.candidate-actions button):focus-visible{outline:3px solid #167363;outline-offset:3px}
+@media(pointer:coarse){
+  .page-shell .steps :is(.sidebar-expand,.sidebar-substeps button){min-height:44px}
+  .page-shell :is(.topbar-save,.topbar-ws,.account-menu-btn){min-height:44px}
+}
