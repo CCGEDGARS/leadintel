@@ -4182,7 +4182,8 @@
         "data-official-contact-url",
         "if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;",
         "company-published-routes",
-        "Official linking page"
+        "Official linking page",
+        "Resume company contacts"
       ]
     },
     {
