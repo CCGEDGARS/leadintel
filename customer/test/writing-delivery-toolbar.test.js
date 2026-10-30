@@ -62,3 +62,9 @@ test('continue through the real Messages save adapter reconciles its own update 
  f.c.setDraft({subject:'A useful conversation',message:'Hi Alice, Bob here.'});f.button().click();assert.equal(f.d.querySelector('dialog.wa-dialog').open,true);assert.equal(item.approved,false);assert.equal(item.messageStudioDraft.tailoredOriginal.draft.message,'Old');resolve({ok:true});await tick();assert.equal(f.d.querySelector('dialog.wa-dialog').open,false);assert.equal(f.d.activeElement,f.target);assert.equal(item.drafts.emailSubject,'A useful conversation');assert.equal(item.drafts.emailBody,'Hi Alice, Bob here.');assert.equal(item.messageStudioDraft.flowMembership,undefined);assert.equal(f.sent(),0);
  }finally{f.close()}
 });
+test('return from Writing Assistant highlights the visible review action without executing it',async()=>{
+ const f=fixture();try{
+  f.target.hidden=true;let reviews=0;const review=f.d.createElement('button');review.id='mw-flow-resolve';review.textContent='Review message update';review.onclick=()=>reviews++;f.target.before(review);
+  f.button().click();await tick();assert.equal(f.d.querySelector('dialog.wa-dialog').open,false);assert.equal(f.d.activeElement,review);assert.equal(review.classList.contains('wa-delivery-highlight'),true);assert.equal(reviews,0);assert.equal(f.sent(),0);
+ }finally{f.close();}
+});
