@@ -988,7 +988,8 @@
         ".mw-subject-picker>summary:focus-visible",
         ".mw-subject-picker .mw-subject-status",
         "#mw-language-tools.mw-disclosure",
-        "#mw-tools-drawer.mw-disclosure"
+        "#mw-tools-drawer.mw-disclosure",
+        ".mw-message-footer #mw-flow-resolve:disabled"
       ]
     },
     {
@@ -4680,7 +4681,9 @@
         "mw-flow-resolve",
         "mw-message-footer",
         "Continue to Delivery \u2192",
-        "This button does not send anything."
+        "This button does not send anything.",
+        "mw-footer-main",
+        "q('mw-add-flow').hidden=linkedin||Boolean(flowIssue?.target)"
       ]
     },
     {
