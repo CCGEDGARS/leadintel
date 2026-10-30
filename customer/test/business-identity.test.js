@@ -219,7 +219,7 @@ test('Latvian default produces complete evidence-backed framework conclusions', 
   assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
 });
 
-test('AJ Produkti identity starts the Latvian business summary with the company name', () => {
+test('a source-derived company title starts the Latvian business summary with that identity', () => {
   const ajInput = JSON.parse(JSON.stringify(input));
   ajInput.website = 'https://www.ajprodukti.lv/';
   ajInput.uiLanguage = 'lv';
@@ -229,7 +229,7 @@ test('AJ Produkti identity starts the Latvian business summary with the company 
   ajInput.scrapedSources = [{
     type: 'website',
     url: 'https://www.ajprodukti.lv/',
-    title: 'Biroja mēbeles un darba vides aprīkojums',
+    title: 'AJ Produkti | Biroja mēbeles un darba vides aprīkojums',
     text: 'AJ Produkti piedāvā biroja mēbeles un darba vides aprīkojumu Latvijas uzņēmumiem.'
   }];
   const result = profile.buildCompanyIntelligenceProfile(ajInput);
@@ -238,15 +238,15 @@ test('AJ Produkti identity starts the Latvian business summary with the company 
   assert.doesNotMatch(result.businessSummary, /^Biroja mēbeles/i);
 });
 
-test('existing AJ Produkti saved profiles repair a category mistaken for the company name', () => {
+test('an AJ hostname cannot replace the reviewed seller identity while repairing a generated summary', () => {
   const ajInput = JSON.parse(JSON.stringify(input));
   ajInput.website = 'https://www.ajprodukti.lv/';
   ajInput.uiLanguage = 'lv';
   ajInput.answers.priority_offers = 'Biroja mēbeles un darba vides aprīkojums';
   ajInput.scrapedSources = [{type:'website',url:'https://www.ajprodukti.lv/',title:'Biroja mēbeles un darba vides aprīkojums',text:'AJ Produkti piedāvā biroja mēbeles un darba vides aprīkojumu.'}];
-  const saved = profile.normalizeSavedState({...ajInput, profile:{companyName:'Biroja mēbeles un darba vides aprīkojums', priorityOffers:ajInput.answers.priority_offers, businessSummary:'Biroja mēbeles un darba vides aprīkojums nodrošina biroja mēbeles.'}});
-  assert.equal(saved.profile.companyName, 'AJ Produkti');
-  assert.match(saved.profile.businessSummary, /^AJ Produkti\s/);
+  const saved = profile.normalizeSavedState({...ajInput, profile:{companyName:'Customer-reviewed legal identity', priorityOffers:ajInput.answers.priority_offers, businessSummary:'Biroja mēbeles un darba vides aprīkojums nodrošina biroja mēbeles.'}});
+  assert.equal(saved.profile.companyName, 'Customer-reviewed legal identity');
+  assert.match(saved.profile.businessSummary, /^Customer-reviewed legal identity\s/);
 });
 
 test('Research synthesis prompt requires fully Latvian ready-to-use output', () => {

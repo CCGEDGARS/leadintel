@@ -9,7 +9,7 @@ Each stage has four independent gates: deterministic code verification, exact pr
 | Visible stage | Internal screen/module | Code | Production | Authenticated workflow | Business outcome |
 |---|---|---|---|---|---|
 | 1 Setup | 1 | PASS: 4,211 customer + 1,226 backend; build/syntax/controlled Chromium | PASS: historical Instruction 1 proof at `8ce16fc5`, 494 checks; PR #781 | BLOCKED: no customer browser/session | BLOCKED: durable real company setup not observed |
-| 2 Profile | 2 questionnaire/research + 3 profile review | PASS: 4,333 customer + 1,247 backend; build/syntax/browser; independent review | NOT TESTED: Profile audit release pending | BLOCKED: no customer session/database authorization | BLOCKED: real researched-company accuracy not established |
+| 2 Profile | 2 questionnaire/research + 3 profile review | PASS: 4,335 customer + 1,247 backend; build/syntax/browser; independent review | NOT TESTED: Profile audit release pending | BLOCKED: no customer session/database authorization | BLOCKED: real researched-company accuracy not established |
 | 3 Strategy | 4 | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
 | 4 Companies | 5 with company journey focus | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
 | 5 Buyers | 5 with buyer journey focus | NOT TESTED for new authenticated acceptance; prior regression evidence in Step 5 report | Prior release evidence is historical, not a new release claim | BLOCKED: prior customer acceptance still open | BLOCKED: actual priority-email/receipt outcomes still open |
@@ -79,8 +79,10 @@ Start from the final Instruction 2 PR and exact merged/released proof, not an as
 
 The final Profile PR is the permanent evidence continuation for exact tested/released revisions and the four acceptance gates. This committed report deliberately records the pre-release snapshot; later release evidence belongs to that PR/proof rather than changing the source SHA solely to report its own deployment.
 
-Instruction 2 final local verification: **PASS**, 4,333/4,333 customer tests including root suites, 1,247/1,247 backend tests, zero skips/failures, static build, changed JavaScript syntax and whitespace checks. Final runtime tree independently reviewed. Production remains NOT TESTED until exact-SHA proof is linked by the final PR. Authenticated workflow and real business accuracy remain BLOCKED.
+Instruction 2 final local verification: **PASS**, 4,335/4,335 customer tests including root suites, 1,247/1,247 backend tests, zero skips/failures, static build, changed JavaScript syntax and whitespace checks. Final runtime tree independently reviewed. Production remains NOT TESTED until exact-SHA proof is linked by the final PR. Authenticated workflow and real business accuracy remain BLOCKED.
 
 Final Instruction 2 evidence continuation: [Profile audit PR #782](https://github.com/CCGEDGARS/leadintel/pull/782). Its final validation/release evidence resolves the pending production gate. Initial frozen runtime was locally verified at `c2b78c5c07dde2f108a7a82b65f953fe67df0fbe`; the following handoff-only commit does not change executable code. Use the final PR head/merged SHA and matching PROVEN artifact for release status.
 
 Final portability scan reproduced a hidden AJ-domain name override, including replacement of a saved reviewed identity. Removed the exception and added source-title/domain/retained-name regressions; all seller identities now follow the same inference path. See Profile finding P15 and final PR checks.
+
+Final executable revision `466dd34f073f05ca7cc1b1f44dcee132cf9547c6` passed 4,335 customer checks after replacing obsolete domain-override test expectations with generic source/review identity assertions. The subsequent test/report commit changes no executable behavior. [Controlled browser result record](evidence/2026-10-30-profile-controlled-browser.json) retains the exercised scope and limitations. Final PR checks/proof govern the released revision.
