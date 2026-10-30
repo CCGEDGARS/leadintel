@@ -99,3 +99,5 @@ Release wiring adds Strategy health identity, ten mandatory Strategy smoke check
 | Real scheduler/business outcome | BLOCKED: no actual scheduled customer run, live research correctness, company fit or contact outcome demonstrated |
 
 Instruction 4 should use the master handoff, this contract and final PR evidence; preserve the open Profile/Buyers/customer gates. Recheck exact running revisions and migration status, actual company-search payloads/results, ownership/evidence dates and buyer-role handoffs. Successful activation alone must never become permission to enrich or send.
+
+Permanent exact-revision evidence continuation: [Strategy audit PR #783](https://github.com/CCGEDGARS/leadintel/pull/783). Initial complete runtime verification is at `22dcb83b0eaab3405b056f4c781cbcf5cc7e7232`; the following documentation-only commit adds this handoff. Final required CI, merged SHA, migration/deploy outcome, canonical production manifest/health and release-proof artifact belong to that PR. Its production gate remains pending until the exact proof is inspected. Do not use the historical Profile proof as Strategy proof.
