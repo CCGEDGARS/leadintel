@@ -1,4 +1,4 @@
-function isOfficialInventoryQuery(query=''){return /\(contact OR contacts OR kontakt OR team\)|\(management OR leadership OR ledning OR executive\)|\(investor-contacts OR press-contact/.test(query);}
+function isOfficialInventoryQuery(query=''){return /\(contact OR contacts OR kontakt OR team\)|\(management OR leadership OR ledning OR executive\)|\(investor-contacts OR press-contact|\(supplier OR procurement OR contact OR kontakt\)|site:news\.cision\.com\/|\(privacy OR invoices OR accounting OR supplier\)/.test(query);}
 const {weakBuyerFitResponse}=require('./helpers/buyer-fit-fixtures.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -1325,7 +1325,7 @@ test('known full identities receive contact evidence searches before optional pr
  await context.__findPublicProspectContacts('example.com');
  const contact=queries.indexOf('site:example.com "Jane Example"');
  const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
- assert.equal(contact,3);assert.ok(queries.slice(0,3).every(isOfficialInventoryQuery));assert.ok(profiles>contact);
+ assert.equal(contact,6);assert.ok(queries.slice(0,6).every(isOfficialInventoryQuery));assert.ok(profiles>contact);
 });
 
 test('ranked buyer controls retain the original candidate index after ranking clones the people',()=>{
@@ -1479,7 +1479,7 @@ test('one failed contact source does not prevent research for the other nine and
  assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,9);assert.equal(c.people[9].contactResearch.channels.phone.status,'partial');assert.equal(c.publicContactStatus,'error');
  fail=false;queries.length=0;await context.__findPublicProspectContacts('example.com');c=context.__discoveryState().selectedProspects[0];
  assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,10);assert.equal(c.publicContactStatus,'complete');
- assert.equal(queries.filter(isOfficialInventoryQuery).length,3,'an earlier empty company inventory must be rechecked');const personQueries=queries.filter(query=>!isOfficialInventoryQuery(query));assert.equal(personQueries.length,1);assert.ok(personQueries[0].includes('Anna Juliet')&&personQueries[0].includes('(phone OR'));
+ assert.equal(queries.filter(isOfficialInventoryQuery).length,6,'an earlier empty company inventory must be rechecked');const personQueries=queries.filter(query=>!isOfficialInventoryQuery(query));assert.equal(personQueries.length,1);assert.ok(personQueries[0].includes('Anna Juliet')&&personQueries[0].includes('(phone OR'));
 });
 test('pending role edits do not start contact research automatically before the buyer refresh',async()=>{
  let calls=0;const context=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async()=>{calls++;return {ok:true,json:async()=>({data:[]})};}});

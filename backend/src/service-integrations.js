@@ -1,3 +1,4 @@
+import {getDocumentProxy} from 'unpdf';
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {sha256,cookieValue} from './security.js';
@@ -109,20 +110,22 @@ function htmlMeta(html,name){
   }
   return '';
 }
-async function boundedPageText(response,signal){
-  if(!response.body)return '';
-  const reader=response.body.getReader(),decoder=new TextDecoder();let bytes=0,text='';
+async function boundedPageBytes(response,signal){
+  if(!response.body)return new Uint8Array();
+  const reader=response.body.getReader(),chunks=[];let bytes=0;
+  try{for(;;){signal?.throwIfAborted();const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');chunks.push(value);}signal?.throwIfAborted();const data=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.byteLength;}return data;}
+  catch(cause){await reader.cancel().catch(()=>{});throw cause;}finally{reader.releaseLock();}
+}
+async function boundedPageText(response,signal){return new TextDecoder().decode(await boundedPageBytes(response,signal));}
+async function publicPdfText(response,url,signal){
+  const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw Error('Website page is too large to read safely');
+  const bytes=await boundedPageBytes(response,signal);if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw Error('Invalid PDF signature');signal?.throwIfAborted();
+  const pdf=await getDocumentProxy(bytes,{isEvalSupported:false,useSystemFonts:true,disableFontFace:true});
   try{
-    for(;;){
-      signal?.throwIfAborted();
-      const {done,value}=await reader.read();if(done)break;
-      bytes+=value.byteLength;
-      if(bytes>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
-      text+=decoder.decode(value,{stream:true});
-    }
-    signal?.throwIfAborted();return text+decoder.decode();
-  }catch(cause){await reader.cancel().catch(()=>{});throw cause;}
-  finally{reader.releaseLock();}
+    if(pdf.numPages>40)throw Error('Public PDF exceeds the 40-page direct extraction limit');const sections=[];let characters=0;
+    for(let n=1;n<=pdf.numPages;n++){signal?.throwIfAborted();const page=await pdf.getPage(n);try{const content=await page.getTextContent(),text=content.items.map(item=>typeof item.str==='string'?item.str+(item.hasEOL?'\n':' '):'').join('').trim();characters+=text.length;if(characters>MAX_DIRECT_PAGE_CHARS)throw Error('Public PDF exceeds the direct extraction text limit');if(text)sections.push('## Page '+n+'\n'+text);}finally{page.cleanup();}}
+    signal?.throwIfAborted();if(!sections.length)throw Error('PDF has no readable text');return {success:true,data:{markdown:sections.join('\n\n'),links:[],metadata:{title:new URL(url).pathname.split('/').pop(),sourceURL:url,url,statusCode:response.status,source:'direct-pdf',totalPages:pdf.numPages,readablePages:sections.length}}};
+  }finally{await pdf.loadingTask.destroy();}
 }
 export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10000)}={}){
   let current=publicResearchUrl(value);if(!current)throw new Error('A valid public research URL is required');
@@ -136,6 +139,7 @@ export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10
     }
     if(!response.ok)throw Object.assign(new Error(`Website returned ${response.status}`),{status:response.status});
     const contentType=(response.headers.get('content-type')||'').toLowerCase();
+    if(contentType.includes('application/pdf')||/\.pdf$/i.test(current.pathname)&&contentType.includes('application/octet-stream'))return publicPdfText(response,current.href,signal);
     const sitemap=/\/(?:[^/]*sitemap[^/]*)\.xml$/i.test(current.pathname)&&/xml/i.test(contentType);
     if(!sitemap&&contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
     const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');

@@ -1,0 +1,9 @@
+# Adaptive research agent
+
+Root causes: the inventory required same-domain sources, only discovered links before its first reading wave, excluded privacy pages, extracted mostly named-card/mailto emails, and surfaced company routes behind two disclosures. Direct public extraction rejected PDF content. This missed Stegra's linked public invoice PDF and Cision publication. Gmail patterns retained invalid hyphens from compound names.
+
+The shared engine now follows company sources adaptively, retains linked-document/publication provenance and separates organizational emails, phones, forms and company LinkedIn. The visible summary counts routes above buyer cards; source and official linking page remain inspectable. Six discovery queries run, followed by the existing person-specific and three-query Gmail plan. Native bounded PDF extraction is available in the backend without an enrichment request.
+
+Independent review found and regressions cover brand/domain mismatch on snapshot validation, basic contacts suppressing follow-up, repeated completed pages and dropped durable queue entries. A 100-page reference completes across reloads without rereading successful pages. Budget exhaustion and truncation remain partial. Cancellation/context guards and source-domain attribution remain required; partner phones, guessed Gmail and departmental inboxes cannot satisfy buyer confirmation.
+
+Validation must distinguish captured-source reference tests and generated-PDF integration tests from fresh customer outcomes. A live S3 read from the execution environment was attempted but the environment fetch failed; it is not claimed as a successful live native extraction. Production backend version, exact-SHA CI and release proof are required before announcing publication. No paid contact limits, approvals, protected scripts, sending controls or workspace contact records were modified by this source change.

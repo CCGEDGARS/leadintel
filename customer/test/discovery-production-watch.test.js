@@ -94,7 +94,7 @@ const boundedDiscoveryRuntime = [
   'buyer-public-summary data-contact-channel= View profile ↗ officialPageReads buyer-polish=20261021-v2 Checking public contact evidence public searches',
   'Building company dossier /api/ai/company-dossier companyDossier:',
   "discovery-assessment-gaps company assessments failure.detail|| buyerFitIssueCode:cachedFit(c)?.buyerFitIssueCode",
-  'async function refreshOfficialCompanyContacts( data-refresh-company-contacts= published email routes inventoryRestored Read this source first Official sources read data-official-contact-url if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;',
+  'async function refreshOfficialCompanyContacts( data-refresh-company-contacts= published email routes inventoryRestored Read this source first Company contact sources company-published-routes Official linking page data-official-contact-url if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;',
   "alternativeAction:'Save to CRM' choice==='alternative' Company saved to CRM · removed from the Buyers list Research changed during saving.",
   'function saveSelectedBuyerCompany( function removeSelectedBuyerCompany( b.deleteCrmCompany(company.id) Saved ✓ data-remove-buyer-company= Remove completely',
  'Possible match · Unconfirmed Name-based Gmail patterns Gmail research ·',
