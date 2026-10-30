@@ -5,6 +5,8 @@ function harness({kept=true,verified=true,synced=true}={}){
  const candidate={company:'Example',domain:'example.com',people:[person]};let meta={},events=[],checks=0,focused=0;
  const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>({workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function selectedEmailBuyer('),source.indexOf('let buyerConfirmationLevel=')),ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
+ // This harness isolates recipient persistence; stage prerequisites are exercised in buyers-guided-continuation.test.js.
+ ctx.buyerContinuationIssue=()=>null;
  return {ctx,person,candidate,get meta(){return meta;},get events(){return events;},get checks(){return checks;},get focused(){return focused;}};
 }
 test('single next action requires save and a verified business email, not public listings or Gmail',()=>{
@@ -81,11 +83,11 @@ test('LinkedIn selection cannot cross workspaces or enter email delivery',()=>{
  assert.equal(O.buildApprovedSendPayload({...saved,approved:true}),null);assert.equal(O.approveOutreachItem(saved,{}).approved,false);
 });
 
-test('Select & proceed saves the exact email recipient and opens Content Creation immediately',async()=>{
+test('Per-card Proceed saves the exact recipient for the guided footer',async()=>{
  const h=harness();h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),true);
  assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.meta.selectedEmailBuyer.contactId,'contact-anna');
- assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,6);assert.equal(h.meta.scriptBuyer.personId,h.person.id);assert.equal(h.events.length,1);
+ assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.scriptBuyer,undefined);assert.equal(h.events.length,0);
  assert.equal(h.ctx.enrichmentPending.size,0);assert.equal(h.ctx.buyerSelectionPending.size,0);
 });
 test('selecting a second recipient clears the first active flag while keeping both contacts',async()=>{

@@ -510,7 +510,12 @@
         "function discoveryRunTimeoutMs(",
         "window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};",
         "initDiscoveryWhenReady();",
-        "function ensureDiscoveryMounted("
+        "function ensureDiscoveryMounted(",
+        "function buyerContinuationIssue(",
+        "function pointToBuyerRequirement(",
+        "guided-primary-action",
+        "acquisitionFailed=false",
+        "Completed buyer research stages"
       ],
       "notContains": [
         "import \"./content-variants.js\"",
