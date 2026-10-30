@@ -13,6 +13,8 @@ test("allows only the configured application origin",()=>{
   const headers=corsHeaders("https://app.example.test");
   assert.equal(headers["Access-Control-Allow-Credentials"],"true");
   assert.match(headers["Access-Control-Allow-Headers"],/Idempotency-Key/);
+  assert.match(headers["Access-Control-Allow-Headers"],/X-LeadIntel-Operation-Id/);
+  assert.match(headers["Access-Control-Expose-Headers"],/X-LeadIntel-Operation-Id/);
   assert.match(headers["Access-Control-Allow-Methods"],/PATCH/);
   assert.match(headers["Access-Control-Allow-Methods"],/PUT/);
 });

@@ -26,7 +26,8 @@ export function corsHeaders(origin) {
   return origin ? {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Headers": "Content-Type, X-CSRF-Token, Idempotency-Key",
+    "Access-Control-Allow-Headers": "Content-Type, X-CSRF-Token, Idempotency-Key, X-LeadIntel-Operation-Id",
+    "Access-Control-Expose-Headers": "X-LeadIntel-Operation-Id",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Vary": "Origin"
   } : {};

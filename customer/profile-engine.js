@@ -35,10 +35,11 @@
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function normalizeUrl(value){
     const raw=clean(value); if(!raw)return "";
+    if(/^[a-z][a-z\d+.-]*:/i.test(raw)&&!/^https?:\/\//i.test(raw)&&!/^[^/?#:\s]+:\d+(?:[/?#]|$)/.test(raw))return "";
     try{
       const withProtocol=/^https?:\/\//i.test(raw)?raw:`https://${raw}`;
       const url=new URL(withProtocol);
-      if(!["https:","http:"].includes(url.protocol))return "";
+      if(!["https:","http:"].includes(url.protocol)||url.username||url.password)return "";
       url.hash="";
       return url.href;
     }catch{return "";}

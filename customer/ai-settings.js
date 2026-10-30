@@ -26,7 +26,12 @@ let status={role:'',providers:[]};
 // Unknown is not 'not connected': statusKnown turns true with the first status answer; statusUnavailable keeps the last failure.
 let statusKnown=false,statusUnavailable='';
 let integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};
-let busy='';
+let busy='',busyOperation=null,settingsEpoch=0,observedContext='';
+function settingsContext(){return JSON.stringify([workspace()?.id||'',bridge()?.session?.user?.id||'',signedIn(),settingsEpoch]);}
+function settingsCurrent(context){return context===settingsContext()&&signedIn();}
+function prepareSettingsContext(){const context=settingsContext();if(observedContext&&observedContext!==context){++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};statusKnown=false;statusUnavailable='';integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';busyOperation=null;unmountCredentialControls();}observedContext=context;return context;}
+function beginSettingsOperation(provider){const operation={context:settingsContext(),provider};busyOperation=operation;busy=provider;return operation;}
+function finishSettingsOperation(operation,renderUi){if(busyOperation!==operation)return;busyOperation=null;busy='';if(settingsCurrent(operation.context))renderUi();}
 const providerErrors=Object.create(null);
 
 function bridge(){return window.LeadIntelServerBridge||null;}
@@ -40,8 +45,11 @@ function unmountCredentialControls(){
 function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 function apiUrl(path){const ws=workspace();const join=path.includes('?')?'&':'?';return `${API_BASE}${path}${join}workspace_id=${encodeURIComponent(ws?.id||'')}`;}
 async function api(path,options={}){
-  const response=await fetch(apiUrl(path),{credentials:'include',headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options});
-  const payload=await response.json().catch(()=>({}));return {response,payload};
+  const originContext=settingsContext(),trace=window.LeadIntelSetupTrace?.begin('ai_settings');trace?.checkpoint('request','pending');
+  try{
+    const response=await fetch(apiUrl(path),{credentials:'include',...options,headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{}),...(trace?.id?{'X-LeadIntel-Operation-Id':trace.id}:{})}});
+    const payload=await response.json().catch(()=>({}));trace?.checkpoint('response',response.ok?'pass':'fail');trace?.finish(!settingsCurrent(originContext)?'stale':response.ok?'pass':'fail');return {response,payload};
+  }catch(error){trace?.finish(settingsCurrent(originContext)?'fail':'stale');throw error;}
 }
 function providerSaveConfirmation({name,model,configured,hasMain}){
   const request=`LeadIntel sends one tiny test request to ${name} with ${model}: a few tokens, billed to your key, well under a cent.`;
@@ -249,9 +257,9 @@ function render(){
 }
 async function saveDossierSettings(event){
  const button=event.target.closest('#save-dossier-settings');if(!button||button.disabled)return;
- const workspaceId=workspace()?.id,primary=document.getElementById('dossier-main-provider')?.value||'',secondary=document.getElementById('dossier-second-provider')?.value||'';
+ const originContext=settingsContext(),primary=document.getElementById('dossier-main-provider')?.value||'',secondary=document.getElementById('dossier-second-provider')?.value||'';
  if(primary&&primary===secondary){toast('Choose a different second researcher.');return;}button.disabled=true;
- try{const {response,payload}=await api('/api/integrations/ai/research-settings',{method:'PUT',body:JSON.stringify({primary,secondary})});if(workspace()?.id!==workspaceId)return;if(!response.ok)throw Error(payload.error||'Research settings could not be saved');status.research_settings=payload;render();toast('Company research settings saved');}catch(error){if(workspace()?.id===workspaceId){toast(error.message);button.disabled=false;}}
+ try{const {response,payload}=await api('/api/integrations/ai/research-settings',{method:'PUT',body:JSON.stringify({primary,secondary})});if(!settingsCurrent(originContext))return;if(!response.ok)throw Error(payload.error||'Research settings could not be saved');status.research_settings=payload;render();toast('Company research settings saved');}catch(error){if(settingsCurrent(originContext)){toast(error.message);button.disabled=false;}}
 }
 function handleModelModeChange(event){
   // Model choice is a curated list now; nothing to reveal or hide on change.
@@ -404,15 +412,16 @@ async function handleCommunicationAction(event){
   const mailButton=gmailButton||microsoftButton;if(!mailButton||mailButton.disabled)return;
   const provider=gmailButton?'gmail':'microsoft',action=gmailButton?mailButton.dataset.gmailAction:mailButton.dataset.microsoftMailAction,label=provider==='gmail'?'Gmail':'Microsoft 365 mail';
   if(action==='connect'){if(provider==='gmail')bridge()?.connectGmail?.({choose:mailButton.dataset.gmailChoose==='1'});else openMicrosoftHelp(mailButton,'mail');return;}
+  const originContext=settingsContext();
   if(action!=='disconnect'||!(await (window.LeadIntelDialogs?.confirm(`Disconnect ${label} from this LeadIntel workspace?`)??false)))return;
-  const originWorkspace=workspace()?.id;mailButton.disabled=true;
+  if(!settingsCurrent(originContext))return;mailButton.disabled=true;
   try{
     const result=provider==='gmail'?await bridge()?.disconnectGmail?.():await bridge()?.disconnectMicrosoftMail?.();
-    if(workspace()?.id!==originWorkspace)return;
+    if(!settingsCurrent(originContext))return;
     if(!result?.ok)throw new Error(result?.error||`Unable to disconnect ${label}`);
     if(provider==='gmail')integrationStatus.gmail=gmailMailStatus();else integrationStatus.microsoftMail=microsoftMailStatus();
     renderActiveToolsSummary();renderIntegrationMonitoring();toast(`${label} disconnected`);
-  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{mailButton.disabled=false;}
+  }catch(error){if(settingsCurrent(originContext))toast(error.message);}finally{mailButton.disabled=false;}
 }
 function setProviderSaveBusy(provider,isBusy){
   const button=document.querySelector(`[data-ai-action="save"][data-provider="${provider}"]`);if(!button)return;
@@ -431,7 +440,7 @@ function clearProviderError(provider){
   providerErrors[provider]='';updateProviderErrorUi(provider);
 }
 function openDrawer(){
-  injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
+  prepareSettingsContext();injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
   // Slide in from the right like Ask LeadIntel: unhide first, then add is-open on the next frames so the transition runs.
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
   const reveal=()=>{drawer?.classList.add('is-open');backdrop?.classList.add('is-open');};if(typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(()=>window.requestAnimationFrame(reveal));else reveal();
@@ -447,18 +456,19 @@ function closeDrawer(){
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
 let aiStatusGeneration=0;
 async function refreshStatus(){
-  const generation=++aiStatusGeneration;
+  const originContext=prepareSettingsContext(),generation=++aiStatusGeneration;
   if(!signedIn()){status={role:'',providers:[]};render();return status;}
-  const originWorkspace=workspace()?.id;
   try{
     const {response,payload}=await api('/api/integrations/ai/status');
-    if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;
+    if(!settingsCurrent(originContext)||generation!==aiStatusGeneration)return status;
     if(!response.ok)throw new Error(payload.error||'Unable to load AI settings');status=payload;statusKnown=true;statusUnavailable='';render();return status;
-  }catch(error){if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;statusUnavailable=String(error.message||error);render();toast(error.message);return status;}
+  }catch(error){if(!settingsCurrent(originContext)||generation!==aiStatusGeneration)return status;statusUnavailable=String(error.message||error);render();toast(error.message);return status;}
 }
 async function checkApolloStatus(){
+  const originContext=settingsContext();
   try{
     const {response,payload}=await api('/api/enrichment-policy');
+    if(!settingsCurrent(originContext))return null;
     if(!response.ok)throw new Error(payload.error||`Status ${response.status}`);
     const daily=Number(payload.usage?.daily)||0;const monthly=Number(payload.usage?.monthly)||0;const dailyLimit=Number(payload.policy?.daily_credit_limit)||0;const monthlyLimit=Number(payload.policy?.monthly_credit_limit)||0;
     const service=await api('/api/integrations/services/status');
@@ -503,22 +513,22 @@ async function checkGmailStatus(){
 }
 let integrationStatusGeneration=0;
 async function refreshIntegrationStatus(){
-  const generation=++integrationStatusGeneration,originWorkspace=workspace()?.id;
+  const originContext=prepareSettingsContext(),generation=++integrationStatusGeneration;
   integrationStatus.checking=true;integrationStatus.account=workspaceAccountStatus();integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();
   if(!signedIn()){integrationStatus={...integrationStatus,checkedAt:new Date().toISOString(),checking:false,apollo:null,firecrawl:null,gmail:null,microsoftMail:microsoftMailStatus()};renderIntegrationMonitoring();return integrationStatus;}
   const checkedAt=new Date().toISOString();
   const refreshMicrosoft=Promise.resolve(bridge()?.refreshMicrosoftMailStatus?.()).catch(()=>null);
   const [apollo,firecrawl,gmail]=await Promise.all([checkApolloStatus(),checkFirecrawlStatus(),checkGmailStatus(),refreshMicrosoft]);
-  if(!signedIn()||workspace()?.id!==originWorkspace||generation!==integrationStatusGeneration)return integrationStatus;
+  if(!signedIn()||!settingsCurrent(originContext)||generation!==integrationStatusGeneration)return integrationStatus;
   integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};window.dispatchEvent(new CustomEvent('leadintel:integration-health'));renderActiveToolsSummary();renderIntegrationMonitoring();return integrationStatus;
 }
 async function refreshAllStatus(){
-  await refreshStatus();await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};
+  const originContext=settingsContext();await refreshStatus();if(!settingsCurrent(originContext))return {ai:status,integrations:integrationStatus};await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};
 }
 async function testAllIntegrations(){
   if(!signedIn()){toast('Sign in with Google or Microsoft to test workspace integrations');return;}
-  integrationStatus.checking=true;renderIntegrationMonitoring();
-  await refreshAllStatus();
+  const originContext=settingsContext();integrationStatus.checking=true;renderIntegrationMonitoring();
+  await refreshAllStatus();if(!settingsCurrent(originContext))return;
   const checks=criticalChecks();toast(`${checks.filter(check=>check.ok).length}/${checks.length} critical checks passing`);
 }
 async function handleProviderAction(event){
@@ -529,6 +539,7 @@ async function handleProviderAction(event){
   if(action==='disconnect')return disconnectProvider(provider);
 }
 async function saveProvider(provider){
+  prepareSettingsContext();if(!signedIn()||!isOwner()||busy)return;
   const input=document.querySelector(`[data-ai-key="${provider}"]`);const choiceInput=document.querySelector(`[data-ai-model-choice="${provider}"]`);
   const config=PROVIDERS.find(item=>item.provider===provider);const configured=Boolean(providerState(provider)?.configured);
   const apiKey=String(input?.value||'').trim();const model=String(choiceInput?.value||config?.model||'').trim();
@@ -536,40 +547,43 @@ async function saveProvider(provider){
   if(!apiKey&&!configured){toast('Enter your provider API key first');input?.focus();return;}
   const hasMain=status.providers.some(p=>p.active);
   const confirmation=providerSaveConfirmation({name:config.name,model,configured,hasMain});
+  const originContext=settingsContext();
   if(!(await (window.LeadIntelDialogs?.confirm(confirmation.message,confirmation.options)??false)))return;
-  const originWorkspace=workspace()?.id;
-  clearProviderError(provider);busy=provider;setProviderSaveBusy(provider,true);
+  if(!settingsCurrent(originContext)||busy)return;
+  const operation=beginSettingsOperation(provider);clearProviderError(provider);setProviderSaveBusy(provider,true);
   try{
     const updatingModel=configured&&!apiKey;
     const {response,payload}=await api('/api/integrations/ai/provider',{method:updatingModel?'PATCH':'PUT',body:JSON.stringify(updatingModel?{provider,model}:{provider,api_key:apiKey,model,make_active:Boolean(providerState(provider)?.active)||!status.providers.some(p=>p.active)})});
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');
-    if(workspace()?.id!==originWorkspace)return;
-    if(input)input.value='';providerErrors[provider]='';busy='';
+    if(!settingsCurrent(originContext))return;
+    if(input)input.value='';providerErrors[provider]='';
     toast(`${config.name} · ${payload.model} confirmed${payload.active?' · Main engine':''}`);
-    await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
+    await refreshAllStatus();if(!settingsCurrent(originContext))return;window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
   }catch(error){
-    if(workspace()?.id!==originWorkspace)return;
+    if(!settingsCurrent(originContext))return;
     providerErrors[provider]=error.message;
     updateProviderErrorUi(provider);
     toast(error.message);
-  }finally{if(workspace()?.id===originWorkspace){if(busy===provider)busy='';setProviderSaveBusy(provider,false);}}
+  }finally{finishSettingsOperation(operation,()=>setProviderSaveBusy(provider,false));}
 }
 async function activateProvider(provider){
-  const current=providerState(provider);if(!current?.configured)return;
+  prepareSettingsContext();if(!signedIn()||!isOwner()||busy)return;
+  const current=providerState(provider);if(!current?.configured)return;const originContext=settingsContext();
   if(!(await (window.LeadIntelDialogs?.confirm(`Make ${current.name} · ${current.model} the main AI engine? Normal profile, strategy, extraction and writing tasks will use this model. Connected specialists keep their separate research/document roles.`)??false)))return;
-  const originWorkspace=workspace()?.id;
-  busy=provider;render();try{
+  if(!settingsCurrent(originContext)||busy)return;
+  const operation=beginSettingsOperation(provider);render();try{
     const {response,payload}=await api('/api/integrations/ai/activate',{method:'POST',body:JSON.stringify({provider,confirmed_model:current.model})});if(!response.ok)throw new Error(payload.error||'Unable to activate provider');
-    if(workspace()?.id!==originWorkspace)return;
-    await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;toast(`${payload.model} confirmed as main engine`);window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
-  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{if(workspace()?.id===originWorkspace){busy='';render();}}
+    if(!settingsCurrent(originContext))return;
+    await refreshAllStatus();if(!settingsCurrent(originContext))return;toast(`${payload.model} confirmed as main engine`);window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
+  }catch(error){if(settingsCurrent(originContext))toast(error.message);}finally{finishSettingsOperation(operation,render);}
 }
 async function disconnectProvider(provider){
-  const originWorkspace=workspace()?.id;
-  busy=provider;render();try{
+  prepareSettingsContext();if(!signedIn()||!isOwner()||busy)return;
+  const originContext=settingsContext();if(!settingsCurrent(originContext)||busy)return;
+  const operation=beginSettingsOperation(provider);render();try{
     const {response,payload}=await api('/api/integrations/ai/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');
-    if(workspace()?.id!==originWorkspace)return;await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;toast('AI provider disconnected');window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider,disconnected:true}}));
-  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{if(workspace()?.id===originWorkspace){busy='';render();}}
+    if(!settingsCurrent(originContext))return;await refreshAllStatus();if(!settingsCurrent(originContext))return;toast('AI provider disconnected');window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider,disconnected:true}}));
+  }catch(error){if(settingsCurrent(originContext))toast(error.message);}finally{finishSettingsOperation(operation,render);}
 }
 
 window.LeadIntelMicrosoftConnection={version:SETTINGS_VERSION,openSignIn(trigger){openDrawer();openMicrosoftHelp(trigger,'signin');}};
@@ -579,7 +593,7 @@ window.addEventListener('leadintel:service-status',()=>{renderIntegrationMonitor
 window.addEventListener('leadintel:calendly-status',()=>renderActiveToolsSummary());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 addEventListener('leadintel:service-credential-changed',()=>{if(signedIn())void refreshIntegrationStatus();});
-window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};statusKnown=false;statusUnavailable='';integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
+window.addEventListener('leadintel:workspace-changed',()=>{++settingsEpoch;++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};statusKnown=false;statusUnavailable='';integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';busyOperation=null;unmountCredentialControls();refreshAllStatus();});
 window.addEventListener('leadintel:gmail-status',()=>{integrationStatus.gmail=gmailMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 if(shouldOpenSettingsFromUrl())openDrawer();

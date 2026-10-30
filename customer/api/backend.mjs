@@ -1,6 +1,6 @@
 // Fixed upstream only. Keep cookies HttpOnly and out of JavaScript/JSON/logs.
 const UPSTREAM='https://leadintel-api.edgars-7e7.workers.dev';
-const REQUEST_HEADERS=['accept','content-type','cookie','origin','x-csrf-token','idempotency-key'];
+const REQUEST_HEADERS=['accept','content-type','cookie','origin','x-csrf-token','idempotency-key','x-leadintel-operation-id'];
 export async function proxyRequest(request,fetchImpl=fetch){
   const incoming=new URL(request.url);const route=incoming.searchParams.get('route');
   if(!route||! /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/.test(route)||route.split('/').includes('..'))return new Response('Invalid API route',{status:400});
@@ -9,7 +9,7 @@ export async function proxyRequest(request,fetchImpl=fetch){
   headers.set('x-leadintel-first-party','1');
   const response=await fetchImpl(target,{method:request.method,headers,redirect:'manual',...(!['GET','HEAD'].includes(request.method)?{body:await request.arrayBuffer()}:{}),signal:request.signal});
   const out=new Headers({'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});
-  for(const name of ['content-type','location','retry-after','content-disposition']){const value=response.headers.get(name);if(value)out.set(name,value);}
+  for(const name of ['content-type','location','retry-after','content-disposition','x-leadintel-operation-id']){const value=response.headers.get(name);if(value)out.set(name,value);}
   // No Domain attribute: the browser installs this cookie on the app host.
   for(const cookie of response.headers.getSetCookie())out.append('Set-Cookie',cookie);
   return new Response(response.body,{status:response.status,headers:out});

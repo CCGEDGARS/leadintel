@@ -91,7 +91,84 @@ sqliteTest('company-wide Apollo identity searches do not force management filter
  assert.deepEqual(bodies[0].person_seniorities,[]);assert.deepEqual(bodies[0].person_titles,[]);assert.deepEqual(bodies[0].q_organization_domains_list,['company.example']);assert.equal(bodies[1].q_keywords,'Company AB');assert.equal('q_organization_domains_list' in bodies[1],false);assert.equal(bodies[1].per_page,25);
  }finally{globalThis.fetch=old;}
 });
-function req(pathname,{method='GET',token,body}={}){return new Request(`https://api.example.test${pathname}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
+function req(pathname,{method='GET',token,body,headers={}}={}){return new Request(`https://api.example.test${pathname}`,{method,headers:{...headers,...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
+
+sqliteTest('Setup connection operations correlate bounded provider checks and persistence without secrets',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch,operationId='setup-connect-1234',secret='fc-private-team-token';let reject=false;
+ globalThis.fetch=async()=>reject?new Response(JSON.stringify({error:'Rejected '+secret}),{status:401}):new Response(JSON.stringify({success:true,data:{remainingCredits:42}}));
+ try{
+  const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:secret},headers:{'X-LeadIntel-Operation-Id':operationId}}),env,{});
+  assert.equal(saved.status,200);assert.equal(saved.headers.get('X-LeadIntel-Operation-Id'),operationId);
+  let events=DB.raw.prepare("SELECT event_type,metadata_json FROM audit_events WHERE entity_type='workspace_service_integration' ORDER BY rowid").all();
+  assert.deepEqual(events.map(e=>e.event_type),['service.provider_check_started','service.provider_saved']);assert.ok(events.every(e=>JSON.parse(e.metadata_json).operation_id===operationId));assert.doesNotMatch(JSON.stringify(events),/fc-private-team-token|encrypted_api_key/);
+  reject=true;const checked=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token,headers:{'X-LeadIntel-Operation-Id':'setup-recheck-5678'}}),env,{});
+  assert.equal(checked.headers.get('X-LeadIntel-Operation-Id'),'setup-recheck-5678');events=DB.raw.prepare("SELECT event_type,metadata_json FROM audit_events WHERE entity_type='workspace_service_integration' ORDER BY rowid").all();
+  assert.equal(events.at(-1).event_type,'service.provider_check_failed');assert.equal(JSON.parse(events.at(-1).metadata_json).operation_id,'setup-recheck-5678');assert.doesNotMatch(JSON.stringify(events),/fc-private-team-token/);
+  const invalid=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token,headers:{'X-LeadIntel-Operation-Id':'https://private.example/token?secret=bad'}}),env,{});
+  assert.match(invalid.headers.get('X-LeadIntel-Operation-Id'),/^[0-9a-f-]{36}$/);
+ }finally{globalThis.fetch=old;}
+});
+
+sqliteTest('connection rejection and status checks never expose credential-bearing upstream errors',async()=>{
+ const {env,token}=await fixture(),old=globalThis.fetch,secret='fc-private-customer-token';
+ globalThis.fetch=async()=>new Response(JSON.stringify({error:`Rejected Authorization: Bearer ${secret}; account private@example.test`}),{status:401});
+ try{
+  const rejected=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:secret}}),env,{});
+  assert.equal(rejected.status,422);assert.doesNotMatch(await rejected.text(),/fc-private-customer-token|private@example/);
+  await connectFirecrawl(env);
+  const checked=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{}),status=await checked.json();
+  assert.equal(status.providers.find(p=>p.provider==='firecrawl').state,'bad');assert.doesNotMatch(JSON.stringify(status),/fc-private-customer-token|private@example/);
+ }finally{globalThis.fetch=old;}
+});
+
+sqliteTest('a late status verification cannot overwrite a replacement credential balance or flags',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;await connectFirecrawl(env,{remaining_credits:40,plan_credits:1000});
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return new Response(JSON.stringify({success:true,data:{remainingCredits:0,planCredits:1000}}));};
+ try{
+  const pending=handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{});await entered;
+  const encrypted=await encryptSecret('fc-replacement-token',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
+  DB.raw.prepare("UPDATE workspace_service_integrations SET encrypted_api_key=?,key_hint='new!',metadata_json=? WHERE workspace_id='w1' AND provider='firecrawl'").run(encrypted,JSON.stringify({remaining_credits:900,plan_credits:1000}));
+  release();const status=await (await pending).json(),provider=status.providers.find(p=>p.provider==='firecrawl');
+  assert.equal(JSON.parse(DB.raw.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE provider='firecrawl'").get().metadata_json).remaining_credits,900);
+  assert.equal(provider.key_hint,'new!');assert.equal(provider.metadata.remaining_credits,900);assert.equal(provider.credit_issue,null);
+ }finally{release();globalThis.fetch=old;}
+});
+
+sqliteTest('a verification finishing after disconnect reports the current disconnected state',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;await connectFirecrawl(env);
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return new Response(JSON.stringify({success:true,data:{remainingCredits:50}}));};
+ try{
+  const pending=handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{});await entered;
+  const disconnected=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'DELETE',token,body:{provider:'firecrawl'}}),env,{});assert.equal(disconnected.status,200);
+  release();const provider=(await (await pending).json()).providers.find(p=>p.provider==='firecrawl');
+  assert.equal(provider.configured,false);assert.equal(DB.raw.prepare("SELECT count(*) n FROM workspace_service_integrations").get().n,0);
+ }finally{release();globalThis.fetch=old;}
+});
+
+sqliteTest('a reconnect started before disconnect cannot restore the disconnected credential',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;await connectFirecrawl(env);
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return new Response(JSON.stringify({success:true,data:{remainingCredits:50}}));};
+ try{
+  const pending=handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:'fc-slow-replacement'}}),env,{});await entered;
+  assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'DELETE',token,body:{provider:'firecrawl'}}),env,{})).status,200);
+  release();const saved=await pending;
+  assert.equal(saved.status,409);assert.equal(DB.raw.prepare('SELECT count(*) n FROM workspace_service_integrations').get().n,0);
+ }finally{release();globalThis.fetch=old;}
+});
+
+sqliteTest('concurrent first connections preserve the credential that completed first',async()=>{
+ const {env,token}=await fixture(),old=globalThis.fetch;
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async(_,options)=>{if(options.headers.Authorization==='Bearer fc-slow-first'){started();await waiting;}return new Response(JSON.stringify({success:true,data:{remainingCredits:50}}));};
+ try{
+  const pending=handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:'fc-slow-first'}}),env,{});await entered;
+  const winner=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:'fc-fast-second'}}),env,{});assert.equal(winner.status,200);
+  release();assert.equal((await pending).status,409);assert.equal((await resolveWorkspaceServiceCredential(env,'w1','firecrawl')).apiKey,'fc-fast-second');
+ }finally{release();globalThis.fetch=old;}
+});
 
 sqliteTest('Hunter zero balances flag payment and fresh positive balances clear it without consuming credits',async()=>{
  const {env,token}=await fixture(),original=globalThis.fetch;let remaining=0,calls=[];
@@ -118,6 +195,17 @@ sqliteTest('Hunter real-request payment failures persist across status reload an
   }
   assert.ok(DB.raw.prepare("SELECT count(*) AS count FROM audit_events WHERE entity_id='hunter' AND event_type='provider.credit_exhausted'").get().count>=2);
  }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('reconnecting a provider with verified positive credits clears the old credential billing alert',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;
+ DB.raw.prepare("INSERT INTO audit_events(id,workspace_id,event_type,entity_type,entity_id,metadata_json) VALUES('old-credit-failure','w1','provider.credit_exhausted','provider_credit','firecrawl','{\"source\":\"customer\"}')").run();
+ globalThis.fetch=async()=>Response.json({success:true,data:{remainingCredits:900,planCredits:1000}});
+ try{
+  const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:'fc-new-funded-account'}}),env,{});assert.equal(saved.status,200);
+  const status=await (await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token}),env,{})).json(),provider=status.providers.find(p=>p.provider==='firecrawl');
+  assert.equal(provider.credit_issue,null);assert.equal(provider.state,'good');
+ }finally{globalThis.fetch=old;}
 });
 
 sqliteTest('Hunter authentication failures and ordinary rate limits do not become payment alerts',async()=>{

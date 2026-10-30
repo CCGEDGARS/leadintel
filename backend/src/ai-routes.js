@@ -36,6 +36,10 @@ async function requireMember(request,env,workspaceId,roles=[]){
 async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
   await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`).bind(uuid(),workspaceId,userId,type,'workspace_ai_integration',provider,JSON.stringify(metadata)).run();
 }
+async function connectionTrace(env,event){try{await audit(env,event);}catch{}}
+function verificationMessage(provider,cause){
+  return creditFailure(0,cause?.message)?`${PROVIDER_NAMES[provider]} request failed · code: credits_exhausted · Open Billing & credits, add API credits or review limits, then retry.`:`${PROVIDER_NAMES[provider]} connection check failed. Check the API key and model, then try again.`;
+}
 function encryptionConfigured(env){return Boolean(String(env.OAUTH_TOKEN_ENCRYPTION_KEY||'').trim());}
 function validateModel(provider,value){
   const model=String(value||defaultAiModel(provider)).trim();
@@ -96,6 +100,9 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
   const known=path.startsWith('/api/follow-up-assistant/')||path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/company-dossier'||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
+  const requestedOperation=request.headers.get('X-LeadIntel-Operation-Id')||'';
+  const operationId=/^[A-Za-z0-9._:-]{8,80}$/.test(requestedOperation)?requestedOperation:uuid();
+  if(path.startsWith('/api/integrations/ai/'))cors={...cors,'X-LeadIntel-Operation-Id':operationId};
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path.startsWith('/api/follow-up-assistant/')){
@@ -161,14 +168,20 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('AI provider payload is required',400,cors);
     const provider=normalizeAiProvider(body.provider);if(!provider)return error('Unsupported AI provider',400,cors);
     let apiKey,model;try{apiKey=validateApiKey(body.api_key);model=validateModel(provider,body.model);}catch(cause){return error(cause.message,400,cors);}
-    try{await verifyProviderCredential({provider,apiKey,model});}catch(cause){return error(String(cause?.message||'AI provider verification failed').slice(0,180),422,cors);}
+    const previous=await env.DB.prepare('SELECT encrypted_api_key,model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?').bind(workspaceId,provider).first();
+    await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_started',provider,metadata:{operation_id:operationId}});
+    try{await verifyProviderCredential({provider,apiKey,model});}catch(cause){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId}});return error(verificationMessage(provider,cause),422,cors);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
       const statements=[];
-      statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CASE WHEN ?=1 AND NOT EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND active=1) THEN 1 ELSE 0 END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,body.make_active!==false?1:0,workspaceId));
-      await env.DB.batch(statements);const makeActive=Boolean((await activeIntegration(env,workspaceId))?.provider===provider);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive}});
+      statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) SELECT ?,?,?,?,?,CASE WHEN ?=1 AND NOT EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND active=1) THEN 1 ELSE 0 END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+        WHERE COALESCE((SELECT encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?),'')=?
+          AND COALESCE((SELECT model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?),'')=?
+        ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,body.make_active!==false?1:0,workspaceId,workspaceId,provider,
+        previous?.encrypted_api_key||'',workspaceId,provider,previous?.model||''));
+      const saved=await env.DB.batch(statements);if(!saved[0]?.meta?.changes){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection changed while checking the key. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}const makeActive=Boolean((await activeIntegration(env,workspaceId))?.provider===provider);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive,operation_id:operationId}});
       return json({saved:true,provider,model,active:makeActive,key_hint:keyHint(apiKey),verified_at:new Date().toISOString()},200,cors);
-    }catch{return error('Unable to save AI provider configuration',500,cors);}
+    }catch{await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_save_failed',provider,metadata:{operation_id:operationId}});return error('Unable to save AI provider configuration',500,cors);}
   }
 
   if(path==='/api/integrations/ai/provider'&&request.method==='PATCH'){
@@ -177,16 +190,20 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('AI provider payload is required',400,cors);
     const provider=normalizeAiProvider(body.provider);if(!provider)return error('Unsupported AI provider',400,cors);
     let model;try{model=validateModel(provider,body.model);}catch(cause){return error(cause.message,400,cors);}
-    const existing=await env.DB.prepare(`SELECT encrypted_api_key,active FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).first();
+    const existing=await env.DB.prepare(`SELECT encrypted_api_key,active,model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).first();
     if(!existing)return error('Configure this AI provider before changing its model',409,cors);
+    await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_started',provider,metadata:{operation_id:operationId}});
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(existing.encrypted_api_key,key);
       await verifyProviderCredential({provider,apiKey,model});
-      await env.DB.prepare(`UPDATE workspace_ai_integrations SET model=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(model,workspaceId,provider).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active)}});
+      const saved=await env.DB.prepare(`UPDATE workspace_ai_integrations SET model=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+        WHERE workspace_id=? AND provider=? AND encrypted_api_key=? AND model=?`).bind(model,workspaceId,provider,existing.encrypted_api_key,existing.model).run();
+      if(!saved?.meta?.changes){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection or model changed during verification. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active),operation_id:operationId}});
       return json({saved:true,provider,model,active:Boolean(existing.active),verified_at:new Date().toISOString()},200,cors);
     }catch(cause){
-      if(/request failed|returned no text|model is invalid/i.test(String(cause?.message||'')))return error(String(cause.message).slice(0,180),422,cors);
+      await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_failed',provider,metadata:{operation_id:operationId}});
+      if(/request failed|returned no text|model is invalid/i.test(String(cause?.message||'')))return error(verificationMessage(provider,cause),422,cors);
       return error('Unable to update AI provider model',500,cors);
     }
   }
@@ -198,14 +215,14 @@ export async function handleAiRoute(request,env,cors={}){
     if(body.confirmed_model!==existing.model)return error('Saved model changed. Refresh Settings before confirming the main engine.',409,cors);
     const activated=await env.DB.batch([env.DB.prepare(`UPDATE workspace_ai_integrations SET active=0,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND provider=? AND model=?)`).bind(workspaceId,workspaceId,provider,existing.model),env.DB.prepare(`UPDATE workspace_ai_integrations SET active=1,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=? AND model=?`).bind(workspaceId,provider,existing.model)]);
     if(!activated[1]?.meta?.changes)return error('Saved model changed. Refresh Settings before confirming the main engine.',409,cors);
-    await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_activated',provider,metadata:{model:existing.model}});return json({active:true,provider,model:existing.model},200,cors);
+    await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_activated',provider,metadata:{model:existing.model,operation_id:operationId}});return json({active:true,provider,model:existing.model},200,cors);
   }
 
   if(path==='/api/integrations/ai/provider'&&request.method==='DELETE'){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeAiProvider(body?.provider);if(!provider)return error('Unsupported AI provider',400,cors);
     const result=await env.DB.prepare(`DELETE FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).run();
-    await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_disconnected',provider});return json({disconnected:Number(result?.meta?.changes||0)>0,provider},200,cors);
+    await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_disconnected',provider,metadata:{operation_id:operationId}});return json({disconnected:Number(result?.meta?.changes||0)>0,provider},200,cors);
   }
 
   if(path==='/api/ai/web-search'&&request.method==='POST'){

@@ -34,7 +34,7 @@ test('AI credential mutations are workspace-owner only while generation and web 
 
 test('configured providers can verify and change models without resubmitting the stored API key',()=>{
   assert.match(source,/request\.method==='PATCH'/);
-  assert.match(source,/SELECT encrypted_api_key,active FROM workspace_ai_integrations/);
+  assert.match(source,/SELECT encrypted_api_key,active,model FROM workspace_ai_integrations/);
   assert.match(source,/decryptSecret\(existing\.encrypted_api_key,key\)/);
   assert.match(source,/verifyProviderCredential\(\{provider,apiKey,model\}\)/);
   assert.match(source,/UPDATE workspace_ai_integrations SET model=\?,verified_at=CURRENT_TIMESTAMP/);

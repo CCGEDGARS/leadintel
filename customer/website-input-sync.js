@@ -13,9 +13,10 @@
   function normalizeUrl(value){
     const raw=String(value??"").trim();
     if(!raw)return "";
+    if(/^[a-z][a-z\d+.-]*:/i.test(raw)&&!/^https?:\/\//i.test(raw)&&!/^[^/?#:\s]+:\d+(?:[/?#]|$)/.test(raw))return "";
     try{
       const url=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);
-      if(!["http:","https:"].includes(url.protocol)||!url.hostname.includes("."))return "";
+      if(!["http:","https:"].includes(url.protocol)||!url.hostname.includes(".")||url.username||url.password)return "";
       url.hash="";
       return url.href;
     }catch{return "";}

@@ -1,21 +1,30 @@
 (function(root){
   'use strict';
   const API='https://leadintel-api.edgars-7e7.workers.dev',P=root.LeadIntelAdditionalContactPolicy;
-  let adapter=null,loadedWorkspace='',policy=null,provider=null,hunter=null,treg=null,busyPolicy=false,policyRole='',policyRequest=0;
+  let adapter=null,loadedWorkspace='',policy=null,provider=null,hunter=null,treg=null,busyPolicy=false,policyRole='',policyRequest=0,loadedContext='',policyEpoch=0,policyOperation=null;
   const publicChecking=new Map(),running=new Map(),automaticAttempts=new Set(),outcomes=new Map();
   const bridge=()=>root.LeadIntelServerBridge,workspace=()=>bridge()?.workspace?.id||'';
+  const policyContext=()=>JSON.stringify([workspace(),bridge()?.session?.user?.id||'',bridge()?.session?.authenticated===true,policyEpoch]);
+  const policyCurrent=context=>context===policyContext()&&bridge()?.session?.authenticated===true;
+  const loadedCurrent=()=>loadedWorkspace===workspace()&&loadedContext===policyContext()&&bridge()?.session?.authenticated===true;
+  function beginPolicyOperation(){const operation={context:policyContext()};policyOperation=operation;busyPolicy=true;policyRequest++;return operation;}
+  function finishPolicyOperation(operation){if(policyOperation!==operation)return;policyOperation=null;busyPolicy=false;if(policyCurrent(operation.context))renderPolicy();}
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const key=(candidate,person)=>[workspace(),bridge()?.session?.user?.id||'',candidate.domain,person.id].join('|');
   async function api(path,options={}){
-    const id=workspace(),userId=bridge()?.session?.user?.id;if(!id||!bridge()?.session?.authenticated)throw Error('Sign in to configure additional services.');
-    const response=await fetch(`${API}${path}${path.includes('?')?'&':'?'}workspace_id=${encodeURIComponent(id)}`,{credentials:'include',...options,headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(options.body?.includes('\"data_lookup\":true')?240000:60000)});
-    const result=await response.json();if(workspace()!==id||bridge()?.session?.user?.id!==userId||!bridge()?.session?.authenticated)throw Error('Workspace changed; retry in the current workspace.');
-    if(!response.ok)throw Object.assign(Error(result.error||'Additional services are unavailable.'),{code:result.code});return result;
+    const id=workspace(),userId=bridge()?.session?.user?.id,originContext=policyContext();if(!id||!bridge()?.session?.authenticated)throw Error('Sign in to configure additional services.');
+    const trace=path==='/api/additional-contact-services/policy'||path==='/api/integrations/services/apollo/settings'?root.LeadIntelSetupTrace?.begin('paid_preferences'):null;trace?.checkpoint('request','pending');
+    try{
+      const response=await fetch(`${API}${path}${path.includes('?')?'&':'?'}workspace_id=${encodeURIComponent(id)}`,{credentials:'include',...options,headers:{Accept:'application/json','Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(options.body?.includes('"data_lookup":true')?240000:60000)});
+      const result=await response.json();trace?.checkpoint('response',response.ok?'pass':'fail');
+      if(workspace()!==id||bridge()?.session?.user?.id!==userId||!bridge()?.session?.authenticated||!policyCurrent(originContext))throw Error('Workspace changed; retry in the current workspace.');
+      if(!response.ok)throw Object.assign(Error(result.error||'Additional services are unavailable.'),{code:result.code});trace?.finish('pass');return result;
+    }catch(error){trace?.finish(policyCurrent(originContext)?'fail':'stale');throw error;}
   }
   function status(message){const node=document.getElementById('additional-contact-status');if(node)node.textContent=message;}
   function mountPaidSearch(card=document.getElementById('delivery-setup')){
     if(!card)return;const footer=card.querySelector('.delivery-settings-footer, [data-paid-settings-controls]');if(!footer)return;
-    const valid=loadedWorkspace===workspace()&&policy,isTreg=valid&&policy.provider==='treg';
+    const valid=loadedCurrent()&&policy,isTreg=valid&&policy.provider==='treg';
     for(const channel of ['email','phone']){
       const phone=channel==='phone',selector=phone?'[data-paid-phone-toggle]':'[data-paid-search-toggle]';
       let button=footer.querySelector(selector);if(!button){button=document.createElement('button');button.type='button';button.className='secondary-btn';if(phone)button.dataset.paidPhoneToggle='1';else button.dataset.paidSearchToggle='1';footer.insertBefore(button,footer.querySelector('#delivery-setup-save')||footer.lastElementChild);button.addEventListener('click',()=>togglePaidSearch(channel,{settings:card.hasAttribute('data-paid-contact-settings')}));}
@@ -30,23 +39,23 @@
   function mountSettings(){const card=document.querySelector('[data-paid-contact-settings]');if(card)mountPaidSearch(card);}
   function renderPaidControls(){mountPaidSearch();mountSettings();}
   async function togglePaidSearch(channel='email',{settings=false}={}){
-    if(busyPolicy||loadedWorkspace!==workspace()||policyRole!=='owner')return;
-    const id=workspace(),userId=bridge()?.session?.user?.id,phone=channel==='phone',enabled=!(policy.provider==='treg'&&(phone?policy.phoneEnabled:policy.enabled));
+    if(busyPolicy||!loadedCurrent()||policyRole!=='owner')return;
+    const originContext=policyContext(),phone=channel==='phone',enabled=!(policy.provider==='treg'&&(phone?policy.phoneEnabled:policy.enabled));
     if(enabled&&!treg?.configured){openSettings('treg');status('Connect your Treg team token in Settings, then activate paid search.');return;}
     const daily=settings?policy.dailyLimit:Math.max(1,Math.min(50,Number(document.getElementById('delivery-setup-custom')?.hidden===false?document.getElementById('delivery-setup-custom').value:document.getElementById('delivery-setup-limit')?.value)||policy.dailyLimit||5));
     const input={enabled:phone?Boolean(policy.provider==='treg'&&policy.enabled):enabled,phoneEnabled:phone?enabled:Boolean(policy.provider==='treg'&&policy.phoneEnabled),provider:'treg',maxPerCompany:1,dailyLimit:daily,monthlyLimit:settings?policy.monthlyLimit:Math.max(daily,Math.min(1000,Math.max(policy.monthlyLimit||0,daily*30)))};
-    busyPolicy=true;policyRequest++;renderPaidControls();
+    const operation=beginPolicyOperation();renderPaidControls();
     try{
       if(enabled){const approved=await (root.LeadIntelDialogs?.confirm((phone?'Activate paid phone lookup. Budget approximately €0.20 per number found. This does not activate paid email search. A number may be missing or provider-listed without confirmed reachability or ownership. Each phone request is capped at $0.25.':'Activate paid work-email finding and verification. Budget approximately €0.30/contact for research and AI. This does not activate paid phone search. Treg finding and verification are capped at $0.075 combined; public/AI research costs vary.')+' These are estimates, not fixed prices. Up to '+input.dailyLimit+' contact lookups/day and '+input.monthlyLimit+'/month; one buyer per company. Saving this choice does not run a paid lookup or send messages. Automatic sending requires separate activation.',{title:'Activate paid '+channel+' search',action:'Activate paid '+channel+' search'})??false);if(!approved)return;}
-      if(id!==workspace()||bridge()?.session?.user?.id!==userId||!bridge()?.session?.authenticated)throw Error('Workspace changed. Paid search was not changed.');
-      const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
-    }catch(error){status(error.message);outcomes.set('policy-error',error.message);}
-    finally{busyPolicy=false;if(id===workspace()){renderPaidControls();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
+      if(!policyCurrent(originContext))return;
+      const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});if(!policyCurrent(originContext))return;policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
+    }catch(error){if(policyCurrent(originContext)){status(error.message);outcomes.set('policy-error',error.message);}}
+    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
   }
   function renderPolicy(){
     renderPaidControls();
     const form=document.getElementById('additional-contact-preferences');if(!form)return;
-    const valid=loadedWorkspace===workspace()&&policy,owner=bridge()?.workspace?.role==='owner';
+    const valid=loadedCurrent()&&policy,owner=policyRole==='owner';
     for(const field of form.elements)field.disabled=!valid||!owner||busyPolicy;
     if(!valid){form.reset();status('Sign in to save optional research preferences.');return;}
     form.elements.enabled.checked=policy.enabled;
@@ -54,14 +63,14 @@
     status(policy.enabled?`Approved · up to ${policy.maxPerCompany} buyers per company, ${policy.dailyLimit} lookups per day and ${policy.monthlyLimit} per month.${provider?.configured?'':' Connect Apollo in Settings before use.'}`:'Public research first. Additional services require your approval when needed.');
   }
   async function load(){
-    const id=workspace(),serial=++policyRequest;if(!id||!bridge()?.session?.authenticated){loadedWorkspace='';policy=null;provider=null;renderPolicy();return;}
-    if(loadedWorkspace!==id){loadedWorkspace='';policy=null;provider=null;renderPolicy();}
+    const id=workspace(),originContext=policyContext(),serial=++policyRequest;if(policyOperation&&!policyCurrent(policyOperation.context)){policyOperation=null;busyPolicy=false;}if(!id||!bridge()?.session?.authenticated){loadedWorkspace='';policy=null;provider=null;renderPolicy();return;}
+    if(!loadedCurrent()){loadedWorkspace='';policy=null;provider=null;renderPolicy();}
     try{
       const [value,services]=await Promise.all([api('/api/additional-contact-services/policy'),api('/api/integrations/services/status')]);
-      if(workspace()!==id||serial!==policyRequest||busyPolicy)return;
-      policy=value.policy;policyRole=value.role||bridge()?.workspace?.role||'';loadedWorkspace=id;treg=services.providers?.find(p=>p.provider==='treg');provider=services.providers?.find(p=>p.provider==='apollo');hunter=services.providers?.find(p=>p.provider==='hunter');renderPolicy();adapter?.render?.();
+      if(!policyCurrent(originContext)||serial!==policyRequest||busyPolicy)return;
+      policy=value.policy;policyRole=value.role||bridge()?.workspace?.role||'';loadedWorkspace=id;loadedContext=originContext;treg=services.providers?.find(p=>p.provider==='treg');provider=services.providers?.find(p=>p.provider==='apollo');hunter=services.providers?.find(p=>p.provider==='hunter');renderPolicy();adapter?.render?.();
 
-    }catch(error){if(workspace()===id&&serial===policyRequest&&!busyPolicy){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
+    }catch(error){if(policyCurrent(originContext)&&serial===policyRequest&&!busyPolicy){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
   }
   function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
   function record(candidate,person,message,{status='not_verified',append=false,lookup=null}={}){
@@ -131,8 +140,8 @@
       const receipts=[];
       try{
         check();
-        if(loadedWorkspace!==id||!policy)await load();
-        check();if(!policy||loadedWorkspace!==id)throw Error('Research preferences could not load. Retry or check Settings.');
+        if(!loadedCurrent()||!policy)await load();
+        check();if(!policy||!loadedCurrent())throw Error('Research preferences could not load. Retry or check Settings.');
         if((dataLookup||policy.provider==='treg')&&(policy.provider!=='treg'||!policy.enabled&&!policy.phoneEnabled))throw Error('Paid email and phone search are off. Activate the required service in Setup.');
         if(automatic&&!policy.enabled&&!policy.phoneEnabled)throw Error('Automatic paid contact research is off.');
         const tregReady=(dataLookup||policy.provider==='treg')&&treg?.configured&&treg.source==='customer';
@@ -198,9 +207,9 @@
     // A selected buyer's manual confirmation owns this company until settled.
     const prefix=[workspace(),bridge()?.session?.user?.id||'',candidate.domain,''].join('|');
     if([...publicChecking.keys()].some(identity=>identity.startsWith(prefix)))return;
-    if(trigger==='research_completed'&&(loadedWorkspace!==workspace()||!policy))await load();
+    if(trigger==='research_completed'&&(!loadedCurrent()||!policy))await load();
     if(!current()||[...publicChecking.keys()].some(identity=>identity.startsWith(prefix)))return;
-    if(busyPolicy||!adapter||loadedWorkspace!==workspace()||!(policy?.enabled||policy?.phoneEnabled))return;
+    if(busyPolicy||!adapter||!loadedCurrent()||!(policy?.enabled||policy?.phoneEnabled))return;
     if(policy.provider==='treg'){
       if(!treg?.configured||treg.source!=='customer')return;
       if(trigger!=='research_completed')return;
@@ -215,21 +224,24 @@
     }
   }
   document.getElementById('additional-contact-preferences')?.addEventListener('submit',async event=>{
-    event.preventDefault();if(busyPolicy||loadedWorkspace!==workspace())return;
-    const form=event.currentTarget,id=workspace(),input={enabled:form.elements.enabled.checked,dailyLimit:Number(form.elements.dailyLimit.value),monthlyLimit:Number(form.elements.monthlyLimit.value),maxPerCompany:Number(form.elements.maxPerCompany.value)};
-    busyPolicy=true;for(const field of form.elements)field.disabled=true;
+    event.preventDefault();if(busyPolicy||!loadedCurrent()||policyRole!=='owner')return;
+    const form=event.currentTarget,originContext=policyContext(),input={enabled:form.elements.enabled.checked,phoneEnabled:Boolean(policy.phoneEnabled),provider:policy.provider||'apollo',dailyLimit:Number(form.elements.dailyLimit.value),monthlyLimit:Number(form.elements.monthlyLimit.value),maxPerCompany:Number(form.elements.maxPerCompany.value)};
+    const operation=beginPolicyOperation();for(const field of form.elements)field.disabled=true;
     try{
-      if(input.enabled&&provider?.configured){
+      if(input.enabled){const approved=await (root.LeadIntelDialogs?.confirm(`Approve additional work-email research using your provider credits, up to ${input.maxPerCompany} buyers per company, ${input.dailyLimit} lookups per day and ${input.monthlyLimit} per month? Saving preferences does not run a paid lookup or send messages. Sending requires separate activation.`,{title:'Approve additional email research',action:'Save research approval'})??false);if(!approved||!policyCurrent(originContext))return;}
+      if(!policyCurrent(originContext))return;
+      if(input.enabled&&input.provider==='apollo'&&provider?.configured){
         await api('/api/integrations/services/apollo/settings',{method:'PUT',body:JSON.stringify({discovery:provider.metadata?.discovery_enabled!==false,email:true,phone:provider.metadata?.phone_enrichment_enabled===true,daily_limit:input.dailyLimit,monthly_limit:input.monthlyLimit})});
       }
-      if(workspace()!==id)throw Error('Workspace changed; research preferences were not saved.');
+      if(!policyCurrent(originContext))return;
       const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});
-      if(workspace()!==id)return;policy=saved.policy;automaticAttempts.clear();await load();status('Research preferences saved. '+(input.enabled?'Additional email services are approved within your limits.':'Automatic paid email research is off.'));
-    }catch(error){if(workspace()===id)status(error.message);}
-    finally{busyPolicy=false;if(workspace()===id){renderPolicy();}}
+      if(!policyCurrent(originContext))return;policy=saved.policy;automaticAttempts.clear();
+      finishPolicyOperation(operation);await load();if(policyCurrent(originContext))status('Research preferences saved. '+(input.enabled?'Additional email services are approved within your limits.':'Automatic paid email research is off.'));
+    }catch(error){if(policyCurrent(originContext))status(error.message);}
+    finally{finishPolicyOperation(operation);}
   });
-  root.LeadIntelAdditionalContacts={mountPaidSearch,mountSettings,policy:()=>loadedWorkspace===workspace()?{...policy}:null,register(value){adapter=value;void load();},load,card,label,confirm,run,auto,readiness};
-  root.addEventListener('leadintel:workspace-reset',()=>{loadedWorkspace='';policy=null;provider=null;treg=null;policyRole='';automaticAttempts.clear();renderPolicy();});
+  root.LeadIntelAdditionalContacts={mountPaidSearch,mountSettings,policy:()=>loadedCurrent()?{...policy}:null,register(value){adapter=value;void load();},load,card,label,confirm,run,auto,readiness};
+  root.addEventListener('leadintel:workspace-reset',()=>{++policyEpoch;++policyRequest;loadedWorkspace='';loadedContext='';policy=null;provider=null;treg=null;hunter=null;policyRole='';busyPolicy=false;policyOperation=null;automaticAttempts.clear();outcomes.delete('policy-error');renderPolicy();});
   root.addEventListener('leadintel:server-ready',()=>void load());
   root.addEventListener('leadintel:service-settings-changed',()=>void load());
   root.addEventListener('leadintel:service-status',()=>void load());

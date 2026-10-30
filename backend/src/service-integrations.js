@@ -40,6 +40,10 @@ async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
 function normalizeProvider(value){const provider=clean(value,40).toLowerCase();return PROVIDERS.includes(provider)?provider:'';}
 function validateApiKey(value){const apiKey=String(value||'').trim();if(apiKey.length<8||apiKey.length>8192||/[\r\n]/.test(apiKey))throw new Error('A valid provider API key is required');return apiKey;}
 function encryptionConfigured(env){return Boolean(String(env.OAUTH_TOKEN_ENCRYPTION_KEY||'').trim());}
+function verificationMessage(provider,cause){
+  // Provider bodies and network errors can echo credentials or account details.
+  return creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message))?`${PROVIDER_NAMES[provider]} credits exhausted or payment required`:`${PROVIDER_NAMES[provider]} connection check failed. Check the API key and try again.`;
+}
 async function integrationRow(env,workspaceId,provider){return env.DB.prepare(`SELECT provider,encrypted_api_key,key_hint,metadata_json,verified_at,last_used_at FROM workspace_service_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).first();}
 async function decryptRow(env,row){if(!row||!encryptionConfigured(env))return '';const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);return decryptSecret(row.encrypted_api_key,key);}
 
@@ -195,14 +199,30 @@ export async function withWorkspaceServiceCredentials(request,env){
   return runtime;
 }
 
-async function providerStatus(env,workspaceId,provider,{verify=false}={}){
+async function providerStatus(env,workspaceId,provider,{verify=false,operationId,userId}={}){
   let row=null;try{row=await integrationRow(env,workspaceId,provider);}catch{}
   if(row){
     let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}')||{};}catch{}
     let state='good',label='Connected';
     if(verify){
-      try{const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=CASE WHEN provider='hunter' THEN json_set(?, '$.additional_verification_enabled', json(CASE WHEN json_extract(metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json_patch(?,CASE WHEN provider='apollo' THEN json_object('discovery_enabled',json(CASE WHEN json_extract(metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json('{}') END) END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),JSON.stringify(metadata),workspaceId,provider).run();}
-      catch(cause){if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});state='bad';label='Connection error';metadata={...metadata,error:clean(cause?.message||cause,180)};}
+      const trace=type=>audit(env,{workspaceId,userId,type,provider,metadata:{operation_id:operationId}});
+      await trace('service.provider_check_started');
+      try{
+        const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};
+        // A check belongs to the exact encrypted credential it read. Replacing or
+        // disconnecting that credential while the provider responds invalidates it.
+        const saved=await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=CASE WHEN provider='hunter' THEN json_set(?, '$.additional_verification_enabled', json(CASE WHEN json_extract(metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json_patch(?,CASE WHEN provider='apollo' THEN json_object('discovery_enabled',json(CASE WHEN json_extract(metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json('{}') END) END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+          WHERE workspace_id=? AND provider=? AND encrypted_api_key=?`).bind(JSON.stringify(metadata),JSON.stringify(metadata),workspaceId,provider,row.encrypted_api_key).run();
+        if(!saved?.meta?.changes){await trace('service.provider_check_superseded');return providerStatus(env,workspaceId,provider);}
+        const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});
+        await trace('service.provider_check_succeeded');return providerStatus(env,workspaceId,provider);
+      }
+      catch(cause){
+        if((await integrationRow(env,workspaceId,provider))?.encrypted_api_key!==row.encrypted_api_key){await trace('service.provider_check_superseded');return providerStatus(env,workspaceId,provider);}
+        await trace('service.provider_check_failed');
+        if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});
+        state='bad';label='Connection error';metadata={...metadata,error:verificationMessage(provider,cause)};
+      }
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
   }
@@ -367,6 +387,9 @@ async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
 export async function handleServiceIntegrationRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
   const known=path.startsWith('/api/integrations/services/');if(!known)return null;
+  const requestedOperation=request.headers.get('X-LeadIntel-Operation-Id')||'';
+  const operationId=/^[A-Za-z0-9._:-]{8,80}$/.test(requestedOperation)?requestedOperation:uuid();
+  cors={...cors,'X-LeadIntel-Operation-Id':operationId};
   const workspaceId=workspaceIdFrom(url);if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/services/contact-policy'&&request.method==='GET'){
@@ -378,7 +401,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
     const verify=url.searchParams.get('verify')==='1';
     const providers=[];for(const provider of PROVIDERS){
-      const state=await providerStatus(env,workspaceId,provider,{verify});
+      const state=await providerStatus(env,workspaceId,provider,{verify,operationId,userId:access.user.id});
       state.credit_issue=state.source==='customer'?await providerCreditIssue(env,workspaceId,provider):null;
       if(state.source==='customer'&&verifiedCreditBalance(provider,state.metadata)==='failed')state.credit_issue={code:'credits_exhausted',source:'customer'};
       if(state.credit_issue?.source===state.source){state.state='bad';state.label='Credits exhausted';}
@@ -414,20 +437,28 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     if(!encryptionConfigured(env))return error('Credential encryption is not configured',503,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     let apiKey;try{apiKey=validateApiKey(body.api_key);}catch(cause){return error(cause.message,400,cors);}
-    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='apollo'){let prior={};try{prior=JSON.parse((await integrationRow(env,workspaceId,provider))?.metadata_json||'{}');}catch{}for(const key of ['discovery_enabled','email_enrichment_enabled','phone_enrichment_enabled'])metadata[key]=prior[key]??(key==='discovery_enabled');}if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){return error(clean(cause?.message||'Provider verification failed',180),422,cors);}
+    const previous=await integrationRow(env,workspaceId,provider);
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_started',provider,metadata:{operation_id:operationId}});
+    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='apollo'){let prior={};try{prior=JSON.parse((await integrationRow(env,workspaceId,provider))?.metadata_json||'{}');}catch{}for(const key of ['discovery_enabled','email_enrichment_enabled','phone_enrichment_enabled'])metadata[key]=prior[key]??(key==='discovery_enabled');}if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_failed',provider,metadata:{operation_id:operationId}});return error(verificationMessage(provider,cause),422,cors);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
-      await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) WHEN provider='apollo' THEN json_patch(excluded.metadata_json,json_object('discovery_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END))) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata)).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_saved',provider,metadata:{source:'customer'}});
+      const saved=await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at)
+        SELECT ?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+        WHERE COALESCE((SELECT encrypted_api_key FROM workspace_service_integrations WHERE workspace_id=? AND provider=?),'')=?
+        ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) WHEN provider='apollo' THEN json_patch(excluded.metadata_json,json_object('discovery_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END))) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata),workspaceId,provider,
+        previous?.encrypted_api_key||'').run();
+      if(!saved?.meta?.changes){await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('Service connection changed while checking the key. Reload Settings before retrying.',409,cors,'SERVICE_CONNECTION_CONFLICT');}
+      const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:balance,source:'customer'});
+      await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_saved',provider,metadata:{source:'customer',operation_id:operationId}});
       return json({saved:true,provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',key_hint:keyHint(apiKey),verified_at:new Date().toISOString(),metadata},200,cors);
-    }catch{return error('Unable to save service provider configuration',500,cors);}
+    }catch{await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_save_failed',provider,metadata:{operation_id:operationId}});return error('Unable to save service provider configuration',500,cors);}
   }
 
   if(path==='/api/integrations/services/provider'&&request.method==='DELETE'){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     const result=await env.DB.prepare(`DELETE FROM workspace_service_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).run();
-    await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_disconnected',provider});
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_disconnected',provider,metadata:{operation_id:operationId}});
     return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:false},200,cors);
   }
 

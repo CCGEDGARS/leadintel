@@ -53,7 +53,8 @@
       "google_translation_version": "google-translation-v1",
       "public_contact_research_version": "20261030-adaptive-company-sources-v6",
       "public_pdf_extraction_version": "20261030-native-public-pdf-v1",
-      "buyer_integrity_version": "20261030-audit-v1"
+      "buyer_integrity_version": "20261030-audit-v1",
+      "setup_integrity_version": "20261030-v1"
     }
   },
   "smokeChecks": [
@@ -2436,8 +2437,9 @@
       "url": "/customer/website-activation.js",
       "status": 200,
       "contains": [
-        "accountContext!==root.localStorage",
-        "Workspace or website changed while loading."
+        "accountContext===root.localStorage",
+        "accountSession===session()",
+        "await savePersistenceWithTimeout(assertCurrent)"
       ]
     },
     {
@@ -5640,6 +5642,68 @@
       "status": 200,
       "contains": [
         "step5-audit=20261030-v1"
+      ]
+    },
+    {
+      "id": "setup-audit-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "setup-audit=20261030-v1",
+        "setup-operation-trace.js?v=20261030-v1"
+      ]
+    },
+    {
+      "id": "setup-safe-operation-trace",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "leadintel:setup-operation",
+        "records.length>100",
+        "captured!==owner"
+      ]
+    },
+    {
+      "id": "setup-material-account-ownership",
+      "type": "text",
+      "url": "/customer/company-materials.js",
+      "status": 200,
+      "contains": [
+        "currentUser()===nextUser",
+        "Account or workspace changed",
+        "operation?.checkpoint('persistence','pass')"
+      ]
+    },
+    {
+      "id": "setup-source-preservation",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "if(additionalLinks)state.additionalLinks="
+      ]
+    },
+    {
+      "id": "setup-service-operation-correlation",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "X-LeadIntel-Operation-Id",
+        "settingsCurrent(originContext)"
+      ]
+    },
+    {
+      "id": "setup-activation-persistence-result",
+      "type": "text",
+      "url": "/customer/website-activation.js",
+      "status": 200,
+      "contains": [
+        "result!==true&&result?.saved!==true",
+        "accountSession===session()",
+        "Website evidence is loaded in this browser"
       ]
     }
   ],
