@@ -170,8 +170,8 @@ const phoneCallback=(phones=true)=>({status:'success',credits_consumed:phones?8:
 const callbackRequest=(url,body)=>new Request(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 
 sqliteTest('concurrent phone lookups atomically reserve once and call the paid endpoint once',async()=>{
- const f=await phoneFixture();let calls=0,release;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;await new Promise(r=>release=r);return Response.json(apolloPerson());};
- try{const first=handleCrmRoute(f.request(),f.env,{}),second=handleCrmRoute(f.request(),f.env,{});await new Promise(r=>setTimeout(r,15));assert.equal(calls,1);release();const p=await Promise.all((await Promise.all([first,second])).map(r=>r.json()));assert.equal(p.filter(r=>r.duplicate).length,1);assert.equal(f.env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_enrichment_requests').get().n,1);}finally{globalThis.fetch=original;}
+ const f=await phoneFixture();let calls=0,release,started;const dispatched=new Promise(r=>started=r);const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;await new Promise(r=>{release=r;started();});return Response.json(apolloPerson());};
+ try{const first=handleCrmRoute(f.request(),f.env,{}),second=handleCrmRoute(f.request(),f.env,{});await dispatched;assert.equal(calls,1);release();const p=await Promise.all((await Promise.all([first,second])).map(r=>r.json()));assert.equal(p.filter(r=>r.duplicate).length,1);assert.equal(f.env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_enrichment_requests').get().n,1);}finally{globalThis.fetch=original;}
 });
 
 sqliteTest('early and concurrent callbacks preserve phone and actual credits exactly once',async()=>{
@@ -240,4 +240,26 @@ sqliteTest('phone-only Apollo results preserve the existing email verifier and v
 sqliteTest('main phone OFF blocks legacy Apollo reveal without reserving credits or calling a provider',async()=>{
  const f=await phoneFixture();f.env.DB.raw.exec("CREATE TABLE additional_contact_policies(workspace_id TEXT,provider TEXT,phone_enabled INTEGER);INSERT INTO additional_contact_policies VALUES('w1','treg',0),('other','treg',1)");let calls=0;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;return Response.json(apolloPerson());};
  try{const response=await handleCrmRoute(f.request(),f.env,{});assert.equal(response.status,409);assert.equal((await response.json()).code,'CRM_PHONE_LOOKUP_DISABLED');assert.equal(calls,0);assert.equal(f.env.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);}finally{globalThis.fetch=original;}
+});
+
+sqliteTest('cancelled Apollo responses retain paid credit receipts without saving a late contact',async()=>{
+ const {env,token}=await fixture(),controller=new AbortController();
+ const company=(await (await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{})).json()).company;
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;controller.abort();return Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});};
+ try{
+  const source=req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson',title:'Procurement Director'}});
+  const response=await handleCrmRoute(new Request(source,{signal:controller.signal}),env,{});assert.equal(response.status,499);assert.equal((await response.json()).code,'CRM_ENRICHMENT_CANCELLED');assert.equal(calls,1);
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_used,1);assert.equal(ledger.credits_reserved,1);assert.equal(ledger.status,'cancelled');
+  const {apolloCreditUsage}=await import('../src/apollo-credit-policy.js');assert.equal((await apolloCreditUsage(env.DB,'w1')).daily,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('atomic Apollo reservations include submitted requests cancelled after dispatch',async()=>{
+ const {env,token}=await fixture(),company=(await (await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{})).json()).company,now=new Date().toISOString();
+ const values=['cancelled-paid','w1',company.id,null,'apollo','apollo-p1','Director','cancelled',0,0,1,1,'{"budget_retained":1}','u1',now,now];
+ env.DB.raw.prepare('INSERT INTO crm_enrichment_requests(id,workspace_id,company_id,contact_id,provider,person_provider_id,role_requested,status,personal_email_requested,phone_requested,credits_reserved,credits_used,response_summary_json,requested_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...values);
+ const {reserveCrmEnrichment}=await import('../src/apollo-crm-reservation.js');
+ const next=[...values];next[0]='next-paid';next[5]='apollo-p2';next[7]='processing';next[11]=0;
+ const result=await reserveCrmEnrichment(env.DB,{values:next,workspaceId:'w1',companyId:company.id,personId:'apollo-p2',phone:false,reserved:1},{daily_credit_limit:1,monthly_credit_limit:1});assert.equal(result,null);
 });

@@ -131,3 +131,14 @@ test('email-only research preserves the separate saved phone failure without a n
  const r=await f.mod.findTregWorkEmail({},ctx,candidate,p,'c',{attemptKey:'separate',dataLookup:true,includePhone:false,includeEmail:true},f.deps);
  assert.equal(r.contactData.phone.status,'error');assert.equal(r.contactData.phone.checkedAt,old);assert.equal(f.calls.some(call=>call.url.includes('phone.find')),false);
 });
+
+test('an arbitrary returned LinkedIn URL cannot establish email ownership without a matching expected profile',async()=>{
+ const f=await fixture({find:{output:{email:'anna@example.com'},raw:{linkedin_url:'https://www.linkedin.com/in/somebody-else'}}});
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,{...person,publicLinkedinUrl:''},'company-a',{attemptKey:'unattributed'},f.deps);
+ assert.equal(result.contact,null);assert.equal(f.saved.length,0);assert.equal(f.calls.length,1);
+});
+test('a conflicting normalized finder LinkedIn profile blocks verification and saving',async()=>{
+ const f=await fixture({find:{output:{email:'anna@example.com',full_name:person.name,linkedin_url:'https://www.linkedin.com/in/somebody-else'},raw:{}}});
+ const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'profile-conflict'},f.deps);
+ assert.equal(result.contact,null);assert.equal(f.saved.length,0);assert.equal(f.calls.length,1);
+});

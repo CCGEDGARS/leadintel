@@ -47,10 +47,10 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  const returnedName=output.full_name||output.fullName||record.full_name||record.fullName||[output.first_name||record.first_name,output.last_name||record.last_name].filter(Boolean).join(' ');
  if(personal&&identity(returnedName)!==identity(name))return result('unconfirmed','Personal email requires exact returned person ownership.');
  if(returnedName&&identity(returnedName)!==identity(name))return result('unconfirmed','Treg returned a different buyer identity.');
- const returnedProfile=record.employee_linkedin||record.linkedin_url||record.linkedin;
+ const returnedProfile=output.employee_linkedin||output.linkedin_url||output.linkedin||record.employee_linkedin||record.linkedin_url||record.linkedin;
  const expectedProfile=person.publicLinkedinUrl||person.linkedin_url;
  if(returnedProfile&&expectedProfile&&String(returnedProfile).replace(/^https?:\/\/(?:[a-z]+\.)?linkedin.com/,'linkedin.com').replace(/\/$/,'')!==String(expectedProfile).replace(/^https?:\/\/(?:[a-z]+\.)?linkedin.com/,'linkedin.com').replace(/\/$/,''))return result('unconfirmed','The returned professional profile belongs to a different identity.');
- if(!returnedName&&!returnedProfile&&identity(email.split('@')[0])!==identity(name))return result('unconfirmed','The provider did not establish ownership of this mailbox.');
+ if(!returnedName&&!(returnedProfile&&expectedProfile)&&identity(email.split('@')[0])!==identity(name))return result('unconfirmed','The provider did not establish ownership of this mailbox.');
  let checked=await call('verify','treg.people.email.verify',{email});
  let v=object(checked.output),r=object(checked.raw||checked),task=r.id||r.task_id;
  // BounceBan asynchronous results are polled through its free endpoint only.

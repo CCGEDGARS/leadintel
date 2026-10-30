@@ -67,10 +67,11 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   await guard();const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
   if(!company||company.lifecycle_status!=='prospect')return false;
   const detail=await getCrmCompany(env.DB,context,company.id);await guard();
-  const research=globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch,prior=detail.intelligence?.research_snapshot?.buyerResearch;
+  const mapped=globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence,signatureContext=mapped.research_snapshot;
+  const research=signatureContext.buyerResearch,prior=detail.intelligence?.research_snapshot?.buyerResearch;
   if(Date.parse(prior?.checkedAt||'')>Date.parse(research.checkedAt||''))return false;
   if(Date.parse(prior?.discovery?.officialContactInventory?.checkedAt||'')>Date.parse(research.discovery?.officialContactInventory?.checkedAt||''))research.discovery.officialContactInventory=prior.discovery.officialContactInventory;
-  await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),research_snapshot:{...(detail.intelligence?.research_snapshot||{}),...(candidate.qualification?{qualification:candidate.qualification}:{}),...(candidate.buyerFit?{buyerFit:candidate.buyerFit}:{}),buyerResearch:research}});await guard();return true;
+  await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),evidence:Array.isArray(candidate.evidence)?mapped.evidence:detail.intelligence?.evidence||[],research_snapshot:{...(detail.intelligence?.research_snapshot||{}),fitDescription:signatureContext.fitDescription,buyerRoles:signatureContext.buyerRoles,buyerRolesChanged:signatureContext.buyerRolesChanged,...(candidate.qualification?{qualification:candidate.qualification}:{}),...(candidate.buyerFit?{buyerFit:candidate.buyerFit}:{}),buyerResearch:research}});await guard();return true;
 }
 
 async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier){

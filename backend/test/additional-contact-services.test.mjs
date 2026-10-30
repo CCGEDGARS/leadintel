@@ -7,6 +7,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {lookupAdditionalEmail,saveAdditionalContactPolicy,readAdditionalContactPolicy} from '../src/additional-contact-services.js';
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...args){this.args=args;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async run(){const r=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(r.changes)}};}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}}
 function fixture(){const raw=new DatabaseSync(':memory:');raw.exec(fs.readFileSync(new URL('../migrations/0041_additional_contact_services.sql',import.meta.url),'utf8'));raw.exec(fs.readFileSync(new URL('../migrations/0043_additional_contact_provider_receipts.sql',import.meta.url),'utf8'));raw.exec(fs.readFileSync(new URL('../migrations/0045_treg_paid_search.sql',import.meta.url),'utf8'));raw.exec(fs.readFileSync(new URL('../migrations/0047_paid_phone_permission.sql',import.meta.url),'utf8'));raw.exec(`CREATE TABLE workspace_service_integrations(workspace_id TEXT,provider TEXT,metadata_json TEXT);CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,daily_credit_limit INTEGER,monthly_credit_limit INTEGER);INSERT INTO workspace_service_integrations VALUES('w','apollo','{"email_enrichment_enabled":true}');INSERT INTO enrichment_policies VALUES('w',3,30);`);const DB={prepare:sql=>new Statement(raw,sql),batch:async rows=>Promise.all(rows.map(row=>row.run()))};const now=new Date().toISOString(),people=Array.from({length:4},(_,i)=>({id:'p'+i,name:'Anna Buyer'+i,title:'Head of Procurement',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now,queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}));const detail={company:{id:'c',company_name:'Example',normalized_domain:'example.com',lifecycle_status:'prospect'},contacts:[],intelligence:{research_snapshot:{qualification:{eligible:true,researchedAt:now},buyerResearch:{publicResearch:{accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1}},buyers:people,discovery:{opportunityRoles:['Procurement Director']}}}}};const context={workspaceId:'w',userId:'u',role:'owner'},calls=[];return {raw,env:{DB,APOLLO_API_KEY:'test-only'},context,detail,people,calls,deps:{getCompany:async(_,ctx)=>{if(ctx.workspaceId!=='w')throw Object.assign(Error('Not found'),{status:404});return detail;},resolvePerson:async p=>p,enrich:async()=>{calls.push('paid');return new Response(JSON.stringify({contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified',source:'apollo',verification_provider:'Apollo'},request:{status:'verified'}}),{status:201});}}};}
+function currentReview(f){const s=f.detail.intelligence.research_snapshot;return {status:'complete',checkedAt:new Date().toISOString(),inputSignature:D.buyerReviewSignature({company:f.detail.company.company_name,domain:f.detail.company.normalized_domain,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,buyerFit:s.buyerFit,evidence:f.detail.intelligence.evidence||[],publicResearch:s.buyerResearch.publicResearch,buyerDiscovery:s.buyerResearch.discovery,people:f.people}),reviewedPersonIds:['p0'],findings:[],conflicts:[]};}
 test('policy is off by default and only an owner can authorize scoped paid research',async()=>{const f=fixture();assert.equal((await readAdditionalContactPolicy(f.env,'w')).enabled,false);await assert.rejects(saveAdditionalContactPolicy(f.env,{...f.context,role:'sales'},{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2}),/owner/i);await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2});assert.equal((await readAdditionalContactPolicy(f.env,'w')).enabled,true);assert.equal((await readAdditionalContactPolicy(f.env,'other')).enabled,false);});
 test('automatic lookup requires separate upfront approval; manual lookup requires exact per-contact approval',async()=>{const f=fixture();for(const body of [{person_id:'p0',automatic:true},{person_id:'p0'},{person_id:'p0',approved:'true'}])await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',body,f.deps),/approv/i);assert.equal(f.calls.length,0);await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps);assert.equal(f.calls.length,1);});
 test('company, buyer, public research, roster and workspace holds block provider calls',async()=>{for(const mutate of [f=>f.detail.intelligence.research_snapshot.qualification.eligible=false,f=>f.people[0].organization='Wrong employer',f=>f.people[0].emailResearch.status='partial',f=>f.detail.company.lifecycle_status='suppressed',f=>f.context.workspaceId='other']){const f=fixture();mutate(f);await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps));assert.equal(f.calls.length,0);}});
@@ -140,7 +141,7 @@ test('Treg ignores attempts to bypass disabled email or phone permissions in man
 test('phone-only saved consent permits automatic strongest-buyer lookup with a saved email and no email purchase',async()=>{
  const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,max_per_company) VALUES('w',0,1,'treg',1)");
  f.detail.intelligence.research_snapshot.qualification.score=85;
- f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),reviewedPersonIds:['p0'],findings:[],conflicts:[]};
+ f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview=currentReview(f);
  f.detail.contacts=[{id:'saved',external_person_id:'p0',name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified',source:'treg',verification_provider:'Treg'}];
  f.deps.credential=async()=>({configured:true});let called;
  f.deps.findTreg=async(e,c,candidate,person,id,options)=>{called=options;return {contact:f.detail.contacts[0],contactData:{phone:{status:'provider_listed',number:'+37120000001'}},research:{status:'verified'}};};
@@ -186,5 +187,74 @@ test('a retained Hunter preference cannot add a hidden verification requirement 
 test('automatic Treg research requires a completed current AI review of the selected buyer before spending',async()=>{
  const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,max_per_company) VALUES('w',1,'treg',1)");f.detail.intelligence.research_snapshot.qualification.score=85;f.deps.credential=async()=>({configured:true});let calls=0;f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_REVIEW_REQUIRED');assert.equal(calls,0);
- f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),reviewedPersonIds:['p0'],findings:[],conflicts:[]};await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps);assert.equal(calls,1);
+ f.detail.intelligence.research_snapshot.buyerResearch.publicResearch.aiReview=currentReview(f);await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps);assert.equal(calls,1);
+});
+
+test('interrupted Treg calls retain daily and monthly budget while the saved lookup remains resumable',async()=>{
+ for(const scope of ['daily','monthly']){
+  const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,daily_limit,monthly_limit) VALUES('w',1,'treg',1,1)");f.deps.credential=async()=>({configured:true});let calls=0;
+  f.deps.findTreg=async()=>{calls++;throw Object.assign(Error('Retry the saved lookup'),{code:'TREG_RETRY_SAME_LOOKUP'});};
+  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},f.deps),/saved lookup/);
+  if(scope==='monthly')f.raw.exec("UPDATE additional_contact_attempts SET created_at='2000-01-01 00:00:00'");
+  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p1',provider:'treg',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_'+scope.toUpperCase()+'_LIMIT');
+  assert.equal(calls,1);
+  f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
+  await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},f.deps);assert.equal(calls,2);
+ }
+});
+test('aborting manual paid research before dispatch consumes no reservation or provider call',async()=>{
+ const f=fixture(),controller=new AbortController();controller.abort();
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},{...f.deps,signal:controller.signal}),e=>e.code==='ADDITIONAL_CONTACT_CANCELLED');
+ assert.equal(f.calls.length,0);assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM additional_contact_attempts').get().n,0);
+});
+test('aborting a submitted manual Treg lookup stops subsequent phases through the shared guard',async()=>{
+ const f=fixture(),controller=new AbortController();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider) VALUES('w',1,'treg')");f.deps.credential=async()=>({configured:true});let nextPhase=false;
+ f.deps.findTreg=async(e,c,candidate,person,id,{guard})=>{controller.abort();await guard({phase:'verify'});nextPhase=true;return {contact:null};};
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},{...f.deps,signal:controller.signal}),e=>e.code==='ADDITIONAL_CONTACT_CANCELLED');assert.equal(nextPhase,false);
+});
+test('the HTTP paid research route forwards client cancellation to the lookup boundary',async()=>{
+ const {handleAdditionalContactRoute}=await import('../src/additional-contact-services.js'),{sha256}=await import('../src/security.js'),f=fixture(),controller=new AbortController();
+ f.raw.exec('CREATE TABLE sessions(token_hash TEXT,user_id TEXT,expires_at TEXT);CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT)');
+ f.raw.prepare("INSERT INTO sessions VALUES(?,'u','2099-01-01')").run(await sha256('test-session'));f.raw.exec("INSERT INTO workspace_members VALUES('w','u','owner')");controller.abort();
+ const request=new Request('https://leadintel.test/api/additional-contact-services/email?workspace_id=w',{method:'POST',headers:{Cookie:'leadintel_session=test-session','Content-Type':'application/json'},body:JSON.stringify({company_id:'c',person_id:'p0',approved:true}),signal:controller.signal});
+ const response=await handleAdditionalContactRoute(request,f.env);assert.equal((await response.json()).code,'ADDITIONAL_CONTACT_CANCELLED');assert.equal(f.calls.length,0);
+});
+test('automatic Treg research rejects a review whose identity inputs changed after supervision',async()=>{
+ const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,max_per_company) VALUES('w',1,'treg',1)");f.detail.intelligence.research_snapshot.qualification.score=85;f.deps.credential=async()=>({configured:true});let calls=0;f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
+ const snapshot=f.detail.intelligence.research_snapshot,candidate={company:'Example',domain:'example.com',qualification:snapshot.qualification,publicResearch:snapshot.buyerResearch.publicResearch,buyerDiscovery:snapshot.buyerResearch.discovery,people:f.people};
+ snapshot.buyerResearch.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),inputSignature:D.buyerReviewSignature(candidate),reviewedPersonIds:['p0'],findings:[],conflicts:[]};
+ f.people[0].title='Procurement Director';
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',automatic:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_REVIEW_REQUIRED');assert.equal(calls,0);
+});
+
+test('an unspent Treg hold must reacquire budget before it can be retried',async()=>{
+ const f=fixture(),month=new Date().toISOString().slice(0,7);f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,daily_limit,monthly_limit) VALUES('w',1,'treg',1,1)");f.deps.credential=async()=>({configured:true});let calls=0;
+ f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider,status,result_json) VALUES('w','c','p0',?,'treg','retryable',?)").run(month,JSON.stringify({provider_started:false,error:'pre-dispatch cancellation'}));
+ f.deps.findTreg=async()=>{calls++;return {contact:null,request:{status:'not_found'}};};
+ await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p1',provider:'treg',approved:true},f.deps);
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_DAILY_LIMIT');assert.equal(calls,1);
+});
+
+test('Hunter cancellation after finding stops verification and leaves the paid attempt reserved',async()=>{
+ const f=fixture(),controller=new AbortController();f.raw.exec("INSERT INTO workspace_service_integrations VALUES('w','hunter','{\"additional_verification_enabled\":true}')");let calls=0;
+ f.deps.findHunter=(env,context,candidate,person,companyId,options)=>findHunterWorkEmail(env,context,candidate,person,companyId,{...options,credential:async()=>({source:'customer',apiKey:'test'}),fetch:async()=>{calls++;controller.abort();return Response.json({data:{email:'anna@example.com',first_name:'Anna',last_name:'Buyer0'}});},save:async()=>{throw Error('Cancelled contact must not be saved');}});
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'hunter',hunter_approved:true,approved:true},{...f.deps,signal:controller.signal}),e=>e.code==='ADDITIONAL_CONTACT_CANCELLED');assert.equal(calls,1);
+ assert.equal(f.raw.prepare('SELECT status FROM additional_contact_attempts').get().status,'needs_review');
+});
+
+test('automatic Treg activation never authorizes legacy Apollo spending',async()=>{
+ const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider) VALUES('w',1,'treg')");
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'apollo',automatic:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_APPROVAL_REQUIRED');assert.equal(f.calls.length,0);assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM additional_contact_attempts').get().n,0);
+ // Explicit per-contact legacy approval remains independent of Treg consent.
+ await lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'apollo',approved:true},f.deps);assert.equal(f.calls.length,1);
+});
+
+test('a later pre-dispatch hold cannot release the budget of an already submitted Treg retry',async()=>{
+ const f=fixture();f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,provider,daily_limit,monthly_limit) VALUES('w',1,'treg',1,1)");f.deps.credential=async()=>({configured:true});
+ f.deps.findTreg=async()=>{throw Object.assign(Error('Provider outcome uncertain'),{code:'TREG_RETRY_SAME_LOOKUP'});};
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},f.deps),/uncertain/);
+ let checks=0;f.deps.guard=async()=>{if(++checks===2)throw Error('Buyer context changed before resume');};
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',provider:'treg',approved:true},f.deps),/context changed/);delete f.deps.guard;
+ f.deps.findTreg=async()=>({contact:null,request:{status:'not_found'}});
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p1',provider:'treg',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_DAILY_LIMIT');
 });

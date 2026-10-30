@@ -1428,11 +1428,17 @@ async function openMessageChannel(channel){
 async function openBuyerScripts(choice){buyerHandoffPending=true;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();const pending=openVerifiedBuyerScripts(choice),request=buyerHandoffRequest;try{return await pending;}finally{if(request===buyerHandoffRequest){buyerHandoffPending=false;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();}}}
 async function openVerifiedBuyerScripts(choice){
  if(!choice||!['email','linkedin'].includes(choice.channel)||choice.workspaceId!==crmBridge()?.workspace?.id)return false;
+ choice={...choice};
  const handoffRequest=++buyerHandoffRequest;
- const active=()=>{const b=crmBridge();return handoffRequest===buyerHandoffRequest&&choice.workspaceId===b?.workspace?.id&&b.ready&&b.session?.authenticated&&!b.conflict&&!b.resolvingSync;};
+ const userId=crmBridge()?.session?.user?.id,selected=typeof readJson==='function'?readJson(DISCOVERY_META_KEY).scriptBuyer:null,selectionSnapshot=typeof readJson==='function'?JSON.stringify(selected):null;
+ if(typeof readJson==='function'&&(!selected||!['workspaceId','domain','personId','contactId','channel','email','linkedinUrl'].every(key=>String(selected[key]||'')===String(choice[key]||''))))return false;
+ const buyerState=(candidate,person)=>JSON.stringify([person?.id,person?.publicName||person?.name,person?.title,person?.organization,person?.kept,person?.identityStatus,person?.nameVerification,person?.opportunityScope,person?.publicLinkedinUrl||person?.linkedin_url,candidate?.buyerRolesChanged,candidate?.publicResearch?.conflicts]);
+ let buyerSnapshot=null;
+ const active=()=>{const b=crmBridge();if(handoffRequest!==buyerHandoffRequest||choice.workspaceId!==b?.workspace?.id||userId!==b?.session?.user?.id||!b.ready||!b.session?.authenticated||b.conflict||b.resolvingSync)return false;if(selectionSnapshot!==null&&selectionSnapshot!==JSON.stringify(readJson(DISCOVERY_META_KEY).scriptBuyer))return false;if(buyerSnapshot!==null){const current=pipeline().find(row=>row.domain===choice.domain),person=current?.people?.find(row=>row.id===choice.personId);if(!person||buyerState(current,person)!==buyerSnapshot)return false;}return true;};
  if(!active())return false;
  const candidate=pipeline().find(p=>p.domain===choice.domain);if(!candidate)return false;
  const person=candidate.people?.find(p=>p.id===choice.personId);if(!person?.kept)return false;
+ buyerSnapshot=buyerState(candidate,person);
  let contacts=[],companyRecord=null;
  if(candidate.crmId){const detail=await crmBridge().getCrmCompany(candidate.crmId);companyRecord=detail;contacts=detail?.ok?detail.contacts:[];}
  if(!candidate.crmId){const result=await crmBridge().listCrmCompanies({q:choice.domain,limit:20});if(!active())return false;const company=(result.companies||[]).find(c=>c.normalized_domain===choice.domain);if(company){const record=await crmBridge().getCrmCompany(company.id);companyRecord=record;contacts=record.ok?record.contacts:[];}}
@@ -1452,7 +1458,9 @@ async function openVerifiedBuyerScripts(choice){
    if(!active())return false;
    q('outreach-linkedin')?.scrollIntoView?.({block:'center',behavior:'smooth'});q('outreach-linkedin')?.focus?.();return true;
  }
- const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.())));if(!contact)return false;
+ if(!companyRecord?.ok||['suppressed','archived'].includes(companyRecord.company?.lifecycle_status)||candidate.buyerRolesChanged||person.identityStatus==='pending'||person.nameVerification==='pending'||person.opportunityScope?.status==='review_required'||(candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))return false;
+ const name=String(person.publicName||person.name||'').trim().toLowerCase();
+ const contact=(contacts||[]).find(c=>{const id=String(c.external_person_id||''),contactName=String(c.name||'').trim().toLowerCase(),email=String(c.work_email||c.normalized_email||'').trim().toLowerCase();return c.id===choice.contactId&&Boolean(id||contactName)&&(!id||id===String(person.id))&&(!contactName||contactName===name)&&(!choice.email||email===String(choice.email).trim().toLowerCase())&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.()));});if(!contact)return false;
  const target=(outreach.items||[]).find(i=>i.domain===choice.domain),local=target?.selectedPersonId===person.id&&target.channel==='email'?target:LeadIntelOutreach.savedBuyerDraft(outreach,candidate.domain,person.id,'email');
  const stamp=JSON.stringify(local);let saved=null;
  if(!local?.drafts?.emailBody?.trim()){

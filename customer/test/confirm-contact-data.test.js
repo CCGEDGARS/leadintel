@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom'),D=require('../discovery-engine.js');
 async function fixture(choice=true,provider='treg',phoneEnabled=true){
  const dom=new JSDOM('<main/>',{url:'https://example.test',runScripts:'outside-only'}),w=dom.window,calls=[],prompts=[];
  const p={id:'p',name:'Anna Buyer',title:'Director'},c={company:'Example',domain:'example.com',people:[p]};
- w.AbortSignal=AbortSignal;w.LeadIntelServerBridge={workspace:{id:'w',role:'owner'},session:{authenticated:true}};
+ w.LeadIntelDiscovery=D;w.AbortSignal=AbortSignal;w.LeadIntelServerBridge={workspace:{id:'w',role:'owner'},session:{authenticated:true}};
  w.LeadIntelAdditionalContactPolicy={readiness:(c,p,o)=>({eligible:!o.confirmedEmail,reason:'Confirmed email already available'}),targets:()=>[]};
  w.LeadIntelDialogs={confirm:async(message,options)=>{prompts.push({message,options});return choice;}};
  const result={contact:{id:'crm-p',company_id:'crm-c',work_email:'anna@example.com',email_status:'verified'},contactData:{version:1,domain:'example.com',personId:'p',status:'updated',checkedAt:new Date().toISOString(),profile:{status:'provider_reported',title:'Director',city:'Riga'},phone:{status:'provider_listed',number:'+37120000001'}},research:{status:'verified',costMicro:15000}};

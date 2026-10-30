@@ -174,3 +174,58 @@ test('reusing a buyer ID for a different identity during free confirmation canno
  const result=await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{freeConfirm:async()=>{f.c.people[0]={...f.c.people[0],name:'Different Buyer'};}});
  assert.equal(result,false);assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,0);assert.equal(f.c.people[0].contactVerification,undefined);f.close();
 });
+
+test('a stale policy-load failure cannot erase a newer successful policy',async()=>{
+ const f=runtime();await f.loaded;let rejectOld,count=0;
+ f.w.fetch=async url=>{if(url.includes('/policy')&&++count===1)return new Promise((_r,reject)=>{rejectOld=reject;});return {ok:true,json:async()=>url.includes('/policy')?{policy:{enabled:true,provider:'apollo',dailyLimit:5,monthlyLimit:30,maxPerCompany:2}}:{providers:[]}};};
+ const old=f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.load();rejectOld(Error('old request failed'));await old;
+ assert.equal(f.w.LeadIntelAdditionalContacts.policy()?.enabled,true);f.close();
+});
+test('a replaced buyer releases the pending lookup marker without applying its late result',async()=>{
+ const f=runtime();await f.loaded;let release,started;const entered=new Promise(r=>started=r),pending=new Set();f.adapter.pending=(_c,p,value)=>value?pending.add(p.id):pending.delete(p.id);
+ const original=f.w.fetch;f.w.fetch=async(url,opts)=>url.includes('/email?')?(started(),await new Promise(r=>release=r)):original(url,opts);
+ const person=f.c.people[0],run=f.w.LeadIntelAdditionalContacts.run(f.c,person);await entered;f.c.people=[];release({ok:true,json:async()=>({contact:{external_person_id:person.id,name:person.name,work_email:'anna@example.com'}})});await run;
+ assert.equal(f.contact.size,0);assert.equal(pending.size,0);f.close();
+});
+test('same-workspace user replacement rejects a late paid result',async()=>{
+ const f=runtime();await f.loaded;f.w.LeadIntelServerBridge.session.user={id:'first'};let release,started;const entered=new Promise(r=>started=r),original=f.w.fetch;
+ f.w.fetch=async(url,opts)=>url.includes('/email?')?(started(),await new Promise(r=>release=r)):original(url,opts);
+ const person=f.c.people[0],run=f.w.LeadIntelAdditionalContacts.run(f.c,person);await entered;f.w.LeadIntelServerBridge.session.user.id='second';release({ok:true,json:async()=>({contact:{external_person_id:person.id,name:person.name,work_email:'anna@example.com'}})});await run;
+ assert.equal(f.contact.size,0);assert.equal(person.contactVerification,undefined);f.close();
+});
+test('another buyer saved contact-data profile is not displayed on the current card',async()=>{
+ const f=runtime();await f.loaded;f.c.people[0].contactData={version:1,domain:f.c.domain,personId:'other',identityName:'Other Buyer',profile:{status:'provider_reported',title:'Private wrong role'},phone:{number:'+37120000001'}};
+ const html=f.w.LeadIntelAdditionalContacts.card(f.c,f.c.people[0]);assert.doesNotMatch(html,/Private wrong role|37120000001/);assert.match(html,/different buyer|identity/i);f.close();
+});
+
+test('old pending cleanup cannot clear a newer operation on the same buyer',()=>{
+ const f=discoveryAdapter(),p=f.candidate.people[0],first={},second={};
+ f.adapter.pending(f.candidate,p,true,first);f.adapter.pending(f.candidate,p,true,second);f.adapter.pending(f.candidate,p,false,first);
+ assert.equal(f.ctx.enrichmentPending.has(f.ctx.personKey(f.candidate,p)),true);
+ f.adapter.pending(f.candidate,p,false,second);assert.equal(f.ctx.enrichmentPending.size,0);
+});
+test('automatic work rechecks manual ownership after awaiting policy loading',async()=>{
+ const f=runtime({enabled:true});await f.loaded;let releasePolicy,enteredPolicy,releaseManual,enteredManual;const policyStarted=new Promise(r=>enteredPolicy=r),manualStarted=new Promise(r=>enteredManual=r),original=f.w.fetch;
+ f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));
+ f.w.fetch=async(url,opts)=>url.includes('/policy')?(enteredPolicy(),await new Promise(r=>releasePolicy=r)):original(url,opts);
+ const automatic=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await policyStarted;
+ const selected=f.c.people[1],manual=f.w.LeadIntelAdditionalContacts.confirm(f.c,selected,{freeConfirm:async()=>{enteredManual();await new Promise(r=>releaseManual=r);}});await manualStarted;
+ releasePolicy({ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})});await automatic;
+ const count=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length;releaseManual();await manual;
+ assert.equal(count,0);f.close();
+});
+
+test('a changed LinkedIn identity cannot display a previous saved profile or phone',async()=>{
+ const f=runtime();await f.loaded;f.w.LeadIntelDiscovery=D;const p=f.c.people[0];p.publicLinkedinUrl='https://linkedin.com/in/new-buyer';
+ p.contactData={version:1,domain:f.c.domain,personId:p.id,identityName:p.name,identityLinkedinUrl:'https://linkedin.com/in/old-buyer',profile:{status:'provider_reported',title:'Previous role'},phone:{status:'provider_listed',number:'+37120000001'}};
+ const html=f.w.LeadIntelAdditionalContacts.card(f.c,p);assert.doesNotMatch(html,/Previous role|37120000001/);assert.match(html,/different buyer identity/);f.close();
+});
+
+test('automatic research from an earlier user cannot spend using a newer loaded policy',async()=>{
+ const f=runtime({enabled:true});await f.loaded;f.w.LeadIntelServerBridge.session.user={id:'first'};f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));
+ let release,entered,count=0;const started=new Promise(r=>entered=r),original=f.w.fetch;
+ f.w.fetch=async(url,opts)=>{if(url.includes('/policy')){if(++count===1){entered();return await new Promise(r=>release=r);}return {ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})};}return original(url,opts);};
+ const old=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started;f.w.LeadIntelServerBridge.session.user.id='second';await f.w.LeadIntelAdditionalContacts.load();
+ release({ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})});await old;
+ assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,0);f.close();
+});

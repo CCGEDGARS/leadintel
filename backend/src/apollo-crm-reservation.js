@@ -5,7 +5,7 @@ export async function reserveCrmEnrichment(db,row,policy){
   const names=tables.map(r=>r.name);
   if(!names.includes('crm_enrichment_requests'))throw new Error('CRM enrichment ledger is unavailable');
   const args=[...row.values];
-  const usage=start=>names.map(table=>{args.push(row.workspaceId);return `(SELECT COALESCE(SUM(credits_reserved),0) FROM ${table} WHERE workspace_id=? AND created_at>=${start} AND status NOT IN ('failed','cancelled'))`;}).join('+');
+  const usage=start=>names.map(table=>{args.push(row.workspaceId);const retained=table==='crm_enrichment_requests'?" OR (status='cancelled' AND json_extract(response_summary_json,'$.budget_retained')=1)":'';return `(SELECT COALESCE(SUM(credits_reserved),0) FROM ${table} WHERE workspace_id=? AND created_at>=${start} AND (status NOT IN ('failed','cancelled')${retained}))`;}).join('+');
   const daily=usage("date('now')");args.push(row.reserved,Number(policy.daily_credit_limit));
   const monthly=usage("date('now','start of month')");args.push(row.reserved,Number(policy.monthly_credit_limit));
   args.push(row.phone?1:0,row.workspaceId,row.companyId,row.personId,Math.max(1,Number(policy.retry_after_days)||30),row.workspaceId,row.companyId,row.personId,row.contactId||'');

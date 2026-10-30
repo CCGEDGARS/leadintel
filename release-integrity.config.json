@@ -52,7 +52,8 @@
       "language_packs_version": "country-language-v1",
       "google_translation_version": "google-translation-v1",
       "public_contact_research_version": "20261030-adaptive-company-sources-v6",
-      "public_pdf_extraction_version": "20261030-native-public-pdf-v1"
+      "public_pdf_extraction_version": "20261030-native-public-pdf-v1",
+      "buyer_integrity_version": "20261030-audit-v1"
     }
   },
   "smokeChecks": [
@@ -5580,6 +5581,65 @@
       "status": 200,
       "contains": [
         "buyer-routing=20261030-v1"
+      ]
+    },
+    {
+      "id": "step5-audit-action-identity",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "personId:button.dataset.personId",
+        "selectedInputKey()===expectedPeopleKey",
+        "pending.owners"
+      ]
+    },
+    {
+      "id": "step5-audit-lookup-context",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "pendingToken",
+        "serial===policyRequest",
+        "bridge()?.session?.user?.id===userId"
+      ]
+    },
+    {
+      "id": "step5-audit-source-checkpoint",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "checkpointInventory"
+      ]
+    },
+    {
+      "id": "step5-audit-recipient-reopen",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "choice.email"
+      ]
+    },
+    {
+      "id": "step5-audit-snapshot-review",
+      "type": "text",
+      "url": "/customer/crm-engine.js",
+      "status": 200,
+      "contains": [
+        "fitDescription:clean(candidate.fitDescription)",
+        "buyerRolesChanged:candidate.buyerRolesChanged"
+      ]
+    },
+    {
+      "id": "step5-audit-audit-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "step5-audit=20261030-v1"
       ]
     }
   ],

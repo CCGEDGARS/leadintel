@@ -325,3 +325,14 @@ for(const mode of ['email','email_phone','existing_email_phone','fallback_pendin
   assert.equal(Number(env.DB.raw.prepare('SELECT SUM(cost_micro) cost FROM treg_contact_calls').get().cost)||0,existingEmail?(withPhone?125000:0):withPhone?137000:8000);
  }finally{globalThis.fetch=original;}
 });
+
+test('updated workflow research persists every AI review signature input for a saved company',async()=>{
+ const env=await fixture(),crm=await import('../src/crm.js'),context={workspaceId:'w1',userId:'u1',role:'owner'},D=globalThis.LeadIntelDiscovery;
+ const saved=await crm.upsertCrmCompany(env.DB,context,{company_name:'Example',domain:'signature.example',source:'discovery'});
+ await crm.upsertCrmIntelligence(env.DB,context,saved.company.id,{evidence:[{url:'https://signature.example/old',text:'Earlier evidence'}],research_snapshot:{fitDescription:'Earlier fit',buyerRoles:['CEO'],buyerRolesChanged:false}});
+ const now=new Date().toISOString(),candidate={company:'Example',domain:'signature.example',fitDescription:'Updated automation opportunity',buyerRoles:['COO'],buyerRolesChanged:true,evidence:[{url:'https://signature.example/new',text:'Updated official company evidence',date:'2026-10-29'}],people:[{id:'anna',name:'Anna Buyer',title:'COO',organization:'Example'}],buyerDiscovery:{checkedAt:now,opportunityRoles:['COO']},publicResearch:{aiReview:{status:'complete',checkedAt:now,reviewedPersonIds:['anna'],findings:[],conflicts:[]}}};
+ candidate.publicResearch.aiReview.inputSignature=D.buyerReviewSignature(candidate);
+ assert.equal(await persistWorkflowBuyerResearch(env,context,candidate),true);
+ const detail=await crm.getCrmCompany(env.DB,context,saved.company.id),s=detail.intelligence.research_snapshot,reloaded={company:detail.company.company_name,domain:detail.company.normalized_domain,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,buyerFit:s.buyerFit,evidence:detail.intelligence.evidence,buyerDiscovery:s.buyerResearch.discovery,people:s.buyerResearch.buyers,publicResearch:s.buyerResearch.publicResearch};
+ assert.equal(D.buyerReviewSignature(reloaded),candidate.publicResearch.aiReview.inputSignature);assert.equal(detail.intelligence.evidence[0].url,'https://signature.example/new');
+});
