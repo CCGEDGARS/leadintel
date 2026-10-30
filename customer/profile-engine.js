@@ -204,12 +204,7 @@
     if(signal.id==="market-entry")return "Relevant for identifying companies entering or expanding in target markets.";
     return "Common high-value commercial trigger for B2B opportunity discovery.";
   }
-  function knownCompanyName(website){
-    const hostnameValue=(()=>{try{return new URL(normalizeUrl(website)).hostname.replace(/^www\./i,"").toLowerCase();}catch{return "";}})();
-    return {"ajprodukti.lv":"AJ Produkti"}[hostnameValue]||"";
-  }
   function inferCompanyName(scrapedSources,website){
-    const known=knownCompanyName(website);if(known)return known;
     const primary=(scrapedSources||[]).find(x=>x.type==="website")||(scrapedSources||[])[0];
     const title=clean(primary?.title).replace(/\s+[|–—-]\s+.*$/,"");
     if(title)return title.slice(0,90);
@@ -370,10 +365,9 @@
     }:null;
     if(profile){
       delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(activeSources));
-      const regeneratedOverview=deriveCompanyOverview(activeSources,docs,knownCompanyName(value.website)||clean(value.profile?.companyName)||inferCompanyName(activeSources,value.website));
+      const regeneratedOverview=deriveCompanyOverview(activeSources,docs,clean(value.profile?.companyName)||inferCompanyName(activeSources,value.website));
       const regeneratedDigest=deriveEvidenceDigest(activeSources,docs);
-      const companyName=knownCompanyName(value.website)||clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
-      if(knownCompanyName(value.website))profile.companyName=companyName;
+      const companyName=clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
       if(hasAssetNoise(profile.companyOverview)||hasEvidenceNavigationNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
       if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
       profile.evidenceSources=buildEvidenceSources(activeSources,docs);

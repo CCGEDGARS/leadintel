@@ -169,3 +169,20 @@ test('a newly added unnamed document identity cannot collide with a retained cit
  assert.notEqual(state.documents[1].id,'D2');
  assert.equal(new Set(state.documents.map(doc=>doc.id)).size,2);
 });
+
+test('AJ hostname uses the same evidence-derived identity as any other seller',()=>{
+ for(const website of ['https://www.ajprodukti.lv/','https://independent-seller.example/']){
+  const i={...input(),website,scrapedSources:[{type:'website',url:website,title:'Reviewed Seller Brand | Products',text:'Reviewed Seller Brand provides clinical software.'}]};
+  assert.equal(Profile.buildCompanyIntelligenceProfile(i).companyName,'Reviewed Seller Brand');
+ }
+ assert.equal(Profile.buildCompanyIntelligenceProfile({...input(),website:'https://www.ajprodukti.lv/',scrapedSources:[]}).companyName,'ajprodukti.lv');
+});
+
+test('AJ hostname cannot silently replace a saved reviewed company identity',()=>{
+ for(const website of ['https://www.ajprodukti.lv/','https://independent-seller.example/']){
+  const i={...input(),website,scrapedSources:[{type:'website',url:website,title:'Current Website Title',text:'We provide clinical software.'}],profile:{companyName:'Customer-reviewed legal identity',companyOverview:'Customer-reviewed company description',evidenceDigest:'Retained evidence'}};
+  const next=Profile.normalizeSavedState(i);
+  assert.equal(next.profile.companyName,'Customer-reviewed legal identity');
+  assert.equal(Profile.normalizeSavedState(JSON.parse(JSON.stringify(next))).profile.companyName,'Customer-reviewed legal identity');
+ }
+});
