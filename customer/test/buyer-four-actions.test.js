@@ -162,3 +162,12 @@ test('sync-blocked buyer controls expose a working recovery action without enabl
  handler({target:review});assert.equal(opens,1);
  context.bridge=()=>({workspace:{id:'w1'},conflict:false});assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-review-buyer-sync/);
 });
+
+test('a rendered email button routes by stable ID even when its old array position belongs to another buyer',()=>{
+ const {JSDOM}=require('jsdom'),{context,person,candidate}=runtime();
+ const doc=new JSDOM(context.prospectContactControls(candidate,person)).window.document,button=doc.querySelector('[data-prospect-enrich-email]');
+ assert.equal(button.dataset.personId,person.id);candidate.people.unshift({id:'klas',name:'Klas Buyer'});
+ let handler,request;context.discovery={selectedProspects:[candidate]};context.$=()=>({addEventListener:(_name,fn)=>{handler=fn;}});context.confirmBuyerContact=(c,index,options)=>{request={c,index,options};};
+ vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')&&line.includes('prospectEnrichEmail')),context);
+ handler({target:button});assert.equal(request.options.personId,person.id);assert.equal(request.options.kind,'email');assert.notEqual(candidate.people[request.index].id,person.id);
+});

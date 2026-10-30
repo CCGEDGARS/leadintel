@@ -154,3 +154,23 @@ for(const phoneEnabled of [false,true])test(`automatic Treg phone lookup follows
  const body=JSON.parse(requests[0][1].body);assert.equal(body.phone_approved,phoneEnabled);assert.equal(body.email_lookup,true);assert.equal(body.automatic,true);assert.equal(f.calls.includes('confirm'),false);f.close();
 });
 
+
+test('manual public confirmation prevents an automatic paid lookup for a different ranked buyer',async()=>{
+ const f=runtime({enabled:true});await f.loaded;let release,started;const waiting=new Promise(r=>started=r);
+ const selected=f.c.people[1],pending=f.w.LeadIntelAdditionalContacts.confirm(f.c,selected,{freeConfirm:async()=>{started();await new Promise(r=>release=r);}});
+ await waiting;await f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
+ assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,0);
+ release();await pending;
+ const posts=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(posts.length,1);assert.equal(JSON.parse(posts[0][1].body).person_id,selected.id);f.close();
+});
+test('a paid result for another buyer is rejected before it reaches the acceptance adapter',async()=>{
+ const f=runtime();await f.loaded;
+ const original=f.w.fetch;f.w.fetch=async(url,opts)=>url.includes('/email?')?{ok:true,json:async()=>({contact:{external_person_id:'another-buyer',work_email:'wrong@example.com'}})}:original(url,opts);
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);assert.equal(f.contact.size,0);assert.match(f.c.people[0].contactVerification.issues.join(' '),/does not match/);f.close();
+});
+
+test('reusing a buyer ID for a different identity during free confirmation cannot authorize a paid lookup',async()=>{
+ const f=runtime();await f.loaded;
+ const result=await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{freeConfirm:async()=>{f.c.people[0]={...f.c.people[0],name:'Different Buyer'};}});
+ assert.equal(result,false);assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,0);assert.equal(f.c.people[0].contactVerification,undefined);f.close();
+});
