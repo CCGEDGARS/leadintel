@@ -26,6 +26,7 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, privateSettingsStatus=401,storageStatus=401 }) {
   return async url => {
     const parsed = new URL(String(url));
+    if(parsed.pathname==='/customer/styles.css')return response({text:fs.readFileSync(path.join(root,'customer/styles.css'),'utf8')});
     if(parsed.pathname==='/customer/conversation-workflow-ui.js')return response({text:fs.readFileSync(path.join(root,'customer/conversation-workflow-ui.js'),'utf8')});
     if(parsed.pathname==='/api/conversation-workflows')return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/app-shell.css','/customer/language-pack-catalogue.js','/customer/message-translation-ui.js','/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
