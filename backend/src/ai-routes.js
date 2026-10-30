@@ -24,7 +24,8 @@ const COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS=20000;
 
 async function sessionUser(request,env){
   const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);
-  return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();
+  const user=await env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();
+  return user?{...user,sessionTokenHash:tokenHash}:null;
 }
 async function membership(env,workspaceId,userId){return env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();}
 async function requireMember(request,env,workspaceId,roles=[]){
@@ -39,6 +40,14 @@ async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
 async function connectionTrace(env,event){try{await audit(env,event);}catch{}}
 function verificationMessage(provider,cause){
   return creditFailure(0,cause?.message)?`${PROVIDER_NAMES[provider]} request failed · code: credits_exhausted · Open Billing & credits, add API credits or review limits, then retry.`:`${PROVIDER_NAMES[provider]} connection check failed. Check the API key and model, then try again.`;
+}
+const OWNER_SESSION_GUARD="EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND wm.workspace_id=? AND wm.role='owner')";
+async function deniedOwnerCommit(env,{workspaceId,user,provider,operationId,cors}){
+  const session=await env.DB.prepare("SELECT 1 FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.user_id=? AND sessions.expires_at>datetime('now')").bind(user.sessionTokenHash,user.id).first();
+  const member=session?await membership(env,workspaceId,user.id):null;
+  const status=!session?401:member?.role!=='owner'?403:0;if(!status)return null;
+  await connectionTrace(env,{workspaceId,userId:user.id,type:'ai.provider_authorization_revoked',provider,metadata:{operation_id:operationId,reason:status===401?'session_expired_or_revoked':'workspace_owner_revoked'}});
+  return error(status===401?'Authentication expired or was revoked. Sign in again before changing connections.':'Workspace owner permission changed. Reload Settings.',status,cors);
 }
 function encryptionConfigured(env){return Boolean(String(env.OAUTH_TOKEN_ENCRYPTION_KEY||'').trim());}
 function validateModel(provider,value){
@@ -177,9 +186,10 @@ export async function handleAiRoute(request,env,cors={}){
       statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) SELECT ?,?,?,?,?,CASE WHEN ?=1 AND NOT EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND active=1) THEN 1 ELSE 0 END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
         WHERE COALESCE((SELECT encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?),'')=?
           AND COALESCE((SELECT model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?),'')=?
+          AND ${OWNER_SESSION_GUARD}
         ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,body.make_active!==false?1:0,workspaceId,workspaceId,provider,
-        previous?.encrypted_api_key||'',workspaceId,provider,previous?.model||''));
-      const saved=await env.DB.batch(statements);if(!saved[0]?.meta?.changes){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection changed while checking the key. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}const makeActive=Boolean((await activeIntegration(env,workspaceId))?.provider===provider);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive,operation_id:operationId}});
+        previous?.encrypted_api_key||'',workspaceId,provider,previous?.model||'',access.user.sessionTokenHash,access.user.id,workspaceId));
+      const saved=await env.DB.batch(statements);if(!saved[0]?.meta?.changes){const denied=await deniedOwnerCommit(env,{workspaceId,user:access.user,provider,operationId,cors});if(denied)return denied;await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection changed while checking the key. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}const makeActive=Boolean((await activeIntegration(env,workspaceId))?.provider===provider);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive,operation_id:operationId}});
       return json({saved:true,provider,model,active:makeActive,key_hint:keyHint(apiKey),verified_at:new Date().toISOString()},200,cors);
     }catch{await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_save_failed',provider,metadata:{operation_id:operationId}});return error('Unable to save AI provider configuration',500,cors);}
   }
@@ -197,8 +207,8 @@ export async function handleAiRoute(request,env,cors={}){
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(existing.encrypted_api_key,key);
       await verifyProviderCredential({provider,apiKey,model});
       const saved=await env.DB.prepare(`UPDATE workspace_ai_integrations SET model=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
-        WHERE workspace_id=? AND provider=? AND encrypted_api_key=? AND model=?`).bind(model,workspaceId,provider,existing.encrypted_api_key,existing.model).run();
-      if(!saved?.meta?.changes){await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection or model changed during verification. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}
+        WHERE workspace_id=? AND provider=? AND encrypted_api_key=? AND model=? AND ${OWNER_SESSION_GUARD}`).bind(model,workspaceId,provider,existing.encrypted_api_key,existing.model,access.user.sessionTokenHash,access.user.id,workspaceId).run();
+      if(!saved?.meta?.changes){const denied=await deniedOwnerCommit(env,{workspaceId,user:access.user,provider,operationId,cors});if(denied)return denied;await connectionTrace(env,{workspaceId,userId:access.user.id,type:'ai.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('AI connection or model changed during verification. Reload Settings before retrying.',409,cors,{code:'AI_CONNECTION_CONFLICT'});}
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active),operation_id:operationId}});
       return json({saved:true,provider,model,active:Boolean(existing.active),verified_at:new Date().toISOString()},200,cors);
     }catch(cause){

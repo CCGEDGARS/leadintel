@@ -159,6 +159,25 @@ sqliteTest('a reconnect started before disconnect cannot restore the disconnecte
  }finally{release();globalThis.fetch=old;}
 });
 
+for(const [revocation,sql,status] of [
+ ['membership removal',"DELETE FROM workspace_members WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['owner demotion',"UPDATE workspace_members SET role='viewer' WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['session deletion',"DELETE FROM sessions",401],
+ ['session expiry',"UPDATE sessions SET expires_at=datetime('now','-1 day')",401]
+])sqliteTest('service credential save rejects '+revocation+' during provider verification',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;await connectFirecrawl(env);const before=DB.raw.prepare("SELECT * FROM workspace_service_integrations WHERE provider='firecrawl'").get();
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return Response.json({success:true,data:{remainingCredits:50}});};
+ try{
+  const pending=handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'firecrawl',api_key:'fc-revoked-replacement'}}),env,{});await entered;DB.raw.exec(sql);
+  if(status===401)DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'u1',datetime('now','+1 day'))").run(await sha256('different-valid-session'));
+  release();const response=await pending;assert.equal(response.status,status);
+  assert.deepEqual(DB.raw.prepare("SELECT * FROM workspace_service_integrations WHERE provider='firecrawl'").get(),before);
+  assert.equal(DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='service.provider_saved'").get().n,0);
+  const event=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='service.provider_authorization_revoked'").get();assert.equal(JSON.parse(event.metadata_json).reason,status===401?'session_expired_or_revoked':'workspace_owner_revoked');
+ }finally{release();globalThis.fetch=old;}
+});
+
 sqliteTest('concurrent first connections preserve the credential that completed first',async()=>{
  const {env,token}=await fixture(),old=globalThis.fetch;
  let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});

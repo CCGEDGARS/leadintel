@@ -42,3 +42,22 @@ test('AI connection verification redacts network errors and correlates the faile
   const events=DB.raw.prepare('SELECT event_type,metadata_json FROM audit_events ORDER BY rowid').all();assert.deepEqual(events.map(e=>e.event_type),['ai.provider_check_started','ai.provider_check_failed']);assert.ok(events.every(e=>JSON.parse(e.metadata_json).operation_id==='setup-ai-check-1234'));
  }finally{globalThis.fetch=old;}
 });
+
+for(const method of ['PUT','PATCH'])for(const [revocation,sql,status] of [
+ ['membership removal',"DELETE FROM workspace_members WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['owner demotion',"UPDATE workspace_members SET role='viewer' WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['session deletion',"DELETE FROM sessions",401],
+ ['session expiry',"UPDATE sessions SET expires_at=datetime('now','-1 day')",401]
+])test('AI '+method+' rejects '+revocation+' during provider verification',async()=>{
+ const {env,DB,add}=await setup();await add('anthropic',1);const old=globalThis.fetch,before=DB.raw.prepare("SELECT * FROM workspace_ai_integrations WHERE provider='anthropic'").get();
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return Response.json({content:[{type:'text',text:'OK'}]});};
+ try{
+  const pending=handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',api_key:'revoked-ai-replacement',model:'claude-new-model'},method),env);await entered;DB.raw.exec(sql);
+  if(status===401)DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'u1',datetime('now','+1 day'))").run(await sha256('different-valid-session'));
+  release();const response=await pending;assert.equal(response.status,status);
+  assert.deepEqual(DB.raw.prepare("SELECT * FROM workspace_ai_integrations WHERE provider='anthropic'").get(),before);
+  assert.equal(DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type IN ('ai.provider_saved','ai.provider_model_updated')").get().n,0);
+  const event=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='ai.provider_authorization_revoked'").get();assert.equal(JSON.parse(event.metadata_json).reason,status===401?'session_expired_or_revoked':'workspace_owner_revoked');
+ }finally{release();globalThis.fetch=old;}
+});

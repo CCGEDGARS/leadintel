@@ -8,7 +8,7 @@ Each stage has four independent gates: deterministic code verification, exact pr
 
 | Visible stage | Internal screen/module | Code | Production | Authenticated workflow | Business outcome |
 |---|---|---|---|---|---|
-| 1 Setup | 1 | PASS: 4,211 customer + 1,214 backend; build/syntax/controlled Chromium | NOT TESTED: audit revision pending | BLOCKED: no customer browser/session | BLOCKED: durable real company setup not observed |
+| 1 Setup | 1 | PASS: 4,211 customer + 1,226 backend; build/syntax/controlled Chromium | NOT TESTED: audit revision pending | BLOCKED: no customer browser/session | BLOCKED: durable real company setup not observed |
 | 2 Profile | 2 questionnaire/research + 3 profile review | NOT TESTED in this audit | NOT TESTED in this audit | NOT TESTED | NOT TESTED |
 | 3 Strategy | 4 | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
 | 4 Companies | 5 with company journey focus | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
@@ -23,7 +23,7 @@ Never infer the visible stage from the internal numeric module alone. `data-work
 - Starting source/default branch: `e9faaa76b61ebce4f744d08a648fc55671d70614`, confirmed through GitHub main read. Previous Step 5 release proof is historical evidence only.
 - Working branch: `codex/setup-reliability-audit-20261030`.
 - Frontend authority: Vercel `leadintel`, static output `.vercel-static`; backend authority: Cloudflare Worker `leadintel-api`. GitHub Pages/Cloudflare Pages are retired frontend authorities.
-- Connected GitHub repository read/write and Vercel deployment inspection are available. The initial Vercel inventory reported production deployment `dpl_D3oBa9ooShT2LbWbBwhBm9R8Jw2v` READY for the baseline SHA; READY alone is not release proof.
+- Connected GitHub repository read/write and Vercel deployment/log inspection are available. Baseline Vercel logs reported three Node DEP0169 platform deprecation warnings in the inspected 30-minute window; these are not evidence of failed Setup transactions. Backend customer logs/production D1 remain unavailable. The initial Vercel inventory reported production deployment `dpl_D3oBa9ooShT2LbWbBwhBm9R8Jw2v` READY for the baseline SHA; READY alone is not release proof.
 - Managed environment observations are current, network policy enforced/restricted, with no configured secrets, runtime variables, or outbound identities. No user-authenticated interactive browser connector is available. Local Chromium/Playwright is available for controlled fixtures.
 - Read-only Wrangler connection check reports unauthenticated. Do not create a temporary account, replace customer credentials, or pretend local SQLite is the production database.
 - Database migrations present through `0064_microsoft_calendar.sql`. Setup regressions use a local full-migration SQLite fixture. No schema migration is required for these fixes; this does not assert remote migration state.
@@ -55,9 +55,9 @@ Verify preserved optional links/materials and activated evidence through Profile
 
 ## Final revision and evidence
 
-Final local verification: `node --test customer/test/*.test.js customer/*.test.js` passed 4,211/4,211 (includes three root-level legacy suites); backend `npm test` passed 1,214/1,214. Static build, changed JavaScript syntax and whitespace checks pass. Controlled Chromium at 1440/720/390 CSS pixels exercised activation, market selection, keyboard continuation to Profile and retained local state on reload; no horizontal overflow/page errors. The 720px case checks a narrowed desktop layout, not native browser zoom or assistive-technology acceptance.
+Final local verification: `node --test customer/test/*.test.js customer/*.test.js` passed 4,211/4,211 (includes three root-level legacy suites); backend `npm test` passed 1,226/1,226. Static build, changed JavaScript syntax and whitespace checks pass. Controlled Chromium at 1440/720/390 CSS pixels exercised activation, market selection, keyboard continuation to Profile and retained local state on reload; no horizontal overflow/page errors. The 720px case checks a narrowed desktop layout, not native browser zoom or assistive-technology acceptance.
 
 Exact source SHA, CI/run links, production proof and deployment acceptance are recorded in the linked audit pull request and its release-proof artifact. Before merging, production for this audit revision remains NOT TESTED. Authenticated acceptance remains BLOCKED until actual access and evidence exist.
 
 
-Final evidence handoff: [audit PR #781](https://github.com/CCGEDGARS/leadintel/pull/781). Its validation and release-proof links record the exact final source/merged SHA and observed CI/production status. This document records the pre-release audit snapshot; use the PR proof to resolve the pending production gate, never infer it from this document. Runtime code was locally verified at `9bba49abe849f6c7ae9cfb4646ba96a594c61431`; the following documentation-only revision adds this permanent evidence link.
+Final evidence handoff: [audit PR #781](https://github.com/CCGEDGARS/leadintel/pull/781). Its validation and release-proof links record the exact final source/merged SHA and observed CI/production status. This document records the pre-release audit snapshot; use the PR proof to resolve the pending production gate, never infer it from this document. Initial runtime code was locally verified at `9bba49abe849f6c7ae9cfb4646ba96a594c61431`; the independent authorization follow-up is verified separately on the final PR revision.

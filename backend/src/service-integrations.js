@@ -25,7 +25,8 @@ const keyHint=apiKey=>`••••${String(apiKey||'').slice(-4)}`;
 async function sessionUser(request,env){
   const token=cookieValue(request,'leadintel_session');if(!token)return null;
   const tokenHash=await sha256(token);
-  return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();
+  const user=await env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();
+  return user?{...user,sessionTokenHash:tokenHash}:null;
 }
 async function membership(env,workspaceId,userId){return env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();}
 async function requireMember(request,env,workspaceId,roles=[]){
@@ -39,6 +40,14 @@ async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
 }
 function normalizeProvider(value){const provider=clean(value,40).toLowerCase();return PROVIDERS.includes(provider)?provider:'';}
 function validateApiKey(value){const apiKey=String(value||'').trim();if(apiKey.length<8||apiKey.length>8192||/[\r\n]/.test(apiKey))throw new Error('A valid provider API key is required');return apiKey;}
+const OWNER_SESSION_GUARD="EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND wm.workspace_id=? AND wm.role='owner')";
+async function deniedOwnerCommit(env,{workspaceId,user,provider,operationId,cors}){
+  const session=await env.DB.prepare("SELECT 1 FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.user_id=? AND sessions.expires_at>datetime('now')").bind(user.sessionTokenHash,user.id).first();
+  const member=session?await membership(env,workspaceId,user.id):null;
+  const status=!session?401:member?.role!=='owner'?403:0;if(!status)return null;
+  await audit(env,{workspaceId,userId:user.id,type:'service.provider_authorization_revoked',provider,metadata:{operation_id:operationId,reason:status===401?'session_expired_or_revoked':'workspace_owner_revoked'}});
+  return error(status===401?'Authentication expired or was revoked. Sign in again before changing connections.':'Workspace owner permission changed. Reload Settings.',status,cors);
+}
 function encryptionConfigured(env){return Boolean(String(env.OAUTH_TOKEN_ENCRYPTION_KEY||'').trim());}
 function verificationMessage(provider,cause){
   // Provider bodies and network errors can echo credentials or account details.
@@ -445,9 +454,10 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
       const saved=await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at)
         SELECT ?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
         WHERE COALESCE((SELECT encrypted_api_key FROM workspace_service_integrations WHERE workspace_id=? AND provider=?),'')=?
+          AND ${OWNER_SESSION_GUARD}
         ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) WHEN provider='apollo' THEN json_patch(excluded.metadata_json,json_object('discovery_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END))) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata),workspaceId,provider,
-        previous?.encrypted_api_key||'').run();
-      if(!saved?.meta?.changes){await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('Service connection changed while checking the key. Reload Settings before retrying.',409,cors,'SERVICE_CONNECTION_CONFLICT');}
+        previous?.encrypted_api_key||'',access.user.sessionTokenHash,access.user.id,workspaceId).run();
+      if(!saved?.meta?.changes){const denied=await deniedOwnerCommit(env,{workspaceId,user:access.user,provider,operationId,cors});if(denied)return denied;await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_superseded',provider,metadata:{operation_id:operationId}});return error('Service connection changed while checking the key. Reload Settings before retrying.',409,cors,'SERVICE_CONNECTION_CONFLICT');}
       const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:balance,source:'customer'});
       await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_saved',provider,metadata:{source:'customer',operation_id:operationId}});
       return json({saved:true,provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',key_hint:keyHint(apiKey),verified_at:new Date().toISOString(),metadata},200,cors);
