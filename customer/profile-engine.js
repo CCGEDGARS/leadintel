@@ -264,7 +264,7 @@
     const url=normalizeUrl(source.url);
     let host="";try{host=new URL(url).hostname.replace(/^www\./i,"");}catch{}
     return {
-      id:`E${index+1}`,
+      id:clean(source.id)||`E${index+1}`,
       type:scope==="document"?"PDF":source.type==="website"?"Official website":"Official page",
       title:clean(source.title||source.name)||host||`Evidence source ${index+1}`,
       url,
@@ -276,8 +276,12 @@
       supports:supports[scope]
     };
   }
+  function documentIdentities(documents=[]){
+    const used=new Set(documents.map(doc=>clean(doc?.id).slice(0,160)).filter(Boolean));
+    return documents.map((doc,index)=>{let id=clean(doc?.id).slice(0,160);if(!id){let ordinal=index+1;while(used.has(`D${ordinal}`))ordinal++;id=`D${ordinal}`;used.add(id);}return {...doc,id};});
+  }
   function buildEvidenceSources(scrapedSources=[],documents=[]){
-    const sources=[...(scrapedSources||[]).filter(source=>clean(source?.text)),...(documents||[]).filter(doc=>clean(doc?.text)).map(doc=>({type:"document",name:doc.name,title:doc.name,text:doc.text,url:""}))];
+    const sources=[...(scrapedSources||[]).map((source,index)=>({...source,id:clean(source?.id)||`S${index+1}`})).filter(source=>clean(source?.text)),...documentIdentities(documents).map(doc=>({id:doc.id,type:"document",name:doc?.name,title:doc?.name,text:doc?.text,url:""})).filter(doc=>clean(doc.text))];
     return sources.map(evidenceSourceRecord);
   }
   function evidenceCoverage(records=[]){
@@ -307,8 +311,8 @@
       buyingTriggers:answers.buying_triggers,valueProposition:answers.value_proposition,differentiation:answers.differentiation,
       proofPoints:answers.proof_points,commonObjections:answers.objections
     };
-    const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text)&&sourceMatchesWebsite(x,input.website));
-    const documents=(input.documents||[]).filter(x=>x&&clean(x.name));
+    const scraped=(input.scrapedSources||[]).map((source,index)=>({...source,id:clean(source?.id)||`S${index+1}`})).filter(x=>clean(x.text)&&x.extracted!==false&&sourceMatchesWebsite(x,input.website));
+    const documents=documentIdentities(input.documents||[]).filter(x=>clean(x.name));
     const combined=sourceText(scraped,documents);
     const legacyMarketFocus=clean(migrated.legacyStrategyContext?.growthMarkets||input.answers?.growth_markets);
     const selectedTargetMarkets=normalizeTargetMarkets(input.targetMarkets).length?normalizeTargetMarkets(input.targetMarkets):normalizeTargetMarkets(legacyMarketFocus);
@@ -349,8 +353,10 @@
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
     const legacyMarketFocus=clean(migrated.legacyStrategyContext?.growthMarkets||value.answers?.growth_markets);
     const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(legacyMarketFocus);
-    const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
-    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready",pageCategory:["company","offers","proof","delivery","contact"].includes(s?.pageCategory)?s.pageCategory:"",...sourceBranding(s)})).filter(s=>s.url):[];
+    const claims=value=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).filter(([,item])=>typeof item==='string').slice(0,30).map(([key,item])=>[clean(key).slice(0,80),clean(item).slice(0,1600)])):{};
+    const docs=Array.isArray(value.documents)?documentIdentities(value.documents.slice(0,5)).map(d=>({id:d.id,...(d?.claims?{claims:claims(d.claims)}:{}),...(d?.fields?{fields:claims(d.fields)}:{}),name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
+    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map((s,index)=>({id:clean(s?.id).slice(0,160)||`S${index+1}`,...(typeof s?.extracted==='boolean'?{extracted:s.extracted}:{}),...(['primary','supporting'].includes(s?.role)?{role:s.role}:{}),...(s?.claims?{claims:claims(s.claims)}:{}),type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready",pageCategory:["company","offers","proof","delivery","contact"].includes(s?.pageCategory)?s.pageCategory:"",...sourceBranding(s)})).filter(s=>s.url):[];
+    const activeSources=scrapedSources.filter(source=>source.extracted!==false&&sourceMatchesWebsite(source,value.website));
     const profile=value.profile&&typeof value.profile==="object"?{
       ...value.profile,
       mission:buildMission(),
@@ -359,20 +365,20 @@
       marketFocus:clean(value.profile.marketFocus)||legacyMarketFocus,
       recommendedSignals:mergeSignalRecommendations(
         value.profile.recommendedSignals,
-        recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
+        recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(activeSources,docs))
       )
     }:null;
     if(profile){
-      delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(scrapedSources));
-      const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs,knownCompanyName(value.website)||clean(value.profile?.companyName)||inferCompanyName(scrapedSources,value.website));
-      const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
+      delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(activeSources));
+      const regeneratedOverview=deriveCompanyOverview(activeSources,docs,knownCompanyName(value.website)||clean(value.profile?.companyName)||inferCompanyName(activeSources,value.website));
+      const regeneratedDigest=deriveEvidenceDigest(activeSources,docs);
       const companyName=knownCompanyName(value.website)||clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
       if(knownCompanyName(value.website))profile.companyName=companyName;
       if(hasAssetNoise(profile.companyOverview)||hasEvidenceNavigationNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
       if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
-      profile.evidenceSources=buildEvidenceSources(scrapedSources,docs);
+      profile.evidenceSources=buildEvidenceSources(activeSources,docs);
       profile.evidenceCoverage=evidenceCoverage(profile.evidenceSources);
-      profile.sourceSummary=sourceSummary(scrapedSources,docs);
+      profile.sourceSummary=sourceSummary(activeSources,docs);
     }
     return {
       ...(value.websiteActivation?.status==='active'&&normalizeUrl(value.websiteActivation.url)===normalizeUrl(value.website)&&scrapedSources.some(source=>source.type==='website'&&source.url===normalizeUrl(value.website)&&source.text.trim())?{websiteActivation:{status:'active',url:normalizeUrl(value.websiteActivation.url),activatedAt:clean(value.websiteActivation.activatedAt),title:clean(value.websiteActivation.title),description:clean(value.websiteActivation.description),contentChars:Number(value.websiteActivation.contentChars)||0}}:{}),

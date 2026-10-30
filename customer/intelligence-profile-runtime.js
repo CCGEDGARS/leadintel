@@ -8,6 +8,7 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
   const STORAGE_KEY='leadintel_customer_v2_state';
   let applying=false;
   let editing=false;
+  let editContext=null;
   function addCss(href){if(document.querySelector(`link[href^="${href.split('?')[0]}"]`))return;const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.appendChild(link);}
   addCss(`intelligence-profile.css?v=${INTELLIGENCE_PROFILE_ASSET_VERSION}`);
   addCss(`reference-customers.css?v=${REFERENCE_CUSTOMERS_CSS_VERSION}&reference-discovery=5`);
@@ -33,13 +34,18 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
     editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[],market:state.market||{}});installCanonicalCompat(editor);editor.dataset.canonicalSignature=signature;
     setEditButton(edit);upgradeStatus(state);compactSignals(profile);compactEvidence(profile);retireLegacyLookalike();
   }
-  function enterEditMode(){editing=true;const editor=document.getElementById('profile-editor');if(editor)delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(true);setTimeout(()=>document.querySelector('#profile-editor [data-profile-field]:not([data-canonical-compat])')?.focus(),0);}
+  function contextIdentity(state){return JSON.stringify([localStorage.getItem('leadintel_account_context_v1'),root.LeadIntelServerBridge?.workspace?.id||'',root.LeadIntelServerBridge?.session?.user?.id||'',state.website||'']);}
+  function enterEditMode(){const state=readState();editContext={identity:contextIdentity(state),fields:JSON.parse(JSON.stringify(state.profile?.canonical?.fields||{}))};editing=true;const editor=document.getElementById('profile-editor');if(editor)delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(true);setTimeout(()=>document.querySelector('#profile-editor [data-profile-field]:not([data-canonical-compat])')?.focus(),0);}
   function saveCanonicalEdits(){
     const state=readState();const profile=state.profile;const editor=document.getElementById('profile-editor');if(!profile?.canonical?.fields||!editor){editing=false;setEditButton(false);return false;}
-    editor.querySelectorAll('[data-profile-field]:not([data-canonical-compat])').forEach(field=>{
+    if(!editing||!editContext||editContext.identity!==contextIdentity(state)||typeof root.LeadIntelAccountCache?.current==='function'&&!root.LeadIntelAccountCache.current()){toast('Workspace changed. Reopen the profile before saving edits.');return false;}
+    const changed=[...editor.querySelectorAll('[data-profile-field]:not([data-canonical-compat])')].filter(field=>String(field.value||'').trim()!==String(editContext.fields[field.dataset.profileField]?.value||'').trim());
+    if(changed.some(field=>JSON.stringify(profile.canonical.fields[field.dataset.profileField])!==JSON.stringify(editContext.fields[field.dataset.profileField]))){toast('Profile changed while editing. Reopen it to review the latest values.');return false;}
+    if(!changed.length){editing=false;editContext=null;replaceProfileGrid(true);setEditButton(false);return true;}
+    changed.forEach(field=>{
       const key=field.dataset.profileField;const value=String(field.value||'').trim();const previous=profile.canonical.fields[key]||{};
       profile[key]=value;
-      profile.canonical.fields[key]={...previous,value,status:value?'user_confirmed':'unknown',provenance:'user',sourceIds:[`U:${key}`],confidence:value?'high':'low'};
+      profile.canonical.fields[key]={...previous,value,status:value?'user_confirmed':'unknown',provenance:'user',sourceIds:[`U:${key}`],confidence:value?'high':'low',updatedAt:new Date().toISOString()};
       const answerKey=root.LeadIntelCanonicalIntelligence?.FIELD_MAP?.[key];
       if(key==='commercialObjective')state.workspaceGoals={...(state.workspaceGoals||{}),successOutcome:value};
       else if(answerKey){state.answers={...(state.answers||{}),[answerKey]:value};state.answerStatus={...(state.answerStatus||{}),[answerKey]:value?'user':'missing'};}
@@ -49,8 +55,10 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
         if(row){row.state=value?'known':'missing';row.status=value?'user_confirmed':'unknown';}
       }
     });
-    root.LeadIntelCanonicalIntelligence?.finalizeProfileQuality?.(profile,state);
-    state.profile=profile;state.approved=false;state.market={...(state.market||{}),strategyApproved:false,strategyApprovedAt:''};writeState(state);editing=false;
+    const changedAnswers=changed.map(field=>root.LeadIntelCanonicalIntelligence?.FIELD_MAP?.[field.dataset.profileField]).filter(Boolean);
+    if(root.LeadIntelStep2Brief?.applyAnswers)Object.assign(state,root.LeadIntelStep2Brief.applyAnswers(state,changedAnswers));
+    root.LeadIntelCanonicalIntelligence?.finalizeProfileQuality?.(state.profile,state);
+    state.approved=false;state.market={...(state.market||{}),strategyApproved:false,strategyApprovedAt:''};writeState(state);editing=false;editContext=null;
     delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(false);upgradeStatus(state);
     root.dispatchEvent(new CustomEvent('leadintel:workspace-changed',{detail:{source:'canonical-profile-edit'}}));
     root.LeadIntelWorkspacePersistence?.saveWorkspace?.().catch?.(()=>null);

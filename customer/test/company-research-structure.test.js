@@ -104,7 +104,7 @@ test('Step 2 renders research summary, provenance, confidence and needs-input st
   assert.match(ui,/research-field-meta/);
   assert.match(ui,/Needs your input/);
   assert.match(ui,/confidence/i);
-  assert.match(ui,/rel="noopener"/);
+  assert.match(ui,/rel="noopener(?: noreferrer)?"/);
   assert.match(css,/\.research-summary/);
   assert.match(css,/\.research-rerun\.research-primary/);
   assert.match(css,/\.research-rerun\{[^}]*color:#0d5d4f/);

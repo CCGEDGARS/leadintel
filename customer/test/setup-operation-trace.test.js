@@ -22,3 +22,8 @@ test('Setup trace invalidates old operations when the account ticket changes bef
  const {root}=runtime();let ticket='a',current=true;root.localStorage={getItem:()=>ticket};root.LeadIntelAccountCache={current:()=>current};
  const op=root.LeadIntelSetupTrace.begin('material_upload');ticket='b';current=false;op.finish('pass');assert.equal(root.LeadIntelSetupTrace.snapshot().length,0);
 });
+test('shared reliability trace attributes Profile decisions to stage two without private payloads',()=>{
+ const {root,events}=runtime();assert.equal(typeof root.LeadIntelReliabilityTrace?.begin,'function');
+ const operation=root.LeadIntelReliabilityTrace.begin('profile_approval');operation.finish('blocked');
+ const rows=root.LeadIntelReliabilityTrace.snapshot();assert.equal(rows.length,2);assert.ok(rows.every(row=>row.stage===2&&row.action==='profile_approval'));assert.equal(rows[1].outcome,'blocked');assert.equal(events.length,2);
+});

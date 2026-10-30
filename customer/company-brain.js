@@ -174,13 +174,18 @@
   }
 
   function claimsForProfile(profile={},input={}){
-    const evidenceIds=(input.scrapedSources||[]).filter(item=>clean(item?.text)).slice(0,5).map((item,index)=>clean(item.id)||`E${index+1}`);
-    const confirmed=(value,answerKey)=>claim(value,clean(input?.answers?.[answerKey])?"confirmed":"inferred",clean(input?.answers?.[answerKey])?"high":"medium",evidenceIds);
+    const confirmed=(fieldKey,answerKey)=>{
+      const record=profile.canonical?.fields?.[fieldKey];
+      if(record)return claim(record.value,!clean(record.value)?'unknown':['user_confirmed','first_party_evidence','external_validated'].includes(record.status)?'confirmed':'inferred',record.confidence,record.sourceIds||[]);
+      const value=clean(profile[fieldKey]);const meta=input.researchMeta?.fields?.[answerKey]||{};const marker=clean(input.answerStatus?.[answerKey]||meta.origin).toLowerCase();
+      const user=Boolean(clean(input.answers?.[answerKey]))&&(!marker||marker==='user');
+      return claim(value,!value?'unknown':user?'confirmed':'inferred',user?'high':meta.confidence||'low',user?[`U:${answerKey}`]:meta.sourceIds||meta.source_ids||[]);
+    };
     return {
-      offers:confirmed(profile.priorityOffers,"priority_offers"),
-      idealCustomer:confirmed(profile.idealCustomer,"ideal_customer"),
-      differentiation:confirmed(profile.differentiation,"differentiation"),
-      buyingTriggers:confirmed(profile.buyingTriggers,"buying_triggers")
+      offers:confirmed('priorityOffers',"priority_offers"),
+      idealCustomer:confirmed('idealCustomer',"ideal_customer"),
+      differentiation:confirmed('differentiation',"differentiation"),
+      buyingTriggers:confirmed('buyingTriggers',"buying_triggers")
     };
   }
 
@@ -213,7 +218,7 @@
       if(normalized.profile&&typeof normalized.profile==="object"){
         const companyClassification=classifyCompany({...normalized,profile:normalized.profile});
         normalized.profile.companyClassification=companyClassification;
-        normalized.profile.companyClaims=normalized.profile.companyClaims||claimsForProfile(normalized.profile,normalized);
+        normalized.profile.companyClaims=claimsForProfile(normalized.profile,normalized);
         normalized.profile.recommendedSignals=recommendSignals({...normalized,profile:normalized.profile,companyClassification});
         const language=workspaceLanguage();
         const generated=!normalized.profile.customerPainPointsStatus||normalized.profile.customerPainPointsStatus==="AI-inferred · review recommended";
@@ -263,5 +268,5 @@
     if(!legacy.test(clean(profile.decisionMakers)))return state;
     return repairIndustrialBuyerRoles(state);
   }
-  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,suggestedBuyerRoles,repairIndustrialBuyerRoles,strategyConflicts,repairLegacyStrategy,install};
+  return {claim,claimsForProfile,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,suggestedBuyerRoles,repairIndustrialBuyerRoles,strategyConflicts,repairLegacyStrategy,install};
 });

@@ -54,7 +54,8 @@
       "public_contact_research_version": "20261030-adaptive-company-sources-v6",
       "public_pdf_extraction_version": "20261030-native-public-pdf-v1",
       "buyer_integrity_version": "20261030-audit-v1",
-      "setup_integrity_version": "20261030-v1"
+      "setup_integrity_version": "20261030-v1",
+      "profile_integrity_version": "20261030-v1"
     }
   },
   "smokeChecks": [
@@ -5704,6 +5705,86 @@
         "result!==true&&result?.saved!==true",
         "accountSession===session()",
         "Website evidence is loaded in this browser"
+      ]
+    },
+    {
+      "id": "profile-audit-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "profile-audit=20261030-v1"
+      ]
+    },
+    {
+      "id": "profile-review-handoff-integrity",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "profileReviewCurrent",
+        "legacyProfileAnalysis",
+        "!hasPortfolio"
+      ]
+    },
+    {
+      "id": "profile-source-citation-receipts",
+      "type": "text",
+      "url": "/customer/company-research-ui.js",
+      "status": 200,
+      "contains": [
+        "retainAcceptedEvidence",
+        "task:'profile-synthesis'",
+        "receipt.operationId"
+      ]
+    },
+    {
+      "id": "profile-editor-context",
+      "type": "text",
+      "url": "/customer/intelligence-profile-runtime.js",
+      "status": 200,
+      "contains": [
+        "editContext",
+        "changedAnswers"
+      ]
+    },
+    {
+      "id": "profile-canonical-history",
+      "type": "text",
+      "url": "/customer/canonical-profile-runtime.js",
+      "status": 200,
+      "contains": [
+        "fieldHistory"
+      ]
+    },
+    {
+      "id": "profile-reference-context",
+      "type": "text",
+      "url": "/customer/reference-customers.js",
+      "status": 200,
+      "contains": [
+        "20261030-reference-reliability-v1",
+        "referenceWorkflowScope"
+      ]
+    },
+    {
+      "id": "profile-reference-discovery-gate",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Array.isArray(main.referenceCustomerPortfolio?.lists)?null"
+      ]
+    },
+    {
+      "id": "profile-operation-diagnostics",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelReliabilityTrace",
+        "profile_approval",
+        "leadintel:profile-operation"
       ]
     }
   ],

@@ -2,7 +2,7 @@ import './first-party-research.js?v=20260930-research-pipeline-v2';
 import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&list-lifecycle=20261002-v1&qualification-context=20261020-v1';
 import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&profile-market=20261001-v1&list-lifecycle=20261002-v1';
-import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5&list-lifecycle=20261002-v1';
+import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5&list-lifecycle=20261002-v1&profile-audit=20261030-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=5';
 
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
@@ -64,16 +64,28 @@ const REFERENCE_AI_CONCURRENCY=4;
       state=Portfolio.saveCurrentList(state,{name:currentList.name,markets:currentList.markets,purpose:currentList.purpose});
     }
     const listId=state.referenceCustomerPortfolio.selectedListId;
+    const scope=()=>Ref.referenceWorkflowScope(root,readState());
+    const initialScope=scope();
+    const inputs=current=>JSON.stringify([Ref.normalizeReferenceState(current.referenceCustomers||{}),current.referenceCustomerPortfolio?.lists?.find(list=>list.id===listId),current.profile?.priorityOffers,current.profile?.idealCustomer,current.targetMarkets]);
+    const initialInputs=inputs(state);
+    function assertCurrent(){
+      const current=readState();
+      if(scope()!==initialScope||current.referenceCustomerPortfolio?.selectedListId!==listId||inputs(current)!==initialInputs)
+        throw new Error('The reference list changed during analysis, or the workspace context changed. The results were not applied. Open the saved list and analyze it again.');
+    }
     await writeState(state);
     const saved=await root.LeadIntelServerBridge.saveNow?.({saveIntent:true});
+    assertCurrent();
     if(saved?.saved!==true)throw new Error('The reference list has not synced to your workspace. Check workspace sync and retry analysis.');
     button.disabled=true;status(`Scraping reference customer websites… 0/${ready.length}`);
     let completed=0;
-    const scraped=await mapLimit(ready,async row=>{const result=await scrapeRow(row);completed++;status(`Scraping reference customer websites… ${completed}/${ready.length}`);return result;});
+    const scraped=await mapLimit(ready,async row=>{assertCurrent();const result=await scrapeRow(row);assertCurrent();completed++;status(`Scraping reference customer websites… ${completed}/${ready.length}`);return result;});
+    assertCurrent();
     const evidence=scraped.filter(item=>item.ok).map(item=>item.value);const failures=scraped.length-evidence.length;
     if(!evidence.length)throw new Error('No reference customer websites could be read');
     status(`Running AI analysis on ${evidence.length} reference customers…`);
     const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence,seller:{website:state.website,offers:state.profile?.priorityOffers,idealCustomer:state.profile?.idealCustomer,targetMarkets:state.targetMarkets}});
+    assertCurrent();
     if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
     for(const row of evidence){if(result.analyses[row.id])result.analyses[row.id].evidenceCoverage=row.coverage;}
     const coherentProfile=result.segmentationMeaningful?result:Ref.buildReferenceSegments(state.referenceCustomers.rows,result.analyses);

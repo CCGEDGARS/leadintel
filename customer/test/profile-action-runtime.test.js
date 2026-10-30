@@ -30,7 +30,7 @@ test('profile approval reads only editable textarea fields', () => {
 
 test('profile approval updates the canonical UI without invoking the retired renderer', () => {
   const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  const approval = app.match(/function approveProfile\(\)\{([^}]|}\))*/)?.[0] || '';
+  const approval = app.slice(app.indexOf('function approveProfile(){'),app.indexOf('function updateApprovalUI(){'));
   assert.match(approval, /updateApprovalUI\(\)/);
   assert.match(approval, /leadintel:workspace-changed/);
   assert.doesNotMatch(approval, /renderProfile\(\)/);

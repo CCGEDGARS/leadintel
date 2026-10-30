@@ -38,10 +38,16 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     return merged;
   }
   function patchedBuild(input={}){return {...applyCanonical(originalBuild(input),input),generatedContextVersion:3};}
-  function preserveConfirmedFields(current,rebuilt){
+  function preserveConfirmedFields(current,rebuilt,input={},onDisplaced=()=>{}){
     const fields=current?.canonical?.fields||{};
+    if(current?.canonical?.fieldHistory)rebuilt.canonical.fieldHistory=JSON.parse(JSON.stringify(current.canonical.fieldHistory));
+    function retainPrevious(key,record){onDisplaced();const history=rebuilt.canonical.fieldHistory||(rebuilt.canonical.fieldHistory={});const rows=Array.isArray(history[key])?history[key]:[];if(!rows.some(row=>row.value===record.value&&row.updatedAt===record.updatedAt))rows.push({...record});history[key]=rows;}
     for(const [key,record] of Object.entries(fields)){
       if(record?.status!=='user_confirmed'||!String(record.value||'').trim())continue;
+      const answerKey=Canonical.FIELD_MAP[key];
+      if(answerKey&&Object.hasOwn(input.answers||{},answerKey)&&String(input.answers[answerKey]||'').trim()!==String(record.value).trim()){retainPrevious(key,record);continue;}
+      if(key==='targetMarkets'&&Object.hasOwn(input,'targetMarkets')&&Profile.normalizeTargetMarkets(input.targetMarkets).join('; ')!==String(record.value).trim()){retainPrevious(key,record);continue;}
+      if(key==='commercialObjective'&&Object.hasOwn(input.workspaceGoals||{},'successOutcome')&&String(input.workspaceGoals.successOutcome||'').trim()!==String(record.value).trim()){retainPrevious(key,record);continue;}
       rebuilt.canonical.fields[key]={...record,updatedAt:record.updatedAt||new Date().toISOString()};rebuilt[key]=record.value;
     }
     Canonical.finalizeProfileQuality(rebuilt);rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);return rebuilt;
@@ -60,7 +66,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
   function patchedNormalize(value={}){
     const normalized=originalNormalize(value);normalized.answerStatus=value.answerStatus&&typeof value.answerStatus==='object'?{...value.answerStatus}:{};
     if(Refs){let referenceState=value.referenceCustomers||{};if(!referenceState.rows?.length&&!Array.isArray(value.referenceCustomerPortfolio?.lists)&&value.answers?.lookalike_customers){referenceState={rows:Refs.migrateLegacyLookalikes(value.answers.lookalike_customers)};}normalized.referenceCustomers=Refs.normalizeReferenceState(referenceState);}
-    if(normalized.profile&&normalized.website){const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus,researchMeta:readResearchMeta(normalized)});normalized.profile=preserveUnchangedClocks(value.profile,preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt}));}
+    if(normalized.profile&&normalized.website){let displaced=false;const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus,researchMeta:readResearchMeta(value)});normalized.profile=preserveUnchangedClocks(value.profile,preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt},value,()=>{displaced=true;}));if(displaced){normalized.approved=false;normalized.market={...(value.market||{}),...(normalized.market||{}),strategyApproved:false,strategyApprovedAt:''};}}
     const repair=normalized.profile?.canonical?.buyerRoleRepair;
     if(repair){
       normalized.answers.buyer_roles=normalized.profile.decisionMakers;

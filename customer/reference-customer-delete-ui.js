@@ -11,7 +11,15 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
   function setStatus(message){const status=document.getElementById('reference-import-status');if(status)status.textContent=message;}
   let pendingWorkspace='';
-  function workspaceKey(){return root.LeadIntelServerBridge?.workspace?.id||'local';}
+  let pendingListVersion='';
+  function workspaceKey(){
+    const bridge=root.LeadIntelServerBridge,state=readState();
+    return JSON.stringify([bridge?.workspace?.id||'local',bridge?.session?.authenticated,bridge?.session?.user?.id,root.localStorage.getItem('leadintel_account_context_v1'),state.website||state.profile?.website]);
+  }
+  function listVersion(id){
+    const state=readState(),portfolio=state.referenceCustomerPortfolio;
+    return JSON.stringify([portfolio?.lists?.find(list=>list.id===id),portfolio?.selectedListId===id?state.referenceCustomers:null]);
+  }
   function deleteWarning(id){
     const state=readState(),portfolio=Portfolio.normalizePortfolio(state.referenceCustomerPortfolio||{});
     const list=portfolio.lists.find(item=>item.id===id);
@@ -33,8 +41,8 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   function selectedName(id){const p=Portfolio.normalizePortfolio(readState().referenceCustomerPortfolio||{});return p.lists.find(x=>x.id===id)?.name||'this customer list';}
   async function deleteSavedList(id){
     const workspace=workspaceKey();
-    if(pendingDeleteId!==id||pendingWorkspace!==workspace){
-      pendingDeleteId='';decorate();setStatus('The workspace changed. Open Delete again in the intended workspace.');return false;
+    if(pendingDeleteId!==id||pendingWorkspace!==workspace||pendingListVersion!==listVersion(id)){
+      pendingDeleteId='';decorate();setStatus('The workspace or reference list changed. Open Delete again to review the intended list.');return false;
     }
     const state=readState();
     if(!state.referenceCustomerPortfolio?.lists?.some(list=>list.id===id)){pendingDeleteId='';decorate();return false;}
@@ -88,7 +96,7 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   }
   document.addEventListener('click',event=>{
     const begin=event.target?.closest?.('[data-delete-reference-list]');
-    if(begin){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();pendingWorkspace=workspaceKey();pendingDeleteId=begin.dataset.deleteReferenceList;decorate();return;}
+    if(begin){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();pendingWorkspace=workspaceKey();pendingDeleteId=begin.dataset.deleteReferenceList;pendingListVersion=listVersion(pendingDeleteId);decorate();return;}
     const cancel=event.target?.closest?.('[data-cancel-delete-list]');
     if(cancel){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();pendingDeleteId='';decorate();return;}
     const confirm=event.target?.closest?.('[data-confirm-delete-list]');

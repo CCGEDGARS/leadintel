@@ -11,6 +11,7 @@
   const QUESTION_IDS=Brief?.FIELD_IDS||["priority_offers","ideal_customer","buyer_roles","exclusions","buying_outcomes","buying_triggers","value_proposition","differentiation","proof_points","objections"];
   const DRAFT_ORIGINS=new Set(["research","evidence_draft","hypothesis_draft"]);
   const CONFIDENCE=new Set(["high","medium","low"]);
+  const HYPOTHESIS_FIELDS=new Set(["ideal_customer","buyer_roles","buying_outcomes","buying_triggers","value_proposition","objections","exclusions"]);
   const MAX_PUBLIC_QUERIES=3;
   const MAX_SOURCES=25;
   const AUTHORITATIVE_CATEGORIES=Object.freeze(["company","offers","proof","delivery","contact","technical"]);
@@ -19,9 +20,10 @@
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
   function safeUrl(value){
     try{
-      const raw=clean(value);if(!raw)return "";
+      const raw=clean(value);if(!raw||raw.length>2048||/^(?!https?:)[a-z][a-z0-9+.-]*:/i.test(raw))return "";
       const url=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);
-      if(!["http:","https:"].includes(url.protocol))return "";
+      const host=url.hostname.toLowerCase();
+      if(!["http:","https:"].includes(url.protocol)||url.username||url.password||!host.includes(".")||/^[\d.]+$/.test(host)||host.includes(":")||/(^|\.)(localhost|local|internal|invalid)$/.test(host))return "";
       url.hash="";
       return url.href;
     }catch{return "";}
@@ -203,10 +205,13 @@
       const value=truncate(row.value,1500);
       const rationale=truncate(row.rationale,500);
       if(clean(language).toLowerCase().startsWith("lv")&&(hasEnglishProse(value)||hasEnglishProse(rationale)))return {};
-      const sourceIds=unique(Array.isArray(row.source_ids)?row.source_ids:row.sourceIds||[]).map(String).filter(sourceId=>valid.has(sourceId)).slice(0,6);
+      const citations=Array.isArray(row.source_ids)?row.source_ids:Array.isArray(row.sourceIds)?row.sourceIds:[];
+      const sourceIds=unique(citations.filter(id=>typeof id==="string")).filter(sourceId=>valid.has(sourceId)).slice(0,6);
       const requestedType=clean(row.draft_type||row.draftType).toLowerCase();
       const draftType=requestedType==="hypothesis"?"hypothesis":"evidence";
-      output[id]={value,confidence,sourceIds,rationale,draftType};
+      if(value&&draftType==="evidence"&&!sourceIds.length)continue;
+      if(draftType==="hypothesis"&&!HYPOTHESIS_FIELDS.has(id))continue;
+      output[id]={value,confidence:draftType==="hypothesis"&&confidence==="high"?"medium":confidence,sourceIds:draftType==="hypothesis"?[]:sourceIds,rationale,draftType};
     }
     return output;
   }
@@ -308,6 +313,8 @@
     for(const id of QUESTION_IDS){
       const current=clean(currentAnswers?.[id]);const row=draft?.[id]||emptyDraftItem();
       const previous=previousMeta[id];
+      const editedDraft=current&&DRAFT_ORIGINS.has(clean(previous?.origin).toLowerCase())&&typeof previous.draftValue==="string"&&current!==clean(previous.draftValue);
+      if(editedDraft){answers[id]=current;meta[id]={origin:"user",reviewed:true,confidence:"",sourceIds:[],rationale:"Customer-edited answer preserved."};continue;}
       const replaceDraft=DRAFT_ORIGINS.has(clean(previous?.origin).toLowerCase())&&!previous.reviewed;
       if(current&&!replaceDraft){answers[id]=current;meta[id]=previous?{...previous}:{origin:"user",confidence:"",sourceIds:[],rationale:"Existing answer preserved."};continue;}
       const value=truncate(row.value,1500);answers[id]=value;
@@ -347,17 +354,23 @@
     const domain=hostname(website);return domain?domain.split(".")[0].replace(/[-_]+/g," ").replace(/\b\w/g,char=>char.toUpperCase()):"Company";
   }
 
+  function normalizeDocumentIds(documents=[]){
+    const rows=Array.isArray(documents)?documents:[];
+    const used=new Set(rows.map(doc=>clean(doc?.id).slice(0,160)).filter(Boolean));
+    return rows.map((doc,index)=>{let id=clean(doc?.id).slice(0,160);if(!id){let ordinal=index+1;while(used.has(`D${ordinal}`))ordinal++;id=`D${ordinal}`;used.add(id);}return {...doc,id};});
+  }
+
   function buildAiPrompt(input={}){
-    const sources=(input.sources||[]).slice(0,MAX_SOURCES);const docs=(input.documents||[]).filter(doc=>clean(doc?.text)).slice(0,5);
+    const sources=(input.sources||[]).slice(0,MAX_SOURCES);const docs=normalizeDocumentIds(input.documents).filter(doc=>clean(doc?.text)).slice(0,5);
     const requestedLanguage=clean(input.uiLanguage).toLowerCase();
     const outputLanguage=requestedLanguage==="en"||requestedLanguage.startsWith("en")?"English":"Latvian";
     const sourceLines=sources.map(source=>`[${source.id}] ${source.title||source.url}\nURL: ${source.url}\n${String(source.text||"").slice(0,5000)}`).join("\n\n");
-    const docLines=docs.map((doc,index)=>`[D${index+1}] PDF ${clean(doc.name)}\n${String(doc.text||"").slice(0,4000)}`).join("\n\n");
+    const docLines=docs.map(doc=>`[${doc.id}] PDF ${clean(doc.name)}\n${String(doc.text||"").slice(0,4000)}`).join("\n\n");
     const system="You are the LeadIntel evidence analyst. Use supplied evidence for factual claims. Never invent customers, prices, certifications, proof, or company capabilities. You may add a commercially useful hypothesis only for ideal_customer, buyer_roles, buying_outcomes, buying_triggers, value_proposition, objections, or exclusions; label it draft_type hypothesis, keep confidence low or medium, and do not attach source IDs. Return strict JSON only. Every returned value must be written entirely in "+outputLanguage+"; do not mix languages or leave English business terminology inside Latvian output.";
     const schema=QUESTION_IDS.map(id=>`\"${id}\":{\"value\":\"\",\"confidence\":\"high|medium|low\",\"draft_type\":\"evidence|hypothesis\",\"source_ids\":[\"S1\"],\"rationale\":\"brief evidence reason\"}`).join(",");
     const prompt=`Output language: ${outputLanguage}\nCompany website: ${safeUrl(input.website)}\nTarget markets selected by customer: ${normalizeMarkets(input.targetMarkets).join("; ")}\n\nBuild a ready-to-use Commercial Intelligence Brief in one language that supports targeting, buying-signal discovery, and content creation. For evidence-backed fields, cite only supplied source IDs and set draft_type to evidence. When the evidence does not directly answer a commercially necessary field, either leave it empty or provide a clearly marked hypothesis under the permitted rules. proof_points and differentiation must remain empty unless explicitly evidenced. Buyer roles may be inferred only when the business model strongly supports the buying function.\n\nReturn exactly this shape: {\"fields\":{${schema}}}\n\nWEB EVIDENCE\n${sourceLines||"No readable web evidence."}\n\nDOCUMENT EVIDENCE\n${docLines||"No document evidence."}`;
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,researchFieldReadyForLanguage,researchOutputReadyForLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,recoverDraftAnswers,reconcileResearchField,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,researchFieldReadyForLanguage,researchOutputReadyForLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,recoverDraftAnswers,reconcileResearchField,reviewActionState,deriveCompanyName,normalizeDocumentIds,buildAiPrompt};
 });

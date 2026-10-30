@@ -39,6 +39,12 @@
     const document=root.document;
     if(!document||document.documentElement?.dataset.referenceClearListInstalled==='true')return;
     if(document.documentElement)document.documentElement.dataset.referenceClearListInstalled='true';
+    let pendingContext='';
+    function confirmationContext(){
+      let state={};try{state=JSON.parse(root.localStorage.getItem(STORAGE_KEY)||'{}');}catch{}
+      const bridge=root.LeadIntelServerBridge;
+      return JSON.stringify([bridge?.session?.authenticated,bridge?.session?.user?.id,bridge?.workspace?.id,root.localStorage.getItem('leadintel_account_context_v1'),state.website||state.profile?.website,state.referenceCustomerPortfolio?.selectedListId,state.referenceCustomers]);
+    }
 
     function ensureStyles(){
       if(document.getElementById('reference-clear-list-styles'))return;
@@ -53,6 +59,7 @@
     }
 
     function hideConfirmation(){
+      pendingContext='';
       const panel=document.querySelector('[data-reference-clear-confirm]');
       if(panel){panel.hidden=true;panel.style?.removeProperty?.('display');panel.setAttribute('aria-hidden','true');}
       const trigger=document.getElementById('reference-clear-list');
@@ -61,6 +68,7 @@
     }
 
     async function clearList(){
+      if(!pendingContext||pendingContext!==confirmationContext()){hideConfirmation();setStatus('The workspace or draft changed. Open Clear current draft again to review the intended draft.');return;}
       let state={};
       try{state=JSON.parse(root.localStorage.getItem(STORAGE_KEY)||'{}');}catch{}
       const rows=Array.isArray(state.referenceCustomers?.rows)?state.referenceCustomers.rows:[];
@@ -101,6 +109,7 @@
       const actions=modal?.querySelector('.reference-import-actions');
       if(!actions)return;
       const panel=ensureConfirmation(actions);
+      pendingContext=confirmationContext();
       panel.hidden=false;
       panel.setAttribute('aria-hidden','false');
       document.getElementById('reference-clear-list')?.setAttribute('aria-expanded','true');

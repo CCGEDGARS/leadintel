@@ -18,7 +18,7 @@ function harness({step=3,canonicalBeforeInit=false}={}){
   w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=()=>{};
   w.LeadIntelServerBridge={ready:true,session:{authenticated:true},workspace:{id:'profile-runtime-test'},saveNow:async()=>{}};
   let verifiedInit;
-  w.LeadIntelAccountCache={afterVerification:init=>{verifiedInit=init;}};
+  w.LeadIntelAccountCache={current:()=>true,afterVerification:init=>{verifiedInit=init;}};
   const load=file=>w.eval(read(file));
   for(const file of ['content-language.js','step2-brief-schema.js','profile-engine.js','market-engine.js','targeting-policy.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','intelligence-profile-ui.js','profile-approval-ui.js'])load(file);
   w.eval(read('evidence-view.js').slice(read('evidence-view.js').indexOf('(function(root,factory)')));
@@ -156,4 +156,13 @@ test('page-quality denied actions can focus Profile after canonical reconstructi
     assert.ok(h.w.document.querySelector('#profile-editor .intel-profile-shell'));
     assert.deepEqual(h.errors,[]);
   }finally{h.close();}
+});
+
+test('canonical offer edits rebase current core ICPs while preserving custom strategy and live research',()=>{
+ const h=harness({canonicalBeforeInit:true});try{
+  h.init();const state=h.state();state.market.icps=[{id:'icp-core',type:'core',offers:'Old offer',buyerRoles:'Current buyer'},{id:'custom-1',type:'custom',offers:'Manual offer'}];
+  state.market.researchStatus='running';state.market.researchResults=[{url:'https://research.example/new'}];
+  const runtime=h.w.LeadIntelIntelligenceProfileRuntime;runtime.enterEditMode();const input=h.w.document.querySelector('[data-profile-field="priorityOffers"]');input.value='New reviewed maintenance offer';assert.equal(runtime.saveCanonicalEdits(),true);
+  const saved=h.saved();assert.equal(saved.market.icps[0].offers,input.value);assert.equal(saved.market.icps[0].buyerRoles,'Current buyer');assert.equal(saved.market.icps[1].offers,'Manual offer');assert.equal(saved.market.researchStatus,'running');assert.equal(saved.market.researchResults[0].url,'https://research.example/new');
+ }finally{h.close();}
 });

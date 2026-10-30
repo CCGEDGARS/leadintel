@@ -598,7 +598,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   const referenceDomains=(main.referenceCustomers?.rows||[]).map(row=>canonicalDomain(row.website||row.domain)).filter(Boolean);
   const lookalikeIcp=(market.icps||[]).find(item=>item.type==='lookalike'||item.type==='lookalike-led'||item.id==='icp-lookalike'||item.id==='icp-reference-lookalike');
   const discoveryMode=window.LeadIntelQualificationSettings?.get?.().researchPriority||'balanced';
-  const referenceModel=discoveryMode==='signals'||lookalikeIcp?.active===false?null:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{});
+  const referenceModel=discoveryMode==='signals'||lookalikeIcp?.active===false?null:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(Array.isArray(main.referenceCustomerPortfolio?.lists)?null:window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}));
   const referenceTraits=(referenceModel?.dna?.referenceProfiles||[]).flatMap(ref=>ref.dimensions||[]).filter(d=>['industry','broadIndustry','productionModel','capabilities'].includes(d.key)).flatMap(d=>d.values||[]);
   const profileForQueries={buyingTriggers:(market.signals||[]).filter(s=>s.active!==false).map(s=>s.keywords||s.name).join('; '),discoveryPriority:window.LeadIntelQualificationSettings?.get?.().researchPriority||'balanced',referenceDomains,referenceSimilarityModel:referenceModel,discoveryFitFirst:true,...(main.profile||{website:main.website}),...window.LeadIntelTargeting.profileFields(main),...companyQualificationProfile(main)};
   if(discoveryMode==='lookalike'&&!referenceModel){showToast('Activate a reference customer model before using Lookalike discovery');return false;}
@@ -939,7 +939,7 @@ async function retryPurchasingFitChecks(){
   const domains=new Set(failures.map(f=>canonicalDomain(f.domain||f.queryMeta?.domain)).filter(Boolean));
   const pool=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates||[]).filter(c=>domains.has(canonicalDomain(c.domain))).slice(0,10);
   if(!pool.length){showToast('Saved company evidence is unavailable; recheck the company websites.');return false;}
-  const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})};
+  const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(Array.isArray(main.referenceCustomerPortfolio?.lists)?null:window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}))};
   const startedDiscovery=discovery,scope=()=>JSON.stringify([bridge()?.workspace?.id||'',fingerprint()]),startedScope=scope();
   const controller=new AbortController(),stop=()=>{if(scope()!==startedScope)controller.abort(new DOMException('Workspace or strategy changed','AbortError'));};
   window.addEventListener?.('leadintel:workspace-changed',stop);window.addEventListener?.('leadintel:server-ready',stop);
@@ -3450,7 +3450,7 @@ function qualificationContext(){
   const previous=qualificationContextCache;
   if(previous&&previous.raw===raw&&previous.scope===scope&&dependencies.every((fn,i)=>fn===previous.dependencies[i]))return previous;
   let main;try{main=JSON.parse(raw)||{};}catch{main={};}
-  const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})};
+  const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(Array.isArray(main.referenceCustomerPortfolio?.lists)?null:window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}))};
   qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}};
   return qualificationContextCache;
 }

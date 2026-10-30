@@ -94,6 +94,9 @@ function privateIpv6(hostname){
   if(!host.includes(':'))return false;
   if(host==='::'||host==='::1')return true;
   if(/^f[cd]/.test(host)||/^fe[89ab]/.test(host))return true;
+  // URL canonicalizes dotted IPv4-mapped addresses to two hexadecimal groups.
+  const mappedHex=host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if(mappedHex){const high=parseInt(mappedHex[1],16),low=parseInt(mappedHex[2],16);return privateIpv4([high>>8,high&255,low>>8,low&255].join('.'));}
   const mapped=host.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);return Boolean(mapped&&privateIpv4(mapped[1]));
 }
 function publicResearchUrl(value,base){
@@ -239,10 +242,11 @@ async function providerStatus(env,workspaceId,provider,{verify=false,operationId
 }
 
 function workspaceIdFrom(url){return clean(url.searchParams.get('workspace_id')||'',120);}
-async function extractionFallback(env,url,access,workspaceId,credential,status,signal){
+async function extractionFallback(env,url,access,workspaceId,credential,status,signal,operationId){
   const direct=await fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
-  await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status}});
-  return direct;
+  const researchTrace=[{provider:'firecrawl',operation:'extract',status:'failed',results:0,...(status?{httpStatus:status}:{})},{provider:'direct',operation:'extract',status:'succeeded',results:1}];
+  await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{operation_id:operationId,source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status,researchTrace}});
+  return {...direct,researchTrace};
 }
 export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,totalTimeoutMs=25000,directTimeoutMs=10000,firecrawlTimeoutMs=20000}={}){
   if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
@@ -280,7 +284,7 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
   else researchTrace.push({provider:'scrapling',operation:'extract',status:'skipped',results:0,reason:'Fallback not configured'});
   throw Object.assign(new Error('Public source extraction unavailable'),{status:502,researchTrace});
 }
-async function forwardFirecrawl(request,env,cors,workspaceId,kind){
+async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
   let target='',payload={},researchUrl=null;
@@ -299,13 +303,18 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   }
   if(kind==='scrape'&&body.publicFirst===true){
     if(request.signal.aborted)return cancelledResponse(request.signal,cors);
-    try{const extracted=await readPublicBuyerPage(env,workspaceId,researchUrl.href,{signal:providerSignal(request,55000)});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{source:extracted.data.metadata?.source,researchTrace:extracted.researchTrace}});return json(extracted,200,cors);}
-    catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{status:'failed',researchTrace:cause.researchTrace||[]}});return json({error:cause.message,code:'PUBLIC_EXTRACTION_UNAVAILABLE',researchTrace:cause.researchTrace||[]},cause.status||502,cors);}
+    try{const extracted=await readPublicBuyerPage(env,workspaceId,researchUrl.href,{signal:providerSignal(request,55000)});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{operation_id:operationId,source:extracted.data.metadata?.source,researchTrace:extracted.researchTrace}});return json(extracted,200,cors);}
+    catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{operation_id:operationId,status:'failed',researchTrace:cause.researchTrace||[]}});return json({error:cause.message,code:'PUBLIC_EXTRACTION_UNAVAILABLE',researchTrace:cause.researchTrace||[]},cause.status||502,cors);}
   }
   let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const signal=providerSignal(request,kind==='scrape'?Math.min(65000,payload.timeout+5000):30000);
   if(signal.aborted)return cancelledResponse(signal,cors);
+  const protectedResult=async value=>{
+    if(signal.aborted)return cancelledResponse(signal,cors);
+    const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);
+    return current.error?error(current.error,current.status,cors):json(value,200,cors);
+  };
   // Workspace gate (firecrawl-rate-gate.js): Firecrawl limits are per team per minute, the browser fans out from many
   // places and tabs, so the Worker paces every customer-key request and WAITS for the next slot while the request's
   // own deadline allows. Only when the slot is further away than the deadline does the caller get a 429 that names
@@ -322,27 +331,32 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload),signal});}catch(cause){
     if(signal.aborted)return cancelledResponse(signal,cors);
     if(kind==='scrape'&&researchUrl){
-      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0,signal);return json(direct,200,cors);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0,signal,operationId);return protectedResult(direct);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
     }
     return error(`Firecrawl ${kind} is temporarily unavailable`,502,cors);
   }
   const upstream=await response.json().catch(()=>({}));
   if(signal.aborted)return cancelledResponse(signal,cors);
-  if(!response.ok){
-    if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
+  const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)return error(current.error,current.status,cors);
+  if(!response.ok||upstream?.success===false){
+    const status=response.ok?502:response.status;
+    if(creditFailure(status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
     let upstreamRetryAfterMs=0;if(response.status===429){upstreamRetryAfterMs=parseRetryAfterMs(response,upstream);await recordFirecrawlRateLimit(env,workspaceId,kind,upstreamRetryAfterMs);}
-    const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status);
+    const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(status);
     if(canFallback){
-      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status,signal);return json(direct,200,cors);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,status,signal,operationId);return protectedResult(direct);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
     }
-    if(response.status===429){const seconds=Math.max(1,Math.ceil(upstreamRetryAfterMs/1000));return json({error:`Firecrawl rate limit reached on your plan (${upstream.error||'429'}). The next ${kind} can start in ${seconds} s.`,code:'FIRECRAWL_UPSTREAM_RATE_LIMIT',retry_after:seconds,kind},429,{...cors,'Retry-After':String(seconds)});}
-    return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
+    if(response.status===429){const seconds=Math.max(1,Math.ceil(upstreamRetryAfterMs/1000));return json({error:`Firecrawl rate limit reached on your plan (429). The next ${kind} can start in ${seconds} s.`,code:'FIRECRAWL_UPSTREAM_RATE_LIMIT',retry_after:seconds,kind},429,{...cors,'Retry-After':String(seconds)});}
+    return error(`Firecrawl ${kind} failed (${status})`,status>=400&&status<600?status:502,cors);
   }
   await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'recovered',source:credential.source});
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'`).bind(workspaceId).run();
-  await audit(env,{workspaceId,userId:access.user.id,type:`service.firecrawl_${kind}`,provider:'firecrawl',metadata:{source:credential.source}});
-  if(kind==='search'&&credential.source==='customer'&&Array.isArray(upstream?.data?.web))return json({success:true,data:upstream.data.web},200,cors);
-  return json(upstream,200,cors);
+  const rows=Array.isArray(upstream?.data?.web)?upstream.data.web:Array.isArray(upstream?.data)?upstream.data:[];
+  const researchTrace=[{provider:'firecrawl',operation:kind==='search'?'search':'extract',status:'succeeded',results:kind==='search'?rows.length:String(upstream?.data?.markdown||upstream?.data?.content||'').trim()?1:0}];
+  await audit(env,{workspaceId,userId:access.user.id,type:`service.firecrawl_${kind}`,provider:'firecrawl',metadata:{operation_id:operationId,source:credential.source,researchTrace}});
+  if(kind==='search'&&credential.source==='customer'&&Array.isArray(upstream?.data?.web))return protectedResult({...upstream,data:upstream.data.web,researchTrace});
+  if(kind==='scrape'&&upstream.data&&typeof upstream.data==='object')return protectedResult({...upstream,data:{...upstream.data,metadata:{...upstream.data.metadata,source:'firecrawl'}},researchTrace});
+  return protectedResult({...upstream,researchTrace});
 }
 
 function normalizeApolloPeopleSearch(body){
@@ -516,8 +530,8 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     return json({email,source:clean(source,1000),source_type:clean(data.source_type,30),status:clean(data.verification?.status,30),provider:'Hunter',identity_confirmed:false},200,cors);
   }
 
-  if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape');
-  if(path==='/api/integrations/services/firecrawl/search'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'search');
+  if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape',operationId);
+  if(path==='/api/integrations/services/firecrawl/search'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'search',operationId);
   if(path==='/api/integrations/services/apollo/people-search'&&request.method==='POST')return forwardApolloPeopleSearch(request,env,cors,workspaceId);
   return error('Method not allowed',405,cors);
 }
