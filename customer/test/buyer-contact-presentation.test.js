@@ -65,7 +65,7 @@ test('research summary uses person and page coverage without turning capped sear
 
 test('standalone contact resume starts at contact evidence without claiming to re-identify all people',()=>{
  const {ctx}=runtime();vm.runInContext(source.slice(source.indexOf('function buyerResearchProgressHtml('),source.indexOf('async function findExecutiveBuyer(')),ctx);
- const doc=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'complete',publicContactStatus:'loading'}));assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/Checking public contact evidence/);assert.equal(doc.querySelector('li.active').textContent.trim(),'5Contact evidence');assert.match(doc.querySelector('.buyer-research-progress-head b').textContent,/5\/5/);
+ const doc=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'complete',publicContactStatus:'loading'}));assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/Checking public contact evidence/);assert.equal(doc.querySelector('li.active').textContent.trim(),'5Contact evidence');assert.match(doc.querySelector('.buyer-research-progress-head b').textContent,/Stage 5 of 5/);
  const discovery=documentFor(ctx.buyerResearchProgressHtml({peopleStatus:'loading',publicContactStatus:'loading'}));assert.equal(discovery.querySelector('li.active').textContent.trim(),'1Verify company');
 });
 

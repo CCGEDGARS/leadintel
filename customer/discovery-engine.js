@@ -2602,6 +2602,13 @@
 
   function recoverInterruptedDiscoveryState(value={}){
     const state=normalizeDiscoveryState(value);
+    for(const key of ['selectedProspects','candidates','potentialMatches','pipeline'])for(const candidate of state[key]||[]){
+      if(candidate.peopleStatus!=='loading'&&candidate.publicContactStatus!=='loading')continue;
+      if(candidate.peopleStatus==='loading')candidate.peopleStatus='error';
+      if(candidate.publicContactStatus==='loading')candidate.publicContactStatus='error';
+      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),researchIncomplete:true,lastError:{name:'InterruptedResearch',message:'Previous buyer research was interrupted. Saved evidence is preserved; resume unfinished checks.',phase:'restore'}};
+      candidate.buyerResearchProgress={phase:'error',label:'Previous research interrupted · resume unfinished checks',step:1,total:5};
+    }
     if(state.status!=="running")return state;
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }

@@ -33,8 +33,8 @@ test('a buyer search left in loading state is reset when discovery state loads',
  vm.createContext(context);vm.runInContext(slice('function loadDiscovery(','function saveDiscovery('),context);
  const state=context.loadDiscovery();
  const [stuck,done]=state.selectedProspects;
- assert.equal(stuck.peopleStatus,'idle');assert.equal(stuck.buyerResearchProgress,undefined);
- assert.equal(done.peopleStatus,'complete');
+ assert.equal(stuck.peopleStatus,'error');assert.equal(stuck.buyerResearchProgress.phase,'error');
+ assert.equal(done.peopleStatus,'error');assert.equal(done.people.length,1);assert.equal(done.buyerDiscovery.researchIncomplete,true);
 });
 
 test('reloading an unchanged role selection preserves the researched buyer list',()=>{
