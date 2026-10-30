@@ -78,9 +78,9 @@
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');
-    const paidHold=/lookup limit reached|approval was revoked/i.test(result||'')?'<small class="additional-contact-paused">Paid lookup is paused. Review limits and approval in Setup. '+(bridge()?.conflict?'Resolve workspace sync before using Recheck.':'Recheck remains available for public-source research.')+' No limit or approval was changed.</small>':'';
+    const paidHold=/lookup limit reached|approval was revoked/i.test(result||'')?'<small class="additional-contact-paused">That paid lookup was blocked. Review current limits and approval in Setup. '+(bridge()?.conflict?'Resolve workspace sync before using Recheck.':'Recheck remains available for public-source research.')+' No limit or approval was changed.</small>':'';
     if(!adapter||!readiness(candidate,person).eligible)return result?`<p class="additional-contact-note" role="status">Saved lookup attempt: ${esc(result)}${paidHold}</p>`:'';
-    return `<p class="additional-contact-note" role="status"><strong>Strong match. No confirmed public work email found.</strong>${result?` <span>${esc(result)}</span>`:''}${paidHold}</p>`;
+    return `<p class="additional-contact-note" role="status"><strong>Strong match. No confirmed public work email found.</strong>${result?` <span>Saved lookup attempt: ${esc(result)}</span>`:''}${paidHold}</p>`;
   }
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}

@@ -61,7 +61,7 @@ test('paid permissions do not claim remaining budget and historical holds respec
  await f.click('[data-paid-search-toggle]');const note=f.w.document.querySelector('[data-paid-search-status]');assert.match(note.textContent,/permission, not remaining budget/);
  const person={id:'p',contactVerification:{status:'error',issues:['Treg · error: Additional-services lookup limit reached or approval was revoked']}};
  f.w.LeadIntelServerBridge.conflict=true;
- const blocked=f.w.LeadIntelAdditionalContacts.card({domain:'example.com'},person);assert.match(blocked,/Saved lookup attempt/);assert.match(blocked,/Resolve workspace sync before using Recheck/);assert.doesNotMatch(blocked,/Recheck remains available/);
+ const blocked=f.w.LeadIntelAdditionalContacts.card({domain:'example.com'},person);assert.match(blocked,/Saved lookup attempt/);assert.match(blocked,/That paid lookup was blocked/);assert.doesNotMatch(blocked,/Paid lookup is paused/);assert.match(blocked,/Resolve workspace sync before using Recheck/);assert.doesNotMatch(blocked,/Recheck remains available/);
  f.w.LeadIntelServerBridge.conflict=false;assert.match(f.w.LeadIntelAdditionalContacts.card({domain:'example.com'},person),/Recheck remains available/);
  assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
  }finally{f.dom.window.close();}
