@@ -49,3 +49,12 @@ test('reviewing buyer quality opens collapsed research ancestors before focusing
  h.api.register('buyers',{read:()=>({loaded:true,checks:[h.api.check('buyer-quality','Buyer quality',false,'Review buyer quality.',{target:{step:5,selector:'.buyer-quality-supervisor'}})]})});await h.api.open('buyers');
  d.querySelector('[data-quality-resolve]').click();assert.equal(research.open,true);assert.equal(d.activeElement,d.querySelector('.buyer-quality-supervisor'));h.close();
 });
+
+test('a newly raised sync conflict refreshes page checks and recovery opens visible Workspace status',async()=>{
+ const h=harness();try{
+ let opened=0;h.w.LeadIntelAttention={open(){opened++;}};h.api.refresh('setup');assert.equal(h.api.getReport('setup').state,'ready');
+ h.w.LeadIntelServerBridge.conflict=true;h.w.dispatchEvent(new h.w.Event('leadintel:server-conflict'));await Promise.resolve();await Promise.resolve();
+ const panel=h.w.document.querySelector('[data-page-quality]');assert.equal(panel.dataset.state,'blocked');panel.querySelector('[data-quality-resolve]').click();assert.equal(opened,1);
+ h.w.LeadIntelServerBridge.conflict=false;h.w.dispatchEvent(new h.w.Event('leadintel:server-synced'));await Promise.resolve();assert.equal(panel.dataset.state,'ready');
+ }finally{h.close();}
+});

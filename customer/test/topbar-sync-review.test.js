@@ -40,3 +40,13 @@ test('the sync attention card reviews a conflict instead of silently keeping loc
   card.querySelector('button').click();assert.deepEqual(choices,[]);assert.equal(d.getElementById('workspace-attention-drawer').hidden,false);
  }finally{w.close();}
 });
+
+test('sync recovery remains the single actionable prerequisite until resolved, then buyer quality returns',()=>{
+ const {w,d}=setup();try{
+ w.LeadIntelJourney={getModel:()=>[{id:5,name:'Buyers',active:true,steps:[{id:'buyer-quality',label:'Buyer research quality needs review',action:'Complete buyer checks',complete:false}]}]};
+ w.LeadIntelAttention.refresh();d.getElementById('workspace-attention').click();
+ assert.equal(w.LeadIntelAttention.list().some(item=>item.id==='stage-5-buyer-quality'),false);
+ w.LeadIntelServerBridge.conflict=false;w.LeadIntelServerBridge.status='synced';d.querySelector('.autosave').textContent='Saved';w.LeadIntelWorkspacePersistence.hasUnsavedChanges=()=>false;
+ w.LeadIntelAttention.refresh();assert.equal(w.LeadIntelAttention.list().some(item=>item.id==='stage-5-buyer-quality'),true);
+ }finally{w.close();}
+});

@@ -121,3 +121,11 @@ test('a retry preflight that returns no result never leaves a phantom running jo
  const centre=TaskCentre.createTaskCentre({storage:memoryStorage()});centre.start({id:'old',type:'company-discovery'});centre.fail('old','Earlier failure');centre.registerActions('old',{retry:async()=>undefined});
  await centre.retry('old');assert.equal(centre.list().some(t=>['running','queued'].includes(t.status)),false);
 });
+
+test('completed CRM recovery cannot retain its failure heading or retry after reload and action registration',()=>{
+ const storage=memoryStorage(),c=TaskCentre.createTaskCentre({storage});
+ c.start({id:'crm-refresh:w1',type:'crm-refresh',title:'CRM connection needs attention',total:1,canRetry:true});c.fail('crm-refresh:w1','Timeout');
+ c.registerActions('crm-refresh:w1',{retry(){}});c.complete('crm-refresh:w1',{stage:'CRM connection refreshed',resultCount:7});
+ const restored=TaskCentre.createTaskCentre({storage});restored.registerActions('crm-refresh:w1',{retry(){}});
+ const task=restored.get('crm-refresh:w1');assert.equal(task.title,'CRM connection refreshed');assert.equal(task.canRetry,false);assert.equal(task.canResume,false);assert.equal(task.error,'');assert.equal(task.resultCount,7);
+});

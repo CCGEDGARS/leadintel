@@ -66,7 +66,7 @@ test('Workspace status offers the CRM task Retry action and removes its warning 
   w.document.getElementById('workspace-attention').click();assert.match(w.document.querySelector('.attention-list').textContent,/CRM connection needs attention/);assert.doesNotMatch(w.document.querySelector('.attention-list').textContent,/page component stopped unexpectedly/);
   Array.from(w.document.querySelectorAll('.attention-action')).find(button=>button.textContent==='Review task').click();
   const retry=w.document.querySelector('[data-task-action="retry"]');assert.ok(retry);bridge.listCrmCompanies=async()=>({ok:true,companies:[{id:'recovered-company'}]});retry.click();await new Promise(resolve=>setImmediate(resolve));w.LeadIntelAttention.refresh();
-  assert.equal(w.LeadIntelTaskCentre.list()[0].status,'complete');assert.equal(w.LeadIntelAttention.list().some(item=>item.id.startsWith('task-crm-refresh:')),false);assert.equal(w.crmCompanies[0].id,'recovered-company');
+  assert.equal(w.LeadIntelTaskCentre.list()[0].status,'complete');assert.equal(w.LeadIntelAttention.list().some(item=>item.id.startsWith('task-crm-refresh:')),false);assert.equal(w.crmCompanies[0].id,'recovered-company');assert.equal(w.document.querySelector('[data-task-card] strong').textContent,'CRM connection refreshed');assert.equal(w.document.querySelector('[data-task-action=retry]'),null);
  }finally{w.close();}
 });
 

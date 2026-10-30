@@ -19,11 +19,11 @@
     const completed=Math.min(total||Number.MAX_SAFE_INTEGER,Math.max(0,Math.round(finite(raw.completed))));
     const progress=total?Math.round((completed/total)*100):Math.min(100,Math.max(0,Math.round(finite(raw.progress))));
     return {
-      id:cleanText(raw.id,160),type:cleanText(raw.type||'background-task',80),title:cleanText(raw.title||'Background task',120),
+      id:cleanText(raw.id,160),type:cleanText(raw.type||'background-task',80),title:cleanText(raw.type==='crm-refresh'&&raw.status==='complete'?'CRM connection refreshed':raw.title||'Background task',120),
       stage:cleanText(raw.stage||'Preparing',180),status:FINAL.has(raw.status)||ACTIVE.has(raw.status)?raw.status:'queued',
       completed,total,progress,resultCount:Math.max(0,Math.round(finite(raw.resultCount))),etaSeconds:raw.etaSeconds==null?null:Math.max(0,Math.round(finite(raw.etaSeconds))),
       error:cleanText(raw.error||'',240),startedAt:finite(raw.startedAt,now),updatedAt:finite(raw.updatedAt,now),finishedAt:raw.finishedAt?finite(raw.finishedAt):null,
-      metadata:raw.metadata&&typeof raw.metadata==='object'?raw.metadata:{},canCancel:Boolean(raw.canCancel),canRetry:Boolean(raw.canRetry),canResume:Boolean(raw.canResume)
+      metadata:raw.metadata&&typeof raw.metadata==='object'?raw.metadata:{},canCancel:raw.status!=='complete'&&Boolean(raw.canCancel),canRetry:raw.status!=='complete'&&Boolean(raw.canRetry),canResume:raw.status!=='complete'&&Boolean(raw.canResume)
     };
   }
   function createTaskCentre(options={}){

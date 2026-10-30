@@ -130,3 +130,11 @@ test('keyboard stage activation remains distinct from nested substep and channel
 });
 
 test('active sidebar names the missing requirement and offers its existing review action',()=>{const input=messages();input.outreach.items[0].approved=false;const model=Journey.buildJourneyModel(input),{w,ctx}=renderer(model);ctx.syncProcessMap();const button=w.document.querySelector('[data-workflow-stage="6"] [data-sidebar-next-action]');assert.equal(button.hidden,false);assert.match(button.textContent,/Review and approve/);assert.equal(button.dataset.sidebarSubstep,'approval');assert.equal(button.dataset.stageId,'6');w.close();});
+
+test('unmet buyer quality is not labelled as met and sync recovery takes priority without changing evidence',()=>{
+ const input={currentStep:5,journeyFocus:'buyers',availability,discovery:{selectedProspects:[{domain:'buyer.example',people:[{id:'anna',name:'Anna Buyer'}]}]}};
+ const stage=Journey.buildJourneyModel(input)[4];assert.match(stage.steps.find(s=>s.id==='buyer-quality').label,/needs review/);
+ const blocked=Journey.buildJourneyModel({...input,syncConflict:true})[4];assert.equal(blocked.nextAction,'Resolve workspace synchronization');assert.equal(blocked.nextTarget.itemId,'sync-review');
+ assert.equal(blocked.requiredCompleted,stage.requiredCompleted);assert.equal(blocked.steps.find(s=>s.id==='buyer-quality').complete,false);
+ const passed=Journey.buildJourneyModel({...input,buyerQualityPassed:true})[4];assert.match(passed.steps.find(s=>s.id==='buyer-quality').label,/requirements met/);
+});

@@ -20,7 +20,11 @@
   const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage','outreach.selectedDomain','outreach.messageStudio.mode','outreach.messageStudio.linkedinMode']);
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
-    if(!RECORD_LISTS.has(path.split('.').at(-1))||!arrays.every(Array.isArray))return null;
+    if(!RECORD_LISTS.has(path.split('.').at(-1)))return null;
+    // Missing baseline lists precede the first retained records. Treat only those
+    // baselines as empty; a deleted live list remains a deletion-versus-edit conflict.
+    arrays=arrays.map((value,index)=>(index===0||index===2)&&value===undefined?[]:value);
+    if(!arrays.every(Array.isArray))return null;
     const rows=arrays.flat();if(!rows.length||!rows.every(object))return null;
     const field=rows.every(row=>typeof row.id==='string'&&row.id.trim())?'id':rows.every(row=>typeof row.domain==='string'&&row.domain.trim())?'domain':null;
     if(!field)return null;
