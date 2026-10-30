@@ -1,4 +1,3 @@
-import {getDocumentProxy} from 'unpdf';
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {sha256,cookieValue} from './security.js';
@@ -120,6 +119,7 @@ async function boundedPageText(response,signal){return new TextDecoder().decode(
 async function publicPdfText(response,url,signal){
   const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw Error('Website page is too large to read safely');
   const bytes=await boundedPageBytes(response,signal);if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw Error('Invalid PDF signature');signal?.throwIfAborted();
+  const {getDocumentProxy}=await import('unpdf');
   const pdf=await getDocumentProxy(bytes,{isEvalSupported:false,useSystemFonts:true,disableFontFace:true});
   try{
     if(pdf.numPages>40)throw Error('Public PDF exceeds the 40-page direct extraction limit');const sections=[];let characters=0;
