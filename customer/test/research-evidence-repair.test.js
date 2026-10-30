@@ -11,9 +11,10 @@ test('richer extracted article replaces search snippet, including metadata',()=>
 });
 test('quick automatic plan balances markets and priorities without overriding explicit sources',()=>{
  const profile={targetMarkets:'Sweden; Finland',priorityOffers:'Drawing development; steel fabrication; installation',idealCustomer:'Machinery manufacturers; construction contractors'};
- const plan=Market.buildResearchPlan(profile,[],{mode:'quick',sourceTypes:['news'],sourceTypesCustomized:false});
- assert.ok(plan.every(item=>item.query.includes(item.offer)));assert.equal(plan.length,4);assert.equal(new Set(plan.map(x=>x.market)).size,2);assert.equal(new Set(plan.map(x=>x.offer)).size,3);assert.equal(new Set(plan.map(x=>x.sourceType)).size,3);
- assert.ok(Market.buildResearchPlan(profile,[],{mode:'quick',sourceTypes:['news'],sourceTypesCustomized:true}).every(x=>x.sourceType==='news'));
+ const signals=[{id:'growth',name:'Expansion',keywords:'new factory',weight:8,active:true}];
+ const plan=Market.buildResearchPlan(profile,signals,{mode:'quick',sourceTypes:['news'],sourceTypesCustomized:false});
+ assert.ok(plan.every(item=>item.query.includes(item.offer)));assert.equal(plan.length,4);assert.equal(new Set(plan.map(x=>x.market)).size,2);assert.equal(new Set(plan.map(x=>x.offer)).size,3);assert.deepEqual([...new Set(plan.map(x=>x.sourceType))],['company','news','investments']);
+ assert.ok(Market.buildResearchPlan(profile,signals,{mode:'quick',sourceTypes:['news'],sourceTypesCustomized:true}).every(x=>x.sourceType==='news'));
 });
 test('rank before cap prefers recent relevant evidence over early generic hits',()=>{
  const old={url:'https://old.example/a',title:'Generic overview',date:'2020-01-01',text:'old overview'};

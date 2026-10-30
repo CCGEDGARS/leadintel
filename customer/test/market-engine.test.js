@@ -151,7 +151,7 @@ test('normalizeMarketState sanitizes persisted strategy state',()=>{
   });
   assert.equal(state.signals[0].weight,10);
   assert.ok(state.researchQueries.length<=4);
-  assert.ok(state.researchResults.length<=20);
+  assert.equal(state.researchResults.length,40,'persisted citations survive a quick-mode view; per-run result limits belong to research execution');
   assert.equal(state.strategyApproved,true);
 });
 

@@ -1,5 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const E=require('../outreach-engine.js');
+const I=require('../strategy-integrity.js'),Market=require('../market-engine.js');
 const Editor=require('../message-editor.js');
 const ui=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
 function restoreHarness(overrides={}){
@@ -24,9 +25,12 @@ test('CRM history failure leaves current scripts unchanged',async()=>{
 });
 test('completed monitoring run refreshes alerts and history while busy',async()=>{
  const app=fs.readFileSync(require.resolve('../app.js'),'utf8'),calls=[];
- const context={window:{},monitoringLoaded:true,monitoringBusy:false,state:{market:{}},LeadIntelMarket:{normalizeMonitoring:value=>value},$:()=>({textContent:''}),waitForMarketServerBridge:async()=>({session:{authenticated:true},workspace:{id:'w1'}}),monitoringApi:async(path)=>{calls.push(path);return path.endsWith('/run')?{run:{sourceCount:2,alertCount:1}}:path.endsWith('/config')?{config:{}}:{alerts:[{id:'new'}],runs:[{id:'run'}]};},saveState:()=>{},renderMonitoringControls:()=>{},renderMonitoringAlerts:items=>{context.alerts=items},renderMonitoringHistory:items=>{context.runs=items},monitoringHasEdits:()=>false,showToast:()=>{}};
+ const state={website:'https://seller.example',approved:true,profile:{priorityOffers:'Clinical software',targetMarkets:'Finland'},market:{strategyApproved:true,icps:[{id:'core',active:true}],signals:[{id:'growth',active:true,keywords:'clinic',weight:7}],monitoring:{enabled:true,frequency:'weekly',sourceTypes:['news'],signalIds:['growth'],revision:1}}};state.market.strategyApproval=I.approval(state);
+ const bridge={ready:true,session:{authenticated:true,user:{id:'u1'}},workspace:{id:'w1'}};
+ const context={window:{LeadIntelStrategyIntegrity:I,LeadIntelServerBridge:bridge},monitoringRequestSerial:0,monitoringLoaded:true,monitoringBusy:false,state,LeadIntelMarket:Market,$:()=>({textContent:''}),waitForMarketServerBridge:async()=>bridge,monitoringApi:async(path)=>{calls.push(path);return path.endsWith('/run')?{run:{status:'completed',sourceCount:2,alertCount:1}}:path.endsWith('/config')?{config:{...state.market.monitoring,revision:1}}:{alerts:[{id:'new'}],runs:[{id:'run'}]};},saveState:()=>{},renderMonitoringControls:()=>{},renderMonitoringAlerts:items=>{context.alerts=items},renderMonitoringHistory:items=>{context.runs=items},monitoringHasEdits:()=>false,showToast:()=>{}};
  vm.createContext(context);
- vm.runInContext(app.slice(app.indexOf('function captureMonitoringContext()'),app.indexOf('function monitoringHasEdits()')),context);
+ vm.runInContext(app.slice(app.indexOf('function strategyIntegrity(){'),app.indexOf('function captureStrategyContext(')),context);
+ vm.runInContext(app.slice(app.indexOf('function captureMonitoringContext('),app.indexOf('function monitoringHasEdits()')),context);
  for(const [name,next] of [['loadMonitoringServerState','saveMonitoringConfig'],['runMonitoringNow','markMonitoringAlertRead']]){const start=app.indexOf(`async function ${name}(`),end=app.indexOf(`async function ${next}(`,start);vm.runInContext(app.slice(start,end),context);}
  await context.runMonitoringNow();assert.equal(context.alerts[0].id,'new');assert.equal(context.runs[0].id,'run');assert.equal(context.monitoringBusy,false);assert.equal(calls.length,4);
 });

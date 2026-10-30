@@ -4,6 +4,7 @@
   if(root)root.LeadIntelMarketConditions=api;
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
+  const Market=typeof module==="object"&&module.exports?require("./market-engine.js"):globalThis.LeadIntelMarket;
 
   const clean=value=>String(value??"").replace(/\s+/g," ").trim();
   const unique=values=>[...new Set(values.map(clean).filter(Boolean))];
@@ -11,9 +12,9 @@
   const evidenceItem=item=>({title:clean(item.title)||"Source evidence",url:clean(item.url),organisation:organisation(item),date:clean(item.date)});
   const host=value=>{try{return new URL(value).hostname.replace(/^www\./,"").toLowerCase();}catch{return "";}};
   const officialHost=value=>/(^|\.)(europa\.eu|ec\.europa\.eu|eurostat\.ec\.europa\.eu|oecd\.org|worldbank\.org|gov\.[a-z]{2}|govt\.[a-z]{2}|stat\.[a-z]{2}|statistics\.[a-z]{2})$/i.test(host(value));
-  const fingerprint=item=>clean(`${item.title||""} ${item.text||item.description||""}`).toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(word=>word.length>3).slice(0,24).sort().join(" ");
+  const fingerprint=item=>clean(`${item.title||""} ${item.text||item.description||""}`).toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N} ]/gu," ").split(/\s+/).filter(word=>word.length>3).slice(0,24).sort().join(" ");
   function scoreEvidence(item={},now=Date.now()){
-    let score=20;const domain=host(item.url);const parsed=Date.parse(item.date);const age=Number.isFinite(parsed)?Math.max(0,(now-parsed)/86400000):null;
+    let score=20;const domain=host(item.url);const parsed=Date.parse(item.date);const age=Number.isFinite(parsed)&&parsed<=now+7*86400000&&!/detect|scrap|retriev|access|last.?seen|extract/i.test(clean(item.dateSource))?Math.max(0,(now-parsed)/86400000):null;
     if(item.official===true||officialHost(item.url))score+=30;
     else if(/(university|institute|association|chamber|research|statistic)/i.test(`${domain} ${organisation(item)}`))score+=18;
     else if(domain)score+=8;
@@ -78,17 +79,30 @@
 
   function buildAdaptivePlan(input={}){
     const mode=input.mode||"quick";
+    const remaining=Number.isFinite(Number(input.remainingQueries))?Math.max(0,Math.floor(Number(input.remainingQueries))):mode==="intelligence"?6:mode==="deep"?4:2;
+    const selected=Market.filterResearchSourceTypes(input.sourceTypes??["company","news","investments","registries"],input.signals||[]);
+    if(!selected.length||remaining===0)return {queries:[],gaps:!selected.length?["source selection"]:[]};
+    const previous=new Set((input.previousQueries||[]).map(item=>clean(typeof item==="string"?item:item.query)));
+    const restrict=plan=>({...plan,queries:plan.queries.filter(query=>!previous.has(clean(query.query))).slice(0,remaining).map(query=>({...query,sourceType:selected.includes(query.sourceType)?query.sourceType:selected[0]}))});
     if(mode==="quick"){
       const results=input.results||[];const quality=buildQualityGate(results,{mode});
       if(!results.length||!quality.gaps.includes("source diversity"))return {queries:[],gaps:[]};
       const market=clean(input.market)||"target market",offer=clean(input.offer)||"priority offer";
-      return {gaps:["source diversity"],queries:[{id:"adaptive-primary",market,offer,sourceType:"companies",researchCategory:"commercial",query:`${market} ${offer} company newsroom current project announcement`},{id:"adaptive-independent",market,offer,sourceType:"news",researchCategory:"commercial",query:`${market} ${offer} industry news investment production project`} ]};
+      return restrict({gaps:["source diversity"],queries:[{id:"adaptive-primary",market,offer,sourceType:"company",researchCategory:"commercial",query:`${market} ${offer} company newsroom current project announcement`},{id:"adaptive-independent",market,offer,sourceType:"news",researchCategory:"commercial",query:`${market} ${offer} industry news investment production project`} ]});
     }
     const results=Array.isArray(input.results)?input.results:[];const categories=new Set(results.map(item=>clean(item.researchCategory)));const gaps=[];
     for(const category of ["direction","competition","funding","pricing","commercial"])if(!categories.has(category)||results.filter(item=>clean(item.researchCategory)===category).length<2)gaps.push(category);
-    const intents={direction:"official statistics sector output orders employment latest",competition:"competitor landscape market share supplier positioning",funding:"official EU and national funding open calls eligibility deadline",pricing:"public pricing hourly rate contract value comparable examples",commercial:"current buyer projects investments tenders and demand signals"};
-    const limit=mode==="intelligence"?6:4;const market=clean(input.market)||"target market",offer=clean(input.offer)||"priority offer";
-    return {gaps,queries:gaps.slice(0,limit).map((category,index)=>({id:`adaptive-${category}-${index+1}`,market,offer,researchCategory:category,sourceType:category==="funding"?"investments":category==="direction"?"registries":"news",query:`${market} ${offer} ${intents[category]}`}))};
+    const intents={direction:"official statistics sector output orders employment latest",competition:"competitor landscape market share supplier positioning",funding:"official EU and national funding open calls eligibility deadline",pricing:"public pricing hourly rate contract value comparable examples",commercial:"current buyer projects investments and demand signals"};
+    const limit=mode==="intelligence"?6:4;
+    if(mode==="intelligence")for(const category of ["commercial","competition","direction"]){
+      if(!gaps.includes(category))gaps.push(category);
+      intents[category]+=" independent source corroboration cross-check contradictions";
+    }
+    const market=clean(input.market)||"target market",offer=clean(input.offer)||"priority offer";
+    const strongest=results.filter(item=>item.researchCategory==="commercial"&&item.verification?.relevance!=="reject"&&!item.verification?.contradiction&&clean(item.title)).slice(0,mode==="intelligence"?2:1);
+    const followUps=strongest.map((item,index)=>({id:`adaptive-event-${index+1}`,market:clean(item.market)||market,offer,researchCategory:"commercial",sourceType:"company",query:`${clean(item.market)||market} "${clean(item.title).replace(/["\\]/g,"").split(/\s+/).slice(0,10).join(" ")}" official company announcement confirm event publication date ${offer}`}));
+    if(mode==="intelligence")for(const [index,item] of strongest.entries())followUps.splice(index*2+1,0,{id:`adaptive-corroboration-${index+1}`,market:clean(item.market)||market,offer,researchCategory:"commercial",sourceType:"news",query:`${clean(item.market)||market} "${clean(item.title).replace(/["\\]/g,"").split(/\s+/).slice(0,10).join(" ")}" independent reporting corroboration contradictions ${offer}`});
+    return restrict({gaps,queries:[...followUps,...gaps.slice(0,limit).map((category,index)=>({id:`adaptive-${category}-${index+1}`,market,offer,researchCategory:category,sourceType:category==="funding"?"investments":category==="direction"?"registries":"news",query:`${market} ${offer} ${intents[category]}`}))].slice(0,limit)});
   }
 
   function inferDirection(item={}){

@@ -5,7 +5,7 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});retur
 function coordinator(){
  const first=deferred(),calls=[],owner={company:'Example',domain:'example.com',people:[{id:'a',name:'Ada Andersson'},{id:'b',name:'Bert Buyer'}]},state={workspace:'one',user:'owner'};
  const c={LeadIntelDiscovery:D,AbortController,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,canonicalDomain:D.canonicalDomain,discovery:{selectedProspects:[owner]},mainState:()=>({profile:{}}),bridge:()=>({workspace:{id:state.workspace},session:{user:{id:state.user}}}),publicContactPromises:new Map(),runPublicProspectContacts:async(domain,options)=>{calls.push({domain,options,workspace:state.workspace,user:state.user});return calls.length===1?first.promise:true;}};
- vm.createContext(c);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows(')),c);return {c,first,calls,owner,state};
+ require('./helpers/strategy-discovery-context.cjs')(c);vm.createContext(c);vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows(')),c);return {c,first,calls,owner,state};
 }
 test('a forced selected-buyer refresh queued behind an unforced pass executes its own forced checks',async()=>{
  const {c,first,calls,owner}=coordinator();
@@ -39,7 +39,7 @@ test('cancellation settles the shared run without starting its queued scopes',as
 function runner(){
  const gate=deferred(),owner={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:[{id:'a',name:'Ada Andersson',publicName:'Ada Andersson',title:'Procurement Director',publicNameUrl:'https://example.com/team'}]},state={user:'owner'};
  const c={LeadIntelDiscovery:{...D,runOfficialContactResearch:async()=>({}),runMandatoryBuyerResearch:async(candidate,{accountability})=>{accountability.status='complete';accountability.gaps=[];return accountability;}},AbortController,Date,URL,setTimeout,clearTimeout,DISCOVERY_REQUEST_TIMEOUT_MS:25000,PUBLIC_NAME_CHECK_VERSION:'v',discovery:{selectedProspects:[owner]},mainState:()=>({profile:{}}),canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'workspace'},session:{user:{id:state.user}}}),crmAuthenticated:()=>false,saveDiscovery(){},renderPipeline(){},renderCandidates(){},showToast(){},confirmResearchedPublicEmails:async()=>{},reviewBuyerPublicEvidence:async()=>({status:'complete',conflicts:[]})};
- c.window={LeadIntelCompanyDossierUi:{research:async()=>gate.promise,evidenceRows:()=>[]}};vm.createContext(c);vm.runInContext(source.slice(source.indexOf('async function runPublicProspectContacts('),source.indexOf('function scheduleSavedBuyerPublicChecks(')),c);return {c,owner,gate,state};
+ c.window={LeadIntelCompanyDossierUi:{research:async()=>gate.promise,evidenceRows:()=>[]}};require('./helpers/strategy-discovery-context.cjs')(c);vm.createContext(c);vm.runInContext(source.slice(source.indexOf('async function runPublicProspectContacts('),source.indexOf('function scheduleSavedBuyerPublicChecks(')),c);return {c,owner,gate,state};
 }
 test('a user replacement prevents a late research result from writing buyer evidence',async()=>{
  const {c,owner,gate,state}=runner(),pending=c.runPublicProspectContacts(owner.domain,{researchOwner:owner});
@@ -67,4 +67,15 @@ test('an explicit forced contact refresh forwards refresh intent to company doss
  const {c,owner,gate}=runner();let options;
  c.window.LeadIntelCompanyDossierUi.research=async(_candidate,_context,settings)=>{options=settings;return gate.promise;};
  const pending=c.runPublicProspectContacts(owner.domain,{researchOwner:owner,force:true});gate.resolve({});await pending;assert.equal(options.force,true);
+});
+for(const changed of [false,true,'removed'])test(changed==='removed'?'removing a saved buying role invalidates earlier contact checkpoints':changed?'a real buying-role edit rejects the earlier contact checkpoints':'array-to-string normalization of the same buying roles keeps contact checkpoints current',async()=>{
+ const {c,owner,gate}=runner();let officialCalls=0;
+ owner.buyerRoles=['Procurement Director','Engineering Director'];
+ c.LeadIntelDiscovery={...c.LeadIntelDiscovery,runOfficialContactResearch:async()=>{officialCalls++;},runMandatoryBuyerResearch:async(candidate,{accountability})=>{accountability.status='complete';accountability.gaps=[];candidate.people[0].emailResearch={status:'complete',searches:11,failed:0};return accountability;}};
+ const pending=c.runPublicProspectContacts(owner.domain,{researchOwner:owner});
+ const newerRoles=changed==='removed'?'Engineering Director':'Finance Director';owner.buyerRoles=changed?newerRoles:'Procurement Director; Engineering Director';gate.resolve({});
+ const result=await pending;
+ assert.equal(officialCalls,changed?0:1);
+ if(changed){assert.equal(result,false);assert.equal(owner.people[0].emailResearch,undefined);assert.equal(owner.buyerRoles,newerRoles);}
+ else{assert.equal(result,true);assert.equal(owner.people[0].emailResearch.status,'complete');assert.equal(owner.people[0].emailResearch.searches,11);}
 });

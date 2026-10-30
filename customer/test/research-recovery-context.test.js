@@ -1,13 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-const Market=require('../market-engine.js'),Conditions=require('../market-conditions-engine.js');
+const Market=require('../market-engine.js'),Conditions=require('../market-conditions-engine.js'),Integrity=require('../strategy-integrity.js');
 const app=fs.readFileSync(require.resolve('../app.js'),'utf8');
 function fn(name,next){return app.slice(app.indexOf('function '+name+'('),app.indexOf(next,app.indexOf('function '+name+'(')));}
 test('signal ID subsets do not falsely mark a researched workspace stale; actual changes do',()=>{
  const state={website:'https://seller.example',profile:{companyName:'Seller',priorityOffers:'Metal fabrication',targetMarkets:'Sweden',recommendedSignals:[{id:'a',name:'Project'},{id:'b',name:'Expansion'}]},market:{icps:[{active:true}],signals:[{id:'a',name:'Project',active:true}],researchResults:[{url:'https://source.example'}],opportunities:[{}]}};
- const ctx={state,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
- vm.createContext(ctx);vm.runInContext(fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule'),ctx);
+ const ctx={state,LeadIntelStrategyIntegrity:Integrity,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
+ vm.createContext(ctx);vm.runInContext(fn('strategyIntegrity','function captureStrategyContext')+fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule'),ctx);
  vm.runInContext('state.market.researchContextFingerprint=researchContextFingerprint();ensureMarketStrategySeeded();',ctx);assert.notEqual(state.market.researchContextStale,true);
- state.profile.companyName='Another name';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.notEqual(state.market.researchContextStale,true);
+ state.profile.companyName='Another name';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,true,'seller identity is material research input');
+ state.profile.companyName='Seller';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,false);
  state.profile.targetMarkets='Finland';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,true);
 });
 test('research timer, phase, exact context and retry state survive normalize/reload',()=>{
@@ -37,8 +38,8 @@ test('source diversification derives queries from each workspace offer and marke
 });
 test('a research context that changes and then changes back clears the stale latch',()=>{
  const state={website:'https://seller.example',profile:{companyName:'Seller',priorityOffers:'Metal fabrication',targetMarkets:'Sweden',recommendedSignals:[{id:'a',name:'Project'}]},market:{icps:[{active:true}],signals:[{id:'a',name:'Project',active:true}],researchResults:[{url:'https://source.example'}],opportunities:[{}],strategyApproved:true,strategyApprovedAt:'2026-10-24T00:00:00.000Z'}};
- const ctx={state,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
- vm.createContext(ctx);vm.runInContext(fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule'),ctx);
+ const ctx={state,LeadIntelStrategyIntegrity:Integrity,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
+ vm.createContext(ctx);vm.runInContext(fn('strategyIntegrity','function captureStrategyContext')+fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule'),ctx);
  vm.runInContext('state.market.researchContextFingerprint=researchContextFingerprint();',ctx);
  state.profile.targetMarkets='Finland';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,true);assert.equal(state.market.strategyApproved,false);
  state.profile.targetMarkets='Sweden';vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,false);
@@ -47,13 +48,13 @@ test('a research context that changes and then changes back clears the stale lat
 });
 test('a forced stale marker survives seeding until a new run rewrites the fingerprint',()=>{
  const state={website:'https://seller.example',profile:{companyName:'Seller',priorityOffers:'Metal fabrication',targetMarkets:'Sweden',recommendedSignals:[{id:'a',name:'Project'}]},market:{icps:[{active:true}],signals:[{id:'a',name:'Project',active:true}],researchResults:[{url:'https://source.example'}],opportunities:[{}],researchContextStale:true,researchContextFingerprint:'stale:website-reactivated'}};
- const ctx={state,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
- vm.createContext(ctx);vm.runInContext(fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule')+'ensureMarketStrategySeeded();',ctx);
+ const ctx={state,LeadIntelStrategyIntegrity:Integrity,LeadIntelMarket:{normalizeSignals:(_,saved)=>saved,localizeGeneratedState:x=>x},LeadIntelCompanyBrain:{unrelatedSignals:()=>[]},contentLanguage:()=> 'en',saveState:()=>{}};
+ vm.createContext(ctx);vm.runInContext(fn('strategyIntegrity','function captureStrategyContext')+fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule')+'ensureMarketStrategySeeded();',ctx);
  assert.equal(state.market.researchContextStale,true);
  state.market.researchResults=[];vm.runInContext('ensureMarketStrategySeeded();',ctx);assert.equal(state.market.researchContextStale,false,'no saved research means nothing can be stale');
 });
 test('retained previous research keeps the fingerprint of the run it came from and the handoff gate compares live',()=>{
- assert.match(app,/fingerprint:state\.market\.researchContextFingerprint\}/);
- assert.match(app,/state\.market\.researchContextFingerprint=previousResearch\.fingerprint\|\|'stale:rerun-failed'/);
+ assert.match(app,/fingerprint:state\.market\.researchContextFingerprint/);
+ assert.match(app,/state\.market\.researchContextFingerprint=previous\.fingerprint\|\|"stale:rerun-failed"/);
  assert.match(fn('strategyHandoffModel','function renderStrategyHandoff'),/^function strategyHandoffModel\(\)\{\s*syncResearchContextStale\(\);/);
 });

@@ -1,9 +1,9 @@
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
-import {upsertCrmContacts,appendCrmActivity,getCrmCompany} from './crm.js';
+import {upsertCrmContacts,appendCrmActivity,getCrmCompany,writeCrmRecord} from './crm.js';
 const fail=(message,status=409,code='ADDITIONAL_CONTACT_HUNTER')=>Object.assign(Error(message),{status,code});
 const identity=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
 export async function findHunterWorkEmail(env,context,candidate,person,companyId,deps={}){
- const guard=deps.guard||async function(){};await guard();
+ const guard=deps.guard||async function(){};context={...context,guard,writeAuthority:context.writeAuthority||guard.writeAuthority};await guard();
  const credential=await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,'hunter');
  if(credential.source!=='customer'||!credential.apiKey)throw fail('Connect your Hunter account in Settings.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
  const name=String(person.publicName||person.name||'').trim().replace(/^(?:Dr\.?|Prof\.?)\s+/i,''),parts=name.split(/\s+/),first=parts.shift(),last=parts.join(' ');
@@ -35,7 +35,7 @@ export async function findHunterWorkEmail(env,context,candidate,person,companyId
   await guard();
   const contacts=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name:person.publicName||person.name,title:person.title,work_email:email,email_status:'verified',source:'hunter',linkedin_url:person.publicLinkedinUrl||person.linkedin_url}]);
   const contact=contacts[0];if(!contact)throw fail('Hunter email could not be saved.');
-  await env.DB.prepare("UPDATE crm_contacts SET email_status='verified',email_type='work',match_confidence='verified',verification_provider='Hunter',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(checkedAt,checkedAt,contact.id,context.workspaceId,companyId).run();
+  await writeCrmRecord(env.DB,context,"UPDATE crm_contacts SET email_status='verified',email_type='work',match_confidence='verified',verification_provider='Hunter',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?",[checkedAt,checkedAt,contact.id,context.workspaceId,companyId]);
   await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='hunter'").bind(context.workspaceId).run();
   await appendCrmActivity(env.DB,context,{companyId,contactId:contact.id,type:'contact.enriched',summary:'Hunter confirmed a named buyer’s work email',metadata:{provider:'Hunter',person_provider_id:person.id}});
   return {...contact,email_status:'verified',verification_provider:'Hunter',verified_at:checkedAt};

@@ -65,9 +65,9 @@ test('deep research wires Gemini as verifier, never as web discovery',()=>{
   const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(app,/\/api\/ai\/research-verification/);
-  assert.match(app,/Discovery: \$\{state\.market\.researchSourceStatus\.openai/);
-  assert.match(app,/Extraction: Firecrawl/);
-  assert.match(app,/Verification: \$\{[^}]*Gemini/);
+  assert.match(app,/verifyResearchWithGemini\(mode,profile,results,signals,signal\)/);
+  assert.match(app,/applyVerification\(results,payload\)/);
+  assert.match(app,/state\.market\.researchSourceStatus\.gemini=verified\.verification\.status/);
   assert.doesNotMatch(app,/Gemini (web )?search/i);
   assert.match(html,/market-research-verification\.js\?v=20260916-gemini-verification-v1/);
 });

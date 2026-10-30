@@ -1,0 +1,38 @@
+[
+  {
+    "width": 1440,
+    "profileToStrategy": true,
+    "activationAcknowledgedBeforeCompanies": true,
+    "duplicateActivationSuppressed": true,
+    "approvedRevisionSurvivesReload": true,
+    "multilingualKeywordRetained": true,
+    "concurrentDraftsRetained": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "shipping DOM/modules/CSS, controlled session and server acknowledgements; mocked Companies navigation, no real customer/provider outcome"
+  },
+  {
+    "width": 720,
+    "profileToStrategy": true,
+    "activationAcknowledgedBeforeCompanies": true,
+    "duplicateActivationSuppressed": true,
+    "approvedRevisionSurvivesReload": true,
+    "multilingualKeywordRetained": true,
+    "concurrentDraftsRetained": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "shipping DOM/modules/CSS, controlled session and server acknowledgements; mocked Companies navigation, no real customer/provider outcome"
+  },
+  {
+    "width": 390,
+    "profileToStrategy": true,
+    "activationAcknowledgedBeforeCompanies": true,
+    "duplicateActivationSuppressed": true,
+    "approvedRevisionSurvivesReload": true,
+    "multilingualKeywordRetained": true,
+    "concurrentDraftsRetained": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "shipping DOM/modules/CSS, controlled session and server acknowledgements; mocked Companies navigation, no real customer/provider outcome"
+  }
+]

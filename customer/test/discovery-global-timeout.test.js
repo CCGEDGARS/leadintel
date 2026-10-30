@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
+const StrategyIntegrity = require('../strategy-integrity.js');
 const Targeting = require('../targeting-policy.js');
 
 function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), bridgeImpl = null, requestTimeout = 1, scaleProductionRunTimeout = 15000, researchMode = 'deep' } = {}) {
@@ -47,6 +48,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
   };
   mainState.answers={priority_offers:mainState.profile.priorityOffers,ideal_customer:mainState.profile.idealCustomer,buyer_roles:mainState.profile.decisionMakers,exclusions:'No specific exclusions'};
   mainState.targetingConfirmation=Targeting.confirm(mainState);
+  mainState.approved=true;mainState.market.strategyApproved=true;mainState.market.icps=[{id:'icp-core',type:'core',active:true}];mainState.market.strategyApproval=StrategyIntegrity.approval(mainState);
   const storage = new Map([['leadintel_customer_v2_state', JSON.stringify(mainState)],['leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5})]]);
   const elements = new Map();
   const getElementById = id => {
@@ -68,6 +70,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     dispatchEvent() {},
     addEventListener() {},
     LeadIntelDiscovery: Discovery,
+    LeadIntelStrategyIntegrity: StrategyIntegrity,
     LeadIntelTargeting: Targeting,
     LeadIntelServerBridge: bridgeImpl,
     fetch: (url,args)=>String(url).includes('/api/integrations/services/contact-policy?')?Promise.resolve({ok:true,json:async()=>({confirmationLevel:'provider_verified'})}):fetchImpl(url,args),
@@ -809,7 +812,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
-  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);state.market.strategyApproval=StrategyIntegrity.approval(state);
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({targetOnly:true,savingMode:true,targetDomain:'sodra.com'});
   assert.equal(requests.some(item=>item.body.query?.includes('official company website')),false);
@@ -829,7 +832,7 @@ test('retry of a failed saved-target lookup uses the known domain and preserves 
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
-  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.targetingConfirmation=Targeting.confirm(state);
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.targetingConfirmation=Targeting.confirm(state);state.market.strategyApproval=StrategyIntegrity.approval(state);
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   context.__setDiscovery({status:'error',savingMode:true,searchFailures:[{phase:'resolving',company:'Södra',queryMeta:{id:'resolve-sodra',kind:'resolution',company:'Södra',market:'Sweden',query:'"Södra" Sweden official company website'},reason:'network_error'}],funnel:{marketSearchesCompleted:1,marketSearchesTotal:1,openAiFallbackSearches:1}});
   await context.__retryFailedDiscoveryChecks();
@@ -851,8 +854,8 @@ test('Saving Mode samples two saved targets and one opportunity hypothesis withi
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
   state.targetCompanies=['Södra','Boliden','Billerud'].map((companyName,index)=>({companyName,website:`https://${['sodra','boliden','billerud'][index]}.com/`,domain:`${['sodra','boliden','billerud'][index]}.com`}));
-  state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);
-  state.referenceCustomers={analyzedAt:'2026-09-27T09:00:00Z',opportunityMap:{analysisAt:'2026-09-27T09:00:00Z',service:'Automation',problem:'Production efficiency',hypotheses:[{niche:'Packaging plants',sharedNeed:'Upgrade machinery',evidenceToCheck:'Factory investment'}]}};
+  state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);state.market.strategyApproval=StrategyIntegrity.approval(state);
+  state.referenceCustomers={analyzedAt:'2026-09-27T09:00:00Z',opportunityMap:{analysisAt:'2026-09-27T09:00:00Z',service:'Automation',problem:'Production efficiency',hypotheses:[{niche:'Packaging plants',sharedNeed:'Upgrade machinery',evidenceToCheck:'Factory investment'}]}};state.market.icps.push({id:'icp-lookalike',type:'lookalike',active:true});state.market.strategyApproval=StrategyIntegrity.approval(state);
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({savingMode:true});
   const searches=requests.filter(item=>item.url.includes('/firecrawl-search'));
@@ -1227,7 +1230,7 @@ test('a failed provider run preserves previous potential companies and checked d
 test('paused Lookalike does not call the reference model while known targets remain searchable',async()=>{
  const ctx=loadDiscoveryRunner();let calls=0;
  ctx.LeadIntelReferenceCustomerPortfolio={getCombinedActiveModel(){calls++;return {dna:{referenceProfiles:[]}}}};
- const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state'));main.market.icps=[{id:'icp-lookalike',type:'lookalike',active:false}];main.targetCompanies=[{companyName:'North',domain:'north.example',website:'https://north.example'}];ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state'));main.market.icps=[{id:'icp-core',type:'core',active:true},{id:'icp-lookalike',type:'lookalike',active:false}];main.targetCompanies=[{companyName:'North',domain:'north.example',website:'https://north.example'}];main.market.strategyApproval=StrategyIntegrity.approval(main);ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
  await ctx.__runDiscovery({recheckOnly:true});assert.equal(calls,0);assert.ok(ctx.__discoveryState().queries.some(q=>q.query.includes('North')));
 });
 
@@ -1733,7 +1736,7 @@ test('the real search runner prioritizes names from buyer evidence before paid d
  }});
  const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
  main.profile.idealCustomer='Insurance companies with regional sales teams';main.profile.customerPainPoints='sales conversion';
- main.answers.ideal_customer=main.profile.idealCustomer;main.targetingConfirmation=Targeting.confirm(main);
+ main.answers.ideal_customer=main.profile.idealCustomer;main.targetingConfirmation=Targeting.confirm(main);main.market.strategyApproval=StrategyIntegrity.approval(main);
  context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
  await context.__runDiscovery({autoPass:3});
  assert.equal(resolutions[0],'Insurance One');
@@ -1811,10 +1814,10 @@ test('changing the seller offer while discovery is in flight discards stale resu
  assert.equal(context.__discoveryState().lastRunAt,'');
 });
 
-test('a confirmed operational buyer profile can search without references or buying signals',async()=>{
+test('a confirmed operational buyer profile without buying signals retains evidence and blocks new Strategy research',async()=>{
  let calls=0;const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:0,fetchImpl:async()=>{calls++;return {ok:true,json:async()=>({data:[]})};}});
  const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.market.signals=[];main.referenceCustomers={rows:[]};main.targetCompanies=[];context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
- assert.equal(await context.__runDiscovery({autoPass:3}),true);assert.ok(calls>0);assert.notEqual(context.__discoveryState().status,'running');
+ const before=JSON.stringify(context.__discoveryState());assert.equal(await context.__runDiscovery({autoPass:3}),false);assert.equal(calls,0);assert.equal(JSON.stringify(context.__discoveryState()),before);
 });
 
 function companyShortlistDisplayFixture({amount=5,scores=[55,94,44,79,90,68,82],review=true}={}){

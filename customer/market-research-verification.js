@@ -13,7 +13,7 @@
     return {status:complete?"complete":"unavailable",provider:"gemini",role:"verification",webSearch:false,reason:clean(payload?.reason,300),summary:clean(payload?.summary,1000),disagreements:Array.isArray(payload?.disagreements)?payload.disagreements.map(item=>clean(item,400)).filter(Boolean).slice(0,12):[],missingEvidence:Array.isArray(payload?.missing_evidence)?payload.missing_evidence.map(item=>clean(item,400)).filter(Boolean).slice(0,12):[],verifiedAt:complete?new Date().toISOString():""};
   }
   function applyVerification(results=[],payload={}){
-    const verdicts=new Map((Array.isArray(payload?.verdicts)?payload.verdicts:[]).map(item=>[clean(item?.evidence_id,80),item]));
+    const verdicts=new Map((payload?.status==="complete"&&Array.isArray(payload?.verdicts)?payload.verdicts:[]).map(item=>[clean(item?.evidence_id,80),item]));
     const merged=(results||[]).map((item,index)=>{
       const verdict=verdicts.get(`evidence-${index+1}`);if(!verdict)return {...item};
       return {...item,verification:{provider:"gemini",role:"verification",relevance:["strong","moderate","weak","reject"].includes(verdict.relevance)?verdict.relevance:"weak",commercialFit:["strong","moderate","weak","unknown"].includes(verdict.commercial_fit)?verdict.commercial_fit:"unknown",contradiction:Boolean(verdict.contradiction),rationale:clean(verdict.rationale,600),missingEvidence:Array.isArray(verdict.missing_evidence)?verdict.missing_evidence.map(value=>clean(value,240)).filter(Boolean).slice(0,8):[]}};

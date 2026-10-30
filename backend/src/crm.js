@@ -65,8 +65,35 @@ function contactDataMatches(data,person){
 function parseActivityCursor(value){if(!value)return null;try{const cursor=JSON.parse(String(value));if(!cursor||typeof cursor!=='object'||Array.isArray(cursor)||!clean(cursor.occurred_at,64)||!clean(cursor.created_at,64)||!validActivityId(cursor.id))throw new Error('Invalid cursor');return {occurred_at:clean(cursor.occurred_at,64),created_at:clean(cursor.created_at,64),id:String(cursor.id)};}catch{throw crmError('CRM_ACTIVITY_CURSOR_INVALID','Invalid CRM activity cursor');}}
 
 function activityValues(context,activity={}){const workspaceId=clean(context?.workspaceId,160);const companyId=clean(activity.companyId||activity.company_id,160);if(!workspaceId||!companyId)throw crmError('CRM_ACTIVITY_INVALID','Workspace and company are required');const type=clean(activity.type||activity.activity_type,80);if(!type)throw crmError('CRM_ACTIVITY_INVALID','Activity type is required');return [validActivityId(activity.id)?String(activity.id):uuid(),workspaceId,companyId,clean(activity.contactId||activity.contact_id,160)||null,type,clean(activity.channel,40)||null,clean(activity.direction,40)||null,clean(activity.subject,500)||null,clean(activity.summary,4000)||null,jsonString(activity.metadata,{}),clean(activity.occurredAt||activity.occurred_at,64)||now(),now(),clean(context?.userId,160)||null];}
-function activityInsertStatement(db,values,guardSql='',guardArgs=[]){const columns='id,workspace_id,company_id,contact_id,activity_type,channel,direction,subject,summary,metadata_json,occurred_at,created_at,actor_user_id';const placeholders=values.map(()=>'?').join(',');const sql=guardSql?`INSERT OR IGNORE INTO crm_activities(${columns}) SELECT ${placeholders} WHERE ${guardSql}`:`INSERT OR IGNORE INTO crm_activities(${columns}) VALUES(${placeholders})`;return db.prepare(sql).bind(...values,...guardArgs);}
-async function writeWithActivity(db,context,activity,statements=[]){const values=activityValues(context,activity);const [id,workspaceId,companyId,contactId]=values;const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);let validContactId=contactId;if(validContactId){const contact=await db.prepare(`SELECT id FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL`).bind(validContactId,workspaceId,companyId).first();if(!contact)values[3]=null;}const result=await db.batch([...statements,activityInsertStatement(db,values)]);const activityResult=result?.at?.(-1);return {id,inserted:Number(activityResult?.meta?.changes||0)>0};}
+// Delay preparation until after the last internal read and fresh workflow check.
+// Automatic writes carry the same run/source predicates inside their SQL commit;
+// ordinary CRM callers retain their existing statements and transaction behavior.
+function crmWrite(_db,sql){return {bind:(...args)=>({crmSql:sql,crmArgs:args})};}
+function prepareCrmWrite(db,statement,authority){
+  if(!statement.crmSql){if(authority)throw crmError('CRM_WRITE_GUARD_REQUIRED','Automatic CRM write needs current workflow authority',409);return statement;}
+  let sql=statement.crmSql,args=statement.crmArgs;
+  if(authority){
+    if(/\bVALUES\s*\([^()]*\)/i.test(sql))sql=sql.replace(/\bVALUES\s*\(([^()]*)\)/i,(_match,values)=>`SELECT ${values} WHERE (${authority.sql})`);
+    else if(/\bWHERE\b/i.test(sql))sql+=` AND (${authority.sql})`;
+    else throw crmError('CRM_WRITE_GUARD_REQUIRED','Automatic CRM write needs a guarded statement',409);
+    args=[...args,...authority.args];
+  }
+  return db.prepare(sql).bind(...args);
+}
+async function executeCrmWrites(db,context,statements){
+  let result;for(let attempt=0;attempt<3;attempt++){
+    await context?.guard?.();const authority=context?.writeAuthority?.();
+    result=await db.batch(statements.map(statement=>prepareCrmWrite(db,statement,authority)));
+    if(!authority||Number(result?.[0]?.meta?.changes||0)>0)return result;
+    // Refresh only the local write after a benign source save. A revoked or
+    // materially changed workflow throws here; provider work is never replayed.
+    await context?.guard?.();
+  }
+  return result;
+}
+export async function writeCrmRecord(db,context,sql,args=[]){return (await executeCrmWrites(db,context,[crmWrite(db,sql).bind(...args)]))[0];}
+function activityInsertStatement(db,values,guardSql='',guardArgs=[]){const columns='id,workspace_id,company_id,contact_id,activity_type,channel,direction,subject,summary,metadata_json,occurred_at,created_at,actor_user_id';const placeholders=values.map(()=>'?').join(',');const sql=guardSql?`INSERT OR IGNORE INTO crm_activities(${columns}) SELECT ${placeholders} WHERE ${guardSql}`:`INSERT OR IGNORE INTO crm_activities(${columns}) VALUES(${placeholders})`;return crmWrite(db,sql).bind(...values,...guardArgs);}
+async function writeWithActivity(db,context,activity,statements=[]){const values=activityValues(context,activity);const [id,workspaceId,companyId,contactId]=values;const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);let validContactId=contactId;if(validContactId){const contact=await db.prepare(`SELECT id FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL`).bind(validContactId,workspaceId,companyId).first();if(!contact)values[3]=null;}const result=await executeCrmWrites(db,context,[...statements,activityInsertStatement(db,values)]);const activityResult=result?.at?.(-1);return {id,inserted:Number(activityResult?.meta?.changes||0)>0};}
 function guardedActivityStatement(db,context,activity,guardSql,guardArgs=[]){const values=activityValues(context,activity);return activityInsertStatement(db,values,guardSql,guardArgs);}
 
 export async function appendCrmActivity(db,context,activity={}){return writeWithActivity(db,context,activity);}
@@ -102,9 +129,9 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
     if(!existing){
       const id=uuid();
       const stamp=now();
-      const insert=db.prepare(`INSERT OR IGNORE INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,external_person_id,email_status,linkedin_url,source,public_name_url,public_email_url,public_linkedin_url,created_at,updated_at,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`).bind(id,workspaceId,companyId,name,title,workEmail,email||null,externalId,emailStatus,linkedin,source,publicNameUrl,publicEmailUrl,publicLinkedinUrl,stamp,stamp);
+      const insert=crmWrite(db,`INSERT OR IGNORE INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,external_person_id,email_status,linkedin_url,source,public_name_url,public_email_url,public_linkedin_url,created_at,updated_at,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`).bind(id,workspaceId,companyId,name,title,workEmail,email||null,externalId,emailStatus,linkedin,source,publicNameUrl,publicEmailUrl,publicLinkedinUrl,stamp,stamp);
       const event=guardedActivityStatement(db,context,{companyId,contactId:id,type:'contact.added',summary:name||email||'Contact added',metadata:{source}},`EXISTS (SELECT 1 FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=?)`,[id,workspaceId,companyId]);
-      const result=await db.batch([insert,event]);
+      const result=await executeCrmWrites(db,context,[insert,event]);
       const inserted=Number(result?.[0]?.meta?.changes||0)>0;
       if(inserted){
         saved.push(await db.prepare(`SELECT * FROM crm_contacts WHERE id=? AND workspace_id=?`).bind(id,workspaceId).first());
@@ -115,7 +142,7 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
     }
     const stamp=now();
     const verified=['verified','public_confirmed'].includes(String(existing.email_status||'').toLowerCase())&&emailStatus==='public_unverified';
-    const update=db.prepare(`UPDATE crm_contacts SET name=?,title=?,work_email=?,normalized_email=?,external_person_id=?,email_status=?,linkedin_url=?,source=?,public_name_url=?,public_email_url=?,public_linkedin_url=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(verified?existing.name:name||existing.name,title||existing.title,verified?existing.work_email:workEmail||existing.work_email,verified?existing.normalized_email:email||existing.normalized_email,externalId||existing.external_person_id,verified?existing.email_status:emailStatus||existing.email_status,linkedin||existing.linkedin_url,source||existing.source,publicNameUrl||existing.public_name_url,publicEmailUrl||existing.public_email_url,publicLinkedinUrl||existing.public_linkedin_url,stamp,existing.id,workspaceId);
+    const update=crmWrite(db,`UPDATE crm_contacts SET name=?,title=?,work_email=?,normalized_email=?,external_person_id=?,email_status=?,linkedin_url=?,source=?,public_name_url=?,public_email_url=?,public_linkedin_url=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(verified?existing.name:name||existing.name,title||existing.title,verified?existing.work_email:workEmail||existing.work_email,verified?existing.normalized_email:email||existing.normalized_email,externalId||existing.external_person_id,verified?existing.email_status:emailStatus||existing.email_status,linkedin||existing.linkedin_url,source||existing.source,publicNameUrl||existing.public_name_url,publicEmailUrl||existing.public_email_url,publicLinkedinUrl||existing.public_linkedin_url,stamp,existing.id,workspaceId);
     try{
       await writeWithActivity(db,context,{companyId,contactId:existing.id,type:'contact.updated',summary:name||email||'Contact updated',metadata:{source}},[update]);
     }catch(error){
@@ -127,7 +154,7 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
   return saved;
 }
 
-export async function upsertCrmIntelligence(db,context,companyId,intelligence={}){const workspaceId=clean(context?.workspaceId,160);const stamp=now();const upsert=db.prepare(`INSERT INTO crm_intelligence(company_id,workspace_id,matched_signals_json,evidence_json,opportunity_hypothesis,score_breakdown_json,confidence,research_snapshot_json,intelligence_updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET workspace_id=excluded.workspace_id,matched_signals_json=excluded.matched_signals_json,evidence_json=excluded.evidence_json,opportunity_hypothesis=excluded.opportunity_hypothesis,score_breakdown_json=excluded.score_breakdown_json,confidence=excluded.confidence,research_snapshot_json=excluded.research_snapshot_json,intelligence_updated_at=excluded.intelligence_updated_at`).bind(companyId,workspaceId,jsonString(intelligence.matched_signals,[]),jsonString(intelligence.evidence,[]),clean(intelligence.opportunity_hypothesis,4000)||null,jsonString(intelligence.score_breakdown,{}),clean(intelligence.confidence,40)||null,jsonString(intelligence.research_snapshot,{}),stamp);await writeWithActivity(db,context,{companyId,type:'intelligence.updated',summary:'Commercial intelligence updated',metadata:{confidence:clean(intelligence.confidence,40)||null}},[upsert]);return parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE company_id=? AND workspace_id=?`).bind(companyId,workspaceId).first());}
+export async function upsertCrmIntelligence(db,context,companyId,intelligence={}){const workspaceId=clean(context?.workspaceId,160);const stamp=now();const upsert=crmWrite(db,`INSERT INTO crm_intelligence(company_id,workspace_id,matched_signals_json,evidence_json,opportunity_hypothesis,score_breakdown_json,confidence,research_snapshot_json,intelligence_updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET workspace_id=excluded.workspace_id,matched_signals_json=excluded.matched_signals_json,evidence_json=excluded.evidence_json,opportunity_hypothesis=excluded.opportunity_hypothesis,score_breakdown_json=excluded.score_breakdown_json,confidence=excluded.confidence,research_snapshot_json=excluded.research_snapshot_json,intelligence_updated_at=excluded.intelligence_updated_at`).bind(companyId,workspaceId,jsonString(intelligence.matched_signals,[]),jsonString(intelligence.evidence,[]),clean(intelligence.opportunity_hypothesis,4000)||null,jsonString(intelligence.score_breakdown,{}),clean(intelligence.confidence,40)||null,jsonString(intelligence.research_snapshot,{}),stamp);await writeWithActivity(db,context,{companyId,type:'intelligence.updated',summary:'Commercial intelligence updated',metadata:{confidence:clean(intelligence.confidence,40)||null}},[upsert]);return parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE company_id=? AND workspace_id=?`).bind(companyId,workspaceId).first());}
 
 export async function getCrmCompany(db,context,companyId){
   const workspaceId=clean(context?.workspaceId,160),company=await companyRow(db,workspaceId,companyId);
@@ -180,7 +207,7 @@ export async function upsertCrmCompany(db,context,input={}){
     if(requestedStage&&lifecycle==='suppressed')throw crmError('CRM_COMPANY_SUPPRESSED','Suppressed companies must be restored before adding them to pipeline',409);
     if(requestedStage&&lifecycle==='archived')throw crmError('CRM_COMPANY_ARCHIVED','Archived companies must be restored before adding them to pipeline',409);
     const stage=['archived','suppressed'].includes(lifecycle)?null:(requestedStage?nextPipelineStage(record.pipeline_stage,requestedStage):record.pipeline_stage);
-    const update=db.prepare(`UPDATE crm_companies SET company_name=?,website=?,country=?,industry=?,pipeline_stage=?,opportunity_score=?,confidence=?,source=?,last_seen_at=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(name,website||record.website,clean(companyInput.country,120)||record.country,clean(companyInput.industry,180)||record.industry,stage,score??record.opportunity_score,confidence||record.confidence,source||record.source,stamp,stamp,record.id,workspaceId);
+    const update=crmWrite(db,`UPDATE crm_companies SET company_name=?,website=?,country=?,industry=?,pipeline_stage=?,opportunity_score=?,confidence=?,source=?,last_seen_at=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(name,website||record.website,clean(companyInput.country,120)||record.country,clean(companyInput.industry,180)||record.industry,stage,score??record.opportunity_score,confidence||record.confidence,source||record.source,stamp,stamp,record.id,workspaceId);
     await writeWithActivity(db,context,{companyId:record.id,type:'company.saved',summary:'Company record updated',metadata:{created:false,source,domain}},[update]);
     return record.id;
   };
@@ -191,9 +218,9 @@ export async function upsertCrmCompany(db,context,input={}){
     if(requestedStage&&requestedLifecycle==='suppressed')throw crmError('CRM_COMPANY_SUPPRESSED','Suppressed companies must be restored before adding them to pipeline',409);
     if(requestedStage&&requestedLifecycle==='archived')throw crmError('CRM_COMPANY_ARCHIVED','Archived companies must be restored before adding them to pipeline',409);
     id=uuid();
-    const insert=db.prepare(`INSERT OR IGNORE INTO crm_companies(id,workspace_id,normalized_domain,company_name,website,country,industry,lifecycle_status,pipeline_stage,opportunity_score,confidence,source,first_seen_at,last_seen_at,created_at,updated_at,archived_at,suppressed_at,customer_since,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL,NULL)`).bind(id,workspaceId,domain||null,name,website||null,clean(companyInput.country,120)||null,clean(companyInput.industry,180)||null,requestedLifecycle,requestedStage,score,confidence,source,stamp,stamp,stamp,stamp);
+    const insert=crmWrite(db,`INSERT OR IGNORE INTO crm_companies(id,workspace_id,normalized_domain,company_name,website,country,industry,lifecycle_status,pipeline_stage,opportunity_score,confidence,source,first_seen_at,last_seen_at,created_at,updated_at,archived_at,suppressed_at,customer_since,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL,NULL)`).bind(id,workspaceId,domain||null,name,website||null,clean(companyInput.country,120)||null,clean(companyInput.industry,180)||null,requestedLifecycle,requestedStage,score,confidence,source,stamp,stamp,stamp,stamp);
     const activity=guardedActivityStatement(db,context,{companyId:id,type:'company.saved',summary:'Company saved to CRM',metadata:{created:true,source,domain}},`EXISTS (SELECT 1 FROM crm_companies WHERE id=? AND workspace_id=?)`,[id,workspaceId]);
-    await db.batch([insert,activity]);
+    await executeCrmWrites(db,context,[insert,activity]);
     const inserted=await db.prepare(`SELECT id FROM crm_companies WHERE id=? AND workspace_id=? AND deleted_at IS NULL`).bind(id,workspaceId).first();
     if(inserted){
       created=true;

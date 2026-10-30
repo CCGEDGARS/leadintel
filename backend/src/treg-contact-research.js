@@ -1,5 +1,5 @@
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
-import {upsertCrmContacts,appendCrmActivity,getCrmCompany} from './crm.js';
+import {upsertCrmContacts,appendCrmActivity,getCrmCompany,writeCrmRecord} from './crm.js';
 import {sha256} from './security.js';
 const fail=(message,status=409,code='TREG_RESEARCH_HOLD')=>Object.assign(Error(message),{status,code});
 const identity=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
@@ -8,6 +8,7 @@ const object=value=>value&&typeof value==='object'?value:{};
 
 // One backend boundary owns attribution, request ceilings and idempotency.
 export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,guard=async()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null}={},deps={}){
+ context={...context,guard,writeAuthority:context.writeAuthority||guard.writeAuthority};
  const credential=await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,'treg');
  if(credential.source!=='customer'||!credential.apiKey)throw fail('Connect your Treg team token in Settings.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
  const name=String(person.publicName||person.name||'').trim(),parts=name.split(/\s+/),domain=String(candidate.domain||'').toLowerCase();
@@ -75,7 +76,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   await guard();
   const contacts=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name,title:person.title,work_email:email,email_status:'verified',source:'treg',linkedin_url:expectedProfile}]);
   const contact=contacts[0];if(!contact)throw fail('Verified Treg contact could not be saved.');
-  await env.DB.prepare("UPDATE crm_contacts SET email_status='verified',email_type=?,match_confidence='verified',verification_provider='Treg',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(personal?'personal':'work',checkedAt,checkedAt,contact.id,context.workspaceId,companyId).run();
+  await writeCrmRecord(env.DB,context,"UPDATE crm_contacts SET email_status='verified',email_type=?,match_confidence='verified',verification_provider='Treg',verified_at=?,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?",[personal?'personal':'work',checkedAt,checkedAt,contact.id,context.workspaceId,companyId]);
   await appendCrmActivity(env.DB,context,{companyId,contactId:contact.id,type:'contact.enriched',summary:'Treg verified a named buyer’s work email',metadata:{provider:'Treg',call_ids:callIds,cost_micro:total}});
   return {...contact,email_status:'verified',verification_provider:'Treg',verified_at:checkedAt};
  });
@@ -129,14 +130,14 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
    contact=contact||detail.contacts.find(c=>String(c.external_person_id)===String(person.id)&&identity(c.name)===identity(name))||null;
    if(!contact){const saved=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name,title:person.title,linkedin_url:expectedProfile,source:'treg'}]);contact=saved[0];}
    await guard();
-   await env.DB.prepare("UPDATE crm_contacts SET phone_number=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_number ELSE ? END,phone_status=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_status ELSE 'provider_listed' END,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?").bind(data.phone.number,checkedAt,contact.id,context.workspaceId,companyId).run();
+   await writeCrmRecord(env.DB,context,"UPDATE crm_contacts SET phone_number=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_number ELSE ? END,phone_status=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_status ELSE 'provider_listed' END,updated_at=? WHERE id=? AND workspace_id=? AND company_id=?",[data.phone.number,checkedAt,contact.id,context.workspaceId,companyId]);
    contact=await env.DB.prepare('SELECT * FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL').bind(contact.id,context.workspaceId,companyId).first();
   }
   // Only the selected buyer is patched. Other research, contacts and activities remain intact.
   const selected="SELECT e.key FROM json_each(research_snapshot_json,'$.buyerResearch.buyers') e WHERE CAST(json_extract(e.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicName'),''),json_extract(e.value,'$.name'))=? AND json_extract(e.value,'$.title')=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicLinkedinUrl'),''),json_extract(e.value,'$.linkedin_url'),'')=? LIMIT 1";
   const selectedArgs=[String(person.id),person.publicName||person.name,person.title,expectedProfile||''];
   await guard();
-  const written=await env.DB.prepare("UPDATE crm_intelligence SET research_snapshot_json=json_set(research_snapshot_json,'$.buyerResearch.buyers['||("+selected+")||'].contactData',json(?)),intelligence_updated_at=? WHERE company_id=? AND workspace_id=? AND ("+selected+") IS NOT NULL").bind(...selectedArgs,JSON.stringify(data),checkedAt,companyId,context.workspaceId,...selectedArgs).run();
+  const written=await writeCrmRecord(env.DB,context,"UPDATE crm_intelligence SET research_snapshot_json=json_set(research_snapshot_json,'$.buyerResearch.buyers['||("+selected+")||'].contactData',json(?)),intelligence_updated_at=? WHERE company_id=? AND workspace_id=? AND ("+selected+") IS NOT NULL",[...selectedArgs,JSON.stringify(data),checkedAt,companyId,context.workspaceId,...selectedArgs]);
   if(!(written?.meta?.changes??written?.changes))throw fail('The selected buyer changed. Reload the saved research.');
   await appendCrmActivity(env.DB,context,{companyId,contactId:contact?.id,type:'contact.enriched',summary:'Manual contact data research completed',metadata:{provider:'Treg',contact_data:data}});
  }

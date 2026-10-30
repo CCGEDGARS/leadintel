@@ -6,6 +6,7 @@ import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261
 import './business-identity.js?v=20260924-workspace-profile-english-v1&startup-token-scan=20261016-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1&observer-stability=20261016-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
+import './strategy-integrity.js?strategy-audit=20261030-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&local-storage=20261016-v1&startup-cleanup=20261016-v1&research-recovery=20261020-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&finish-core=20261024-v1&sender-identity-save=20261025-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1';
@@ -18,6 +19,8 @@ const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
 const RESET_CONFIRM_WINDOW_MS=30000;
 const ANALYSIS_SOURCE_TIMEOUT_MS=25000;
+const STRATEGY_SAVE_TIMEOUT_MS=10000;
+const STRATEGY_RECOVERY_KEY='leadintel_customer_v2_strategy_recovery_v1';
 const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],["customerPainPoints","Customer Pain Points",true],
@@ -40,6 +43,9 @@ let monitoringDraftMarket=null;
 let pendingResearchMode="";
 let brandIdentityUI=null;
 let legacyProfileAnalysis=null;
+let activeMarketResearchRun=null;
+let strategySavedBaseline=null;
+let monitoringRequestSerial=0;
 const $=id=>document.getElementById(id);
 function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
 
@@ -59,6 +65,7 @@ function loadState(){
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
     base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
     base.senderIdentityVersion=source.senderIdentityVersion===1?1:0;
+    strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(source)||null;window.__leadIntelLocalStrategyConflict=false;
     base.step=window.LeadIntelWorkspaceIsolation?.safeStep
       ?window.LeadIntelWorkspaceIsolation.safeStep(localStorage,base,source.step)
       :([1,2,3,4,5,6,7].includes(Number(source.step))?Number(source.step):base.step);
@@ -76,10 +83,12 @@ function saveState(){
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
+    if(typeof checkStrategyLocalPersistence==='function'&&!checkStrategyLocalPersistence(current))return false;
   }catch{}
+  if(typeof syncStrategyApproval==='function')syncStrategyApproval();
   if(state.targetingConfirmation&&!LeadIntelTargeting.isConfirmed(state))state.targetingConfirmation=null;
   if(typeof renderTargetingConfirmation==="function")renderTargetingConfirmation();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(state)||null;updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();return true;
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
@@ -444,6 +453,41 @@ function profileApprovalCurrent(context){return context===profileApprovalContext
 function profileReviewCurrent(){
   try{return profileApprovalSignature(state)===profileApprovalSignature(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'));}catch{return false;}
 }
+function strategyIntegrity(){return globalThis.LeadIntelStrategyIntegrity||window.LeadIntelStrategyIntegrity;}
+function captureStrategyContext(research=false){return {account:profileApprovalContext(),profileApproved:state.approved,signature:research?researchContextFingerprint():strategyIntegrity()?.signature(state),research};}
+function strategyContextCurrent(context){return Boolean(context&&!window.__leadIntelLocalStrategyConflict&&profileApprovalCurrent(context.account)&&state.approved===context.profileApproved&&context.signature===(context.research?researchContextFingerprint():strategyIntegrity()?.signature(state)));}
+function assertStrategyContext(context){if(!strategyContextCurrent(context)){const error=Error('Account, workspace or Strategy changed. The old result was discarded; your saved work is retained.');error.code='STRATEGY_STALE';throw error;}}
+function strategyReviewCurrent(){try{return strategyIntegrity()?.signature(state)===strategyIntegrity()?.signature(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'));}catch{return false;}}
+function strategyRecoveryRecord(){try{const record=JSON.parse(localStorage.getItem(STRATEGY_RECOVERY_KEY)||'null');return record?.context===profileApprovalContext()?record:null;}catch{return null;}}
+function checkStrategyLocalPersistence(saved){
+  const integrity=strategyIntegrity();if(!integrity)return true;
+  const signature=integrity.signature(saved);if(strategySavedBaseline&&signature!==strategySavedBaseline&&signature!==integrity.signature(state)){
+    window.__leadIntelLocalStrategyConflict=true;let retained=false;
+    try{localStorage.setItem(STRATEGY_RECOVERY_KEY,JSON.stringify({version:1,context:profileApprovalContext(),at:new Date().toISOString(),local:state,saved}));retained=true;}catch{}
+    const message=retained?'Strategy changed in another view. Both drafts are preserved. Download the local recovery copy, then reload to review the saved version.':'Strategy changed in another view. Recovery storage is unavailable; keep this tab open and copy your edits before reloading.';
+    setActivationFeedback(message,'error');showToast(message);return false;
+  }return !window.__leadIntelLocalStrategyConflict;
+}
+function downloadStrategyRecovery(){const record=strategyRecoveryRecord();if(!record)return false;const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='leadintel-strategy-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;}
+function syncStrategyApproval(){
+  const integrity=strategyIntegrity(),market=state?.market;if(!integrity||!market)return false;
+  const run=typeof activeMarketResearchRun==='undefined'?null:activeMarketResearchRun;
+  if(run&&!marketResearchScopeCurrent(run)){
+    run.stopReason='Account, workspace or Strategy changed';run.controller.abort();
+    if(profileApprovalCurrent(run.context.account)&&market.researchStatus==='running'){
+      market.researchStatus=market.researchResults?.length?'partial':'error';market.researchPhase='interrupted';
+      market.researchExecution={...run.execution,status:'cancelled',receipts:(run.execution.receipts||[]).map(receipt=>({...receipt,status:receipt.status==='running'?'cancelled':receipt.status==='planned'?'not_run':receipt.status}))};
+    }
+  }
+  const report=integrity.status(state),mismatch=market.strategyApproval&&market.strategyApproval.signature!==integrity.signature(state);
+  if((market.strategyApproved&&!report.current)||mismatch){market.strategyApproved=false;market.strategyApprovedAt='';if(market.strategyApprovalInvalidated?.code!==report.code||market.strategyApprovalInvalidated?.reason!==report.reason){market.strategyApprovalInvalidated={code:report.code,reason:report.reason,at:new Date().toISOString()};window.LeadIntelReliabilityTrace?.begin('strategy_edit')?.finish('stale');}return true;}return false;
+}
+async function saveStrategyApproval(context){
+  assertStrategyContext(context);const bridge=window.LeadIntelServerBridge;
+  if(bridge?.conflict)throw Error('Resolve the workspace synchronization conflict before activating Strategy.');
+  if(!bridge?.session?.authenticated||!bridge.workspace?.id||typeof bridge.saveNow!=='function')throw Error('Sign in and save this workspace before activating Strategy.');
+  let timer;try{const result=await Promise.race([Promise.resolve().then(()=>{assertStrategyContext(context);if(bridge.conflict)throw Error('Resolve the workspace synchronization conflict before activating Strategy.');return bridge.saveNow({saveIntent:true,explicitSave:true});}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Strategy save timed out. Your reviewed work is retained; retry save.')),STRATEGY_SAVE_TIMEOUT_MS);})]);assertStrategyContext(context);if(!strategyReviewCurrent()){const error=Error('Strategy changed in another view during saving. Reopen and review its latest version; your local work is retained.');error.code='STRATEGY_STALE';throw error;}if(result?.saved!==true)throw Error(result?.conflict?'Resolve the workspace synchronization conflict before activating Strategy.':'Strategy is retained locally but workspace save was not confirmed. Retry activation after saving.');return true;}finally{clearTimeout(timer);}
+}
 function approveProfile(){
   const context=profileApprovalContext(),operation=window.LeadIntelReliabilityTrace?.begin('profile_approval');let previous,outcome='blocked';
   try{
@@ -532,11 +576,12 @@ function enforceIcpActivationRequirements(){
   if(changed)saveState();
 }
 function readMarketEdits(markDirty=true){
+  const previous=strategyIntegrity()?.signature(state);
   document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;if(field==="active"){item.requestedActive=el.checked;item.active=icpActivationRequirement(item).available&&item.requestedActive;}else item[field]=el.value.trim();});
   document.querySelectorAll("[data-signal-field]").forEach(el=>{const item=state.market.signals[Number(el.dataset.index)];if(!item)return;const field=el.dataset.signalField;if(field==="active")item.active=el.checked;else if(field==="weight")item.weight=Math.max(1,Math.min(10,Number(el.value)||1));else item[field]=el.value.trim();});
   document.querySelectorAll("[data-opportunity-active]").forEach(el=>{const item=state.market.opportunities[Number(el.dataset.opportunityActive)];if(item)item.active=el.checked;});
   syncResearchSourcesToSignals();
-  if(markDirty){state.market.strategyApproved=false;state.market.strategyApprovedAt="";}
+  if(markDirty&&previous!==strategyIntegrity()?.signature(state)){state.market.strategyApproved=false;state.market.strategyApprovedAt="";}
   enforceIcpActivationRequirements();
   saveState();
 }
@@ -627,9 +672,10 @@ async function waitForMarketServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener("leadintel:server-ready",finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener("leadintel:server-ready",finish,{once:true});setTimeout(finish,timeout);});
 }
-async function ensureMarketResearchWorkspace(mode){
+async function ensureMarketResearchWorkspace(mode,context,signal){
   const selectedMode=normalizeResearchMode(mode);
   const bridge=await waitForMarketServerBridge();
+  if(context)assertStrategyContext(context);assertMarketResearchRun(signal?.leadIntelResearchRun,signal);
   if(bridge?.session?.authenticated&&bridge?.workspace?.id){sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);return true;}
   sessionStorage.setItem(MARKET_RESEARCH_RESUME_KEY,selectedMode);
   showToast(`Sign in with Google or Microsoft to start ${researchModeUi(selectedMode).label}`);
@@ -644,70 +690,123 @@ async function resumePendingMarketResearchAfterAuth(){
   void runMarketResearch(mode);
   return true;
 }
+function marketResearchAbortError(message="Market research cancelled"){
+  const error=new Error(message);error.name="AbortError";error.code="MARKET_RESEARCH_CANCELLED";return error;
+}
+function marketResearchScopeCurrent(run){return Boolean(run&&activeMarketResearchRun===run&&strategyContextCurrent(run.context));}
+function assertMarketResearchRun(run,signal){
+  if(run&&Date.now()>=run.deadlineAt&&!run.controller.signal.aborted){run.stopReason="Market research reached its overall time limit";run.controller.abort();}
+  if(signal?.aborted||run?.controller.signal.aborted)throw marketResearchAbortError(run?.stopReason||"Market research cancelled");
+  if(run&&!marketResearchScopeCurrent(run)){run.stopReason="Account, workspace or Strategy changed";run.controller.abort();throw marketResearchAbortError(run.stopReason);}
+}
+function beginMarketResearchRun(mode,runtime){
+  if(activeMarketResearchRun){if(marketResearchScopeCurrent(activeMarketResearchRun)&&!activeMarketResearchRun.controller.signal.aborted)return null;activeMarketResearchRun.stopReason="Research superseded";activeMarketResearchRun.controller.abort();}
+  const startedAt=Date.now(),overallTimeoutMs=Math.max(1,Number(runtime.overallTimeoutMs)||({quick:120000,deep:360000,intelligence:600000}[mode]||120000));
+  const run={id:`market-${startedAt}-${Math.random().toString(36).slice(2,8)}`,mode,market:state.market,context:captureStrategyContext(true),controller:new AbortController(),startedAt,deadlineAt:startedAt+overallTimeoutMs,stopReason:"",execution:{version:1,mode,startedAt,deadlineAt:startedAt+overallTimeoutMs,status:"running",receipts:[]}};
+  run.execution.runId=run.id;activeMarketResearchRun=run;
+  run.deadlineTimer=setTimeout(()=>{run.stopReason="Market research reached its overall time limit";run.controller.abort();},overallTimeoutMs);
+  run.scopeTimer=setInterval(()=>{if(!marketResearchScopeCurrent(run)){run.stopReason="Account, workspace or Strategy changed";run.controller.abort();}},100);
+  return run;
+}
+function finishMarketResearchRun(run){clearTimeout(run.deadlineTimer);clearInterval(run.scopeTimer);if(activeMarketResearchRun===run)activeMarketResearchRun=null;}
+function recordMarketResearchReceipt(run,provider,stage,query,status="planned"){
+  const receipt={provider,stage,query:String(query||"").slice(0,180),status,attempt:0,startedAt:0,completedAt:0,resultCount:0};run.execution.receipts.push(receipt);return receipt;
+}
+async function marketResearchRequest(run,operation,timeoutMs,label,receipt){
+  assertMarketResearchRun(run);
+  const controller=new AbortController();controller.signal.leadIntelResearchRun=run;
+  if(receipt){receipt.status="running";receipt.attempt++;receipt.startedAt=Date.now();}
+  let timer,parentAbort;
+  try{
+    const value=await new Promise((resolve,reject)=>{
+      let settled=false;const finish=(fn,value)=>{if(settled)return;settled=true;fn(value);};
+      parentAbort=()=>{controller.abort();finish(reject,marketResearchAbortError(run.stopReason||"Market research cancelled"));};
+      run.controller.signal.addEventListener("abort",parentAbort,{once:true});
+      timer=setTimeout(()=>{controller.abort();finish(reject,new Error(`${label} timed out`));},Math.max(1,Math.min(timeoutMs,run.deadlineAt-Date.now())));
+      Promise.resolve().then(()=>{assertMarketResearchRun(run,controller.signal);return operation(controller.signal);}).then(value=>finish(resolve,value),error=>finish(reject,error));
+    });
+    assertMarketResearchRun(run,controller.signal);
+    if(receipt){const rows=Array.isArray(value)?value:value?.results;receipt.resultCount=rows?.length||0;receipt.status=value?.available===false||value?.status==="unavailable"?"unavailable":Array.isArray(rows)&&!rows.length?"zero_results":"complete";receipt.completedAt=Date.now();}
+    return value;
+  }catch(error){if(receipt){receipt.status=run.controller.signal.aborted?"cancelled":"failed";receipt.completedAt=Date.now();}throw error;}
+  finally{clearTimeout(timer);run.controller.signal.removeEventListener("abort",parentAbort);}
+}
+function mergeRetainedResearchEvidence(previous,results){
+  // Existing citations remain addressable even when the new run is partial or its selection cap is smaller.
+  return LeadIntelMarket.mergeResearchResults(previous||[],results||[]);
+}
 async function searchOpenAiWeb(queryMeta,maxResults=5,signal){
-  const bridge=await waitForMarketServerBridge();const workspace=bridge?.workspace;
+  const run=signal?.leadIntelResearchRun,context=run?.context||captureStrategyContext(true);
+  assertMarketResearchRun(run,signal);const bridge=await waitForMarketServerBridge();assertStrategyContext(context);assertMarketResearchRun(run,signal);const workspace=bridge?.workspace;
   if(!bridge?.session?.authenticated||!workspace?.id)return {available:false,reason:"Sign in to use OpenAI signal discovery",results:[]};
   const query=cleanOpenAiResearchQuery(queryMeta.query);
   const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({query,max_results:maxResults}),signal});
-  const payload=await response.json().catch(()=>{throw new Error(`OpenAI discovery returned an unreadable response (${response.status})`);});
-  if(payload.warning)state.market.researchErrors.push({provider:"OpenAI",query,message:String(payload.warning).slice(0,240)});
+  const payload=await response.json().catch(()=>{throw new Error(`OpenAI discovery returned an unreadable response (${response.status})`);});assertStrategyContext(context);assertMarketResearchRun(run,signal);
   if(response.status===409&&payload.error==="OpenAI integration is required for web search")return {available:false,reason:"OpenAI integration is required for web search",results:[]};
   if(!response.ok)throw new Error(payload.error||`OpenAI signal discovery returned ${response.status}`);
-  return {available:true,reason:"",results:LeadIntelMarket.normalizeSearchResults({results:payload.results},{...queryMeta,query},"openai")};
+  return {available:true,reason:"",warning:payload.warning?String(payload.warning).slice(0,240):"",results:LeadIntelMarket.normalizeSearchResults({results:payload.results},{...queryMeta,query},"openai")};
 }
 async function searchMarket(queryMeta,limit=5,signal){
+  const run=signal?.leadIntelResearchRun;assertMarketResearchRun(run,signal);
   const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit,scrapeOptions:{formats:["markdown"]}}),signal});
-  const payload=await response.json().catch(()=>({}));
+  const payload=await response.json().catch(()=>({}));assertMarketResearchRun(run,signal);
   if(!response.ok)throw new Error(payload.error||`Market search returned ${response.status}`);
   return LeadIntelMarket.normalizeSearchResults(payload,queryMeta,"firecrawl");
 }
 async function searchCustomSource(url,index,signal){
+  const run=signal?.leadIntelResearchRun;assertMarketResearchRun(run,signal);
   const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal});
-  const payload=await response.json().catch(()=>({}));
+  const payload=await response.json().catch(()=>({}));assertMarketResearchRun(run,signal);
   if(!response.ok)throw new Error(payload.error||`Custom source scrape returned ${response.status}`);
-  const data=payload?.data||payload;const metadata=data?.metadata||{};const text=String(data?.markdown||data?.content||"").slice(0,5000);
+  const data=payload?.data||payload,metadata=data?.metadata||{},text=String(data?.markdown||data?.content||"").slice(0,5000);
   const extractor=response.headers.get("X-LeadIntel-Extractor")||"firecrawl";if(!text.trim())throw new Error("Page extraction returned no readable content");
-  return LeadIntelMarket.normalizeSearchResults({results:[{url,title:metadata.title||url,description:metadata.description||text.slice(0,500),text}]},{id:`custom-${index+1}`,market:"Custom source",offer:"User-specified source",sourceType:"custom",query:url},extractor);
+  return LeadIntelMarket.normalizeSearchResults({results:[{url,title:metadata.title||url,description:metadata.description||text.slice(0,500),text,extractedBy:extractor,extractedAt:new Date().toISOString()}]},{id:`custom-${index+1}`,market:"Custom source",offer:"User-specified source",sourceType:"custom",query:url},extractor);
 }
 function researchExtractionTimeoutMs(mode){return ({quick:2,deep:3,intelligence:5}[mode]||2)*35000+5000;}
-async function extractResearchPages(results,mode,signal,{previouslyExtracted=[]}={}){
-  const limits={quick:4,deep:6,intelligence:10};const selected=[];const domains=new Set();
-  const extractedUrls=new Set(previouslyExtracted.filter(item=>item?.extractedAt).map(item=>item.url));
-  for(const item of (globalThis.LeadIntelMarketConditions?.selectDiverseEvidence(results,results.length,{profile:researchProfile()})||results)){if(item.extractedAt||extractedUrls.has(item.url))continue;let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
-  return LeadIntelMarket.mapWithConcurrency(selected,async(item,index)=>{
+async function extractResearchPages(results,mode,signal,{previouslyExtracted=[],profile=researchProfile()}={}){
+  const run=signal?.leadIntelResearchRun;assertMarketResearchRun(run,signal);
+  const limits={quick:4,deep:6,intelligence:10},selected=[],domains=new Set(),extractedUrls=new Set(previouslyExtracted.filter(item=>item?.extractedAt).map(item=>item.url));
+  for(const item of (globalThis.LeadIntelMarketConditions?.selectDiverseEvidence(results,results.length,{profile})||results)){if(item.extractedAt||extractedUrls.has(item.url))continue;let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
+  return LeadIntelMarket.mapWithConcurrency(selected,async item=>{
+    assertMarketResearchRun(run,signal);const receipt=run?recordMarketResearchReceipt(run,"firecrawl","extraction",item.url):null;
     try{
-      const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal});
-      const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(`Page extraction returned ${response.status}`);
-      const data=payload?.data||payload,metadata=data?.metadata||{};const text=String(data?.markdown||data?.content||"").slice(0,12000);const extractor=response.headers.get("X-LeadIntel-Extractor")||"firecrawl";if(!text.trim())throw new Error("Page extraction returned no readable content");
-      return {...item,title:metadata.title||item.title,description:metadata.description||item.description,text:text||item.text,sourceProviders:[...(item.sourceProviders||[]),extractor],extractedBy:extractor,extractedAt:new Date().toISOString()};
-    }catch(error){state.market.researchErrors.push({provider:"Firecrawl extraction",query:item.url,message:String(error?.message||"Page extraction failed").slice(0,240)});return item;}
+      const scrape=async childSignal=>{
+        assertMarketResearchRun(run,signal);const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal:childSignal});
+        const payload=await response.json().catch(()=>({}));assertMarketResearchRun(run,signal);assertMarketResearchRun(run,childSignal);if(!response.ok)throw new Error(`Page extraction returned ${response.status}`);
+        const data=payload?.data||payload,metadata=data?.metadata||{},text=String(data?.markdown||data?.content||"").slice(0,12000),extractor=response.headers.get("X-LeadIntel-Extractor")||"firecrawl";if(!text.trim())throw new Error("Page extraction returned no readable content");
+        return {...item,title:metadata.title||item.title,description:metadata.description||item.description,text,sourceProviders:[...new Set([...(item.sourceProviders||[]),extractor])],extractedBy:extractor,extractedAt:new Date().toISOString()};
+      };
+      // The batch signal also cancels individual requests if its extraction deadline is reached.
+      const cancelChild=()=>{if(run&&!run.controller.signal.aborted){run.stopReason="Evidence extraction cancelled";run.controller.abort();}};signal?.addEventListener("abort",cancelChild,{once:true});
+      try{return run?await marketResearchRequest(run,scrape,35000,"Page extraction",receipt):await scrape(signal);}finally{signal?.removeEventListener("abort",cancelChild);}
+    }catch(error){assertMarketResearchRun(run,signal);run?.recordError?.("Firecrawl extraction",item.url,error);return item;}
   },{concurrency:2});
 }
 async function verifyResearchWithGemini(mode,profile,results,signals,signal){
   const unavailable=reason=>({status:"unavailable",provider:"gemini",role:"verification",web_search:false,reason});
+  const run=signal?.leadIntelResearchRun,context=run?.context||captureStrategyContext(true);assertMarketResearchRun(run,signal);
   if(!["deep","intelligence"].includes(mode))return {status:"idle",provider:"gemini",role:"verification",web_search:false,reason:"Verification is reserved for Market Research and Deep Analysis"};
   if(!results.length)return unavailable("No evidence was available to verify");
-  const bridge=await waitForMarketServerBridge();const workspace=bridge?.workspace;
+  const bridge=await waitForMarketServerBridge();assertStrategyContext(context);assertMarketResearchRun(run,signal);const workspace=bridge?.workspace;
   if(!bridge?.session?.authenticated||!workspace?.id)return unavailable("Sign in to use Gemini verification");
   const payload=globalThis.LeadIntelResearchVerification.buildVerificationPayload({mode,profile,signals,results});
-  try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/research-verification?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(payload),signal});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)return unavailable(data.error||`Gemini verification returned ${response.status}`);
-    return data;
-  }catch{return unavailable("Gemini verification is temporarily unavailable");}
+  const response=await fetch(`${LEADINTEL_API}/api/ai/research-verification?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(payload),signal});
+  const data=await response.json().catch(()=>({}));assertStrategyContext(context);assertMarketResearchRun(run,signal);
+  if(!response.ok)return unavailable(data.error||`Gemini verification returned ${response.status}`);return data;
 }
 function readResearchSettings(sourceTypesChanged=false){
   const sourceTypes=[...document.querySelectorAll('#research-source-types input:checked')].map(input=>input.value);
-  state.market.researchSourceTypes=LeadIntelMarket.filterResearchSourceTypes(sourceTypes.length?sourceTypes:["news"],state.market.signals||[]);
+  state.market.researchSourceTypes=LeadIntelMarket.filterResearchSourceTypes(sourceTypes,state.market.signals||[]);
   if(sourceTypesChanged)state.market.researchSourceTypesCustomized=true;
   state.market.researchCustomSources=LeadIntelMarket.splitList($("research-custom-sources").value).slice(0,20);
   state.market.researchInstructions=$("research-instructions").value.trim().slice(0,1200);
   saveState();return state.market;
 }
 function researchContextFingerprint(){
-  const profile=state.profile||{};
-  return JSON.stringify({website:state.website||profile.website||"",offers:profile.priorityOffers||"",customer:profile.idealCustomer||"",markets:[...new Set(LeadIntelMarket.splitList?.((state.market.icps||[]).filter(x=>x.active!==false).map(x=>x.targetMarkets).filter(Boolean).join("; ")||profile.targetMarkets)||[profile.targetMarkets||""])].sort().join("; "),buyers:profile.decisionMakers||"",exclusions:profile.exclusions||"",signals:(state.market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.keywords||x.name]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))});
+  const integrity=strategyIntegrity();
+  if(!integrity?.material)throw Error("Strategy integrity is unavailable");
+  const material=integrity.material(state);delete material.evidence;delete material.opportunities;
+  return `${integrity.VERSION}:research:${integrity.digest(JSON.stringify(material))}`;
 }
 // Staleness is a live comparison, not a latch: it clears as soon as the saved research context matches again.
 // A forced marker in the fingerprint (e.g. 'stale:website-reactivated') keeps it stale until the next run rewrites it.
@@ -778,7 +877,7 @@ function openResearchPreview(mode){
   $("research-preview-queries").dataset.plannedThemes=JSON.stringify(queries.map(item=>item.signalName||item.researchCategory));
   $("research-preview-queries").innerHTML=queries.map(item=>`<li><strong>${esc(item.researchCategory)}</strong> · ${esc(item.query)}</li>`).join("")||"<li>No searches could be prepared. Add a target market.</li>";
   $("confirm-market-research").textContent=`Start ${modeUi.label}`;
-  $("confirm-market-research").disabled=!queries.length;
+  $("confirm-market-research").disabled=!queries.length&&!state.market.researchCustomSources.length;
   $("research-run-preview").hidden=false;
   $("research-run-preview").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
@@ -791,152 +890,115 @@ function addSuggestedSources(){
   const mode=pendingResearchMode;if(mode)openResearchPreview(mode);
   showToast(`${urls.length} recommended site${urls.length===1?"":"s"} added to research and monitoring`);
 }
-async function runMarketResearch(modeOverride=""){
+async function runMarketResearch(modeOverride="",{retryOnly=false}={}){
+  if(activeMarketResearchRun&&marketResearchScopeCurrent(activeMarketResearchRun)&&!activeMarketResearchRun.controller.signal.aborted)return;
   if(!state.profile){showToast("Add your website and target market so LeadIntel can build a profile first");return;}
   ensureMarketStrategySeeded();readMarketEdits();readResearchSettings();
-  state.market.researchMode=normalizeResearchMode(modeOverride||$("research-mode").value);
-  $("research-mode").value=state.market.researchMode;
-  if(!await ensureMarketResearchWorkspace(state.market.researchMode))return;
-  const profile=researchProfile();
-  const selectedSources=state.market.researchSourceTypes;
-  const limits=LeadIntelMarket.RESEARCH_MODES[state.market.researchMode];
-  const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
-  const queries=LeadIntelMarket.buildResearchPlan(profile,state.market.signals,{mode:state.market.researchMode,sourceTypes:selectedSources,sourceTypesCustomized:state.market.researchSourceTypesCustomized,instructions:state.market.researchInstructions,language:contentLanguage()});
-  if(!queries.length){showToast("Add a target market to improve research precision");return;}
-  let totalJobs=queries.length+state.market.researchCustomSources.length;
-  const taskCentre=window.LeadIntelTaskCentre;const taskId=`market-research:${Date.now()}`;
-  taskCentre?.start({id:taskId,type:'market-research',title:'Market research',stage:'Searching public sources',total:totalJobs,completed:0,canRetry:true});
-  taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(state.market.researchMode)});
-  closeResearchPreview();
-  const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
-  const previousResearch={results:[...state.market.researchResults],opportunities:[...state.market.opportunities],conditions:state.market.marketConditions,quality:state.market.researchQuality,lastResearchAt:state.market.lastResearchAt,fingerprint:state.market.researchContextFingerprint};
-  state.market.researchQuality=null;
-  state.market.researchContextStale=false;
-  state.market.researchContextFingerprint=researchContextFingerprint();
-  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.marketConditions=null;state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchStartedAt=Date.now();state.market.researchPhase="finding";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();clearInterval(researchElapsedTimer);researchElapsedTimer=setInterval(renderResearchStatus,1000);
-  const researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
-  let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
-  const recordResearchError=(provider,query,error)=>{if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};
-  const updateProgress=completed=>{state.market.researchProgress={completed,total:totalJobs};taskCentre?.update(taskId,{completed,total:totalJobs,stage:'Checking market evidence',resultCount:state.market.researchResults.length});saveState();renderResearchStatus();};
+  const mode=normalizeResearchMode(modeOverride||$("research-mode").value);state.market.researchMode=mode;$("research-mode").value=mode;
+  const runtime=LeadIntelMarket.researchRuntimePolicy(mode),limits=LeadIntelMarket.RESEARCH_MODES[mode],run=beginMarketResearchRun(mode,runtime);if(!run)return;
+  let started=false,totalJobs=0,completedJobs=0,taskId,elapsedTimer;
+  const taskCentre=window.LeadIntelTaskCentre,requestsGemini=["deep","intelligence"].includes(mode),researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);
+  const previous={results:[...state.market.researchResults],opportunities:[...state.market.opportunities],conditions:state.market.marketConditions,quality:state.market.researchQuality,lastResearchAt:state.market.lastResearchAt,fingerprint:state.market.researchContextFingerprint,verification:state.market.researchVerification};
+  let results=[],openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
+  const publish=()=>{assertMarketResearchRun(run);state.market.researchExecution=JSON.parse(JSON.stringify(run.execution));if(saveState()===false)throw Error("Research evidence could not be saved; resolve workspace synchronization before retrying");assertMarketResearchRun(run);renderResearchStatus();};
+  const recordResearchError=(provider,query,error)=>{assertMarketResearchRun(run);if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};run.recordError=recordResearchError;
+  const addResults=rows=>{assertMarketResearchRun(run);results=LeadIntelMarket.mergeResearchResults(results,rows||[]).slice(0,limits.maxStoredResults*10);state.market.researchResults=mergeRetainedResearchEvidence(previous.results,results);};
+  const updateProgress=()=>{assertMarketResearchRun(run);if(retryOnly)state.market.openAiRetryProgress={...state.market.openAiRetryProgress,completed:completedJobs,total:totalJobs};state.market.researchProgress={completed:completedJobs,total:totalJobs};taskCentre?.update(taskId,{completed:completedJobs,total:totalJobs,stage:'Checking market evidence',resultCount:results.length});publish();};
   try{
-    const queryResults=await LeadIntelMarket.mapWithConcurrency(queries,async query=>{
-      const openAiJob=openAiAvailable?withOpenAiRetry(attempt=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(attempt===1?query:{...query,query:cleanOpenAiResearchQuery(query.query).slice(0,120)},limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search"),{retryTimeouts:true}).then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
-      const firecrawlJob=LeadIntelMarket.withTimeout(signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl search").then(results=>({results}),error=>({error}));
-      const [openAi,firecrawl]=await Promise.all([openAiJob,firecrawlJob]);
-      let openAiResults=[],firecrawlResults=[];
-      if(openAi.found?.available){openAiResults=openAi.found.results;openAiSuccesses++;}
-      else if(openAi.found&&!openAi.found.available){openAiAvailable=false;state.market.researchSourceStatus.openai="unavailable";if(!state.market.researchErrors.some(item=>item.provider==="OpenAI"))recordResearchError("OpenAI",query.query,openAi.found.reason);}
-      else if(openAi.error){openAiFailures++;recordResearchError("OpenAI",query.query,openAi.error);}
-      if(firecrawl.results){firecrawlResults=firecrawl.results;firecrawlSuccesses++;}else{firecrawlFailures++;recordResearchError("Firecrawl",query.query,firecrawl.error);}
-      state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,openAiResults,firecrawlResults).slice(0,limits.maxStoredResults*10);
-      state.market.researchPhase=state.market.researchResults.length?"extracting":"finding";
-      return {openAiResults,firecrawlResults};
-    },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(progress.completed)});
-    for(const result of queryResults)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,result.openAiResults,result.firecrawlResults).slice(0,limits.maxStoredResults*10);
-    const customResults=await LeadIntelMarket.mapWithConcurrency(state.market.researchCustomSources,async(url,index)=>{
-      try{const results=await LeadIntelMarket.withTimeout(signal=>searchCustomSource(url,index,signal),runtime.requestTimeoutMs,"Custom source");firecrawlSuccesses++;return results;}
-      catch(error){firecrawlFailures++;recordResearchError("Custom URL",url,error);return [];}
-    },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(queries.length+progress.completed)});
-    for(const result of customResults)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,[],result).slice(0,limits.maxStoredResults*10);
-    state.market.researchPhase="extracting";renderResearchStatus();
-    const extracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal),researchExtractionTimeoutMs(state.market.researchMode),"Evidence extraction").catch(error=>{recordResearchError("Firecrawl extraction","Evidence extraction",error);return [];});
-    state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,extracted).slice(0,limits.maxStoredResults*10);
-    const adaptive=globalThis.LeadIntelMarketConditions?.buildAdaptivePlan({mode:state.market.researchMode,market:LeadIntelMarket.effectiveResearchMarkets(profile)[0],offer:String(profile.priorityOffers||"").split(/[;\n]/)[0],results:state.market.researchResults})||{queries:[],gaps:[]};
-    if(adaptive.queries.length){
-      totalJobs+=adaptive.queries.length;state.market.researchProgress.total=totalJobs;state.market.researchQueries=[...queries,...adaptive.queries];state.market.researchPhase="following";renderResearchStatus();
-      const followUps=await LeadIntelMarket.mapWithConcurrency(adaptive.queries,async query=>{
-        const [openAi,firecrawl]=await Promise.all([
-          openAiAvailable?withOpenAiRetry(attempt=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(attempt===1?query:{...query,query:cleanOpenAiResearchQuery(query.query).slice(0,120)},limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI follow-up"),{retryTimeouts:true}).catch(error=>{recordResearchError("OpenAI","Adaptive follow-up",error);openAiFailures++;return {available:false,results:[]};}):Promise.resolve({available:false,results:[]}),
-          LeadIntelMarket.withTimeout(signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl follow-up").catch(error=>{firecrawlFailures++;recordResearchError("Firecrawl","Adaptive follow-up",error);return [];})
-        ]);
-        if(openAi.available)openAiSuccesses++;if(firecrawl.length)firecrawlSuccesses++;
-        return LeadIntelMarket.mergeResearchResults(openAi.results||[],firecrawl);
-      },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(queries.length+state.market.researchCustomSources.length+progress.completed)});
-      for(const result of followUps)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,result).slice(0,limits.maxStoredResults*10);
-      const followUpExtracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal,{previouslyExtracted:extracted}),researchExtractionTimeoutMs(state.market.researchMode),"Follow-up evidence extraction").catch(error=>{recordResearchError("Firecrawl extraction","Evidence extraction",error);return [];});
-      state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,followUpExtracted).slice(0,limits.maxStoredResults*10);
+    const ready=await marketResearchRequest(run,signal=>ensureMarketResearchWorkspace(mode,run.context,signal),2000,"Workspace check");if(!ready)return;assertMarketResearchRun(run);
+    const profile=JSON.parse(JSON.stringify(researchProfile())),signals=JSON.parse(JSON.stringify(state.market.signals)),sourceTypes=[...state.market.researchSourceTypes],customSources=retryOnly?[]:[...new Set((state.market.researchCustomSources||[]).map(value=>{try{const url=new URL(value);return ["http:","https:"].includes(url.protocol)?url.href:"";}catch{return "";}}).filter(Boolean))].slice(0,20);
+    const failedQueries=new Set((state.market.researchErrors||[]).filter(item=>item.provider==="OpenAI").map(item=>item.query));
+    const planned=retryOnly?(state.market.researchQueries||[]).filter(item=>!failedQueries.size||failedQueries.has(String(item.query||"").slice(0,180))):LeadIntelMarket.buildResearchPlan(profile,signals,{mode,sourceTypes,sourceTypesCustomized:state.market.researchSourceTypesCustomized,instructions:state.market.researchInstructions,language:contentLanguage(),reserveFollowUps:true});
+    const queries=[...new Map(planned.map(item=>[String(item.query).trim().toLowerCase(),item])).values()].slice(0,limits.maxQueries);
+    if(!queries.length&&!customSources.length){showToast(retryOnly?"No failed OpenAI queries are available to retry":"Choose research sources or add a valid public URL");return;}
+    totalJobs=queries.length+customSources.length;started=true;taskId=`market-research:${run.id}`;
+    taskCentre?.start({id:taskId,type:'market-research',title:'Market research',stage:'Searching public sources',total:totalJobs,completed:0,canRetry:true,canCancel:true});
+    taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(mode),cancel:()=>{if(marketResearchScopeCurrent(run)){run.stopReason="Market research cancelled by user";run.controller.abort();}}});closeResearchPreview();
+    if(state.market.researchExecution)state.market.researchExecutionHistory=[...(state.market.researchExecutionHistory||[]),state.market.researchExecution].slice(-10);
+    state.market.researchQuality=null;state.market.researchContextStale=false;state.market.researchContextFingerprint=run.context.signature;
+    state.market.researchQueries=queries;state.market.researchResults=previous.results;state.market.researchErrors=retryOnly?state.market.researchErrors.filter(item=>String(item.provider).toLowerCase()!=="openai"):[];
+    state.market.researchStatus="running";state.market.researchStartedAt=run.startedAt;state.market.researchPhase="finding";state.market.strategyApproved=false;
+    state.market.researchSourceStatus={...state.market.researchSourceStatus,openai:queries.length?"running":"idle",...(!retryOnly?{firecrawl:"running",gemini:requestsGemini?"running":"idle"}:{})};
+    if(!retryOnly)state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};
+    state.market.researchProgress={completed:0,total:totalJobs};if(retryOnly)state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt:run.startedAt,deadlineAt:run.deadlineAt};publish();renderMarketStrategy();
+    elapsedTimer=setInterval(()=>{if(marketResearchScopeCurrent(run)&&!run.controller.signal.aborted)renderResearchStatus();},1000);researchElapsedTimer=elapsedTimer;
+    researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
+    const queryReceipts=query=>({query,openai:recordMarketResearchReceipt(run,"openai","discovery",query.query),firecrawl:retryOnly?null:recordMarketResearchReceipt(run,"firecrawl","discovery",query.query)});
+    const executeQuery=async job=>{
+      assertMarketResearchRun(run);const query=job.query;
+      const openAiJob=async()=>{
+        if(!openAiAvailable){job.openai.status="not_run";return [];}
+        try{
+          const found=await withOpenAiRetry(attempt=>{assertMarketResearchRun(run);if(retryOnly)state.market.openAiRetryProgress={...state.market.openAiRetryProgress,attempt,deadlineAt:Math.min(run.deadlineAt,Date.now()+runtime.openAiTimeoutMs)};return marketResearchRequest(run,signal=>searchOpenAiWeb(attempt===1?query:{...query,query:cleanOpenAiResearchQuery(query.query).slice(0,120)},limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search",job.openai);},{retryTimeouts:true,sleep:delay=>marketResearchRequest(run,signal=>new Promise((resolve,reject)=>{const timer=setTimeout(resolve,delay);signal.addEventListener("abort",()=>{clearTimeout(timer);reject(marketResearchAbortError());},{once:true});}),Math.max(1,delay+100),"Retry delay")});
+          assertMarketResearchRun(run);if(!found.available){openAiAvailable=false;recordResearchError("OpenAI",query.query,found.reason);return [];}
+          openAiSuccesses++;if(found.warning)recordResearchError("OpenAI",query.query,found.warning);return found.results;
+        }catch(error){assertMarketResearchRun(run);openAiFailures++;recordResearchError("OpenAI",query.query,error);return [];}
+      };
+      const firecrawlJob=async()=>{if(!job.firecrawl)return [];try{const rows=await marketResearchRequest(run,signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl search",job.firecrawl);assertMarketResearchRun(run);firecrawlSuccesses++;return rows;}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Firecrawl",query.query,error);return [];}};
+      const found=await Promise.all([openAiJob(),firecrawlJob()]);assertMarketResearchRun(run);addResults(LeadIntelMarket.mergeResearchResults(...found));completedJobs++;updateProgress();return found;
+    };
+    const verificationReceipt=requestsGemini&&!retryOnly?recordMarketResearchReceipt(run,"gemini","verification","Collected evidence"):null;
+    const customJobs=customSources.map((url,index)=>({url,index,receipt:recordMarketResearchReceipt(run,"firecrawl","custom_source",url)}));
+    await LeadIntelMarket.mapWithConcurrency(queries.map(queryReceipts),executeQuery,{concurrency:runtime.concurrency});assertMarketResearchRun(run);
+    await LeadIntelMarket.mapWithConcurrency(customJobs,async job=>{assertMarketResearchRun(run);try{const rows=await marketResearchRequest(run,signal=>searchCustomSource(job.url,job.index,signal),runtime.requestTimeoutMs,"Custom source",job.receipt);assertMarketResearchRun(run);firecrawlSuccesses++;addResults(rows);}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Custom URL",job.url,error);}completedJobs++;updateProgress();},{concurrency:runtime.concurrency});assertMarketResearchRun(run);
+    let extracted=[];
+    const extractEvidence=async()=>{state.market.researchPhase="extracting";publish();const receipt=recordMarketResearchReceipt(run,"firecrawl","extraction_batch","Evidence extraction");try{const rows=await marketResearchRequest(run,signal=>extractResearchPages(results,mode,signal,{previouslyExtracted:extracted,profile}),researchExtractionTimeoutMs(mode),"Evidence extraction",receipt);assertMarketResearchRun(run);extracted=LeadIntelMarket.mergeResearchResults(extracted,rows);addResults(rows);}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Firecrawl extraction","Evidence extraction",error);}};
+    if(!retryOnly)await extractEvidence();assertMarketResearchRun(run);
+    // Each pass uses newly collected evidence; intelligence may spend its reserved budget over two passes.
+    for(let pass=0;!retryOnly&&mode!=="quick"&&pass<(mode==="intelligence"?2:1);pass++){
+      assertMarketResearchRun(run);const remainingQueries=limits.maxQueries-state.market.researchQueries.length;if(remainingQueries<=0)break;
+      const adaptive=globalThis.LeadIntelMarketConditions?.buildAdaptivePlan({mode,market:LeadIntelMarket.effectiveResearchMarkets(profile)[0],offer:String(profile.priorityOffers||"").split(/[;\n]/)[0],profile,signals,sourceTypes,remainingQueries:Math.min(remainingQueries,2),previousQueries:state.market.researchQueries,results})||{queries:[],gaps:[]};
+      const seen=new Set(state.market.researchQueries.map(item=>String(item.query).trim().toLowerCase())),followups=(adaptive.queries||[]).filter(item=>{const key=String(item.query).trim().toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,Math.min(remainingQueries,2));
+      if(!followups.length)break;state.market.researchQueries=[...state.market.researchQueries,...followups];totalJobs+=followups.length;state.market.researchPhase="following";updateProgress();
+      const before=new Set(results.map(item=>item.url));await LeadIntelMarket.mapWithConcurrency(followups.map(queryReceipts),executeQuery,{concurrency:runtime.concurrency});assertMarketResearchRun(run);await extractEvidence();assertMarketResearchRun(run);
+      if(!results.some(item=>!before.has(item.url)))break;
     }
-    if(openAiAvailable)state.market.researchSourceStatus.openai=openAiFailures===0?"complete":openAiSuccesses?"partial":"error";
-    state.market.researchSourceStatus.firecrawl=firecrawlFailures===0?"complete":firecrawlSuccesses?"partial":"error";
-    if(requestsGemini){
-      state.market.researchPhase="verifying";renderResearchStatus();
-      const verificationPayload=await LeadIntelMarket.withTimeout(signal=>verifyResearchWithGemini(state.market.researchMode,profile,state.market.researchResults,state.market.signals,signal),runtime.requestTimeoutMs,"Gemini verification").catch(error=>({status:"unavailable",provider:"gemini",role:"verification",web_search:false,reason:error.message}));
-      const verified=globalThis.LeadIntelResearchVerification.applyVerification(state.market.researchResults,verificationPayload);
-      state.market.researchResults=verified.results;state.market.researchVerification=verified.verification;state.market.researchSourceStatus.gemini=verified.verification.status;
+    if(requestsGemini&&!retryOnly){
+      state.market.researchPhase="verifying";publish();const receipt=verificationReceipt;
+      try{const payload=await marketResearchRequest(run,signal=>verifyResearchWithGemini(mode,profile,results,signals,signal),runtime.requestTimeoutMs,"Gemini verification",receipt);assertMarketResearchRun(run);const verified=globalThis.LeadIntelResearchVerification.applyVerification(results,payload);results=verified.results;state.market.researchVerification=verified.verification;state.market.researchSourceStatus.gemini=verified.verification.status;}
+      catch(error){assertMarketResearchRun(run);recordResearchError("Gemini","Verification",error);state.market.researchSourceStatus.gemini="unavailable";state.market.researchVerification={status:"unavailable",provider:"gemini",role:"verification",webSearch:false,reason:"Verification did not complete",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};}
     }
-    const operationalFailures=openAiFailures+firecrawlFailures+state.market.researchErrors.length+(requestsGemini&&state.market.researchSourceStatus.gemini!=="complete"?1:0)+(openAiAvailable?0:1);
-    state.market.researchPhase="building";renderResearchStatus();
-    const evidenceAssessment=globalThis.LeadIntelMarketConditions?.assessEvidence(state.market.researchResults,{profile});
-    if(evidenceAssessment)state.market.researchResults=globalThis.LeadIntelMarketConditions.selectDiverseEvidence(evidenceAssessment.results,limits.maxStoredResults);
-    state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults,contentLanguage());
-    state.market.marketConditions=state.market.researchMode==="quick"?null:globalThis.LeadIntelMarketConditions?.buildPack(state.market.researchResults)||null;
-    state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(state.market.researchResults,{mode:state.market.researchMode})||null;
-    state.market.researchStatus=!state.market.researchResults.length?"error":operationalFailures>0||state.market.researchQuality?.passed===false?"partial":"complete";
-    if(state.market.researchStatus==='error')taskCentre?.fail(taskId,'Market research could not complete',{canRetry:true});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==='partial'?'Completed with source warnings':'Market research complete',resultCount:state.market.researchResults.length});
+    assertMarketResearchRun(run);state.market.researchSourceStatus.openai=!queries.length?"idle":!openAiAvailable?"unavailable":openAiFailures?openAiSuccesses?"partial":"error":"complete";
+    if(!retryOnly)state.market.researchSourceStatus.firecrawl=firecrawlFailures?firecrawlSuccesses?"partial":"error":"complete";
+    state.market.researchPhase="building";publish();const assessment=globalThis.LeadIntelMarketConditions?.assessEvidence(results,{profile});if(assessment)results=assessment.results;
+    results=globalThis.LeadIntelMarketConditions?.selectDiverseEvidence(results,limits.maxStoredResults,{profile})||results.slice(0,limits.maxStoredResults);
+    state.market.researchResults=mergeRetainedResearchEvidence(previous.results,results);
+    if(results.length){state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,signals,results,contentLanguage());state.market.marketConditions=mode==="quick"?null:globalThis.LeadIntelMarketConditions?.buildPack(results)||null;}
+    state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(results,{mode})||null;
+    const incomplete=openAiFailures+firecrawlFailures+state.market.researchErrors.length>0||!openAiAvailable||state.market.researchQuality?.passed===false||(requestsGemini&&state.market.researchSourceStatus.gemini!=="complete");
+    state.market.researchStatus=!results.length?(previous.results.length?"partial":"error"):incomplete?"partial":"complete";run.execution.status=state.market.researchStatus;
+    if(retryOnly)state.market.lastOpenAiRetry={attempts:run.execution.receipts.filter(item=>item.provider==="openai").reduce((n,item)=>n+item.attempt,0),responseTimeMs:Date.now()-run.startedAt,status:state.market.researchSourceStatus.openai,failureReason:openAiFailures?"One or more OpenAI queries remained unavailable":""};
   }catch(error){
-    recordResearchError("LeadIntel","Research run",error);
-    state.market.researchStatus=state.market.researchResults.length?"partial":"error";
-    state.market.researchSourceStatus={openai:openAiSuccesses?"partial":"error",firecrawl:firecrawlSuccesses?"partial":"error",gemini:requestsGemini?"unavailable":"idle"};
-    if(requestsGemini)state.market.researchVerification={status:"unavailable",provider:"gemini",role:"verification",webSearch:false,reason:"Research stopped before verification completed",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};
-    showToast(`Research stopped safely · ${error.message}`);
-    taskCentre?.fail(taskId,error,{canRetry:true,resultCount:state.market.researchResults.length});
+    if(marketResearchScopeCurrent(run)&&started){state.market.researchStatus=state.market.researchResults.length?"partial":"error";run.execution.status=run.controller.signal.aborted?"cancelled":"failed";if(!run.controller.signal.aborted)recordResearchError("LeadIntel","Research run",error);}
   }finally{
-    const retainedPrevious=!state.market.researchResults.length&&previousResearch.results.length>0;
-    if(retainedPrevious){state.market.researchResults=previousResearch.results;state.market.opportunities=previousResearch.opportunities;state.market.marketConditions=previousResearch.conditions;state.market.researchQuality=previousResearch.quality;state.market.researchContextFingerprint=previousResearch.fingerprint||'stale:rerun-failed';state.market.researchContextStale=true;state.market.researchStatus="partial";recordResearchError("LeadIntel","Saved evidence","This rerun returned no usable evidence. Previous research was retained and must be reviewed before reuse.");}
-    clearInterval(researchElapsedTimer);researchElapsedTimer=null;state.market.researchPhase="complete";
-    state.market.researchProgress={completed:totalJobs,total:totalJobs};
-    state.market.lastResearchAt=retainedPrevious?previousResearch.lastResearchAt:new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
-    researchReportUi?.capture();
-    researchButtons.forEach(button=>{button.disabled=false;});
+    clearInterval(elapsedTimer);
+    try{if(marketResearchScopeCurrent(run)&&started){
+      if(researchElapsedTimer===elapsedTimer)researchElapsedTimer=null;
+      const cancelled=run.controller.signal.aborted;for(const receipt of run.execution.receipts)if(["planned","running"].includes(receipt.status)){receipt.status=receipt.status==="planned"?"not_run":"cancelled";receipt.completedAt=Date.now();}
+      if(cancelled)run.execution.status="cancelled";run.execution.completedAt=Date.now();
+      for(const provider of ["openai","firecrawl","gemini"])if(state.market.researchSourceStatus[provider]==="running")state.market.researchSourceStatus[provider]="unavailable";
+      if(state.market.researchVerification?.status==="running")state.market.researchVerification={...state.market.researchVerification,status:"unavailable",reason:"Research stopped before verification completed"};
+      if(!results.length&&previous.results.length){state.market.researchQuality=previous.quality;state.market.researchContextFingerprint=previous.fingerprint||"stale:rerun-failed";state.market.researchContextStale=true;}
+      state.market.researchResults=mergeRetainedResearchEvidence(previous.results,state.market.researchResults);
+      if(retryOnly)delete state.market.openAiRetryProgress;
+      state.market.researchExecution=JSON.parse(JSON.stringify(run.execution));state.market.researchPhase="complete";state.market.researchProgress={completed:completedJobs,total:totalJobs};
+      state.market.lastResearchAt=results.length?new Date().toISOString():previous.lastResearchAt;
+      state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:run.id,mode,status:state.market.researchStatus,sourceCount:results.length,queryCount:state.market.researchQueries.length,completedAt:new Date().toISOString()});
+      researchButtons.forEach(button=>{button.disabled=false;});
+      try{if(saveState()===false)throw Error("Workspace save was not confirmed");}catch(error){if(!marketResearchScopeCurrent(run))return;state.market.researchStatus=state.market.researchResults.length?"partial":"error";state.market.researchExecution.status="failed";taskCentre?.fail(taskId,"Research results remain in memory; the workspace save did not complete",{canRetry:true,resultCount:results.length});renderMarketStrategy();showToast("Research results remain in memory. Workspace save did not complete; check storage and synchronization before leaving.");return;}
+      if(!marketResearchScopeCurrent(run))return;renderMarketStrategy();if(!marketResearchScopeCurrent(run))return;researchReportUi?.capture();
+      if(cancelled||state.market.researchStatus==="error")taskCentre?.fail(taskId,cancelled?"Market research stopped; collected evidence was retained":"Market research could not complete",{canRetry:true,resultCount:results.length});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==="partial"?'Completed with source warnings':'Market research complete',resultCount:results.length});
+      showToast(`${cancelled?"Market research stopped":state.market.researchStatus==="complete"?"Market research complete":"Market research partially complete"} · ${results.length} new evidence sources · saved evidence retained`);
+    }}finally{finishMarketResearchRun(run);}
   }
-  const sourceNote=` · Discovery: ${state.market.researchSourceStatus.openai==="unavailable"?"OpenAI unavailable":"OpenAI"} · Extraction: Firecrawl${requestsGemini?` · Verification: ${state.market.researchSourceStatus.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""}`;
-  showToast(`${state.market.researchStatus==="complete"?"Market research complete":state.market.researchStatus==="partial"?"Market research partially complete":"Market research could not complete"}${sourceNote} · ${state.market.researchResults.length} evidence sources`);
 }
 function stopOpenAiCountdown(){if(openAiCountdownTimer){clearInterval(openAiCountdownTimer);openAiCountdownTimer=null;}}
 function startOpenAiCountdown(){stopOpenAiCountdown();openAiCountdownTimer=setInterval(()=>{if(!state.market.openAiRetryProgress){stopOpenAiCountdown();return;}renderResearchStatus();},1000);}
 function openAiRetryStatus(progress={}){const total=Math.max(1,Number(progress.total)||1);const completed=Math.min(Number(progress.completed)||0,total);const current=Math.min(completed+1,total);const remaining=Math.max(0,Math.ceil(((Number(progress.deadlineAt)||Date.now())-Date.now())/1000));const attempt=Math.max(1,Number(progress.attempt)||1);return `OpenAI ${current}/${total} queries · attempt ${attempt}/2 · ${remaining}s remaining`;}
 async function retryOpenAiDiscovery(){
-  if(state.market.researchStatus==="running")return;
+  if(activeMarketResearchRun&&marketResearchScopeCurrent(activeMarketResearchRun)&&!activeMarketResearchRun.controller.signal.aborted)return;
   if(state.market.researchContextStale||state.market.researchQuality?.passed===false)return runMarketResearch(state.market.researchMode);
-  const failedQueries=new Set((state.market.researchErrors||[]).filter(x=>x.provider==="OpenAI").map(x=>x.query));
-  const queries=[...(state.market.researchQueries||[])].filter(x=>!failedQueries.size||failedQueries.has(String(x.query||"").slice(0,180)));
-  if(!queries.length){showToast("No failed OpenAI queries are available to retry");return;}
-  if(!await ensureMarketResearchWorkspace(state.market.researchMode))return;
-  const preservedResults=[...state.market.researchResults];
-  const limits=LeadIntelMarket.RESEARCH_MODES[normalizeResearchMode(state.market.researchMode)];
-  const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
-  const priorErrors=[...(state.market.researchErrors||[])].filter(item=>String(item.provider).toLowerCase()!=="openai");
-  let successes=0,failures=0;const startedAt=Date.now();
-  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt,deadlineAt:Date.now()+runtime.openAiTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
-  try{
-    const retried=await LeadIntelMarket.mapWithConcurrency(queries,async(query,index)=>{
-      const attemptStarted=Date.now();
-      try{
-        const found=await withOpenAiRetry(attempt=>{
-          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,startedAt,deadlineAt:Date.now()+runtime.openAiTimeoutMs};renderResearchStatus();
-          return LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search");
-        },{retryTimeouts:true});
-        if(!found.available)throw new Error(found.reason||"OpenAI discovery unavailable");
-        successes++;return found.results;
-      }catch(error){
-        failures++;state.market.researchErrors.push({provider:"OpenAI",query:String(query.query||"").slice(0,180),message:String(error?.message||error).slice(0,240),attempts:error?.attempts||1,responseTimeMs:Date.now()-attemptStarted,failureReason:String(error?.cause?.message||error?.message||error).slice(0,240)});return [];
-      }
-    },{concurrency:runtime.concurrency,onProgress:progress=>{state.market.openAiRetryProgress={...state.market.openAiRetryProgress,...progress,deadlineAt:Date.now()+runtime.openAiTimeoutMs};saveState();renderResearchStatus();}});
-    for(const results of retried)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,results);
-    state.market.researchResults=(globalThis.LeadIntelMarketConditions?.selectDiverseEvidence(state.market.researchResults,limits.maxStoredResults,{profile:researchProfile()})||state.market.researchResults);
-    state.market.researchSourceStatus.openai=failures===0?"complete":successes?"partial":"error";
-    state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(state.market.researchResults,{mode:state.market.researchMode})||null;
-    const incomplete=failures>0||state.market.researchErrors.length>0||state.market.researchQuality?.passed===false||state.market.researchContextStale||(["deep","intelligence"].includes(state.market.researchMode)&&state.market.researchSourceStatus.gemini!=="complete");
-    state.market.researchStatus=state.market.researchResults.length?(incomplete?"partial":"complete"):"error";
-    state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(researchProfile(),state.market.icps,state.market.signals,state.market.researchResults,contentLanguage());
-    state.market.lastOpenAiRetry={attempts:queries.length+failures,responseTimeMs:Date.now()-startedAt,status:state.market.researchSourceStatus.openai,failureReason:failures?"One or more OpenAI queries remained unavailable":""};
-  }finally{
-    stopOpenAiCountdown();
-    const recovered=LeadIntelMarket.mergeResearchResults(state.market.researchResults,preservedResults);
-    state.market.researchResults=(globalThis.LeadIntelMarketConditions?.selectDiverseEvidence(recovered,limits.maxStoredResults,{profile:researchProfile()})||recovered);
-    delete state.market.openAiRetryProgress;saveState();renderMarketStrategy();researchReportUi?.capture();
-  }
-  showToast(failures?"Firecrawl results preserved — OpenAI still unavailable":"OpenAI discovery finished — review evidence coverage");
+  return runMarketResearch(state.market.researchMode,{retryOnly:true});
 }
 function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
 function marketConditionSources(items=[]){
@@ -1203,7 +1265,7 @@ function removeSavedResearchWebsite(url){
   $("research-custom-sources").value=state.market.researchCustomSources.join("\n");saveState();renderResearchControls();showToast("Website removed from research. Manage scheduled websites in monitoring settings.");
 }
 function renderResearchControls(){
-  state.market.researchMode=normalizeResearchMode(state.market.researchMode);$("research-mode").value=state.market.researchMode;syncResearchSourcesToSignals();const selectedSources=new Set(state.market.researchSourceTypes?.length?state.market.researchSourceTypes:(state.market.researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"]));const tenderAllowed=LeadIntelMarket.filterResearchSourceTypes(["tenders"],state.market.signals||[]).includes("tenders");document.querySelectorAll('#research-source-types input').forEach(input=>{input.disabled=input.value==="tenders"&&!tenderAllowed;input.checked=selectedSources.has(input.value)&&!input.disabled;});
+  state.market.researchMode=normalizeResearchMode(state.market.researchMode);$("research-mode").value=state.market.researchMode;syncResearchSourcesToSignals();const selectedSources=new Set(state.market.researchSourceTypes?.length||state.market.researchSourceTypesCustomized===true?state.market.researchSourceTypes:(state.market.researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"]));const tenderAllowed=LeadIntelMarket.filterResearchSourceTypes(["tenders"],state.market.signals||[]).includes("tenders");document.querySelectorAll('#research-source-types input').forEach(input=>{input.disabled=input.value==="tenders"&&!tenderAllowed;input.checked=selectedSources.has(input.value)&&!input.disabled;});
   const tenderNote=$("tender-source-note");if(tenderNote)tenderNote.textContent=tenderAllowed?"Tender research is available because the tender signal is active.":"Tenders are excluded. Activate the tender signal above if you want to include them.";
   $("research-custom-sources").value=(state.market.researchCustomSources||[]).join("\n");$("research-instructions").value=state.market.researchInstructions||"";renderSavedResearchWebsites();
   const recommendations=LeadIntelMarket.buildResearchRecommendations(state.profile||{},state.market.signals||[],[...selectedSources],contentLanguage());$("research-recommendations").innerHTML=recommendations.length?recommendations.map(item=>`<div><strong>${esc(item.label)}</strong><span>${esc(item.reason)}</span></div>`).join(""):"<span>Select a source category to see the recommendation.</span>";
@@ -1223,11 +1285,12 @@ async function monitoringApi(path,options={},context=captureMonitoringContext())
 function monitoringFormSnapshot(){
   return JSON.stringify([...$("monitoring-settings").querySelectorAll("input,select,textarea")].map(input=>[input.id||input.dataset.monitorSignal||input.dataset.monitorSource,input.value,input.checked]));
 }
-function captureMonitoringContext(){return {market:state.market,workspace:window.LeadIntelServerBridge?.workspace?.id||"",account:window.localStorage?.getItem("leadintel_account_context_v1")||""};}
+function captureMonitoringContext(strategy=false){const bridge=window.LeadIntelServerBridge;return {workspace:bridge?.workspace?.id||'',user:bridge?.session?.user?.id||'',authenticated:bridge?.session?.authenticated,account:window.localStorage?.getItem('leadintel_account_context_v1')||'',...(strategy?{strategy:strategyIntegrity()?.signature(state)}:{})};}
 function monitoringContextCurrent(context){
-  if(!context||context.market!==state.market)return false;
-  const current=captureMonitoringContext();return context.workspace===current.workspace&&context.account===current.account;
+  if(!context)return false;const current=captureMonitoringContext();
+  return context.workspace===current.workspace&&context.user===current.user&&context.authenticated===current.authenticated&&context.account===current.account&&window.LeadIntelServerBridge?.ready!==false&&(!window.LeadIntelAccountCache||window.LeadIntelAccountCache.current())&&(!context.strategy||context.strategy===strategyIntegrity()?.signature(state));
 }
+
 function monitoringHasEdits(){return monitoringDraftMarket===state.market&&monitoringDraftBaseline!==null&&monitoringFormSnapshot()!==monitoringDraftBaseline;}
 function updateMonitoringDisclosure(){
   const open=!$("monitoring-settings").hidden,config=state.market.monitoring;
@@ -1235,7 +1298,7 @@ function updateMonitoringDisclosure(){
   const toggle=$("toggle-monitoring-settings");toggle.querySelector("[data-monitoring-action-label]").textContent=open?"Close settings":configured?"Edit settings":"Set up monitoring";toggle.querySelector("[aria-hidden]").textContent=open?"↑":"→";toggle.setAttribute("aria-expanded",String(open));
   const summary=$("monitoring-saved-summary");summary.hidden=!configured;
   const count=config.customSources?.length||0;
-  summary.textContent=`${count?`${count} website${count===1?"":"s"}`:"Selected source categories"} · ${config.frequency[0].toUpperCase()+config.frequency.slice(1)} · ${config.researchDepth==="deep"?"Deep":"Quick"} research`;
+  summary.textContent=`${count?`${count} website${count===1?"":"s"}`:"Selected source categories"} · ${config.frequency[0].toUpperCase()+config.frequency.slice(1)} UTC · ${config.researchDepth==="deep"?"Deep":"Quick"} research`;
   $("toggle-monitoring-settings").disabled=monitoringBusy;$("close-monitoring-settings").disabled=monitoringBusy;$("save-monitoring-close").disabled=monitoringBusy||(!state.market.strategyApproved&&!config.enabled);
   for(const id of ["discard-monitoring-close","keep-editing-monitoring"])$(id).disabled=monitoringBusy;
   $("monitoring-settings").querySelectorAll("input,select,textarea").forEach(input=>{input.disabled=monitoringBusy||(input.id==="monitoring-enabled"&&!state.market.strategyApproved&&!config.enabled);});
@@ -1255,48 +1318,47 @@ function renderMonitoringControls(){
   const selectedSignals=new Set(config.signalIds.length?config.signalIds:state.market.signals.filter(signal=>signal.active).map(signal=>signal.id));$("monitoring-signals").innerHTML=state.market.signals.filter(signal=>signal.active).map(signal=>`<label><input type="checkbox" data-monitor-signal value="${esc(signal.id)}" ${selectedSignals.has(signal.id)?"checked":""}> ${esc(signal.name)}</label>`).join("")||"<span>No active signals</span>";
   const selectedSources=new Set(config.sourceTypes);$("monitoring-sources").innerHTML=Object.keys(LeadIntelMarket.SOURCE_TYPES).map(source=>`<label><input type="checkbox" data-monitor-source value="${source}" ${selectedSources.has(source)?"checked":""}> ${source[0].toUpperCase()+source.slice(1)}</label>`).join("");
   }
-  const locked=!state.market.strategyApproved;$("monitoring-summary-status").textContent=monitoringBusy?"Saving…":locked&&!config.enabled?"Setup required":config.enabled?"Active":"Off";$("monitoring-enabled").disabled=monitoringBusy||(locked&&!config.enabled);$("save-monitoring").disabled=(locked&&!config.enabled)||monitoringBusy;$("run-monitoring-now").disabled=locked||monitoringBusy;$("monitoring-status").textContent=monitoringBusy?"Saving monitoring settings…":locked&&!config.enabled?"Activate the market strategy before enabling monitoring.":config.enabled?`Monitoring active · ${config.frequency}${config.nextRunAt?` · next run ${new Date(config.nextRunAt).toLocaleString()}`:""}`:"Monitoring is off.";
+  const locked=!strategyIntegrity()?.status(state).current;$("monitoring-summary-status").textContent=monitoringBusy?"Saving…":locked&&!config.enabled?"Setup required":config.enabled?"Active":"Off";$("monitoring-enabled").disabled=monitoringBusy||(locked&&!config.enabled);$("save-monitoring").disabled=(locked&&!config.enabled)||monitoringBusy;$("run-monitoring-now").disabled=locked||monitoringBusy;$("monitoring-status").textContent=monitoringBusy?"Saving monitoring settings…":locked&&!config.enabled?"Activate the market strategy before enabling monitoring.":config.enabled?`Monitoring active · ${config.frequency} · UTC${config.nextRunAt?` · next run ${new Date(config.nextRunAt).toLocaleString()}`:""}`:"Monitoring is off.";
   if(!preserveDraft&&!$("monitoring-settings").hidden){monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();}updateMonitoringDisclosure();
 }
 function readMonitoringEdits(persist=true){const sourceTypes=LeadIntelMarket.filterResearchSourceTypes([...document.querySelectorAll('[data-monitor-source]:checked')].map(input=>input.value),state.market.signals||[]);const config=LeadIntelMarket.normalizeMonitoring({enabled:$("monitoring-enabled").checked,frequency:$("monitoring-frequency").value,researchDepth:$("monitoring-depth").value,minimumScore:$("monitoring-minimum-score").value,sourceTypes,signalIds:[...document.querySelectorAll('[data-monitor-signal]:checked')].map(input=>input.value),customSources:$("monitoring-custom-sources").value.split(/\n/)});if(persist){state.market.monitoring=config;saveState();}return config;}
 function renderMonitoringAlerts(alerts=[]){$("monitoring-alerts").innerHTML=alerts.length?alerts.map(alert=>`<article class="monitor-alert"><div class="monitor-alert-head"><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><strong>${Number(alert.score)||0}/100</strong></div><p>${esc(alert.summary)}</p><span>${esc(new Date(alert.created_at).toLocaleString())}</span> ${alert.status==="new"?`<button type="button" data-monitor-alert-read="${esc(alert.id)}">Mark read</button>`:""}</article>`).join(""):'<div class="market-empty">No monitoring alerts yet.</div>';}
-function renderMonitoringHistory(runs=[]){$("monitoring-history").innerHTML=runs.length?runs.map(run=>`<div class="monitor-run"><span>${esc(run.trigger_type)} · ${esc(run.research_depth)} · ${esc(run.status)}</span><strong>${Number(run.source_count)||0} sources · ${Number(run.alert_count)||0} alerts</strong></div>`).join(""):'<div class="market-empty">No automatic runs yet.</div>';}
+function renderMonitoringHistory(runs=[]){$("monitoring-history").innerHTML=runs.length?runs.map(run=>`<div class="monitor-run"><span>${esc(run.trigger_type)} · ${esc(run.research_depth)} · ${esc(run.status)}${run.error_message?` · ${esc(run.error_message)}`:""}</span><strong>${Number(run.source_count)||0} sources · ${Number(run.alert_count)||0} alerts</strong></div>`).join(""):'<div class="market-empty">No automatic runs yet.</div>';}
 async function loadMonitoringServerState(force=false){
   if((monitoringContextCurrent(monitoringLoaded)||monitoringBusy)&&!force)return;
-  const context=captureMonitoringContext(),bridge=await waitForMarketServerBridge();
-  if(!monitoringContextCurrent(context))return;
+  const context=captureMonitoringContext(),serial=++monitoringRequestSerial,bridge=await waitForMarketServerBridge();
+  if(!monitoringContextCurrent(context)||serial!==monitoringRequestSerial)return;
   if(!bridge?.session?.authenticated||!bridge.workspace?.id){$("monitoring-status").textContent="Sign in to configure automatic monitoring.";return;}
   monitoringLoaded=context;
   try{
     const [config,alerts,runs]=await Promise.all([monitoringApi('/api/market-monitoring/config',{},context),monitoringApi('/api/market-monitoring/alerts',{},context),monitoringApi('/api/market-monitoring/runs',{},context)]);
-    if(!monitoringContextCurrent(context))return;
-    state.market.monitoring={...LeadIntelMarket.normalizeMonitoring(config.config),nextRunAt:config.config.nextRunAt||"",lastRunAt:config.config.lastRunAt||""};
-    saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);
-  }catch(error){
-    if(monitoringLoaded===context)monitoringLoaded=false;
-    if(monitoringContextCurrent(context))$("monitoring-status").textContent=error.message;
-  }
+    if(!monitoringContextCurrent(context)||serial!==monitoringRequestSerial)return;
+    state.market.monitoring=LeadIntelMarket.normalizeMonitoring(config.config);saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);
+  }catch(error){if(serial===monitoringRequestSerial){if(monitoringLoaded===context)monitoringLoaded=false;if(monitoringContextCurrent(context))$("monitoring-status").textContent=error.message;}}
 }
 async function saveMonitoringConfig({closeAfterSave=true}={}){
   if(monitoringBusy)return false;
-  if(!state.market.strategyApproved&&$("monitoring-enabled").checked){showToast("Activate the market strategy first");return false;}
-  const context=captureMonitoringContext(),previous=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);let failure='',succeeded=false;
+  const previous=LeadIntelMarket.normalizeMonitoring(state.market.monitoring),config=readMonitoringEdits(false),context=captureMonitoringContext(config.enabled),serial=++monitoringRequestSerial;let failure='',succeeded=false;
+  const operation=window.LeadIntelReliabilityTrace?.begin('strategy_monitoring');
   try{
-    const config=readMonitoringEdits(false);monitoringBusy=true;renderMonitoringControls();
-    if(config.enabled&&!config.signalIds.length)throw new Error("Select at least one signal to monitor");
-    if(config.enabled&&!config.sourceTypes.length&&!config.customSources.length)throw new Error("Select at least one source category or custom source");
-    const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();if(!monitoringContextCurrent(context))return false;if(!saved)throw new Error("Save the workspace before enabling monitoring");
-    const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})},context);
-    if(!monitoringContextCurrent(context))return false;
-    state.market.monitoring={...config,...(result.config?.enabled!==undefined?LeadIntelMarket.normalizeMonitoring(result.config):{}),nextRunAt:result.config.nextRunAt||"",lastRunAt:result.config.lastRunAt||""};saveState();
-    succeeded=true;monitoringDraftBaseline=null;
-    showToast(state.market.monitoring.enabled?"Automatic monitoring enabled":"Automatic monitoring disabled");return true;
-  }catch(error){if(monitoringContextCurrent(context)){state.market.monitoring=previous;$("monitoring-enabled").checked=previous.enabled;saveState();failure=error.message;showToast(failure);}return false;}
-  finally{monitoringBusy=false;renderMonitoringControls();if(monitoringContextCurrent(context)){if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}}
+    monitoringBusy=true;renderMonitoringControls();
+    if(config.enabled){const report=strategyIntegrity()?.status(state);if(!report?.current)throw Error(report?.reason||'Review and activate the current Strategy first.');if(window.LeadIntelServerBridge?.conflict)throw Error('Resolve workspace synchronization before enabling monitoring.');}
+    if(config.enabled&&!config.signalIds.length)throw Error('Select at least one signal to monitor');
+    if(config.enabled&&!config.sourceTypes.length&&!config.customSources.length)throw Error('Select at least one source category or custom source');
+    operation?.checkpoint('persistence','pending');
+    const result=await monitoringApi('/api/market-monitoring/config',{method:'PUT',body:JSON.stringify({revision:previous.revision,strategy_signature:config.enabled?strategyIntegrity().digest(context.strategy):undefined,enabled:config.enabled,frequency:config.frequency,research_depth:config.researchDepth,minimum_score:config.minimumScore,source_types:config.sourceTypes,signal_ids:config.signalIds,custom_sources:config.customSources})},context);
+    if(!monitoringContextCurrent(context)||serial!==monitoringRequestSerial)return false;
+    if(result.saved!==true||!result.config)throw Error('Monitoring save was not confirmed. Reload settings before retrying.');
+    state.market.monitoring=LeadIntelMarket.normalizeMonitoring(result.config);saveState();succeeded=true;monitoringDraftBaseline=null;monitoringLoaded=context;
+    showToast(state.market.monitoring.enabled?'Automatic monitoring enabled':'Automatic monitoring disabled');return true;
+  }catch(error){if(monitoringContextCurrent(context)&&serial===monitoringRequestSerial){state.market.monitoring=previous;$("monitoring-enabled").checked=previous.enabled;saveState();failure=error.message;showToast(failure);}return false;}
+  finally{operation?.finish(!monitoringContextCurrent(context)?'stale':succeeded?'pass':'fail');if(serial===monitoringRequestSerial)monitoringBusy=false;renderMonitoringControls();if(monitoringContextCurrent(context)){if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}}
 }
+
 async function runMonitoringNow(){
   if(monitoringBusy)return;if(monitoringHasEdits()){showToast("Save your monitoring changes before running.");return;}
-  const context=captureMonitoringContext();monitoringBusy=true;renderMonitoringControls();
+  const report=strategyIntegrity()?.status(state);if(!report?.current){showToast(report?.reason||'Review and activate Strategy first.');return false;}
+  const context=captureMonitoringContext(true);monitoringBusy=true;renderMonitoringControls();
   try{const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'},context);if(!monitoringContextCurrent(context))return;
     showToast(`Monitoring ${result.run.status||'completed'} · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);
   }catch(error){if(monitoringContextCurrent(context))showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}
@@ -1318,6 +1380,8 @@ function renderMarketStrategy(){
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
+  if(state.market.strategyApprovalInvalidated&&$("activate-market-strategy")?.dataset.activationBusy!=='true')setActivationFeedback(state.market.strategyApprovalInvalidated.reason,'warning');
+  const recoveryButton=$("download-strategy-recovery");if(recoveryButton)recoveryButton.hidden=!strategyRecoveryRecord();
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketConditions();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 let researchReportUi;
@@ -1473,46 +1537,31 @@ async function openDiscoveryAfterActivation(){
 }
 async function activateMarketStrategy(){
   if(!requireConfirmedTargeting())return false;
-  const button=$("activate-market-strategy");
-  const confirm=$("confirm-strategy-handoff");
-  if(button?.dataset.activationBusy==="true")return;
-  const model=strategyHandoffModel();
-  if(model.blockers.length){
-    renderStrategyHandoff();
-    if(state.market.researchContextStale){returnToProfileResearch();return false;}
-    const activeIcps=(state.market.icps||[]).some(x=>x.active!==false),activeSignals=(state.market.signals||[]).some(x=>x.active!==false);
-    if(!activeIcps||!activeSignals){closeStrategyHandoff();LeadIntelTargeting.focusControl(window,{step:4,selector:activeIcps?'[data-signal-field="active"]':'[data-icp-field="active"]',message:activeIcps?'Enable at least one buying signal before continuing.':'Enable at least one customer profile before continuing.'});}
-    return false;
-  }
-  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Companies…";}
-  if(confirm){confirm.disabled=true;confirm.textContent="Opening Companies…";}
-  setActivationFeedback(state.market.strategyApproved?"Strategy is active · opening Companies…":"Saving your strategy and opening Companies…","running");
+  const button=$("activate-market-strategy"),confirm=$("confirm-strategy-handoff");
+  if(button?.dataset.activationBusy==="true")return false;
+  const context=captureStrategyContext(),operation=window.LeadIntelReliabilityTrace?.begin('strategy_activation');let outcome='blocked',attemptedApproval=false;
   try{
-    if(!state.market.strategyApproved){
-      state.market.strategyApproved=true;
-      state.market.strategyApprovedAt=new Date().toISOString();
-      saveState();
-      void Promise.resolve().then(()=>window.LeadIntelWorkspacePersistence?.saveWorkspace?.()).catch(error=>console.warn("Market strategy cloud save deferred",error));
-    }
-    closeStrategyHandoff();
-    const opened=await openDiscoveryAfterActivation();
-    if(!opened){
-      setActivationFeedback("Companies did not open. Please try again.","error");
-      showToast("Companies did not open. Please try again.");
-      if(button){button.disabled=false;button.textContent="Try Companies Again →";}
-      return;
-    }
-    setActivationFeedback("Companies opened.","success");
-    showToast("Strategy approved · Companies are ready");
+    assertStrategyContext(context);
+    if(!strategyIntegrity())throw Error('Strategy verification is still loading. Retry in a moment.');
+    if(window.LeadIntelServerBridge?.conflict)throw Error('Resolve the workspace synchronization conflict before activating Strategy.');
+    if(!strategyReviewCurrent())throw Error('Strategy changed in another view. Reopen and review the saved Strategy before activating.');
+    const model=strategyHandoffModel();if(model.blockers.length){renderStrategyHandoff();if(state.market.researchContextStale)returnToProfileResearch();return false;}
+    const approval=strategyIntegrity().approval(state);if(!approval)throw Error(strategyIntegrity().requirements(state)?.reason||'Complete and review Strategy before activation.');
+    if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Companies…";}if(confirm){confirm.disabled=true;confirm.textContent="Opening Companies…";}
+    setActivationFeedback('Saving your reviewed Strategy…','running');
+    attemptedApproval=true;delete state.market.strategyApprovalInvalidated;state.market.strategyApproval=approval;state.market.strategyApproved=true;state.market.strategyApprovedAt=approval.approvedAt;saveState();
+    if(!strategyReviewCurrent()||!strategyIntegrity().status(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')).current)throw Error('Strategy approval could not be saved locally. Your reviewed work is retained.');
+    operation?.checkpoint('persistence','pending');await saveStrategyApproval(context);operation?.checkpoint('persistence','pass');assertStrategyContext(context);
+    closeStrategyHandoff();const opened=await openDiscoveryAfterActivation();assertStrategyContext(context);
+    if(!opened){setActivationFeedback('Companies did not open. Please try again.','error');showToast('Companies did not open. Please try again.');if(button){button.disabled=false;button.textContent='Try Companies Again →';}return false;}
+    outcome='pass';setActivationFeedback('Companies opened.','success');showToast('Strategy approved · Companies are ready');return true;
   }catch(error){
-    console.error("Market strategy activation failed",error);
-    setActivationFeedback("Activation failed · "+(error?.message||"Please try again"),"error");
-    showToast("Activation failed · "+(error?.message||"Please try again"));
-  }finally{
-    if(button)button.dataset.activationBusy="false";
-    if(confirm)confirm.disabled=false;
-  }
+    outcome=error.code==='STRATEGY_STALE'?'stale':'fail';
+    if(strategyContextCurrent(context)){if(attemptedApproval){state.market.strategyApproved=false;state.market.strategyApprovedAt='';try{if(strategyReviewCurrent())saveState();}catch{}}setActivationFeedback('Activation not confirmed · '+error.message,'error');showToast(error.message);}
+    return false;
+  }finally{operation?.finish(outcome);if(button){button.dataset.activationBusy='false';if(outcome!=='pass')button.disabled=false;}if(confirm)confirm.disabled=false;}
 }
+
 function resetCenterStatus(message="",tone=""){
   const node=$("reset-center-status");if(!node)return;
   node.textContent=message;node.dataset.tone=tone;
@@ -1592,6 +1641,7 @@ async function factoryResetLeadIntel(){
 }
 
 function bind(){
+  $("download-strategy-recovery")?.addEventListener("click",downloadStrategyRecovery);
   window.addEventListener("leadintel:workspace-changed",acceptCanonicalProfileEdits);
   $("company-website").addEventListener("input",()=>{
     // Editing an existing website is tentative until the field is committed. A partial

@@ -3,17 +3,21 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const {JSDOM}=require('jsdom');
+const I=require('../strategy-integrity.js'),Market=require('../market-engine.js');
+function serverConfig(body,revision=2){return Market.normalizeMonitoring({enabled:body.enabled,frequency:body.frequency,researchDepth:body.research_depth,minimumScore:body.minimum_score,sourceTypes:body.source_types,signalIds:body.signal_ids,customSources:body.custom_sources,revision});}
 const html=fs.readFileSync('customer/index.html','utf8');
 const app=fs.readFileSync('customer/app.js','utf8');
 function setup(){
  const window=new JSDOM(html,{url:"https://leadintel.test"}).window,document=window.document,$=id=>document.getElementById(id);
- const config={enabled:true,frequency:'weekly',researchDepth:'deep',minimumScore:70,sourceTypes:['news'],signalIds:['signal'],customSources:['https://example.com/news']};
- const state={market:{strategyApproved:true,signals:[{id:'signal',name:'Expansion',active:true}],monitoring:{...config}}};
+ const config={revision:1,enabled:true,frequency:'weekly',researchDepth:'deep',minimumScore:70,sourceTypes:['news'],signalIds:['signal'],customSources:['https://example.com/news']};
+ const state={website:'https://seller.example',approved:true,profile:{priorityOffers:'Industrial automation',targetMarkets:'Finland'},market:{strategyApproved:true,icps:[{id:'core',active:true}],signals:[{id:'signal',name:'Expansion',keywords:'expansion',weight:7,active:true}],monitoring:{...config}}};state.market.strategyApproval=I.approval(state);
+ window.LeadIntelStrategyIntegrity=I;window.LeadIntelServerBridge={ready:true,workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};window.LeadIntelAccountCache={current:()=>true};
  const calls=[];
- const context={window,document,$,state,monitoringBusy:false,monitoringDraftBaseline:null,monitoringDraftMarket:null,esc:String,saveState(){},showToast(){},LeadIntelMarket:{normalizeMonitoring:c=>({...config,...c}),SOURCE_TYPES:{news:{}},filterResearchSourceTypes:s=>s},monitoringApi:async(path,options)=>{calls.push(JSON.parse(options.body));return {config:{}};}};
+ const context={window,document,$,state,monitoringBusy:false,monitoringLoaded:false,monitoringRequestSerial:0,monitoringDraftBaseline:null,monitoringDraftMarket:null,esc:String,saveState(){},showToast(){},LeadIntelMarket:Market,waitForMarketServerBridge:async()=>window.LeadIntelServerBridge,monitoringApi:async(path,options={})=>{if(options.method==='PUT'){const body=JSON.parse(options.body);calls.push(body);return {saved:true,config:serverConfig(body)};}return path.endsWith('/config')?{config:{...config}}:path.endsWith('/alerts')?{alerts:[]}:{runs:[]};}};
  window.LeadIntelWorkspacePersistence={saveWorkspace:async()=>true};
  const dialog=$('monitoring-close-dialog');if(dialog){dialog.showModal=()=>dialog.open=true;dialog.close=()=>dialog.open=false;}
  vm.createContext(context);
+ vm.runInContext(app.slice(app.indexOf('function strategyIntegrity(){'),app.indexOf('function captureStrategyContext(')),context);
  vm.runInContext(app.slice((app.includes('function monitoringFormSnapshot(')?app.indexOf('function monitoringFormSnapshot('):app.indexOf('function renderMonitoringControls(')),app.indexOf('async function markMonitoringAlertRead(')),context);
  return {...context,context,calls};
 }
@@ -83,20 +87,20 @@ test('pending save freezes form and competing dialog actions, then returns focus
  let resolve;c.context.monitoringApi=()=>new Promise(r=>resolve=r);
  const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));
  for(const id of ['monitoring-frequency','monitoring-custom-sources','discard-monitoring-close','keep-editing-monitoring'])assert.equal(c.$(id).disabled,true,id);
- resolve({config:{}});await pending;
+ resolve({saved:true,config:{...c.state.market.monitoring,frequency:'daily',revision:2}});await pending;
  assert.equal(c.document.activeElement.id,'toggle-monitoring-settings');assert.equal(c.$('monitoring-frequency').disabled,false);
 });
 test('switching workspace state replaces old draft instead of retaining previous workspace inputs',()=>{
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-custom-sources').value='https://private-old.example';
- c.state.market={...c.state.market,monitoring:{...c.state.market.monitoring,customSources:['https://new.example']}};
- c.context.renderMonitoringControls();assert.equal(c.$('monitoring-custom-sources').value,'https://new.example');
+ c.state.market={...c.state.market,monitoring:{...c.state.market.monitoring,customSources:['https://new.example/']}};
+ c.context.renderMonitoringControls();assert.equal(c.$('monitoring-custom-sources').value,'https://new.example/');
 });
 test('late monitoring save cannot replace a newly loaded workspace or its saved configuration',async()=>{
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-frequency').value='daily';
  let resolve;c.context.monitoringApi=()=>new Promise(r=>resolve=r);
  const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));
- c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example']}};
- const next=c.state.market.monitoring;resolve({config:{enabled:true,frequency:'daily',customSources:['https://old.example']}});
+ c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example/']}};
+ c.window.LeadIntelServerBridge.workspace.id='w2';const next=c.state.market.monitoring;resolve({saved:true,config:{enabled:true,frequency:'daily',customSources:['https://old.example']}});
  assert.equal(await pending,false);assert.equal(c.state.market.monitoring.enabled,false);assert.equal(c.state.market.monitoring.frequency,next.frequency);
  assert.deepEqual(c.state.market.monitoring.customSources,next.customSources);
 });
@@ -104,26 +108,26 @@ test('failed old monitoring save cannot roll previous workspace configuration in
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
  let reject;c.context.monitoringApi=()=>new Promise((_,r)=>reject=r);
  const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));
- c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example']}};
- reject(Error('Workspace changed'));await pending;
+ c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example/']}};
+ c.window.LeadIntelServerBridge.workspace.id='w2';reject(Error('Workspace changed'));await pending;
  assert.equal(c.state.market.monitoring.enabled,false);assert.equal(c.state.market.monitoring.frequency,'monthly');
 });
-test('failed monitoring load retries and a new market reloads instead of sharing a global loaded flag',async()=>{
- const c=setup();c.context.monitoringLoaded=false;c.context.waitForMarketServerBridge=async()=>({session:{authenticated:true},workspace:{id:'a'}});
+test('failed monitoring load retries and a new workspace reloads confirmed server settings',async()=>{
+ const c=setup();c.context.monitoringLoaded=false;c.context.waitForMarketServerBridge=async()=>c.window.LeadIntelServerBridge;
  let attempts=0;c.context.monitoringApi=async()=>{attempts++;throw Error('offline');};
  await c.context.loadMonitoringServerState();await c.context.loadMonitoringServerState();assert.equal(attempts,6);
  c.context.monitoringApi=async()=>({config:{enabled:false,frequency:'monthly'},alerts:[],runs:[]});
  await c.context.loadMonitoringServerState();assert.equal(c.state.market.monitoring.frequency,'monthly');
- c.state.market={...c.state.market,monitoring:{enabled:false,frequency:'daily'}};
+ c.state.market={...c.state.market,monitoring:{enabled:false,frequency:'daily'}};c.window.LeadIntelServerBridge.workspace.id='w2';
  await c.context.loadMonitoringServerState();assert.equal(c.state.market.monitoring.frequency,'monthly');
 });
-test('delayed monitoring load does not write server config into replaced active market',async()=>{
- const c=setup();c.context.monitoringLoaded=false;c.context.waitForMarketServerBridge=async()=>({session:{authenticated:true},workspace:{id:'a'}});
+test('delayed monitoring load does not write server config after workspace changes',async()=>{
+ const c=setup();c.context.monitoringLoaded=false;c.context.waitForMarketServerBridge=async()=>c.window.LeadIntelServerBridge;
  // Resolve all three endpoints together after the state changes.
  const deferred=[];c.context.monitoringApi=()=>new Promise(r=>deferred.push(r));
  const pending=c.context.loadMonitoringServerState();await new Promise(r=>setImmediate(r));
- c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example']}};
- deferred.forEach(r=>r({config:{enabled:true,frequency:'daily'},alerts:[],runs:[]}));await pending;
+ c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly',customSources:['https://new.example/']}};
+ c.window.LeadIntelServerBridge.workspace.id='w2';deferred.forEach(r=>r({config:{enabled:true,frequency:'daily'},alerts:[],runs:[]}));await pending;
  assert.equal(c.state.market.monitoring.enabled,false);assert.equal(c.state.market.monitoring.frequency,'monthly');
 });
 test('failed immediate off save restores the confirmed switch while retaining other draft edits',async()=>{
@@ -146,9 +150,30 @@ test('a late old save releases the new workspace controls without closing its pa
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
  let resolve;c.context.monitoringApi=()=>new Promise(r=>resolve=r);
  const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));
- c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly'}};c.context.renderMonitoringControls();
+ c.state.market={strategyApproved:true,signals:[],monitoring:{enabled:false,frequency:'monthly'}};c.window.LeadIntelServerBridge.workspace.id='w2';c.context.renderMonitoringControls();
  assert.equal(c.$('toggle-monitoring-settings').disabled,true);
- resolve({config:{enabled:true}});await pending;
+ resolve({saved:true,config:{enabled:true,revision:2}});await pending;
  assert.equal(c.$('toggle-monitoring-settings').disabled,false);assert.equal(c.$('monitoring-frequency').disabled,false);
  assert.equal(c.$('monitoring-settings').hidden,false);assert.notEqual(c.$('monitoring-summary-status').textContent,'Saving…');
+});
+
+test('same-context market normalization does not discard a confirmed monitoring save',async()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-frequency').value='daily';let resolve,submitted;
+ c.context.monitoringApi=async(path,options)=>{submitted=JSON.parse(options.body);return new Promise(r=>resolve=r);};
+ const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));c.state.market=JSON.parse(JSON.stringify(c.state.market));
+ resolve({saved:true,config:serverConfig(submitted)});assert.equal(await pending,true);assert.equal(c.state.market.monitoring.frequency,'daily');assert.equal(c.state.market.monitoring.revision,2);assert.equal(c.$('monitoring-settings').hidden,true);
+});
+
+test('same-workspace material Strategy edit discards the old enabled monitoring response',async()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();c.$('monitoring-frequency').value='daily';let resolve,submitted;
+ c.context.monitoringApi=async(path,options)=>{submitted=JSON.parse(options.body);return new Promise(r=>resolve=r);};
+ const pending=c.context.saveMonitoringConfig();await new Promise(r=>setImmediate(r));c.state.profile.priorityOffers='New reviewed service';
+ resolve({saved:true,config:serverConfig(submitted)});assert.equal(await pending,false);assert.equal(c.state.market.monitoring.frequency,'weekly');assert.equal(c.state.profile.priorityOffers,'New reviewed service');assert.equal(c.$('monitoring-settings').hidden,false);
+});
+
+test('same-context market object replacement accepts the authoritative monitoring load',async()=>{
+ const c=setup(),deferred=[];c.context.monitoringApi=()=>new Promise(r=>deferred.push(r));
+ const pending=c.context.loadMonitoringServerState();await new Promise(r=>setImmediate(r));c.state.market=JSON.parse(JSON.stringify(c.state.market));
+ deferred.forEach(resolve=>resolve({config:{...c.state.market.monitoring,frequency:'daily',revision:3},alerts:[],runs:[]}));await pending;
+ assert.equal(c.state.market.monitoring.frequency,'daily');assert.equal(c.state.market.monitoring.revision,3);
 });

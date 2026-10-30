@@ -30,8 +30,8 @@ test('Market Research signs into the workspace before starting a degraded run an
   assert.match(app,/async function ensureMarketResearchWorkspace\(/);
   assert.match(app,/sessionStorage\.setItem\(MARKET_RESEARCH_RESUME_KEY/);
   assert.match(app,/bridge\?\.signIn\?\.\(\)/);
-  assert.match(block,/await ensureMarketResearchWorkspace\(state\.market\.researchMode\)/);
-  assert.ok(block.indexOf('await ensureMarketResearchWorkspace(state.market.researchMode)')<block.indexOf('researchStatus="running"'),'authentication must be checked before the research run is marked running');
+  assert.match(block,/marketResearchRequest\(run,signal=>ensureMarketResearchWorkspace\(mode,run.context,signal\)/);
+  assert.ok(block.indexOf('ensureMarketResearchWorkspace(mode,run.context,signal)')<block.indexOf('researchStatus="running"'),'authentication must be checked before the research run is marked running');
 });
 
 test('pending Market Research resumes only after an authenticated workspace is ready',()=>{
@@ -46,7 +46,7 @@ test('pending Market Research resumes only after an authenticated workspace is r
 
 test('each market query attempts OpenAI discovery and Firecrawl verification without invoking Apollo',()=>{
   const block=runMarketResearchBlock();
-  assert.match(block,/searchOpenAiWeb\(query/);
+  assert.match(block,/searchOpenAiWeb\(attempt===1\?query/);
   assert.match(block,/searchMarket\(query/);
   assert.match(block,/mergeResearchResults/);
   assert.doesNotMatch(block,/apollo|mixed_people|people\/search|crm-contact\/enrich/i);

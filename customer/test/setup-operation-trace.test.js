@@ -27,3 +27,8 @@ test('shared reliability trace attributes Profile decisions to stage two without
  const operation=root.LeadIntelReliabilityTrace.begin('profile_approval');operation.finish('blocked');
  const rows=root.LeadIntelReliabilityTrace.snapshot();assert.equal(rows.length,2);assert.ok(rows.every(row=>row.stage===2&&row.action==='profile_approval'));assert.equal(rows[1].outcome,'blocked');assert.equal(events.length,2);
 });
+test('Strategy diagnostics retain safe stage-three revision outcomes and keep account isolation',()=>{
+ const {root,events}=runtime();const operation=root.LeadIntelReliabilityTrace.begin('strategy_activation');operation.checkpoint('persistence','pending');operation.finish('stale');
+ const rows=root.LeadIntelReliabilityTrace.snapshot();assert.equal(rows.length,3);assert.ok(rows.every(row=>row.stage===3&&row.action==='strategy_activation'&&row.operationId.startsWith('strategy-')));assert.equal(rows.at(-1).outcome,'stale');assert.equal(events.length,3);
+ const old=root.LeadIntelReliabilityTrace.begin('strategy_monitoring');root.LeadIntelServerBridge.workspace.id='other';old.finish('pass');assert.equal(root.LeadIntelReliabilityTrace.snapshot().length,0);
+});
