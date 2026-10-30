@@ -12,7 +12,13 @@ const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].i
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
 let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
-let busy='';
+let busy='',busyOperation=null,serviceRequest=0,serviceEpoch=0,loadedContext='',observedContext='';
+function settingsContext(){return JSON.stringify([workspace()?.id||'',bridge()?.session?.user?.id||'',signedIn(),serviceEpoch]);}
+function settingsCurrent(context){return context===settingsContext()&&signedIn();}
+function beginOperation(provider){const operation={context:settingsContext(),provider};busyOperation=operation;busy=provider;return operation;}
+function finishOperation(operation,decorate=true){if(busyOperation!==operation)return;busyOperation=null;busy='';if(decorate&&settingsCurrent(operation.context))queueDecorate(true);}
+function prepareServiceContext(){const context=settingsContext();if(observedContext&&observedContext!==context)resetServiceContext();observedContext=context;return context;}
+function resetServiceContext(){++serviceRequest;busy='';busyOperation=null;loadedContext='';serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};confirmationLevel='provider_verified';apolloBudget={daily_credit_limit:3,monthly_credit_limit:30};apolloUsage={daily:0,monthly:0};for(const provider of Object.keys(errors))delete errors[provider];window.LeadIntelServiceIntegrationStatus=null;document.querySelectorAll('[data-service-extension="1"]').forEach(node=>node.remove());publishCalendly();queueDecorate(true);}
 let installed=false;
 let renderQueued=false;
 const errors=Object.create(null);
@@ -25,8 +31,11 @@ function isOwner(){return serviceStatus.role==='owner'||workspace()?.role==='own
 function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function apiUrl(path){const join=path.includes('?')?'&':'?';return `${API_BASE}${path}${join}workspace_id=${encodeURIComponent(workspace()?.id||'')}`;}
 async function api(path,options={}){
-  const response=await fetch(apiUrl(path),{credentials:'include',headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options});
-  const payload=await response.json().catch(()=>({}));return {response,payload};
+  const originContext=settingsContext(),trace=window.LeadIntelSetupTrace?.begin('service_settings');trace?.checkpoint('request','pending');
+  try{
+    const response=await fetch(apiUrl(path),{credentials:'include',...options,headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{}),...(trace?.id?{'X-LeadIntel-Operation-Id':trace.id}:{})}});
+    const payload=await response.json().catch(()=>({}));trace?.checkpoint('response',response.ok?'pass':'fail');trace?.finish(!settingsCurrent(originContext)?'stale':response.ok?'pass':'fail');return {response,payload};
+  }catch(error){trace?.finish(settingsCurrent(originContext)?'fail':'stale');throw error;}
 }
 function publishCalendly(){window.LeadIntelCalendlyStatus={...calendlyStatus,workspace_id:workspace()?.id||''};window.dispatchEvent(new CustomEvent('leadintel:calendly-status'));}
 function providerState(provider){return serviceStatus.providers.find(row=>row.provider===provider)||null;}
@@ -101,7 +110,7 @@ function decorateGoogleCard(){
   card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Connect with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
 }
 function decorateCards(){
-  if(!settingsDrawerOpen())return;
+  prepareServiceContext();if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   grid.querySelector('[data-integration="hunter"]')?.remove();
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
@@ -123,54 +132,64 @@ function decorateCards(){
 }
 function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
-  const requestedWorkspace=workspace()?.id;
+  const requestedWorkspace=workspace()?.id,originContext=prepareServiceContext(),serial=++serviceRequest;
   if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};window.LeadIntelServiceIntegrationStatus=null;publishCalendly();queueDecorate(true);return serviceStatus;}
   try{
     const [services,calendly,workflow,budget]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status'),api('/api/approved-workflow'),api('/api/enrichment-policy')]);
-    if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};window.LeadIntelServiceIntegrationStatus=serviceStatus;window.dispatchEvent(new CustomEvent('leadintel:service-status'));
+    if(!settingsCurrent(originContext)||serial!==serviceRequest)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');loadedContext=originContext;serviceStatus={...services.payload,workspace_id:requestedWorkspace};window.LeadIntelServiceIntegrationStatus=serviceStatus;window.dispatchEvent(new CustomEvent('leadintel:service-status'));
     if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'public_confirmed';
     if(budget.response.ok&&budget.payload.policy){apolloBudget=budget.payload.policy;apolloUsage=budget.payload.usage||{daily:0,monthly:0};}
     window.dispatchEvent(new CustomEvent('leadintel:contact-policy-changed'));
     if(calendly.response.ok)calendlyStatus=calendly.payload;else errors.calendly=calendly.payload.error||'Unable to load Calendly status';publishCalendly();
     queueDecorate(true);return serviceStatus;
-  }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
+  }catch(cause){if(!settingsCurrent(originContext)||serial!==serviceRequest)return serviceStatus;console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
 }
 // A saved or removed key makes the cached health observation stale: drop it so the fresh row renders now, and ask for a re-check.
 function credentialChanged(provider){if(window.LeadIntelIntegrationHealth&&provider in window.LeadIntelIntegrationHealth)window.LeadIntelIntegrationHealth[provider]=null;window.dispatchEvent(new CustomEvent('leadintel:service-credential-changed',{detail:{provider}}));}
 async function saveService(provider,button){
+  prepareServiceContext();
+  if(busy||!signedIn()||!isOwner())return;
   const input=document.querySelector(`[data-service-key="${provider}"]`);const apiKey=String(input?.value||'').trim();if(!apiKey){errors[provider]='Enter an API key first.';queueDecorate(true);return;}
-  busy=provider;errors[provider]='';if(button){button.disabled=true;button.textContent='Testing…';}
+  const operation=beginOperation(provider);let failed=false;errors[provider]='';if(button){button.disabled=true;button.textContent='Testing…';}
   try{
     const {response,payload}=await api('/api/integrations/services/provider',{method:'PUT',body:JSON.stringify({provider,api_key:apiKey})});
+    if(!settingsCurrent(operation.context))return;
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');if(input)input.value='';credentialChanged(provider);await refreshServiceStatus(false);
-  }catch(cause){errors[provider]=String(cause?.message||cause);busy='';if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors[provider])));node.textContent=errors[provider];}return;}
-  busy='';queueDecorate(true);
+  }catch(cause){if(!settingsCurrent(operation.context))return;failed=true;errors[provider]=String(cause?.message||cause);if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors[provider])));node.textContent=errors[provider];}}
+  finally{finishOperation(operation,!failed);}
 }
 async function saveCalendly(button){
+  prepareServiceContext();
+  if(busy||!signedIn()||!isOwner())return;
   const token=String(document.querySelector('[data-calendly-token]')?.value||'').trim();const schedulingUrl=String(document.querySelector('[data-calendly-url]')?.value||'').trim();
   if(!token){errors.calendly='Enter a Calendly personal access token first.';queueDecorate(true);return;}
-  busy='calendly';errors.calendly='';if(button){button.disabled=true;button.textContent='Connecting…';}
-  try{const {response,payload}=await api('/api/integrations/calendly/connect',{method:'PUT',body:JSON.stringify({personal_access_token:token,scheduling_url:schedulingUrl})});if(!response.ok)throw new Error(payload.error||'Calendly connection failed');calendlyStatus=payload;publishCalendly();queueDecorate(true);}
-  catch(cause){errors.calendly=String(cause?.message||cause);const node=document.querySelector('[data-service-error="calendly"]');if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors.calendly)));node.textContent=errors.calendly;}}
-  finally{busy='';queueDecorate(true);}
+  const operation=beginOperation('calendly');errors.calendly='';if(button){button.disabled=true;button.textContent='Connecting…';}
+  try{const {response,payload}=await api('/api/integrations/calendly/connect',{method:'PUT',body:JSON.stringify({personal_access_token:token,scheduling_url:schedulingUrl})});if(!settingsCurrent(operation.context))return;if(!response.ok)throw new Error(payload.error||'Calendly connection failed');calendlyStatus=payload;publishCalendly();queueDecorate(true);}
+  catch(cause){if(!settingsCurrent(operation.context))return;errors.calendly=String(cause?.message||cause);const node=document.querySelector('[data-service-error="calendly"]');if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors.calendly)));node.textContent=errors.calendly;}}
+  finally{finishOperation(operation);}
 }
 async function disconnectCalendly(){
-  if(!(await (window.LeadIntelDialogs?.confirm('Disconnect Calendly booking detection from this workspace?')??false)))return;
-  busy='calendly';queueDecorate(true);
-  try{const {response,payload}=await api('/api/integrations/calendly/disconnect',{method:'DELETE'});if(!response.ok)throw new Error(payload.error||'Unable to disconnect Calendly');calendlyStatus={role:serviceStatus.role,configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};publishCalendly();errors.calendly='';}
-  catch(cause){errors.calendly=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
+  prepareServiceContext();
+  if(busy||!signedIn()||!isOwner())return;const originContext=settingsContext();
+  if(!(await (window.LeadIntelDialogs?.confirm('Disconnect Calendly booking detection from this workspace?')??false))||!settingsCurrent(originContext)||busy)return;
+  const operation=beginOperation('calendly');queueDecorate(true);
+  try{const {response,payload}=await api('/api/integrations/calendly/disconnect',{method:'DELETE'});if(!settingsCurrent(originContext))return;if(!response.ok)throw new Error(payload.error||'Unable to disconnect Calendly');calendlyStatus={role:serviceStatus.role,configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};publishCalendly();errors.calendly='';}
+  catch(cause){if(settingsCurrent(originContext))errors.calendly=String(cause?.message||cause);}finally{finishOperation(operation);}
 }
 async function disconnectService(provider){
-  if(!(await (window.LeadIntelDialogs?.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`)??false)))return;
-  busy=provider;queueDecorate(true);
-  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';credentialChanged(provider);await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
+  prepareServiceContext();
+  if(busy||!signedIn()||!isOwner())return;const originContext=settingsContext();
+  if(!(await (window.LeadIntelDialogs?.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`)??false))||!settingsCurrent(originContext)||busy)return;
+  const operation=beginOperation(provider);queueDecorate(true);
+  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!settingsCurrent(originContext))return;if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';credentialChanged(provider);await refreshServiceStatus(false);}catch(cause){if(settingsCurrent(originContext))errors[provider]=String(cause?.message||cause);}finally{finishOperation(operation);}
 }
-window.LeadIntelServiceSettings={refresh:refreshServiceStatus,confirmationLevel:()=>serviceStatus.workspace_id===workspace()?.id?confirmationLevel:'provider_verified',apolloEnabled:kind=>serviceStatus.workspace_id===workspace()?.id&&providerState('apollo')?.metadata?.[kind==='phone'?'phone_enrichment_enabled':'email_enrichment_enabled']===true,hunterEnabled:()=>false};
+window.LeadIntelServiceSettings={refresh:refreshServiceStatus,confirmationLevel:()=>loadedContext===settingsContext()?confirmationLevel:'provider_verified',apolloEnabled:kind=>loadedContext===settingsContext()&&providerState('apollo')?.metadata?.[kind==='phone'?'phone_enrichment_enabled':'email_enrichment_enabled']===true,hunterEnabled:()=>false};
 function handleClick(event){
-  const button=event.target.closest('[data-service-action]');if(!button)return;
+  const button=event.target.closest('[data-service-action]');if(!button||button.disabled)return;
   if(button.dataset.serviceAction==='apollo-policy'){
-    const card=button.closest('[data-service-provider="apollo"]');busy='apollo';button.disabled=true;
-    void api('/api/integrations/services/apollo/settings',{method:'PUT',body:JSON.stringify({discovery:card.querySelector('[data-apollo-discovery]').checked,email:card.querySelector('[data-apollo-email]').checked,phone:card.querySelector('[data-apollo-phone]').checked,daily_limit:Number(card.querySelector('[data-apollo-daily]').value),monthly_limit:Number(card.querySelector('[data-apollo-monthly]').value)})}).then(async({response,payload})=>{if(!response.ok)throw new Error(payload.error);await refreshServiceStatus(false);window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}).catch(error=>{errors.apollo=error.message;}).finally(()=>{busy='';queueDecorate(true);});return;
+    prepareServiceContext();
+    if(busy||!signedIn()||!isOwner())return;const operation=beginOperation('apollo');const card=button.closest('[data-service-provider="apollo"]');button.disabled=true;
+    void api('/api/integrations/services/apollo/settings',{method:'PUT',body:JSON.stringify({discovery:card.querySelector('[data-apollo-discovery]').checked,email:card.querySelector('[data-apollo-email]').checked,phone:card.querySelector('[data-apollo-phone]').checked,daily_limit:Number(card.querySelector('[data-apollo-daily]').value),monthly_limit:Number(card.querySelector('[data-apollo-monthly]').value)})}).then(async({response,payload})=>{if(!settingsCurrent(operation.context))return;if(!response.ok)throw new Error(payload.error);await refreshServiceStatus(false);if(settingsCurrent(operation.context))window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}).catch(error=>{if(settingsCurrent(operation.context))errors.apollo=error.message;}).finally(()=>finishOperation(operation));return;
   }
   if(button.dataset.serviceAction==='google-signin'){connectGoogle();return;}
   if(button.dataset.serviceAction==='calendly-save'){saveCalendly(button);return;}
@@ -181,6 +200,7 @@ function handleClick(event){
 function bind(){
   if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);
   const observer=new MutationObserver(()=>{if(needsDecoration())queueDecorate();});observer.observe(document.body,{childList:true,subtree:true});
+  for(const event of ['leadintel:workspace-changed','leadintel:workspace-reset'])window.addEventListener(event,()=>{++serviceEpoch;resetServiceContext();void refreshServiceStatus(false);});
   window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));window.addEventListener('leadintel:integration-health',()=>queueDecorate(true));
   document.addEventListener('click',event=>{if(event.target.closest('#open-settings'))setTimeout(()=>refreshServiceStatus(false),0);if(event.target.closest('#test-all-integrations'))setTimeout(()=>refreshServiceStatus(true),0);});
   if(signedIn())refreshServiceStatus(false);else queueDecorate(true);

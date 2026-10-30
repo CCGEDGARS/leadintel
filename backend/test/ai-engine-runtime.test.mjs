@@ -11,3 +11,53 @@ test('Claude primary and Gemini search specialist work without an OpenAI credent
 test('credential save preserves activation committed immediately before the upsert',async()=>{const {env,DB,add}=await setup();await add('openai',1);await add('anthropic');const batch=DB.batch.bind(DB);DB.batch=async statements=>{DB.raw.exec("UPDATE workspace_ai_integrations SET active=0; UPDATE workspace_ai_integrations SET active=1 WHERE provider='anthropic'");return batch(statements);};const old=globalThis.fetch;globalThis.fetch=async()=>Response.json({content:[{type:'text',text:'OK'}]});try{const r=await handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',api_key:'new-test-key',model:'claude-sonnet-5-5',make_active:false},'PUT'),env);assert.equal(r.status,200);assert.equal((await r.json()).active,true);assert.equal(DB.raw.prepare('SELECT provider FROM workspace_ai_integrations WHERE active=1').get().provider,'anthropic');}finally{globalThis.fetch=old;}});
 
 test('web-search returns 409 and makes no provider call when neither OpenAI nor Gemini is connected',async()=>{const {env,add}=await setup();await add('anthropic',1);const calls=[];const old=globalThis.fetch;globalThis.fetch=async(url)=>{calls.push(String(url));return Response.json({});};try{const r=await handleAiRoute(req('/api/ai/web-search',{query:'Company project'}),env);assert.equal(r.status,409);const body=await r.json();assert.equal(body.code,'AI_SEARCH_PROVIDER_NOT_CONNECTED');assert.match(body.error,/Connect OpenAI or Google Gemini/);assert.equal(calls.length,0);}finally{globalThis.fetch=old;}});
+
+test('AI reconnect verification cannot restore a disconnected credential',async()=>{
+ const {env,DB,add}=await setup();await add('anthropic',1);const old=globalThis.fetch;
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return Response.json({content:[{type:'text',text:'OK'}]});};
+ try{
+  const pending=handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',api_key:'replacement-ai-key',model:'claude-sonnet-5-5'},'PUT'),env);await entered;
+  assert.equal((await handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic'},'DELETE'),env)).status,200);release();
+  assert.equal((await pending).status,409);assert.equal(DB.raw.prepare('SELECT count(*) n FROM workspace_ai_integrations').get().n,0);
+ }finally{release();globalThis.fetch=old;}
+});
+
+test('late AI model verification cannot replace a newer saved model',async()=>{
+ const {env,DB,add}=await setup();await add('anthropic',1);const old=globalThis.fetch;
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async(_,options)=>{if(JSON.parse(options.body).model==='claude-slow-model'){started();await waiting;}return Response.json({content:[{type:'text',text:'OK'}]});};
+ try{
+  const pending=handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',model:'claude-slow-model'},'PATCH'),env);await entered;
+  assert.equal((await handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',model:'claude-newer-model'},'PATCH'),env)).status,200);release();
+  assert.equal((await pending).status,409);assert.equal(DB.raw.prepare("SELECT model FROM workspace_ai_integrations WHERE provider='anthropic'").get().model,'claude-newer-model');
+ }finally{release();globalThis.fetch=old;}
+});
+
+test('AI connection verification redacts network errors and correlates the failed operation',async()=>{
+ const {env,DB}=await setup(),old=globalThis.fetch;globalThis.fetch=async()=>{throw Error('private-ai-api-key in request https://private.example.test');};
+ try{
+  const request=req('/api/integrations/ai/provider',{provider:'anthropic',api_key:'private-ai-api-key',model:'claude-sonnet-5-5'},'PUT');request.headers.set('X-LeadIntel-Operation-Id','setup-ai-check-1234');
+  const response=await handleAiRoute(request,env);assert.equal(response.status,422);assert.doesNotMatch(await response.text(),/private-ai-api-key|private.example/);assert.equal(response.headers.get('X-LeadIntel-Operation-Id'),'setup-ai-check-1234');
+  const events=DB.raw.prepare('SELECT event_type,metadata_json FROM audit_events ORDER BY rowid').all();assert.deepEqual(events.map(e=>e.event_type),['ai.provider_check_started','ai.provider_check_failed']);assert.ok(events.every(e=>JSON.parse(e.metadata_json).operation_id==='setup-ai-check-1234'));
+ }finally{globalThis.fetch=old;}
+});
+
+for(const method of ['PUT','PATCH'])for(const [revocation,sql,status] of [
+ ['membership removal',"DELETE FROM workspace_members WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['owner demotion',"UPDATE workspace_members SET role='viewer' WHERE workspace_id='w1' AND user_id='u1'",403],
+ ['session deletion',"DELETE FROM sessions",401],
+ ['session expiry',"UPDATE sessions SET expires_at=datetime('now','-1 day')",401]
+])test('AI '+method+' rejects '+revocation+' during provider verification',async()=>{
+ const {env,DB,add}=await setup();await add('anthropic',1);const old=globalThis.fetch,before=DB.raw.prepare("SELECT * FROM workspace_ai_integrations WHERE provider='anthropic'").get();
+ let release,started;const entered=new Promise(resolve=>{started=resolve;}),waiting=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async()=>{started();await waiting;return Response.json({content:[{type:'text',text:'OK'}]});};
+ try{
+  const pending=handleAiRoute(req('/api/integrations/ai/provider',{provider:'anthropic',api_key:'revoked-ai-replacement',model:'claude-new-model'},method),env);await entered;DB.raw.exec(sql);
+  if(status===401)DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'u1',datetime('now','+1 day'))").run(await sha256('different-valid-session'));
+  release();const response=await pending;assert.equal(response.status,status);
+  assert.deepEqual(DB.raw.prepare("SELECT * FROM workspace_ai_integrations WHERE provider='anthropic'").get(),before);
+  assert.equal(DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type IN ('ai.provider_saved','ai.provider_model_updated')").get().n,0);
+  const event=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='ai.provider_authorization_revoked'").get();assert.equal(JSON.parse(event.metadata_json).reason,status===401?'session_expired_or_revoked':'workspace_owner_revoked');
+ }finally{release();globalThis.fetch=old;}
+});

@@ -226,7 +226,7 @@ function readSources(){
   const isolation=window.LeadIntelWorkspaceIsolation;
   const sameCompany=Boolean(previousWebsite&&enteredWebsite&&isolation?.canonicalDomain(previousWebsite)===isolation?.canonicalDomain(enteredWebsite));
   state.website=sameCompany?previousWebsite:enteredWebsite;
-  const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
+  const additionalLinks=$("additional-links");if(additionalLinks)state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
   if(previousWebsite&&state.website!==previousWebsite){
     if(!isolation||isolation.canonicalDomain(previousWebsite)!==isolation.canonicalDomain(state.website))isolation?.clearDerivedWorkspaceData?.(localStorage);
     invalidateStrategicOutputs(true);

@@ -3,10 +3,10 @@ import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2
 
 const SUPPORT_MODULES=[
   './website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1',
-  './website-input-sync.js?v=20261006-sender-identity-v1',
+  './website-input-sync.js?v=20261006-sender-identity-v1&setup-audit=20261030-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
-  './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1&optional-verification=20261014-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&paid-settings-removed=20261021-v1&treg-paid-search=20261021-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1',
+  './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1&optional-verification=20261014-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&paid-settings-removed=20261021-v1&treg-paid-search=20261021-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1&setup-audit=20261030-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './company-brain.js?v=20261001-adaptive-business-context-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',

@@ -21,9 +21,10 @@
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function normalizeUrl(value){
     const raw=clean(value);if(!raw)return "";
+    if(/^[a-z][a-z\d+.-]*:/i.test(raw)&&!/^https?:\/\//i.test(raw)&&!/^[^/?#:\s]+:\d+(?:[/?#]|$)/.test(raw))return "";
     try{
       const url=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);
-      if(!["http:","https:"].includes(url.protocol)||!url.hostname.includes("."))return "";
+      if(!["http:","https:"].includes(url.protocol)||!url.hostname.includes(".")||url.username||url.password)return "";
       url.hash="";return url.href;
     }catch{return "";}
   }
@@ -146,16 +147,19 @@
       clearTimeout(timeout);
     }
   }
-  async function savePersistenceWithTimeout(){
+  async function savePersistenceWithTimeout(assertCurrent){
     const persistence=root.LeadIntelWorkspacePersistence;
-    const save=()=>persistence?.saveWorkspace?persistence.saveWorkspace():root.LeadIntelServerBridge?.saveNow?.();
-    if(typeof save!=="function")return;
+    const save=typeof persistence?.saveWorkspace==="function"?()=>persistence.saveWorkspace():typeof root.LeadIntelServerBridge?.saveNow==="function"?()=>root.LeadIntelServerBridge.saveNow():null;
+    if(!save)return;
     let timer;
     try{
-      await Promise.race([
-        Promise.resolve().then(save),
+      const result=await Promise.race([
+        Promise.resolve().then(()=>{assertCurrent();return save();}),
         new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Workspace save timed out")),PERSISTENCE_TIMEOUT_MS);})
       ]);
+      if(result!==true&&result?.saved!==true)throw new Error("Workspace could not be saved");
+    }catch(error){
+      throw new Error(`Website evidence is loaded in this browser, but the workspace save failed: ${clean(error?.message)||"unknown save error"}. Retry Save workspace.`);
     }finally{
       clearTimeout(timer);
     }
@@ -186,13 +190,22 @@
   async function activateWebsite(){
     if(running)return false;const url=visibleWebsite(),button=root?.document?.getElementById("activate-website");
     if(!url){activationError="Enter a valid website URL first.";setStatus("error",activationError);return false;}
+    if(root.LeadIntelServerBridge?.ready===false){activationError="Workspace is still loading. Wait for it to finish, then activate the website again.";setStatus("error",activationError);return false;}
     const accountContext=root.localStorage.getItem('leadintel_account_context_v1');
     const workspaceId=root.LeadIntelServerBridge?.workspace?.id||'';
+    const session=()=>JSON.stringify([root.LeadIntelServerBridge?.session?.authenticated,root.LeadIntelServerBridge?.session?.user?.id]);
+    const accountSession=session();
+    const operation=root.LeadIntelSetupTrace?.begin('website_activation');
+    const contextCurrent=()=>sameUrl(visibleWebsite(),url)&&accountContext===root.localStorage.getItem('leadintel_account_context_v1')&&workspaceId===(root.LeadIntelServerBridge?.workspace?.id||'')&&accountSession===session()&&root.LeadIntelServerBridge?.ready!==false&&(!root.LeadIntelAccountCache||root.LeadIntelAccountCache.current());
+    const assertCurrent=()=>{if(!contextCurrent())throw new Error('Workspace or website changed while loading. Your saved work was preserved; activate the current website again.');};
     activationError="";running=true;if(button){button.disabled=true;button.textContent="Activating…";}setStatus("loading","Connecting to the website and loading public company evidence…");
     try{
+      assertCurrent();
+      operation?.checkpoint('request','pending');
       const source=await scrapeWebsite(url);
       // A response for the previous URL/account must never clear the current workspace.
-      if(!sameUrl(visibleWebsite(),url)||accountContext!==root.localStorage.getItem('leadintel_account_context_v1')||workspaceId!==(root.LeadIntelServerBridge?.workspace?.id||'')||(root.LeadIntelAccountCache&&!root.LeadIntelAccountCache.current()))throw new Error('Workspace or website changed while loading. Your saved work was preserved; activate the current website again.');
+      assertCurrent();
+      operation?.checkpoint('response','pass');
       const current=readState(),sameCompany=isSameCompanyActivation(current,source.url);
       const at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(current,source,at);
       if(!sameCompany)clearDerivedWorkspaceData();
@@ -207,10 +220,14 @@
           root.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'website-evidence-refresh'}}));
         }else root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail}));
       }catch{}
+      assertCurrent();
       returnToWebsiteStep();
-      try{await savePersistenceWithTimeout();}catch{}
+      operation?.checkpoint('persistence','pending');
+      await savePersistenceWithTimeout(assertCurrent);
+      assertCurrent();
+      operation?.checkpoint('persistence','pass');operation?.finish('pass');
       activationError="";setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;
-    }catch(error){activationError=`Activation failed · ${clean(error?.message)||"Website could not be read"}`;setStatus("error",activationError);return false;}
+    }catch(error){operation?.finish(contextCurrent()?'fail':'stale');if(!contextCurrent()){activationError="";return false;}activationError=`Activation failed · ${clean(error?.message)||"Website could not be read"}`;setStatus("error",activationError);return false;}
     finally{running=false;render();}
   }
   function guardProtectedNavigation(event){

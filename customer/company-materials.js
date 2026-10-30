@@ -1,19 +1,26 @@
 (function(root){
  'use strict';
  const maxBytes=15*1024*1024;
- function createApi(workspace,fetchImpl=root.fetch.bind(root)){
-  async function request(path='',method='GET',body){const response=await fetchImpl('/api/company-materials'+path+'?workspace_id='+encodeURIComponent(workspace),{method,credentials:'include',headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)}),data=await response.json();if(!response.ok)throw Error(data.error||'Could not load company materials. Retry.');return data;}
+ function createApi(workspace,fetchImpl=root.fetch.bind(root),isCurrent=()=>true){
+  const check=()=>{if(!isCurrent())throw Error('Account or workspace changed. Retry company materials in the current context.');};
+  async function request(path='',method='GET',body){check();const response=await fetchImpl('/api/company-materials'+path+'?workspace_id='+encodeURIComponent(workspace),{method,credentials:'include',headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)}),data=await response.json();check();if(!response.ok)throw Error(data.error||'Could not load company materials. Retry.');return data;}
   return {list:()=>request(),extracted:id=>request('/'+encodeURIComponent(id)+'/extracted'),originalUrl:id=>'/api/company-materials/'+encodeURIComponent(id)+'/original?workspace_id='+encodeURIComponent(workspace),remove:card=>request('/'+encodeURIComponent(card.id),'DELETE',{expectedRevision:card.revision}),retry:card=>request('/'+encodeURIComponent(card.id)+'/retry','POST',{expectedRevision:card.revision}),upload:async file=>{
+   const operation=root.LeadIntelSetupTrace?.begin('material_upload');try{
    if(file.size>maxBytes)throw Error(file.name+': maximum file size is 15 MB');
+   operation?.checkpoint('request','pending');
    const authorization=await request('/upload-ticket','POST',{}),url=new URL(authorization.uploadUrl);if(url.origin!=='https://leadintel-api.edgars-7e7.workers.dev'||url.pathname!=='/company-material-upload')throw Error('Invalid private upload endpoint');
-   const form=new FormData();form.set('ticket',authorization.ticket);form.set('file',file);const response=await fetchImpl(url.href,{method:'POST',credentials:'omit',body:form,signal:AbortSignal.timeout(120000)}),data=await response.json();if(!response.ok)throw Error(data.error||'Upload failed. Select the file again.');return data;
+   check();operation?.checkpoint('response','pass');const form=new FormData();form.set('ticket',authorization.ticket);form.set('file',file);operation?.checkpoint('persistence','pending');const response=await fetchImpl(url.href,{method:'POST',credentials:'omit',body:form,signal:AbortSignal.timeout(120000)}),data=await response.json();check();if(!response.ok)throw Error(data.error||'Upload failed. Select the file again.');operation?.checkpoint('persistence','pass');operation?.finish('pass');return data;
+   }catch(error){operation?.finish(isCurrent()?'fail':'stale');throw error;}
   }};
  }
- function mount({document,currentWorkspace,fetchImpl=root.fetch?.bind(root),confirm=message=>root.LeadIntelDialogs?.confirm({title:'Delete material?',message,confirmLabel:'Delete material',danger:true})}={}){
+ function mount({document,currentWorkspace,currentUser=()=>root.LeadIntelServerBridge?.session?.user?.id||'',fetchImpl=root.fetch?.bind(root),confirm=message=>root.LeadIntelDialogs?.confirm({title:'Delete material?',message,confirmLabel:'Delete material',danger:true})}={}){
   const host=document.getElementById('company-material-list'),status=document.getElementById('company-material-status'),input=document.getElementById('pdf-input');if(!host||!status)return null;
-  let workspace='',api=null,cards=[],generation=0,busy=false,alive=true,loaded=false,lastPoll=0;
+  const runtime=document.defaultView||root;
+  const ticket=()=>{try{return runtime.localStorage?.getItem('leadintel_account_context_v1')||'';}catch{return '';}};
+  const accountReady=()=>!runtime.LeadIntelAccountCache||runtime.LeadIntelAccountCache.current();
+  let workspace='',user='',accountTicket='',api=null,cards=[],generation=0,busy=false,alive=true,loaded=false,lastPoll=0;
   const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;};
-  const valid=(owner,token)=>alive&&workspace===owner&&currentWorkspace()===owner&&generation===token;
+  const valid=(owner,token)=>alive&&accountReady()&&accountTicket===ticket()&&workspace===owner&&currentWorkspace()===owner&&currentUser()===user&&generation===token;
   const say=text=>{status.textContent=text;};
   function paint(){
    host.replaceChildren();if(input)input.disabled=!workspace||busy;
@@ -37,7 +44,7 @@
   }
   async function mutate(run,message){if(busy||!workspace)return;const owner=workspace,token=generation;busy=true;paint();try{const data=await run();if(!valid(owner,token))return;cards=data.cards;loaded=true;paint();say(message);}catch(e){if(valid(owner,token))say(e.message);}finally{if(valid(owner,token)){busy=false;paint();}}}
   async function sync({refresh=false}={}){
-   if(!alive)return;const next=currentWorkspace()||'';if(next!==workspace){generation++;workspace=next;api=next?createApi(next,fetchImpl):null;cards=[];busy=false;loaded=false;paint();}else if(!refresh&&(loaded&&!cards.some(c=>['Processing','Uploading','Deleting'].includes(c.status))||Date.now()-lastPoll<5000))return;
+   if(!alive)return;const next=accountReady()?currentWorkspace()||'':'',nextUser=currentUser(),nextTicket=ticket();if(next!==workspace||nextUser!==user||nextTicket!==accountTicket){generation++;workspace=next;user=nextUser;accountTicket=nextTicket;api=next?createApi(next,fetchImpl,()=>alive&&accountReady()&&ticket()===nextTicket&&currentWorkspace()===next&&currentUser()===nextUser):null;cards=[];busy=false;loaded=false;paint();}else if(!refresh&&(loaded&&!cards.some(c=>['Processing','Uploading','Deleting'].includes(c.status))||Date.now()-lastPoll<5000))return;
    if(!workspace){paint();return;}if(busy)return;const owner=workspace,token=++generation;lastPoll=Date.now();try{const data=await api.list();if(!valid(owner,token))return;cards=data.cards;loaded=true;paint();say(cards.some(c=>c.status==='Processing')?'Analysis runs automatically. Ready references will be chosen when relevant.':'Ready references are selected automatically when relevant to your message.');}catch(e){if(valid(owner,token))say(e.message);}
   }
   async function upload(files){

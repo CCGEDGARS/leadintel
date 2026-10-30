@@ -5,12 +5,14 @@ const path=require('node:path');
 const vm=require('node:vm');
 
 const source=fs.readFileSync(path.join(__dirname,'..','ai-settings.js'),'utf8');
+const settingsScopeFunctions=source.slice(source.indexOf('function settingsContext(){'),source.indexOf('function prepareSettingsContext(){'));
 const apolloFunction=source.slice(source.indexOf('async function checkApolloStatus(){'),source.indexOf('async function checkFirecrawlStatus(){'));
 const cardFunction=source.slice(source.indexOf('function providerCard(config,current){'),source.indexOf('function formatDate(value){'));
 
 async function apollo({usage={daily:0,monthly:0},policy={daily_credit_limit:10,monthly_credit_limit:100},provider={provider:'apollo',configured:true,source:'customer',state:'good'}}={}){
-  const context={api:async route=>route==='/api/enrichment-policy'?{response:{ok:true},payload:{configured:true,usage,policy}}:{response:{ok:true},payload:{providers:[{configured:provider.source==='customer',...provider}]}}};
-  vm.runInNewContext(`${apolloFunction}\nglobalThis.run=checkApolloStatus`,context);
+  const serverBridge={workspace:{id:'credit-health-workspace',role:'owner'},session:{authenticated:true,user:{id:'credit-health-user'}}};
+  const context={settingsEpoch:0,bridge:()=>serverBridge,workspace:()=>serverBridge.workspace,signedIn:()=>Boolean(serverBridge.session.authenticated&&serverBridge.workspace?.id),api:async route=>route==='/api/enrichment-policy'?{response:{ok:true},payload:{configured:true,usage,policy}}:{response:{ok:true},payload:{providers:[{configured:provider.source==='customer',...provider}]}}};
+  vm.runInNewContext(`${settingsScopeFunctions}\n${apolloFunction}\nglobalThis.run=checkApolloStatus`,context);
   return context.run();
 }
 

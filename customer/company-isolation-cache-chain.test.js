@@ -7,12 +7,12 @@ const processMap=fs.readFileSync(path.join(__dirname,"process-map.js"),"utf8");
 
 assert.match(
   index,
-  /process-map\.js\?v=20260917-shell-stability-v1/,
+  /<script defer src="process-map\.js\?v=[^"\s]+"/,
   "the HTML entry point must load the stable journey shell"
 );
 assert.match(
   index,
-  /website-activation\.js\?v=20260916-ercon-context-v1/,
+  /<script defer src="website-activation\.js\?v=[^"\s]+&setup-audit=20261030-v1"/,
   "website activation must load directly without waiting on optional modules"
 );
 
