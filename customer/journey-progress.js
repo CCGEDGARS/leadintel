@@ -72,7 +72,7 @@
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
         step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'}),
-        step('buyer-quality','Buyer research quality requirements met',buyerQualityPassed,{action:'Complete the buyer quality check and resolve its unmet requirements'})
+        step('buyer-quality',buyerQualityPassed?'Buyer research quality requirements met':'Buyer research quality needs review',buyerQualityPassed,{action:'Complete the buyer quality check and resolve its unmet requirements'})
       ],
       6:[
         step('brand','Sender identity configured',main.brandIdentity?.status==='ready',{optional:true,action:'Configure sender identity in Messages'}),
@@ -134,6 +134,7 @@
       const next=model.find(candidate=>candidate.id>stage.id&&candidate.available&&!candidate.requiredComplete);
       if(next){stage.nextAction=`Continue to ${next.name}`;stage.nextTarget={stageId:next.id,itemId:next.nextTarget?.itemId||''};}
     }
+    if(input.syncConflict)for(const stage of model)if(stage.active){stage.nextAction='Resolve workspace synchronization';stage.nextTarget={stageId:stage.id,itemId:'sync-review'};}
     return model;
   }
 

@@ -540,3 +540,21 @@ test('workspace state response-body stalls retain the network deadline before ac
  assert.equal(outcome?.error?.code,'request_timeout');assert.equal(bridge.stateVersion,3);
  releaseBody({saved:true,version:4});await saving;await new Promise(resolve=>setImmediate(resolve));assert.equal(bridge.stateVersion,3,'late acknowledgement cannot become an accepted success');assert.notEqual(root.LeadIntelWorkspacePersistence.syncedBase('w1')?.version,4,'a canceled late read cannot publish a synced browser snapshot');
 });
+
+test('first concurrent buyer lists survive 409 reconciliation, acknowledged save and reload',async()=>{
+ const DISC='leadintel_customer_v2_discovery',puts=[];let server;
+ const h=load(async(_url,options={})=>{
+  if(options.method==='PUT'){puts.push(JSON.parse(options.body));return Response.json(puts.length===1?{current:server}:{saved:true,version:5},{status:puts.length===1?409:200});}
+  return Response.json(server);
+ },{withBridge:true});
+ const base=establishBase(h.root,h.values);
+ h.values.set(DISC,JSON.stringify({people:[{id:'anna',name:'Anna Buyer',publicEmail:'anna@buyer.example',publicEmailUrl:'https://buyer.example/team'}]}));
+ server={version:4,payload:{...base,discovery:{people:[{id:'bob',name:'Bob Buyer',publicPhone:'+37120000001'}]}}};
+ Object.assign(h.root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const saved=await h.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});assert.equal(saved.saved,true);assert.equal(puts.length,2);
+ assert.deepEqual(puts[1].payload.discovery.people.map(p=>p.id),['anna','bob']);
+ const reloaded=load(async()=>Response.json({version:5,payload:puts[1].payload}),{withBridge:true,sharedValues:h.values});
+ assert.equal(JSON.parse(reloaded.values.get(DISC)).people.length,2);
+ const ack=reloaded.root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.equal(ack.version,5);assert.equal(ack.payload.discovery.people[0].publicEmail,'anna@buyer.example');
+ assert.ok(h.values.get(RECOVERY));
+});

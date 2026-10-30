@@ -24,7 +24,7 @@
     const checks=[];
     const session=context.session||{};
     checks.push(check('workspace-loaded','Workspace loaded',context.storageValid!==false&&session.ready===true,context.storageValid===false?'Workspace data could not be read. Reopen the page; your saved work is preserved.':'Wait for the workspace to load.',{state:context.storageValid===false?'blocked':session.ready?'blocked':'preparing'}));
-    checks.push(check('workspace-sync','Workspace synchronized',!session.conflict&&!session.resolvingSync,'Resolve workspace synchronization. Your local work is preserved.',{state:session.resolvingSync?'preparing':'blocked',target:{id:'server-conflict-actions'}}));
+    checks.push(check('workspace-sync','Workspace synchronized',!session.conflict&&!session.resolvingSync,'Resolve workspace synchronization. Your local work is preserved.',{state:session.resolvingSync?'preparing':'blocked',target:{type:'sync-review'}}));
     if(['messages','delivery','crm'].includes(page))checks.push(check('workspace-auth','Workspace signed in',session.authenticated===true&&Boolean(session.workspaceId),'Sign in to use your saved workspace.',{state:'blocked',target:{id:'server-sign-in'}}));
     checks.push(check('page-loaded','Page controls loaded',context.loaded===true,'This page could not finish loading. Reopen it to retry.',{state:'blocked'}));
     if(context.busy)checks.push(check('procedure-running','Current procedure finished',null,context.busyMessage||'Wait for the current procedure to finish.',{state:'preparing'}));
@@ -71,7 +71,7 @@
     const current=()=>{if(root.document.getElementById('crm-workspace')?.hidden===false)return 'crm';const step=Number(root.document.querySelector('.step-view.active')?.dataset.step)||1;if(step===5){try{return JSON.parse(root.localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').activeJourneyStage===5?'buyers':'companies';}catch{return 'companies';}}return ({1:'setup',2:'profile',3:'profile',4:'strategy',6:'messages',7:'delivery'})[step]||'setup';};
     let scheduled=false;
     const schedule=()=>{if(scheduled)return;scheduled=true;root.queueMicrotask(()=>{scheduled=false;runtime.refresh(runtime.active==='crm'&&root.document.getElementById('crm-workspace')?.hidden===false?'crm':current());});};
-    for(const event of ['leadintel:server-ready','leadintel:server-synced','leadintel:workspace-changed','leadintel:workspace-dirty','leadintel:commercial-context-changed','leadintel:sender-identity-changed','leadintel:sync-resolving','leadintel:sync-settled','leadintel:crm-changed','leadintel:support-modules-ready','leadintel:outreach-approved','leadintel:outreach-sent','storage'])root.addEventListener(event,schedule);
+    for(const event of ['leadintel:server-ready','leadintel:server-conflict','leadintel:server-synced','leadintel:workspace-changed','leadintel:workspace-dirty','leadintel:commercial-context-changed','leadintel:sender-identity-changed','leadintel:sync-resolving','leadintel:sync-settled','leadintel:crm-changed','leadintel:support-modules-ready','leadintel:outreach-approved','leadintel:outreach-sent','storage'])root.addEventListener(event,schedule);
     root.addEventListener('leadintel:server-ready',()=>{void runtime.open(current());});
     root.addEventListener('leadintel:sync-settled',()=>{void runtime.open(current());});
     root.addEventListener('leadintel:module-opened',()=>{void runtime.open(current());});

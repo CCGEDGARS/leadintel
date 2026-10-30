@@ -158,3 +158,15 @@ test('concurrent profile replacement cannot escape an identity ambiguity hold',(
  const unrelated=structuredClone(b);unrelated.discovery.people[0].publicEmail='anna@buyer.example';
  const merged=Sync.merge(b,local,unrelated);assert.equal(merged.safe,true);assert.deepEqual(merged.payload.discovery.people[0].linkedinProfileReview,local.discovery.people[0].linkedinProfileReview);assert.equal(merged.payload.discovery.people[0].publicEmail,'anna@buyer.example');
 });
+
+test('independent first buyer lists merge by stable identity when the baseline has no list',()=>{
+ const b={discovery:{selectedProspects:[{domain:'example.com'}]}};
+ const l=structuredClone(b),r=structuredClone(b);
+ l.discovery.selectedProspects[0].people=[{id:'anna',name:'Anna Buyer',publicEmail:'anna@example.com',publicEmailUrl:'https://example.com/team'}];
+ r.discovery.selectedProspects[0].people=[{id:'bob',name:'Bob Buyer',publicPhone:'+37120000001'}];
+ const merged=Sync.merge(b,l,r);assert.equal(merged.safe,true,merged.conflicts.join(','));
+ assert.deepEqual(merged.payload.discovery.selectedProspects[0].people.map(p=>p.id),['anna','bob']);
+ r.discovery.selectedProspects[0].people=[{id:'anna',name:'Different Person',publicEmail:'different@example.com'}];
+ assert.equal(Sync.merge(b,l,r).safe,false,'competing identities or email evidence must still require a choice');
+ r.discovery.selectedProspects[0].people=[{name:'Unknown buyer'}];assert.equal(Sync.merge(b,l,r).safe,false,'unkeyed evidence cannot be merged speculatively');
+});

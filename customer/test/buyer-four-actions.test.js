@@ -151,3 +151,14 @@ test('E-mail stays available after email confirmation and data-updated never gra
  let html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*disabled/);
  context.enrichmentResults.clear();person.contactData={status:'updated',profile:{city:'Riga'}};html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.match(html,/data-keep-buyer[^>]*disabled/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
 });
+
+test('sync-blocked buyer controls expose a working recovery action without enabling research or proceeding',()=>{
+ const {JSDOM}=require('jsdom'),{context,person,candidate}=runtime();
+ context.bridge=()=>({workspace:{id:'w1'},conflict:true});const doc=new JSDOM(context.prospectContactControls(candidate,person)).window.document;
+ for(const selector of ['[data-prospect-enrich-email]','[data-prospect-enrich-phone]','[data-recheck-buyer]','[data-keep-buyer]'])assert.equal(doc.querySelector(selector).disabled,true);
+ const review=doc.querySelector('[data-review-buyer-sync]');assert.ok(review);assert.equal(review.disabled,false);
+ let handler,opens=0;context.$=()=>({addEventListener:(_name,fn)=>{handler=fn;}});context.window.LeadIntelAttention={open(){opens++;}};
+ vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')&&line.includes('data-review-buyer-sync')),context);
+ handler({target:review});assert.equal(opens,1);
+ context.bridge=()=>({workspace:{id:'w1'},conflict:false});assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-review-buyer-sync/);
+});

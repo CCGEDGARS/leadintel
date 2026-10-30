@@ -5482,6 +5482,75 @@
       "contains": [
         "recording-review=20261030-v1"
       ]
+    },
+    {
+      "id": "status-recovery-task-state",
+      "type": "text",
+      "url": "/customer/background-task-centre.js",
+      "status": 200,
+      "contains": [
+        "raw.status!=='complete'&&Boolean(raw.canRetry)",
+        "raw.type==='crm-refresh'&&raw.status==='complete'?'CRM connection refreshed'"
+      ]
+    },
+    {
+      "id": "status-recovery-empty-lists",
+      "type": "text",
+      "url": "/customer/workspace-sync.js",
+      "status": 200,
+      "contains": [
+        "(index===0||index===2)&&value===undefined?[]:value"
+      ]
+    },
+    {
+      "id": "status-recovery-page-recovery",
+      "type": "text",
+      "url": "/customer/page-quality.js",
+      "status": 200,
+      "contains": [
+        "target:{type:'sync-review'}",
+        "'leadintel:server-conflict'"
+      ]
+    },
+    {
+      "id": "status-recovery-journey",
+      "type": "text",
+      "url": "/customer/journey-progress.js",
+      "status": 200,
+      "contains": [
+        "Buyer research quality needs review",
+        "if(input.syncConflict)"
+      ]
+    },
+    {
+      "id": "status-recovery-buyer-action",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "data-review-buyer-sync",
+        "title:'CRM connection refreshed'"
+      ]
+    },
+    {
+      "id": "status-recovery-paid-history",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "Saved lookup attempt:",
+        "Resolve workspace sync before using Recheck.",
+        "ON records permission, not remaining budget"
+      ]
+    },
+    {
+      "id": "status-recovery-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "status-recovery=20261030-v1"
+      ]
     }
   ],
   "retry": {

@@ -139,7 +139,7 @@ function journeyModel(availability,current){
   const journeyFocus=state.discoveryMeta.activeJourneyStage===5?'buyers':'companies';
   const quality=window.LeadIntelDiscoveryUI?.assessBuyerQuality;
   const buyerQualityPassed=typeof quality==='function'&&[...(state.discovery.selectedProspects||[]),...(state.discovery.pipeline||[])].some(candidate=>candidate.people?.length&&candidate.peopleStatus!=='loading'&&candidate.publicContactStatus!=='loading'&&quality(candidate).passed);
-  return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,journeyFocus,buyerQualityPassed,websiteActivated:websiteActivated(state.main)})||[];
+  return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,journeyFocus,buyerQualityPassed,syncConflict:Boolean(window.LeadIntelServerBridge?.conflict),websiteActivated:websiteActivated(state.main)})||[];
 }
 const statusLabels={'in-progress':"In progress",'not-started':"Not started",complete:"Complete",locked:"Locked"};
 function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Not started";}
@@ -285,6 +285,7 @@ function openProcessStep(stageId){
   setTimeout(syncProcessMap,0);
 }
 function reviewMiniStep(stageId,itemId){
+  if(itemId==='sync-review'||window.LeadIntelServerBridge?.conflict){window.LeadIntelAttention?.open?.();return;}
   if(stageId===2&&itemId==='research'){void window.LeadIntelProfileMarket?.open?.();return;}
   const profileGroups={'offer-customer':'priority_offers','decision-fit':'buyer_roles','demand-signals':'buying_outcomes','message-proof':'value_proposition'};
   if(stageId===2&&profileGroups[itemId]){
@@ -334,6 +335,7 @@ if(processMap){
   window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:journey-changed",syncProcessMap);
+  for(const name of ['leadintel:server-conflict','leadintel:server-synced','leadintel:sync-settled'])window.addEventListener(name,syncProcessMap);
   window.addEventListener("leadintel:open-discovery",()=>setTimeout(syncProcessMap,120));
   window.addEventListener("leadintel:crm-changed",syncProcessMap);
   window.addEventListener("leadintel:outreach-approved",syncProcessMap);

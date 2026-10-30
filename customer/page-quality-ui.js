@@ -39,7 +39,7 @@
   }
   for(const page of ['setup','profile','strategy'])Q.register(page,{read:()=>mainContext(page)});
 
-  function focus(target){if(!target)return;if(target.step)root.LeadIntelCustomerNavigation?.setStep?.(target.step);const node=target.id?q(target.id):root.document.querySelector(target.selector);for(let parent=node?.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;node?.scrollIntoView?.({block:'center',behavior:'smooth'});node?.focus?.({preventScroll:true});}
+  function focus(target){if(!target)return;if(target.type==='sync-review'){if(root.LeadIntelAttention?.open)root.LeadIntelAttention.open();else q('workspace-attention')?.click();return;}if(target.step)root.LeadIntelCustomerNavigation?.setStep?.(target.step);const node=target.id?q(target.id):root.document.querySelector(target.selector);for(let parent=node?.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;node?.scrollIntoView?.({block:'center',behavior:'smooth'});node?.focus?.({preventScroll:true});}
   function denied(page,action){const report=Q.getReport(page);const problem=report?.checks.find(row=>row.status!=='pass'&&(row.actions.includes('*')||row.actions.includes(action)));const toast=q('toast');if(toast){toast.textContent=problem?.message||'Complete the page checks before proceeding.';toast.classList.add('show');clearTimeout(denied.timer);denied.timer=setTimeout(()=>toast.classList.remove('show'),3000);}focus(problem?.target);}
   root.document.addEventListener('click',event=>{
     const button=event.target.closest('button');if(!button||button.disabled)return;let route=guarded[button.id];
