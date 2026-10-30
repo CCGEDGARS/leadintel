@@ -16,3 +16,14 @@ test('saving buyer research updates durable qualification without replacing veri
 test('failed durable save is reported without claiming success or advancing the workflow',async()=>{
  const {ctx,events}=setup(false);assert.equal(await ctx.saveBuyerResearch('example.com'),false);assert.deepEqual(events,['save failed']);
 });
+test('CRM round trip retains all opportunity inputs in the buyer review signature',()=>{
+ for(const buyerRoles of ['Procurement Director; Project Manager',['Procurement Director','Project Manager']])for(const buyerRolesChanged of [false,true]){
+  const {candidate}=setup();Object.assign(candidate,{fitDescription:'New production line needs structural components.',buyerRoles,buyerRolesChanged,evidence:[{url:'https://example.com/project',text:'New production line under construction.',date:'2026-10-01'}]});
+  const before=D.buyerReviewSignature(candidate),mapped=JSON.parse(JSON.stringify(C.mapDiscoveryCandidateToCrm(candidate))),s=mapped.intelligence.research_snapshot;
+  assert.equal(s.fitDescription,candidate.fitDescription);assert.deepEqual(s.buyerRoles,buyerRoles);assert.equal(s.buyerRolesChanged,buyerRolesChanged);
+  const reopened={company:mapped.company.company_name,domain:mapped.company.domain,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,buyerFit:s.buyerFit,evidence:mapped.intelligence.evidence,people:s.buyerResearch.buyers,buyerDiscovery:s.buyerResearch.discovery,publicResearch:s.buyerResearch.publicResearch};
+  assert.equal(D.buyerReviewSignature(reopened),before);
+  assert.notEqual(D.buyerReviewSignature({...reopened,fitDescription:'A different opportunity'}),before);
+  assert.notEqual(D.buyerReviewSignature({...reopened,buyerRolesChanged:!buyerRolesChanged}),before);
+ }
+});

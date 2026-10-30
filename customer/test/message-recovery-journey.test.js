@@ -5,8 +5,8 @@ const O=require('../outreach-engine.js'),E=require('../message-editor.js');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function crmFixture(h,{activities=[],page=[]}={}){
  h.w.scrollTo=()=>{};
- const key='leadintel_customer_v2_discovery_meta',meta=JSON.parse(h.w.localStorage.getItem(key));meta.scriptBuyer.contactId='c1';h.w.localStorage.setItem(key,JSON.stringify(meta));
- const detail={ok:true,company:{id:'crm1',normalized_domain:'buyer.example',lifecycle_status:'prospect'},contacts:[{id:'c1',work_email:'alex@buyer.example',email_status:'verified'}],activities,activity_next_cursor:page.length?'next':''};
+ const key='leadintel_customer_v2_discovery_meta',meta=JSON.parse(h.w.localStorage.getItem(key));meta.scriptBuyer.contactId='c1';meta.scriptBuyer.email='alex@buyer.example';h.w.localStorage.setItem(key,JSON.stringify(meta));
+ const detail={ok:true,company:{id:'crm1',normalized_domain:'buyer.example',lifecycle_status:'prospect'},contacts:[{id:'c1',external_person_id:meta.scriptBuyer.personId,name:'Alex Buyer',work_email:'alex@buyer.example',email_status:'verified'}],activities,activity_next_cursor:page.length?'next':''};
  Object.assign(h.w.LeadIntelServerBridge,{listCrmCompanies:async()=>({ok:true,companies:[detail.company]}),getCrmCompany:async()=>detail,getCrmActivities:async()=>({ok:true,activities:page,next_cursor:''})});
  return {choice:meta.scriptBuyer,detail};
 }

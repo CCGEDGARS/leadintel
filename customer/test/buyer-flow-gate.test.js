@@ -3,7 +3,8 @@ const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function harness({kept=true,verified=true,synced=true}={}){
  const person={id:'public-second',name:'Anna Buyer',organization:'Example',title:'COO',kept,publicLinkedinUrl:'https://linkedin.com/in/anna'};
  const candidate={company:'Example',domain:'example.com',people:[person]};let meta={},events=[],checks=0,focused=0;
- const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>({workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
+ const serverBridge={workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})};
+ const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>serverBridge,loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function selectedEmailBuyer('),source.indexOf('let buyerConfirmationLevel=')),ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
  // This harness isolates recipient persistence; stage prerequisites are exercised in buyers-guided-continuation.test.js.
  ctx.buyerContinuationIssue=()=>null;
@@ -101,7 +102,7 @@ test('failed selection restores the previous recipient and never advances the st
  assert.equal(h.meta.selectedEmailBuyer.personId,'previous');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.events.length,0);
 });
 test('sync conflicts block selection before any CRM lookup or progress handoff',async()=>{
- const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),conflict:true});
+ const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{conflict:true});
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.checks,0);assert.equal(h.events.length,0);assert.equal(h.meta.selectedEmailBuyer,undefined);
 });
 test('opening Content Creation waits until its listener has loaded',async()=>{
@@ -126,7 +127,7 @@ test('selection bridge scrolls and focuses the highlighted footer with the recip
 });
 
 test('sync conflict keeps confirmed email evidence but disables proceed until ready',async()=>{
- const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),conflict:true});
+ const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{conflict:true});
  h.ctx.selectedBuyerKey=()=>h.person.id;h.ctx.buyerAutomaticMode=()=>false;
  h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  vm.runInContext(source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts(')),h.ctx);
@@ -143,10 +144,10 @@ test('failed Messages initialization restores Buyers while preserving the saved 
 
 
 test('a capacity failure can reopen only the exact previously saved and freshly verified email message',async()=>{
- const h=harness();assert.equal(await h.ctx.addBuyerToFlow('example.com',0),true);const previous={...h.meta.scriptBuyer};const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');}});
+ const h=harness();assert.equal(await h.ctx.addBuyerToFlow('example.com',0),true);const previous={...h.meta.scriptBuyer};const original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');}});
  assert.equal(await h.ctx.continueBuyerMessages(),true);assert.deepEqual({...h.meta.scriptBuyer},previous);assert.equal(h.events.length,2);assert.equal(h.meta.activeJourneyStage,6);
 });
 test('capacity failures still block new recipients, select-only changes and revoked confirmations',async()=>{
- for(const mode of ['new','select-only','revoked']){const h=harness();if(mode!=='new')await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');},...(mode==='revoked'?{getCrmCompany:async()=>({ok:true,contacts:[]})}:{})});const before=h.events.length;assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:mode==='select-only'}),false);assert.equal(h.events.length,before);}
+ for(const mode of ['new','select-only','revoked']){const h=harness();if(mode!=='new')await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');},...(mode==='revoked'?{getCrmCompany:async()=>({ok:true,contacts:[]})}:{})});const before=h.events.length;assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:mode==='select-only'}),false);assert.equal(h.events.length,before);}
 });
-test('ordinary failed sync never reopens a previously saved message',async()=>{const h=harness();await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Network request failed');}});assert.equal(await h.ctx.continueBuyerMessages(),false);assert.equal(h.events.length,1);});
+test('ordinary failed sync never reopens a previously saved message',async()=>{const h=harness();await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{saveNow:async()=>{throw Error('Network request failed');}});assert.equal(await h.ctx.continueBuyerMessages(),false);assert.equal(h.events.length,1);});
