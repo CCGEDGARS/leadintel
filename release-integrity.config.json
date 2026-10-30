@@ -5439,6 +5439,20 @@
         "topbar.js?v=20261025-v1&save-now=20261025-v1&admin-entry=20261026-v1&sync-review=20261029-v1",
         "message-quality=20261027-v1&sync-review=20261029-v1"
       ]
+    },
+    {
+      "id": "shared-journey-buttons",
+      "type": "text",
+      "url": "/customer/styles.css",
+      "status": 200,
+      "contains": [
+        "Shared journey footer: one visual contract for every stage and assistant return.",
+        "width:min(640px,100%)!important;",
+        "#continue-company-buyers",
+        "#delivery-workflow-status",
+        "[data-wa-continue]",
+        "outline-offset:3px!important;"
+      ]
     }
   ],
   "retry": {
