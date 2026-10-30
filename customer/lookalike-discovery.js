@@ -125,8 +125,8 @@
       if(typeof localStorage==='undefined')return {state:null,model:null,draftDirty:false};
       let state=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}');
       const Portfolio=root?.LeadIntelReferenceCustomerPortfolio;
-      if(Portfolio){state=Portfolio.migrateLegacy(state);const model=Portfolio.getCombinedActiveModel(state);if(model)return {state,model,draftDirty:Boolean(state.referenceCustomers?.draftDirty)};}
-      if(!root?.LeadIntelReferenceCustomers)return {state,model:null,draftDirty:false};
+      if(Portfolio){state=Portfolio.migrateLegacy(state);const model=Portfolio.getCombinedActiveModel(state);return {state,model,draftDirty:Boolean(state.referenceCustomers?.draftDirty)};}
+      if(Array.isArray(state.referenceCustomerPortfolio?.lists)||!root?.LeadIntelReferenceCustomers)return {state,model:null,draftDirty:false};
       const reference=state.referenceCustomers||{};const model=root.LeadIntelReferenceCustomers.getActiveReferenceModel(reference);return {state,model,draftDirty:Boolean(reference.draftDirty)};
     }catch{return {state:null,model:null,draftDirty:false};}
   }
@@ -158,8 +158,8 @@
     };
     const originalFollowUp=Discovery.buildDiscoveryFollowUpQueries.bind(Discovery);
     Discovery.buildDiscoveryFollowUpQueries=function(profile,market,attempted,limit){return Discovery.searchPlanningVersion>=2?originalFollowUp(profile,market,attempted,limit):profile.discoveryPriority==='lookalike'?Discovery.buildDiscoveryQueries(profile,market,limit,attempted):originalFollowUp(profile,market,attempted,limit);};
-    if(originalMerge)Discovery.mergeCompanyCandidates=function(results=[],profile={},marketState={},maxCandidates=12){const base=originalMerge(results,profile,marketState,maxCandidates);const model=profile.referenceSimilarityModel||activeModelFromBrowser();return rankCandidates(base,profile,model||null).slice(0,maxCandidates);};
-    if(originalPotential)Discovery.buildPotentialCompanyCandidates=function(results=[],profile={},marketState={},qualified=[],maxCandidates=12){return rankCandidates(originalPotential(results,profile,marketState,qualified,maxCandidates),profile,profile.referenceSimilarityModel||activeModelFromBrowser()).slice(0,maxCandidates);};
+    if(originalMerge)Discovery.mergeCompanyCandidates=function(results=[],profile={},marketState={},maxCandidates=12){const base=originalMerge(results,profile,marketState,maxCandidates);const model=Object.prototype.hasOwnProperty.call(profile,'referenceSimilarityModel')?profile.referenceSimilarityModel:activeModelFromBrowser();return rankCandidates(base,profile,model||null).slice(0,maxCandidates);};
+    if(originalPotential)Discovery.buildPotentialCompanyCandidates=function(results=[],profile={},marketState={},qualified=[],maxCandidates=12){const model=Object.prototype.hasOwnProperty.call(profile,'referenceSimilarityModel')?profile.referenceSimilarityModel:activeModelFromBrowser();return rankCandidates(originalPotential(results,profile,marketState,qualified,maxCandidates),profile,model).slice(0,maxCandidates);};
     Discovery.__lookalikeInstalled=true;return Discovery;
   }
   return {parseEvidenceSimilarity,researchEvidenceSimilarity,install,installMarketStrategy,refreshCurrentStep4,syncReferenceLookalikeIcp,isLookalikeStrategyEnabled,scoreLookalikeMatch,scoreReferenceDna,scoreLookalikeSet,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};

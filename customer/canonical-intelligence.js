@@ -30,7 +30,7 @@
     if(source.type==='user')return {class:'user_confirmed',authority:40,firstParty:true};
     if(source.type==='document'||source.kind==='document'||source.scope==='document'||String(source.type||'').toLowerCase()==='pdf'||source.name&&!source.url)return {class:'first_party_document',authority:30,firstParty:true};
     const url=safeUrl(source.url),companyHost=host(companyWebsite),sourceHost=host(url);
-    if(url&&companyHost&&sourceHost===companyHost)return {class:'first_party_website',authority:20,firstParty:true};
+    if(url&&companyHost&&sourceHost===companyHost&&source.extracted!==false)return {class:'first_party_website',authority:20,firstParty:true};
     if(url)return {class:'external_validation',authority:0,firstParty:false};
     return {class:'unknown',authority:-1,firstParty:false};
   }
@@ -68,10 +68,11 @@
   function confidenceRank(value){return ({high:3,medium:2,low:1})[String(value||'').toLowerCase()]||0;}
   function defaultStatus(provenance){return provenance==='user'?'user_confirmed':provenance==='document'||provenance==='website'?'first_party_evidence':provenance==='ai_inference'?'ai_inferred_first_party':'unknown';}
   function defaultConfidence(provenance){return provenance==='user'||provenance==='document'?'high':provenance==='website'?'medium':'low';}
-  function researchProvenance(meta={}){
+  function researchProvenance(meta={},input={}){
+    if(clean(meta.origin).toLowerCase()==='hypothesis_draft'||clean(meta.draftType||meta.draft_type).toLowerCase()==='hypothesis')return 'ai_inference';
     const ids=uniq(meta.sourceIds||meta.source_ids||[]);
-    if(ids.some(id=>/^D\d+$/i.test(id)))return 'document';
-    if(ids.some(id=>/^S\d+$/i.test(id)))return 'website';
+    if((input.documents||[]).some((doc,index)=>clean(doc?.text)&&ids.includes(clean(doc.id)||`D${index+1}`)))return 'document';
+    if((input.scrapedSources||[]).some((source,index)=>ids.includes(clean(source.id)||`S${index+1}`)&&clean(source.text)&&classifySource(source,input.website).class==='first_party_website'))return 'website';
     return 'ai_inference';
   }
   function answerCandidate(input,fieldKey){
@@ -81,7 +82,7 @@
     const marker=clean(input?.answerStatus?.[answerKey]||meta.origin).toLowerCase();
     if(marker==='user')return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
     if(['accepted','draft','evidence_draft','hypothesis_draft','research','ai','inferred'].includes(marker)||clean(meta.origin).toLowerCase()==='research'){
-      const provenance=researchProvenance(meta);const reviewed=Boolean(meta.reviewed||marker==='accepted');const sourceIds=uniq(meta.sourceIds||meta.source_ids||[]);
+      const provenance=researchProvenance(meta,input);const reviewed=Boolean(meta.reviewed||marker==='accepted');const sourceIds=uniq(meta.sourceIds||meta.source_ids||[]);
       return {value,provenance,status:reviewed&&provenance!=='ai_inference'?'first_party_evidence':'needs_confirmation',confidence:confidence(meta.confidence,provenance==='document'?'high':'medium'),sourceIds:sourceIds.length?sourceIds:[`AI:${answerKey}`]};
     }
     return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
@@ -92,8 +93,10 @@
   function websiteCandidate(input,fieldKey,derived){
     if(fieldKey==='commercialObjective'||fieldKey==='customerPainPoints'&&derived?.customerPainPoints)return null;
     const value=clean(derived?.websiteFields?.[fieldKey]||input?.baseProfile?.[fieldKey]);if(!value)return null;
-    const ids=partitionSources(input?.scrapedSources||[],input.website).firstParty.filter(s=>clean(s.text)).slice(0,5).map((s,index)=>clean(s.id)||`W${index+1}`);
-    return {value,provenance:'website',status:'first_party_evidence',confidence:ids.length?'medium':'low',sourceIds:ids};
+    const answerKey=FIELD_MAP[fieldKey];
+    if(answerKey&&clean(input?.answers?.[answerKey])===value)return null;
+    const ids=(input?.scrapedSources||[]).flatMap((source,index)=>classifySource(source,input.website).class==='first_party_website'&&clean(source.text).toLowerCase().includes(value.toLowerCase())?[clean(source.id)||`S${index+1}`]:[]).slice(0,5);
+    return {value,provenance:ids.length?'website':'ai_inference',status:ids.length?'first_party_evidence':'needs_confirmation',confidence:ids.length?'medium':'low',sourceIds:ids};
   }
   function derivedCandidate(derived,fieldKey){
     const value=clean(derived?.[fieldKey]);if(!value)return null;
@@ -127,6 +130,7 @@
     }
     profile.canonical.diagnostics=diagnoseCanonicalProfile(profile);
     profile.completeness=Math.round(profile.canonical.diagnostics.filter(item=>item.state==='known').length/DIAGNOSTIC_FIELDS.length*100);
+    if(Brain?.claimsForProfile)profile.companyClaims=Brain.claimsForProfile(profile,input);
     return profile;
   }
 
@@ -168,7 +172,7 @@
     out.canonical.diagnostics=diagnoseCanonicalProfile(out);
     return finalizeProfileQuality(out,input);
   }
-  function activeFirstPartySources(input={}){const web=partitionSources(input.scrapedSources||[],input.website).firstParty.filter(source=>clean(source.text));const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));return [...web,...docs];}
+  function activeFirstPartySources(input={}){const web=partitionSources(input.scrapedSources||[],input.website).firstParty.filter(source=>clean(source.text));const docs=(input.documents||[]).map((doc,index)=>({...doc,id:clean(doc?.id)||`D${index+1}`,type:'document'})).filter(doc=>clean(doc.text)||clean(doc.name));return [...web,...docs];}
 
   return {VERSION,DIAGNOSTIC_FIELDS,FIELD_MAP,finalizeProfileQuality,confirmProfileContext,classifySource,partitionSources,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
 });

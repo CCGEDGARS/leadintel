@@ -112,11 +112,19 @@
     async function enrich(button){
       const ref=Ref();if(!ref?.normalizeReferenceState)throw new Error('Reference Customer Intelligence is not ready. Reload and try again.');
       let state=readState();state.referenceCustomers=ref.normalizeReferenceState(state.referenceCustomers||{});
+      const initialScope=ref.referenceWorkflowScope(root,state),initialReference=JSON.stringify(state.referenceCustomers),selectedListId=state.referenceCustomerPortfolio?.selectedListId;
+      function assertCurrent(){
+        const current=readState();
+        if(ref.referenceWorkflowScope(root,current)!==initialScope||current.referenceCustomerPortfolio?.selectedListId!==selectedListId||JSON.stringify(ref.normalizeReferenceState(current.referenceCustomers||{}))!==initialReference)
+          throw new Error('The workspace or reference draft changed. Your current work was preserved; run Find Missing Info again.');
+        return current;
+      }
       const missing=state.referenceCustomers.rows.filter(needsInfo).slice(0,MAX_ENRICH);
       if(!missing.length){setStatus('All reference customers have company names and websites.');return;}
       button.disabled=true;button.textContent='Finding missing info…';let websitesFound=0,namesFound=0,checked=0,failed=0;let firstError='';
       try{
         for(const row of missing){
+          assertCurrent();
           setStatus(`Finding missing info… ${checked}/${missing.length} checked · ${websitesFound+namesFound} found`);
           try{
             if(needsWebsite(row)){
@@ -128,7 +136,9 @@
             }
           }catch(error){checked++;failed++;if(!firstError)firstError=clean(error?.message)||'Information search failed';}
         }
-        state.referenceCustomers=ref.normalizeReferenceState({...state.referenceCustomers,rows:state.referenceCustomers.rows,segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});
+        const current=assertCurrent();
+        current.referenceCustomers=ref.normalizeReferenceState({...state.referenceCustomers,rows:state.referenceCustomers.rows,segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});
+        state=current;
         await writeState(state);
         if(!websitesFound&&!namesFound&&firstError)setStatus(`Unable to find missing information: ${firstError}`);
         else setStatus(`Find Missing Info complete · ${websitesFound} website${websitesFound===1?'':'s'} found · ${namesFound} company name${namesFound===1?'':'s'} identified · ${failed} need review.${missing.length===MAX_ENRICH?' Run again to continue with the remaining records.':''}`);

@@ -20,7 +20,7 @@ function runtime({completed=false,active=true,markets=['Germany'],aiFailure=fals
   vm.runInNewContext(code,context);context.hooks.bind();
   return {calls,storage,context,timers,get reloads(){return reloads;},click(){let prevented=false;const target={id:'to-questionnaire',dataset:{},closest:()=>target};const event={target,preventDefault(){prevented=true;},stopImmediatePropagation(){}};listeners.get('click')?.(event);return prevented;},state:()=>JSON.parse(storage.get('leadintel_customer_v2_state'))};
 }
-async function flush(){for(let i=0;i<40;i++)await Promise.resolve();}
+async function flush(){await new Promise(resolve=>setImmediate(resolve));}
 test('Continue prepares website answers before opening a fresh commercial brief',async()=>{const r=runtime();assert.equal(r.click(),true);await flush();assert.ok(r.calls.some(url=>url.includes('/api/ai/generate')));assert.equal(r.state().answers.value_proposition,'Help operations teams streamline inventory work');assert.equal(r.state().answers.delivery_approach,'Online onboarding');assert.equal(r.state().answers.priority_offers,'Confirmed software offer');assert.equal(r.state().step,2);const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1'));assert.equal(meta.fields.value_proposition.origin,'hypothesis_draft');assert.equal(meta.fields.value_proposition.reviewed,false);});
 test('completed research opens without repeating provider calls',()=>{const r=runtime({completed:true});assert.equal(r.click(),false);assert.equal(r.calls.length,0);});
 test('unactivated websites and missing markets keep Setup navigation validation',()=>{for(const options of [{active:false},{markets:[]}]){const r=runtime(options);assert.equal(r.click(),false);assert.equal(r.calls.length,0);}});

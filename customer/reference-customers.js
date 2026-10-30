@@ -1,5 +1,5 @@
 (function(root,factory){
-  const runtimeVersion='20260930-reference-activation-v6';
+  const runtimeVersion='20261030-reference-reliability-v1';
   const api=root?.LeadIntelReferenceCustomers?.runtimeVersion===runtimeVersion?root.LeadIntelReferenceCustomers:factory();
   api.runtimeVersion=runtimeVersion;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
@@ -11,6 +11,10 @@
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
   const normName=v=>clean(v).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūž]+/gi,' ').trim();
   const normKey=v=>clean(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[_./\\-]+/g,' ').replace(/\s+/g,' ').trim();
+  function referenceWorkflowScope(root,state={}){
+    const bridge=root.LeadIntelServerBridge;
+    return JSON.stringify([bridge?.session?.authenticated,bridge?.session?.user?.id,bridge?.workspace?.id,root.localStorage?.getItem?.('leadintel_account_context_v1'),state.website||state.profile?.website||'']);
+  }
   function persistReferenceWorkspaceState(root,state,{render=true,eventName='leadintel:reference-customers-updated'}={}){
     root.localStorage.setItem(REFERENCE_WORKSPACE_STORAGE_KEY,JSON.stringify(state));
     if(eventName&&typeof root.dispatchEvent==='function'&&typeof root.CustomEvent==='function')root.dispatchEvent(new root.CustomEvent(eventName));
@@ -113,6 +117,7 @@
     for(const key of ['buyerRoles','buyingTriggers','capabilities'])if(Array.isArray(value[key]))copy[key]=[...new Set(value[key].map(clean).filter(Boolean))].slice(0,8);
     copy.sourceEvidence=(Array.isArray(value.sourceEvidence)?value.sourceEvidence:[]).map(item=>({field:clean(item.field),quote:clean(item.quote),url:normalizeUrl(item.url)})).filter(item=>item.field&&item.quote&&item.url).slice(0,16);
     if(value.analysisVersion===4)copy.analysisVersion=4;
+    if(value.evidenceCoverage&&typeof value.evidenceCoverage==='object')copy.evidenceCoverage={pagesRead:Math.max(0,Number(value.evidenceCoverage.pagesRead)||0),pagesPlanned:Math.max(0,Number(value.evidenceCoverage.pagesPlanned)||0),partial:value.evidenceCoverage.partial===true};
     copy.confidence=['high','medium','low'].includes(clean(value.confidence).toLowerCase())?clean(value.confidence).toLowerCase():'low';
     return copy;
   }
@@ -128,7 +133,7 @@
   }
   function normalizeReferenceState(value={}){
     const rows=normalizeImportedRows((value.rows||[]).map(row=>({Company:row.companyName,Website:row.website,Country:row.country,Product:row.productService,Value:row.approximateValue,'Why good':row.reason,Notes:row.notes})),{sourceType:'state'}).map(row=>{
-      const old=(value.rows||[]).find(x=>clean(x.id)===row.id||domain(x.website)===row.domain||(!row.domain&&normName(x.companyName)===normName(row.companyName)) )||{};
+      const old=(value.rows||[]).find(x=>clean(x.id)===row.id||(row.domain&&domain(x.website)===row.domain)||(!row.domain&&normName(x.companyName)===normName(row.companyName)) )||{};
       return {...row,referenceType:old.referenceType==='ideal_example'?'ideal_example':'existing_customer',status:['ready','needs_review','unresolved'].includes(old.status)?old.status:row.status,reviewed:old.reviewed!==false};
     });
     const rowIds=new Set(rows.map(row=>row.id));
@@ -246,5 +251,5 @@
     const evidence=saved?.evidence||review?.evidence||qualified?.evidence||[];
     return {completed:completed||Boolean(qualified||review),qualified:verified,label:verified?'Research completed · Qualified':completed||review?'Research completed · Opportunity unverified':'Research pending',gaps:verified?[]:gaps.length?gaps:['The search did not confirm all opportunity requirements.'],evidence,completedAt:saved?.completedAt||discovery.lastRunAt||''};
   }
-  return {hasUsableReferenceDna,MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState,saveReferenceWorkflowState,referenceWorkflowSaveNotice,targetResearchSummary};
+  return {hasUsableReferenceDna,MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState,saveReferenceWorkflowState,referenceWorkflowSaveNotice,referenceWorkflowScope,targetResearchSummary};
 });

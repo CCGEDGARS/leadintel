@@ -1,0 +1,44 @@
+{
+  "runtimeRevision": "466dd34f073f05ca7cc1b1f44dcee132cf9547c6",
+  "authentication": "controlled fixture; no customer session",
+  "persistence": "controlled local storage and normalization; no production D1 durability",
+  "providers": "controlled responses; no live company research or paid lookup",
+  "assembly": "relevant shipping Profile DOM/modules/CSS; not complete authenticated assembly",
+  "results": [
+    {
+      "width": 1440,
+      "approval": true,
+      "strategyEntry": true,
+      "continueHeight": 72,
+      "overflow": false,
+      "pageErrors": 0,
+      "retained": {
+        "approved": true,
+        "offer": "Industrial maintenance and installation",
+        "citation": "official-1"
+      },
+      "scope": "isolated shipping DOM/modules with controlled session/providers; no real customer/cloud acceptance"
+    },
+    {
+      "width": 390,
+      "approval": true,
+      "strategyEntry": true,
+      "continueHeight": 58,
+      "overflow": false,
+      "pageErrors": 0,
+      "retained": {
+        "approved": true,
+        "offer": "Industrial maintenance and installation",
+        "citation": "official-1"
+      },
+      "scope": "isolated shipping DOM/modules with controlled session/providers; no real customer/cloud acceptance"
+    }
+  ],
+  "notDemonstrated": [
+    "real customer Profile to Strategy cloud save/reload",
+    "independent company fact accuracy",
+    "live multilingual or binary PDF extraction",
+    "native browser zoom",
+    "screen reader and full focus acceptance"
+  ]
+}

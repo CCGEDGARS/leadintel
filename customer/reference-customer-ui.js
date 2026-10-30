@@ -7,7 +7,7 @@ let pdfModule=null;
 
 (function installReferenceCustomerUI(root){
   const Ref=root.LeadIntelReferenceCustomers;if(!Ref||typeof document==='undefined')return;
-  if(root.LeadIntelReferenceCustomerUI?.runtimeVersion==='20261001-profile-market-v1')return;
+  if(root.LeadIntelReferenceCustomerUI?.runtimeVersion==='20261030-reference-reliability-v1')return;
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   let editingTarget=-1;
@@ -18,6 +18,7 @@ let pdfModule=null;
 
   async function writeTargets(state){writeState(state);await syncTargets();}
   function ensureState(state){state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});return state;}
+  function referenceOperationContext(state=ensureState(readState())){return JSON.stringify([Ref.referenceWorkflowScope(root,state),state.referenceCustomerPortfolio?.selectedListId,state.referenceCustomers,state.targetMarkets,state.profile?.priorityOffers]);}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2600);}
   function ensureModal(){
     let modal=document.getElementById('reference-customer-modal');if(modal)return modal;
@@ -148,10 +149,10 @@ let pdfModule=null;
     event.preventDefault();const form=event.target,button=form.querySelector('[type="submit"]'),status=document.getElementById('customer-opportunity-status');if(button.disabled)return;
     const state=ensureState(readState()),reference=state.referenceCustomers,rows=reference.rows.filter(row=>reference.analyses?.[row.id]);if(rows.length!==1)return;
     const service=clean(form.elements.service.value),problem=clean(form.elements.problem.value),dealTrigger=clean(form.elements.dealTrigger.value);if(!service||!problem)return;
-    const workspace=root.LeadIntelServerBridge?.workspace?.id;button.disabled=true;button.textContent='Analyzing opportunity niches…';status.textContent='Comparing the customer with your deal context…';
+    const workspace=root.LeadIntelServerBridge?.workspace?.id,context=referenceOperationContext(state);button.disabled=true;button.textContent='Analyzing opportunity niches…';status.textContent='Comparing the customer with your deal context…';
     try{
       const hypotheses=await root.LeadIntelReferenceCustomerAI.requestOpportunityMap({workspaceId:workspace,customer:rows[0],analysis:reference.analyses[rows[0].id],seller:{website:state.website,priorityOffers:state.profile?.priorityOffers},service,problem,dealTrigger,market:(state.targetMarkets||[]).join(', ')});
-      const current=ensureState(readState());if(!current.referenceCustomers.rows.some(row=>row.id===rows[0].id)||!current.referenceCustomers.analyses?.[rows[0].id]||current.referenceCustomers.analyzedAt!==reference.analyzedAt)throw new Error('Customer analysis changed. Review it and build the map again.');
+      const current=ensureState(readState());if(referenceOperationContext(current)!==context)throw new Error('Customer analysis or workspace changed. Review it and build the map again.');
       current.referenceCustomers.opportunityMap={customerId:rows[0].id,service,problem,dealTrigger,hypotheses,updatedAt:new Date().toISOString(),analysisAt:current.referenceCustomers.analyzedAt};
       const Portfolio=root.LeadIntelReferenceCustomerPortfolio;const saved=Portfolio?.syncCurrentList?.(current)||current;
       await writeState(saved);render();root.LeadIntelReferenceCustomerLibraryUI?.sync?.();
@@ -160,18 +161,18 @@ let pdfModule=null;
     }catch(error){const visibleStatus=document.getElementById('customer-opportunity-status');if(visibleStatus)visibleStatus.textContent=error?.message||'Opportunity analysis failed. Your customer list is unchanged.';const currentButton=document.querySelector('#customer-opportunity-form [type="submit"]');if(currentButton){currentButton.disabled=false;currentButton.textContent='Build Opportunity Map';}}
   }
   function mergeRows(state,newRows,source){
-    const existing=state.referenceCustomers?.rows||[];const combined=Ref.normalizeImportedRows([...existing.map(row=>({Company:row.companyName,Website:row.website,referenceType:row.referenceType,reason:row.reason,notes:row.notes,country:row.country})),...newRows.map(row=>({Company:row.companyName,Website:row.website,referenceType:row.referenceType,reason:row.reason,notes:row.notes,country:row.country}))],{sourceType:'state'});
+    const existing=state.referenceCustomers?.rows||[];const combined=Ref.normalizeImportedRows([...existing,...newRows],{sourceType:'state'});
     const incomingByKey=new Map(newRows.map(row=>[row.domain||`${row.companyName.toLowerCase()}`,row]));
     const preservedAnalyses=state.referenceCustomers?.analyses||{};
-    state.referenceCustomers=Ref.normalizeReferenceState({...state.referenceCustomers,source,rows:combined.map(row=>{const incoming=incomingByKey.get(row.domain||row.companyName.toLowerCase());return incoming?{...row,status:incoming.status,reviewed:incoming.reviewed}:row;}),analyses:preservedAnalyses,segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});return state;
+    state.referenceCustomers=Ref.normalizeReferenceState({...state.referenceCustomers,source,rows:combined.map(row=>{const original=existing.find(item=>item.id===row.id),incoming=original||incomingByKey.get(row.domain||row.companyName.toLowerCase());return incoming?{...row,status:incoming.status,reviewed:incoming.reviewed}:row;}),analyses:preservedAnalyses,segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});return state;
   }
-  async function handleFile(file){if(!file)return;const modal=ensureModal(),statusNode=modal.querySelector('#reference-import-status');statusNode.textContent='Reading customer list…';try{
+  async function handleFile(file){if(!file)return;const modal=ensureModal(),statusNode=modal.querySelector('#reference-import-status'),context=referenceOperationContext();statusNode.textContent='Reading customer list…';try{
       const name=file.name||'customer-list',ext=(name.split('.').pop()||'').toLowerCase();let rawRows=[],sourceType=ext;
       if(ext==='csv'){rawRows=Ref.parseCsv(await file.text());}
       else if(ext==='xlsx'||ext==='xls'){const XLSX=await import(`https://cdn.jsdelivr.net/npm/xlsx@${XLSX_VERSION}/+esm`);const workbook=XLSX.read(await file.arrayBuffer(),{type:'array'});const sheet=workbook.Sheets[workbook.SheetNames[0]];rawRows=XLSX.utils.sheet_to_json(sheet,{defval:''});sourceType='xlsx';}
       else if(ext==='pdf'){rawRows=await parsePdfRows(file);sourceType='pdf';}
       else throw new Error('Use CSV or Excel. PDF is available as a fallback.');
-      const rows=Ref.normalizeImportedRows(rawRows,{sourceType});if(!rows.length)throw new Error('No records found. Include a Company Name, Website, or both.');const state=ensureState(readState());mergeRows(state,rows,{type:sourceType,name});await writeState(state);statusNode.textContent=`${rows.length} companies imported. ${rows.filter(row=>row.status==='ready').length} ready for analysis.`;render();
+      const rows=Ref.normalizeImportedRows(rawRows,{sourceType});if(!rows.length)throw new Error('No records found. Include a Company Name, Website, or both.');const state=ensureState(readState());if(referenceOperationContext(state)!==context)throw new Error('The workspace or reference list changed. Import the file again into the intended list.');mergeRows(state,rows,{type:sourceType,name});await writeState(state);statusNode.textContent=`${rows.length} companies imported. ${rows.filter(row=>row.status==='ready').length} ready for analysis.`;render();
     }catch(error){statusNode.textContent=error.message||'Unable to import customer list';}}
   let targetImportDraft=null,targetImportGeneration=0;
   async function previewTargetImport(file){
@@ -228,5 +229,5 @@ let pdfModule=null;
   async function analyzeRow(row){const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);const data=payload.data||payload;const text=String(data.markdown||data.content||'').slice(0,25000);if(!text.trim())throw new Error('No readable website content');return inferAnalysis(text);}
   async function analyzeCustomerList(){let state=ensureState(readState());const ready=state.referenceCustomers.rows.filter(row=>row.status==='ready'&&row.website).slice(0,MAX_REFERENCE_ANALYSIS);if(!ready.length){toast('Upload companies with valid websites first');return;}const modal=ensureModal(),statusNode=modal.querySelector('#reference-import-status'),button=modal.querySelector('#reference-analyze');button.disabled=true;const analyses={...state.referenceCustomers.analyses};let completed=0,failed=0;for(const row of ready){statusNode.textContent=`Analyzing customer websites… ${completed+1}/${ready.length}`;try{analyses[row.id]=await analyzeRow(row);}catch{analyses[row.id]={confidence:'low'};failed++;}completed++;}state=ensureState(readState());state.referenceCustomers.analyses=analyses;const segmentation=Ref.buildReferenceSegments(state.referenceCustomers.rows,analyses);state.referenceCustomers.segments=segmentation.segments;state.referenceCustomers.segmentationMeaningful=segmentation.meaningful;state.referenceCustomers.activeSegmentIds=[];state.referenceCustomers.activeIds=[];state.referenceCustomers.activated=false;state.referenceCustomers.dna=null;state.referenceCustomers.analyzedAt=new Date().toISOString();state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers);await writeState(state);statusNode.textContent=`Analysis complete · ${ready.length-failed}/${ready.length} websites produced usable intelligence${failed?` · ${failed} need review`:''}. Review the Customer segments below before activation.`;button.disabled=false;render();}
   async function activateSelectedSegments(){let state=ensureState(readState());const segmentIds=selectedSegmentIds();if(!segmentIds.length){toast('Select at least one customer segment');return;}state.referenceCustomers=Ref.activateReferenceSegments(state.referenceCustomers,segmentIds);state.referenceCustomers.dna=Ref.buildReferenceDna(state.referenceCustomers,state.referenceCustomers.analyses);state.referenceCustomers.analyzedAt=new Date().toISOString();await writeState(state);render();toast('Reference Customer priority model activated');}
-  root.LeadIntelReferenceCustomerUI={runtimeVersion:'20261001-profile-market-v1',open,close,render};
+  root.LeadIntelReferenceCustomerUI={runtimeVersion:'20261030-reference-reliability-v1',open,close,render};
 })(globalThis);

@@ -243,6 +243,8 @@ export async function handleAiRoute(request,env,cors={}){
     const maxResults=Math.max(1,Math.min(8,Math.floor(Number(body.max_results)||5)));
     try{
       const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
+      if(request.signal?.aborted)return error('Web search was canceled',499,cors);
+      const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)return error(current.error,current.status,cors);
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:result.provider,metadata:{model:result.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,result_count:result.results.length,routing:result.routing||null}});
       return json(result,200,cors);
     }catch(cause){return error(String(cause?.message||'Web search failed').slice(0,180),cause?.status===409?409:502,cors,cause?.code?{code:cause.code}:{});}
@@ -297,9 +299,11 @@ export async function handleAiRoute(request,env,cors={}){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
     const body=await request.json().catch(()=>null);if(!body)return error('AI generation payload is required',400,cors);
+    if(!assistant&&body.task==='profile-synthesis')cors={...cors,'X-LeadIntel-Operation-Id':operationId};
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!assistant&&(!prompt||prompt.length>80000||system.length>20000))return error('AI generation prompt is invalid or too large',400,cors);
     const boundedResearch=!assistant&&['company-extraction','buyer-fit'].includes(body.task);
+    const profileSynthesis=!assistant&&body.task==='profile-synthesis';
     const integration=await activeIntegration(env,workspaceId);
     if(!integration)return error('No active AI provider is configured for this workspace',409,cors,boundedResearch?{provider:'main',fallback:{status:'not_used',used:false}}:{});
     try{
@@ -312,23 +316,27 @@ export async function handleAiRoute(request,env,cors={}){
       const extractionRequest={system:companyMaterials.system+languageGuidance,prompt:companyMaterials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
-        let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
-        if(assistant||boundedResearch){
-          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
+        let controller=null,timer=null,timedOut=false,onRequestAbort=null,stopped=null;let signal=request.signal;
+        if(assistant||boundedResearch||profileSynthesis){
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis)canceled.status=499;throw canceled;}
           controller=new AbortController();signal=controller.signal;
+          // A late/ignoring upstream must not keep Profile work alive after its deadline.
+          if(profileSynthesis)stopped=new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('Profile synthesis stopped')),{once:true}));
           onRequestAbort=()=>controller.abort(request.signal.reason);
           request.signal?.addEventListener('abort',onRequestAbort,{once:true});
-          timer=setTimeout(()=>{timedOut=true;controller.abort();},assistant?55000:COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
+          timer=setTimeout(()=>{timedOut=true;controller.abort();},assistant||profileSynthesis?55000:COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
         }
         try{
-          const result=await generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});
+          const pending=generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});
+          const result=await (stopped?Promise.race([pending,stopped]):pending);
+          if(profileSynthesis&&signal.aborted)throw new Error('Profile synthesis stopped');
           await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'recovered'});
           return result;
         }
         catch(cause){
           if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'failed'});
-          if(timedOut)throw new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`);
-          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
+          if(timedOut)throw Object.assign(new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`),profileSynthesis?{status:504}:{});
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis)canceled.status=499;throw canceled;}
           throw cause;
         }finally{
           if(timer)clearTimeout(timer);
@@ -342,7 +350,7 @@ export async function handleAiRoute(request,env,cors={}){
       if(!attempt.ok){
         const message=attempt.fallback.status==='failed'?'Main-engine research failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
         const metadata=boundedResearch?{provider:integration.provider,fallback:attempt.fallback}:{};
-        return error(message,502,cors,metadata);
+        return error(message,profileSynthesis?attempt.error?.status||502:502,cors,metadata);
       }
       await assertCompanyMaterialsCurrent(env,workspaceId,companyMaterials.refs);
       if(assistant)await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
@@ -357,9 +365,14 @@ export async function handleAiRoute(request,env,cors={}){
       }
       try{await assertWritingContextCurrent(writingReferenceRuntime(env),{workspaceId},writing.context);}catch{return error('Writing references changed. Regenerate the message.',409,cors);}
       if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
+      if(profileSynthesis){
+        if(request.signal?.aborted)return error('AI generation was canceled',499,cors);
+        const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);
+        if(current.error)return error(current.error,current.status,cors);
+      }
       const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;if(!assistant&&companyMaterials.refs.length)result.company_materials=companyMaterials.refs.map(({id,revision,filename,evidence})=>({id,revision,filename,locations:evidence.map(e=>e.location)}));const usedProvider=result.provider||integration.provider;
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{...(profileSynthesis?{task:'profile-synthesis',operation_id:operationId}:{}),model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
       if(assistant)return json(assistantReply,200,cors);
       return json(boundedResearch?{...result,fallback:attempt.fallback}:translationPack?{...result,language_pack:{language:translationPack.language,revision:translationPack.revision,status:translationPack.status,sources:translationPack.sources.map(({url,title})=>({url,title}))}}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
