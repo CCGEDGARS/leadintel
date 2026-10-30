@@ -63,11 +63,22 @@ export async function enqueueApprovedSequence(env,cors,workspaceId,access,body,w
   const alreadySent=await env.DB.prepare(`SELECT id FROM gmail_messages WHERE workspace_id=? AND recipient=? AND status='sent' LIMIT 1`).bind(workspaceId,recipient).first();
   if(previous||alreadySent)return error('This recipient already has outreach recorded; review before sending again',409,cors,{code:'AUTOMATION_RECIPIENT_ALREADY_CONTACTED'});
   const now=safeNow(env);let scheduled;try{scheduled=nextEnabledWindow(policy,now);}catch{return error('No eligible automatic sending window is available',409,cors,{code:'NO_SEND_WINDOW'});}
-  const statements=[
-    env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,contact_identity,approved_at,initial_subject,initial_body,followup_body,followup_html_body,status,created_by,workflow_run_id,workflow_revision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(sequenceId,workspaceId,connection.workspace_id,sourcePackageKey,domain,recipient,contactIdentity,approvedAt,subject,messageBody,followupBody,followupHtml,'active',access.user.id,workflow?.runId||null,workflow?.revision||null),
-    env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,html_body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(queueId,workspaceId,sequenceId,connection.workspace_id,0,recipient,subject,messageBody,messageHtml,'queued',scheduled,scheduled,idempotencyKey)
-  ];
-  const results=await env.DB.batch(statements);const inserted=Number(results?.[0]?.meta?.changes||0)>0;
+  let results;
+  for(let attempt=0;attempt<3;attempt++){
+    await access.guard?.();const authority=access.guard?.writeAuthority?.();
+    if(workflow&&!authority)return error('Current workflow authority is required to queue approved outreach',409,cors,{code:'AUTOMATION_WORKFLOW_AUTHORITY_REQUIRED'});
+    const values=placeholders=>authority?`SELECT ${placeholders} WHERE (${authority.sql})`:`VALUES(${placeholders})`,authorityArgs=authority?.args||[];
+    results=await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,contact_identity,approved_at,initial_subject,initial_body,followup_body,followup_html_body,status,created_by,workflow_run_id,workflow_revision) ${values('?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?')}`).bind(sequenceId,workspaceId,connection.workspace_id,sourcePackageKey,domain,recipient,contactIdentity,approvedAt,subject,messageBody,followupBody,followupHtml,'active',access.user.id,workflow?.runId||null,workflow?.revision||null,...authorityArgs),
+      env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,html_body,status,earliest_send_at,scheduled_send_at,idempotency_key) ${values('?,?,?,?,?,?,?,?,?,?,?,?,?')}`).bind(queueId,workspaceId,sequenceId,connection.workspace_id,0,recipient,subject,messageBody,messageHtml,'queued',scheduled,scheduled,idempotencyKey,...authorityArgs)
+    ]);
+    if(!authority||results.every(result=>Number(result?.meta?.changes||0)>0))break;
+    // Refresh only this local commit after a benign progress save. Revocation
+    // or material source changes stop here; research and stages are not replayed.
+    await access.guard?.();
+    if(attempt===2)return error('Workflow authority changed before outreach could be queued',409,cors,{code:'AUTOMATION_WORKFLOW_AUTHORITY_CHANGED'});
+  }
+  const inserted=Number(results?.[0]?.meta?.changes||0)>0;
   const sequence=await env.DB.prepare(`SELECT * FROM outreach_automation_sequences WHERE id=?`).bind(sequenceId).first();const {results:queueItems=[]}=await env.DB.prepare(`SELECT * FROM outreach_automation_queue WHERE sequence_id=? ORDER BY step_index`).bind(sequenceId).all();
   if(!sequence||!queueItems.length)return error('Unable to create automated outreach sequence',500,cors);
   if(inserted)await audit(env,{workspaceId,userId:access.user.id,type:'outreach_automation.sequence_enqueued',entityType:'outreach_automation_sequence',entityId:sequenceId,metadata:{domain,recipient,approved_at:approvedAt,queue_item_ids:queueItems.map(item=>item.id)}});

@@ -9,8 +9,8 @@ Each stage has four independent gates: deterministic code verification, exact pr
 | Visible stage | Internal screen/module | Code | Production | Authenticated workflow | Business outcome |
 |---|---|---|---|---|---|
 | 1 Setup | 1 | PASS: 4,211 customer + 1,226 backend; build/syntax/controlled Chromium | PASS: historical Instruction 1 proof at `8ce16fc5`, 494 checks; PR #781 | BLOCKED: no customer browser/session | BLOCKED: durable real company setup not observed |
-| 2 Profile | 2 questionnaire/research + 3 profile review | PASS: 4,335 customer + 1,247 backend; build/syntax/browser; independent review | NOT TESTED: Profile audit release pending | BLOCKED: no customer session/database authorization | BLOCKED: real researched-company accuracy not established |
-| 3 Strategy | 4 | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
+| 2 Profile | 2 questionnaire/research + 3 profile review | PASS: 4,335 customer + 1,247 backend; build/syntax/browser; independent review | PASS: historical Instruction 2 proof at `dfde189e`, 502 checks; PR #782 | BLOCKED: no customer session/database authorization | BLOCKED: real researched-company accuracy not established |
+| 3 Strategy | 4 | PASS: 4,463 customer + 1,381 backend; build/syntax/controlled Chromium; independent review | NOT TESTED: Strategy revision pending | BLOCKED: no customer session/database authorization | BLOCKED: real company qualification and scheduled execution not established |
 | 4 Companies | 5 with company journey focus | NOT TESTED | NOT TESTED | NOT TESTED | NOT TESTED |
 | 5 Buyers | 5 with buyer journey focus | NOT TESTED for new authenticated acceptance; prior regression evidence in Step 5 report | Prior release evidence is historical, not a new release claim | BLOCKED: prior customer acceptance still open | BLOCKED: actual priority-email/receipt outcomes still open |
 | 6 Messages | 6 | NOT TESTED in this audit | NOT TESTED in this audit | NOT TESTED | NOT TESTED |
@@ -33,7 +33,7 @@ Never infer the visible stage from the internal numeric module alone. `data-work
 
 For every finding, record stage/requirement, expected/observed behavior, severity, reproducible trigger, cause and affected files, downstream impact, fix, red/green regression evidence, residual risk, tested SHA, and release/run links. Never store credentials, cookies, signed upload tickets, raw provider responses, or private customer drafts here.
 
-Stage 2 findings, actual research coverage and test mapping: [Profile detailed audit](2026-10-30-profile-reliability.md). Stage 1 findings and test mapping: [Setup detailed audit](2026-10-30-setup-reliability.md). Earlier Buyers evidence: [Step 5 priority audit](../fixes/2026-10-30-step5-priority-audit.md). Earlier sync causes: [workspace status](../fixes/2026-10-30-workspace-status-root-causes.md).
+Stage 3 findings and contract: [Strategy detailed audit](2026-10-30-strategy-reliability.md). Stage 2 findings, actual research coverage and test mapping: [Profile detailed audit](2026-10-30-profile-reliability.md). Stage 1 findings and test mapping: [Setup detailed audit](2026-10-30-setup-reliability.md). Earlier Buyers evidence: [Step 5 priority audit](../fixes/2026-10-30-step5-priority-audit.md). Earlier sync causes: [workspace status](../fixes/2026-10-30-workspace-status-root-causes.md).
 
 Existing conflict behavior remains protected: review does not choose a version, both versions/recovery are retained, competing legitimate edits require an explicit resolution. No audit fix may silently replace either version to clear a blocker.
 
@@ -86,3 +86,17 @@ Final Instruction 2 evidence continuation: [Profile audit PR #782](https://githu
 Final portability scan reproduced a hidden AJ-domain name override, including replacement of a saved reviewed identity. Removed the exception and added source-title/domain/retained-name regressions; all seller identities now follow the same inference path. See Profile finding P15 and final PR checks.
 
 Final executable revision `466dd34f073f05ca7cc1b1f44dcee132cf9547c6` passed 4,335 customer checks after replacing obsolete domain-override test expectations with generic source/review identity assertions. The subsequent test/report commit changes no executable behavior. [Controlled browser result record](evidence/2026-10-30-profile-controlled-browser.json) retains the exercised scope and limitations. Final PR checks/proof govern the released revision.
+
+
+## Instruction 3 execution record
+
+Baseline main `dfde189e004df2195f1f38a075fd80bd0179bf17` was rediscovered. Instruction 2 historical release proof: [Release Integrity 41123544065](https://github.com/CCGEDGARS/leadintel/actions/runs/41123544065), verified `2026-10-30T20:29:06.978Z`, exact main manifest and backend revision, 502/502 checks, PROVEN with zero failures. This resolves the earlier Profile pre-release production snapshot while preserving its authenticated/business blockers.
+
+Strategy requirement/authority map, reproduction ledger, scheduler semantics, evidence limitations and Instruction 4 handoff: [detailed Strategy audit](2026-10-30-strategy-reliability.md). This instruction adds one shared material Strategy approval contract; no bare legacy boolean or configured schedule is evidence that the approved revision ran. Final verification/release acceptance remains pending until the final PR proof is linked.
+
+
+## Instruction 3 findings and Instruction 4 handoff
+
+Read [Strategy detailed audit](2026-10-30-strategy-reliability.md) for the authoritative content digest, approved active ICP/reference projection, research/evidence state, owned asynchronous operations, explicit conflict recovery, scheduler leases/revisions and automatic consequence guards. Migration 0065 is required for monitoring revision/lease/signature and event-fingerprint uniqueness; release evidence must verify migration/deployment, not assume remote schema state. Strategy events extend existing `LeadIntelReliabilityTrace` using `leadintel:strategy-operation`; its version is `20261030-strategy-v1`. Keep the Setup/Profile aliases and safe bounded trace semantics.
+
+Instruction 4 must start from the final Strategy PR and exact released SHA/proof, recheck main/runtime freshness, then inspect actual company requests and results against this contract. Priorities: stable company identity and ownership, source-backed claims/event dates, seller/target/reference separation, evidence+ICP fit before enrichment, deduplication, exclusion/tender handling, shortlist/review, manual-role retention, source persistence/reload and Companies → Buyers handoff. Retained historical evidence does not become a current approved strategy automatically. Do not infer real provider execution, scheduled-run success or usable contact outcomes from controlled tests. Authenticated workflow, actual source/company accuracy and prior Buyers contact acceptance remain open.

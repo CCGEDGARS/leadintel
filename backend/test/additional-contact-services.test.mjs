@@ -258,3 +258,12 @@ test('a later pre-dispatch hold cannot release the budget of an already submitte
  f.deps.findTreg=async()=>({contact:null,request:{status:'not_found'}});
  await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p1',provider:'treg',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_DAILY_LIMIT');
 });
+
+test('pause while decoding Apollo response prevents late identity remapping and retains the submitted attempt',async()=>{
+ const f=fixture();f.raw.exec("CREATE TABLE crm_contacts(id TEXT,workspace_id TEXT,external_person_id TEXT);INSERT INTO crm_contacts VALUES('saved','w','apollo-person');");
+ let allowed=true;f.deps.guard=async()=>{if(!allowed)throw Error('Workflow paused');};f.deps.resolvePerson=async p=>({...p,id:'apollo-person'});
+ f.deps.enrich=async()=>({ok:true,json:async()=>{allowed=false;return {contact:{id:'saved',name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified',source:'apollo',verification_provider:'Apollo'},request:{status:'verified',credits_used:1}};}});
+ await assert.rejects(()=>lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps),/Workflow paused/);
+ assert.equal(f.raw.prepare("SELECT external_person_id FROM crm_contacts WHERE id='saved'").get().external_person_id,'apollo-person');
+ const attempt=f.raw.prepare('SELECT status,result_json FROM additional_contact_attempts').get();assert.equal(attempt.status,'needs_review');assert.equal(JSON.parse(attempt.result_json).provider_started,true);
+});

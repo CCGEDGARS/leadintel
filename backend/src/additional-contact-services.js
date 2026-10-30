@@ -3,7 +3,7 @@ import {findHunterWorkEmail} from './hunter-contact-research.js';
 import '../../customer/discovery-engine.js';
 import '../../customer/contact-confirmation-policy.js';
 import '../../customer/additional-contact-policy.js';
-import {getCrmCompany} from './crm.js';
+import {getCrmCompany,writeCrmRecord} from './crm.js';
 import {enrichCrmContact} from './crm-routes.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import {withWorkspaceServiceCredentials,resolveWorkspaceServiceCredential} from './service-integrations.js';
@@ -169,7 +169,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     if(!response.ok)throw fail(result.error||'Additional services are unavailable',response.status,result.code);
     if(result.contact&&(!C.accepted(result.contact,candidate.domain,'provider_verified')||String(result.contact.name).trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase()))throw fail('Provider result did not confirm this exact buyer and company email');
     if(result.contact?.id&&String(resolved.id)!==String(person.id)){
-      await env.DB.prepare('UPDATE crm_contacts SET external_person_id=? WHERE id=? AND workspace_id=?').bind(String(person.id),result.contact.id,context.workspaceId).run();
+      await writeCrmRecord(env.DB,{...context,guard,writeAuthority:context.writeAuthority||deps.guard?.writeAuthority},'UPDATE crm_contacts SET external_person_id=? WHERE id=? AND workspace_id=?',[String(person.id),result.contact.id,context.workspaceId]);
       result.contact.external_person_id=String(person.id);
     }
     const status=result.contact?'verified':'not_found';

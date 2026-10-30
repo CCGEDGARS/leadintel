@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
 const Targeting = require('../targeting-policy.js');
+const StrategyIntegrity = require('../strategy-integrity.js');
 
 const uiSource = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -124,6 +125,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
   };
   mainState.answers = { priority_offers: mainState.profile.priorityOffers, ideal_customer: mainState.profile.idealCustomer, buyer_roles: mainState.profile.decisionMakers, exclusions: 'No specific exclusions' };
   mainState.targetingConfirmation = Targeting.confirm(mainState);
+  mainState.approved=true;mainState.market.strategyApproved=true;mainState.market.icps=[{id:'icp-core',type:'core',active:true}];mainState.market.strategyApproval=StrategyIntegrity.approval(mainState);
   const storage = new Map([
     ['leadintel_customer_v2_state', JSON.stringify(mainState)],
     ['leadintel_customer_v2_discovery_meta', JSON.stringify({ activeJourneyStage: 5, targetCount, targetMode: 'custom' })]
@@ -164,6 +166,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     AbortController, DOMException, URL, URLSearchParams, TextEncoder, TextDecoder,
     dispatchEvent() {}, addEventListener() {}, removeEventListener() {},
     LeadIntelDiscovery: engine,
+    LeadIntelStrategyIntegrity: StrategyIntegrity,
     LeadIntelTargeting: Targeting,
     LeadIntelServerBridge: null,
     fetch: fetchImpl,
@@ -227,7 +230,7 @@ test('the Companies step shows the research budget next to the amount selector a
   assert.match(uiSource, /Research budget: up to \$\{estimate\.cap\} Firecrawl calls/);
   assert.match(uiSource, /if\(followUpQueries\.length&&!discoveryBudgetExhausted\(\)\)/);
   assert.match(uiSource, /autoPass<MAX_AUTONOMOUS_DISCOVERY_PASSES&&budgetAllowsPass/);
-  assert.match(uiSource, /fetchImpl:async\(url,init\)=>\{reserveFirecrawlCall\('page'\);return fetch\(url,init\);\}/);
+  assert.match(uiSource, /fetchImpl:async\(url,init\)=>\{throwIfDiscoveryRunAborted\(runSignal\);reserveFirecrawlCall\('page'\);return fetch\(url,init\);\}/);
   assert.doesNotMatch(uiSource, /Saving Mode search limit reached/);
   assert.match(uiSource, /research-budget=20261019-v1/);
   assert.match(indexHtml, /discovery-engine\.js\?v=[^"]*research-budget=20261019-v1/);

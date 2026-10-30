@@ -23,7 +23,7 @@ test('market strategy exposes Quick Overview, Market Research and Deep Analysis 
   assert.match(html,/id="research-recommendations"/);
   assert.match(html,/id="research-instructions"/);
   assert.match(html,/id="research-custom-sources"/);
-  assert.match(app,/RESEARCH_MODES\[state\.market\.researchMode\]/);
+  assert.match(app,/RESEARCH_MODES\[mode\]/);
   assert.match(app,/buildResearchRecommendations/);
   assert.match(app,/researchCustomSources/);
   assert.match(app,/openResearchPreview\("quick"\)/);
@@ -83,7 +83,9 @@ test('research status copy does not repeat the word research',()=>{
 
 test('market research cannot remain indefinitely busy and exposes live progress',()=>{
   assert.match(app,/recoverInterruptedResearch/);
-  assert.match(app,/withTimeout/);
+  assert.match(app,/function marketResearchRequest/);
+  assert.match(app,/overallTimeoutMs/);
+  assert.match(app,/run\.controller\.abort\(\)/);
   assert.match(app,/mapWithConcurrency/);
   assert.match(app,/researchProgress/);
   assert.match(app,/finally\s*\{/);
@@ -155,5 +157,5 @@ test('website monitoring is upfront and optional, with website entry and results
  assert.equal(document.querySelectorAll('#monitoring-custom-sources').length,1);
  assert.ok(panel.compareDocumentPosition(document.getElementById('icp-list'))&4);
  assert.match(app,/monitoring-summary-status/);
- assert.match(app,/const locked=!state\.market\.strategyApproved/);
+ assert.match(app,/strategyIntegrity\(\)\?\.status\(state\)/);
 });

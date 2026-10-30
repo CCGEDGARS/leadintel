@@ -55,7 +55,8 @@
       "public_pdf_extraction_version": "20261030-native-public-pdf-v1",
       "buyer_integrity_version": "20261030-audit-v1",
       "setup_integrity_version": "20261030-v1",
-      "profile_integrity_version": "20261030-v1"
+      "profile_integrity_version": "20261030-v1",
+      "strategy_integrity_version": "20261030-strategy-v1"
     }
   },
   "smokeChecks": [
@@ -2510,7 +2511,7 @@
       "url": "/customer/market-engine.js",
       "status": 200,
       "contains": [
-        "referenceModel=null",
+        "referenceModel=undefined",
         "Activate a reference customer to establish commercial anchors."
       ]
     },
@@ -2994,7 +2995,7 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "function captureMonitoringContext()",
+        "function captureMonitoringContext(",
         "monitoringContextCurrent(context)",
         "Manage scheduled websites in monitoring settings."
       ]
@@ -3771,7 +3772,7 @@
       "status": 200,
       "contains": [
         "const approvedCoreRoles=new Set",
-        "candidate.buyerRolesChanged===true&&stored",
+        "(candidate.buyerRolesChanged===true||candidate.buyerRolesSource==='manual')&&stored",
         "!approvedCoreRoles.has(role.toLowerCase())",
         "function buyerRoleSelectionContext(main={})",
         "research.roleSelectionContext!==buyerRoleSelectionContext(main)"
@@ -5785,6 +5786,117 @@
         "LeadIntelReliabilityTrace",
         "profile_approval",
         "leadintel:profile-operation"
+      ]
+    },
+    {
+      "id": "strategy-revision-contract",
+      "type": "text",
+      "url": "/customer/strategy-integrity.js",
+      "status": 200,
+      "contains": [
+        "20261030-strategy-v1",
+        "function signature(",
+        "function status(",
+        "function approval("
+      ]
+    },
+    {
+      "id": "strategy-save-acknowledgement",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "async function saveStrategyApproval(",
+        "STRATEGY_SAVE_TIMEOUT_MS",
+        "explicitSave:true",
+        "saved!==true"
+      ]
+    },
+    {
+      "id": "strategy-concurrent-edit-recovery",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function checkStrategyLocalPersistence(",
+        "strategyRecoveryRecord",
+        "downloadStrategyRecovery",
+        "strategySavedBaseline"
+      ]
+    },
+    {
+      "id": "strategy-research-owned-lifecycle",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function assertMarketResearchRun(",
+        "function marketResearchRequest(",
+        "researchExecutionHistory",
+        "buildAdaptivePlan"
+      ]
+    },
+    {
+      "id": "strategy-evidence-retention",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "function normalizeResearchExecution(",
+        "strategyApprovalInvalidated:",
+        "researchExecutionHistory:"
+      ]
+    },
+    {
+      "id": "strategy-adaptive-evidence",
+      "type": "text",
+      "url": "/customer/market-conditions-engine.js",
+      "status": 200,
+      "contains": [
+        "function buildAdaptivePlan(",
+        "remainingQueries",
+        "previousQueries"
+      ]
+    },
+    {
+      "id": "strategy-context-monitoring",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "monitoringRequestSerial",
+        "strategy_signature",
+        "captureMonitoringContext(true)"
+      ]
+    },
+    {
+      "id": "strategy-custom-signal-mobile",
+      "type": "text",
+      "url": "/customer/market.css",
+      "status": 200,
+      "contains": [
+        "grid-template-columns:minmax(0,1fr)",
+        "custom-signal-fields"
+      ]
+    },
+    {
+      "id": "strategy-context-discovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "strategySignature:window.LeadIntelStrategyIntegrity?.signature(main)",
+        "strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current"
+      ]
+    },
+    {
+      "id": "strategy-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "strategy-integrity.js?strategy-audit=20261030-v1",
+        "strategy-audit=20261030-v1"
       ]
     }
   ],

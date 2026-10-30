@@ -12,7 +12,7 @@ import '../../customer/discovery-engine.js';
 import '../../customer/crm-engine.js';
 import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage,renderDefaultWorkflowMessage} from './approved-workflow-engine.js';
-import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
+import {parse,workflowMain,workflowAuthorized,workflowRunAuthority,workflowExecutionSnapshot} from './approved-workflow-store.js';
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities,fetchDirectPublicPage,readPublicBuyerPage} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain,getCrmCompany} from './crm.js';
@@ -28,7 +28,7 @@ async function search(env,workspaceId,query,guard){
   await guard();const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
   const url='https://api.firecrawl.dev/v2/search';
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-  const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,...(query.kind==='market'&&query.market&&query.market!=='priority market'?{location:discovery.searchLocation(query.market)}:{}),scrapeOptions:{formats:['markdown']}})});await guard();
+  await guard();const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,...(query.kind==='market'&&query.market&&query.market!=='priority market'?{location:discovery.searchLocation(query.market)}:{}),scrapeOptions:{formats:['markdown']}})});await guard();
   // Snippets without an extracted page are insufficient for automatic qualification.
   const raw=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
   return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query).map(item=>({...item,verifiedAt:new Date().toISOString()}));
@@ -64,6 +64,7 @@ export async function researchBuyerContacts(candidate,search,guard,readPage,rows
 }
 
 export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
+  context={...context,guard,writeAuthority:guard.writeAuthority};
   await guard();const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
   if(!company||company.lifecycle_status!=='prospect')return false;
   const detail=await getCrmCompany(env.DB,context,company.id);await guard();
@@ -100,7 +101,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
       if(identityCredential.configured&&(await apolloCapabilities(env,workspaceId)).discovery){
         const identityHeaders={'Content-Type':'application/json','X-Api-Key':identityCredential.apiKey,Accept:'application/json'};
-        const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
+        await guard();const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
         discovery.recordBuyerResearchTool(accountability,{provider:'apollo',operation:'identity',status:'succeeded',results:(identityPayload.people||[]).length,reason:'Identity-only discovery; no contact reveal'});
         const identityTrace=discovery.traceIdentityBuyers(identityPayload,candidate,profile);
         const identityPeople=identityTrace.people;directoryPeople=identityPeople;
@@ -143,7 +144,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   }
   const pinned=new Set([...candidate.people.filter(p=>p.kept),...selectedCompanyContacts].map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
-  const crmContext={workspaceId,userId,role:'owner'};
+  const crmContext={workspaceId,userId,role:'owner',guard,writeAuthority:guard.writeAuthority};
   const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
   const agentIdentityReady=person=>{const agent=discovery.safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),row=agent?.people.find(row=>row.personId===String(person.id));return Boolean(agent&&agent.inputSignature===discovery.buyerReviewSignature(candidate)&&row?.identity==='supported'&&row.checks==='complete');};
   // The Buyer Agent owns the identity gate; providers may enrich but never waive it.
@@ -204,7 +205,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
               record('apollo','skipped','Apollo is not configured');
             }else{
               const runtime=Object.create(env);runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||env.APOLLO_API_KEY||'';runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;runtime.APOLLO_API_KEY=credential.apiKey;
-              const response=await enrichCrmContact(new Request('https://leadintel.invalid/internal-phone',{method:'POST',body:JSON.stringify({person_id:personId,contact_id:contact.id,name:contact.name,title:contact.title,phone_lookup:true})}),runtime,{}, {context:crmContext},contact.company_id);
+              const response=await enrichCrmContact(new Request('https://leadintel.invalid/internal-phone',{method:'POST',body:JSON.stringify({person_id:personId,contact_id:contact.id,name:contact.name,title:contact.title,phone_lookup:true})}),runtime,{}, {context:crmContext,guard},contact.company_id);
               await guard();
               const payload=await response.json();
               if(response.ok){
@@ -258,7 +259,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       if(!discovery.qualifyBuyer(person,profile,candidate).eligible)continue;
       const findings=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
       const source=findings.find(item=>globalThis.LeadIntelContactPolicy.publicSource(item.email,person.publicName||person.name,item.url,candidate.domain));if(!source)continue;
-      try{const contact=await confirmPublicWorkEmail(env,crmContext,target.id,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url});await guard();if(globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel))return complete(contact);}catch(error){candidate.buyerDiscovery.issues.push(error.message);}
+      try{const contact=await confirmPublicWorkEmail(env,crmContext,target.id,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url},{guard});await guard();if(globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel))return complete(contact);}catch(error){candidate.buyerDiscovery.issues.push(error.message);}
     }
   }
   if(paidPolicy.provider==='treg'){candidate.buyerDiscovery.contactConfirmationRequired=true;return null;}
@@ -268,7 +269,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   if(config.buyers.confirmContacts===true&&(await apolloCapabilities(env,workspaceId)).email){
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
     if(credential.configured){
-      const crmContext={workspaceId,userId,role:'owner'};
+      const crmContext={workspaceId,userId,role:'owner',guard,writeAuthority:guard.writeAuthority};
       const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
       await env.DB.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').bind(workspaceId).run();
       const runtime=Object.create(env);runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||env.APOLLO_API_KEY||'';runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;runtime.APOLLO_API_KEY=credential.apiKey;
@@ -283,7 +284,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
         const personId=publicId?(matches.length===1?matches[0].id:null):person.id;
         if(!personId||String(personId).startsWith('public-'))continue;
         const request=new Request('https://leadintel.invalid/internal-enrich',{method:'POST',body:JSON.stringify({person_id:personId,name:person.publicName||person.name,title:person.title,phone_lookup:false,allow_personal_email:false})});
-        const response=await enrichCrmContact(request,runtime,{}, {context:crmContext},target.id);await guard();
+        const response=await enrichCrmContact(request,runtime,{}, {context:crmContext,guard},target.id);await guard();
         const value=await response.json();
         const email=provenBusinessEmail({email:value.contact?.normalized_email,email_status:value.contact?.email_status},candidate.domain);
         if(response.ok&&email){candidate.buyerDiscovery.contactConfirmationRequired=false;return complete(value.contact);}
@@ -297,7 +298,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   return null;
 }
 export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch,researchDossier=researchWorkspaceDossier}){
-  await guard();const profile={...context.profile,website:context.website||context.profile?.website,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
+  await guard();const market={icps:context.icps,signals:context.signals},profile={...discovery.effectiveTargetingProfile({...context.profile,website:context.website||context.profile?.website},market),discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
     const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(row.workspace_id).first();
@@ -346,58 +347,65 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     // passed score >= approved minimum plus every mandatory evidence/identity/fit gate.
     // Persist it immediately so a later buyer/provider failure cannot lose a qualified opportunity.
     if(config.crm.saveQualified){
-      const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'};
+      const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner',guard,writeAuthority:guard.writeAuthority};
       for(const candidate of candidates){
         await guard();
         const existing=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);
         if(existing&&existing.lifecycle_status!=='prospect')continue;
-        const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Discovered',source:'approved_workflow_qualified'});
-        await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.qualification?.confidence||candidate.confidence,research_snapshot:{flowId:row.id||null,runId:run.id,revision:row.revision,researchAt:researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification,automaticQualifiedSave:true}});
+        await guard();const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Discovered',source:'approved_workflow_qualified'});
+        await guard();await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.qualification?.confidence||candidate.confidence,research_snapshot:{flowId:row.id||null,runId:run.id,revision:row.revision,researchAt:researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification,automaticQualifiedSave:true}});
       }
     }
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,context.profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
+    const candidates=[],reviewBuyers=[];for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
     return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
   if(stage==='messages'){
     const reviewMessages=[];const candidates=(result.candidates||[]).flatMap(candidate=>{try{if(context.outreachDefault)return [{...candidate,message:{...renderDefaultWorkflowMessage(context,candidate),followup_body:''}}];const evidence=freshEvidence(candidate,config.triggers.maxEvidenceAgeDays)[0]||(candidate.evidence||[]).find(e=>{const checked=Date.parse(e.verifiedAt),age=Date.now()-checked;return discovery.companyIdentityDomain(e.url)===discovery.companyIdentityDomain(candidate.domain)&&Number.isFinite(checked)&&age>=-300000&&age<=config.triggers.maxEvidenceAgeDays*86400000;}),values={firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],company:candidate.company,sender:profile.companyName,offer:profile.priorityOffers,evidenceUrl:evidence?.url};return [{...candidate,message:{subject:renderWorkflowMessage(config.messages.subject,values),body:renderWorkflowMessage(config.messages.body,values),followup_body:renderWorkflowMessage(config.messages.followup,values)}}];}catch(error){reviewMessages.push({domain:candidate.domain,contactId:candidate.contact?.id||null,reason:String(error?.message||'Message generation failed').slice(0,500),code:'MESSAGE_REVIEW_REQUIRED'});return [];}});return {...result,candidates,reviewMessages};
   }
-  const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'};
+  const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner',guard,writeAuthority:guard.writeAuthority};
   if(stage==='crm'){
     const candidates=[];for(const candidate of result.candidates||[]){await guard();const old=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(old&&old.lifecycle_status!=='prospect')continue;
-      const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Ready for Outreach',source:'approved_workflow'});await guard();
+      await guard();const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Ready for Outreach',source:'approved_workflow'});await guard();
       const contacts=await upsertCrmContacts(env.DB,crmContext,saved.company.id,[{...candidate.contact,work_email:candidate.contact.email,email_status:'verified'}]);await guard();
       await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{flowId:row.id||null,runId:run.id,revision:row.revision,researchAt:result.researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification,...(candidate.buyerDiscovery?{buyerResearch:globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence.research_snapshot.buyerResearch}:{})}});await guard();
       await appendCrmActivity(env.DB,crmContext,{id:`workflow-message-${run.id}-${saved.company.id}`,companyId:saved.company.id,type:'dossier.built',summary:'Message generated under approved workflow template',metadata:{flow_id:row.id||null,run_id:run.id,revision:row.revision,subject:candidate.message.subject,body:candidate.message.body,approval:'workflow_template',script_package:{version:1,savedAt:new Date().toISOString(),item:{domain:candidate.domain,company:candidate.company,researchStatus:'complete',researchAt:result.researchedAt,selectedPersonId:contacts[0]?.id||candidate.contact.id,approved:false,dossier:{company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,recommendedOffer:profile.priorityOffers,buyerRoles:config.buyers.roles,evidence:candidate.evidence,matchedSignals:candidate.matchedSignals,people:[{...candidate.contact,id:contacts[0]?.id||candidate.contact.id}]},drafts:{emailSubject:candidate.message.subject,emailBody:candidate.message.body,followUp:candidate.message.followup_body}}}}});
       candidates.push({...candidate,crmId:saved.company.id});}return {...result,candidates};
   }
   if(stage==='delivery'){
-    let queued=0,skipped=0;for(const candidate of result.candidates||[]){await guard();const response=await enqueueApprovedSequence(env,{},row.workspace_id,{user:{id:row.approved_by},member:{role:'owner'}},{...candidate.message,domain:candidate.domain,recipient:candidate.contact.email,contact_identity:candidate.contact.id||candidate.contact.name,approved:true,approved_at:row.approved_at},{runId:run.id,revision:row.revision});const value=await response.json();if(!response.ok){if(value.code==='AUTOMATION_RECIPIENT_ALREADY_CONTACTED'||value.code==='CRM_COMPANY_SUPPRESSED'||value.code==='CONTACT_SUPPRESSED'){skipped++;continue;}throw new Error(value.error||'Could not queue approved message');}if(!value.duplicate)queued++;}
+    let queued=0,skipped=0;for(const candidate of result.candidates||[]){await guard();const response=await enqueueApprovedSequence(env,{},row.workspace_id,{user:{id:row.approved_by},member:{role:'owner'},guard},{...candidate.message,domain:candidate.domain,recipient:candidate.contact.email,contact_identity:candidate.contact.id||candidate.contact.name,approved:true,approved_at:row.approved_at},{runId:run.id,revision:row.revision});const value=await response.json();if(!response.ok){if(value.code==='AUTOMATION_RECIPIENT_ALREADY_CONTACTED'||value.code==='CRM_COMPANY_SUPPRESSED'||value.code==='CONTACT_SUPPRESSED'){skipped++;continue;}throw new Error(value.error||'Could not queue approved message');}if(!value.duplicate)queued++;}
     return {...result,queued,skipped};
   }
   throw new Error('No executor for workflow stage');
 }
 export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,execute=executeWorkflowStage,now=new Date()}={}){
-  const sql=workspaceId?"SELECT * FROM approved_workflows WHERE workspace_id=? AND status='automatic'":"SELECT w.* FROM approved_workflows w WHERE w.status='automatic' AND NOT EXISTS (SELECT 1 FROM approved_workflow_runs r WHERE r.workspace_id=w.workspace_id AND r.revision=w.revision AND r.status='blocked') ORDER BY w.next_run_at LIMIT ?";
+  const sql=workspaceId?"SELECT * FROM approved_workflows WHERE workspace_id=? AND status='automatic'":"SELECT w.* FROM approved_workflows w WHERE w.status='automatic' AND NOT EXISTS (SELECT 1 FROM approved_workflow_runs r WHERE r.workspace_id=w.workspace_id AND r.flow_id IS NULL AND r.revision=w.revision AND r.status='blocked') ORDER BY w.next_run_at LIMIT ?";
   const {results:rows=[]}=await env.DB.prepare(sql).bind(workspaceId||maxWorkspaces).all();const summary={completed:0,blocked:0,skipped:0};
   for(const row of rows){
     if(!await workflowAuthorized(env,row.workspace_id,row.revision)){summary.skipped++;continue;}
-    let run=await env.DB.prepare("SELECT * FROM approved_workflow_runs WHERE workspace_id=? AND revision=? AND status IN ('running','blocked') ORDER BY created_at DESC LIMIT 1").bind(row.workspace_id,row.revision).first();
+    let run=await env.DB.prepare("SELECT * FROM approved_workflow_runs WHERE workspace_id=? AND flow_id IS NULL AND revision=? AND status IN ('running','blocked') ORDER BY created_at DESC LIMIT 1").bind(row.workspace_id,row.revision).first();
     if(run?.status==='blocked'){summary.skipped++;continue;}
     if(!run){if(row.next_run_at&&new Date(row.next_run_at)>now){summary.skipped++;continue;}const id=crypto.randomUUID();await env.DB.prepare("INSERT OR IGNORE INTO approved_workflow_runs(id,workspace_id,revision,status) VALUES(?,?,?,'running')").bind(id,row.workspace_id,row.revision).run();run=await env.DB.prepare('SELECT * FROM approved_workflow_runs WHERE id=?').bind(id).first();if(!run){summary.skipped++;continue;}}
     if(run.lease_token){if(new Date(run.lease_until)>now){summary.skipped++;continue;}await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message='Execution was interrupted. Review before retrying; provider usage may already have occurred.',lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND lease_until<=?").bind(run.id,run.lease_token,now.toISOString()).run();summary.blocked++;continue;}
     const token=crypto.randomUUID(),claim=await env.DB.prepare("UPDATE approved_workflow_runs SET lease_token=?,lease_until=? WHERE id=? AND status='running' AND lease_token IS NULL").bind(token,new Date(now.getTime()+15*60000).toISOString(),run.id).run();if(!claim.meta?.changes){summary.skipped++;continue;}
-    const guard=async()=>{if(!await workflowAuthorized(env,row.workspace_id,row.revision))stop();const lease=await env.DB.prepare('SELECT status,lease_token FROM approved_workflow_runs WHERE id=?').bind(run.id).first();if(lease?.status!=='running'||lease?.lease_token!==token)stop();};
+    const leaseStartedAt=Date.now(),executionTime=()=>new Date(now.getTime()+Math.max(0,Date.now()-leaseStartedAt)).toISOString();
+    let authoritySnapshot=null;
+    const guard=async()=>{for(let attempt=0;attempt<3;attempt++){
+      const snapshot=await workflowExecutionSnapshot(env,row,run);if(!snapshot.valid){if(snapshot.retry)continue;stop();}
+      const lease=await env.DB.prepare('SELECT status,lease_token,lease_until FROM approved_workflow_runs WHERE id=?').bind(run.id).first();if(lease?.status!=='running'||lease.lease_token!==token||!(Date.parse(lease.lease_until)>Date.parse(executionTime())))stop();
+      const authority=workflowRunAuthority(row,run,token,executionTime(),snapshot),current=await env.DB.prepare('SELECT lease_until FROM approved_workflow_runs WHERE id=? AND '+authority.sql).bind(run.id,...authority.args).first();if(current&&Date.parse(current.lease_until)>Date.parse(executionTime())){authoritySnapshot=snapshot;return;}
+    }stop();};
+    guard.writeAuthority=()=>{const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);return {sql:'EXISTS(SELECT 1 FROM approved_workflow_runs WHERE id=? AND '+authority.sql+')',args:[run.id,...authority.args]};};
     let result=parse(run.result_json);try{
       const context=approvedContext(await workflowMain(env,row.workspace_id)),config=normalizeWorkflowConfig(parse(row.config_json),context);
       for(let index=run.stage_index;index<WORKFLOW_STAGES.length;index++){
         result=await execute(WORKFLOW_STAGES[index],{env,row,run,result,context,config,guard});await guard();
-        await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?').bind(index+1,JSON.stringify(result),run.id,token).run();
+        let checkpoint;for(let attempt=0;attempt<3;attempt++){const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);checkpoint=await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND '+authority.sql).bind(index+1,JSON.stringify(result),run.id,...authority.args).run();if(checkpoint.meta?.changes)break;await guard();}if(!checkpoint?.meta?.changes)stop();
       }
-      await guard();await env.DB.batch([env.DB.prepare("UPDATE approved_workflow_runs SET status='completed',lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(run.id,token),env.DB.prepare('UPDATE approved_workflows SET next_run_at=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=?').bind(new Date(now.getTime()+(config.delivery.frequency==='weekly'?7:1)*86400000).toISOString(),row.workspace_id,row.revision)]);summary.completed++;
+      let completed;for(let attempt=0;attempt<3;attempt++){await guard();const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);completed=await env.DB.batch([env.DB.prepare("UPDATE approved_workflow_runs SET status='completed',lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND "+authority.sql).bind(run.id,...authority.args),env.DB.prepare("UPDATE approved_workflows SET next_run_at=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic' AND approved_by=? AND EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=approved_workflows.workspace_id AND user_id=approved_workflows.approved_by AND role='owner') AND EXISTS(SELECT 1 FROM approved_workflow_runs WHERE id=? AND status='completed')").bind(new Date(now.getTime()+(config.delivery.frequency==='weekly'?7:1)*86400000).toISOString(),row.workspace_id,row.revision,row.approved_by,run.id)]);if(completed[0]?.meta?.changes)break;}if(!completed?.[0]?.meta?.changes)stop();summary.completed++;
     }catch(cause){await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message=?,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(String(cause.message||'Execution failed').slice(0,500),run.id,token).run();summary.blocked++;}
   }return summary;
 }

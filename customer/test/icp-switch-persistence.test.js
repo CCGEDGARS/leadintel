@@ -4,7 +4,7 @@ const Lookalike=require('../lookalike-discovery.js');
 const app=fs.readFileSync(require.resolve('../app.js'),'utf8');
 function part(start,end){const a=app.indexOf(start);return app.slice(a,app.indexOf(end,a));}
 function harness(icps=[]){
- const dom=new JSDOM('<div id="icp-list"></div>'),state={profile:{idealCustomer:'Business buyers'},market:{icps,signals:[],opportunities:[],contentLanguage:'en'}},context={state,document:dom.window.document,esc:x=>String(x??''),$:id=>dom.window.document.getElementById(id),saveState:()=>{},syncResearchSourcesToSignals:()=>{},LeadIntelMarket:{...Market,buildIcpCandidates:()=>[{id:'icp-core',type:'core',name:'Core ICP',active:true,description:'Business buyers'}]},icpActivationRequirement:icp=>({available:icp.type==='core'||context.evidenceAvailable,reason:'Verified evidence required',target:'run-market-research',action:'Add evidence'}),evidenceAvailable:false};
+ const dom=new JSDOM('<div id="icp-list"></div>'),state={profile:{idealCustomer:'Business buyers'},market:{icps,signals:[],opportunities:[],contentLanguage:'en'}},context={strategyIntegrity:()=>require('../strategy-integrity.js'),state,document:dom.window.document,esc:x=>String(x??''),$:id=>dom.window.document.getElementById(id),saveState:()=>{},syncResearchSourcesToSignals:()=>{},LeadIntelMarket:{...Market,buildIcpCandidates:()=>[{id:'icp-core',type:'core',name:'Core ICP',active:true,description:'Business buyers'}]},icpActivationRequirement:icp=>({available:icp.type==='core'||context.evidenceAvailable,reason:'Verified evidence required',target:'run-market-research',action:'Add evidence'}),evidenceAvailable:false};
  vm.createContext(context);vm.runInContext(part('function enforceIcpActivationRequirements(){','function readMarketEdits(')+part('function readMarketEdits(','function syncResearchSourcesToSignals(){')+part('function renderIcps(){','function renderSignalDesigner(){'),context);return {context,state,document:dom.window.document};
 }
 test('normalization keeps every profile and its saved preference and reference identity',()=>{
@@ -51,7 +51,7 @@ test('hidden legacy reference profiles cannot bypass the canonical reference Off
 });
 test('profile reapproval preserves explicit On and Off preferences, including the canonical reference lens',()=>{
  const state={profile:{idealCustomer:'B2B buyers'},market:{icps:[{id:'icp-core',type:'core',active:false,requestedActive:false},{id:'icp-opportunity-led',type:'opportunity-led',active:false,requestedActive:true},{id:'icp-reference-lookalike',type:'lookalike-led',active:false,requestedActive:false}]}};
- const context={state,contentLanguage:()=> 'en',LeadIntelMarket:Market};vm.runInNewContext(part('function seedMarketStrategy(){','function requireConfirmedTargeting(){')+';seedMarketStrategy()',context);
+ const context={strategyIntegrity:()=>require('../strategy-integrity.js'),state,contentLanguage:()=> 'en',LeadIntelMarket:Market};vm.runInNewContext(part('function seedMarketStrategy(){','function requireConfirmedTargeting(){')+';seedMarketStrategy()',context);
  assert.equal(state.market.icps.find(x=>x.id==='icp-core').requestedActive,false);assert.equal(state.market.icps.find(x=>x.id==='icp-opportunity-led').requestedActive,true);assert.equal(state.market.icps.find(x=>x.id==='icp-reference-lookalike').requestedActive,false);
 });
 test('repairing a partial all-Off strategy does not silently enable missing optional profiles',()=>{

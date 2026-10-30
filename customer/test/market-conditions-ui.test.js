@@ -11,13 +11,14 @@ test('Market Research and Deep Analysis render a compact six-topic evidence pack
   assert.match(index,/id="market-conditions"/);
   assert.match(app,/function renderMarketConditions\(\)/);
   for(const topic of ['Market direction','Competition','Funding','Pricing','Demand and buying points','Practical advice'])assert.match(app,new RegExp(topic));
-  assert.match(app,/state\.market\.researchMode==="quick"\?null/);
+  assert.match(app,/state\.market\.marketConditions=mode==="quick"\?null/);
   assert.match(css,/\.market-condition-grid/);
   assert.match(css,/@media\(max-width:760px\).*market-condition-grid/s);
 });
 
 test('research preview and execution use the same category-reserved plan',()=>{
-  const calls=app.match(/LeadIntelMarket\.buildResearchPlan/g)||[];
-  assert.equal(calls.length,2);
+  for(const name of ['openResearchPreview','runMarketResearch']){const start=app.indexOf('function '+name+'('),end=app.indexOf('\nfunction ',start+1);assert.match(app.slice(start,end<0?undefined:end),/LeadIntelMarket\.buildResearchPlan/);}
+  assert.match(app,/reserveFollowUps:true/);
+  assert.match(app,/remainingQueries/);
   assert.match(app,/researchCategory/);
 });

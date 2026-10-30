@@ -23,3 +23,8 @@ test('verification retries temporary health failures and rejects missing provena
  const result=await verifyWorkerPropagation({url:'https://worker.example/api/health',expectedSha:sha,waitImpl:async()=>{},fetchImpl:async()=>++calls===1?new Response('',{status:503}):Response.json({status:'ok',billing:'customer_only',release_sha:sha})});assert.equal(result.attempts,2);
  await assert.rejects(verifyWorkerPropagation({url:'https://worker.example/api/health',expectedSha:'main'}),/exact release SHA/);
 });
+test('main backend propagation requires its service identity and exact release revision',async()=>{
+ const {verifyWorkerPropagation}=await load();let calls=0;
+ const result=await verifyWorkerPropagation({url:'https://backend.example/api/health',expectedSha:sha,requireCustomerOnly:false,expectedService:'leadintel-api',waitImpl:async()=>{},fetchImpl:async()=>Response.json({status:'ok',service:'leadintel-api',release_sha:++calls===1?old:sha})});assert.equal(result.attempts,2);
+ await assert.rejects(verifyWorkerPropagation({url:'https://backend.example/api/health',expectedSha:sha,requireCustomerOnly:false,expectedService:'leadintel-api',attempts:1,fetchImpl:async()=>Response.json({status:'ok',service:'other',release_sha:sha})}),/failed/);
+});

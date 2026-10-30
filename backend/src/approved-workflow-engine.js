@@ -4,7 +4,9 @@ import MessageFacts from '../../customer/message-facts.js';
 import '../../customer/company-brain.js';
 import '../../customer/targeting-policy.js';
 import '../../customer/reference-customers.js';
+import '../../customer/reference-customer-library.js';
 import '../../customer/reference-customer-portfolio.js';
+import '../../customer/strategy-integrity.js';
 import {sha256} from './security.js';
 export const WORKFLOW_STAGES=['profile','strategy','companies','buyers','triggers','messages','crm','delivery'];
 const text=(v,max=4000)=>String(v??'').trim().slice(0,max);
@@ -13,8 +15,10 @@ function canonical(value){if(Array.isArray(value))return value.map(canonical);if
 export const fingerprint=value=>sha256(JSON.stringify(canonical(value)));
 export function approvedContext(main={}){
   const market=main.market||{},confirmed=globalThis.LeadIntelTargeting?.profileFields?.(main)||{};
+  const strategy=globalThis.LeadIntelStrategyIntegrity.status(main);
   const lookalike=market.icps?.find(item=>item.type==='lookalike'||item.type==='lookalike-led'||item.id==='icp-lookalike'||item.id==='icp-reference-lookalike');
-  const referenceSimilarityModel=lookalike?.active===false?null:globalThis.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})||null;
+  const hasPortfolio=Array.isArray(main.referenceCustomerPortfolio?.lists);
+  const referenceSimilarityModel=lookalike?.active===false?null:globalThis.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(!hasPortfolio?globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}):null)||null;
   const referenceDomains=[...(main.referenceCustomers?.rows||[]),...(referenceSimilarityModel?.activeRows||[]),...(referenceSimilarityModel?.models||[]).flatMap(model=>model.activeRows||[])].map(item=>globalThis.LeadIntelReferenceCustomers.domain(item.website||item.domain)).filter(Boolean);
   const profile={...(main.profile||{}),...Object.fromEntries(Object.entries(confirmed).filter(([,value])=>value)),referenceSimilarityModel,referenceDomains};
   if(main.targetMarkets?.length)profile.targetMarkets=main.targetMarkets.join('; ');
@@ -22,7 +26,7 @@ export function approvedContext(main={}){
 
   const outreachDefault=Studio.defaultTemplate(main.messageStudio||{});
   const outreachLanguage=Studio.normalize(main.messageStudio||{}).languageSettings?.defaultLanguage||'en';
-  return {...(outreachLanguage!=='en'?{outreachLanguage}:{}),...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
+  return {...(outreachLanguage!=='en'?{outreachLanguage}:{}),...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:strategy.current,strategySignature:strategy.signature,
     icps:market.icps||[],signals:market.signals||[],researchSourceTypes:market.researchSourceTypes||[],researchCustomSources:market.researchCustomSources||[],researchInstructions:market.researchInstructions||'',knownEvidence:(market.researchResults||[]).slice(0,20).map(item=>({url:item.url||item.link||'',title:item.title||'',description:item.description||'',text:String(item.text||item.markdown||'').slice(0,4000),date:item.date||item.publishedDate||'',market:item.market||''}))};
 }
 export function normalizeWorkflowConfig(input={},context=null){

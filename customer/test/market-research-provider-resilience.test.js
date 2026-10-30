@@ -31,7 +31,8 @@ test('provider resilience is loaded before research starts and wraps the OpenAI 
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(evidenceView,/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2/);
   assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1['"]/);
-  assert.match(app,/withOpenAiRetry\(attempt=>LeadIntelMarket\.withTimeout\(/);
+  assert.match(app,/withOpenAiRetry\(attempt=>\{assertMarketResearchRun\(run\)/);
+  assert.match(app,/marketResearchRequest\(run,signal=>searchOpenAiWeb/);
   assert.match(app,/describePartialCoverage\(/);
 });
 
@@ -74,8 +75,8 @@ test('market search does not restart a timed out paid request',async()=>{
 });
 test('all OpenAI market search paths use provider budget and bounded timeout retries',()=>{
  const app=fs.readFileSync(appPath,'utf8');
- assert.equal((app.match(/runtime\.openAiTimeoutMs,"OpenAI (?:search|follow-up)"/g)||[]).length,3);
- assert.equal((app.match(/retryTimeouts:true/g)||[]).length,3);
+ assert.equal((app.match(/runtime\.openAiTimeoutMs,"OpenAI (?:search|follow-up)"/g)||[]).length,1);
+ assert.equal((app.match(/retryTimeouts:true/g)||[]).length,1);
  assert.doesNotMatch(app,/runtime\.requestTimeoutMs,"OpenAI (?:search|follow-up)"/);
  assert.match(app,/runtime\.requestTimeoutMs,"Firecrawl search"/);
 });
@@ -147,8 +148,8 @@ test('research completion is prominent while provider gaps remain explicit',()=>
 test('partial coverage offers an OpenAI-only recovery that preserves Firecrawl evidence',()=>{
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(app,/async function retryOpenAiDiscovery\(/);
-  assert.match(app,/const preservedResults=\[\.\.\.state\.market\.researchResults\]/);
-  assert.match(app,/const recovered=LeadIntelMarket\.mergeResearchResults\(state\.market\.researchResults,preservedResults/);
+  assert.match(app,/runMarketResearch\(state\.market\.researchMode,\{retryOnly:true\}\)/);
+  assert.match(app,/mergeRetainedResearchEvidence\(previous.results,state.market.researchResults\)/);
   assert.match(app,/data-extend-openai/);
   assert.match(app,/Retry incomplete checks/);
   assert.match(app,/openAiRetryStatus/);

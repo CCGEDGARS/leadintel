@@ -16,9 +16,10 @@ import {listConversations,syncConversation,approveConversationPlan,runConversati
 import {base64UrlEncode} from '../src/gmail.js';
 import {getCrmCompany} from '../src/crm.js';
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...a){this.args=a;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes)}};}}
-class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec("CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,daily_credit_limit INTEGER NOT NULL DEFAULT 3,monthly_credit_limit INTEGER NOT NULL DEFAULT 30,retry_after_days INTEGER NOT NULL DEFAULT 30,allow_personal_email INTEGER NOT NULL DEFAULT 0,phone_lookup_mode TEXT NOT NULL DEFAULT 'on_request')");for(const file of ['0001_initial.sql','0009_customer_saas.sql','0011_master_crm.sql','0012_crm_contact_enrichment.sql','0013_workspace_service_integrations.sql','0019_microsoft_mail.sql','0023_hunter_service_integration.sql','0015_outreach_automation.sql','0022_crm_public_contact_sources.sql','0024_automation_brand_html.sql','0025_contact_suppression.sql','0027_approved_workflow.sql','0041_additional_contact_services.sql','0043_additional_contact_provider_receipts.sql','0045_treg_paid_search.sql','0046_treg_workspace_credentials.sql','0047_paid_phone_permission.sql'])this.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(statements){this.raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());this.raw.exec('COMMIT');return results;}catch(e){this.raw.exec('ROLLBACK');throw e;}}}
+class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec("CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,daily_credit_limit INTEGER NOT NULL DEFAULT 3,monthly_credit_limit INTEGER NOT NULL DEFAULT 30,retry_after_days INTEGER NOT NULL DEFAULT 30,allow_personal_email INTEGER NOT NULL DEFAULT 0,phone_lookup_mode TEXT NOT NULL DEFAULT 'on_request')");for(const file of ['0001_initial.sql','0009_customer_saas.sql','0011_master_crm.sql','0012_crm_contact_enrichment.sql','0013_workspace_service_integrations.sql','0019_microsoft_mail.sql','0023_hunter_service_integration.sql','0015_outreach_automation.sql','0022_crm_public_contact_sources.sql','0024_automation_brand_html.sql','0025_contact_suppression.sql','0027_approved_workflow.sql','0030_saved_flows.sql','0041_additional_contact_services.sql','0043_additional_contact_provider_receipts.sql','0045_treg_paid_search.sql','0046_treg_workspace_credentials.sql','0047_paid_phone_permission.sql'])this.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(statements){this.raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());this.raw.exec('COMMIT');return results;}catch(e){this.raw.exec('ROLLBACK');throw e;}}}
 const dossierFixture=async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]});
 const main={website:'https://seller.example/',approved:true,profile:{companyName:'Fixture Industrial',priorityOffers:'industrial automation; custom machinery',idealCustomer:'manufacturers',decisionMakers:'COO',targetMarkets:'Sweden',exclusions:'',opportunityValue:'€50,000',customerPainPoints:'production flow downtime'},market:{strategyApproved:true,icps:[{id:'core',description:'manufacturers',active:true}],signals:[{id:'expansion',name:'Facility expansion',active:true,weight:10,keywords:'new factory; capacity expansion'},{id:'modernization',name:'Modernization',active:true,weight:9,keywords:'automation investment; equipment upgrade'}]}};
+main.market.strategyApproval=globalThis.LeadIntelStrategyIntegrity.approval(main,'2026-10-30T00:00:00.000Z');
 const config=normalizeWorkflowConfig({companies:{limit:1,queries:1},buyers:{roles:['COO'],confirmContacts:true},triggers:{minimumScore:50,maxEvidenceAgeDays:90},messages:{subject:'Hello {{company}}',body:'Hello {{firstName}}, {{sender}} offers {{offer}}. Source: {{evidenceUrl}}'},delivery:{timezone:'UTC',dailyLimit:5,sendWindowStart:'09:00',sendWindowEnd:'17:00'}});
 async function fixture(){const db=new DB();db.raw.exec("INSERT INTO users(id,email,display_name) VALUES('u1','owner@fixture.test','Owner');INSERT INTO workspaces(id,name,market,owner_user_id) VALUES('w1','First','SE','u1'),('w2','Second','FI','u1');INSERT INTO workspace_members(workspace_id,user_id,role) VALUES('w1','u1','owner');INSERT INTO gmail_connections(workspace_id,user_id,google_email,status) VALUES('w1','u1','owner@fixture.test','connected');");db.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'u1',datetime('now','+1 day'))").run(await sha256('token'));db.raw.prepare("INSERT INTO customer_workspace_state(workspace_id,payload_json) VALUES('w1',?)").run(JSON.stringify({main}));const key=btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','hunter',?,'test')").run(await encryptSecret('test-hunter',await importAesKey(key)));db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES('w1','apollo',?,'test',?)").run(await encryptSecret('test-apollo',await importAesKey(key)),JSON.stringify({discovery_enabled:false,email_enrichment_enabled:true,phone_enrichment_enabled:true}));db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(await encryptSecret('test-firecrawl',await importAesKey(key)));return {OAUTH_TOKEN_ENCRYPTION_KEY:key,DB:db,AUTOMATIC_GMAIL_DELIVERY_MODE:'manual_only',APPROVED_WORKFLOW_DELIVERY_MODE:'enabled'};}
 async function call(env,body,workspace='w1'){return handleApprovedWorkflowRoute(new Request('https://api.test/api/approved-workflow?workspace_id='+workspace,{method:body?'POST':'GET',headers:{Cookie:'leadintel_session=token','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),env,{});}
@@ -82,7 +83,7 @@ test('checked 80+ Lookalike company fit can advance without inventing a buying s
  const env=await fixture(),guard=async()=>{};
  const model={active:true,dna:{active:true,referenceProfiles:[{rowId:'r',companyName:'Reference',dimensions:[{key:'industry',values:['renewable energy']},{key:'productionModel',values:['modular components']},{key:'capabilities',values:['steel structures']}]}]}};
  model.dna.referenceProfiles[0].sourceEvidence=model.dna.referenceProfiles[0].dimensions.map(d=>({field:d.key,url:'https://reference.example/about',quote:'Reference manufactures '+d.values[0]+' for customers.'}));
- const context={...approvedContext(main),signals:[],profile:{companyName:'Seller',website:'seller.example',targetMarkets:'Sweden',idealCustomer:'renewable energy manufacturers',priorityOffers:'steel structures; modular components',referenceSimilarityModel:model}};
+ const context={...approvedContext(main),icps:[{id:'icp-reference-lookalike',type:'lookalike',active:true,description:'renewable energy manufacturers'}],signals:[],profile:{companyName:'Seller',website:'seller.example',targetMarkets:'Sweden',idealCustomer:'renewable energy manufacturers',priorityOffers:'steel structures; modular components',referenceSimilarityModel:model}};
  const config=normalizeWorkflowConfig({qualificationVersion:2,companies:{limit:1,queries:2,researchPriority:'lookalike'},triggers:{minimumScore:90},buyers:{roles:['COO']},messages:{subject:'Hello {{company}}',body:'Hello {{firstName}}. Relevant source: {{evidenceUrl}}'}});
  const official={url:'https://nordic.se/products',title:'Nordic products',markdown:'Nordic manufactures steel structures and modular components for renewable energy equipment in Sweden. Its factory supports wind energy manufacturers with engineered components.'};
  const independent={url:'https://industry.example/nordic',title:'Nordic renewable energy equipment',markdown:'Nordic manufactures modular components and steel structures for renewable energy projects in Sweden, according to its industry association listing. The company supplies wind energy manufacturers.'};
@@ -285,7 +286,7 @@ test('automatic inventory persists for a saved company even with no eligible buy
  assert.equal(await persistWorkflowBuyerResearch(env,{...context,workspaceId:'w2'},candidate),false);
 });
 
-for(const mode of ['email','email_phone','existing_email_phone','fallback_pending','fallback_phone_off','fallback_unapproved','fallback_ambiguous','fallback_disabled','fallback_webhook_missing','fallback_credit_limit'])test('Buyer Agent phone providers and CRM persistence: '+mode,async()=>{
+for(const mode of ['email','email_phone','existing_email_phone','fallback_pending','fallback_phone_off','fallback_unapproved','fallback_ambiguous','fallback_disabled','fallback_webhook_missing','fallback_credit_limit','fallback_paused'])test('Buyer Agent phone providers and CRM persistence: '+mode,async()=>{
  const fallback=mode.startsWith('fallback'),withPhone=!['email','fallback_phone_off'].includes(mode),existingEmail=mode==='existing_email_phone'||fallback;
  const env=await fixture(),key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);
  if(existingEmail){
@@ -301,6 +302,8 @@ for(const mode of ['email','email_phone','existing_email_phone','fallback_pendin
  env.DB.raw.exec(fs.readFileSync(new URL('../migrations/0010_workspace_ai_integrations.sql',import.meta.url),'utf8'));
  env.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES('w1','gemini',?,'test','gemini-fixture',1)").run(await encryptSecret('test-gemini',key));
  if(fallback){env.DB.raw.exec("INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES('w1')");env.APOLLO_WEBHOOK_URL=mode==='fallback_webhook_missing'?'':'https://api.test/api/webhooks/apollo/crm-contact';env.APOLLO_WEBHOOK_SECRET='fixture-signing';env.DB.raw.prepare("UPDATE workspace_service_integrations SET metadata_json=? WHERE workspace_id='w1' AND provider='apollo'").run(JSON.stringify({discovery_enabled:true,email_enrichment_enabled:true,phone_enrichment_enabled:mode!=='fallback_disabled'}));env.DB.raw.exec("UPDATE enrichment_policies SET daily_credit_limit="+(mode==='fallback_credit_limit'?8:30)+" WHERE workspace_id='w1'");}
+ let authorized=true;
+ if(mode==='fallback_paused'){const prepare=env.DB.prepare.bind(env.DB);env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.includes('SELECT daily_credit_limit,monthly_credit_limit')){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();authorized=false;return value;};}return statement;};}
  const original=globalThis.fetch,calls=[];
  globalThis.fetch=async(url,options={})=>{
   calls.push(String(url));
@@ -315,6 +318,7 @@ for(const mode of ['email','email_phone','existing_email_phone','fallback_pendin
  };
  try{
   const config=normalizeWorkflowConfig({messages:{subject:'Hello {{firstName}}',body:'Hello {{firstName}} at {{company}}'},buyers:{roles:['COO'],confirmContacts:false,confirmPhone:fallback&&mode!=='fallback_unapproved',confirmationLevel:'provider_verified'}}),candidate={company:'Example',domain:'example.com',qualification:{eligible:true,score:85,researchedAt:new Date().toISOString()}};
+  if(mode==='fallback_paused'){await assert.rejects(()=>executeWorkflowStage('buyers',{researchDossier:dossierFixture,env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[candidate]},guard:async()=>{if(!authorized)throw Error('Workflow paused');}}),/Workflow paused/);assert.equal(calls.filter(url=>url.includes('/people/match')).length,0,'pause during Apollo setup must prevent paid dispatch');return;}
   const result=await executeWorkflowStage('buyers',{researchDossier:dossierFixture,env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[candidate]},guard:async()=>{}});
   assert.equal(result.candidates[0]?.contact.email,'anna.andersson@example.com',JSON.stringify({issues:result.reviewBuyers?.[0]?.buyerDiscovery?.issues,people:result.reviewBuyers?.[0]?.people,accountability:result.reviewBuyers?.[0]?.publicResearch?.accountability}));
   assert.equal(calls.filter(url=>url.includes('treg.to/call/')).length,existingEmail?(withPhone?1:0):withPhone?4:2,JSON.stringify({issues:result.candidates[0]?.buyerDiscovery?.issues,people:result.candidates[0]?.people.map(p=>({id:p.id,name:p.name,title:p.title}))}));assert.equal(calls.filter(url=>url.includes('/people/match')).length,mode==='fallback_pending'?1:0,JSON.stringify({trace:result.candidates[0]?.buyerDiscovery?.phoneEnrichment,issues:result.candidates[0]?.buyerDiscovery?.issues,calls}));assert.equal(calls.some(url=>url.includes('hunter.io')),false);
@@ -335,4 +339,205 @@ test('updated workflow research persists every AI review signature input for a s
  assert.equal(await persistWorkflowBuyerResearch(env,context,candidate),true);
  const detail=await crm.getCrmCompany(env.DB,context,saved.company.id),s=detail.intelligence.research_snapshot,reloaded={company:detail.company.company_name,domain:detail.company.normalized_domain,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,buyerFit:s.buyerFit,evidence:detail.intelligence.evidence,buyerDiscovery:s.buyerResearch.discovery,people:s.buyerResearch.buyers,publicResearch:s.buyerResearch.publicResearch};
  assert.equal(D.buyerReviewSignature(reloaded),candidate.publicResearch.aiReview.inputSignature);assert.equal(detail.intelligence.evidence[0].url,'https://signature.example/new');
+});
+
+test('automatic context respects explicit inactive or empty reference portfolios while retaining legacy migration',()=>{
+ const rows=globalThis.LeadIntelReferenceCustomers.normalizeImportedRows([{companyName:'Reference',website:'https://reference.example'}]),dna={active:true,calibrationVersion:2,dimensions:[{key:'industry',values:['manufacturing']}]};
+ const reference={rows,activeIds:rows.map(row=>row.id),activated:true,fingerprint:'published-ref',dna,publishedModel:{active:true,activeRows:rows,fingerprint:'published-ref',dna}};
+ for(const lists of [[],[{id:'inactive',name:'Inactive',active:false,reference}]]){
+  const context=approvedContext({...main,referenceCustomers:reference,referenceCustomerPortfolio:{lists}});
+  assert.equal(context.profile.referenceSimilarityModel,null,'inactive saved portfolio cannot revive its editor model');
+ }
+ assert.ok(approvedContext({...main,referenceCustomers:reference}).profile.referenceSimilarityModel,'legacy-only active models remain available');
+ const draft={...reference,activated:false,activeIds:[],dna:null,draftDirty:true};
+ const published=approvedContext({...main,referenceCustomers:draft,referenceCustomerPortfolio:{lists:[{id:'published',name:'Published',active:true,reference:draft}]}}).profile.referenceSimilarityModel;
+ assert.equal(published?.models[0]?.fingerprint,'published-ref','saved publication survives an unactivated working draft in the backend runtime');
+});
+
+test('automatic buyer dossier uses current active ICP offers and targets rather than the old seller profile',async()=>{
+ const env=await fixture(),context=approvedContext({...main,market:{...main.market,icps:[{id:'selected',active:true,description:'Property agencies',offers:'CRM implementation',targetMarkets:'Portugal',buyerRoles:'Managing Director'}]}});
+ let dossierInput;
+ const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'current-icp'},result:{candidates:[{company:'Target',domain:'target.example'}]},context,config,guard:async()=>{},researchDossier:async(_env,_workspaceId,input)=>{dossierInput=input;return {status:'incomplete'};}});
+ assert.equal(result.candidates.length,0);
+ assert.equal(dossierInput.seller.offers,'CRM implementation');
+ assert.equal(dossierInput.seller.buyers,'Property agencies');
+ assert.equal(dossierInput.seller.markets,'Portugal');
+});
+
+test('automatic company queries and purchasing qualification use the same selected ICP context',async()=>{
+ const env=await fixture(),context=approvedContext({...main,market:{...main.market,icps:[{id:'selected',active:true,description:'industrial equipment manufacturers',offers:'industrial sensors',targetMarkets:'Portugal',buyerRoles:'Operations Director'}]}}),calls=[],sellerInputs=[];
+ const original=globalThis.fetch;globalThis.fetch=async(_url,options)=>{calls.push(JSON.parse(options.body));return Response.json({data:[{url:'https://lusomach.pt/about',title:'Lusomach manufacturing in Portugal',markdown:'Lusomach manufactures industrial equipment in Portugal. The company operates manufacturing facilities and uses industrial sensors in its internal production lines. Lusomach produces machinery for industrial customers in Portugal.'},{url:'https://industry.pt/lusomach',title:'Lusomach equipment manufacturer',markdown:'Lusomach manufactures industrial equipment in Portugal. The company operates production facilities and uses industrial sensors and control systems for its manufacturing operations.'}]});};
+ try{
+  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'selected-icp'},result:{},context,config,guard:async()=>{},generateResearch:async(env,workspaceId,prompt)=>{if(prompt.includes('Seller: '))sellerInputs.push(JSON.parse(prompt.split('Seller: ')[1].split('. Companies: ')[0]));return generateResearch(env,workspaceId,prompt);}});
+  assert.ok(sellerInputs.length>0,'actual operating evidence reaches purchasing qualification');assert.ok(sellerInputs.every(seller=>seller.offers.length===1&&seller.offers[0]==='industrial sensors'&&seller.idealCustomer==='industrial equipment manufacturers'));
+  assert.ok(result.queries.every(query=>query.market==='Portugal'));assert.ok(calls.filter(call=>call.query&&!call.query.startsWith('site:')&&!call.query.startsWith('"')).every(call=>call.location==='Portugal'));
+ }finally{globalThis.fetch=original;}
+});
+
+test('legacy automatic controls never retry or stop another saved flow run',async()=>{
+ const env=await fixture();
+ await approve(env);
+ env.DB.raw.exec("INSERT INTO saved_flows(id,workspace_id,name) VALUES('other','w1','Other flow');INSERT INTO approved_workflow_runs(id,workspace_id,flow_id,revision,status) VALUES('other-run','w1','other',1,'blocked')");
+ await call(env,{action:'retry',revision:1,runId:'other-run'});
+ assert.equal(env.DB.raw.prepare("SELECT status FROM approved_workflow_runs WHERE id='other-run'").get().status,'blocked');
+ await call(env,{action:'stop',revision:1});
+ assert.equal(env.DB.raw.prepare("SELECT status FROM approved_workflow_runs WHERE id='other-run'").get().status,'blocked');
+});
+
+test('legacy automatic scheduler cannot resume another saved flow checkpoint',async()=>{
+ const env=await fixture();
+ await approve(env);
+ env.DB.raw.exec("INSERT INTO saved_flows(id,workspace_id,name) VALUES('other','w1','Other flow');INSERT INTO approved_workflow_runs(id,workspace_id,flow_id,revision,status,stage_index,result_json) VALUES('other-run','w1','other',1,'running',5,'{\"foreignCheckpoint\":true}')");
+ const calls=[];
+ const outcome=await runApprovedWorkflows(env,{execute:async(stage,{run,result})=>{calls.push(stage);assert.equal(run.flow_id,null);assert.equal(result.foreignCheckpoint,undefined);return result;}});
+ assert.equal(outcome.completed,1);assert.deepEqual(calls,WORKFLOW_STAGES);
+ assert.equal(env.DB.raw.prepare("SELECT status FROM approved_workflow_runs WHERE id='other-run'").get().status,'running');
+});
+
+test('a lease that expires during automatic execution prevents further actions and checkpoint completion',async()=>{
+ const env=await fixture();await approve(env);const calls=[];
+ const outcome=await runApprovedWorkflows(env,{execute:async(stage,{run,result,guard})=>{calls.push(stage);env.DB.raw.prepare('UPDATE approved_workflow_runs SET lease_until=? WHERE id=?').run('2000-01-01T00:00:00.000Z',run.id);await guard();return result;}});
+ assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);assert.deepEqual(calls,['profile']);
+ assert.equal(env.DB.raw.prepare('SELECT stage_index FROM approved_workflow_runs').get().stage_index,0);
+});
+
+test('boolean-only Strategy approval cannot authorize a new automatic workflow',async()=>{
+ const env=await fixture(),legacy=structuredClone(main);delete legacy.market.strategyApproval;
+ env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id='w1'").run(JSON.stringify({main:legacy}));
+ assert.equal(approvedContext(legacy).strategyApproved,false);
+ await call(env,{action:'save',revision:0,config});await call(env,{action:'approve-stage',revision:1,stage:'profile'});
+ const response=await call(env,{action:'approve-stage',revision:1,stage:'strategy'});
+ assert.equal(response.status,409);assert.match((await response.json()).error,/Approve the market strategy/);
+ assert.equal(env.DB.raw.prepare('SELECT enabled FROM outreach_automation_policies').get(),undefined);
+});
+
+test('changed Profile source evidence invalidates unattended research and delivery before any provider action',async()=>{
+ const env=await fixture();await approve(env);
+ env.DB.raw.exec("INSERT INTO approved_workflow_runs(id,workspace_id,revision,status,stage_index) VALUES('completed-before-source-change','w1',1,'completed',8)");
+ const changed={...main,scrapedSources:[{id:'new-evidence',url:'https://seller.example/offer',text:'A newly retained seller source changes the signed business context.'}]};
+ env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id='w1'").run(JSON.stringify({main:changed}));
+ let executed=0;await runApprovedWorkflows(env,{execute:async()=>{executed++;return {};}});
+ assert.equal(executed,0);assert.equal(await workflowDeliveryAuthorized(env,{workspace_id:'w1',workflow_run_id:'completed-before-source-change',workflow_revision:1}),false);
+ assert.equal(env.DB.raw.prepare('SELECT status,approved_at FROM approved_workflows').get().status,'needs_review');
+});
+
+test('manual takeover during the CRM lookup prevents a later automatic company write',async()=>{
+ const env=await fixture(),prepare=env.DB.prepare.bind(env.DB);let authorized=true;
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith('SELECT * FROM crm_companies WHERE workspace_id=')){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();authorized=false;return value;};}return statement;};
+ const candidate={company:'Held company',domain:'held.example',contact:{id:'held-buyer',name:'Alex Buyer',email:'alex@held.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
+ await assert.rejects(()=>executeWorkflowStage('crm',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'held'},result:{candidates:[candidate]},context:approvedContext(main),config,guard:async()=>{if(!authorized)throw Error('Manual takeover');}}),/Manual takeover/);
+ assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_companies').get().n,0,'the read cannot authorize a subsequent automatic write');
+});
+
+test('pause during final recipient checks prevents an automatic sequence from being queued',async()=>{
+ const env=await fixture(),approved=await approve(env);env.DB.raw.exec("INSERT INTO approved_workflow_runs(id,workspace_id,revision,status) VALUES('queue-race','w1',1,'running');INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('queued-company','w1','queue.example','Queued company','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source,created_at,updated_at) VALUES('queued-buyer','w1','queued-company','Alex Buyer','COO','alex@queue.example','alex@queue.example','verified','apollo',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+ const prepare=env.DB.prepare.bind(env.DB);let authorized=true;
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith('SELECT id FROM gmail_messages WHERE workspace_id=')){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();authorized=false;return value;};}return statement;};
+ const candidate={company:'Queued company',domain:'queue.example',contact:{id:'queued-buyer',name:'Alex Buyer',email:'alex@queue.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
+ await assert.rejects(()=>executeWorkflowStage('delivery',{env,row:{workspace_id:'w1',revision:1,approved_by:'u1',approved_at:approved.approvedAt},run:{id:'queue-race'},result:{candidates:[candidate]},context:approvedContext(main),config,guard:async()=>{if(!authorized)throw Error('Workflow paused');}}),/Workflow paused/);
+ assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_sequences').get().n,0);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_queue').get().n,0);
+});
+
+test('pause during public email evidence reading prevents an automatic contact confirmation write',async()=>{
+ const env=await fixture(),crm=await import('../src/crm.js'),{confirmPublicWorkEmail}=await import('../src/public-email-confirmation.js'),context={workspaceId:'w1',userId:'u1',role:'owner'};
+ const saved=await crm.upsertCrmCompany(env.DB,context,{company:'Public target',domain:'public.example'});let authorized=true;
+ await assert.rejects(()=>confirmPublicWorkEmail(env,context,saved.company.id,{name:'Alex Buyer',title:'COO',email:'alex@public.example',source_url:'https://public.example/team'},{guard:async()=>{if(!authorized)throw Error('Workflow paused');},loadPage:async()=>{authorized=false;return {markdown:'**Alex Buyer**\nCOO\nalex@public.example'};}}),/Workflow paused/);
+ assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+});
+
+test('a concurrent workflow revision change cannot enable delivery using stale final approval',async()=>{
+ const env=await fixture();await call(env,{action:'save',revision:0,config});for(const stage of WORKFLOW_STAGES)assert.equal((await call(env,{action:'approve-stage',revision:1,stage})).status,200);
+ const prepare=env.DB.prepare.bind(env.DB);let changed=false;
+ env.DB.prepare=sql=>{if(!changed&&sql.startsWith('INSERT INTO outreach_automation_policies')){changed=true;env.DB.raw.exec("UPDATE approved_workflows SET revision=revision+1,status='needs_review',approved_at=NULL WHERE workspace_id='w1'");}return prepare(sql);};
+ const response=await call(env,{action:'activate',revision:1,approved:true});assert.equal(response.status,409);
+ assert.equal(env.DB.raw.prepare('SELECT enabled FROM outreach_automation_policies').get(),undefined,'failed final approval must not turn delivery on');
+ assert.equal(env.DB.raw.prepare('SELECT status FROM approved_workflows').get().status,'needs_review');
+});
+
+for(const change of ['pause','revoke-owner'])test('automatic final authority check catches '+change+' during the lease read',async()=>{
+ const env=await fixture();await approve(env);let armed=false,changed=false,consequentialAction=false;
+ const prepare=env.DB.prepare.bind(env.DB);env.DB.prepare=sql=>{const statement=prepare(sql);if(sql==='SELECT status,lease_token,lease_until FROM approved_workflow_runs WHERE id=?'){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();if(armed&&!changed){changed=true;env.DB.raw.exec(change==='pause'?"UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'":"UPDATE workspace_members SET role='sales' WHERE workspace_id='w1' AND user_id='u1'");}return value;};}return statement;};
+ const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{guard,result})=>{armed=true;await guard();consequentialAction=true;return result;}});
+ assert.equal(changed,true);assert.equal(consequentialAction,false);assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);assert.equal(env.DB.raw.prepare('SELECT stage_index FROM approved_workflow_runs').get().stage_index,0);
+});
+for(const change of ['pause','revoke-owner'])test('automatic checkpoint commit rejects '+change+' after the guard returns',async()=>{
+ const env=await fixture();await approve(env);let changed=false;const prepare=env.DB.prepare.bind(env.DB);
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith('UPDATE approved_workflow_runs SET stage_index=')){const run=statement.run.bind(statement);statement.run=async()=>{if(!changed){changed=true;env.DB.raw.exec(change==='pause'?"UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'":"UPDATE workspace_members SET role='sales' WHERE workspace_id='w1' AND user_id='u1'");}return run();};}return statement;};
+ const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{result})=>result});assert.equal(changed,true);assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);assert.equal(env.DB.raw.prepare('SELECT stage_index FROM approved_workflow_runs').get().stage_index,0);
+});
+for(const change of ['pause','revoke-owner'])test('automatic completion commit rejects '+change+' without scheduling another cycle',async()=>{
+ const env=await fixture();await approve(env);const next=env.DB.raw.prepare('SELECT next_run_at FROM approved_workflows').get().next_run_at;let changed=false;const prepare=env.DB.prepare.bind(env.DB);
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith("UPDATE approved_workflow_runs SET status='completed'")){const run=statement.run.bind(statement);statement.run=async()=>{if(!changed){changed=true;env.DB.raw.exec(change==='pause'?"UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'":"UPDATE workspace_members SET role='sales' WHERE workspace_id='w1' AND user_id='u1'");}return run();};}return statement;};
+ const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{result})=>result});assert.equal(changed,true);assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);assert.equal(env.DB.raw.prepare('SELECT status FROM approved_workflow_runs').get().status,'blocked');assert.equal(env.DB.raw.prepare('SELECT next_run_at FROM approved_workflows').get().next_run_at,next);
+});
+
+for(const boundary of ['lease','checkpoint','completion'])for(const material of [true,false])test('automatic '+boundary+' rechecks exact workspace snapshot after '+(material?'material':'progress')+' save',async()=>{
+ const env=await fixture();await approve(env);let armed=false,changed=false,consequentialAction=false;const stages=[];const prepare=env.DB.prepare.bind(env.DB);
+ const change=()=>{if(changed)return;changed=true;const payload=JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json);if(material)payload.main.profile.priorityOffers='Changed unapproved offer';else payload.discovery={...payload.discovery,progressNote:'Retain this progress'};env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=?,version=version+1 WHERE workspace_id='w1'").run(JSON.stringify(payload));};
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(boundary==='lease'&&sql==='SELECT status,lease_token,lease_until FROM approved_workflow_runs WHERE id=?'){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();if(armed)change();return value;};}if(boundary==='checkpoint'&&sql.startsWith('UPDATE approved_workflow_runs SET stage_index=')||boundary==='completion'&&sql.startsWith("UPDATE approved_workflow_runs SET status='completed'")){const run=statement.run.bind(statement);statement.run=async()=>{change();return run();};}return statement;};
+ const outcome=await runApprovedWorkflows(env,{execute:async(stage,{guard,result})=>{stages.push(stage);if(stage==='companies'){armed=true;await guard();consequentialAction=true;}return result;}});assert.equal(changed,true);assert.equal(outcome.completed,material?0:1);assert.equal(outcome.blocked,material?1:0);if(boundary==='lease')assert.equal(consequentialAction,!material);if(boundary==='checkpoint'&&material)assert.equal(env.DB.raw.prepare('SELECT stage_index FROM approved_workflow_runs').get().stage_index,0);if(!material)assert.deepEqual(stages,WORKFLOW_STAGES);if(!material)assert.equal(JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json).discovery.progressNote,'Retain this progress');
+});
+
+for(const change of ['pause','revoke-owner'])test('automatic CRM stage blocks '+change+' during its second internal company lookup',async()=>{
+ const env=await fixture(),prepare=env.DB.prepare.bind(env.DB);let allowed=true,lookups=0;
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith('SELECT * FROM crm_companies WHERE workspace_id=')){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();if(++lookups===2)allowed=false;return value;};}return statement;};
+ const candidate={company:'Held Company',domain:'held.example',contact:{id:'buyer',name:'Alex Buyer',email:'alex@held.example'},message:{subject:'Subject',body:'Body'}};
+ await assert.rejects(()=>executeWorkflowStage('crm',{env,row:{workspace_id:'w1',approved_by:'u1'},run:{id:'race'},result:{candidates:[candidate]},context:approvedContext(main),config,guard:async()=>{if(!allowed)throw Error(change);}}),new RegExp(change));assert.equal(lookups,2);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_companies').get().n,0);
+});
+
+for(const boundary of ['internal-read','commit'])for(const operation of ['company-create','company-update','contact-create','contact-update','intelligence','activity'])for(const change of ['pause','revoke-owner'])test('automatic CRM '+operation+' rejects '+change+' at '+boundary,async()=>{
+ const env=await fixture();await approve(env);const crm=await import('../src/crm.js'),manual={workspaceId:'w1',userId:'u1',role:'owner'};
+ let company;if(operation!=='company-create')company=(await crm.upsertCrmCompany(env.DB,manual,{company:'Retained Company',domain:'retained.example',pipeline_stage:'Discovered'})).company;
+ if(operation==='contact-update')await crm.upsertCrmContacts(env.DB,manual,company.id,[{name:'Original Buyer',work_email:'buyer@retained.example',source:'manual'}]);
+ if(operation==='intelligence')await crm.upsertCrmIntelligence(env.DB,manual,company.id,{opportunity_hypothesis:'Retain prior evidence'});
+ const tables=['crm_companies','crm_contacts','crm_intelligence','crm_activities'],before=tables.map(table=>env.DB.raw.prepare('SELECT * FROM '+table+' ORDER BY rowid').all());let armed=false,changed=false;
+ const mutate=()=>{if(!armed||changed)return;changed=true;env.DB.raw.exec(change==='pause'?"UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'":"UPDATE workspace_members SET role='sales' WHERE workspace_id='w1' AND user_id='u1'");};
+ if(boundary==='commit'){const batch=env.DB.batch.bind(env.DB);env.DB.batch=async statements=>{mutate();return batch(statements);};}else{const prepare=env.DB.prepare.bind(env.DB);env.DB.prepare=sql=>{const statement=prepare(sql),match=operation.startsWith('company')?sql.startsWith('SELECT * FROM crm_companies WHERE workspace_id='):operation.startsWith('contact')?sql.startsWith('SELECT * FROM crm_contacts WHERE workspace_id=? AND normalized_email=?'):sql.startsWith('SELECT * FROM crm_companies WHERE id=?');if(match){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();mutate();return value;};}return statement;};}
+ const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{guard,result})=>{await guard();armed=true;const ctx={...manual,guard,writeAuthority:guard.writeAuthority};if(operation.startsWith('company'))await crm.upsertCrmCompany(env.DB,ctx,{company:'Automatic replacement',domain:operation==='company-create'?'new.example':'retained.example',pipeline_stage:'Ready for Outreach'});else if(operation.startsWith('contact'))await crm.upsertCrmContacts(env.DB,ctx,company.id,[{name:'Automatic replacement',work_email:'buyer@retained.example',source:'manual'}]);else if(operation==='intelligence')await crm.upsertCrmIntelligence(env.DB,ctx,company.id,{opportunity_hypothesis:'Automatic replacement'});else await crm.appendCrmActivity(env.DB,ctx,{companyId:company.id,type:'dossier.built',summary:'Automatic replacement'});return result;}});
+ assert.equal(changed,true);assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);assert.deepEqual(tables.map(table=>env.DB.raw.prepare('SELECT * FROM '+table+' ORDER BY rowid').all()),before,'no automatic CRM data or timeline write after authority changed');
+});
+
+for(const provider of ['public','apollo','hunter','treg'])for(const boundary of ['post-upsert','status-commit'])test(provider+' automatic contact confirmation blocks pause at '+boundary+' and retains paid receipts',async()=>{
+ const env=await fixture();await approve(env);const crm=await import('../src/crm.js'),manual={workspaceId:'w1',userId:'u1',role:'owner'},company=(await crm.upsertCrmCompany(env.DB,manual,{company:'Adapter Company',domain:'adapter.example'})).company;
+ env.DB.raw.exec("INSERT INTO enrichment_policies(workspace_id) VALUES('w1')");env.APOLLO_API_KEY='test-apollo';let armed=false,changed=false,providerCalls=0;const receipts=[],prepare=env.DB.prepare.bind(env.DB),original=globalThis.fetch;
+ const pause=()=>{if(armed&&!changed){changed=true;env.DB.raw.exec("UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'");}};
+ env.DB.prepare=sql=>{const statement=prepare(sql);if(boundary==='post-upsert'&&sql==='SELECT * FROM crm_contacts WHERE id=? AND workspace_id=?'){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();if(value)pause();return value;};}if(boundary==='status-commit'&&(provider==='public'?sql.startsWith("UPDATE crm_contacts SET email_status='public_confirmed'"):provider==='apollo'?sql.startsWith('UPDATE crm_contacts SET work_email=COALESCE'):sql.startsWith("UPDATE crm_contacts SET email_status='verified'"))){const run=statement.run.bind(statement);statement.run=async()=>{pause();return run();};}return statement;};
+ globalThis.fetch=async()=>{providerCalls++;return Response.json({person:{id:'adapter-person',name:'Alex Buyer',title:'COO',email:'alex@adapter.example',email_status:'verified',organization:{primary_domain:'adapter.example'}}});};
+ try{const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{guard,result})=>{await guard();armed=true;const ctx={...manual,guard,writeAuthority:guard.writeAuthority},person={id:'adapter-person',name:'Alex Buyer',title:'COO'},candidate={company:'Adapter Company',domain:'adapter.example'};
+  if(provider==='public'){const {confirmPublicWorkEmail}=await import('../src/public-email-confirmation.js');await confirmPublicWorkEmail(env,ctx,company.id,{...person,email:'alex@adapter.example',source_url:'https://adapter.example/team'},{guard,loadPage:async()=>({markdown:'**Alex Buyer**\nCOO\nalex@adapter.example'})});}
+  else if(provider==='apollo'){const {enrichCrmContact}=await import('../src/crm-routes.js');await enrichCrmContact(new Request('https://internal.test',{method:'POST',body:JSON.stringify({person_id:person.id,name:person.name,title:person.title})}),env,{}, {context:ctx,guard},company.id);}
+  else if(provider==='hunter'){const {findHunterWorkEmail}=await import('../src/hunter-contact-research.js');await findHunterWorkEmail(env,ctx,candidate,person,company.id,{guard,credential:async()=>({source:'customer',apiKey:'fixture'}),fetch:async()=>{providerCalls++;return Response.json({data:{email:'alex@adapter.example',first_name:'Alex',last_name:'Buyer',verification:{status:'valid'}}});}});}
+  else {const {findTregWorkEmail}=await import('../src/treg-contact-research.js');await findTregWorkEmail(env,ctx,candidate,person,company.id,{attemptKey:'fixture',guard},{credential:async()=>({source:'customer',apiKey:'fixture'}),receipt:async row=>receipts.push(row),fetch:async url=>{providerCalls++;return Response.json(String(url).includes('email.find')?{output:{email:'alex@adapter.example',first_name:'Alex',last_name:'Buyer'}}:{output:{email:'alex@adapter.example',status:'valid'},raw:{email:'alex@adapter.example',is_accept_all:false}},{headers:{'X-Treg-Call-Id':'fixture-call-'+providerCalls,'X-Treg-Cost-Micro':'4000'}});}});}
+  return result;}});assert.equal(changed,true);assert.equal(outcome.completed,0);assert.equal(outcome.blocked,1);const contact=env.DB.raw.prepare('SELECT * FROM crm_contacts').get();assert.ok(contact,'retain the contact legitimately inserted before pause');assert.equal(contact.verification_provider,null,'pause prevents a later verification-label write');assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM crm_activities WHERE activity_type='contact.enriched' OR activity_type='contact.public_email_confirmed'").get().n,0);if(provider==='apollo'){assert.equal(providerCalls,1);assert.equal(env.DB.raw.prepare('SELECT credits_used FROM crm_enrichment_requests').get().credits_used,1);}if(provider==='treg'){assert.equal(providerCalls,2);assert.equal(receipts.length,2);}
+ }finally{globalThis.fetch=original;}
+});
+
+for(const change of ['pause','revoke-owner','material-source','progress','continuous-progress'])test('automatic outreach queue SQL commit rechecks '+change+' without repeating delivery work',async()=>{
+ const env=await fixture();await approve(env);
+ env.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('commit-company','w1','commit.example','Commit Company','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source,created_at,updated_at) VALUES('commit-buyer','w1','commit-company','Alex Buyer','COO','alex@commit.example','alex@commit.example','verified','apollo',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+ let queueCommits=0;const batch=env.DB.batch.bind(env.DB),stages=[];
+ env.DB.batch=async statements=>{
+  if(statements[0]?.sql.startsWith('INSERT OR IGNORE INTO outreach_automation_sequences')){
+   queueCommits++;
+   if(queueCommits===1||change==='continuous-progress'){
+    if(change==='pause')env.DB.raw.exec("UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'");
+    else if(change==='revoke-owner')env.DB.raw.exec("UPDATE workspace_members SET role='sales' WHERE workspace_id='w1' AND user_id='u1'");
+    else {const payload=JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json);if(change==='material-source')payload.main.profile.priorityOffers='Unapproved replacement';else payload.discovery={queueProgress:queueCommits};env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=?,version=version+1 WHERE workspace_id='w1'").run(JSON.stringify(payload));}
+   }
+  }
+  return batch(statements);
+ };
+ const candidate={company:'Commit Company',domain:'commit.example',contact:{id:'commit-buyer',name:'Alex Buyer',email:'alex@commit.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
+ const outcome=await runApprovedWorkflows(env,{execute:async(stage,args)=>{stages.push(stage);return stage==='delivery'?executeWorkflowStage(stage,{...args,result:{...args.result,candidates:[candidate]}}):args.result;}});
+ const succeeded=change==='progress';assert.deepEqual(stages,WORKFLOW_STAGES,'local retries never replay provider or delivery stages');assert.equal(queueCommits,succeeded?2:change==='continuous-progress'?3:1);assert.equal(outcome.completed,succeeded?1:0);assert.equal(outcome.blocked,succeeded?0:1);
+ assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_sequences').get().n,succeeded?1:0,'no active sequence persists after authority is lost');assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_queue').get().n,succeeded?1:0,'no queued item persists after authority is lost');
+ assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM audit_events WHERE event_type='outreach_automation.sequence_enqueued'").get().n,succeeded?1:0);
+ if(succeeded){const run=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get();assert.equal(JSON.parse(run.result_json).queued,1);assert.equal(JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json).discovery.queueProgress,1);assert.equal(env.DB.raw.prepare('SELECT workflow_run_id FROM outreach_automation_sequences').get().workflow_run_id,run.id);}
+});
+
+for(const material of [true,false])test('automatic CRM SQL commit rechecks '+(material?'material':'progress')+' workspace saves without repeating stage work',async()=>{
+ const env=await fixture();await approve(env);const {upsertCrmCompany}=await import('../src/crm.js');let armed=false,changed=false,stageExecutions=0;const batch=env.DB.batch.bind(env.DB);
+ env.DB.batch=async statements=>{if(armed&&!changed){changed=true;const payload=JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json);if(material)payload.main.profile.priorityOffers='Unapproved replacement';else payload.discovery={progressEvidence:'Retained progress'};env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=?,version=version+1 WHERE workspace_id='w1'").run(JSON.stringify(payload));}return batch(statements);};
+ const outcome=await runApprovedWorkflows(env,{execute:async(_stage,{guard,result})=>{if(stageExecutions)return result;stageExecutions++;await guard();armed=true;await upsertCrmCompany(env.DB,{workspaceId:'w1',userId:'u1',role:'owner',guard,writeAuthority:guard.writeAuthority},{company:'Once only',domain:'once.example'});return result;}});
+ assert.equal(changed,true);assert.equal(stageExecutions,1);assert.equal(outcome.completed,material?0:1);assert.equal(outcome.blocked,material?1:0);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_companies').get().n,material?0:1);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_activities').get().n,material?0:1);if(!material)assert.equal(JSON.parse(env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json).discovery.progressEvidence,'Retained progress');
 });

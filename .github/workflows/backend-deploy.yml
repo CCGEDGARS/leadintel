@@ -52,4 +52,6 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
       - name: Verify production health
-        run: curl --fail --silent --show-error https://leadintel-api.edgars-7e7.workers.dev/api/health
+        run: node ../scripts/verify-worker-propagation.mjs https://leadintel-api.edgars-7e7.workers.dev/api/health "$EXPECTED_SHA" --backend
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
