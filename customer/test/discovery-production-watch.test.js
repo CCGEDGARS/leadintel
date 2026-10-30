@@ -108,6 +108,7 @@ const boundedDiscoveryRuntime = [
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
   'A new search does not replace your saved selections. This search has finished.',
   'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1',
+  'function buyerContinuationIssue( function pointToBuyerRequirement( guided-primary-action acquisitionFailed=false Completed buyer research stages',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
   'function discoveryRunTimeoutMs(',
@@ -227,7 +228,8 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
     fetchImpl: productionFetch({
       customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1"></script>`,
       discoveryUi: [
-        'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
+        'function buyerContinuationIssue( function pointToBuyerRequirement( guided-primary-action acquisitionFailed=false Completed buyer research stages',
+  'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
         'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
         'function discoveryRunTimeoutMs(',
   'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept.',
