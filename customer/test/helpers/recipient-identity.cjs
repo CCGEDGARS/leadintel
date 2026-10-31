@@ -1,0 +1,2 @@
+const D=require('../../discovery-engine.js');
+module.exports=(candidate,person,companyId='')=>({version:1,personId:String(person.id),companyDomain:candidate.domain,companyName:candidate.company||'',companyId:companyId||candidate.crmId||'',name:person.publicName||person.name||'',title:person.title||'',organization:person.organization||'',linkedinUrl:D.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),identitySourceUrl:person.publicNameUrl||'',researchKey:D.buyerResearchIdentityKey(candidate,person)});

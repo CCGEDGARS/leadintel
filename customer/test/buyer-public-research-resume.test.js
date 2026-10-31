@@ -115,6 +115,8 @@ test('resume replays a legacy completed LinkedIn search whose profile evidence w
  await D.runMandatoryBuyerResearch(c,{rows,search});
  assert.equal(D.buyerResearchCoveragePassed(c),true);
  delete c.people[0].publicLinkedinUrl;delete c.people[0].linkedinIdentityEvidence;delete c.people[0].contactResearch.checks.linkedin.profileMatchVersion;
+ // A legacy unresolved profile had no profile in its original identity binding.
+ c.people[0].contactResearch.identityKey=D.buyerResearchIdentityKey(c,c.people[0]);
  assert.equal(D.buyerResearchCoveragePassed(c),false,'aggregate completion cannot conceal unreconciled legacy profile results');
  const saved=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0],queries=[];
  await D.runMandatoryBuyerResearch(saved,{search:async q=>{queries.push(q);return search(q);}});

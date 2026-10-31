@@ -5,7 +5,7 @@ function runtime(){
  const person={id:'anna',name:'Anna Smith',title:'Head of Procurement',organization:'Example',publicNameUrl:'https://linkedin.com/in/anna-smith',publicLinkedinUrl:'https://linkedin.com/in/anna-smith',roleReview:{status:'supported',reason:'Official leadership page confirms current role'},contactResearch:{checks:{direct_email:{status:'complete'},gmail:{status:'complete',queryLog:[1,2,3].map(i=>({status:'complete',query:`Gmail business query ${i}`}))}},channels:{company:{status:'complete'},phone:{status:'partial',reason:'Phone request timed out'}}}};
  const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_qualified',people:[person],peopleStatus:'complete',publicContactStatus:'complete',buyerRoles:['Head of Procurement'],publicResearch:{checkedAt:'2026-10-21T10:00:00Z',officialPages:2,patternSearches:4}};
  const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc,emailPatternCandidates:D.rankedEmailGuesses,mainState:()=>({}),enrichmentResults:new Map(),personKey:(_c,p)=>p.id,verifiedBuyerEmail:()=>'',candidateBuyerRoles:c=>c.buyerRoles,crmAuthenticated:()=>true,window:{},selectedBuyerEnrichment:new Set(),buyerCompanyRemovalPending:new Set(),buyerCompanySavePending:new Set(),buyerCompanySaved:()=>false,selectedBuyerKey:(_c,p)=>p.id,linkedInSearchUrl:()=>'',enrichmentResultHtml:()=>'',prospectContactControls:()=>'',buyerResearchProgressHtml:()=>'',buyerQualitySupervisorHtml:()=>'',companyContactDossierHtml:()=>'',buyerProviderStatusHtml:()=>'',buyerResearchAccountabilityHtml:()=>''};
- vm.createContext(ctx);
+ vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerActionIdentity('),source.indexOf('function captureBuyerAction(')),ctx);
  for(const [start,end] of [['function buyerContactRows(','function emailPatternCandidates('],['function buyerQualificationHtml(','function hydratePublishedCompanyEmails('],['function publicResearchOutcome(','function buyerResearchIncomplete('],['function renderSelectedProspects(','function renderPipeline(']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),ctx);
  return {ctx,person,candidate};
 }
@@ -52,6 +52,7 @@ test('Resume uses the same current research-coverage decision as its label, reta
  for(const coveragePassed of [false,true]){
   const candidate={domain:'example.com',people:[{id:'anna',emailResearch:{status:'complete'}}]};let handler,request;
   const context={$:()=>({addEventListener:(_name,fn)=>{handler=fn;}}),LeadIntelDiscovery:{...D,buyerResearchCoveragePassed:()=>coveragePassed},canonicalDomain:D.canonicalDomain,selectedProspects:()=>[candidate],findPublicProspectContacts:(domain,options)=>{request={domain,options};}};
+  vm.runInNewContext(source.slice(source.indexOf('function buyerControlTargetCurrent('),source.indexOf('async function withBuyerControlFocus(')),context);
   vm.runInNewContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),context);
   const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.force,coveragePassed);
  }

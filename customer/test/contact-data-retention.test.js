@@ -7,7 +7,7 @@ test('retained paid data rehydrates without an aggregate research timestamp and 
  const ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
  require('./helpers/crm-hydration-context.cjs')(ctx);
  vm.runInNewContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
- const detail={company:{normalized_domain:'example.com'},contactData:[data],intelligence:{research_snapshot:{buyerResearch:{buyers:[]}}}};
+ const detail={company:{id:'company',workspace_id:'hydration-workspace',normalized_domain:'example.com'},contactData:[data],intelligence:{research_snapshot:{buyerResearch:{buyers:[]}}}};
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);
  assert.equal(candidate.people[0],person,'company context restore must retain the active buyer owner reference');
  const stored=JSON.parse(JSON.stringify(D.normalizeDiscoveryState({selectedProspects:[candidate]}))),restored=D.normalizeDiscoveryState(stored).selectedProspects[0].people[0];

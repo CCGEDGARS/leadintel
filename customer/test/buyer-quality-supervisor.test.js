@@ -1,11 +1,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const now=()=>new Date().toISOString();
 function fixture(){
- const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'p'+i,name:'Anna Buyer'+i,publicName:'Anna Buyer'+i,title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:now(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:now()},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now(),queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now(),resultCount:0}))}]))}}));
+ const people=['CEO','COO','Procurement Director','Plant Manager'].map((title,i)=>({id:'p'+i,name:['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],publicName:['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],title,organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:now(),emailResearch:{status:'complete',searches:4,failed:0,checkedAt:now()},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now(),queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now(),resultCount:0}))}]))}}));
  const c={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:['CEO','COO','Procurement Director','Plant Manager'],people};
  c.buyerDiscovery={officialContactInventory:{version:1,domain:c.domain,checkedAt:now(),sourcePages:['https://example.com/team'],contacts:[],channels:[],research:{policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete',checkedAt:now(),readPages:1,queries:[],failures:[]}}};
  c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now(),totalPeople:4,checkedPeople:4,officialPages:1}};
- return c;
+ return require('./helpers/buyer-research-receipts.cjs')(c);
 }
 function reviewed(c){c.publicResearch.aiReview={status:'complete',provider:'gemini',checkedAt:now(),inputSignature:D.buyerReviewSignature(c),reviewedPersonIds:c.people.map(p=>p.id),summary:'',reason:'',findings:[],conflicts:[]};return c;}
 test('quality supervisor separates completed research from the requested usable contact outcome',()=>{

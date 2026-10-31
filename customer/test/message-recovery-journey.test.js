@@ -6,7 +6,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function crmFixture(h,{activities=[],page=[]}={}){
  h.w.scrollTo=()=>{};
  const key='leadintel_customer_v2_discovery_meta',meta=JSON.parse(h.w.localStorage.getItem(key));meta.scriptBuyer.contactId='c1';meta.scriptBuyer.email='alex@buyer.example';h.w.localStorage.setItem(key,JSON.stringify(meta));
- const detail={ok:true,company:{id:'crm1',normalized_domain:'buyer.example',lifecycle_status:'prospect'},contacts:[{id:'c1',external_person_id:meta.scriptBuyer.personId,name:'Alex Buyer',work_email:'alex@buyer.example',email_status:'verified'}],activities,activity_next_cursor:page.length?'next':''};
+ const detail={ok:true,company:{id:'crm1',normalized_domain:'buyer.example',lifecycle_status:'prospect'},contacts:[{company_id:'crm1',title:'Operations Director',verification_provider:'Apollo',id:'c1',external_person_id:meta.scriptBuyer.personId,name:'Alex Buyer',work_email:'alex@buyer.example',email_status:'verified'}],activities,activity_next_cursor:page.length?'next':''};
  Object.assign(h.w.LeadIntelServerBridge,{listCrmCompanies:async()=>({ok:true,companies:[detail.company]}),getCrmCompany:async()=>detail,getCrmActivities:async()=>({ok:true,activities:page,next_cursor:''})});
  return {choice:meta.scriptBuyer,detail};
 }
@@ -95,5 +95,13 @@ test('cached buyer drafts reopen with their applied style rather than the previo
   const {choice}=crmFixture(h),cached=saved(h).metadata.script_package.item;
   const key='leadintel_customer_v2_outreach',state=JSON.parse(h.w.localStorage.getItem(key));state.items=[];state.buyerDrafts={[O.buyerDraftKey('buyer.example','p1','email')]:cached};h.w.localStorage.setItem(key,JSON.stringify(state));h.w.dispatchEvent(new h.w.Event('leadintel:commercial-context-changed'));
   await h.w.openBuyerScripts(choice);assert.equal(h.w.studioState().mode,'friendly');assert.equal(h.q('outreach-email-body').value,'Saved message for Alex');
+ }finally{h.w.close();}
+});
+
+test('explicit CRM reopen rejects a same-ID snapshot belonging to a replaced person',async()=>{
+ const h=mounted();try{
+  const wrong=saved(h,{message:'Wrong replacement message'});wrong.metadata.script_package.item.dossier.people[0].name='Different Buyer';
+  crmFixture(h,{activities:[wrong]});const before=h.item().drafts.emailBody;
+  await h.w.restoreScriptPackage();assert.equal(h.item().drafts.emailBody,before);assert.doesNotMatch(h.q('outreach-email-body').value,/Wrong replacement/);
  }finally{h.w.close();}
 });

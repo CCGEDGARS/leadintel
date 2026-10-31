@@ -53,7 +53,7 @@
       "google_translation_version": "google-translation-v1",
       "public_contact_research_version": "20261030-adaptive-company-sources-v6",
       "public_pdf_extraction_version": "20261030-native-public-pdf-v1",
-      "buyer_integrity_version": "20261030-audit-v1",
+      "buyer_integrity_version": "20261031-audit-v2",
       "setup_integrity_version": "20261030-v1",
       "profile_integrity_version": "20261030-v1",
       "strategy_integrity_version": "20261030-strategy-v1",
@@ -725,7 +725,7 @@
         "automatic contact research for all retained people",
         "top 4 ranked recommendations",
         "Contact checks complete:",
-        "const supplied=LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows)"
+        "const supplied=LeadIntelDiscovery.safeBuyerReviewEvidence(LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows))"
       ],
       "notContains": [
         "top 4 researched by default",
@@ -851,7 +851,7 @@
       "contains": [
         "buyer-selection=20261005-bridge-v1",
         "function selectedEmailBuyer(",
-        "Synchronization conflict: recipient selection was not saved.",
+        "Synchronization conflict: resolve the workspace versions above before selecting a recipient.",
         "scriptBuyer:choice,activeJourneyStage:6,visibleStep:6",
         "data-buyer-selection-check",
         "await loadOutreachModules();"
@@ -3742,8 +3742,8 @@
       "contains": [
         "buyer-contacts-v23-company-record",
         "async function confirmResearchedPublicEmails",
-        "await confirmResearchedPublicEmails(candidate,controller.signal)",
-        "retry public email confirmation"
+        "await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner)",
+        "contextGuard,researchOwner"
       ]
     },
     {
@@ -4343,7 +4343,7 @@
       "status": 200,
       "contains": [
         "options.provider!=='treg'",
-        "allowPartialRoster:options.provider==='treg'"
+        "researchPeople:[selected]"
       ]
     },
     {
@@ -5577,7 +5577,7 @@
       "status": 200,
       "contains": [
         "CONTACT_IDENTITY_MISMATCH",
-        "publicChecking.keys()"
+        "publicChecking.get(identity)===task"
       ]
     },
     {
@@ -5608,7 +5608,7 @@
       "contains": [
         "pendingToken",
         "serial===policyRequest",
-        "bridge()?.session?.user?.id===userId"
+        "!policyCurrent(originContext)"
       ]
     },
     {
@@ -6007,6 +6007,136 @@
       "status": 200,
       "contains": [
         "companies-audit=20261031-v1"
+      ]
+    },
+    {
+      "id": "buyers-stable-action-ownership",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function captureBuyerAction(",
+        "function buyerActionCurrent(",
+        "selectionOwner:token",
+        "data-person-id="
+      ]
+    },
+    {
+      "id": "buyers-confirmation-response-ownership",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function confirmPublicBuyerSource(",
+        "requireBuyerAction(owner)",
+        "researchOwner"
+      ]
+    },
+    {
+      "id": "buyers-provider-adapter-ownership",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "saveHunter:async",
+        "prepare:async",
+        "accept:async"
+      ]
+    },
+    {
+      "id": "buyers-research-execution-receipts",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerResearchQueryPlan(",
+        "function buyerResearchCheckPassed(",
+        "function buyerResearchIdentityKey("
+      ]
+    },
+    {
+      "id": "buyers-official-checkpoint-resume",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "onCheckpoint",
+        "pendingUrls",
+        "discoveryTruncated"
+      ]
+    },
+    {
+      "id": "buyers-ai-evidence-binding",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function safeBuyerReviewEvidence(",
+        "reviewEvidence",
+        "function buyerReviewSignature("
+      ]
+    },
+    {
+      "id": "buyers-paid-exact-authority",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "policyCurrent",
+        "originContext",
+        "function buyerOperation("
+      ]
+    },
+    {
+      "id": "buyers-recipient-original-identity",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "recipientIdentity",
+        "messageRecipientReady"
+      ]
+    },
+    {
+      "id": "buyers-no-email-fallback",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function normalizeOutreachState(",
+        "selectedPersonId"
+      ]
+    },
+    {
+      "id": "buyers-safe-diagnostics",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "20261031-buyers-v1",
+        "leadintel:buyers-operation",
+        "buyer_selection"
+      ]
+    },
+    {
+      "id": "buyers-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyers-audit=20261031-v1"
+      ]
+    },
+    {
+      "id": "buyers-crm-identity-hydration",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function buyerHydrationScope(",
+        "function buyerHydrationSameIdentity(",
+        "function buyerHydrationContact(",
+        "Saved CRM buyer identity conflicts with retained local work."
       ]
     }
   ],

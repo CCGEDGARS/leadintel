@@ -1,11 +1,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),D=require('../discovery-engine.js');
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
-function harness({kept=true,verified=true,synced=true}={}){
+function harness({kept=true,verified=true,synced=true,legacy=false}={}){
  const person={id:'public-second',name:'Anna Buyer',organization:'Example',title:'COO',kept,publicLinkedinUrl:'https://linkedin.com/in/anna'};
  const candidate={company:'Example',domain:'example.com',people:[person]};let meta={},events=[],checks=0,focused=0;
- const serverBridge={workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})};
- const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>serverBridge,loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
- vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function selectedEmailBuyer('),source.indexOf('let buyerConfirmationLevel=')),ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
+ const serverBridge={workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}},getCrmCompany:async()=>{checks++;return {ok:true,company:{id:'c1',normalized_domain:'example.com'},contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',company_id:'c1',title:person.title,verification_provider:legacy?undefined:'Apollo',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})};
+ const ctx={acceptedBuyerConfirmationLevel:()=> 'provider_verified',LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>serverBridge,loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{LeadIntelContactPolicy:require('../contact-confirmation-policy.js'),dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
+ vm.createContext(ctx);ctx.discoveryOperationContext=()=>JSON.stringify([serverBridge.workspace.id,serverBridge.session.user.id]);vm.runInContext(source.slice(source.indexOf('const buyerActionPendingOwners='),source.indexOf('function crmToLocalPipeline(')),ctx);ctx.personKey=()=>person.id;vm.runInContext(source.slice(source.indexOf('function selectedEmailBuyer('),source.indexOf('let buyerConfirmationLevel=')),ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
  // This harness isolates recipient persistence; stage prerequisites are exercised in buyers-guided-continuation.test.js.
  ctx.buyerContinuationIssue=()=>null;
  return {ctx,person,candidate,get meta(){return meta;},get events(){return events;},get checks(){return checks;},get focused(){return focused;}};
@@ -14,7 +14,7 @@ test('single next action requires save and a verified business email, not public
  const h=harness({kept:false});assert.match(h.ctx.buyerNextAction(h.candidate,h.person,0,'selected'),/disabled/);
  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@example.com',email_status:'public_unverified'}),'');
  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@gmail.com',email_status:'verified'}),'');
- h.person.kept=true;h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ h.person.kept=true;h.ctx.enrichmentResults.set(h.person.id,{contact:{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  assert.match(h.ctx.buyerNextAction(h.candidate,h.person,0,'selected'),/Add to flow →/);
 });
 test('unverified saved buyer is directed to Confirm email without opening Scripts',async()=>{
@@ -35,7 +35,7 @@ test('rendered contact controls have one next action and no enrichment checkboxe
 test('pending identity and changed buying roles cannot open Messages even with a verified email',async()=>{
  for(const state of ['identity','roles']){
   const h=harness();if(state==='identity')h.person.identityStatus='pending';else h.candidate.buyerRolesChanged=true;
-  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@example.com',email_status:'verified'}),'');
+  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}),'');
   assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
  }
 });
@@ -43,19 +43,19 @@ test('navigation enables Messages only for a saved buyer with a verified company
  const h=harness();vm.runInContext(source.slice(source.indexOf('function readyBuyerCount('),source.indexOf('function syncBuyerStageNavigation(')),h.ctx);
  assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
  h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
- h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),1);
+ h.ctx.enrichmentResults.set(h.person.id,{contact:{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),1);
  h.person.kept=false;assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
 });
 test('a recorded identity conflict blocks a verified-email handoff until resolved',async()=>{
  const h=harness();h.candidate.publicResearch={conflicts:[{person_id:h.person.id,reason:'Employer attribution conflict'}]};
  assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
 });
-test('a legacy verified label without attributable provider evidence cannot open Messages',async()=>{const h=harness();h.ctx.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');const legacy={name:h.person.name,work_email:'anna@example.com',email_status:'verified',source:'public_research'};assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,legacy),'');assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{...legacy,verification_provider:'Apollo'}),'anna@example.com');assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);});
+test('a legacy verified label without attributable provider evidence cannot open Messages',async()=>{const h=harness({legacy:true});h.ctx.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');const legacy={name:h.person.name,work_email:'anna@example.com',email_status:'verified',source:'public_research'};assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,legacy),'');assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{...legacy,verification_provider:'Apollo'}),'anna@example.com');assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);});
 
 test('stale/future employment and wrong employers cannot proceed on a verified email',async()=>{
  for(const update of [{identityEvidenceDate:'2013-05-01'},{identityEvidenceDate:'2099-01-01'},{organization:'Other'}]){
   const h=harness();Object.assign(h.person,update);
-  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@example.com',email_status:'verified'}),'');
+  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}),'');
   assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);assert.notEqual(h.person.flowSelected,true);
  }
 });
@@ -85,7 +85,7 @@ test('LinkedIn selection cannot cross workspaces or enter email delivery',()=>{
 });
 
 test('Per-card Proceed saves the exact recipient for the guided footer',async()=>{
- const h=harness();h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ const h=harness();h.ctx.enrichmentResults.set(h.person.id,{contact:{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),true);
  assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.meta.selectedEmailBuyer.contactId,'contact-anna');
  assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.scriptBuyer,undefined);assert.equal(h.events.length,0);
@@ -129,7 +129,7 @@ test('selection bridge scrolls and focuses the highlighted footer with the recip
 test('sync conflict keeps confirmed email evidence but disables proceed until ready',async()=>{
  const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>Object.assign(original(),{conflict:true});
  h.ctx.selectedBuyerKey=()=>h.person.id;h.ctx.buyerAutomaticMode=()=>false;
- h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ h.ctx.enrichmentResults.set(h.person.id,{contact:{name:'Anna Buyer',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  vm.runInContext(source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts(')),h.ctx);
  const html=h.ctx.prospectContactControls(h.candidate,h.person);
  assert.doesNotMatch(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/synchronization conflict/);

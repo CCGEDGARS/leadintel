@@ -26,13 +26,13 @@
     const now=options.now===undefined?Date.now():typeof options.now==='number'?options.now:Date.parse(options.now);
     if(!Number.isFinite(now))throw new TypeError('A valid evaluation time is required');
     const stamp=new Date(now).toISOString(),domain=D.companyIdentityDomain(candidate.domain),people=(candidate.people||[]).slice(0,D.BUYER_CONTACT_RESEARCH_POLICY.maxPeople);
-    const ranked=options.ranked||D.rankedBuyerShortlist(people,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles},candidate);
+    const ranked=options.ranked||D.rankedBuyerShortlist(people,{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate);
     const priorityIds=new Set(ranked.priorityIds),key=person=>person.id||D.buyerIdentity(person),minimum=Policy.level(options.confirmationLevel);
     const fresh=value=>{const age=now-Date.parse(value||'');return age>=0&&age<30*86400000;};
     const conflicts=[...(candidate.publicResearch?.conflicts||[]),...(candidate.publicResearch?.aiReview?.conflicts||[])];
     const conflict=person=>conflicts.some(row=>String(row.person_id)===String(person.id));
     const result=people.map(person=>{
-      const qualification=D.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles},candidate,{now:stamp});
+      const qualification=D.qualifyBuyer(person,{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate,{now:stamp});
       const qualified=qualification.eligible&&!candidate.buyerRolesChanged&&!conflict(person)&&person.opportunityScope?.status!=='review_required';
       const check=person.publicEmailSourceCheck,email=text(person.publicEmail).toLowerCase();
       const sourceConfirmed=qualified&&check?.status==='confirmed'&&fresh(check.checkedAt)&&identity(check.email)===email&&text(check.url)===text(person.publicEmailUrl)&&Policy.publicSource(email,person.publicName||person.name,check.url,domain);
@@ -42,9 +42,8 @@
       const matchingContact=identity(contact.name)===identity(person.publicName||person.name)&&(!text(contact.external_person_id)||String(contact.external_person_id)===String(person.id));
       const usable=qualified&&matchingContact&&Policy.accepted(contact,domain,minimum,now);
       const checks=D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.map(name=>{
-        const row=person.contactResearch?.checks?.[name],expected=name==='direct_email'?2:name==='gmail'?3:null;
-        const receipts=!expected||row?.queryLog?.length===expected&&row.queryLog.every(query=>query.status==='complete'&&text(query.query)&&fresh(query.checkedAt));
-        return {name,status:row?.status||'not_searched',fresh:fresh(row?.checkedAt),complete:person.contactResearch?.policyVersion===D.BUYER_CONTACT_RESEARCH_POLICY.version&&row?.status==='complete'&&fresh(row.checkedAt)&&Boolean(receipts),reason:text(row?.reason)};
+        const row=person.contactResearch?.checks?.[name];
+        return {name,status:row?.status||'not_searched',fresh:fresh(row?.checkedAt),complete:D.buyerResearchCheckPassed(candidate,person,name,{now:stamp}),reason:text(row?.reason)};
       });
       const saved=person.contactData,profile=person.publicLinkedinUrl||person.linkedin_url,paid=saved?.version===1&&D.companyIdentityDomain(saved.domain)===domain&&String(saved.personId)===String(person.id)&&(!saved.identityName||identity(saved.identityName)===identity(person.publicName||person.name))&&(!saved.identityLinkedinUrl||!profile||D.normalizeLinkedInUrl(saved.identityLinkedinUrl)===D.normalizeLinkedInUrl(profile))?saved:null;
       return {personId:text(person.id),name:text(person.publicName||person.name),priority:priorityIds.has(key(person)),identityConfirmed:D.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending',qualified,qualificationGaps:qualification.gaps||[],researchStatus:D.buyerResearchAssessment(person,{now:stamp}).status,checks,sourceConfirmedEmail:sourceConfirmed?email:'',usableEmail:usable?text(contact.normalized_email||contact.work_email||contact.email).toLowerCase():'',confirmation:usable?(contact.email_status==='verified'?'provider_verified':'public_confirmed'):'unconfirmed',paid:paid?{status:text(paid.status),checkedAt:text(paid.checkedAt),callIds:[...new Set((paid.callIds||[]).map(text).filter(Boolean))],costMicro:number(paid.costMicro),phoneStatus:text(paid.phone?.status)}:null};

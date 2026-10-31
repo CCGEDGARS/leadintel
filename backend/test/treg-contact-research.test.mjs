@@ -66,6 +66,8 @@ test('manual Confirm data includes profile and optional phone while preserving e
  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'data-a',dataLookup:true,includePhone:true},f.deps);
  assert.equal(f.calls.length,4);assert.equal(result.contact.work_email,'anna@example.com');assert.equal(result.contactData.profile.city,'Riga');assert.equal(result.contactData.phone.number,'+37120000001');assert.equal(result.contactData.phone.status,'provider_listed');assert.equal(result.contactData.status,'updated');assert.equal(result.research.costMicro,18000);
  assert.equal(f.calls.find(c=>c.url.includes('phone.find')).options.headers['X-Treg-Route-Max-Cost'],'0.25');
+ const retainedDataKey=createHash('sha256').update([ctx.workspaceId,'company-a',person.id,'data-a','annabuyer',candidate.domain,person.publicLinkedinUrl].join('|')).digest('hex');
+ for(const phase of ['profile','phone'])assert.equal(f.calls.find(c=>c.url.includes(phase==='profile'?'people.enrich':'phone.find')).options.headers['Idempotency-Key'],'leadintel-'+retainedDataKey+'-'+phase,'name comparison hardening must preserve purchased phase keys');
 });
 test('profile enrichment remains available for an already confirmed email without buying email again',async()=>{
  const f=await fixture();f.deps.saveData=async data=>data;f.deps.fetch=async(url,options)=>{f.calls.push({url,options});return Response.json({output:{full_name:'Anna Buyer',title:'Procurement Director',company_domain:'example.com',linkedin_url:person.publicLinkedinUrl}});};
@@ -141,4 +143,47 @@ test('a conflicting normalized finder LinkedIn profile blocks verification and s
  const f=await fixture({find:{output:{email:'anna@example.com',full_name:person.name,linkedin_url:'https://www.linkedin.com/in/somebody-else'},raw:{}}});
  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'profile-conflict'},f.deps);
  assert.equal(result.contact,null);assert.equal(f.saved.length,0);assert.equal(f.calls.length,1);
+});
+
+test('conflicting raw finder ownership cannot be hidden by normalized fields',async()=>{
+ for(const raw of [{full_name:'Someone Else'},{full_name:'Ann A Buyer'},{first_name:'Somebody'},{last_name:'Else'},{email:'somebody@example.com'},{linkedin_url:'https://www.linkedin.com/in/somebody-else'},{company_domain:'wrong.example'},{person:{full_name:'Someone Else',email:'someone@example.com'}},{data:{full_name:'Anna Buyer'},person:{full_name:'Someone Else',email:'someone@example.com'}}]){
+  const f=await fixture({find:{...finder,raw}});const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'raw-conflict'},f.deps);
+  assert.equal(result.contact,null);assert.equal(f.saved.length,0);assert.equal(f.calls.length,1);
+ }
+});
+test('conflicting raw verification verdicts and addresses never approve a recipient',async()=>{
+ for(const raw of [{email:'other@example.com',is_accept_all:false},{result:'invalid',is_accept_all:false},{result:'invalid ',is_accept_all:false},{data:{email:'other@example.com',result:'invalid',is_accept_all:true}},{is_disposable:'true',is_accept_all:false},{is_accept_all:'TRUE',is_disposable:'TRUE'},{is_accept_all:' true ',is_disposable:' true '}]){
+  const f=await fixture({verify:{...verifier,output:{...verifier.output,is_accept_all:false},raw}});const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'verify-conflict'},f.deps);
+  assert.equal(result.contact,null);assert.equal(f.saved.length,0);
+ }
+});
+test('token replacement after a paid finder retains its receipt and stops verification',async()=>{
+ const f=await fixture();let token='first-token';f.deps.credential=async()=>({source:'customer',apiKey:token});
+ const original=f.deps.fetch;f.deps.fetch=async(...args)=>{const response=await original(...args);token='replacement-token';return response;};
+ await assert.rejects(f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'rotated'},f.deps),error=>error.code==='ADDITIONAL_CONTACT_PROVIDER_CHANGED');
+ assert.equal(f.calls.length,1);assert.equal(f.receipts.length,1);assert.equal(f.receipts[0].costMicro,4000);assert.equal(f.saved.length,0);
+});
+test('unreadable and error responses retain settled Treg charge headers',async()=>{
+ for(const status of [200,503]){
+  const f=await fixture();f.deps.fetch=async()=>new Response('not-json',{status,headers:{'X-Treg-Cost-Micro':'7000','X-Treg-Call-Id':'billed-malformed'}});
+  await assert.rejects(f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'malformed'},f.deps),error=>error.code==='TREG_RETRY_SAME_LOOKUP');
+  assert.equal(f.receipts.length,1);assert.equal(f.receipts[0].costMicro,7000);assert.equal(f.receipts[0].callId,'billed-malformed');assert.equal(f.saved.length,0);
+ }
+});
+
+test('a response from the old token cannot mark the replacement Treg connection used',async()=>{
+ const f=await fixture(),db=new DatabaseSync(':memory:');db.exec("CREATE TABLE treg_contact_calls(workspace_id TEXT,request_key TEXT,phase TEXT,call_id TEXT,cost_micro INTEGER,result_json TEXT,poll_count INTEGER DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(workspace_id,request_key,phase));CREATE TABLE workspace_service_integrations(workspace_id TEXT,provider TEXT,encrypted_api_key TEXT,last_used_at TEXT,updated_at TEXT);INSERT INTO workspace_service_integrations VALUES('workspace-a','treg','old-revision',NULL,NULL)");
+ const env={DB:{prepare(sql){let args=[];return {bind(...v){args=v;return this;},async first(){return db.prepare(sql).get(...args)||null;},async run(){return db.prepare(sql).run(...args);}};}}};delete f.deps.receipt;
+ f.deps.credential=async()=>{const row=db.prepare('SELECT encrypted_api_key FROM workspace_service_integrations').get();return {source:'customer',apiKey:row.encrypted_api_key,row};};
+ f.deps.fetch=async()=>{db.exec("UPDATE workspace_service_integrations SET encrypted_api_key='new-revision'");return Response.json(finder,{headers:{'X-Treg-Call-Id':'old-call','X-Treg-Cost-Micro':'4000'}});};
+ await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'rotated-receipt'},f.deps),error=>error.code==='ADDITIONAL_CONTACT_PROVIDER_CHANGED');
+ assert.equal(db.prepare('SELECT last_used_at FROM workspace_service_integrations').get().last_used_at,null);assert.equal(db.prepare('SELECT cost_micro FROM treg_contact_calls').get().cost_micro,4000);db.close();
+});
+
+test('normalized profile and phone matches cannot hide conflicting raw identity or employer',async()=>{
+ for(const raw of [{full_name:'Someone Else'},{full_name:'Ann A Buyer'},{company_domain:'wrong.example'},{linkedin_url:'https://www.linkedin.com/in/other'},{person:{full_name:'Anna Buyer'},data:{full_name:'Someone Else'}}]){
+  const f=await fixture();f.deps.saveData=async()=>{};f.deps.fetch=async url=>Response.json({output:{full_name:person.name,company_domain:candidate.domain,linkedin_url:person.publicLinkedinUrl,...(url.includes('phone.find')?{phone:'+37120000001'}:{title:person.title})},raw});
+  const result=await f.mod.findTregWorkEmail({},ctx,candidate,person,'company-a',{attemptKey:'raw-data-conflict',dataLookup:true,includePhone:true,existingContact:{id:'saved',name:person.name,work_email:'anna@example.com',email_status:'verified'}},f.deps);
+  assert.equal(result.contactData.profile.status,'conflict');assert.equal(result.contactData.phone.status,'conflict');assert.equal(result.contactData.phone.number,undefined);assert.equal(result.contact.work_email,'anna@example.com');
+ }
 });

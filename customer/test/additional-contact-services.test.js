@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const D=require('../discovery-engine.js');
-function fixture(){const now=new Date().toISOString();const c={company:'Example',domain:'example.com',market:'Sweden',qualification:{eligible:true,researchedAt:now,version:2,qualificationKind:'company',companyScore:85},people:Array.from({length:4},(_,i)=>({id:'p'+i,name:'Anna Buyer'+i,title:i===0?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now,queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}))};c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1}};return c;}
+function fixture(){const now=new Date().toISOString();const c={company:'Example',domain:'example.com',market:'Sweden',qualification:{eligible:true,researchedAt:now,version:2,qualificationKind:'company',companyScore:85},people:Array.from({length:4},(_,i)=>({id:'p'+i,name:['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],title:i===0?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:5,failed:0,checkedAt:now},contactResearch:{policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(k=>[k,{status:'complete',checkedAt:now,queryLog:Array.from({length:k==='gmail'?3:k==='direct_email'?2:1},(_,i)=>({query:k+' business source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}))};c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1}};return require('./helpers/buyer-research-receipts.cjs')(c,now);}
 test('additional services require a qualified company and four real researched eligible buyers',()=>{
  const P=require('../additional-contact-policy.js'),c=fixture();assert.equal(P.readiness(c,c.people[0]).eligible,true);
  for(const mutate of [c=>c.qualification.eligible=false,c=>c.people.pop(),c=>c.people[1].emailResearch.status='partial',c=>c.people[0].organization='Other employer',c=>c.buyerRolesChanged=true,c=>c.publicResearch={conflicts:[{person_id:'p0'}]}]){const x=fixture();mutate(x);assert.equal(P.readiness(x,x.people[0],{automatic:true}).eligible,false);}
@@ -26,7 +26,7 @@ function runtime({confirmed=false,enabled=false,connected=true,approve=true}={})
  const contact=new Map(),policy={enabled,dailyLimit:3,monthlyLimit:30,maxPerCompany:2,updatedAt:'now'};
  w.LeadIntelAdditionalContactPolicy=require('../additional-contact-policy.js');w.AbortSignal=AbortSignal;w.LeadIntelServerBridge={workspace:{id:'w',role:'owner'},session:{authenticated:true}};w.LeadIntelDialogs={confirm:async()=>{calls.push('confirm');return approve;}};
  let release;const fetched=new Promise(r=>release=r);
- w.fetch=async(url,opts={})=>{calls.push([url,opts]);let value=url.includes('/policy')?{policy}:url.includes('/services/status')?{providers:[{provider:'apollo',configured:connected,source:connected?'customer':'none',metadata:{email_enrichment_enabled:true}}]}:{contact:{work_email:'anna@example.com',name:'Anna Buyer0'}};return {ok:true,json:async()=>value};};
+ w.fetch=async(url,opts={})=>{calls.push([url,opts]);let value=url.includes('/policy')?{policy}:url.includes('/services/status')?{providers:[{provider:'apollo',configured:connected,source:connected?'customer':'none',metadata:{email_enrichment_enabled:true}}]}:{contact:{external_person_id:'p0',work_email:'anna@example.com',name:'Anna Andersson'}};return {ok:true,json:async()=>value};};
  w.eval(fs.readFileSync(require.resolve('../additional-contact-services.js'),'utf8'));
  const adapter={rows:()=>[c],assessment:()=>c.qualification,email:(candidate,p)=>confirmed||contact.get(p.id)?'anna@example.com':'',publicSource:()=>false,render(){release();},pending(){},prepare:async()=>({id:'company'}),accept:async(c,p,result)=>contact.set(p.id,result.contact)};w.LeadIntelAdditionalContacts.register(adapter);
  return {w,c,calls,contact,adapter,loaded:fetched,close:()=>dom.window.close()};
@@ -63,8 +63,9 @@ test('removing a buyer while Hunter confirmation is open cancels the paid check'
 });
 function discoveryAdapter(overrides={}){
  const candidate=fixture();let adapter;const writes=[],ctx={window:{LeadIntelAdditionalContacts:{register:x=>adapter=x},LeadIntelCrm:{mapDiscoveryCandidateToCrm:()=>({company:{domain:candidate.domain}})},dispatchEvent(){}},discovery:{selectedProspects:[candidate]},qualificationAssessment:()=>candidate.qualification,ensureCrmCompany:async()=>({id:'c'}),personKey:()=> 'p',verifiedBuyerEmail:()=>'',publicBuyerSource:()=>null,enrichmentResults:new Map(),enrichmentPending:new Set(),discoveryMounted:false,renderAll(){},showToast(){},saveDiscovery:()=>writes.push('local'),refreshCrmState:async()=>{},CustomEvent:class{},bridge:()=>ctx.b,...overrides};
- ctx.b={workspace:{id:'a'},saveCrmCompany:async()=>{writes.push(ctx.b.workspace.id);return {ok:true};},saveNow:async()=>({saved:true})};
- const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),start=source.indexOf('window.LeadIntelAdditionalContacts?.register({'),end=source.indexOf('initDiscoveryWhenReady();',start);vm.runInNewContext(source.slice(start,end),ctx);
+ ctx.b={workspace:{id:'a'},session:{authenticated:true,user:{id:'u'}},saveCrmCompany:async()=>{writes.push(ctx.b.workspace.id);return {ok:true,company:{id:'c',normalized_domain:candidate.domain,workspace_id:ctx.b.workspace.id}};},saveNow:async()=>({saved:true})};
+ Object.assign(ctx,{LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>ctx.b.session.authenticated,discoveryOperationContext:()=>JSON.stringify([ctx.b.workspace.id,ctx.b.session.user.id,ctx.ticket||''])});
+ const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),start=source.indexOf('window.LeadIntelAdditionalContacts?.register({'),end=source.indexOf('initDiscoveryWhenReady();',start);vm.runInNewContext(source.slice(source.indexOf('const companySelectionOperations=new Map();'),source.indexOf('function crmToLocalPipeline('))+source.slice(start,end),ctx);
  return {adapter,candidate,ctx,writes};
 }
 test('a workspace change during company preparation prevents a cross-workspace CRM write',async()=>{
@@ -75,14 +76,14 @@ test('paid Hunter evidence is retained when CRM succeeds but workspace sync need
 });
 test('automatic approval resumes after a previously unavailable provider is connected',async()=>{
  const f=runtime({enabled:true,connected:false});await f.loaded;
- f.w.fetch=async(url,opts={})=>{f.calls.push([url,opts]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2,updatedAt:'now'}}:url.includes('/services/status')?{providers:[{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}}]}:{contact:{work_email:'anna@example.com',name:'Anna Buyer0'}}};};
+ f.w.fetch=async(url,opts={})=>{f.calls.push([url,opts]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2,updatedAt:'now'}}:url.includes('/services/status')?{providers:[{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}}]}:{contact:{external_person_id:'p0',work_email:'anna@example.com',name:'Anna Andersson'}}};};
  await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c);await new Promise(r=>setTimeout(r,10));assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,2);f.close();
 });
 test('stale company verification cannot authorize additional services despite a saved eligible flag',()=>{const P=require('../additional-contact-policy.js'),c=fixture();c.qualification.researchedAt='2001-01-01';assert.equal(P.readiness(c,c.people[0]).eligible,false);});
 test('newer paid Hunter evidence restores from CRM without repeating equal-timestamp public research',()=>{
  const candidate=fixture(),stamp=new Date(Date.now()-60000).toISOString(),checked_at=new Date().toISOString();candidate.buyerDiscovery={checkedAt:stamp};
  const saved=JSON.parse(JSON.stringify(candidate.people));saved[0].hunterChecks={'anna@example.com':{status:'valid',deliverability:'deliverable',checked_at}};
- const detail={company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:2,checkedAt:stamp,buyers:saved}}}},source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
+ const detail={company:{id:'company',workspace_id:'hydration-workspace',normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:2,checkedAt:stamp,buyers:saved}}}},source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
  require('./helpers/crm-hydration-context.cjs')(ctx);
  vm.runInNewContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);assert.equal(candidate.people[0].hunterChecks['anna@example.com'].checked_at,checked_at);
@@ -120,7 +121,7 @@ test('no-result Apollo lookup offers separately approved Hunter finding and reta
  f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);let value;
  if(url.includes('/services/status'))value={providers:[{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}},{provider:'hunter',configured:true,source:'customer',metadata:{additional_verification_enabled:true}}]};
  else if(url.includes('/policy'))value={policy:{enabled:false,dailyLimit:3,monthlyLimit:30,maxPerCompany:2}};
- else {const body=JSON.parse(options.body);if(body.provider==='hunter'){hunterCalls++;value={contact:{work_email:'anna@example.com',name:'Anna Buyer0'},research:{provider:'hunter',status:'verified'}};}else value={contact:null,reason:'No verified work email returned',research:{provider:'apollo',status:'not_found'}};}
+ else {const body=JSON.parse(options.body);if(body.provider==='hunter'){hunterCalls++;value={contact:{external_person_id:'p0',work_email:'anna@example.com',name:'Anna Andersson'},research:{provider:'hunter',status:'verified'}};}else value={contact:null,reason:'No verified work email returned',research:{provider:'apollo',status:'not_found'}};}
  return {ok:true,json:async()=>value};};
  await f.w.LeadIntelAdditionalContacts.load();assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),true);
  assert.equal(hunterCalls,1);assert.equal(f.calls.filter(c=>c==='confirm').length,2);
@@ -140,7 +141,7 @@ test('one missing buyer cannot loosen the automatic full-roster research gate',(
 
 for(const channel of ['email','phone'])test(`manual ${channel} searches only its requested Treg channel`,async()=>{
  const f=runtime();await f.loaded;
- f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled:true,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified'}}};};
+ f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled:true,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{external_person_id:'p0',name:'Anna Andersson',work_email:'anna@example.com',email_status:'verified'}}};};
  await f.w.LeadIntelAdditionalContacts.load();
  await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel,dataLookup:channel==='phone'});
  const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);
@@ -149,8 +150,8 @@ for(const channel of ['email','phone'])test(`manual ${channel} searches only its
 
 for(const phoneEnabled of [false,true])test(`automatic Treg phone lookup follows Setup switch ${phoneEnabled?'ON':'OFF'}`,async()=>{
  const f=runtime();await f.loaded;f.w.LeadIntelDiscovery=D;f.w.LeadIntelOutreachAutomationUI={getPolicy:()=>({mode:'automatic'})};
- f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{name:'Anna Buyer0',work_email:'anna@example.com',email_status:'verified'}}};};
- await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
+ f.w.fetch=async(url,options={})=>{f.calls.push([url,options]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{provider:'treg',enabled:true,phoneEnabled,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'}:url.includes('/status')?{providers:[{provider:'treg',configured:true,source:'customer'}]}:{contact:{external_person_id:'p0',name:'Anna Andersson',work_email:'anna@example.com',email_status:'verified'}}};};
+ await f.w.LeadIntelAdditionalContacts.load();f.c.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),inputSignature:D.buyerReviewSignature(f.c),reviewedPersonIds:f.c.people.map(p=>p.id),conflicts:[],findings:[]};await f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
  const requests=f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));assert.equal(requests.length,1);
  const body=JSON.parse(requests[0][1].body);assert.equal(body.phone_approved,phoneEnabled);assert.equal(body.email_lookup,true);assert.equal(body.automatic,true);assert.equal(f.calls.includes('confirm'),false);f.close();
 });
@@ -229,4 +230,126 @@ test('automatic research from an earlier user cannot spend using a newer loaded 
  const old=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started;f.w.LeadIntelServerBridge.session.user.id='second';await f.w.LeadIntelAdditionalContacts.load();
  release({ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})});await old;
  assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,0);f.close();
+});
+
+function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};}
+function paidPosts(f){return f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?'));}
+async function configureTreg(f,{enabled=true,phoneEnabled=true,configured=true}={}){
+ const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/policy')?{ok:true,json:async()=>({policy:{provider:'treg',enabled,phoneEnabled,maxPerCompany:1,dailyLimit:5,monthlyLimit:150},role:'owner'})}:url.includes('/services/status')?{ok:true,json:async()=>({providers:[{provider:'treg',configured,source:'customer'}]})}:original(url,options);
+ await f.w.LeadIntelAdditionalContacts.load();
+}
+for(const name of ['Teemu Kettunen','Klas Andersson'])for(const field of ['organization','title','publicLinkedinUrl','publicNameUrl'])test(`${name}: changed ${field} during provider await rejects a same-ID result`,async()=>{
+ const f=runtime();await f.loaded;const p=f.c.people[0];p.name=name;require('./helpers/buyer-research-receipts.cjs')(f.c);const response=deferred(),started=deferred(),original=f.w.fetch;
+ f.w.fetch=async(url,options)=>{if(!url.includes('/email?'))return original(url,options);started.resolve();return response.promise;};
+ const run=f.w.LeadIntelAdditionalContacts.run(f.c,p);await started.promise;p[field]=field==='organization'?'Different employer':field==='title'?'Project Director':'https://example.com/replaced-profile';
+ response.resolve({ok:true,json:async()=>({contact:{external_person_id:p.id,name,work_email:'buyer@example.com'}})});
+ assert.equal(await run,false);assert.equal(f.contact.size,0);assert.equal(p.contactVerification,undefined);f.close();
+});
+test('manual enabled Treg email still requires its own explicit cost approval',async()=>{
+ const f=runtime({approve:false});await f.loaded;await configureTreg(f);let costPrompt='';f.w.LeadIntelDialogs.confirm=async message=>{costPrompt=message;f.calls.push('confirm');return false;};
+ assert.equal(await f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'email'}),false);
+ assert.equal(paidPosts(f).length,0);assert.equal(f.calls.includes('confirm'),true);assert.match(costPrompt,/\$0\.075/);f.close();
+});
+for(const revoke of ['channel','provider','connection'])test(`revoked ${revoke} during phone confirmation cannot submit a stale paid request`,async()=>{
+ const f=runtime();await f.loaded;await configureTreg(f);const started=deferred(),approval=deferred();f.w.LeadIntelDialogs.confirm=()=>{started.resolve();return approval.promise;};
+ const run=f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'phone',dataLookup:true});await started.promise;
+ if(revoke==='provider'){
+  const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/policy')?{ok:true,json:async()=>({policy:{provider:'apollo',enabled:true,phoneEnabled:true,maxPerCompany:1,dailyLimit:5,monthlyLimit:150}})}:original(url,options);await f.w.LeadIntelAdditionalContacts.load();
+ }else await configureTreg(f,{phoneEnabled:revoke!=='channel',configured:revoke!=='connection'});
+ approval.resolve(true);assert.equal(await run,false);assert.equal(paidPosts(f).length,0);f.close();
+});
+test('revoked provider connection during CRM preparation prevents submission',async()=>{
+ const f=runtime();await f.loaded;const started=deferred(),prepared=deferred();f.adapter.prepare=()=>{started.resolve();return prepared.promise;};
+ const run=f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]);await started.promise;
+ const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/services/status')?{ok:true,json:async()=>({providers:[]})}:original(url,options);await f.w.LeadIntelAdditionalContacts.load();
+ prepared.resolve({id:'company'});assert.equal(await run,false);assert.equal(paidPosts(f).length,0);f.close();
+});
+test('manual phone intent queued behind email submits phone once instead of reusing the email promise',async()=>{
+ const f=runtime();await f.loaded;await configureTreg(f);const started=deferred(),response=deferred(),original=f.w.fetch;
+ f.w.fetch=async(url,options)=>{if(url.includes('/email?')&&!paidPosts(f).length){f.calls.push([url,options]);started.resolve();return response.promise;}return original(url,options);};
+ const email=f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'email'});await started.promise;
+ const phone=f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'phone',dataLookup:true});
+ response.resolve({ok:true,json:async()=>({contact:{external_person_id:'p0',name:'Anna Andersson',work_email:'anna@example.com'}})});await Promise.all([email,phone]);
+ assert.equal(paidPosts(f).length,2);const body=JSON.parse(paidPosts(f)[1][1].body);assert.equal(body.phone_approved,true);assert.equal(body.email_lookup,false);f.close();
+});
+test('direct manual lookup owns the company while automatic research tries another buyer',async()=>{
+ const f=runtime({enabled:true});await f.loaded;const started=deferred(),response=deferred(),original=f.w.fetch;
+ f.w.fetch=async(url,options)=>{if(url.includes('/email?')){f.calls.push([url,options]);started.resolve();return response.promise;}return original(url,options);};
+ const run=f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[1]);await started.promise;const automatic=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});
+ await new Promise(r=>setTimeout(r,0));const count=paidPosts(f).length;response.resolve({ok:true,json:async()=>({contact:null,research:{status:'not_found'}})});await Promise.all([run,automatic]);assert.equal(count,1);f.close();
+});
+for(const contact of [{},[],{work_email:'wrong@example.com'},{external_person_id:'p0',name:'Anna Andersson',company_id:'company',linkedin_url:'https://linkedin.com/in/another-buyer',work_email:'anna@example.com'}])test(`malformed or conflicting paid contact cannot reach acceptance: ${JSON.stringify(contact)}`,async()=>{
+ const f=runtime();await f.loaded;f.c.people[0].publicLinkedinUrl='https://linkedin.com/in/anna-buyer';require('./helpers/buyer-research-receipts.cjs')(f.c);let accepted=0;f.adapter.accept=async()=>{accepted++;};
+ const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/email?')?{ok:true,json:async()=>({contact})}:original(url,options);
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);assert.equal(accepted,0);assert.match(f.c.people[0].contactVerification.issues.join(' '),/identity|invalid|match/i);f.close();
+});
+
+test('automatic work started before workspace-reset cannot adopt the reloaded policy',async()=>{
+ const f=runtime({enabled:true});await f.loaded;const started=deferred(),response=deferred(),original=f.w.fetch;let count=0;
+ f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));
+ f.w.fetch=async(url,options)=>{if(url.includes('/policy')&&++count===1){started.resolve();return response.promise;}return original(url,options);};
+ const old=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started.promise;
+ f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));await f.w.LeadIntelAdditionalContacts.load();
+ response.resolve({ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})});await old;
+ assert.equal(paidPosts(f).length,0);f.close();
+});
+test('Treg daily-limit changes during approval require a fresh review before submission',async()=>{
+ const f=runtime();await f.loaded;await configureTreg(f);const started=deferred(),approval=deferred();f.w.LeadIntelDialogs.confirm=()=>{started.resolve();return approval.promise;};
+ const run=f.w.LeadIntelAdditionalContacts.confirm(f.c,f.c.people[0],{channel:'phone',dataLookup:true});await started.promise;
+ const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/policy')?{ok:true,json:async()=>({policy:{provider:'treg',enabled:true,phoneEnabled:true,maxPerCompany:1,dailyLimit:1,monthlyLimit:150}})}:original(url,options);await f.w.LeadIntelAdditionalContacts.load();
+ approval.resolve(true);assert.equal(await run,false);assert.equal(paidPosts(f).length,0);f.close();
+});
+test('Klas historical token rejection remains a saved attempt after successful settings refresh',async()=>{
+ const f=runtime();await f.loaded;const p=f.c.people[0];p.name='Klas Andersson';require('./helpers/buyer-research-receipts.cjs')(f.c);
+ p.contactVerification={status:'error',checkedAt:'2026-10-01T00:00:00Z',issues:['Treg rejected the saved team token']};await configureTreg(f);
+ const html=f.w.LeadIntelAdditionalContacts.card(f.c,p);assert.match(html,/Saved lookup attempt/);assert.doesNotMatch(html,/new connection failed|connection is invalid|current token rejected/i);assert.equal(paidPosts(f).length,0);f.close();
+});
+test('reordering the active buyer while approval is open still requests the exact Teemu identity',async()=>{
+ const f=runtime();await f.loaded;const selected=f.c.people[1];selected.name='Teemu Kettunen';require('./helpers/buyer-research-receipts.cjs')(f.c);
+ f.w.LeadIntelDialogs.confirm=async()=>{f.c.people.reverse();return true;};const original=f.w.fetch;
+ f.w.fetch=async(url,options)=>url.includes('/email?')?(f.calls.push([url,options]),{ok:true,json:async()=>({contact:{external_person_id:selected.id,name:selected.name,work_email:'teemu@example.com'}})}):original(url,options);
+ assert.equal(await f.w.LeadIntelAdditionalContacts.confirm(f.c,selected),true);assert.equal(JSON.parse(paidPosts(f)[0][1].body).person_id,selected.id);assert.equal(f.contact.has(selected.id),true);f.close();
+});
+test('replaced bridge with equal user/workspace IDs cannot adopt an earlier automatic policy request',async()=>{
+ const f=runtime({enabled:true});await f.loaded;const started=deferred(),response=deferred(),original=f.w.fetch;
+ f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));
+ f.w.fetch=async(url,options)=>{if(url.includes('/policy')){started.resolve();return response.promise;}return original(url,options);};
+ const old=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started.promise;
+ const bridge=f.w.LeadIntelServerBridge;f.w.LeadIntelServerBridge={...bridge,workspace:{...bridge.workspace},session:{...bridge.session}};
+ response.resolve({ok:true,json:async()=>({policy:{enabled:true,provider:'apollo',dailyLimit:3,monthlyLimit:30,maxPerCompany:2}})});await old;
+ assert.equal(paidPosts(f).length,0);f.close();
+});
+for(const contact of [{name:'Anna Andersson',work_email:'anna@example.com'},{external_person_id:'p0',work_email:'anna@example.com'}])test(`paid contact missing a required identity anchor is rejected: ${JSON.stringify(contact)}`,async()=>{
+ const f=runtime();await f.loaded;let accepted=0;f.adapter.accept=async()=>{accepted++;};const original=f.w.fetch;
+ f.w.fetch=async(url,options)=>url.includes('/email?')?{ok:true,json:async()=>({contact})}:original(url,options);
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);assert.equal(accepted,0);assert.match(f.c.people[0].contactVerification.issues.join(' '),/identity|match/i);f.close();
+});
+for(const change of ['workspace reset','same-ID replacement'])test(`stale ${change} lookup cannot block a fresh explicit request or clear its pending marker`,async()=>{
+ const f=runtime();await f.loaded;const firstStarted=deferred(),oldResponse=deferred(),newResponse=deferred(),pending=new Map(),original=f.w.fetch;let count=0;
+ f.adapter.pending=(_c,p,on,token)=>{if(on)pending.set(p.id,token);else if(pending.get(p.id)===token)pending.delete(p.id);};
+ f.w.fetch=async(url,options)=>{if(!url.includes('/email?'))return original(url,options);f.calls.push([url,options]);if(++count===1){firstStarted.resolve();return oldResponse.promise;}return newResponse.promise;};
+ const oldPerson=f.c.people[0],old=f.w.LeadIntelAdditionalContacts.run(f.c,oldPerson);await firstStarted.promise;
+ if(change==='workspace reset'){f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));await f.w.LeadIntelAdditionalContacts.load();}else{f.c.people[0]={...oldPerson,name:'Klas Andersson'};require('./helpers/buyer-research-receipts.cjs')(f.c);}
+ const selected=f.c.people[0],fresh=f.w.LeadIntelAdditionalContacts.run(f.c,selected);await new Promise(r=>setTimeout(r,0));const submittedBeforeOldCompletes=count;
+ oldResponse.resolve({ok:true,json:async()=>({contact:{external_person_id:oldPerson.id,name:oldPerson.name,work_email:'old@example.com'}})});await old;
+ const pendingAfterOld=pending.size;newResponse.resolve({ok:true,json:async()=>({contact:{external_person_id:selected.id,name:selected.name,work_email:'fresh@example.com'}})});await fresh;
+ assert.equal(submittedBeforeOldCompletes,2);assert.equal(pendingAfterOld,1);assert.equal(pending.size,0);assert.equal(f.contact.get(selected.id).work_email,'fresh@example.com');f.close();
+});
+for(const result of [{},{contact:false},{contact:null,research:{}}])test(`empty malformed paid response remains an error rather than a completed zero result: ${JSON.stringify(result)}`,async()=>{
+ const f=runtime();await f.loaded;const original=f.w.fetch;f.w.fetch=async(url,options)=>url.includes('/email?')?{ok:true,json:async()=>result}:original(url,options);
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);assert.equal(f.c.people[0].contactVerification.status,'error');assert.match(f.c.people[0].contactVerification.issues.join(' '),/invalid|unreadable|malformed/i);f.close();
+});
+for(const phase of ['provider','policy'])test(`paid operation pins the registered research context during ${phase} await`,async()=>{
+ const f=runtime();await f.loaded;let revision='strategy-one';f.adapter.context=()=>revision;const started=deferred(),response=deferred(),original=f.w.fetch;
+ if(phase==='policy')f.w.dispatchEvent(new f.w.Event('leadintel:workspace-reset'));
+ f.w.fetch=async(url,options)=>{if(url.includes(phase==='provider'?'/email?':'/policy')){if(phase==='provider')f.calls.push([url,options]);started.resolve();return response.promise;}return original(url,options);};
+ const run=f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]);await started.promise;revision='strategy-two';
+ response.resolve({ok:true,json:async()=>phase==='provider'?{contact:{external_person_id:'p0',name:'Anna Andersson',work_email:'anna@example.com'}}:{policy:{provider:'apollo',enabled:false,dailyLimit:3,monthlyLimit:30,maxPerCompany:2}}});
+ assert.equal(await run,false);assert.equal(f.contact.size,0);assert.equal(f.c.people[0].contactVerification,undefined);if(phase==='policy')assert.equal(paidPosts(f).length,0);f.close();
+});
+test('automatic paid follow-up cannot continue under a newer registered research context',async()=>{
+ const f=runtime({enabled:true});await f.loaded;let revision='strategy-one';f.adapter.context=()=>revision;const started=deferred(),response=deferred(),original=f.w.fetch;
+ f.w.fetch=async(url,options)=>{if(url.includes('/email?')){f.calls.push([url,options]);started.resolve();return response.promise;}return original(url,options);};
+ const run=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started.promise;revision='strategy-two';response.resolve({ok:true,json:async()=>({contact:null,research:{status:'not_found'}})});await run;
+ assert.equal(paidPosts(f).length,1);assert.equal(f.c.people[0].contactVerification,undefined);assert.equal(f.c.people[1].contactVerification,undefined);f.close();
 });

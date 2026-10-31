@@ -217,6 +217,42 @@ function captureCompanyAction(){return {state:discovery,bridge:bridge(),context:
 function companyActionCurrent(owner){return discovery===owner.state&&bridge()===owner.bridge&&discoveryOperationContext()===owner.context&&(!owner.selectionKey||companySelectionOperations.get(owner.selectionKey)===owner);}
 function claimCompanySelection(key){const owner=captureCompanyAction(),prior=companySelectionOperations.get(key);if(prior&&companyActionCurrent(prior))return null;owner.selectionKey=key;owner.trace=window.LeadIntelReliabilityTrace?.begin('company_selection');companySelectionOperations.set(key,owner);return owner;}
 function finishCompanySelection(key,owner){owner.trace?.finish(companyActionCurrent(owner)?owner.outcome||'blocked':'stale');if(companySelectionOperations.get(key)===owner)companySelectionOperations.delete(key);}
+const buyerActionPendingOwners=new Map(),buyerActionSelectionOwners=new Map();
+function buyerActionPerson(candidate,index,personId){const id=personId===undefined?candidate?.people?.[index]?.id:personId;if(id===undefined||id===null||String(id)==='')return null;const matches=(candidate?.people||[]).filter(row=>String(row.id)===String(id));return matches.length===1?matches[0]:null;}
+function buyerActionIdentity(candidate,person,contact=false){
+  return JSON.stringify([LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person),String(person?.id||''),candidate?.id||'',candidate?.crmId||'',person?.name||'',person?.publicName||'',person?.publicNameUrl||'',person?.publicLinkedinUrl||'',person?.linkedin_url||'',...(contact?[person?.publicEmail||'',person?.publicEmailUrl||'',person?.hunterFound||'']:[])]);
+}
+function captureBuyerAction(candidate,person,{contact=false,contextGuard,researchOwner}={}){
+  const owner=researchOwner||candidate,ownerPerson=owner?.people?.find(row=>String(row.id)===String(person?.id));
+  return {state:discovery,bridge:bridge(),context:discoveryOperationContext(),candidate,person,owner,ownerPerson,contact,contextGuard,identity:buyerActionIdentity(candidate,person,contact),ownerIdentity:buyerActionIdentity(owner,ownerPerson,contact)};
+}
+function buyerActionCurrent(owner){
+  if(!owner||discovery!==owner.state||bridge()!==owner.bridge||!crmAuthenticated()||bridge()?.conflict||discoveryOperationContext()!==owner.context)return false;
+  if(![...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.pipeline||[])].includes(owner.owner)||!owner.ownerPerson||!owner.owner.people?.includes(owner.ownerPerson)||buyerActionPerson(owner.owner,0,owner.ownerPerson.id)!==owner.ownerPerson||buyerActionPerson(owner.candidate,0,owner.person?.id)!==owner.person)return false;
+  return (!owner.contextGuard||owner.contextGuard()===true)&&buyerActionIdentity(owner.candidate,owner.person,owner.contact)===owner.identity&&buyerActionIdentity(owner.owner,owner.ownerPerson,owner.contact)===owner.ownerIdentity;
+}
+function requireBuyerAction(owner){if(!buyerActionCurrent(owner))throw Object.assign(new Error('Buyer or workspace context changed. Review this exact buyer before retrying.'),{code:'BUYER_ACTION_STALE'});}
+function pruneStaleBuyerActions(){
+  for(const [key,token] of buyerActionPendingOwners)if(!buyerActionCurrent(token.owner)&&!token.researchCurrent?.()){if(buyerActionPendingOwners.get(key)===token){buyerActionPendingOwners.delete(key);enrichmentPending.delete(key);}}
+  for(const [key,token] of buyerActionSelectionOwners)if(!buyerActionCurrent(token.owner)){if(buyerActionSelectionOwners.get(key)===token){buyerActionSelectionOwners.delete(key);buyerSelectionPending.delete(key);}}
+}
+function beginBuyerPending(owner){const key=personKey(owner.candidate,owner.person),prior=buyerActionPendingOwners.get(key);if(enrichmentPending.has(key)&&(!prior||buyerActionCurrent(prior.owner)||prior.researchCurrent?.()))return null;const token={owner};buyerActionPendingOwners.set(key,token);enrichmentPending.add(key);return token;}
+function endBuyerPending(key,token){if(buyerActionPendingOwners.get(key)!==token)return;buyerActionPendingOwners.delete(key);enrichmentPending.delete(key);}
+function buyerRecipientIdentity(candidate,person,companyId=''){return {version:1,personId:String(person.id),companyDomain:canonicalDomain(candidate.domain),companyName:candidate.company||'',companyId:companyId||candidate.crmId||'',name:person.publicName||person.name||'',title:person.title||'',organization:person.organization||'',linkedinUrl:LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),identitySourceUrl:person.publicNameUrl||'',researchKey:LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person)};}
+function buyerRecipientCurrent(choice,candidate,person){if(choice?.recipientIdentity?.version!==1)return false;const expected=buyerRecipientIdentity(candidate,person,choice.recipientIdentity.companyId),actual=choice.recipientIdentity;return Object.keys(expected).every(key=>String(actual[key]||'')===String(expected[key]||''));}
+function buyerControlTargetCurrent(control,scope='selected'){
+  if(!control?.dataset?.personIdentity)return true;
+  const data=control.dataset,domain=data.buyerDomain||data.prospectEnrichEmail||data.prospectEnrichPhone||data.keepBuyer||data.buyerNext||data.flowDomain||data.reviewLinkedin||data.recheckBuyer||data.recheckPublicEmail||data.saveBuyerOnly||data.researchBuyer;
+  const candidates=(scope==='company'?discovery.candidates||[]:discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain)===canonicalDomain(domain));
+  if(candidates.some(candidate=>{const person=buyerActionPerson(candidate,0,data.personId);return person&&buyerActionIdentity(candidate,person,true)===data.personIdentity;}))return true;
+  showToast('This buyer changed after the card was shown. Review the current buyer before retrying.');renderAll();return false;
+}
+async function withBuyerControlFocus(button,run){
+  const before=document.activeElement,owner=captureCompanyAction(),domain=button.dataset.prospectEnrichEmail||button.dataset.prospectEnrichPhone,candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,0,button.dataset.personId),buyerOwner=person?captureBuyerAction(candidate,person):null,attributes=[...button.attributes].filter(a=>a.name.startsWith('data-')&&a.name!=='data-person-index').map(a=>[a.name,a.value]);
+  const wasFocused=before===button||button.contains?.(before);
+  try{return await run();}catch(error){if(companyActionCurrent(owner))showToast(error.message||'Contact action could not finish. Review this buyer and retry.');return false;}
+  finally{if(wasFocused&&companyActionCurrent(owner)&&buyerActionCurrent(buyerOwner)&&(!document.activeElement||document.activeElement===document.body||!document.activeElement.isConnected)){const replacement=[...document.querySelectorAll('button[data-person-id]')].find(control=>!control.disabled&&attributes.every(([key,value])=>control.getAttribute(key)===value));replacement?.focus?.();}}
+}
 function personKey(candidate,person){return `${canonicalDomain(candidate?.domain||candidate?.website)}|${String(person?.id||"")}`;}
 function crmToLocalPipeline(company){const domain=canonicalDomain(company.normalized_domain||company.website);const existing=discovery.pipeline.find(item=>canonicalDomain(item.domain||item.website)===domain);return {...(existing||{}),id:existing?.id||company.id,crmId:company.id,company:company.company_name||existing?.company||domain,domain,website:company.website||existing?.website||(domain?`https://${domain}/`:""),score:existing?.score||{total:Number(company.opportunity_score)||0},confidence:company.confidence||existing?.confidence||"",matchedSignals:existing?.matchedSignals||[],evidence:existing?.evidence||[],people:existing?.people||[],stage:window.LeadIntelCrm?.normalizeCrmStage(company.pipeline_stage)||"Discovered",savedAt:existing?.savedAt||company.created_at||new Date().toISOString(),updatedAt:company.updated_at||new Date().toISOString()};}
 function currentWorkspaceCrmPipeline(){
@@ -227,7 +263,18 @@ function currentWorkspaceCrmPipeline(){
 }
 function restoreNewerBuyerResearch(candidate,detail){
   const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
-  if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
+  if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||!buyerHydrationScope(candidate,detail))return false;
+  // A reused provider ID cannot transfer an earlier person's manual work to a new identity.
+  const incomingStamp=Date.parse(saved?.checkedAt||''),existingStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0,localPeople=[...(candidate.people||[]),...(candidate.buyerDiscovery?.pool||[])];
+  const collisions=Number.isFinite(incomingStamp)&&incomingStamp<=Date.now()&&incomingStamp>=existingStamp?(saved?.buyers||[]).filter(row=>localPeople.some(local=>String(local.id)===String(row.id)&&(LeadIntelDiscovery.hasFullBuyerName(local.publicName||local.name)&&local.identityStatus!=='pending'||local.kept||local.flowSelected||local.linkedinConfirmedUrl||local.contactData)&&!buyerHydrationSameIdentity(local,row))):[];
+  if(collisions.length){
+    const before=JSON.stringify(candidate),ids=new Set(collisions.map(row=>String(row.id))),reason='Saved CRM buyer identity conflicts with retained local work. Review the names, employer, role and profiles before continuing.';
+    candidate.publicResearch={...(candidate.publicResearch||{}),conflicts:[...new Map([...(candidate.publicResearch?.conflicts||[]),...collisions.map(row=>({person_id:String(row.id),reason}))].map(row=>[String(row.person_id),row])).values()]};
+    const diagnostics=collisions.map(row=>({source:'identity',url:row.identitySourceUrl||row.publicNameUrl||'',parsedName:row.publicName||row.name||'',parsedTitle:row.title||'',parsedCompany:row.organization||'',parsing:'complete',companyVerification:'review_required',roleMatching:'review_required',accepted:false,identityStatus:'conflict',rejectionReason:reason}));
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),researchIncomplete:true,resultDiagnostics:[...new Map([...(candidate.buyerDiscovery?.resultDiagnostics||[]),...diagnostics].map(row=>[row.source+'|'+row.parsedName+'|'+row.url,row])).values()].slice(0,500)};
+    for(const person of candidate.people||[])if(ids.has(String(person.id))){person.flowSelected=false;if(person.buyerQualification?.eligible!==false)person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:LeadIntelDiscovery.effectiveBuyerRoles(candidate)||person.title},candidate);}
+    return JSON.stringify(candidate)!==before;
+  }
   const companyContext=window.LeadIntelCrm?.restoreCompanyResearch?.(candidate,detail,{workspaceId:bridge()?.workspace?.id,strategyFingerprint:typeof fingerprint==='function'?fingerprint():undefined});
   const companyRestored=Boolean(companyContext&&Object.entries(companyContext).some(([key,value])=>JSON.stringify(value)!==JSON.stringify(candidate[key])));
   if(companyRestored)Object.assign(candidate,companyContext);
@@ -239,8 +286,9 @@ function restoreNewerBuyerResearch(candidate,detail){
   if(dossierRestored)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:savedDossier};
   let retainedDataRestored=false;
   for(const person of candidate.people||[]){
-    const data=(detail.contactData||[]).find(d=>String(d.personId)===String(person.id)&&canonicalDomain(d.domain)===canonicalDomain(candidate.domain)&&(!d.identityName||String(d.identityName).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase())&&(!d.identityLinkedinUrl||!(person.publicLinkedinUrl||person.linkedin_url)||LeadIntelDiscovery.normalizeLinkedInUrl(d.identityLinkedinUrl)===LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)));
-    if(data&&JSON.stringify(data)!==JSON.stringify(person.contactData)&&Date.parse(data.checkedAt)>=Date.parse(person.contactData?.checkedAt||'1970-01-01')){person.contactData=data;retainedDataRestored=true;}
+    const raw=(detail.contactData||[]).find(data=>data.identityName&&String(data.identityName).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()&&LeadIntelDiscovery.safeContactData?.(data,person,canonicalDomain(candidate.domain)));
+    const data=raw&&LeadIntelDiscovery.safeContactData(raw,person,canonicalDomain(candidate.domain)),time=Date.parse(data?.checkedAt||'');
+    if(data&&Number.isFinite(time)&&time<=Date.now()&&JSON.stringify(data)!==JSON.stringify(person.contactData)&&time>=Date.parse(person.contactData?.checkedAt||'1970-01-01')){person.contactData=data;retainedDataRestored=true;}
   }
   let phoneTraceRestored=false;
   const phoneTrace=LeadIntelDiscovery.safePhoneEnrichment?.(saved?.discovery?.phoneEnrichment),localTrace=candidate.buyerDiscovery?.phoneEnrichment;
@@ -255,9 +303,10 @@ function restoreNewerBuyerResearch(candidate,detail){
   // Contact verification may be newer while the underlying public research is unchanged.
   let paidEvidenceRestored=false;
   for(const row of saved.buyers){
-    const person=(candidate.people||[]).find(p=>String(p.id)===String(row.id)&&String(p.publicName||p.name).trim().toLowerCase()===String(row.publicName||row.name).trim().toLowerCase()&&p.title===row.title);
+    const person=(candidate.people||[]).find(p=>String(p.id)===String(row.id)&&buyerHydrationSameIdentity(p,row));
     if(!person)continue;
-    if(row.contactData?.version===1&&row.contactData.domain===canonicalDomain(candidate.domain)&&String(row.contactData.personId)===String(person.id)&&Date.parse(row.contactData.checkedAt)>Date.parse(person.contactData?.checkedAt||'1970-01-01')){person.contactData=row.contactData;paidEvidenceRestored=true;}
+    const data=row.contactData?.identityName&&LeadIntelDiscovery.safeContactData?.(row.contactData,person,canonicalDomain(candidate.domain)),dataTime=Date.parse(data?.checkedAt||'');
+    if(data&&Number.isFinite(dataTime)&&dataTime<=Date.now()&&dataTime>Date.parse(person.contactData?.checkedAt||'1970-01-01')){person.contactData=data;paidEvidenceRestored=true;}
     for(const [email,check] of Object.entries(row.hunterChecks||{})){
       const time=Date.parse(check?.checked_at||''),prior=Date.parse(person.hunterChecks?.[email]?.checked_at||'')||0;
       if(email.endsWith('@'+canonicalDomain(candidate.domain))&&check.status==='valid'&&check.deliverability==='deliverable'&&Number.isFinite(time)&&time<=Date.now()&&Date.now()-time<=30*86400000&&time>prior){person.hunterChecks={...(person.hunterChecks||{}),[email]:check};paidEvidenceRestored=true;}
@@ -269,25 +318,49 @@ function restoreNewerBuyerResearch(candidate,detail){
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   const previous=candidate.people||[];
   candidate.people=saved.buyers.map(row=>{
-    const local=previous.find(p=>String(p.id)===String(row.id));
+    const local=previous.find(p=>String(p.id)===String(row.id)&&buyerHydrationSameIdentity(p,row));
     const evidence=row.contactEvidence||{};
-    const contact=(detail.contacts||[]).find(p=>String(p.external_person_id||'')===String(row.id));
+    const contact=buyerHydrationContact(candidate,row,detail);
     const restored={...local,...row,linkedin_url:row.linkedin_url||local?.linkedin_url||LeadIntelDiscovery.normalizeLinkedInUrl(contact?.linkedin_url),publicLinkedinUrl:row.publicLinkedinUrl||local?.publicLinkedinUrl||LeadIntelDiscovery.normalizeLinkedInUrl(contact?.public_linkedin_url),publicName:row.name,publicNameUrl:row.identitySourceUrl||row.publicNameUrl,publicEmail:evidence.email||row.publicEmail,publicEmailUrl:evidence.emailUrl||row.publicEmailUrl,publicPhone:evidence.phone||row.publicPhone,publicPhoneUrl:evidence.phoneUrl||row.publicPhoneUrl,patternFindings:evidence.patternFindings||row.patternFindings};
     for(const key of ['kept','keptAt','flowSelected','linkedinConfirmedUrl','linkedinConfirmedAt','linkedinConfirmationMethod'])if(local?.[key]!==undefined)restored[key]=local[key];
     const researchTime=person=>Math.max(0,Date.parse(person?.emailResearch?.checkedAt||'')||0,...Object.values(person?.contactResearch?.checks||{}).map(check=>Date.parse(check.checkedAt||'')||0));
-    const currentPolicy=LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.version,sameIdentity=local&&String(local.publicName||local.name).toLowerCase()===String(row.publicName||row.name).toLowerCase()&&String(local.title||'').toLowerCase()===String(row.title||'').toLowerCase()&&(!local.organization||!row.organization||String(local.organization).toLowerCase()===String(row.organization).toLowerCase());
+    const currentPolicy=LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.version,sameIdentity=Boolean(local);
     const keepLocal=sameIdentity&&local.contactResearch&&(local.contactResearch.policyVersion===currentPolicy&&row.contactResearch?.policyVersion!==currentPolicy||local.contactResearch.policyVersion===row.contactResearch?.policyVersion&&researchTime(local)>researchTime(row));
     if(keepLocal)for(const key of ['contactResearch','emailResearch','gmailMatches','gmailCandidates'])if(local[key]!==undefined)restored[key]=local[key];
     const localSource=local?.publicEmailSourceCheck;
     if(sameIdentity&&localSource&&localSource.email===restored.publicEmail&&localSource?.url===restored.publicEmailUrl&&Date.parse(localSource.checkedAt||'')>Date.parse(restored.publicEmailSourceCheck?.checkedAt||'1970-01-01'))restored.publicEmailSourceCheck=localSource;
-    return restored;
+    if(restored.contactData)restored.contactData=restored.contactData.identityName?LeadIntelDiscovery.safeContactData?.(restored.contactData,restored,canonicalDomain(candidate.domain)):null;
+    return local?Object.assign(local,restored):restored;
   });
   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),companyDossier:candidate.buyerDiscovery?.companyDossier||savedDossier,officialContactInventory:candidate.buyerDiscovery?.officialContactInventory||inventory,found:saved.discovery?.found||0,providerStatus:saved.discovery?.providerStatus||{firecrawl:{status:'unavailable'},grounded:{status:'unavailable'},identity:{status:'unavailable'}},resultDiagnostics:saved.discovery?.resultDiagnostics||[],checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,executiveResearch:saved.discovery?.executiveResearch,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool((candidate.buyerDiscovery?.pool||[]).filter(p=>p.kept),[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
   candidate.publicResearch=saved.publicResearch||{checkedAt:saved.checkedAt,firecrawl:'unavailable',openai:'unavailable',gemini:'unavailable',patternSearches:candidate.people.reduce((n,p)=>n+(p.emailResearch?.searches||0),0),sources:[...new Set(candidate.people.flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(Boolean))],issues:['Aggregate provider activity was not retained in this legacy CRM snapshot']};
   candidate.peopleStatus='complete';candidate.publicContactStatus='complete';candidate.publicContactVersion=saved.publicResearch?.evidenceVersion===2?PUBLIC_NAME_CHECK_VERSION:'';
-  candidate.people=candidate.people.map(p=>({...p,buyerQualification:LeadIntelDiscovery.qualifyBuyer(p,{decisionMakers:candidate.buyerDiscovery.opportunityRoles||candidate.buyerRoles},candidate)}));
+  for(const person of candidate.people)person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:LeadIntelDiscovery.effectiveBuyerRoles(candidate)},candidate);
   return true;
 }
+function buyerHydrationScope(candidate,detail){
+  const company=detail?.company,workspaceId=bridge()?.workspace?.id;
+  return Boolean(company?.id&&workspaceId&&company.workspace_id===workspaceId&&canonicalDomain(company.normalized_domain||company.domain||company.website)===canonicalDomain(candidate.domain||candidate.website)&&(!candidate.crmId||String(candidate.crmId)===String(company.id)));
+}
+function buyerHydrationProfiles(person={}){
+  const host=/^https?:\/\/(?:[a-z0-9-]+\.)*linkedin\.com(?=\/)/i,raw=[person.publicLinkedinUrl,person.linkedin_url,person.public_linkedin_url,person.linkedinUrl,person.linkedin,person.linkedinConfirmedUrl,person.profile?.linkedinUrl].filter(value=>value!==undefined&&value!==null&&String(value).trim());
+  return raw.map(value=>{const url=LeadIntelDiscovery.normalizeLinkedInUrl(value);return host.test(url)?url.replace(host,'https://linkedin.com'):'';});
+}
+function buyerHydrationSameIdentity(a={},b={}){
+  const text=value=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase(),name=text(a.publicName||a.name),profiles=[...buyerHydrationProfiles(a),...buyerHydrationProfiles(b)];
+  return Boolean(LeadIntelDiscovery.hasFullBuyerName(name)&&name===text(b.publicName||b.name)&&text(a.title)&&text(a.title)===text(b.title)&&text(a.organization)&&text(a.organization)===text(b.organization)&&profiles.every(Boolean)&&new Set(profiles).size<=1);
+}
+function buyerHydrationContact(candidate,person,detail){
+  if(!buyerHydrationScope(candidate,detail))return null;
+  const text=value=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase(),name=text(person.publicName||person.name),workspaceId=bridge()?.workspace?.id;
+  if(!LeadIntelDiscovery.hasFullBuyerName(name))return null;
+  const matches=(detail.contacts||[]).filter(contact=>{
+    if(text(contact.name)!==name||String(contact.company_id||'')!==String(detail.company.id)||contact.workspace_id&&contact.workspace_id!==workspaceId||contact.external_person_id&&String(contact.external_person_id)!==String(person.id)||contact.title&&text(contact.title)!==text(person.title)||contact.organization&&text(contact.organization)!==text(person.organization))return false;
+    const profiles=[...buyerHydrationProfiles(person),...buyerHydrationProfiles(contact)];return profiles.every(Boolean)&&new Set(profiles).size<=1;
+  });
+  return matches.length===1?matches[0]:null;
+}
+
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
 function registerCrmRecoveryRetry(){
   const currentBridge=bridge(),currentWorkspaceId=currentBridge?.workspace?.id,currentUserId=currentBridge?.session?.user?.id,tasks=window.LeadIntelTaskCentre;
@@ -329,16 +402,16 @@ async function refreshCrmState({render=true}={}){
   const selected=[...new Map([...(discovery.selectedProspects||[]).filter(item=>crmCompanyByDomain(item.domain)),...(discovery.pipeline||[]).filter(item=>crmPipeline.some(company=>company.normalized_domain===item.domain))].map(item=>[item.domain,item])).values()];
   let nextCompany=0;const hydrateCompany=async candidate=>{
     const company=crmCompanyByDomain(candidate.domain);
-    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||!current())return;
+    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||!current()||!buyerHydrationScope(candidate,detail))return;
       if(restoreNewerBuyerResearch(candidate,detail))saveDiscovery();
       let recoveredProfiles=false;
-      for(const person of candidate.people){const contact=typeof LeadIntelDiscovery.buyerPhoneContact==='function'?LeadIntelDiscovery.buyerPhoneContact(detail,person):(detail.contacts||[]).find(row=>String(row.external_person_id||"")===String(person.id));if(!contact)continue;
+      for(const person of candidate.people){const contact=buyerHydrationContact(candidate,person,detail);if(!contact)continue;
         if(!person.linkedin_url&&LeadIntelDiscovery.normalizeLinkedInUrl(contact.linkedin_url)){person.linkedin_url=LeadIntelDiscovery.normalizeLinkedInUrl(contact.linkedin_url);recoveredProfiles=true;}
         if(!person.publicLinkedinUrl&&LeadIntelDiscovery.normalizeLinkedInUrl(contact.public_linkedin_url)){person.publicLinkedinUrl=LeadIntelDiscovery.normalizeLinkedInUrl(contact.public_linkedin_url);recoveredProfiles=true;}
         person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles},candidate);
         enrichmentResults.set(personKey(candidate,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||"not_requested"}});
       }
-      if(typeof hydratePublishedCompanyEmails==='function'&&hydratePublishedCompanyEmails(candidate,detail.contacts||[]))recoveredProfiles=true;
+      if(typeof hydratePublishedCompanyEmails==='function'&&hydratePublishedCompanyEmails(candidate,(candidate.buyerDiscovery?.companyContacts||[]).map(person=>buyerHydrationContact(candidate,person,detail)).filter(Boolean)))recoveredProfiles=true;
       if(recoveredProfiles)saveDiscovery();
     }catch{ /* CRM history remains available even if this display refresh fails. */ }
   };
@@ -1212,7 +1285,7 @@ function hunterStatusLabel(check,email){
   return 'Hunter: inconclusive';
 }
 function contactFlowControls(candidate,person,index,scope){
-  return ['email','phone'].map(kind=>`<label class="auto-confirm-toggle"><input type="checkbox" data-flow-confirm="${kind}" data-flow-domain="${esc(candidate.domain)}" data-flow-scope="${scope}" data-person-index="${index}" ${person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']?'checked':''} ${!crmAuthenticated()?'disabled':''}> Add to flow</label>`);
+  return ['email','phone'].map(kind=>`<label class="auto-confirm-toggle"><input type="checkbox" data-flow-confirm="${kind}" data-flow-domain="${esc(candidate.domain)}" data-flow-scope="${scope}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" ${person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']?'checked':''} ${!crmAuthenticated()?'disabled':''}> Add to flow</label>`);
 }
 function enrichmentResultHtml(result,{hideContacts=false}={}){
   if(!result)return "";
@@ -1241,7 +1314,7 @@ function peopleHtml(candidate,candidateIndex){
     const emailLabel=pending?"Checking public sources…":hasEmail?"Email verified ✓":person.publicEmail?"Public email found ✓":crmAuthenticated()?"Find work email":"Sign in to find email";
     const phoneAction=phonePending?"refresh-phone":"find-phone";
     const phoneLabel=hasPhone?"Phone found ✓":phonePending?"Refresh phone":"Find phone with Apollo";
-    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}</div><div class="person-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}<p class="people-note">Verify this contact’s email before continuing to content creation. Phone verification is optional.</p><button class="secondary-btn small" type="button" data-action="keep-buyer" data-domain="${esc(candidate.domain)}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-buyer-domain="${esc(candidate.domain)}" aria-pressed="${person.kept===true}" ${pending?"disabled":""}>${person.kept?"Saved ✓ · Unsave":"Keep candidate"}</button>${buyerNextAction(candidate,person,personIndex,"company")}<strong class="contact-confirm-heading">Clarify data</strong><div class="contact-confirm-row"><button class="secondary-btn small${hasEmail?' buyer-email-confirmed':person.contactData?.status==='updated'?' buyer-data-updated':''}" type="button" data-action="enrich-contact" aria-label="${person.contactData?.status==='updated'?'Data updated':'Confirm data'}" title="Check available email, professional profile and optional phone. Costs are shown before paid data research." data-company-index="${candidateIndex}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-buyer-domain="${esc(candidate.domain)}" ${pending||!crmAuthenticated()?"disabled":""}>${pending?"Checking…":person.contactData?.status==='updated'?"Data updated ✓":"Confirm data"}</button></div><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-buyer-domain="${esc(candidate.domain)}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?result.contact?.phone_status==='Verified'?"Phone confirmed ✓":"Phone found · unverified":"Confirm phone"}</button></div></div></div>`;
+    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}</div><div class="person-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}<p class="people-note">Verify this contact’s email before continuing to content creation. Phone verification is optional.</p><button class="secondary-btn small" type="button" data-action="keep-buyer" data-domain="${esc(candidate.domain)}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" data-buyer-domain="${esc(candidate.domain)}" aria-pressed="${person.kept===true}" ${pending?"disabled":""}>${person.kept?"Saved ✓ · Unsave":"Keep candidate"}</button>${buyerNextAction(candidate,person,personIndex,"company")}<strong class="contact-confirm-heading">Clarify data</strong><div class="contact-confirm-row"><button class="secondary-btn small${hasEmail?' buyer-email-confirmed':person.contactData?.status==='updated'?' buyer-data-updated':''}" type="button" data-action="enrich-contact" aria-label="${person.contactData?.status==='updated'?'Data updated':'Confirm data'}" title="Check available email, professional profile and optional phone. Costs are shown before paid data research." data-company-index="${candidateIndex}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" data-buyer-domain="${esc(candidate.domain)}" ${pending||!crmAuthenticated()?"disabled":""}>${pending?"Checking…":person.contactData?.status==='updated'?"Data updated ✓":"Confirm data"}</button></div><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" data-buyer-domain="${esc(candidate.domain)}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?result.contact?.phone_status==='Verified'?"Phone confirmed ✓":"Phone found · unverified":"Confirm phone"}</button></div></div></div>`;
   }).join("")}</div>`;
 }
 function candidateCrmMeta(candidate){const company=crmCompanyByDomain(candidate.domain||candidate.website);const inPipeline=currentWorkspaceCrmPipeline().some(item=>canonicalDomain(item.normalized_domain||item.website)===canonicalDomain(candidate.domain||candidate.website));return {company,suppressed:company?.lifecycle_status==="suppressed",inPipeline};}
@@ -1612,10 +1685,21 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,buyerProfile);
   if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}
   const discoveryAtStart=discovery,bridgeAtStart=bridge(),workspaceAtStart=bridge()?.workspace?.id,accountAtStart=discoveryAccountContext(),scopeAtStart=discoveryOperationContext();
-  const scopeIsCurrent=()=>discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryOperationContext()===scopeAtStart;
+  const retainedOwners=['selectedProspects','candidates','potentialMatches','pipeline'].filter(key=>(discovery[key]||[]).includes(candidate)).map(key=>({key,owner:candidate}));
+  if(!retainedOwners.length&&pipeline){const stored=(discovery.pipeline||[]).find(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(candidate.domain));if(stored)retainedOwners.push({key:'pipeline',owner:stored});}
+  if(!retainedOwners.length)return false;
+  const companyInputKey=()=>JSON.stringify([String(candidate.company||'').trim(),canonicalDomain(candidate.domain),canonicalDomain(candidate.website||candidate.domain)]);
+  const companyInput=companyInputKey();
+  const runToken={};Object.defineProperty(candidate,'__leadIntelBuyerDiscoveryRun',{value:runToken,writable:true,configurable:true});
+  const ownerIsRetained=()=>candidate.__leadIntelBuyerDiscoveryRun===runToken&&retainedOwners.every(({key,owner})=>(discovery[key]||[]).includes(owner));
+  const stableInput=value=>Array.isArray(value)?value.map(stableInput):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().filter(key=>!['buyerQualification','buyerRelevanceScore'].includes(key)).map(key=>[key,stableInput(value[key])])):value;
+  const peopleInputKey=()=>{const people=(candidate.people||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));return JSON.stringify(stableInput(LeadIntelDiscovery.normalizeDiscoveryState({selectedProspects:[{company:candidate.company,domain:candidate.domain,buyerSearchMode:'user_selected_target',people}]}).selectedProspects[0]?.people||[]));};
+  let expectedPeopleKey=peopleInputKey(),expectedRoles=selectionKey(candidate.buyerRoles),contactResearchActive=false;
+  const scopeOwnerIsCurrent=()=>discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryOperationContext()===scopeAtStart&&ownerIsRetained()&&companyInputKey()===companyInput;
+  const scopeIsCurrent=()=>scopeOwnerIsCurrent()&&selectionKey(candidate.buyerRoles)===expectedRoles&&(contactResearchActive||peopleInputKey()===expectedPeopleKey);
   let taskCentre,taskId;
   const persist=()=>{
-    if(!scopeIsCurrent())return;
+    if(!scopeOwnerIsCurrent())return;
     const domain=canonicalDomain(candidate.domain);
     if(pipeline||candidate.saved){
       const existing=new Map((discovery.pipeline||[]).map(item=>[canonicalDomain(item.domain||item.website),item]));
@@ -1624,9 +1708,11 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       if(saved)Object.assign(candidate,saved);
       // Contact checkpoints retain this owner by identity throughout the run.
       discovery.pipeline=updated.map(item=>canonicalDomain(item.domain)===domain?candidate:existing.get(canonicalDomain(item.domain||item.website))||item);
+      const retained=retainedOwners.find(row=>row.key==='pipeline');if(retained)retained.owner=candidate;else retainedOwners.push({key:'pipeline',owner:candidate});
     }
     else if((discovery.selectedProspects||[]).some(item=>canonicalDomain(item.domain)===domain))discovery.selectedProspects=discovery.selectedProspects.map(item=>canonicalDomain(item.domain)===domain?candidate:item);
     else if((discovery.potentialMatches||[]).some(item=>canonicalDomain(item.domain)===domain))discovery.potentialMatches=discovery.potentialMatches.map(item=>canonicalDomain(item.domain)===domain?candidate:item);
+    expectedPeopleKey=peopleInputKey();expectedRoles=selectionKey(candidate.buyerRoles);
     const progress=candidate.buyerResearchProgress;
     if(taskId&&progress)taskCentre?.update(taskId,{stage:progress.label,total:5,completed:Math.max(0,(Number(progress.step)||1)-1)});
     saveDiscovery();renderAll();
@@ -1667,6 +1753,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     rows.push(...window.LeadIntelCompanyDossierUi.evidenceRows(companyDossier));
     Object.defineProperty(candidate,'__leadIntelBuyerSources' ,{value:rows,writable:true,configurable:true});
     const publishCompanyContacts=()=>{
+      if(!scopeIsCurrent()||controller.signal.aborted)return;
       const previous=candidate.buyerDiscovery?.companyContacts||[];
       const contacts=LeadIntelDiscovery.discoverCompanyContacts(rows,candidate,previous);
       candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:contacts};
@@ -1699,7 +1786,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     if(selectionKey(candidate.buyerRoles)!==initialRoleSelection)throw new Error('Buying roles changed during company verification. Refresh buyers using the updated roles.');
     researchProfile={...buyerProfile,decisionMakers:plan.roles.join("; "),companyDomain:candidate.domain};
     providerStatus={firecrawl:{status:"pending",results:0,queries:plan.queries.length},grounded:{status:"pending",results:0},identity:{status:"pending",results:0}};
-    candidate.buyerRoles=plan.roles;candidate.buyerRoleAliases=plan.expandedRoles;candidate.buyerOpportunityTerms=plan.opportunityTerms;
+    candidate.buyerRoles=plan.roles;expectedRoles=selectionKey(plan.roles);candidate.buyerRoleAliases=plan.expandedRoles;candidate.buyerOpportunityTerms=plan.opportunityTerms;
     publishCompanyContacts();
     const officialTrace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,researchProfile);
     if(officialTrace.people.length){
@@ -1710,7 +1797,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       persist();renderAll();
     }
 
-    await waitForRun(()=>LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows,signal:controller.signal,onSignal:signal=>{if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(signal,researchAccountability);},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;},guard:()=>{if(!scopeIsCurrent())throw new Error('Research context changed');},onProgress:detail=>{candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:detail.label};persist();}}));
+    await waitForRun(()=>LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows,signal:controller.signal,onSignal:signal=>{if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(signal,researchAccountability);},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;},guard:()=>{if(!scopeIsCurrent())throw new Error('Research context changed');},onCheckpoint:()=>{if(scopeIsCurrent()&&!controller.signal.aborted)persist();},onProgress:detail=>{if(scopeIsCurrent()&&!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:detail.label};persist();}}}));
     publishCompanyContacts();
 
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
@@ -1742,6 +1829,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       const acquired=results.map(row=>({...row,buyerSource:row.buyerSource||'firecrawl'}));
       providerStatus.firecrawl.sources=[...new Set([...(providerStatus.firecrawl.sources||[]),...results.map(row=>row.searchProvider||'firecrawl')])];
       const pages=await Promise.allSettled(acquired.slice(0,3).map(readBuyerSource));
+      if(controller.signal.aborted||!scopeIsCurrent())throw stopped();
       acquired.push(...pages.filter(page=>page.status==='fulfilled'&&page.value).map(page=>page.value));
       rows.push(...acquired);publishCompanyContacts();
       return acquired;
@@ -1804,7 +1892,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     if(pool.some(person=>person.identityStatus==='pending')){
       candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:'identity',label:'Resolving first names against employer and role evidence',step:4,total:5};persist();
       let identityQueries=0;
-      const resolved=await waitForRun(()=>LeadIntelDiscovery.resolvePendingBuyerIdentities(pool,rows,candidate,researchProfile,async query=>{try{return await searchBuyerPublicPages(query,8,controller.signal);}finally{identityQueries++;if(!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:`Resolving first names against employer and role evidence · ${identityQueries} queries checked`};persist();}}}));
+      const resolved=await waitForRun(()=>LeadIntelDiscovery.resolvePendingBuyerIdentities(pool,rows,candidate,researchProfile,async query=>{try{return await searchBuyerPublicPages(query,8,controller.signal);}finally{identityQueries++;if(scopeIsCurrent()&&!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:`Resolving first names against employer and role evidence · ${identityQueries} queries checked`};persist();}}}));
       issues.push(...resolved.issues);resultDiagnostics.push(...resolved.diagnostics);
       pool=LeadIntelDiscovery.mergeBuyerPool([],resolved.people,researchProfile);
       if(resolved.issues.length)providerStatus.firecrawl.status='partial';
@@ -1826,7 +1914,9 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       taskCentre?.update(taskId,{stage:'Researching public buyer identities and contact evidence'});
       // Identity discovery and public contact research have separate finite budgets.
       clearTimeout(timeout);timeout=setTimeout(()=>controller.abort(),300000+LeadIntelDiscovery.OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs+LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs+DISCOVERY_REQUEST_TIMEOUT_MS*30);
-      await waitForRun(()=>findPublicProspectContacts(candidate.domain,{signal:controller.signal,researchOwner:candidate,accountability:researchAccountability,onProgress:({label}={})=>{if(!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:label||'Verifying identities and current roles'};persist();}}}));
+      contactResearchActive=true;
+      try{await waitForRun(()=>findPublicProspectContacts(candidate.domain,{signal:controller.signal,researchOwner:candidate,accountability:researchAccountability,onProgress:({label}={})=>{if(scopeIsCurrent()&&!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:label||'Verifying identities and current roles'};persist();}}}));}
+      finally{expectedPeopleKey=peopleInputKey();contactResearchActive=false;}
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
       candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"contacts",label:"Finalizing public contact evidence",step:5,total:5};persist();
     }
@@ -1848,7 +1938,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     taskCentre?.complete(taskId,{status:candidate.buyerDiscovery.researchIncomplete?'partial':'complete',stage:candidate.buyerDiscovery.researchIncomplete?'Research incomplete':'Buyer research complete',resultCount:candidate.people.length});
     return true;
   }catch(error){
-    if(!scopeIsCurrent()){if(discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryAccountContext()===accountAtStart){candidate.peopleStatus='error';candidate.buyerResearchProgress={phase:'error',label:'Strategy changed. Refresh buyers using the current Strategy.'};saveDiscovery();renderAll();}taskCentre?.fail(taskId,new Error('Workspace or Strategy changed. Buyer results were not applied.'),{canRetry:false});return false;}
+    if(!scopeIsCurrent()){if(discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryAccountContext()===accountAtStart&&ownerIsRetained()){candidate.peopleStatus='error';candidate.buyerResearchProgress={phase:'error',label:'Company, buyer or Strategy changed. Refresh buyers using the current context.'};saveDiscovery();renderAll();}taskCentre?.fail(taskId,new Error('Workspace, company, buyer or Strategy changed. Buyer results were not applied.'),{canRetry:false});return false;}
     researchAccountability.status='partial';researchAccountability.stopReason=controller.signal.aborted?'canceled':'provider_unavailable';researchAccountability.completedAt=new Date().toISOString();researchAccountability.gaps=[String(error.message||'Buyer research stopped').slice(0,220)];
     candidate.peopleStatus="error";
     if(candidate.publicContactStatus==='loading')candidate.publicContactStatus='error';
@@ -1866,6 +1956,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     return false;
   }finally{
     clearTimeout(timeout);
+    if(candidate.__leadIntelBuyerDiscoveryRun===runToken)delete candidate.__leadIntelBuyerDiscoveryRun;
     if(candidate.__leadIntelBuyerSources===rows)delete candidate.__leadIntelBuyerSources;
     rows.length=0;
     if(typeof searchBuyerPublicPages==='function')searchBuyerPublicPages.runs?.delete(controller.signal);
@@ -1881,99 +1972,111 @@ async function ensureCrmCompany(candidate){
   if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=validateCompanySave(candidate,saved);
   await refreshCrmState({render:false});return companyActionCurrent(owner)?company:null;
 }
-async function findPublicCandidateEmail(candidate,person){
-  const domain=canonicalDomain(candidate.domain||candidate.website);
+async function findPublicCandidateEmail(candidate,person,{owner:callerOwner,signal}={}){
+  const owner=captureBuyerAction(candidate,person,{contact:true}),domain=canonicalDomain(candidate.domain||candidate.website);
   const first=String(person.name||'').trim().split(/\s+/)[0];
   if(!domain||!first)throw new Error('Company domain and person name are needed for public email search');
-  const query=`site:${domain} "${first}" (${String(person.title||'').slice(0,70)} OR team OR contact) email`;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  const controller=new AbortController(),cancel=()=>controller.abort(),current=()=>!controller.signal.aborted&&!signal?.aborted&&buyerActionCurrent(owner)&&(!callerOwner||buyerActionCurrent(callerOwner));
+  if(!current())return false;
+  const query=`site:${domain} "${first}" (${String(person.title||'').slice(0,70)} OR team OR contact) email`,timeout=setTimeout(cancel,DISCOVERY_REQUEST_TIMEOUT_MS);
+  signal?.addEventListener('abort',cancel,{once:true});
   try{
-    const response=await fetchFirecrawlBuyerResearch('search',{query,limit:5,scrapeOptions:{formats:['markdown'],onlyMainContent:true}},{signal:controller.signal});
+    const response=await fetchFirecrawlBuyerResearch('search',{query,limit:5,scrapeOptions:{formats:['markdown'],onlyMainContent:true}},{signal:controller.signal});if(!current())return false;
     if(!response.ok)throw new Error(`Public email search failed (${response.status})`);
-    const payload=await response.json();
+    const payload=await response.json();if(!current())return false;
     const results=Array.isArray(payload.data)?payload.data:Array.isArray(payload.data?.web)?payload.data.web:Array.isArray(payload.web)?payload.web:Array.isArray(payload.results)?payload.results:[];
-    const matched=LeadIntelDiscovery.matchPublicBuyerDetails([person],results,domain)[0];
-    if(!matched?.publicEmail||!matched.publicEmailUrl)return false;
-    const index=candidate.people.findIndex(row=>String(row.id)===String(person.id));
-    if(index<0)return false;
-    const company=await ensureCrmCompany(candidate);
-    const saved=await bridge().saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([matched]));
+    const matched=LeadIntelDiscovery.matchPublicBuyerDetails([JSON.parse(JSON.stringify(person))],results,domain,candidate.company)[0];
+    if(!matched?.publicEmail||!matched.publicEmailUrl||String(matched.id)!==String(person.id)||LeadIntelDiscovery.buyerResearchIdentityKey(candidate,matched)!==LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person))return false;
+    const company=await ensureCrmCompany(candidate);if(!current())return false;
+    const workspaceId=owner.bridge.workspace?.id,expectedCompanyId=candidate.crmId||crmCompanyByDomain(domain)?.id;
+    if(!company?.id||expectedCompanyId&&String(company.id)!==String(expectedCompanyId)||company.workspace_id&&company.workspace_id!==workspaceId||company.normalized_domain&&canonicalDomain(company.normalized_domain)!==domain||['suppressed','archived'].includes(company.lifecycle_status))throw new Error('Saved company identity changed. Reload before saving this contact.');
+    const saved=await owner.bridge.saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([matched]));if(!current())return false;
     if(!saved?.ok)throw new Error(saved?.error||'Public email could not be saved to CRM');
-    candidate.people[index]=matched;saveDiscovery();await refreshCrmState({render:false});renderAll();
-    window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:company.id}}));
-    return true;
-  }finally{clearTimeout(timeout);}
+    const returned=(saved.contacts||[]).filter(contact=>String(contact.external_person_id||'')===String(person.id)||String(contact.name||'').trim().toLowerCase()===String(matched.publicName||matched.name).trim().toLowerCase());
+    const contact=returned[0],addresses=[contact?.work_email,contact?.normalized_email,contact?.email].filter(value=>String(value||'').trim()).map(value=>String(value).trim().toLowerCase());
+    if(returned.length!==1||!contact?.id||!addresses.length||addresses.some(email=>email!==String(matched.publicEmail).toLowerCase())||contact.external_person_id&&String(contact.external_person_id)!==String(person.id)||contact.company_id&&String(contact.company_id)!==String(company.id)||contact.workspace_id&&String(contact.workspace_id)!==String(workspaceId)||String(contact.name||'').trim().toLowerCase()!==String(matched.publicName||matched.name).trim().toLowerCase()||contact.public_email_url!==matched.publicEmailUrl)throw new Error('CRM did not acknowledge this exact person and sourced email.');
+    await refreshCrmState({render:false});if(!current())return false;
+    Object.assign(person,matched);saveDiscovery();renderAll();window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:company.id}}));return true;
+  }finally{clearTimeout(timeout);signal?.removeEventListener('abort',cancel);}
 }
-async function resolveApolloBuyer(candidate,person){
+async function resolveApolloBuyer(candidate,person,{owner=captureBuyerAction(candidate,person)}={}){
+  requireBuyerAction(owner);
   let apolloPerson=person;
   if(String(person.id).startsWith('public-')||String(person.id).startsWith('person-')){
-    const response=await bridge().searchApolloPeople(LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,{decisionMakers:person.title}));
+    const response=await owner.bridge.searchApolloPeople(LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,{decisionMakers:person.title}));requireBuyerAction(owner);
     if(!response?.ok)throw new Error(response?.error||'Apollo identity search unavailable');
-    const expected=String(person.publicName||person.name).trim().toLowerCase();
-    const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
-    const matches=LeadIntelDiscovery.normalizeApolloPeople(response).filter(item=>profile&&LeadIntelDiscovery.normalizeLinkedInUrl(item.linkedin_url)===profile||String(item.name).trim().toLowerCase()===expected);
-    if(matches.length!==1)throw new Error('No unique Apollo identity matched this public buyer');
+    const identity=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ').toLowerCase();
+    const expected=identity(person.publicName||person.name),employer=identity(person.organization||candidate.company),profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+    const matches=LeadIntelDiscovery.normalizeApolloPeople(response).filter(item=>identity(item.name)===expected&&employer&&identity(item.organization)===employer&&(!profile||LeadIntelDiscovery.normalizeLinkedInUrl(item.linkedin_url)===profile));
+    if(matches.length!==1)throw new Error('No unique Apollo identity matched this buyer’s full name, employer and professional profile');
+    if(String(matches[0].id)!==String(person.id))throw Object.assign(new Error('This public buyer needs the approved Confirm data action to preserve its saved identity. No paid Apollo contact lookup was started.'),{code:'BUYER_LEGACY_IDENTITY_HOLD'});
     apolloPerson={...person,id:matches[0].id,name:person.publicName||person.name};
   }
-  return apolloPerson;
+  requireBuyerAction(owner);return apolloPerson;
+}
+function validateBuyerProviderContact(owner,company,resolved,result){
+  const contact=result?.contact;if(!contact){if(!['processing','pending_phone','verified','not_found','cancelled','needs_review','already_verified','already_confirmed','public_confirmed'].includes(String(result?.request?.status||result?.research?.status||'')))throw new Error('Provider response has no acknowledged contact or saved lookup outcome.');return;}
+  const identity=value=>String(value||'').normalize('NFKD').replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/\s+/g,' ').toLowerCase(),person=owner.person,expectedProfile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),profiles=[contact.public_linkedin_url,contact.linkedin_url].filter(Boolean).map(value=>LeadIntelDiscovery.normalizeLinkedInUrl(value)),emails=[contact.work_email,contact.normalized_email,contact.email].filter(Boolean).map(value=>String(value).trim().toLowerCase());
+  if(!contact.id||String(contact.external_person_id||'')!==String(person.id)||String(contact.company_id||'')!==String(company.id)||String(contact.workspace_id||'')!==String(owner.bridge.workspace?.id)||identity(contact.name)!==identity(person.publicName||person.name)||profiles.some(value=>!value||expectedProfile&&value!==expectedProfile)||new Set(profiles).size>1||new Set(emails).size>1)throw new Error('Provider result does not match this exact buyer, company and workspace.');
 }
 async function confirmBuyerContact(candidate,index,{scope='selected',kind='email',both=false,automatic=false,additionalHandled=false,dataLookup=false,personId}={}){
-  let person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(row=>String(row.id)===String(personId));if(!person||!crmAuthenticated())return false;
+  let person=buyerActionPerson(candidate,index,personId);if(!person||!crmAuthenticated())return false;
+  let owner=captureBuyerAction(candidate,person),token=null;if(!buyerActionCurrent(owner))return false;const selectedId=String(person.id);
+  const basicIdentity=p=>JSON.stringify([String(p.id),p.publicName||p.name||'',p.title||'',p.organization||'']),originalBasic=basicIdentity(person),originalProfile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+  const companyIdentity=JSON.stringify([candidate.company,candidate.domain,candidate.crmId]);
+  const researchCurrent=()=>discovery===owner.state&&bridge()===owner.bridge&&discoveryOperationContext()===owner.context&&crmAuthenticated()&&!bridge()?.conflict&&JSON.stringify([candidate.company,candidate.domain,candidate.crmId])===companyIdentity&&[...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.pipeline||[])].includes(candidate)&&candidate.people?.includes(person)&&basicIdentity(person)===originalBasic&&(!originalProfile||LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)===originalProfile);
+  const afterOwnedResearch=completed=>{
+    const prior=owner,selected=candidate.people?.find(row=>String(row.id)===selectedId);
+    if(completed!==true){requireBuyerAction(prior);return;}
+    if(discovery!==prior.state||bridge()!==prior.bridge||discoveryOperationContext()!==prior.context||!crmAuthenticated()||bridge()?.conflict||selected!==prior.person||!prior.owner.people?.includes(prior.ownerPerson)||![...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.pipeline||[])].includes(prior.owner)||basicIdentity(selected)!==originalBasic||originalProfile&&LeadIntelDiscovery.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url)!==originalProfile||token&&buyerActionPendingOwners.get(personKey(candidate,selected))!==token)throw Object.assign(new Error('Buyer context changed during public research.'),{code:'BUYER_ACTION_STALE'});
+    owner=captureBuyerAction(candidate,selected);if(token)token.owner=owner;requireBuyerAction(owner);
+  };
   // A pending paid request is refreshed from CRM before any provider routing or spending.
   if(kind==='phone'&&!both&&enrichmentResults.get(personKey(candidate,person))?.request?.status==='pending_phone'){
-    const key=personKey(candidate,person),b=bridge(),workspaceId=b?.workspace?.id;
-    if(enrichmentPending.has(key))return false;
-    enrichmentPending.add(key);
+    const key=personKey(candidate,person),b=owner.bridge,token=beginBuyerPending(owner);if(!token)return false;
     try{const company=crmCompanyByDomain(candidate.domain);if(!company)throw new Error('Save this company to CRM before refreshing the phone');
-      const detail=await b.getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||'Unable to refresh phone');
-      if(bridge()!==b||b.workspace?.id!==workspaceId||!crmAuthenticated())return false;
+      requireBuyerAction(owner);const detail=await b.getCrmCompany(company.id);requireBuyerAction(owner);if(!detail.ok)throw new Error(detail.error||'Unable to refresh phone');
+      requireBuyerAction(owner);
       const contact=LeadIntelDiscovery.buyerPhoneContact(detail,person),previous=enrichmentResults.get(key)||{};
       enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)}});return true;
-    }catch(error){showToast(error.message||'Unable to refresh phone');return false;}finally{enrichmentPending.delete(key);renderAll();}
+    }catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Unable to refresh phone');return false;}finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderAll();}
   }
   if(kind==='phone'&&!both&&!additionalHandled){
-    const workspaceId=bridge()?.workspace?.id,personId=String(person.id);
-    if(!LeadIntelDiscovery.buyerResearchCoveragePassed({...candidate,people:[person]},{allowPartialRoster:true}))await findPublicProspectContacts(candidate.domain,{researchOwner:candidate,personIds:[String(person.id)],manualContact:!automatic});
-    if(bridge()?.workspace?.id!==workspaceId||bridge()?.conflict)return false;
+    const personId=String(person.id);
+    try{if(!LeadIntelDiscovery.buyerResearchCoveragePassed(candidate,{researchPeople:[person],allowPartialRoster:true})){requireBuyerAction(owner);let researched;if(token)token.researchCurrent=researchCurrent;try{researched=await findPublicProspectContacts(candidate.domain,{researchOwner:candidate,personIds:[selectedId],manualContact:!automatic});}finally{if(token)delete token.researchCurrent;}afterOwnedResearch(researched);}requireBuyerAction(owner);}catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Public buyer research incomplete');return false;}
+    if(!buyerActionCurrent(owner))return false;
     person=candidate.people?.find(row=>String(row.id)===personId);if(!person||![...(discovery.selectedProspects||[]),...(discovery.candidates||[])].includes(candidate))return false;
-    if(!LeadIntelDiscovery.buyerResearchCoveragePassed({...candidate,people:[person]},{allowPartialRoster:true})||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible){showToast('Complete this buyer’s qualification and free research before paid phone lookup.');return false;}
+    if(!LeadIntelDiscovery.buyerResearchCoveragePassed(candidate,{researchPeople:[person],allowPartialRoster:true})||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible){showToast('Complete this buyer’s qualification and free research before paid phone lookup.');return false;}
     index=candidate.people.indexOf(person);
     if(window.LeadIntelAdditionalContacts?.policy?.()?.provider==='treg'){
       return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:true,channel:'phone',phoneOnly:true});
     }
-    return confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true});
+    return confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,personId:selectedId});
   }
-  if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:dataLookup||!automatic,channel:'email',emailOnly:true,freeConfirm:()=>confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,dataLookup,personId:String(person.id)})});
-  const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
-  const workspaceId=bridge()?.workspace?.id;if(!workspaceId)return false;
+  if(kind==='email'&&!both&&!additionalHandled&&window.LeadIntelAdditionalContacts)return window.LeadIntelAdditionalContacts.confirm(candidate,person,{automatic,dataLookup:dataLookup||!automatic,channel:'email',emailOnly:true,freeConfirm:()=>buyerActionCurrent(owner)?confirmBuyerContact(candidate,index,{scope,kind,automatic,additionalHandled:true,dataLookup,personId:selectedId}):false});
+  const workspaceId=owner.bridge?.workspace?.id;if(!workspaceId)return false;
+  const key=personKey(candidate,person);token=beginBuyerPending(owner);if(!token)return false;
   const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
-  enrichmentPending.add(key);renderAll();
+  renderAll();
   const issues=[];
-  const selectedResearchComplete=()=>{const scoped=window.LeadIntelAdditionalContacts?.policy?.()?.provider==='treg';return LeadIntelDiscovery.buyerResearchCoveragePassed(scoped?{...candidate,people:[person]}:candidate,{allowPartialRoster:scoped});};
-  const service=async(path,body)=>{
-    const response=await fetch(`${LEADINTEL_API}/api/integrations/services/hunter/${path}?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Hunter ${path} failed`);return payload;
-  };
+  const selectedResearchComplete=()=>{const scoped=!automatic||window.LeadIntelAdditionalContacts?.policy?.()?.provider==='treg';return LeadIntelDiscovery.buyerResearchCoveragePassed(candidate,{...(scoped?{researchPeople:[person]}:{}),allowPartialRoster:scoped});};
   const apollo=async phoneLookup=>{
     try{
     // Free-first: automation approval is not permission to spend provider credits.
     // Require a separate, immediate user confirmation for each paid-provider lookup.
     if(!phoneLookup&&window.LeadIntelAdditionalContacts){issues.push('Complete qualification and public research, then use additional services to find this email.');return;}
     if(automatic){issues.push('Apollo enrichment requires manual credit approval; free-source research remains available');return;}
-    const approved=await (window.LeadIntelDialogs?.confirm(`Apollo ${phoneLookup?'phone':'email'} lookup may consume provider credits. Approve this individual lookup?`)??Promise.resolve(false));
+    requireBuyerAction(owner);const approved=await (window.LeadIntelDialogs?.confirm(`Apollo ${phoneLookup?'phone':'email'} lookup may consume provider credits. Approve this individual lookup?`)??Promise.resolve(false));requireBuyerAction(owner);
     if(!approved){issues.push('Apollo credit lookup skipped — not approved');return;}
-    if(automatic){
-      const response=await fetch(`${LEADINTEL_API}/api/approved-workflow?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const approved=await response.json().catch(()=>({}));
-      if(!response.ok||approved.status!=='automatic'||(phoneLookup?approved.config?.buyers?.confirmPhone!==true:approved.config?.buyers?.confirmContacts!==true)){issues.push('Approve automatic contact confirmation in Workflow automation');return;}
-    }
     if(!person.id){issues.push('Apollo person identity unavailable');return;}
-      const company=await ensureCrmCompany(candidate);
-      const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});
-      if(!result.ok)throw new Error(result.error||'Apollo confirmation failed');
+      requireBuyerAction(owner);const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);
+      const resolved=await resolveApolloBuyer(candidate,person,{owner});requireBuyerAction(owner);
+      const result=await owner.bridge.enrichCrmContact(company.id,resolved,{phoneLookup,allowPersonalEmail:false});requireBuyerAction(owner);
+      if(!result.ok)throw new Error(result.error||'Apollo confirmation failed');validateBuyerProviderContact(owner,company,resolved,result);
       const previous=enrichmentResults.get(key)||{};
       enrichmentResults.set(key,{...previous,...result,contact:{...(previous.contact||{}),...(result.contact||{})}});
       window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));
-    }catch(error){issues.push(`Apollo: ${error.message||'unavailable'}`);}
+    }catch(error){requireBuyerAction(owner);issues.push(`Apollo: ${error.message||'unavailable'}`);}
   };
   try{
     if((kind==='email'||both)&&buyerAutomaticMode()&&!automatic&&!dataLookup){showToast('Automatic email verification is required. Use workflow controls to take manual control.');return false;}
@@ -1982,7 +2085,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
       if(!qualification.eligible){showToast('Review buyer qualification before email confirmation: '+qualification.gaps[0]);return false;}
       const company=crmCompanyByDomain(candidate.domain);
       if(company?.id){
-        const detail=await bridge().getCrmCompany(company.id);
+        requireBuyerAction(owner);const detail=await owner.bridge.getCrmCompany(company.id);requireBuyerAction(owner);
         if(!detail?.ok)throw new Error(detail?.error||'Saved contact evidence could not be checked');
         if(['suppressed','archived'].includes(detail.company?.lifecycle_status))throw new Error('This company is blocked in CRM');
         if(bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed; retry in the current workspace');
@@ -1991,37 +2094,29 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
         if(accepted.length===1)enrichmentResults.set(key,{...(enrichmentResults.get(key)||{}),contact:accepted[0]});
       }
       // Existing verified contacts are reused before any paid lookup.
-      if(typeof publicBuyerSource==='function'&&publicBuyerSource(candidate,person)&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){try{await confirmPublicBuyerSource(candidate,person,{evidenceOnly:true});}catch(error){issues.push(error.message);}}
+      if(typeof publicBuyerSource==='function'&&publicBuyerSource(candidate,person)&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){try{requireBuyerAction(owner);await confirmPublicBuyerSource(candidate,person,{evidenceOnly:true});requireBuyerAction(owner);}catch(error){requireBuyerAction(owner);issues.push(error.message);}}
       if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})&&!selectedResearchComplete()){
         const personId=String(person.id);
-        await findPublicProspectContacts(candidate.domain,{researchOwner:candidate,personIds:[String(person.id)],manualContact:!automatic});
+        requireBuyerAction(owner);let researched;if(token)token.researchCurrent=researchCurrent;try{researched=await findPublicProspectContacts(candidate.domain,{researchOwner:candidate,personIds:[selectedId],manualContact:!automatic});}finally{if(token)delete token.researchCurrent;}afterOwnedResearch(researched);
         if(bridge()?.workspace?.id!==workspaceId||bridge()?.conflict)throw new Error('Workspace changed during public contact research.');
         person=candidate.people?.find(row=>String(row.id)===personId);
         if(!person)throw new Error('Buyer changed during public contact research.');
         if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})&&!selectedResearchComplete())throw new Error('Mandatory public research is incomplete. Resume its checks before using additional services.');
       }
       if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true}))await apollo(false);
+      requireBuyerAction(owner);
       let hunterReady=false;
-      try{const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const payload=await status.json();const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{}
+      try{requireBuyerAction(owner);const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});requireBuyerAction(owner);const payload=await status.json();requireBuyerAction(owner);const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{requireBuyerAction(owner);}
       if(hunterReady&&!automatic&&!window.LeadIntelAdditionalContacts&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){
-        const hunterApproved=await (window.LeadIntelDialogs?.confirm('Hunter email finding/verification may consume provider credits. Approve Hunter checks for this contact?')??Promise.resolve(false));
+        requireBuyerAction(owner);const hunterApproved=await (window.LeadIntelDialogs?.confirm('Hunter email finding/verification may consume provider credits. Approve Hunter checks for this contact?')??Promise.resolve(false));requireBuyerAction(owner);
         if(!hunterApproved){issues.push('Hunter credit checks skipped — not approved');}
         if(hunterApproved){
-        const name=String(person.publicName||person.name||'').trim().split(/\s+/);
-        const contact=enrichmentResults.get(key)?.contact||{};
-        let found=contact.work_email||contact.normalized_email||person.publicEmail||'';
-        // Finder is the final optional fallback. Generated patterns are never
-        // bulk-verified or promoted to a confirmed identity.
-        if(!found&&name.length>=2){try{const result=await service('find-email',{domain:candidate.domain,first_name:name[0],last_name:name[name.length-1]});found=result.email||'';if(found)person.hunterFound=found;}catch(error){issues.push(`Hunter search: ${error.message}`);}}
-        if(found){
-          try{const prior=person.hunterChecks?.[found];if(!prior||!Number.isFinite(Date.parse(prior.checked_at))||Date.now()-Date.parse(prior.checked_at)>30*24*60*60*1000){const check=await service('verify-email',{email:found});person.hunterChecks={...(person.hunterChecks||{}),[found]:{status:check.status,deliverability:check.deliverability,checked_at:check.checked_at||new Date().toISOString()}};}
-            const check=person.hunterChecks?.[found];
-            const attributable=found===contact.work_email||found===contact.normalized_email||found===person.publicEmail&&Boolean(person.publicEmailUrl);
-            if(check?.status==='valid'&&check.deliverability==='deliverable'&&attributable&&name.length>=2&&found.endsWith('@'+canonicalDomain(candidate.domain))){
-              const company=await ensureCrmCompany(candidate);const mapped=window.LeadIntelCrm.mapContacts([person])[0];const saved=await bridge().saveCrmContacts(company.id,[{...mapped,work_email:found,email_status:'verified',source:'hunter'}]);if(!saved?.ok)throw new Error(saved?.error||'Verified email could not be saved');enrichmentResults.set(key,{contact:{...contact,name:person.publicName||person.name,work_email:found,email_status:'verified',source:'hunter'}});
-            }else issues.push('Additional Hunter check did not confirm an attributable company email');
-          }catch(error){issues.push(`Hunter check: ${error.message}`);}
-        }
+        requireBuyerAction(owner);const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);
+        const response=await fetch(`${LEADINTEL_API}/api/additional-contact-services/email?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company_id:company.id,person_id:selectedId,provider:'hunter',approved:true,hunter_approved:true})});requireBuyerAction(owner);
+        const result=await response.json();requireBuyerAction(owner);
+        if(!response.ok)throw new Error(result.error||'Hunter confirmation failed');
+        if(result.contact&&!verifiedBuyerEmail(candidate,person,result.contact,{skipAdditional:true}))throw new Error('Hunter did not confirm this exact buyer and company email');
+        if(result.contact)enrichmentResults.set(key,result);else issues.push(result.reason||'Hunter did not confirm an attributable company email');
         }
       }
 
@@ -2029,63 +2124,111 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
     if(kind==='phone'||both){
       const previous=enrichmentResults.get(key);
       if(previous?.request?.status==='pending_phone'&&!previous?.contact?.phone_number){
-        const company=crmCompanyByDomain(candidate.domain);if(company){const detail=await bridge().getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||'Unable to refresh phone');const contact=LeadIntelDiscovery.buyerPhoneContact(detail,person);enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)}});}
-      }else await apollo(true);
+        const company=crmCompanyByDomain(candidate.domain);if(company){requireBuyerAction(owner);const detail=await owner.bridge.getCrmCompany(company.id);requireBuyerAction(owner);if(!detail.ok)throw new Error(detail.error||'Unable to refresh phone');const contact=LeadIntelDiscovery.buyerPhoneContact(detail,person);enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)}});}
+      }else {await apollo(true);requireBuyerAction(owner);}
     }
     if(kind==='email'||both)person.contactVerification={status:verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{})?enrichmentResults.get(key)?.contact?.email_status==='public_confirmed'?'public_confirmed':'verified':issues.length?'error':'not_verified',checkedAt:new Date().toISOString(),issues:issues.length?issues:['Provider did not confirm an attributable company email']};
     if(['verified','public_confirmed'].includes(person.contactVerification?.status))person.contactVerification.issues=[];
     if(automatic&&!issues.length)person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']=fingerprint;
-    saveDiscovery();await refreshCrmState({render:false});renderAll();
+    requireBuyerAction(owner);saveDiscovery();await refreshCrmState({render:false});requireBuyerAction(owner);renderAll();
     showToast(issues.length?`${person.publicName||person.name} · ${issues.join(' · ')}`:`${person.publicName||person.name} · confirmation results updated`);
     return !issues.length;
   }catch(error){
+    if(!buyerActionCurrent(owner))return false;
     if(kind==='email'||both)person.contactVerification={status:'error',checkedAt:new Date().toISOString(),issues:[error.message||'Email confirmation failed']};
     saveDiscovery();showToast(error.message||'Contact confirmation failed');return false;
-  }finally{enrichmentPending.delete(key);renderAll();}
+  }finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderAll();}
 }
 const contactFlowPromises=new Map();
-async function runBuyerContactFlow(candidate,index,scope){
-  const person=candidate?.people?.[index];if(!person||!crmAuthenticated()||candidate.publicContactStatus==='loading')return;
-  const key=personKey(candidate,person);if(contactFlowPromises.has(key))return contactFlowPromises.get(key);
-  const run=(async()=>{
-    const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
+async function runBuyerContactFlow(candidate,index,scope,{personId}={}){
+  const person=buyerActionPerson(candidate,index,personId);if(!person||!crmAuthenticated()||candidate.publicContactStatus==='loading')return false;
+  let owner=captureBuyerAction(candidate,person);if(!buyerActionCurrent(owner))return false;
+  const key=personKey(candidate,person),previous=contactFlowPromises.get(key);if(previous&&buyerActionCurrent(previous.owner))return previous.promise;
+  const token={owner,promise:null},selectedId=String(person.id),basic=p=>JSON.stringify([p.publicName||p.name,p.title,p.organization]),original=basic(person),profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+  token.promise=Promise.resolve().then(async()=>{
+    const fingerprint=`${selectedId}:${CONTACT_CONFIRM_VERSION}`;
     for(const kind of ['email','phone']){
-      if(!person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']||person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']===fingerprint)continue;
-      await confirmBuyerContact(candidate,index,{scope,kind,automatic:true});
+      requireBuyerAction(owner);if(contactFlowPromises.get(key)!==token)return false;
+      const selected=buyerActionPerson(candidate,-1,selectedId);if(selected!==person)return false;
+      if(!selected[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']||selected[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']===fingerprint)continue;
+      const completed=await confirmBuyerContact(candidate,candidate.people.indexOf(selected),{scope,kind,automatic:true,personId:selectedId});
+      if(!buyerActionCurrent(owner)&&completed===true){
+        if(discovery!==owner.state||bridge()!==owner.bridge||discoveryOperationContext()!==owner.context||!crmAuthenticated()||bridge()?.conflict||!candidate.people?.includes(person)||basic(person)!==original||profile&&LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)!==profile||contactFlowPromises.get(key)!==token)return false;
+        owner=captureBuyerAction(candidate,person);token.owner=owner;
+      }
+      requireBuyerAction(owner);if(contactFlowPromises.get(key)!==token)return false;
     }
-  })();
-  contactFlowPromises.set(key,run);
-  try{await run;}finally{contactFlowPromises.delete(key);}
+    return true;
+  });
+  contactFlowPromises.set(key,token);
+  try{return await token.promise;}catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Buyer flow incomplete');return false;}finally{if(contactFlowPromises.get(key)===token)contactFlowPromises.delete(key);}
 }
 function toggleBuyerContactFlow(box){
-  const domain=canonicalDomain(box.dataset.flowDomain),scope=box.dataset.flowScope,index=Number(box.dataset.personIndex),kind=box.dataset.flowConfirm;
-  if(!['email','phone'].includes(kind))return;
-  const candidate=(scope==='selected'?discovery.selectedProspects:discovery.candidates).find(item=>canonicalDomain(item.domain)===domain);
-  const person=candidate?.people?.[index];if(!person)return;
+  const domain=canonicalDomain(box.dataset.flowDomain),scope=box.dataset.flowScope,kind=box.dataset.flowConfirm,personId=box.dataset.personId;
+  if(!['email','phone'].includes(kind)||!personId)return false;
+  const candidate=(scope==='selected'?discovery.selectedProspects:discovery.candidates).find(item=>canonicalDomain(item.domain)===domain),person=buyerActionPerson(candidate,-1,personId);
+  if(!person)return false;const owner=captureBuyerAction(candidate,person);if(!buyerActionCurrent(owner))return false;
   person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']=box.checked;
   if(!box.checked)person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']='';
   saveDiscovery();
-  if(box.checked&&candidate.publicContactStatus!=='loading')void runBuyerContactFlow(candidate,index,scope);
+  if(box.checked&&candidate.publicContactStatus!=='loading')void runBuyerContactFlow(candidate,candidate.people.indexOf(person),scope,{personId:String(person.id)});
+  return true;
 }
-async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirmed=false}={}){
-  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact(discovery.candidates[companyIndex],personIndex,{scope:'company'});
-  const candidate=discovery.candidates[companyIndex],person=candidate?.people?.[personIndex];
-  if(!candidate||!person)return false;
+async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirmed=false,domain,personId}={}){
+  const candidate=domain===undefined?discovery.candidates[companyIndex]:(discovery.candidates||[]).find(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(domain)),person=buyerActionPerson(candidate,personIndex,personId);
+  if(!candidate||!person||!crmAuthenticated())return false;
+  let owner=captureBuyerAction(candidate,person);if(!buyerActionCurrent(owner))return false;const researchKey=LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person);
+  const target={domain:canonicalDomain(candidate.domain||candidate.website),personId:String(person.id),phoneLookup};
+  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact(candidate,personIndex,{scope:'company',personId:target.personId});
   if(!phoneLookup){
-    if(!crmAuthenticated()){showToast('Sign in to save public work emails to CRM');return false;}
-    const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
-    enrichmentPending.add(key);renderCandidates();
+    const key=personKey(candidate,person),token=beginBuyerPending(owner);if(!token)return false;renderCandidates();
     try{
       if(person.publicEmail&&person.publicEmailUrl){showToast(`${person.name} · public work email found · unverified`);return true;}
-      if(await findPublicCandidateEmail(candidate,person)){showToast(`${person.name} · public work email found · unverified`);return true;}
-    }catch(error){showToast(error?.name==='AbortError'?'Public email search timed out':error.message||'Public email search failed');return false;}
-    finally{enrichmentPending.delete(key);renderCandidates();}
-    if(!confirmed&&!(await (window.LeadIntelDialogs?.confirm(`${person.name} · no public work email matched. Continue with Apollo verification?`)??false)))return false;
+      requireBuyerAction(owner);let found;const initialCompany=JSON.stringify([candidate.company,candidate.domain,candidate.crmId]);token.researchCurrent=()=>discovery===owner.state&&bridge()===owner.bridge&&discoveryOperationContext()===owner.context&&crmAuthenticated()&&!bridge()?.conflict&&[...(discovery.candidates||[]),...(discovery.selectedProspects||[]),...(discovery.pipeline||[])].includes(candidate)&&candidate.people?.includes(person)&&JSON.stringify([candidate.company,candidate.domain,candidate.crmId])===initialCompany&&LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person)===researchKey;try{found=await findPublicCandidateEmail(candidate,person,{owner});}finally{delete token.researchCurrent;}
+      if(found){if(discovery!==owner.state||bridge()!==owner.bridge||discoveryOperationContext()!==owner.context||!crmAuthenticated()||bridge()?.conflict||!candidate.people?.includes(person)||LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person)!==researchKey||buyerActionPendingOwners.get(key)!==token)return false;owner=captureBuyerAction(candidate,person);token.owner=owner;requireBuyerAction(owner);showToast(`${person.name} · public work email found · unverified`);return true;}
+      requireBuyerAction(owner);
+    }catch(error){if(buyerActionCurrent(owner))showToast(error?.name==='AbortError'?'Public email search timed out':error.message||'Public email search failed');return false;}
+    finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderCandidates();}
+    if(!confirmed){const approved=await (window.LeadIntelDialogs?.confirm(`${person.name} · no public work email matched. Continue with Apollo verification?`)??false);if(!buyerActionCurrent(owner)||!approved)return false;confirmed=true;}
   }
-  return enrichContactWithApollo(companyIndex,personIndex,{phoneLookup});
+  if(!buyerActionCurrent(owner))return false;
+  return enrichContactWithApollo(-1,-1,{...target,approved:!phoneLookup&&confirmed});
 }
-async function enrichContactWithApollo(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;const taskCentre=window.LeadIntelTaskCentre;const taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`;taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});taskCentre?.registerActions(taskId,{retry:()=>enrichContact(companyIndex,personIndex,{phoneLookup})});enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){taskCentre?.fail(taskId,error,{canRetry:true});enrichmentResults.set(key,{error:error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed"});showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
-async function refreshEnrichedContact(companyIndex,personIndex){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person?.id)return false;if(!crmAuthenticated()){showToast("Sign in to refresh Apollo contact status");return false;}const company=crmCompanyByDomain(candidate.domain||candidate.website);if(!company){showToast("Save this company to Master CRM before refreshing the phone");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const detail=await bridge().getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||"Unable to refresh CRM contact");const contact=typeof LeadIntelDiscovery.buyerPhoneContact==='function'?LeadIntelDiscovery.buyerPhoneContact(detail,person):(detail.contacts||[]).find(item=>String(item.external_person_id||"")===String(person.id))||null;const previous=enrichmentResults.get(key)||{};const result={...previous,request:{...(previous.request||{}),status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)},contact:contact||null};enrichmentResults.set(key,result);renderCandidates();showToast(contact?.phone_number?`${person.name} · verified phone loaded from Master CRM`:`${person.name} · ${result.request.status==='pending_phone'?'phone lookup is still pending':result.request.status==='failed'?'phone lookup failed; checks incomplete':result.request.status==='not_requested'?'no phone lookup is recorded':'phone lookup finished without a valid number'}`);return Boolean(contact?.phone_number);}catch(error){showToast(error.message||"Unable to refresh phone status");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
+async function enrichContactWithApollo(companyIndex,personIndex,{phoneLookup=false,domain,personId,approved=false}={}){
+  const candidate=domain===undefined?discovery.candidates[companyIndex]:(discovery.candidates||[]).find(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(domain)),person=buyerActionPerson(candidate,personIndex,personId);
+  if(!candidate||!person?.id)return false;if(!crmAuthenticated()){showToast('Sign in to enrich contacts with Apollo');return false;}
+  const owner=captureBuyerAction(candidate,person);if(!buyerActionCurrent(owner))return false;
+  const key=personKey(candidate,person),token=beginBuyerPending(owner);if(!token)return false;
+  const taskCentre=window.LeadIntelTaskCentre,taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`,target={domain:canonicalDomain(candidate.domain||candidate.website),personId:String(person.id),phoneLookup};
+  taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});
+  taskCentre?.registerActions(taskId,{retry:()=>buyerActionCurrent(owner)?enrichContact(-1,-1,target):false});renderCandidates();
+  try{
+    if(!approved){requireBuyerAction(owner);const consent=await (window.LeadIntelDialogs?.confirm(`Apollo ${phoneLookup?'phone':'email'} lookup may consume provider credits. Approve this individual lookup?`)??false);requireBuyerAction(owner);if(!consent)return false;}
+    requireBuyerAction(owner);const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});
+    const resolved=await resolveApolloBuyer(candidate,person,{owner});requireBuyerAction(owner);
+    const result=await owner.bridge.enrichCrmContact(company.id,resolved,{phoneLookup,allowPersonalEmail:false});requireBuyerAction(owner);
+    if(!result.ok)throw Object.assign(new Error(result.error||'Apollo contact enrichment failed'),{code:result.code});
+    validateBuyerProviderContact(owner,company,resolved,result);
+    await refreshCrmState({render:false});requireBuyerAction(owner);enrichmentResults.set(key,result);renderAll();
+    window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));
+    taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});
+    showToast(phoneLookup?result.contact?.phone_number?`${person.name} · ${String(result.contact.phone_status||'').trim().toLowerCase()==='verified'?'verified phone':'phone listing (unverified)'} saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`:result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;
+  }catch(error){if(!buyerActionCurrent(owner))return false;taskCentre?.fail(taskId,error,{canRetry:true});enrichmentResults.set(key,{error:error.code==='CRM_APOLLO_CREDIT_LIMIT'?'Apollo credit limit reached':error.message||'Apollo contact enrichment failed'});showToast(error.message||'Apollo contact enrichment failed');return false;}
+  finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderCandidates();}
+}
+async function refreshEnrichedContact(companyIndex,personIndex,{domain,personId}={}){
+  const candidate=domain===undefined?discovery.candidates[companyIndex]:(discovery.candidates||[]).find(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(domain)),person=buyerActionPerson(candidate,personIndex,personId);
+  if(!candidate||!person?.id||!crmAuthenticated())return false;
+  const owner=captureBuyerAction(candidate,person);if(!buyerActionCurrent(owner))return false;
+  const company=crmCompanyByDomain(candidate.domain||candidate.website);if(!company){showToast('Save this company to Master CRM before refreshing the phone');return false;}
+  const key=personKey(candidate,person),token=beginBuyerPending(owner);if(!token)return false;renderCandidates();
+  try{
+    requireBuyerAction(owner);const detail=await owner.bridge.getCrmCompany(company.id);requireBuyerAction(owner);if(!detail.ok)throw new Error(detail.error||'Unable to refresh CRM contact');
+    const contact=LeadIntelDiscovery.buyerPhoneContact(detail,person),previous=enrichmentResults.get(key)||{},result={...previous,request:{...(previous.request||{}),status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)},contact:contact||null};
+    enrichmentResults.set(key,result);renderCandidates();showToast(contact?.phone_number?`${person.name} · ${String(contact.phone_status||'').trim().toLowerCase()==='verified'?'verified phone':'phone listing (unverified)'} loaded from Master CRM`:`${person.name} · ${result.request.status==='pending_phone'?'phone lookup is still pending':result.request.status==='failed'?'phone lookup failed; checks incomplete':result.request.status==='not_requested'?'no phone lookup is recorded':'phone lookup finished without a valid number'}`);return Boolean(contact?.phone_number);
+  }catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Unable to refresh phone status');return false;}
+  finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderCandidates();}
+}
 async function saveCandidate(reference,{pipeline=false}={}){
   const stored=companyActionCandidate(reference);if(!stored)return false;
   const owner=captureCompanyAction(),qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
@@ -2167,55 +2310,52 @@ function syncBuyerStageNavigation(){
   return {focus,selected,buyerCount};
 }
 function selectedBuyerKey(candidate,person){return personKey(candidate,person);}
-async function keepBuyer(domain,index,{scope="selected",personId}={}){
-  const candidate=(scope==="company"?discovery.candidates||[]:discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));
-  const person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));if(!person)return false;
-  if(!crmAuthenticated()){showToast('Sign in to save this candidate');return false;}
-  const capturedDiscovery=discovery,b=bridge(),workspaceId=b?.workspace?.id,userId=b?.session?.user?.id;
-  const current=()=>discovery===capturedDiscovery&&bridge()===b&&b?.workspace?.id===workspaceId&&b?.session?.user?.id===userId&&crmAuthenticated()&&(scope==='company'?discovery.candidates:discovery.selectedProspects)?.includes(candidate)&&candidate.people.includes(person);
-  const actionKey=personKey(candidate,person);if(enrichmentPending.has(actionKey))return false;
-  const previous={kept:person.kept,keptAt:person.keptAt,flowSelected:person.flowSelected,pool:[...(candidate.buyerDiscovery?.pool||[])]};
-  const selectionWasPending=buyerSelectionPending.has(actionKey);buyerSelectionPending.add(actionKey);renderPipeline();
+async function keepBuyer(domain,index,{scope="selected",personId,selectionOwner}={}){
+  const candidate=(scope==="company"?discovery.candidates||[]:discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,index,personId);
+  if(!person||!crmAuthenticated())return false;
+  const owner=captureBuyerAction(candidate,person,{contact:true}),actionKey=personKey(candidate,person),b=owner.bridge;
+  if(!buyerActionCurrent(owner)||enrichmentPending.has(actionKey))return false;
+  pruneStaleBuyerActions();
+  const inherited=selectionOwner&&buyerActionSelectionOwners.get(actionKey)===selectionOwner;
+  if(buyerSelectionPending.has(actionKey)&&!inherited)return false;
+  const token=inherited?selectionOwner:{owner};if(!inherited){buyerActionSelectionOwners.set(actionKey,token);buyerSelectionPending.add(actionKey);}renderPipeline();
+  const previous={kept:person.kept,keptAt:person.keptAt,flowSelected:person.flowSelected,pool:(candidate.buyerDiscovery?.pool||[]).slice()},previousIdentity=LeadIntelDiscovery.buyerIdentity(person);let written=null;
   try{
     if(!person.kept){
       if((candidate.people||[]).filter(item=>item.kept).length>=10)throw new Error('Keep up to ten buyers per company');
-      const company=await ensureCrmCompany(candidate);
-      if(!current())return false;
-      const result=await b.saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([person]));
-      if(!current())return false;
-      if(!result?.ok)throw new Error(result?.error||'Candidate could not be saved');
+      const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);if(!company?.id)throw Error('Company could not be saved.');
+      const result=await b.saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([person]));requireBuyerAction(owner);if(!result?.ok)throw new Error(result?.error||'Candidate could not be saved');
     }
     person.kept=!person.kept;person.keptAt=person.kept?new Date().toISOString():'';if(!person.kept)person.flowSelected=false;
-    const key=LeadIntelDiscovery.buyerIdentity(person);
-    candidate.buyerDiscovery=candidate.buyerDiscovery||{pool:[]};
-    candidate.buyerDiscovery.pool=(candidate.buyerDiscovery.pool||[]).filter(item=>LeadIntelDiscovery.buyerIdentity(item)!==key);
-    candidate.buyerDiscovery.pool.unshift({...person});candidate.buyerDiscovery.pool=candidate.buyerDiscovery.pool.slice(0,30);
-    saveDiscovery();
-    const synced=await b.saveNow({saveIntent:true,explicitSave:true});
-    if(!current())return false;
-    if(!synced?.saved)throw new Error('Candidate selection could not be synced. Retry saving.');
-    showToast(person.kept?'Candidate saved · protected during refresh':'Candidate unpinned · CRM history retained');return true;
-  }catch(error){if(!current())return false;person.kept=previous.kept;person.keptAt=previous.keptAt;person.flowSelected=previous.flowSelected;if(candidate.buyerDiscovery)candidate.buyerDiscovery.pool=previous.pool;saveDiscovery();showToast(error.message||'Candidate could not be saved');return false;}
-  finally{if(!selectionWasPending)buyerSelectionPending.delete(actionKey);renderAll();}
+    written={kept:person.kept,keptAt:person.keptAt,flowSelected:person.flowSelected};candidate.buyerDiscovery=candidate.buyerDiscovery||{pool:[]};
+    candidate.buyerDiscovery.pool=(candidate.buyerDiscovery.pool||[]).filter(item=>LeadIntelDiscovery.buyerIdentity(item)!==previousIdentity);candidate.buyerDiscovery.pool.unshift({...person});candidate.buyerDiscovery.pool=candidate.buyerDiscovery.pool.slice(0,30);
+    saveDiscovery();const synced=await b.saveNow({saveIntent:true,explicitSave:true});requireBuyerAction(owner);
+    if(!synced?.saved)throw new Error('Candidate selection could not be synced. Retry saving.');showToast(person.kept?'Candidate saved · protected during refresh':'Candidate unpinned · CRM history retained');return true;
+  }catch(error){
+    if(!buyerActionCurrent(owner))return false;
+    if(written&&Object.keys(written).every(key=>person[key]===written[key])){Object.assign(person,{kept:previous.kept,keptAt:previous.keptAt,flowSelected:previous.flowSelected});if(candidate.buyerDiscovery){const current=(candidate.buyerDiscovery.pool||[]).filter(item=>LeadIntelDiscovery.buyerIdentity(item)!==previousIdentity),old=previous.pool.find(item=>LeadIntelDiscovery.buyerIdentity(item)===previousIdentity);candidate.buyerDiscovery.pool=old?[old,...current]:current;}saveDiscovery();}
+    showToast(error.message||'Candidate could not be saved');return false;
+  }finally{if(!inherited&&buyerActionSelectionOwners.get(actionKey)===token){buyerActionSelectionOwners.delete(actionKey);buyerSelectionPending.delete(actionKey);}renderAll();}
 }
 async function saveBuyerResearch(domain,options={}){
   const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));
-  if(!candidate||!crmAuthenticated()||candidate.peopleStatus==='loading')return false;
-  const b=bridge(),state=discovery,workspaceId=b?.workspace?.id,userId=b?.session?.user?.id;
+  if(!candidate||!crmAuthenticated()||candidate.peopleStatus==='loading'||bridge()?.conflict)return false;
+  const b=bridge(),state=discovery,context=discoveryOperationContext(),originalPeople=candidate.people,people=originalPeople||[],owners=people.slice();let savedSignature='';
+  const current=()=>discovery===state&&bridge()===b&&crmAuthenticated()&&!b?.conflict&&discoveryOperationContext()===context&&discovery.selectedProspects?.includes(candidate)&&candidate.people===originalPeople&&owners.length===people.length&&owners.every(person=>people.includes(person))&&(!savedSignature||window.LeadIntelCrm.buyerCrmSignature(candidate)===savedSignature);
   try{
-    const profile={decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))};
-    const existing=candidate.people||[],ranked=LeadIntelDiscovery.rankedBuyerShortlist(existing,profile,candidate).people;
-    const ids=new Set(ranked.map(person=>LeadIntelDiscovery.buyerIdentity(person)));
-    candidate.people=[...ranked,...existing.filter(person=>!ids.has(LeadIntelDiscovery.buyerIdentity(person)))].map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,profile,candidate)}));
+    const profile={decisionMakers:LeadIntelDiscovery.effectiveBuyerRoles(candidate)||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)};
+    // Qualification is derived in place. Retained person references own pending actions.
+    for(const person of people)person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,profile,candidate);
     const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);delete mapped.company.pipeline_stage;
-    const savedSignature=window.LeadIntelCrm.buyerCrmSignature(candidate);
-    // Contact verification has its own write path. Preserve those records here.
+    savedSignature=window.LeadIntelCrm.buyerCrmSignature(candidate);
     const saved=await b.saveCrmCompany({...mapped,contacts:[]});
-    if(discovery!==state||bridge()!==b||!crmAuthenticated()||b.workspace?.id!==workspaceId||b.session?.user?.id!==userId)throw new Error('Workspace changed; review the current workspace.');
-    if(!saved.ok)throw new Error(saved.error||'Buyer research could not be saved');
-    options.onSaved?.(savedSignature);
-    saveDiscovery();await refreshCrmState({render:false});showToast('Buyer research and qualification saved in CRM');return true;
-  }catch(error){showToast(error.message||'Buyer research could not be saved');return false;}
+    if(!current())return false;
+    if(!saved?.ok)throw new Error(saved?.error||'Buyer research could not be saved');
+    const company=validateCompanySave(candidate,saved),returnedDomain=canonicalDomain(company.normalized_domain||company.domain||company.website);
+    if(!returnedDomain||returnedDomain!==canonicalDomain(candidate.domain)||company.workspace_id!==b.workspace?.id||candidate.crmId&&String(candidate.crmId)!==String(company.id))throw new Error('Saved company identity changed. Review the company before retrying.');
+    saveDiscovery();await refreshCrmState({render:false});if(!current())return false;
+    options.onSaved?.(savedSignature);showToast('Buyer research and qualification saved in CRM');return true;
+  }catch(error){if(current())showToast(error.message||'Buyer research could not be saved');return false;}
 }
 function buyerCompanySnapshot(){
   const read=key=>JSON.parse(localStorage.getItem(key)||'{}');
@@ -2239,19 +2379,20 @@ function buyerCompanySaved(candidate){
 }
 async function saveSelectedBuyerCompany(value){
   const domain=canonicalDomain(value),b=bridge(),candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===domain);
-  if(!candidate||buyerCompanyRemovalPending.size||buyerCompanySavePending.size)return false;
-  const state=discovery,workspaceId=b?.workspace?.id,userId=b?.session?.user?.id;
-  const current=()=>discovery===state&&bridge()===b&&b?.workspace?.id===workspaceId&&b?.session?.user?.id===userId;
-  buyerCompanySavePending.add(domain);
-  let marked=false,savedSignature;
+  if(!candidate||!crmAuthenticated()||b?.conflict||buyerCompanyRemovalPending.size||buyerCompanySavePending.size)return false;
+  const state=discovery,workspaceId=b?.workspace?.id,context=discoveryOperationContext(),owners=saveSelectedBuyerCompany.owners||(saveSelectedBuyerCompany.owners=new Map()),token={};let savedSignature='',marker;
+  const current=()=>discovery===state&&bridge()===b&&crmAuthenticated()&&!b?.conflict&&discoveryOperationContext()===context&&discovery.selectedProspects?.includes(candidate)&&canonicalDomain(candidate.domain||candidate.website)===domain&&(!savedSignature||window.LeadIntelCrm.buyerCrmSignature(candidate)===savedSignature);
+  const clearOwnMarker=()=>{if(!marker)return;const meta=loadMeta();if(JSON.stringify(meta.buyerCrmSaves?.[domain])!==JSON.stringify(marker))return;delete meta.buyerCrmSaves[domain];saveMeta(meta);};
+  owners.set(domain,token);buyerCompanySavePending.add(domain);
   try{
-    renderAll();if(!await saveBuyerResearch(domain,{onSaved:signature=>{savedSignature=signature;}})||!current())return false;
-    const meta=loadMeta();meta.buyerCrmSaves={...meta.buyerCrmSaves,[domain]:{workspaceId,signature:savedSignature}};saveMeta(meta);saveDiscovery();marked=true;
+    renderAll();if(!await saveBuyerResearch(domain,{onSaved:signature=>{savedSignature=signature;}})||!savedSignature||!current())return false;
+    marker={workspaceId,signature:savedSignature,operationId:Date.now().toString(36)+':'+Math.random().toString(36).slice(2)};
+    const meta=loadMeta();meta.buyerCrmSaves={...meta.buyerCrmSaves,[domain]:marker};saveMeta(meta);saveDiscovery();
     const result=await b.saveNow({saveIntent:true,explicitSave:true});if(!current())return false;
-    if(!result?.saved){const next=loadMeta();delete next.buyerCrmSaves?.[domain];saveMeta(next);throw new Error('CRM research saved; workspace status could not be synced. Retry Save.');}
+    if(!result?.saved)throw new Error('CRM research saved; workspace status could not be synced. Retry Save.');
     showToast('Saved to CRM');return true;
-  }catch(error){if(current()){if(marked){const meta=loadMeta();delete meta.buyerCrmSaves?.[domain];saveMeta(meta);}showToast(error.message||'CRM save failed');}return false;}
-  finally{buyerCompanySavePending.delete(domain);if(current())renderAll();}
+  }catch(error){if(current()){clearOwnMarker();showToast(error.message||'CRM save failed');}return false;}
+  finally{if(owners.get(domain)===token){owners.delete(domain);buyerCompanySavePending.delete(domain);}if(current())renderAll();}
 }
 async function removeSelectedBuyerCompany(value){
   const domain=canonicalDomain(value),state=discovery,b=bridge();
@@ -2336,57 +2477,59 @@ function buyerReviewDialog(title,body){
   document.body.appendChild(dialog);dialog.querySelector('[data-review-close]').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();return dialog;
 }
 async function saveBuyerLinkedInReview(candidate,person,profile,workspaceId=bridge()?.workspace?.id){
-  const checkWorkspace=()=>{if(!workspaceId||bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed. Review the profile again.');};checkWorkspace();
-  const current=candidate.people.find(row=>row.id===person.id);
-  if(!current||LeadIntelDiscovery.normalizeLinkedInUrl(current.publicLinkedinUrl||current.linkedin_url)!==profile)throw new Error('Profile changed. Review the current match again.');
-  if(!crmAuthenticated())throw new Error('Sign in to save the review.');
-  const old={method:current.linkedinConfirmationMethod,url:current.linkedinConfirmedUrl,at:current.linkedinConfirmedAt,pool:candidate.buyerDiscovery?.pool};
-  const company=await ensureCrmCompany(candidate);checkWorkspace();
-  const saved=await bridge().saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([current]));checkWorkspace();
-  if(!saved?.ok)throw new Error(saved?.error||'LinkedIn profile could not be saved to CRM');
-  const activity=await bridge().recordCrmActivity(company.id,{type:'contact.linkedin_confirmed',channel:'linkedin',summary:LeadIntelDiscovery.linkedInVerification(current,candidate).status==='automatic'?'LinkedIn identity verified automatically':'LinkedIn profile manually reviewed',metadata:{verification_method:LeadIntelDiscovery.linkedInVerification(current,candidate).status==='automatic'?'automatic':'manual',person_id:current.id,name:current.publicName||current.name,linkedin_url:profile}});
-  checkWorkspace();if(!activity?.ok)throw new Error(activity?.error||'LinkedIn review could not be recorded');
+  if(!workspaceId||bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed. Review the profile again.');
+  const owner=captureBuyerAction(candidate,person,{contact:true}),current=candidate.people.find(row=>String(row.id)===String(person.id));
+  if(current!==person||LeadIntelDiscovery.normalizeLinkedInUrl(current.publicLinkedinUrl||current.linkedin_url)!==profile)throw new Error('Profile changed. Review the current match again.');
+  requireBuyerAction(owner);const b=owner.bridge,old={method:current.linkedinConfirmationMethod,url:current.linkedinConfirmedUrl,at:current.linkedinConfirmedAt,pool:candidate.buyerDiscovery?.pool};
+  const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);if(!company?.id)throw new Error('Company save was not acknowledged.');
+  const saved=await b.saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([current]));requireBuyerAction(owner);if(!saved?.ok)throw new Error(saved?.error||'LinkedIn profile could not be saved to CRM');
+  const automatic=LeadIntelDiscovery.linkedInVerification(current,candidate).status==='automatic';
+  const activity=await b.recordCrmActivity(company.id,{type:'contact.linkedin_confirmed',channel:'linkedin',summary:automatic?'LinkedIn identity verified automatically':'LinkedIn profile manually reviewed',metadata:{verification_method:automatic?'automatic':'manual',person_id:current.id,name:current.publicName||current.name,linkedin_url:profile}});requireBuyerAction(owner);if(!activity?.ok)throw new Error(activity?.error||'LinkedIn review could not be recorded');
+  let installed=null;
   try{
-    current.linkedinConfirmationMethod=LeadIntelDiscovery.linkedInVerification(current,candidate).status==='automatic'?'automatic':'manual';current.linkedinConfirmedUrl=profile;current.linkedinConfirmedAt=new Date().toISOString();
-    candidate.buyerDiscovery=candidate.buyerDiscovery||{pool:[]};candidate.buyerDiscovery.pool=LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery.pool,[current],{decisionMakers:candidate.buyerRoles?.join?.('; ')||current.title});
-    saveDiscovery();const synced=await bridge().saveNow({saveIntent:true,explicitSave:true});if(!synced?.saved)throw new Error('Review could not be synced. Retry confirmation.');
-    renderAll();return true;
-  }catch(error){current.linkedinConfirmationMethod=old.method;current.linkedinConfirmedUrl=old.url;current.linkedinConfirmedAt=old.at;candidate.buyerDiscovery.pool=old.pool||[];saveDiscovery();throw error;}
+    current.linkedinConfirmationMethod=automatic?'automatic':'manual';current.linkedinConfirmedUrl=profile;current.linkedinConfirmedAt=new Date().toISOString();candidate.buyerDiscovery=candidate.buyerDiscovery||{pool:[]};candidate.buyerDiscovery.pool=LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery.pool,[current],{decisionMakers:candidate.buyerRoles?.join?.('; ')||current.title});
+    installed=JSON.stringify([current.linkedinConfirmationMethod,current.linkedinConfirmedUrl,current.linkedinConfirmedAt,candidate.buyerDiscovery.pool]);saveDiscovery();const synced=await b.saveNow({saveIntent:true,explicitSave:true});requireBuyerAction(owner);if(!synced?.saved)throw new Error('Review could not be synced. Retry confirmation.');renderAll();return true;
+  }catch(error){if(buyerActionCurrent(owner)&&installed===JSON.stringify([current.linkedinConfirmationMethod,current.linkedinConfirmedUrl,current.linkedinConfirmedAt,candidate.buyerDiscovery.pool])){current.linkedinConfirmationMethod=old.method;current.linkedinConfirmedUrl=old.url;current.linkedinConfirmedAt=old.at;candidate.buyerDiscovery.pool=old.pool||[];saveDiscovery();}throw error;}
 }
+
 async function holdBuyerForOpportunityReview(domain,index,reason,{personId}={}){
   const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));
-  if(!person||!crmAuthenticated()||!String(reason||'').trim())return false;
-  person.opportunityScope={status:'review_required',reason:String(reason).trim().slice(0,300),url:LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)||person.publicNameUrl||'',checkedAt:new Date().toISOString()};
-  person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate);
-  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title})};
+  if(!person||!crmAuthenticated()||bridge()?.conflict||!String(reason||'').trim())return false;
+  const owner=captureBuyerAction(candidate,person,{contact:true});if(!buyerActionCurrent(owner))return false;
+  const held={status:'review_required',reason:String(reason).trim().slice(0,300),url:LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)||person.publicNameUrl||'',checkedAt:new Date().toISOString()};
+  person.opportunityScope=held;const profile={decisionMakers:LeadIntelDiscovery.effectiveBuyerRoles(candidate)||person.title};
+  person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,profile,candidate);
+  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],profile)};
   saveDiscovery();renderAll();
-  if(!await saveBuyerResearch(domain))return false;
-  const synced=await bridge().saveNow({saveIntent:true,explicitSave:true});
-  return Boolean(synced?.saved);
+  try{
+    if(!await saveBuyerResearch(domain)||!buyerActionCurrent(owner)||person.opportunityScope!==held)return false;
+    const synced=await owner.bridge.saveNow({saveIntent:true,explicitSave:true});
+    return Boolean(buyerActionCurrent(owner)&&person.opportunityScope===held&&synced?.saved);
+  }catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Review hold could not be synced. Retry saving.');return false;}
 }
-async function reviewBuyerLinkedIn(domain,index){
-  const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=candidate?.people?.[index];if(!person)return;
+async function reviewBuyerLinkedIn(domain,index,{personId}={}){
+  const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,index,personId);if(!person)return;
   const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
-  const workspaceId=bridge()?.workspace?.id;
+  const workspaceId=bridge()?.workspace?.id,owner=captureBuyerAction(candidate,person,{contact:true});
   const dialog=buyerReviewDialog('Review LinkedIn match',`<p><strong>${esc(person.publicName||person.name)}</strong><br>${esc(person.title)} · ${esc(candidate.company)}</p><p>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">Open LinkedIn profile ↗</a>`:`<a href="${esc(linkedInSearchUrl(person,candidate))}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`}</p><p>Check that the profile belongs to this person and shows the correct employer and role. Opening it does not confirm the match.</p><p data-review-status role="status"></p><div class="buyer-review-actions"><button class="primary-btn" type="button" data-review-confirm ${!profile||!crmAuthenticated()?'disabled':''}>Confirm this profile</button><button class="primary-btn" type="button" data-review-message ${!profile||!crmAuthenticated()||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible?'disabled':''}>Proceed to message →</button></div><p>Creates an editable LinkedIn direct-message draft. Company email confirmation is not required. Qualification holds still apply.</p><label>Opportunity review reason<textarea data-scope-review-reason>Opportunity responsibility requires review</textarea></label><button class="secondary-btn" type="button" data-scope-review ${!crmAuthenticated()?'disabled':''}>Hold for opportunity review</button>`);
-  dialog.querySelector('[data-scope-review]').addEventListener('click',async event=>{event.target.disabled=true;try{const saved=await holdBuyerForOpportunityReview(domain,index,dialog.querySelector('[data-scope-review-reason]').value);if(!saved)throw new Error('Review hold could not be synced. Retry saving.');dialog.close();showToast('Buyer held for opportunity review · excluded from recommendations and automation');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
-  dialog.querySelector('[data-review-message]').addEventListener('click',async event=>{event.target.disabled=true;try{
+  dialog.querySelector('[data-scope-review]').addEventListener('click',async event=>{event.target.disabled=true;try{requireBuyerAction(owner);const saved=await holdBuyerForOpportunityReview(domain,index,dialog.querySelector('[data-scope-review-reason]').value,{personId:String(person.id)});if(!saved)throw new Error('Review hold could not be synced. Retry saving.');requireBuyerAction(owner);dialog.close();showToast('Buyer held for opportunity review · excluded from recommendations and automation');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
+  dialog.querySelector('[data-review-message]').addEventListener('click',async event=>{event.target.disabled=true;try{requireBuyerAction(owner);
     if(!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible)throw new Error('Review buyer qualification before creating a message.');
-    await saveBuyerLinkedInReview(candidate,person,profile,workspaceId);
-    if(!await startLinkedInBuyerMessage(candidate.domain,index))throw new Error('LinkedIn message selection could not be saved. Retry.');
+    await saveBuyerLinkedInReview(candidate,person,profile,workspaceId);requireBuyerAction(owner);
+    if(!await startLinkedInBuyerMessage(candidate.domain,index,{personId:String(person.id)}))throw new Error('LinkedIn message selection could not be saved. Retry.');
     dialog.close();showToast('LinkedIn confirmed · creating your direct-message draft');
   }catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
-  dialog.querySelector('[data-review-confirm]').addEventListener('click',async event=>{event.target.disabled=true;try{await saveBuyerLinkedInReview(candidate,person,profile,workspaceId);dialog.close();showToast('LinkedIn match confirmed and saved');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
+  dialog.querySelector('[data-review-confirm]').addEventListener('click',async event=>{event.target.disabled=true;try{requireBuyerAction(owner);await saveBuyerLinkedInReview(candidate,person,profile,workspaceId);requireBuyerAction(owner);dialog.close();showToast('LinkedIn match confirmed and saved');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
 }
 function selectedEmailBuyer(){
   const choice=loadMeta().selectedEmailBuyer;
-  if(!choice||choice.workspaceId!==bridge()?.workspace?.id||bridge()?.conflict)return null;
-  const candidate=buyerSelectionRows().find(row=>canonicalDomain(row.domain)===choice.domain);
-  const index=candidate?.people?.findIndex(person=>String(person.id)===String(choice.personId));
-  const person=candidate?.people?.[index];
-  const email=person?.kept&&verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{});
-  return email&&email===choice.email?{candidate,person,index,choice}:null;
+  if(!choice||choice.channel!=='email'||choice.workspaceId!==bridge()?.workspace?.id||!crmAuthenticated()||bridge()?.conflict)return null;
+  const candidate=buyerSelectionRows().find(row=>canonicalDomain(row.domain)===choice.domain),index=candidate?.people?.findIndex(person=>String(person.id)===String(choice.personId)),person=candidate?.people?.[index];
+  if(!person?.kept||!buyerRecipientCurrent(choice,candidate,person)||(candidate.crmId&&choice.recipientIdentity.companyId!==candidate.crmId))return null;
+  const contact=enrichmentResults.get(personKey(candidate,person))?.contact||{},email=verifiedBuyerEmail(candidate,person,contact);
+  return contact.id===choice.contactId&&contact.company_id===choice.recipientIdentity.companyId&&email&&email===choice.email?{candidate,person,index,choice}:null;
 }
+
 function buyerContinuationIssue(row=selectedEmailBuyer()){
   if(bridge()?.conflict)return {label:'Review saved changes',message:'Resolve workspace synchronization before continuing.',target:{type:'sync-review'}};
   if(!crmAuthenticated())return {label:'Review sign-in',message:'Sign in to confirm and save your recipient.',target:{id:'server-account'}};
@@ -2422,7 +2565,8 @@ function pointToBuyerRequirement(issue){
 }
 function renderSelectedEmailBuyer({scroll=false}={}){
   const gate=$('continue-to-outreach');if(!gate)return;
-  const row=selectedEmailBuyer(),onBuyers=currentJourneyFocus()==='buyers',busy=buyerSelectionPending.size>0,issue=onBuyers?buyerContinuationIssue(row):null;
+  pruneStaleBuyerActions();
+  const row=selectedEmailBuyer(),onBuyers=currentJourneyFocus()==='buyers',busy=buyerSelectionPending.size>0,issue=onBuyers&&(!row||bridge()?.conflict)?buyerContinuationIssue(row):null;
   let status=$('selected-email-recipient');
   if(!status&&gate.parentElement){status=document.createElement('p');status.id='selected-email-recipient';status.className='people-note';status.setAttribute('role','status');gate.parentElement.insertBefore(status,gate);}
   if(status){status.hidden=!onBuyers;status.textContent=busy?'Saving selected recipient…':bridge()?.conflict?'Synchronization conflict: resolve the workspace versions above before selecting a recipient.':row?`Selected recipient: ${row.person.publicName||row.person.name} · ${row.choice.email}`:'Select an eligible email recipient to continue.';if(issue&&!busy)status.textContent=(row?'Selected recipient: '+(row.person.publicName||row.person.name)+' · '+row.choice.email+'. ':'')+issue.message;}
@@ -2430,36 +2574,58 @@ function renderSelectedEmailBuyer({scroll=false}={}){
   if(scroll&&row&&!busy){gate.scrollIntoView?.({behavior:'smooth',block:'center'});gate.focus?.();}
 }
 async function continueBuyerMessages(){
-  const issue=buyerContinuationIssue();if(issue)return pointToBuyerRequirement(issue);
   if(bridge()?.conflict){showToast('Resolve the synchronization conflict above before continuing. Your local changes are preserved.');return false;}
   const selected=selectedEmailBuyer();
-  if(selected)return addBuyerToFlow(selected.candidate.domain,selected.index,{scope:discovery.selectedProspects.includes(selected.candidate)?'selected':'company'});
+  if(selected)return addBuyerToFlow(selected.candidate.domain,selected.index,{scope:discovery.selectedProspects.includes(selected.candidate)?'selected':'company',personId:String(selected.person.id)});
+  const issue=buyerContinuationIssue();if(issue)return pointToBuyerRequirement(issue);
   if(loadMeta().selectedEmailBuyer){showToast('The selected recipient needs email confirmation again. Select an eligible buyer to continue.');return false;}
 
   const linkedInReady=(candidate,person)=>LeadIntelDiscovery.confirmedLinkedInBuyer(person,candidate,{domain:canonicalDomain(candidate.domain),personId:person.id,workspaceId:bridge()?.workspace?.id,linkedinUrl:person.publicLinkedinUrl||person.linkedin_url},bridge()?.workspace?.id);
-  const choices=buyerSelectionRows().flatMap(candidate=>(candidate.people||[]).map((person,index)=>({candidate,person,index}))).filter(row=>row.person.kept&&(verifiedBuyerEmail(row.candidate,row.person,enrichmentResults.get(personKey(row.candidate,row.person))?.contact||{})||linkedInReady(row.candidate,row.person)));
+  const choices=buyerSelectionRows().flatMap(candidate=>(candidate.people||[]).map((person,index)=>({candidate,person,index,owner:captureBuyerAction(candidate,person,{contact:true})}))).filter(row=>row.person.kept&&(verifiedBuyerEmail(row.candidate,row.person,enrichmentResults.get(personKey(row.candidate,row.person))?.contact||{})||linkedInReady(row.candidate,row.person)));
   if(!choices.length){showToast('Save a buyer and confirm either their company email or their LinkedIn profile before creating a message.');return false;}
   const dialog=buyerReviewDialog('Choose a buyer for your message',`<p>Use a company email meeting your accepted confirmation level, or a confirmed LinkedIn profile for a direct message.</p><div class="buyer-message-choices">${choices.map((row,index)=>`<button type="button" class="secondary-btn" data-message-choice="${index}"><strong>${esc(row.person.publicName||row.person.name)}</strong><span>${esc(row.candidate.company)} · ${esc(LeadIntelDiscovery.buyerDisplayTitle(row.person.title))}</span></button>`).join('')}</div><p data-review-status role="status"></p>`);
-  dialog.querySelectorAll('[data-message-choice]').forEach(button=>button.addEventListener('click',async()=>{button.disabled=true;const row=choices[Number(button.dataset.messageChoice)];const emailReady=verifiedBuyerEmail(row.candidate,row.person,enrichmentResults.get(personKey(row.candidate,row.person))?.contact||{});const ready=emailReady?await addBuyerToFlow(row.candidate.domain,row.index,{scope:discovery.selectedProspects.includes(row.candidate)?'selected':'company',button}):await startLinkedInBuyerMessage(row.candidate.domain,row.index);if(ready)dialog.close();else{dialog.querySelector('[data-review-status]').textContent='The contact channel or qualification needs review before continuing.';button.disabled=false;}}));return true;
+  dialog.querySelectorAll('[data-message-choice]').forEach(button=>button.addEventListener('click',async()=>{button.disabled=true;const row=choices[Number(button.dataset.messageChoice)];if(!row||!buyerActionCurrent(row.owner)||!row.person.kept){dialog.querySelector('[data-review-status]').textContent='Buyer changed. Close this chooser and select the current buyer.';button.disabled=false;return;}const emailReady=verifiedBuyerEmail(row.candidate,row.person,enrichmentResults.get(personKey(row.candidate,row.person))?.contact||{});const ready=emailReady?await addBuyerToFlow(row.candidate.domain,row.index,{scope:discovery.selectedProspects.includes(row.candidate)?'selected':'company',button,personId:String(row.person.id)}):await startLinkedInBuyerMessage(row.candidate.domain,row.index,{personId:String(row.person.id)});if(ready)dialog.close();else{dialog.querySelector('[data-review-status]').textContent='The contact channel or qualification needs review before continuing.';button.disabled=false;}}));return true;
 }
 
 let buyerConfirmationLevel='provider_verified',confirmationPolicyWorkspace='';
 function acceptedBuyerConfirmationLevel(){return confirmationPolicyWorkspace===bridge()?.workspace?.id?buyerConfirmationLevel:'provider_verified';}
 async function refreshBuyerConfirmationPolicy(){
-  const id=bridge()?.workspace?.id;if(!id||!crmAuthenticated())return;
-  try{const response=await fetch(`${LEADINTEL_API}/api/integrations/services/contact-policy?workspace_id=${encodeURIComponent(id)}`,{credentials:'include'});const data=await response.json();if(response.ok&&bridge()?.workspace?.id===id){confirmationPolicyWorkspace=id;buyerConfirmationLevel=data.confirmationLevel;renderAll();}}catch{}
+  const b=bridge(),id=b?.workspace?.id;if(!id||!crmAuthenticated())return false;
+  const account=discoveryAccountContext(),serial=(refreshBuyerConfirmationPolicy.serial||0)+1;refreshBuyerConfirmationPolicy.serial=serial;
+  const prior=refreshBuyerConfirmationPolicy.owner;if(prior&&(prior.bridge!==b||prior.account!==account))confirmationPolicyWorkspace='';
+  refreshBuyerConfirmationPolicy.owner={bridge:b,account};
+  const current=()=>refreshBuyerConfirmationPolicy.serial===serial&&bridge()===b&&crmAuthenticated()&&discoveryAccountContext()===account;
+  try{
+    if(!current())return false;
+    const response=await fetch(`${LEADINTEL_API}/api/integrations/services/contact-policy?workspace_id=${encodeURIComponent(id)}`,{credentials:'include'});if(!current())return false;
+    const data=await response.json();if(!current())return false;
+    if(!response.ok||!['public_confirmed','provider_verified'].includes(data.confirmationLevel))return false;
+    confirmationPolicyWorkspace=id;buyerConfirmationLevel=data.confirmationLevel;renderAll();return true;
+  }catch{return false;}
+  finally{if(refreshBuyerConfirmationPolicy.serial===serial&&(bridge()!==b||discoveryAccountContext()!==account))confirmationPolicyWorkspace='';}
 }
 function publicBuyerSource(candidate,person,{includeRejected=false}={}){
   const sources=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
   return sources.find(row=>(includeRejected||person.publicEmailSourceCheck?.status!=='failed'||String(row.email).toLowerCase()!==String(person.publicEmailSourceCheck.email).toLowerCase()||row.url!==person.publicEmailSourceCheck.url)&&window.LeadIntelContactPolicy?.publicSource(row.email,person.publicName||person.name,row.url,candidate.domain));
 }
-async function confirmPublicBuyerSource(candidate,person,{retryRejected=false,evidenceOnly=false,signal}={}){
-  const source=publicBuyerSource(candidate,person,{includeRejected:retryRejected});if(!source||!evidenceOnly&&acceptedBuyerConfirmationLevel()!=='public_confirmed')return false;
-  const workspaceId=bridge()?.workspace?.id;
-  const company=await ensureCrmCompany(candidate);
-  if(!workspaceId||bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed; retry public email confirmation.');
+async function confirmPublicBuyerSource(candidate,person,{retryRejected=false,evidenceOnly=false,signal,contextGuard,researchOwner}={}){
+  const selected=publicBuyerSource(candidate,person,{includeRejected:retryRejected});if(!selected||!evidenceOnly&&acceptedBuyerConfirmationLevel()!=='public_confirmed')return false;
+  const owner=captureBuyerAction(candidate,person,{contact:true,contextGuard,researchOwner}),source={email:String(selected.email||'').trim().toLowerCase(),url:selected.url};
+  const current=()=>!signal?.aborted&&buyerActionCurrent(owner)&&LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person)===LeadIntelDiscovery.buyerResearchIdentityKey(owner.owner,owner.ownerPerson)&&(()=>{const latest=publicBuyerSource(candidate,person,{includeRejected:retryRejected});return latest&&String(latest.email||'').trim().toLowerCase()===source.email&&latest.url===source.url;})();
+  if(!current())return false;
+  const workspaceId=owner.bridge.workspace?.id,expectedCompanyId=candidate.crmId||crmCompanyByDomain(candidate.domain)?.id;
+  const company=await ensureCrmCompany(candidate);if(!current())return false;
+  if(!company?.id||expectedCompanyId&&String(company.id)!==String(expectedCompanyId)||company.workspace_id&&company.workspace_id!==workspaceId||company.normalized_domain&&canonicalDomain(company.normalized_domain)!==canonicalDomain(candidate.domain)||['suppressed','archived'].includes(company.lifecycle_status))throw new Error('Saved company identity changed. Reload before confirming this source.');
+  if(!current())return false;
   const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/crm/companies/${encodeURIComponent(company.id)}/confirm-public-email?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url}),signal});
-  const value=await response.json();if(bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed; retry public email confirmation.');if(!response.ok){if(response.status===409){person.publicEmailSourceCheck={status:'failed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:value.error||'Official source no longer confirms the person and email'};saveDiscovery();renderAll();}throw new Error(value.error||'Official source confirmation failed');}person.publicEmailSourceCheck={status:'confirmed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:''};enrichmentResults.set(personKey(candidate,person),{contact:value.contact});saveDiscovery();return true;
+  if(!current())return false;
+  const value=await response.json();if(!current())return false;
+  if(!response.ok){if(response.status===409){person.publicEmailSourceCheck={status:'failed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:value.error||'Official source no longer confirms the person and email'};saveDiscovery();renderAll();}throw new Error(value.error||'Official source confirmation failed');}
+  const contact=value.contact,addresses=[contact?.work_email,contact?.normalized_email,contact?.email].filter(value=>String(value||'').trim()).map(value=>String(value).trim().toLowerCase());
+  const sameSource=(()=>{try{return new URL(contact?.public_email_url).href===new URL(source.url).href;}catch{return false;}})();
+  if(!contact?.id||!addresses.length||addresses.some(email=>email!==source.email)||contact.external_person_id&&String(contact.external_person_id)!==String(person.id)||contact.company_id&&String(contact.company_id)!==String(company.id)||contact.workspace_id&&String(contact.workspace_id)!==String(workspaceId)||String(contact.name||'').trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase()||!sameSource||!window.LeadIntelContactPolicy?.accepted(contact,candidate.domain,'public_confirmed'))throw new Error('The returned contact does not confirm this exact buyer, email and official source.');
+  if(!current())return false;
+  person.publicEmailSourceCheck={status:'confirmed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:''};enrichmentResults.set(personKey(candidate,person),{contact});saveDiscovery();return true;
 }
 window.LeadIntelBuyerConfirmationPolicy={level:acceptedBuyerConfirmationLevel};
 window.addEventListener?.('leadintel:server-ready',()=>{void refreshBuyerConfirmationPolicy();});
@@ -2467,97 +2633,106 @@ window.addEventListener?.('leadintel:contact-policy-changed',()=>{void refreshBu
 window.addEventListener?.('leadintel:service-settings-changed',()=>{void refreshBuyerConfirmationPolicy();});
 if(window.addEventListener&&crmAuthenticated())void refreshBuyerConfirmationPolicy();
 function verifiedBuyerEmail(candidate,person,contact={},options={}){
-  if(person.opportunityScope?.status==='review_required'||LeadIntelDiscovery.qualifyBuyer&&LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible===false)return '';
-  const minimum=typeof acceptedBuyerConfirmationLevel==='function'?acceptedBuyerConfirmationLevel():'provider_verified';
-  const domain=canonicalDomain(candidate.domain),source=minimum==='public_confirmed'?publicBuyerSource(candidate,person):null,email=String(contact.work_email||contact.normalized_email||source?.email||'').trim().toLowerCase();
+  const policy=window.LeadIntelContactPolicy;
+  if(!policy?.accepted||!candidate||!person||!contact||person.opportunityScope?.status==='review_required'||person.linkedinProfileReview?.status==='review_required'||LeadIntelDiscovery.qualifyBuyer&&LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible===false)return '';
+  const domain=canonicalDomain(candidate.domain),minimum=typeof acceptedBuyerConfirmationLevel==='function'?acceptedBuyerConfirmationLevel():'provider_verified',name=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').toLowerCase(),contactName=String(contact.name||'').trim().replace(/\s+/g,' ').toLowerCase();
+  if(!domain||person.identityStatus==='pending'||person.nameVerification==='pending'||candidate.buyerRolesChanged||!LeadIntelDiscovery.hasFullBuyerName(name)||contactName!==name)return '';
   if(contact.external_person_id&&String(contact.external_person_id)!==String(person.id))return '';
-  if(contact.name&&String(contact.name).trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase())return '';
-
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!candidate.buyerRolesChanged&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&!(candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id))&&(String(contact.email_status||'').toLowerCase()==='verified'&&(!window.LeadIntelContactPolicy&&email.endsWith('@'+domain)||window.LeadIntelContactPolicy?.accepted(contact,domain,'provider_verified'))||minimum==='public_confirmed'&&(window.LeadIntelContactPolicy?.accepted(contact,domain,'public_confirmed')))?email:'';
+  const crm=typeof crmCompanyByDomain==='function'?crmCompanyByDomain(domain):null,companyId=options.companyId||candidate.crmId||crm?.id;
+  if(candidate.crmId&&crm?.id&&String(candidate.crmId)!==String(crm.id)||contact.company_id&&(!companyId||String(contact.company_id)!==String(companyId)))return '';
+  if(contact.workspace_id&&contact.workspace_id!==bridge()?.workspace?.id)return '';
+  const profileAliases=value=>[value.publicLinkedinUrl,value.linkedin_url,value.public_linkedin_url,value.linkedinUrl,value.linkedin,value.profile?.linkedinUrl].filter(item=>item!==undefined&&item!==null&&String(item).trim()!=='');
+  const canonicalProfile=value=>{const url=LeadIntelDiscovery.normalizeLinkedInUrl(value),host=/^https?:\/\/(?:[a-z0-9-]+\.)*linkedin\.com(?=\/)/i;return host.test(url)?url.replace(host,'https://linkedin.com'):'';};
+  const profiles=[...profileAliases(person),...profileAliases(contact)].map(canonicalProfile);
+  if(profiles.some(profile=>!profile)||new Set(profiles).size>1)return '';
+  if([...(candidate.publicResearch?.conflicts||[]),...(candidate.publicResearch?.aiReview?.conflicts||[])].some(row=>String(row.person_id)===String(person.id)))return '';
+  if(!policy.accepted(contact,domain,minimum))return '';
+  return String(contact.normalized_email||contact.work_email||contact.email||'').trim().toLowerCase();
 }
 function buyerNextAction(candidate,person,index,scope){
   const contact=enrichmentResults.get(personKey(candidate,person))?.contact||{};
   const ready=Boolean(verifiedBuyerEmail(candidate,person,contact));
-  return `<button class="primary-btn small" type="button" data-buyer-next="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-buyer-scope="${scope}" ${!person.kept||enrichmentPending.has(personKey(candidate,person))?'disabled':''}>${ready?person.flowSelected?'Added to flow ✓ · Open Scripts':'Add to flow →':'Verify email to continue'}</button>`;
+  return `<button class="primary-btn small" type="button" data-buyer-next="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" data-buyer-scope="${scope}" ${!person.kept||enrichmentPending.has(personKey(candidate,person))?'disabled':''}>${ready?person.flowSelected?'Added to flow ✓ · Open Scripts':'Add to flow →':'Verify email to continue'}</button>`;
 }
 async function addBuyerToFlow(domain,index,{scope='selected',button,selectOnly=false,personId}={}){
-  const candidate=(scope==='company'?discovery.candidates||[]:discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));
-  if(!person?.kept||!crmAuthenticated())return false;
-  if(bridge()?.conflict){showToast('Resolve the synchronization conflict above before continuing. Your local changes are preserved.');return false;}
-  const b=bridge(),state=discovery,workspaceId=b.workspace.id,userId=b.session?.user?.id;
-  const identity=JSON.stringify([person.id,person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url]);
-  const current=()=>discovery===state&&bridge()===b&&b.workspace?.id===workspaceId&&b.session?.user?.id===userId&&crmAuthenticated()&&!b.conflict&&(scope==='company'?discovery.candidates:discovery.selectedProspects)?.includes(candidate)&&candidate.people?.includes(person)&&JSON.stringify([person.id,person.publicName||person.name,person.title,person.publicLinkedinUrl||person.linkedin_url])===identity;
-  if(typeof acceptedBuyerConfirmationLevel==='function'&&acceptedBuyerConfirmationLevel()==='public_confirmed'&&publicBuyerSource(candidate,person)&&!(window.LeadIntelContactPolicy?window.LeadIntelContactPolicy.accepted(enrichmentResults.get(personKey(candidate,person))?.contact||{},candidate.domain,'provider_verified'):enrichmentResults.get(personKey(candidate,person))?.contact?.email_status==='verified')){try{await confirmPublicBuyerSource(candidate,person);}catch(error){showToast(error.message);return false;}}
-  if(!current())return false;
-  const company=crmCompanyByDomain(domain);
-  let contact;
+  const candidate=(scope==='company'?discovery.candidates||[]:discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,index,personId);
+  if(!person?.kept||!crmAuthenticated()||bridge()?.conflict)return false;
+  const owner=captureBuyerAction(candidate,person,{contact:true}),token={owner},operationKey='message-handoff';buyerActionSelectionOwners.set(operationKey,token);
+  const selectionStamp=()=>JSON.stringify([loadMeta().selectedEmailBuyer,loadMeta().selectedLinkedInBuyer,loadMeta().scriptBuyer]),entrySelection=selectionStamp();
+  const b=owner.bridge,workspaceId=b.workspace.id,current=()=>buyerActionSelectionOwners.get(operationKey)===token&&buyerActionCurrent(owner)&&person.kept&&(installed||selectionStamp()===entrySelection);
+  let installed=null,prior=null,flags=null;
+  const ownsChoice=()=>installed&&discovery===owner.state&&bridge()===b&&discoveryOperationContext()===owner.context&&buyerActionSelectionOwners.get(operationKey)===token&&Object.keys(installed).every(key=>JSON.stringify(loadMeta()[key])===JSON.stringify(installed[key]));
+  const rollback=()=>{if(!ownsChoice())return;const latest={...loadMeta()};for(const key of Object.keys(installed)){if(Object.prototype.hasOwnProperty.call(prior,key))latest[key]=prior[key];else delete latest[key];}saveMeta(latest);if(flags&&flags.every(([buyer,,selected])=>Boolean(buyer.flowSelected)===selected)){for(const [buyer,value] of flags)buyer.flowSelected=value;saveDiscovery();}};
   try{
-    if(!company?.id)throw new Error('Save this company in CRM first');
-    const detail=await b.getCrmCompany(company.id);if(!current())return false;if(!detail?.ok)throw new Error(detail?.error||'Contact verification could not be checked');
-    if(['suppressed','archived'].includes(detail.company?.lifecycle_status))throw new Error('This company is blocked in CRM');
-    const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),name=String(person.publicName||person.name||'').trim().toLowerCase();
-    const matches=(detail.contacts||[]).filter(row=>String(row.external_person_id||'')===String(person.id)||profile&&LeadIntelDiscovery.normalizeLinkedInUrl(row.linkedin_url)===profile||String(row.name||'').trim().toLowerCase()===name);
-    const verified=matches.filter(row=>verifiedBuyerEmail(candidate,person,row)&&(!row.email_status||row.email_status!=='public_unverified'));
-    if(verified.length===1)contact=verified[0];
-  }catch(error){showToast(error.message);return false;}
-  if(!contact){
-    const card=button?.closest?.('.selected-prospect-person,.person-row');
-    const confirm=card?.querySelector?.('[data-prospect-enrich-email],[data-action="enrich-contact"]');
-    confirm?.scrollIntoView?.({behavior:'smooth',block:'center'});confirm?.focus?.();
-    if(confirm?.animate)confirm.animate([{outline:'3px solid #d99b24'},{outline:'3px solid transparent'}],{duration:1400});
-    showToast('Confirm this contact’s email before continuing. Phone verification is optional.');return false;
-  }
-  if(!current())return false;
-  enrichmentResults.set(personKey(candidate,person),{contact});
-  const meta=loadMeta(),flags=(discovery.selectedProspects||[]).flatMap(row=>(row.people||[]).map(buyer=>[buyer,Boolean(buyer.flowSelected)]));
-  for(const [buyer] of flags)buyer.flowSelected=buyer===person;
-  person.flowSelected=true;saveDiscovery();
-  const choice={domain:canonicalDomain(domain),personId:person.id,contactId:contact.id,workspaceId,channel:'email',email:verifiedBuyerEmail(candidate,person,contact)};
-  saveMeta(selectOnly?{...meta,selectedEmailBuyer:choice,activeJourneyStage:5,visibleStep:5}:{...meta,selectedEmailBuyer:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6});
-  let synced;try{synced=await bridge().saveNow({saveIntent:true,explicitSave:true});}catch(error){synced={saved:false,error:String(error?.message||error)};}
-  if(!current())return false;
-  const prior=meta.scriptBuyer;
-  const reopenExisting=!selectOnly&&!bridge()?.conflict&&bridge()?.workspace?.id===workspaceId&&/500 KB|sync limit/i.test(synced?.error||'')&&prior&&['domain','personId','contactId','workspaceId','channel','email'].every(key=>String(prior[key]||'')===String(choice[key]||''));
-  if((!synced?.saved&&!reopenExisting)||bridge()?.workspace?.id!==workspaceId){for(const [buyer,selected] of flags)buyer.flowSelected=selected;saveDiscovery();saveMeta(meta);showToast(bridge()?.conflict?'Synchronization conflict: recipient selection was not saved. Resolve the versions above; your local changes are preserved.':'Contact selection could not be saved. Retry.');return false;}
-  if(!current())return false;
-  if(selectOnly){renderAll();renderSelectedEmailBuyer({scroll:true});showToast(`${person.publicName||person.name} selected · Continue to Messages when ready`);return true;}
-  try{await loadOutreachModules();}catch(error){saveMeta({...loadMeta(),activeJourneyStage:5,visibleStep:5});renderAll();renderDiscoveryFocus('buyers');showToast(error.message||'Messages could not load. Your recipient is saved; refresh and retry.');return false;}
-  window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));
-  renderAll();if(reopenExisting)showToast('Existing message opened locally · workspace sync remains blocked');return true;
+    if(acceptedBuyerConfirmationLevel()==='public_confirmed'&&publicBuyerSource(candidate,person)&&!window.LeadIntelContactPolicy?.accepted(enrichmentResults.get(personKey(candidate,person))?.contact||{},candidate.domain,'provider_verified')){await confirmPublicBuyerSource(candidate,person);if(!current())return false;}
+    if(!current())return false;
+    const company=crmCompanyByDomain(domain);if(!company?.id)throw new Error('Save this company in CRM first');
+    const detail=await b.getCrmCompany(company.id);if(!current())return false;
+    if(!detail?.ok||detail.company?.id!==company.id||canonicalDomain(detail.company.normalized_domain||detail.company.website)!==canonicalDomain(candidate.domain)||(candidate.crmId&&candidate.crmId!==company.id)||['suppressed','archived'].includes(detail.company.lifecycle_status))throw new Error('Review the saved CRM company before continuing.');
+    const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),text=value=>String(value||'').trim().toLowerCase(),name=text(person.publicName||person.name);
+    const verified=(detail.contacts||[]).filter(row=>row.id&&row.company_id===company.id&&(!row.external_person_id||String(row.external_person_id)===String(person.id))&&text(row.name)===name&&(!person.title||text(row.title)===text(person.title))&&(!profile||!row.linkedin_url||LeadIntelDiscovery.normalizeLinkedInUrl(row.linkedin_url)===profile)&&verifiedBuyerEmail(candidate,person,row)&&window.LeadIntelContactPolicy?.accepted(row,candidate.domain,acceptedBuyerConfirmationLevel()));
+    if(verified.length!==1){const control=button?.closest?.('.selected-prospect-person,.person-row')?.querySelector?.('[data-prospect-enrich-email],[data-action="enrich-contact"]');control?.scrollIntoView?.({behavior:'smooth',block:'center'});control?.focus?.();showToast('Confirm this contact’s email before continuing. Phone verification is optional.');return false;}
+    const contact=verified[0],choice={domain:canonicalDomain(domain),personId:person.id,contactId:contact.id,workspaceId,channel:'email',email:verifiedBuyerEmail(candidate,person,contact),recipientIdentity:buyerRecipientIdentity(candidate,person,company.id)};
+    if(!current())return false;enrichmentResults.set(personKey(candidate,person),{contact});prior=loadMeta();
+    flags=(discovery.selectedProspects||[]).flatMap(row=>(row.people||[]).map(buyer=>[buyer,Boolean(buyer.flowSelected),buyer===person]));for(const [buyer,,selected] of flags)buyer.flowSelected=selected;person.flowSelected=true;saveDiscovery();
+    installed=selectOnly?{selectedEmailBuyer:choice,activeJourneyStage:5,visibleStep:5}:{selectedEmailBuyer:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6};saveMeta({...prior,...installed});
+    let synced;try{synced=await b.saveNow({saveIntent:true,explicitSave:true});}catch(error){synced={saved:false,error:String(error?.message||error)};}
+    if(!current()||!ownsChoice()){rollback();return false;}
+    const reopenExisting=!selectOnly&&/500 KB|sync limit/i.test(synced?.error||'')&&JSON.stringify(prior.scriptBuyer)===JSON.stringify(choice);
+    if(!synced?.saved&&!reopenExisting){rollback();showToast('Contact selection could not be saved. Retry.');return false;}
+    if(selectOnly){renderAll();renderSelectedEmailBuyer({scroll:true});showToast(`${person.publicName||person.name} selected · Continue to Messages when ready`);return true;}
+    try{await loadOutreachModules();}catch(error){if(current()&&ownsChoice()){saveMeta({...loadMeta(),activeJourneyStage:5,visibleStep:5});renderAll();renderDiscoveryFocus('buyers');showToast(error.message||'Messages could not load. Your recipient is saved; refresh and retry.');}return false;}
+    if(!current()||!ownsChoice()){rollback();return false;}
+    window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));renderAll();return true;
+  }catch(error){rollback();if(buyerActionCurrent(owner))showToast(error.message||'Recipient selection could not be saved.');return false;}
 }
-async function startLinkedInBuyerMessage(domain,index){
-  const workspaceId=bridge()?.workspace?.id,candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=candidate?.people?.[index];
-  if(!person||!crmAuthenticated()||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible)return false;
-  const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
-  if(!profile||!['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status))return false;
-  if(!person.kept&&!await keepBuyer(domain,index,{personId:String(person.id)}))return false;
-  const choice={domain:canonicalDomain(domain),personId:person.id,workspaceId,channel:'linkedin',linkedinUrl:profile};
-  if(!LeadIntelDiscovery.confirmedLinkedInBuyer(person,candidate,choice,bridge()?.workspace?.id))return false;
-  const company=await ensureCrmCompany(candidate),record=await bridge().getCrmCompany(company.id);
-  if(!record?.ok||['suppressed','archived'].includes(record.company?.lifecycle_status))return false;
-  if(!LeadIntelDiscovery.confirmedLinkedInBuyer(person,candidate,choice,bridge()?.workspace?.id))return false;
-  const previous=loadMeta();saveMeta({...previous,selectedLinkedInBuyer:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6});
-  let synced;try{synced=await bridge().saveNow({saveIntent:true,explicitSave:true});}catch{}
-  if(!synced?.saved||bridge()?.workspace?.id!==workspaceId){saveMeta(previous);return false;}
-  await loadOutreachModules();window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));renderAll();return true;
+
+async function startLinkedInBuyerMessage(domain,index,{personId}={}){
+  const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,index,personId);
+  if(!person||!crmAuthenticated()||bridge()?.conflict||!LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).eligible)return false;
+  const owner=captureBuyerAction(candidate,person,{contact:true}),token={owner},operationKey='message-handoff';buyerActionSelectionOwners.set(operationKey,token);
+  const selectionStamp=()=>JSON.stringify([loadMeta().selectedEmailBuyer,loadMeta().selectedLinkedInBuyer,loadMeta().scriptBuyer]),entrySelection=selectionStamp();
+  const b=owner.bridge,workspaceId=b.workspace.id,current=()=>buyerActionSelectionOwners.get(operationKey)===token&&buyerActionCurrent(owner)&&(installed||selectionStamp()===entrySelection);
+  let previous=null,installed=null;
+  const ownsChoice=()=>installed&&discovery===owner.state&&bridge()===b&&discoveryOperationContext()===owner.context&&buyerActionSelectionOwners.get(operationKey)===token&&Object.keys(installed).every(key=>JSON.stringify(loadMeta()[key])===JSON.stringify(installed[key]));
+  const rollback=()=>{if(!ownsChoice())return;const latest={...loadMeta()};for(const key of Object.keys(installed)){if(Object.prototype.hasOwnProperty.call(previous,key))latest[key]=previous[key];else delete latest[key];}saveMeta(latest);};
+  try{
+    const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);if(!profile||!['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status))return false;
+    if(!person.kept){if(!await keepBuyer(domain,index,{personId:String(person.id)})||!current())return false;}
+    const company=await ensureCrmCompany(candidate);if(!current()||!company?.id)return false;
+    const record=await b.getCrmCompany(company.id);if(!current())return false;
+    if(!record?.ok||record.company?.id!==company.id||canonicalDomain(record.company.normalized_domain||record.company.website)!==canonicalDomain(candidate.domain)||['suppressed','archived'].includes(record.company.lifecycle_status))return false;
+    const choice={domain:canonicalDomain(domain),personId:person.id,workspaceId,channel:'linkedin',linkedinUrl:profile,recipientIdentity:buyerRecipientIdentity(candidate,person,company.id)};
+    if(!LeadIntelDiscovery.confirmedLinkedInBuyer(person,candidate,choice,workspaceId))return false;
+    const contacts=(record.contacts||[]).filter(row=>String(row.external_person_id||'')===String(person.id));if(contacts.length>1)return false;
+    if(contacts[0]){const contact=contacts[0];if(contact.company_id!==company.id||String(contact.name||'').trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase()||(contact.title&&person.title&&contact.title!==person.title)||(contact.linkedin_url&&LeadIntelDiscovery.normalizeLinkedInUrl(contact.linkedin_url)!==profile))return false;choice.contactId=contact.id;}
+    previous=loadMeta();installed={selectedLinkedInBuyer:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6};saveMeta({...previous,...installed});
+    const synced=await b.saveNow({saveIntent:true,explicitSave:true});if(!current()||!ownsChoice()||!synced?.saved){rollback();return false;}
+    await loadOutreachModules();if(!current()||!ownsChoice()){rollback();return false;}
+    window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));renderAll();return true;
+  }catch(error){rollback();if(buyerActionCurrent(owner))showToast(error.message||'LinkedIn selection could not be saved.');return false;}
 }
+
 async function saveBuyerAndProceed(domain,index,{button,personId}={}){
-  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));
-  if(!person||!crmAuthenticated()||enrichmentPending.has(personKey(candidate,person)))return false;
+  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,index,personId);
+  if(!person||!crmAuthenticated())return false;
+  pruneStaleBuyerActions();
+  if(enrichmentPending.has(personKey(candidate,person)))return false;
   const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate);
   if(!qualification.eligible){showToast('Review buyer qualification before continuing: '+qualification.gaps[0]);return false;}
   if(bridge()?.conflict){showToast('Resolve the synchronization conflict above before selecting a recipient. Your local changes are preserved.');return false;}
-  const selectionKey=personKey(candidate,person);if(buyerSelectionPending.size)return false;
-  let selectionSaved=false;buyerSelectionPending.add(selectionKey);renderAll();
-  if(button)button.disabled=true;
+  const owner=captureBuyerAction(candidate,person,{contact:true}),selectionKey=personKey(candidate,person);
+  if(!buyerActionCurrent(owner)||buyerSelectionPending.size)return false;
+  const token={owner},trace=window.LeadIntelReliabilityTrace?.begin('buyer_selection');let outcome='blocked';
+  buyerActionSelectionOwners.set(selectionKey,token);buyerSelectionPending.add(selectionKey);renderAll();if(button)button.disabled=true;
   try{
-    if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{})){
-      showToast('Confirm this buyer’s company email before continuing. LinkedIn messages are created inside Confirm LinkedIn.');return false;
-    }
-    if(!person.kept&&!await keepBuyer(domain,index,{personId:String(person.id)}))return false;
-    selectionSaved=await addBuyerToFlow(domain,index,{button,selectOnly:true,personId:String(person.id)});return selectionSaved;
-  }catch(error){showToast(error.message||'Buyer could not be saved. Please retry.');return false;}
-  finally{buyerSelectionPending.delete(selectionKey);renderAll();renderSelectedEmailBuyer({scroll:false});}
+    if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(selectionKey)?.contact||{})){showToast('Confirm this buyer’s company email before continuing. LinkedIn messages are created inside Confirm LinkedIn.');return false;}
+    if(!person.kept&&!await keepBuyer(domain,index,{personId:String(person.id),selectionOwner:token}))return false;
+    requireBuyerAction(owner);trace?.checkpoint('persistence','pending');
+    const selected=await addBuyerToFlow(domain,index,{button,selectOnly:true,personId:String(person.id)});requireBuyerAction(owner);
+    outcome=selected?'pass':'blocked';return selected;
+  }catch(error){outcome=buyerActionCurrent(owner)?'fail':'stale';if(buyerActionCurrent(owner))showToast(error.message||'Buyer could not be saved. Please retry.');return false;}
+  finally{trace?.finish(buyerActionCurrent(owner)?outcome:'stale');if(buyerActionSelectionOwners.get(selectionKey)===token){buyerActionSelectionOwners.delete(selectionKey);buyerSelectionPending.delete(selectionKey);}renderAll();renderSelectedEmailBuyer({scroll:false});}
 }
 
 function prospectContactControls(candidate,person){
@@ -2569,7 +2744,7 @@ function prospectContactControls(candidate,person){
   const selecting=buyerSelectionPending.has(key),syncConflict=bridge()?.conflict===true;
   const active=loadMeta().selectedEmailBuyer,selected=active?.workspaceId===bridge()?.workspace?.id&&active?.domain===canonicalDomain(candidate.domain)&&String(active?.personId)===String(person.id);
   const ready=verified&&crmAuthenticated()&&!pending&&!buyerSelectionPending.size&&!hold&&!syncConflict,disabled=!crmAuthenticated()||pending||syncConflict;
-  return `<div class="selected-prospect-contact-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)} · Use Recheck.</p>`:''}<p class="people-note" role="status">${syncConflict?'Resolve the workspace synchronization conflict.':selecting?'Saving selected recipient…':researching?'Researching available free sources…':hold?esc(hold):companyResearching?'Research is running for another buyer; your saved details are unchanged.':pending?'Checking contact details…':verified?'Confirmed contact email ready · Proceed to content creation.':'A confirmed company or personal email for this person is required to proceed.'}</p>${syncConflict?'<button class="secondary-btn small" type="button" data-review-buyer-sync>Review workspace sync</button>':''}<div class="buyer-four-actions"><button class="secondary-btn small${verified?' buyer-email-confirmed':!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" aria-pressed="${verified}" title="Find and confirm this person’s email using connected free and approved paid resources, including Treg." ${disabled||hold?'disabled':''}>E-mail</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" title="Find phone details using connected free and approved paid resources." ${disabled||hold?'disabled':''}>Phone</button><button class="secondary-btn small" type="button" data-recheck-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" title="Recheck free sources, identity, role and collected contact evidence." ${disabled?'disabled':''}>Recheck</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Proceed to content creation':'Confirm this person’s email to continue'}" ${!ready?'disabled':''}>Proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
+  return `<div class="selected-prospect-contact-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)} · Use Recheck.</p>`:''}<p class="people-note" role="status">${syncConflict?'Resolve the workspace synchronization conflict.':selecting?'Saving selected recipient…':researching?'Researching available free sources…':hold?esc(hold):companyResearching?'Research is running for another buyer; your saved details are unchanged.':pending?'Checking contact details…':verified?'Confirmed contact email ready · Proceed to content creation.':'A confirmed company or personal email for this person is required to proceed.'}</p>${syncConflict?'<button class="secondary-btn small" type="button" data-review-buyer-sync>Review workspace sync</button>':''}<div class="buyer-four-actions"><button class="secondary-btn small${verified?' buyer-email-confirmed':!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${verified}" title="Find and confirm this person’s email using connected free and approved paid resources, including Treg." ${disabled||hold?'disabled':''}>E-mail</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" title="Find phone details using connected free and approved paid resources." ${disabled||hold?'disabled':''}>Phone</button><button class="secondary-btn small" type="button" data-recheck-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" title="Recheck free sources, identity, role and collected contact evidence." ${disabled?'disabled':''}>Recheck</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Proceed to content creation':'Confirm this person’s email to continue'}" ${!ready?'disabled':''}>Proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
 }
 async function recheckBuyerContact(domain,index,{personId}={}){
   const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));
@@ -2578,27 +2753,29 @@ async function recheckBuyerContact(domain,index,{personId}={}){
 }
 async function findPublicProspectContacts(domain,options={}){
   const companyDomain=canonicalDomain(domain),key=`${bridge()?.workspace?.id||''}|${companyDomain}`;
-  const state=discovery,workspaceId=bridge()?.workspace?.id,userId=bridge()?.session?.user?.id;
+  const state=discovery,researchBridge=bridge(),workspaceId=researchBridge?.workspace?.id,userId=researchBridge?.session?.user?.id;
   const contextKey=discoveryOperationContext;
   const initialContext=contextKey();
   const owners=()=>[...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.potentialMatches||[]),...(discovery.pipeline||[])];
   const researchOwner=options.researchOwner||owners().find(row=>canonicalDomain(row.domain)===companyDomain);
-  const current=()=>discovery===state&&bridge()?.workspace?.id===workspaceId&&bridge()?.session?.user?.id===userId&&contextKey()===initialContext&&owners().includes(researchOwner);
+  const ownerCollections=['selectedProspects','candidates','potentialMatches','pipeline'].filter(key=>(discovery[key]||[]).includes(researchOwner));
+  const companyInput=JSON.stringify([researchOwner?.company,researchOwner?.domain,researchOwner?.website]);
+  const current=()=>discovery===state&&bridge()===researchBridge&&bridge()?.workspace?.id===workspaceId&&bridge()?.session?.user?.id===userId&&contextKey()===initialContext&&ownerCollections.length>0&&ownerCollections.every(key=>(discovery[key]||[]).includes(researchOwner))&&JSON.stringify([researchOwner?.company,researchOwner?.domain,researchOwner?.website])===companyInput&&canonicalDomain(researchOwner.domain)===companyDomain;
   options={...options,researchOwner};
   if(!current())return false;
   if(researchOwner&&(![...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.potentialMatches||[]),...(discovery.pipeline||[])].includes(researchOwner)||canonicalDomain(researchOwner.domain)!==companyDomain))return false;
   const existing=publicContactPromises.get(key);
-  if(existing&&!existing.controller.signal.aborted&&existing.researchOwner!==researchOwner)existing.cancel();
+  if(existing&&!existing.controller.signal.aborted&&(existing.researchOwner!==researchOwner||existing.current&&!existing.current()))existing.cancel();
   if(existing&&!existing.controller.signal.aborted){
     if(options.signal?.aborted)return false;
     const cancelShared=()=>existing.cancel();options.signal?.addEventListener('abort',cancelShared,{once:true});
     if(options.manualContact)existing.manualContact=true;
     try{const result=await existing.promise;
       if(!current()||existing.controller.signal.aborted||options.signal?.aborted)return false;
-      if(options.force&&!existing.force||existing.personIds&&(!options.personIds||options.personIds.some(id=>!existing.personIds.includes(String(id))))){if(publicContactPromises.get(key)===existing)publicContactPromises.delete(key);return findPublicProspectContacts(domain,options);}
+      if(options.force&&!existing.force||existing.personIds&&(!options.personIds||options.personIds.some(id=>!existing.personIds.includes(String(id))))){if(publicContactPromises.get(key)===existing)publicContactPromises.delete(key);return findPublicProspectContacts(domain,{...options,manualContact:options.manualContact||existing.manualContact});}
       return result;}finally{options.signal?.removeEventListener('abort',cancelShared);}
   }
-  const controller=new AbortController(),entry={controller,promise:null,cancel:null,researchOwner,personIds:options.personIds?.map(String),force:Boolean(options.force),manualContact:Boolean(options.manualContact)};
+  const controller=new AbortController(),entry={controller,promise:null,cancel:null,current,researchOwner,personIds:options.personIds?.map(String),force:Boolean(options.force),manualContact:Boolean(options.manualContact)};
   let settleCanceled;
   const canceled=new Promise(resolve=>{settleCanceled=resolve;});
   const cancel=()=>{controller.abort();settleCanceled(false);if(publicContactPromises.get(key)===entry)publicContactPromises.delete(key);};
@@ -2845,21 +3022,24 @@ async function scrapeOfficialContactPage(url,domain,signal){
   if(canonicalDomain(source)!==domain||!page.markdown&&!page.content)return null;
   return {url:source,title:page.metadata?.title||page.title||'',markdown:page.markdown||page.content,sourceRead:true};
 }
-async function reviewBuyerPublicEvidence(candidate,rows,signal){
+async function reviewBuyerPublicEvidence(candidate,rows,signal,{signatureCandidate}={}){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id||!rows.length)return {status:'unavailable',conflicts:[]};
-  const inputSignature=LeadIntelDiscovery.buyerReviewSignature(candidate);
-  const supplied=LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows);
+  const supplied=LeadIntelDiscovery.safeBuyerReviewEvidence(LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,rows));
+  candidate.publicResearch={...(candidate.publicResearch||{}),reviewEvidence:supplied};
+  const inputSignature=LeadIntelDiscovery.buyerReviewSignature(signatureCandidate?{...signatureCandidate,publicResearch:candidate.publicResearch}:candidate);
   try{
     const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,buyerAgent:candidate.publicResearch?.buyerAgent,people:(candidate.people||[]).map(person=>({employer:person.organization,linkedin:person.publicLinkedinUrl||person.linkedin_url,id:person.id,name:person.publicName||person.name,role:person.title,email:person.publicEmail,email_source:person.publicEmailUrl,checks:person.contactResearch?.checks})),evidence:supplied,quality:{depth:LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:candidate.publicResearch?.accountability?.status,checked_people:candidate.publicResearch?.accountability?.checkedPeople,official_pages:candidate.publicResearch?.accountability?.officialPages}}),signal,timeoutMs:DISCOVERY_REQUEST_TIMEOUT_MS*2});
     const review=response.ok?await response.json():{status:'unavailable',conflicts:[]};
     return {...review,aiReview:LeadIntelDiscovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'gemini',checkedAt:new Date().toISOString(),inputSignature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts})};
   }catch(error){if(signal?.aborted)throw error;return {status:'unavailable',conflicts:[]};}
 }
-async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge()?.workspace?.id){
-  if(!crmAuthenticated()||!workspaceId||bridge()?.workspace?.id!==workspaceId||bridge()?.conflict||signal?.aborted)return;
+async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge()?.workspace?.id,isCurrent=()=>true,researchOwner){
+  const state=discovery,researchBridge=bridge(),userId=researchBridge?.session?.user?.id;
+  const current=()=>isCurrent()&&discovery===state&&bridge()===researchBridge&&researchBridge?.session?.user?.id===userId&&crmAuthenticated()&&workspaceId&&bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&!signal?.aborted;
+  if(!current())return;
   const sourcePages=new Map();
   for(const person of candidate.people||[]){
-    if(bridge()?.workspace?.id!==workspaceId||bridge()?.conflict||signal?.aborted)return;
+    if(!current())return;
     const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title};
     if(!LeadIntelDiscovery.qualifyBuyer(person,profile,candidate).eligible)continue;
     // Old identity snapshots may predate address decoding. Read the known official
@@ -2869,7 +3049,7 @@ async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge
         const url=person.publicNameUrl;
         if(!sourcePages.has(url))sourcePages.set(url,scrapeOfficialContactPage(url,canonicalDomain(candidate.domain),signal));
         const page=await sourcePages.get(url);
-        if(bridge()?.workspace?.id!==workspaceId||signal?.aborted)return;
+        if(!current())return;
         if(page)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],[page],candidate.domain,candidate.company)[0]);
       }catch(error){if(signal?.aborted)return;}
     }
@@ -2879,10 +3059,12 @@ async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge
     try{
       // This endpoint rereads the official source and stores its exact person–email
       // association. It never invokes Apollo or Hunter and never sends outreach.
-      await confirmPublicBuyerSource(candidate,person,{evidenceOnly:true,signal});
+      const confirmed=await confirmPublicBuyerSource(candidate,person,{evidenceOnly:true,signal,contextGuard:current,researchOwner});
+      if(!current())return;
+      if(!confirmed)continue;
       person.contactVerification={status:'public_confirmed',checkedAt:new Date().toISOString(),issues:[]};
     }catch(error){
-      if(signal?.aborted)return;
+      if(!current())return;
       person.contactVerification={status:'error',checkedAt:new Date().toISOString(),issues:[String(error.message||'Official email source could not be confirmed').slice(0,220)]};
     }
   }
@@ -2894,35 +3076,42 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
   const chosen=personIds?(owner.people||[]).filter(person=>personIds.includes(String(person.id))).slice(0,10):LeadIntelDiscovery.buyerResearchCandidates(owner.people||[],profile,owner);
   if(!chosen.length)return false;
   accountability=accountability||LeadIntelDiscovery.createBuyerResearchAccountability();
-  const researchWorkspace=bridge()?.workspace?.id,researchUser=bridge()?.session?.user?.id;
+  const researchState=discovery,researchBridge=bridge(),researchWorkspace=researchBridge?.workspace?.id,researchUser=researchBridge?.session?.user?.id;
+  const companyInput=()=>JSON.stringify([canonicalDomain(owner.domain),owner.company,owner.website]);
+  const researchCompany=companyInput();
+  const ownerCollections=['selectedProspects','candidates','potentialMatches','pipeline'].filter(key=>(discovery[key]||[]).includes(owner));
   const chosenIds=new Set(chosen.map(person=>String(person.id)));
-  const candidate={...owner,people:chosen.map(person=>JSON.parse(JSON.stringify(person))),publicResearch:{...(owner.publicResearch||{})}};
+  const candidate={...owner,buyerDiscovery:JSON.parse(JSON.stringify(owner.buyerDiscovery||{})),people:chosen.map(person=>JSON.parse(JSON.stringify(person))),publicResearch:JSON.parse(JSON.stringify(owner.publicResearch||{}))};
   const resumingChecks=owner.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&chosen.every(person=>person.contactResearch?.evidenceVersion===2);
   const priorResearch=owner.publicResearch||{};
   const retainedAudit=LeadIntelDiscovery.safeBuyerResearchAccountability(priorResearch.accountability);
-  if(retainedAudit&&priorResearch.accountability!==accountability){
+  const mergedAuditOwners=accountability.__leadIntelMergedAuditOwners||new WeakSet();
+  if(!accountability.__leadIntelMergedAuditOwners)Object.defineProperty(accountability,'__leadIntelMergedAuditOwners',{value:mergedAuditOwners});
+  if(retainedAudit&&priorResearch.accountability!==accountability&&!mergedAuditOwners.has(owner)){
     for(const row of accountability.tools){const retained=retainedAudit.tools.find(item=>item.provider===row.provider);if(!retained)continue;for(const key of ['attempted','succeeded','failed','skipped','results'])row[key]=(Number(row[key])||0)+(Number(retained[key])||0);row.reason=row.reason||retained.reason;}
   }
+  mergedAuditOwners.add(owner);
   if(!force)accountability.officialPageReads=[...new Map([...(retainedAudit?.officialPageReads||[]),...(accountability.officialPageReads||[])].map(row=>[row.url,row])).values()].slice(0,24);
   const previousConflicts=(owner.publicResearch?.conflicts||[]).filter(row=>!chosenIds.has(String(row.person_id)));
   const runToken={};Object.defineProperty(owner,'__leadIntelPublicContactRun',{value:runToken,writable:true,configurable:true});
+  Object.defineProperty(owner,'__leadIntelContactOperation',{value:runToken,writable:true,configurable:true});
   let controller,finishing=false,acquisitionFailed=false;
   const ownerRoleSelection=()=>JSON.stringify([owner.buyerRoles,owner.buyerDiscovery?.opportunityRoles].map(value=>roleList(value).map(role=>role.toLowerCase()).sort()));
   const researchStrategyKey=discoveryOperationContext(),ownerRolesKey=ownerRoleSelection();
   const stableInput=value=>Array.isArray(value)?value.map(stableInput):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().filter(key=>!['buyerQualification','buyerRelevanceScore'].includes(key)).map(key=>[key,stableInput(value[key])])):value;
-  const selectedInputKey=()=>{const people=(owner.people||[]).filter(p=>chosenIds.has(String(p.id)));const normalized=LeadIntelDiscovery.normalizeDiscoveryState({selectedProspects:[{company:owner.company,domain:owner.domain,buyerSearchMode:'user_selected_target',people}]}).selectedProspects[0]?.people||[];return JSON.stringify(stableInput(normalized));};
+  const selectedInputKey=()=>{const people=(owner.people||[]).filter(p=>chosenIds.has(String(p.id))).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));const normalized=LeadIntelDiscovery.normalizeDiscoveryState({selectedProspects:[{company:owner.company,domain:owner.domain,buyerSearchMode:'user_selected_target',people}]}).selectedProspects[0]?.people||[];return JSON.stringify(stableInput(normalized));};
   let expectedPeopleKey=selectedInputKey();
-  const ownerExists=()=>researchUser===bridge()?.session?.user?.id&&owner.__leadIntelPublicContactRun===runToken&&researchWorkspace===bridge()?.workspace?.id&&[...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.potentialMatches||[]),...(discovery.pipeline||[])].includes(owner);
-  const ownerIsCurrent=()=>ownerExists()&&selectedInputKey()===expectedPeopleKey&&researchStrategyKey===discoveryOperationContext()&&ownerRolesKey===ownerRoleSelection();
+  const ownerExists=()=>discovery===researchState&&bridge()===researchBridge&&researchUser===bridge()?.session?.user?.id&&owner.__leadIntelPublicContactRun===runToken&&owner.__leadIntelContactOperation===runToken&&researchWorkspace===bridge()?.workspace?.id&&ownerCollections.every(key=>(discovery[key]||[]).includes(owner));
+  const ownerIsCurrent=()=>ownerExists()&&companyInput()===researchCompany&&selectedInputKey()===expectedPeopleKey&&researchStrategyKey===discoveryOperationContext()&&ownerRolesKey===ownerRoleSelection();
   const commit=({closing=false}={})=>{
     if(!ownerIsCurrent()||controller?.signal.aborted&&!closing)return;
     const updates=new Map(candidate.people.map(person=>[String(person.id),person]));
-    owner.people=(owner.people||[]).map(person=>updates.has(String(person.id))?JSON.parse(JSON.stringify(updates.get(String(person.id)))):person);expectedPeopleKey=selectedInputKey();
-    owner.publicResearch={...candidate.publicResearch,conflicts:[...previousConflicts,...(candidate.publicResearch?.conflicts||[])],researchedPersonIds:[...chosenIds],researchScope:'selected_buyers'};
+    for(const person of owner.people||[]){const updated=updates.get(String(person.id));if(updated)Object.assign(person,JSON.parse(JSON.stringify(updated)));}expectedPeopleKey=selectedInputKey();
+    owner.publicResearch={...JSON.parse(JSON.stringify(candidate.publicResearch)),conflicts:[...previousConflicts,...(candidate.publicResearch?.conflicts||[])],researchedPersonIds:[...chosenIds],researchScope:'selected_buyers'};
     owner.publicContacts=[...new Map([...(owner.publicContacts||[]),...(candidate.publicContacts||[])].map(row=>[row.url+'|'+row.value,row])).values()];
     owner.buyerResearchProgress=candidate.buyerResearchProgress||owner.buyerResearchProgress;
     owner.publicContactStatus=finishing||closing?candidate.publicContactStatus:'loading';owner.publicContactVersion=candidate.publicContactVersion;
-    owner.buyerDiscovery={...(owner.buyerDiscovery||{}),companyDossier:candidate.buyerDiscovery?.companyDossier||owner.buyerDiscovery?.companyDossier,officialContactInventory:candidate.buyerDiscovery?.officialContactInventory||owner.buyerDiscovery?.officialContactInventory,companyContacts:LeadIntelDiscovery.mergeCompanyContacts(owner.buyerDiscovery?.companyContacts||[],candidate.people,owner)};
+    owner.buyerDiscovery={...(owner.buyerDiscovery||{}),companyDossier:candidate.buyerDiscovery?.companyDossier?JSON.parse(JSON.stringify(candidate.buyerDiscovery.companyDossier)):owner.buyerDiscovery?.companyDossier,officialContactInventory:candidate.buyerDiscovery?.officialContactInventory?JSON.parse(JSON.stringify(candidate.buyerDiscovery.officialContactInventory)):owner.buyerDiscovery?.officialContactInventory,companyContacts:LeadIntelDiscovery.mergeCompanyContacts(owner.buyerDiscovery?.companyContacts||[],candidate.people,owner)};
   };
   candidate.buyerResearchProgress={phase:'company',label:'Researching company sources independently',step:1,total:5,startedAt:new Date().toISOString()};candidate.publicContactStatus="loading";commit();saveDiscovery();renderPipeline();renderCandidates();
   controller=new AbortController();let timeout;const armDeadline=ms=>{clearTimeout(timeout);timeout=setTimeout(()=>controller.abort(),ms);};if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(controller.signal,accountability);
@@ -2949,7 +3138,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     armDeadline(LeadIntelDiscovery.OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs+DISCOVERY_REQUEST_TIMEOUT_MS);
     const existingRows=[...(owner.__leadIntelBuyerSources||[])];
     existingRows.push(...window.LeadIntelCompanyDossierUi.evidenceRows(dossier));
-    await LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows:existingRows,signal:controller.signal,force,onSignal:signal=>{if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(signal,accountability);},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;},guard:()=>{if(!ownerIsCurrent())throw new Error('Research context changed');},onProgress:detail=>{if(canContinue()){commit();saveDiscovery();onProgress?.(detail);}}});
+    await LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows:existingRows,signal:controller.signal,force,onSignal:signal=>{if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(signal,accountability);},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;},guard:()=>{if(!ownerIsCurrent())throw new Error('Research context changed');},onCheckpoint:()=>{if(canContinue()){commit();saveDiscovery();}},onProgress:detail=>{if(canContinue()){commit();saveDiscovery();onProgress?.(detail);}}});
     if(!canContinue())return false;commit();saveDiscovery();renderPipeline();
     armDeadline(Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*9,LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs));
     let mandatoryResult;
@@ -2962,7 +3151,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
         accountability.status=accountability.gaps.length?'partial':'complete';return mandatoryResult;
       }
       armDeadline(LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs+DISCOVERY_REQUEST_TIMEOUT_MS);
-      const evidence=[...existingRows,...additionalRows],report=await LeadIntelDiscovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:LeadIntelDiscovery.buyerAgentContext(candidate,mainState().profile||{}),crossCheck:person=>groundedGeminiPersonSearch(candidate,person,controller.signal),search:query=>searchBuyerPublicPages(query,5,controller.signal),readPage:async url=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false,publicFirst:true},{signal:controller.signal});const payload=await response.json();if(!response.ok)throw new Error('Source extraction unavailable');return payload.data||payload;},signal:controller.signal,rows:evidence,accountability,force,observeTools:false,guard:()=>{if(!ownerIsCurrent())controller.abort();if(controller.signal.aborted)throw Object.assign(new Error('Research context changed'),{code:'CANCELED'});},onProgress:detail=>{progress();onProgress?.(detail);}});
+      const evidence=[...existingRows,...additionalRows],report=await LeadIntelDiscovery.runMandatoryBuyerResearch(candidate,{buyerAgentContext:LeadIntelDiscovery.buyerAgentContext(candidate,mainState().profile||{}),crossCheck:person=>groundedGeminiPersonSearch(candidate,person,controller.signal),search:query=>searchBuyerPublicPages(query,5,controller.signal),readPage:async url=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false,publicFirst:true},{signal:controller.signal});const payload=await response.json();if(!response.ok)throw new Error('Source extraction unavailable');return payload.data||payload;},signal:controller.signal,rows:evidence,accountability,force,observeTools:false,guard:()=>{if(!ownerIsCurrent())controller.abort();if(controller.signal.aborted)throw Object.assign(new Error('Research context changed'),{code:'CANCELED'});},onProgress:detail=>{if(canContinue()){progress();onProgress?.(detail);}}});
       armDeadline(Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*9,LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.maxDurationMs));
       qualityEvidenceRows=evidence;
       if(report.status!=='complete')candidate.publicContactStatus='error';
@@ -3097,7 +3286,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
       clearTimeout(timeout);
       if(!signal?.aborted){
         onProgress?.({label:'Dossier incomplete · collecting independent public company contacts'});
-        try{await LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows:[...(owner.__leadIntelBuyerSources||[])],signal,force,guard:()=>{if(!ownerIsCurrent())throw Error('Research context changed');},search:(query,publicSignal)=>searchBuyerPublicPages(query,5,publicSignal),readPage:async(url,publicSignal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal:publicSignal});if(!response.ok)throw Error('Public company source unavailable');const payload=await response.json();return payload.data||payload;},onProgress:detail=>{if(canContinue()){commit();saveDiscovery();onProgress?.(detail);}}});}catch{}
+        try{await LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows:[...(owner.__leadIntelBuyerSources||[])],signal,force,guard:()=>{if(!ownerIsCurrent())throw Error('Research context changed');},search:(query,publicSignal)=>searchBuyerPublicPages(query,5,publicSignal),readPage:async(url,publicSignal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal:publicSignal});if(!response.ok)throw Error('Public company source unavailable');const payload=await response.json();return payload.data||payload;},onCheckpoint:()=>{if(ownerIsCurrent()&&!signal?.aborted){commit({closing:true});saveDiscovery();}},onProgress:detail=>{if(canContinue()){commit();saveDiscovery();onProgress?.(detail);}}});}catch{}
       }
       if(ownerIsCurrent()){finishing=true;commit({closing:true});saveDiscovery();renderPipeline();renderCandidates();}return false;
     }
@@ -3107,15 +3296,18 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     }
     candidate.people=(candidate.people||[]).map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
     armDeadline(DISCOVERY_REQUEST_TIMEOUT_MS*(candidate.people.length+1));
-    if(canContinue())await confirmResearchedPublicEmails(candidate,controller.signal);
+    if(canContinue())await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner);
     if(!canContinue())return false;
     armDeadline(DISCOVERY_REQUEST_TIMEOUT_MS*3);
-    candidate.publicResearch.buyerAgent=LeadIntelDiscovery.assessBuyerAgent(candidate,qualityEvidenceRows,LeadIntelDiscovery.buyerAgentContext(candidate,mainState().profile||{}));
-    candidate.publicResearch.buyerAgent.inputSignature=LeadIntelDiscovery.buyerReviewSignature(candidate);
+    candidate.publicResearch.reviewEvidence=LeadIntelDiscovery.safeBuyerReviewEvidence(LeadIntelDiscovery.buyerSupervisorEvidence(candidate.people,qualityEvidenceRows));
+    const reviewedPeople=new Map(candidate.people.map(person=>[String(person.id),person]));
+    const signatureCandidate={...owner,buyerDiscovery:{...(owner.buyerDiscovery||{}),...(candidate.buyerDiscovery||{})},publicResearch:candidate.publicResearch,people:(owner.people||[]).map(person=>reviewedPeople.get(String(person.id))||JSON.parse(JSON.stringify(person)))};
+    candidate.publicResearch.buyerAgent=LeadIntelDiscovery.assessBuyerAgent({...signatureCandidate,people:candidate.people},qualityEvidenceRows,LeadIntelDiscovery.buyerAgentContext(signatureCandidate,mainState().profile||{}));
+    candidate.publicResearch.buyerAgent.inputSignature=LeadIntelDiscovery.buyerReviewSignature(signatureCandidate);
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:'contacts',label:'Reviewing buyer identities and evidence',step:5};commit();onProgress?.({label:'AI supervisor: checking research coverage · Buyer Agent evidence'});
-    const review=await reviewBuyerPublicEvidence(candidate,qualityEvidenceRows,controller.signal);
+    const review=await reviewBuyerPublicEvidence(candidate,qualityEvidenceRows,controller.signal,{signatureCandidate});
     if(!canContinue())return false;
-    candidate.publicResearch.aiReview=review.aiReview||LeadIntelDiscovery.safeBuyerAiReview({status:'unavailable',provider:'gemini',checkedAt:new Date().toISOString(),inputSignature:LeadIntelDiscovery.buyerReviewSignature(candidate),reason:review.reason||'AI evidence review did not finish'});
+    candidate.publicResearch.aiReview=review.aiReview||LeadIntelDiscovery.safeBuyerAiReview({status:'unavailable',provider:'gemini',checkedAt:new Date().toISOString(),inputSignature:LeadIntelDiscovery.buyerReviewSignature({...signatureCandidate,publicResearch:candidate.publicResearch}),reason:review.reason||'AI evidence review did not finish'});
     candidate.publicResearch.gemini=review.status==='complete'?'complete':'unavailable';
     if(review.status==='complete')candidate.publicResearch.conflicts=(review.conflicts||[]).slice(0,10);
     else candidate.publicResearch.issues=[...(candidate.publicResearch.issues||[]),'Optional evidence review unavailable; individual source checks are retained'];
@@ -3156,54 +3348,66 @@ function scheduleSavedBuyerPublicChecks(){
   // startSelectedBuyerResearch; incomplete saved work requires explicit Refresh.
   return false;
 }
-async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,confirmed=false}={}){
-  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact((discovery.selectedProspects||[]).find(c=>canonicalDomain(c.domain)===canonicalDomain(domain)),personIndex);
-  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=candidate?.people?.[personIndex];
-  if(!person?.id||String(person.id).startsWith("person-")||!crmAuthenticated())return false;
-  const key=selectedBuyerKey(candidate,person);if(enrichmentPending.has(key))return false;
-  const previous=enrichmentResults.get(key);
-  if(!phoneLookup){
-    enrichmentPending.add(key);renderPipeline();
-    try{
-      if(!person.publicEmail||!person.publicEmailUrl){
-        const checked=await findPublicProspectContacts(domain);
-        if(!checked)return false;
-      }
-      const refreshed=candidate.people.find(row=>String(row.id)===String(person.id));
-      if(refreshed?.publicEmail&&refreshed.publicEmailUrl){
-        const company=await ensureCrmCompany(candidate);
-        const saved=await bridge().saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([refreshed]));
-        if(!saved?.ok)throw new Error(saved?.error||'Public email could not be saved to CRM');
-        showToast(`${refreshed.publicName||person.name} · public work email found · unverified`);return true;
-      }
-    }catch(error){showToast(error.message||'Public email search failed');return false;
-    }finally{enrichmentPending.delete(key);renderPipeline();}
-  }
-  if(!confirmed&&!(phoneLookup&&previous?.request?.status==="pending_phone")&&!(await (window.LeadIntelDialogs?.confirm(`${person.name} · ${phoneLookup?"find a direct phone with Apollo":"no public work email matched; check with Apollo"}. Continue?`)??false)))return false;
-  if(phoneLookup&&previous?.request?.status==="pending_phone"){
-    const company=crmCompanyByDomain(domain);if(!company)return false;
-    const detail=await bridge().getCrmCompany(company.id);if(!detail.ok){showToast(detail.error||"Unable to refresh phone");return false;}
-    const contact=typeof LeadIntelDiscovery.buyerPhoneContact==='function'?LeadIntelDiscovery.buyerPhoneContact(detail,person):(detail.contacts||[]).find(row=>String(row.external_person_id||"")===String(person.id));
-    enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)}});renderPipeline();return true;
-  }
-  enrichmentPending.add(key);renderPipeline();
+async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,confirmed=false,personId,contextGuard}={}){
+  const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=buyerActionPerson(candidate,personIndex,personId);
+  if(!person?.id||String(person.id).startsWith('person-')||!crmAuthenticated())return false;
+  let owner=captureBuyerAction(candidate,person,{contextGuard});if(!buyerActionCurrent(owner))return false;const selectedId=String(person.id);
+  if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact(candidate,candidate.people.indexOf(person),{personId:selectedId});
+  const key=selectedBuyerKey(candidate,person),token=beginBuyerPending(owner);if(!token)return false;
+  const previous=enrichmentResults.get(key),basic=p=>JSON.stringify([p.publicName||p.name,p.title,p.organization]),original=basic(person),profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+  renderPipeline();
   try{
-    const company=await ensureCrmCompany(candidate);
-    const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});
-    if(!result.ok)throw new Error(result.error||"Apollo verification failed");
-    enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();
-    showToast(result.contact?.work_email||result.contact?.phone_number?"Contact saved in CRM · verify identity before outreach":result.request?.status==="pending_phone"?"Phone lookup pending":"Apollo returned no verified work email");
-    return true;
-  }catch(error){showToast(error.message);return false;}
-  finally{enrichmentPending.delete(key);renderPipeline();}
+    if(!phoneLookup){
+      if(!person.publicEmail||!person.publicEmailUrl){
+        requireBuyerAction(owner);let checked;const initialCompany=JSON.stringify([candidate.company,candidate.domain,candidate.crmId]);token.researchCurrent=()=>discovery===owner.state&&bridge()===owner.bridge&&discoveryOperationContext()===owner.context&&crmAuthenticated()&&!bridge()?.conflict&&(!contextGuard||contextGuard()===true)&&(discovery.selectedProspects||[]).includes(candidate)&&candidate.people?.includes(person)&&JSON.stringify([candidate.company,candidate.domain,candidate.crmId])===initialCompany&&basic(person)===original&&(!profile||LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)===profile);try{checked=await findPublicProspectContacts(domain,{researchOwner:candidate,personIds:[selectedId],manualContact:true});}finally{delete token.researchCurrent;}
+        if(!checked)return false;
+        if(discovery!==owner.state||bridge()!==owner.bridge||discoveryOperationContext()!==owner.context||!crmAuthenticated()||bridge()?.conflict||contextGuard&&contextGuard()!==true||!candidate.people?.includes(person)||basic(person)!==original||profile&&LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)!==profile||buyerActionPendingOwners.get(key)!==token)return false;
+        owner=captureBuyerAction(candidate,person,{contextGuard});token.owner=owner;requireBuyerAction(owner);
+      }
+      if(person.publicEmail&&person.publicEmailUrl){
+        requireBuyerAction(owner);const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);
+        const saved=await owner.bridge.saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([person]));requireBuyerAction(owner);
+        if(!saved?.ok)throw new Error(saved?.error||'Public email could not be saved to CRM');
+        showToast(`${person.publicName||person.name} · public work email found · unverified`);return true;
+      }
+    }
+    if(!confirmed&&!(phoneLookup&&previous?.request?.status==='pending_phone')){
+      requireBuyerAction(owner);const approved=await (window.LeadIntelDialogs?.confirm(`${person.name} · ${phoneLookup?'find a direct phone with Apollo':'no public work email matched; check with Apollo'}. Continue?`)??false);requireBuyerAction(owner);if(!approved)return false;
+    }
+    if(phoneLookup&&previous?.request?.status==='pending_phone'){
+      const company=crmCompanyByDomain(domain);if(!company)return false;
+      requireBuyerAction(owner);const detail=await owner.bridge.getCrmCompany(company.id);requireBuyerAction(owner);if(!detail.ok)throw new Error(detail.error||'Unable to refresh phone');
+      const contact=LeadIntelDiscovery.buyerPhoneContact(detail,person);
+      enrichmentResults.set(key,{...previous,contact:contact||null,request:{...previous.request,status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],selectedId)}});renderPipeline();return true;
+    }
+    requireBuyerAction(owner);const company=await ensureCrmCompany(candidate);requireBuyerAction(owner);
+    const resolved=await resolveApolloBuyer(candidate,person,{owner});requireBuyerAction(owner);
+    const result=await owner.bridge.enrichCrmContact(company.id,resolved,{phoneLookup,allowPersonalEmail:false});requireBuyerAction(owner);
+    if(!result.ok)throw new Error(result.error||'Apollo verification failed');validateBuyerProviderContact(owner,company,resolved,result);
+    await refreshCrmState({render:false});requireBuyerAction(owner);enrichmentResults.set(key,result);renderAll();
+    showToast(result.contact?.work_email||result.contact?.phone_number?'Contact saved in CRM · verify identity before outreach':result.request?.status==='pending_phone'?'Phone lookup pending':'Apollo returned no verified work email');return true;
+  }catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Contact enrichment failed');return false;}
+  finally{endBuyerPending(key,token);if(buyerActionCurrent(owner))renderPipeline();}
 }
+const selectedBuyerBatchOperations=new Map();
 async function enrichSelectedProspectBatch(domain,phoneLookup=false){
   const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));if(!candidate)return false;
-  const selected=candidate.people.map((person,index)=>({person,index})).filter(({person})=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person)));
-  if(!selected.length)return false;
-  if(!(await (window.LeadIntelDialogs?.confirm(`${selected.length} selected people · ${phoneLookup?"find direct phones":"check work emails"} with Apollo. Continue?`)??false)))return false;
-  for(const {person,index} of selected){await enrichSelectedProspect(domain,index,{phoneLookup,confirmed:true});selectedBuyerEnrichment.delete(selectedBuyerKey(candidate,person));}
-  renderPipeline();return true;
+  const selected=candidate.people.filter(person=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person))).map(person=>({person,personId:String(person.id),owner:captureBuyerAction(candidate,person)}));if(!selected.length||selected.some(row=>!buyerActionCurrent(row.owner)))return false;
+  const key=canonicalDomain(domain),previous=selectedBuyerBatchOperations.get(key);if(previous&&buyerActionCurrent(previous.owner))return false;
+  const token={owner:selected[0].owner},origin=token.owner,current=()=>selectedBuyerBatchOperations.get(key)===token&&discovery===origin.state&&bridge()===origin.bridge&&discoveryOperationContext()===origin.context&&crmAuthenticated()&&!bridge()?.conflict&&(discovery.selectedProspects||[]).includes(candidate);
+  selectedBuyerBatchOperations.set(key,token);
+  try{
+    const approved=await (window.LeadIntelDialogs?.confirm(`${selected.length} selected people · ${phoneLookup?'find direct phones':'check work emails'} with Apollo. Continue?`)??false);
+    if(!current()||!approved||selected.some(row=>!buyerActionCurrent(row.owner)))return false;
+    for(const row of selected){
+      if(!current()||!buyerActionCurrent(row.owner))return false;
+      const completed=await enrichSelectedProspect(key,-1,{phoneLookup,confirmed:true,personId:row.personId,contextGuard:current});
+      if(!current()||!completed)return false;
+      if(!candidate.people?.includes(row.person)||String(row.person.id)!==row.personId)return false;
+      selectedBuyerEnrichment.delete(selectedBuyerKey(candidate,row.person));
+    }
+    renderPipeline();return true;
+  }finally{if(selectedBuyerBatchOperations.get(key)===token)selectedBuyerBatchOperations.delete(key);}
 }
 function publicResearchOutcome(candidate){
   const people=Array.isArray(candidate.people)?candidate.people:[];
@@ -3294,20 +3498,27 @@ async function refreshOfficialCompanyContacts(domain,{sourceUrl=''}={}){
   const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(domain));
   if(!candidate||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||!crmAuthenticated()||bridge()?.conflict)return false;
   if(sourceUrl){try{const url=new URL(sourceUrl);if(!['https:','http:'].includes(url.protocol)||url.username||url.password||canonicalDomain(url.href)!==canonicalDomain(domain))throw new Error();sourceUrl=url.href;}catch{showToast('Use an official page on this company website.');return false;}}
-  const state=discovery,workspaceId=bridge().workspace.id,userId=bridge().session?.user?.id,previous=candidate.publicContactStatus,controller=new AbortController();
-  const current=()=>discovery===state&&crmAuthenticated()&&!bridge()?.conflict&&bridge()?.workspace?.id===workspaceId&&bridge()?.session?.user?.id===userId&&(discovery.selectedProspects||[]).includes(candidate);
+  const state=discovery,researchBridge=bridge(),workspaceId=researchBridge.workspace.id,userId=researchBridge.session?.user?.id,previous=candidate.publicContactStatus,controller=new AbortController();
+  const runToken={},contextAtStart=discoveryOperationContext(),companyInput=JSON.stringify([candidate.company,candidate.domain,candidate.website]);
+  Object.defineProperty(candidate,'__leadIntelOfficialContactRun',{value:runToken,writable:true,configurable:true});
+  Object.defineProperty(candidate,'__leadIntelContactOperation',{value:runToken,writable:true,configurable:true});
+  const ownerExists=()=>discovery===state&&bridge()===researchBridge&&candidate.__leadIntelOfficialContactRun===runToken&&candidate.__leadIntelContactOperation===runToken&&crmAuthenticated()&&bridge()?.workspace?.id===workspaceId&&bridge()?.session?.user?.id===userId&&(discovery.selectedProspects||[]).includes(candidate);
+  let expectedInventory=JSON.stringify(candidate.buyerDiscovery?.officialContactInventory);
+  const current=()=>ownerExists()&&!bridge()?.conflict&&discoveryOperationContext()===contextAtStart&&JSON.stringify([candidate.company,candidate.domain,candidate.website])===companyInput&&JSON.stringify(candidate.buyerDiscovery?.officialContactInventory)===expectedInventory;
+  const researchCandidate={...candidate,buyerDiscovery:JSON.parse(JSON.stringify(candidate.buyerDiscovery||{}))};
+  const checkpoint=()=>{if(controller.signal.aborted||!current())return;const inventory=researchCandidate.buyerDiscovery?.officialContactInventory;if(!inventory)return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:JSON.parse(JSON.stringify(inventory))};expectedInventory=JSON.stringify(candidate.buyerDiscovery.officialContactInventory);saveDiscovery();renderAll();};
   const priorInventory=candidate.buyerDiscovery?.officialContactInventory,resume=!sourceUrl&&priorInventory?.research?.policyVersion===LeadIntelDiscovery.OFFICIAL_CONTACT_RESEARCH_POLICY.version&&['partial','error'].includes(priorInventory.research.status);
   candidate.publicContactStatus='loading';saveDiscovery();renderAll();
   try{
-    await LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows:[],seedUrls:sourceUrl?[sourceUrl]:[],signal:controller.signal,force:!resume,guard:()=>{if(!current())throw new Error('Research context changed');},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;}});
+    await LeadIntelDiscovery.runOfficialContactResearch(researchCandidate,{rows:[],seedUrls:sourceUrl?[sourceUrl]:[],signal:controller.signal,force:!resume,guard:()=>{if(!current())throw new Error('Research context changed');},onCheckpoint:checkpoint,onProgress:checkpoint,search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;}});
     if(!current())return false;
-    candidate.publicContactStatus=previous||'idle';saveDiscovery();renderAll();
+    checkpoint();
     if(crmCompanyByDomain(domain)&&!(await saveBuyerResearch(domain)))throw new Error('Official contacts retained locally; CRM save did not finish. Retry Save.');
     if(!current())return false;
     const inventory=candidate.buyerDiscovery?.officialContactInventory;
     showToast(`${inventory?.contacts?.length||0} official contacts · ${inventory?.channels?.length||0} published email routes${inventory?.research?.status!=='complete'?' · some source checks incomplete':''}`);return true;
   }catch(error){if(current())showToast(error.message||'Official contact research could not finish');return false;}
-  finally{controller.abort();if(current()){candidate.publicContactStatus=previous||'idle';saveDiscovery();renderAll();}}
+  finally{controller.abort();if(ownerExists()){candidate.publicContactStatus=previous||'idle';delete candidate.__leadIntelOfficialContactRun;saveDiscovery();renderAll();}}
 }
 function companyContactDossierHtml(candidate){
   const inventory=candidate.buyerDiscovery?.officialContactInventory,channels=inventory?.channels||[];
@@ -3434,7 +3645,7 @@ function renderSelectedProspects(prospects){
       const linkedIn=direct||linkedInSearchUrl(person,candidate);
       return `<li class="selected-prospect-person"><span class="selected-prospect-rank">${rank}</span><div class="selected-prospect-person-details"><div class="selected-prospect-person-name"><strong>${esc(name||"Name unavailable")}</strong>${LeadIntelDiscovery.isExecutiveBuyer(person)&&priorities.has(person.id||LeadIntelDiscovery.buyerIdentity(person))?'<small class="buyer-recommendation">Executive leadership</small>':''}${recommendations.has(person.id||LeadIntelDiscovery.buyerIdentity(person))?'<small class="buyer-recommendation">Recommended</small>':""}${name&&!/\s/.test(name)?'<small>First name only</small>':publicName&&!verifiedName?`<small>Public name · <a href="${esc(person.publicNameUrl)}" target="_blank" rel="noopener noreferrer">Source ↗</a></small>`:""}</div><p>${esc(LeadIntelDiscovery.buyerDisplayTitle(person.title)||"Role not provided")}</p>${location?`<small class="selected-prospect-person-location">${esc(location)}</small>`:""}${buyerQualificationHtml(candidate,person)}${buyerContactRows(person,candidate,enrichmentResults.get(personKey(candidate,person)))}${enrichmentResultHtml(enrichmentResults.get(personKey(candidate,person)),{hideContacts:true})}</div>${prospectContactControls(candidate,person)}</li>`;
     }).join("");
-    const compactBuyersHtml=potentialPeople.length?`<details class="buyer-other-contacts"><summary>Show other contacts (${potentialPeople.length})</summary><section class="buyer-shortlist-group"><div class="selected-prospect-buyers-heading"><strong>${potentialPeople.length} ${candidate.buyerRolesChanged?'saved people · role review pending':'other potential buyers'}</strong><span>Names and roles first · contact evidence inside each card</span><button class="secondary-btn small" type="button" data-research-remaining="${esc(domain)}" ${candidate.publicContactStatus==='loading'?'disabled':''}>Research these ${potentialPeople.length} buyers</button></div><ol class="buyer-potential-list">${potentialPeople.map(person=>{const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate),complete=LeadIntelDiscovery.buyerResearchAssessment(person).status==='complete';return `<li><details><summary><strong>${esc(person.publicName||person.name)}</strong><span>${esc(LeadIntelDiscovery.buyerDisplayTitle(person.title))}</span><small>${qualification.eligible===false?`On hold · ${esc('Current role needs verification')}`:`${complete?'Researched':'Provisional'} priority ${Number(qualification.total)||0}/100`}</small></summary>${!complete?`<p>${esc(LeadIntelDiscovery.buyerResearchAssessment(person).reason)} Decision authority remains unconfirmed.</p>`:''}<ol class="selected-prospect-people">${buyerCardsHtml([person])}</ol><button class="secondary-btn small" type="button" data-research-buyer="${esc(domain)}" data-person-id="${esc(person.id)}" ${candidate.publicContactStatus==='loading'?'disabled':''}>${complete?'Refresh this buyer':'Research this buyer'}</button></details></li>`;}).join('')}</ol></section></details>`:'';
+    const compactBuyersHtml=potentialPeople.length?`<details class="buyer-other-contacts"><summary>Show other contacts (${potentialPeople.length})</summary><section class="buyer-shortlist-group"><div class="selected-prospect-buyers-heading"><strong>${potentialPeople.length} ${candidate.buyerRolesChanged?'saved people · role review pending':'other potential buyers'}</strong><span>Names and roles first · contact evidence inside each card</span><button class="secondary-btn small" type="button" data-research-remaining="${esc(domain)}" ${candidate.publicContactStatus==='loading'?'disabled':''}>Research these ${potentialPeople.length} buyers</button></div><ol class="buyer-potential-list">${potentialPeople.map(person=>{const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate),complete=LeadIntelDiscovery.buyerResearchAssessment(person).status==='complete';return `<li><details><summary><strong>${esc(person.publicName||person.name)}</strong><span>${esc(LeadIntelDiscovery.buyerDisplayTitle(person.title))}</span><small>${qualification.eligible===false?`On hold · ${esc('Current role needs verification')}`:`${complete?'Researched':'Provisional'} priority ${Number(qualification.total)||0}/100`}</small></summary>${!complete?`<p>${esc(LeadIntelDiscovery.buyerResearchAssessment(person).reason)} Decision authority remains unconfirmed.</p>`:''}<ol class="selected-prospect-people">${buyerCardsHtml([person])}</ol><button class="secondary-btn small" type="button" data-research-buyer="${esc(domain)}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" ${candidate.publicContactStatus==='loading'?'disabled':''}>${complete?'Refresh this buyer':'Research this buyer'}</button></details></li>`;}).join('')}</ol></section></details>`:'';
     const buyerGroupHtml=(list,label,note)=>list.length?`<section class="buyer-shortlist-group"><div class="selected-prospect-buyers-heading"><strong>${list.length} ${label}</strong><span>${note}</span></div><ol class="selected-prospect-people">${buyerCardsHtml(list)}</ol></section>`:"";
     const researchPending=candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading';
     const checkedPeople=people.filter(person=>LeadIntelDiscovery.buyerResearchAssessment(person).status==='complete').length;
@@ -3602,13 +3813,13 @@ function bindDiscovery(){
   $("continue-company-buyers")?.addEventListener("click",()=>{setJourneyFocus('buyers');renderAll();});
   $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage);$("run-company-discovery")?.addEventListener("click",()=>{void runCompanyDiscovery({savingMode:false});});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderDiscoveryEstimate();renderStatus();renderCandidates();renderPotentialMatches();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderDiscoveryEstimate();renderStatus();renderCandidates();renderPotentialMatches();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
   $("company-search-preferences")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback)updateCompanySearchFeedback(feedback);});
-  $("company-candidates")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback){updateCompanySearchFeedback(feedback);return;}const box=event.target.closest("[data-flow-confirm]");if(box)toggleBuyerContactFlow(box);});
-  $("company-candidates")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(btn.dataset.companyKey||index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"email",dataLookup:true,personId:btn.dataset.personId});if(btn.dataset.action==="find-phone")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"phone",personId:btn.dataset.personId});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="select-qualified-buyers")void selectQualifiedForBuyers(btn.dataset.companyKey||index);if(btn.dataset.action==="save-crm")saveCandidate(btn.dataset.companyKey||index,{pipeline:false});});
+  $("company-candidates")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback){updateCompanySearchFeedback(feedback);return;}const box=event.target.closest("[data-flow-confirm]");if(box&&buyerControlTargetCurrent(box,box.dataset.flowScope))toggleBuyerContactFlow(box);});
+  $("company-candidates")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn||!buyerControlTargetCurrent(btn,'company'))return;if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(btn.dataset.companyKey||index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"email",dataLookup:true,personId:btn.dataset.personId});if(btn.dataset.action==="find-phone")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"phone",personId:btn.dataset.personId});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex,{domain:btn.dataset.buyerDomain,personId:btn.dataset.personId});if(btn.dataset.action==="select-qualified-buyers")void selectQualifiedForBuyers(btn.dataset.companyKey||index);if(btn.dataset.action==="save-crm")saveCandidate(btn.dataset.companyKey||index,{pipeline:false});});
   $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
   $("discovery-potential-matches")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback)updateCompanySearchFeedback(feedback);});
-  $("discovery-potential-matches")?.addEventListener("click",event=>{const review=event.target.closest("[data-review-action]");if(review){const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomain:key});return;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="buyers"){selectResearchReviewForBuyers(key);return;}if(action==="unselect"){unselectResearchReviewForBuyers(key);return;}if(action==="remove"){removeResearchReviewCompany(key);return;}if(action==="clear"){clearResearchReview();return;}}const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="select-qualified-buyers"){void selectQualifiedForBuyers(btn.dataset.companyKey||Number(btn.dataset.companyIndex));return;}if(btn.dataset.action==="save-crm"){void saveCandidate(btn.dataset.companyKey||Number(btn.dataset.companyIndex),{pipeline:false});return;}if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
-  $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box){toggleBuyerContactFlow(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;candidate.buyerRolesSource='manual';selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
-  $("customer-pipeline")?.addEventListener("click",event=>{const button=event.target.closest("button");if(button?.disabled)return;if(button?.hasAttribute('data-review-buyer-sync')){window.LeadIntelAttention?.open?.();return;}if(button?.hasAttribute('data-remove-buyer-company')){void removeSelectedBuyerCompany(button.dataset.removeBuyerCompany);return;}if(button?.hasAttribute('data-show-confirmed-buyers')){const row=button.closest('.selected-prospect-row'),cards=[...row.querySelectorAll('.buyer-potential-list > li > details')].filter(card=>card.querySelector('[data-prospect-enrich-email][aria-pressed="true"]'));for(const card of cards){card.open=true;const group=card.closest('.buyer-other-contacts');if(group)group.open=true;}cards[0]?.scrollIntoView?.({behavior:'smooth',block:'center'});cards[0]?.querySelector('[data-keep-buyer]')?.focus?.();return;}if(button?.dataset.researchExecutive){void findExecutiveBuyer(button.dataset.researchExecutive);return;}if(button?.dataset.researchBuyer){void findPublicProspectContacts(button.dataset.researchBuyer,{personIds:[button.dataset.personId]});return;}if(button?.dataset.researchRemaining){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.researchRemaining));if(candidate){const ranked=LeadIntelDiscovery.rankedBuyerShortlist(candidate.people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);void findPublicProspectContacts(candidate.domain,{personIds:candidate.people.filter(person=>!ranked.recommendedIds.includes(person.id)).map(person=>String(person.id))});}return;}if(button?.dataset.buyerNext){void addBuyerToFlow(button.dataset.buyerNext,Number(button.dataset.personIndex),{scope:button.dataset.buyerScope,button,personId:button.dataset.personId});return;}if(button?.dataset.recheckPublicEmail){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.recheckPublicEmail)),person=candidate?.people?.[Number(button.dataset.personIndex)];if(person){button.disabled=true;void confirmPublicBuyerSource(candidate,person,{retryRejected:true}).catch(error=>showToast(error.message)).finally(()=>renderAll());}return;}if(button?.dataset.recheckBuyer){void recheckBuyerContact(button.dataset.recheckBuyer,Number(button.dataset.personIndex),{personId:button.dataset.personId});return;}if(button?.dataset.reviewLinkedin){reviewBuyerLinkedIn(button.dataset.reviewLinkedin,Number(button.dataset.personIndex));return;}if(button?.dataset.saveBuyerOnly){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.saveBuyerOnly));if(!candidate?.people?.[Number(button.dataset.personIndex)]?.kept)void keepBuyer(button.dataset.saveBuyerOnly,Number(button.dataset.personIndex));return;}if(button?.dataset.useCompanyContact){void selectPublishedCompanyContact(button.dataset.useCompanyContact,button.dataset.contactId,{button});return;}if(button?.dataset.checkCompanyEmail){const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.checkCompanyEmail));if(candidate)void confirmPublishedCompanyContacts(candidate,{force:true,personId:button.dataset.contactId});return;}if(button?.dataset.keepBuyer){void saveBuyerAndProceed(button.dataset.keepBuyer,Number(button.dataset.personIndex),{button,personId:button.dataset.personId});return;}if(button?.dataset.saveBuyerResearch){void saveSelectedBuyerCompany(button.dataset.saveBuyerResearch);return;}if(button?.dataset.readOfficialContactSource){const input=button.closest('.company-contact-dossier')?.querySelector('[data-official-contact-url]');if(input?.value)void refreshOfficialCompanyContacts(button.dataset.readOfficialContactSource,{sourceUrl:input.value});else showToast('Enter an official contact or team page URL.');return;}if(button?.dataset.refreshCompanyContacts){void refreshOfficialCompanyContacts(button.dataset.refreshCompanyContacts);return;}if(button?.dataset.findPublicContacts){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.findPublicContacts));findPublicProspectContacts(button.dataset.findPublicContacts,{force:Boolean(candidate&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))});return;}if(button?.dataset.prospectEnrichEmail){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichEmail));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"email",dataLookup:true,personId:button.dataset.personId});return;}if(button?.dataset.prospectEnrichPhone){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichPhone));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"phone",personId:button.dataset.personId});return;}if(button?.dataset.prospectBatchEmail){enrichSelectedProspectBatch(button.dataset.prospectBatchEmail);return;}if(button?.dataset.prospectBatchPhone){enrichSelectedProspectBatch(button.dataset.prospectBatchPhone,true);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers,{refreshDossier:true});return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers,{refreshDossier:true});return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
+  $("discovery-potential-matches")?.addEventListener("click",event=>{const review=event.target.closest("[data-review-action]");if(review){const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomain:key});return;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="buyers"){selectResearchReviewForBuyers(key);return;}if(action==="unselect"){unselectResearchReviewForBuyers(key);return;}if(action==="remove"){removeResearchReviewCompany(key);return;}if(action==="clear"){clearResearchReview();return;}}const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn||!buyerControlTargetCurrent(btn,'company'))return;if(btn.dataset.action==="select-qualified-buyers"){void selectQualifiedForBuyers(btn.dataset.companyKey||Number(btn.dataset.companyIndex));return;}if(btn.dataset.action==="save-crm"){void saveCandidate(btn.dataset.companyKey||Number(btn.dataset.companyIndex),{pipeline:false});return;}if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
+  $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box){if(buyerControlTargetCurrent(box,box.dataset.flowScope))toggleBuyerContactFlow(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;candidate.buyerRolesSource='manual';selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
+  $("customer-pipeline")?.addEventListener("click",event=>{const button=event.target.closest("button");if(button?.disabled||!buyerControlTargetCurrent(button))return;if(button?.hasAttribute('data-review-buyer-sync')){window.LeadIntelAttention?.open?.();return;}if(button?.hasAttribute('data-remove-buyer-company')){void removeSelectedBuyerCompany(button.dataset.removeBuyerCompany);return;}if(button?.hasAttribute('data-show-confirmed-buyers')){const row=button.closest('.selected-prospect-row'),cards=[...row.querySelectorAll('.buyer-potential-list > li > details')].filter(card=>card.querySelector('[data-prospect-enrich-email][aria-pressed="true"]'));for(const card of cards){card.open=true;const group=card.closest('.buyer-other-contacts');if(group)group.open=true;}cards[0]?.scrollIntoView?.({behavior:'smooth',block:'center'});cards[0]?.querySelector('[data-keep-buyer]')?.focus?.();return;}if(button?.dataset.researchExecutive){void findExecutiveBuyer(button.dataset.researchExecutive);return;}if(button?.dataset.researchBuyer){void findPublicProspectContacts(button.dataset.researchBuyer,{personIds:[button.dataset.personId]});return;}if(button?.dataset.researchRemaining){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.researchRemaining));if(candidate){const ranked=LeadIntelDiscovery.rankedBuyerShortlist(candidate.people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);void findPublicProspectContacts(candidate.domain,{personIds:candidate.people.filter(person=>!ranked.recommendedIds.includes(person.id)).map(person=>String(person.id))});}return;}if(button?.dataset.buyerNext){void addBuyerToFlow(button.dataset.buyerNext,Number(button.dataset.personIndex),{scope:button.dataset.buyerScope,button,personId:button.dataset.personId});return;}if(button?.dataset.recheckPublicEmail){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.recheckPublicEmail)),person=buyerActionPerson(candidate,Number(button.dataset.personIndex),button.dataset.personId);if(person){button.disabled=true;void confirmPublicBuyerSource(candidate,person,{retryRejected:true}).catch(error=>showToast(error.message)).finally(()=>renderAll());}return;}if(button?.dataset.recheckBuyer){void recheckBuyerContact(button.dataset.recheckBuyer,Number(button.dataset.personIndex),{personId:button.dataset.personId});return;}if(button?.dataset.reviewLinkedin){reviewBuyerLinkedIn(button.dataset.reviewLinkedin,Number(button.dataset.personIndex),{personId:button.dataset.personId});return;}if(button?.dataset.saveBuyerOnly){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.saveBuyerOnly));if(!buyerActionPerson(candidate,Number(button.dataset.personIndex),button.dataset.personId)?.kept)void keepBuyer(button.dataset.saveBuyerOnly,Number(button.dataset.personIndex),{personId:button.dataset.personId});return;}if(button?.dataset.useCompanyContact){void selectPublishedCompanyContact(button.dataset.useCompanyContact,button.dataset.contactId,{button});return;}if(button?.dataset.checkCompanyEmail){const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.checkCompanyEmail));if(candidate)void confirmPublishedCompanyContacts(candidate,{force:true,personId:button.dataset.contactId});return;}if(button?.dataset.keepBuyer){void saveBuyerAndProceed(button.dataset.keepBuyer,Number(button.dataset.personIndex),{button,personId:button.dataset.personId});return;}if(button?.dataset.saveBuyerResearch){void saveSelectedBuyerCompany(button.dataset.saveBuyerResearch);return;}if(button?.dataset.readOfficialContactSource){const input=button.closest('.company-contact-dossier')?.querySelector('[data-official-contact-url]');if(input?.value)void refreshOfficialCompanyContacts(button.dataset.readOfficialContactSource,{sourceUrl:input.value});else showToast('Enter an official contact or team page URL.');return;}if(button?.dataset.refreshCompanyContacts){void refreshOfficialCompanyContacts(button.dataset.refreshCompanyContacts);return;}if(button?.dataset.findPublicContacts){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.findPublicContacts));findPublicProspectContacts(button.dataset.findPublicContacts,{force:Boolean(candidate&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))});return;}if(button?.dataset.prospectEnrichEmail){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichEmail));void withBuyerControlFocus(button,()=>confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"email",dataLookup:true,personId:button.dataset.personId}));return;}if(button?.dataset.prospectEnrichPhone){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichPhone));void withBuyerControlFocus(button,()=>confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"phone",personId:button.dataset.personId}));return;}if(button?.dataset.prospectBatchEmail){enrichSelectedProspectBatch(button.dataset.prospectBatchEmail);return;}if(button?.dataset.prospectBatchPhone){enrichSelectedProspectBatch(button.dataset.prospectBatchPhone,true);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers,{refreshDossier:true});return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers,{refreshDossier:true});return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
   window.addEventListener("leadintel:open-discovery",event=>{targetListHandoff=event.detail?.source==='target-companies';if(!moduleReady()){showToast('Add your company website first');return;}showDiscoveryStep(event.detail?.focus||"companies");if(event.detail?.source==='target-discovery'){restoreDiscoveryTarget();renderDiscoveryEstimate();}if(event.detail?.startResearch&&(targetListHandoff||event.detail?.source==='target-discovery')&&discovery.status!=='running')void runCompanyDiscovery({targetOnly:targetListHandoff,savingMode:false,targetDomain:event.detail?.targetDomain||""});});window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;discoveryStageOpenRevision++;automaticPublicChecks.clear();syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();renderDiscoveryFocus(loadMeta().activeJourneyStage===5?"buyers":"companies");scheduleSavedBuyerPublicChecks();if(crmAuthenticated())refreshCrmState();});
   window.addEventListener("leadintel:website-activated",()=>{
@@ -3633,9 +3844,9 @@ function loadOutreachModules(){
     script.addEventListener('error',()=>{script.remove();reject(new Error('Content Creation could not load. Please retry.'));},{once:true});
     if(!script.isConnected)document.body.appendChild(script);
   });
-  outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}&core-renderer=20261011-v3&sharing-privacy=20261011-v1&shared-message-brief=20261022-v2&delivery-handoff=20261022-v2&buyer-draft-dedupe=20261022-v1&original-history-slim=20261022-v1&rich-text=20261025-v1&country-language=20261027-v1`)
+  outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}&core-renderer=20261011-v3&sharing-privacy=20261011-v1&shared-message-brief=20261022-v2&delivery-handoff=20261022-v2&buyer-draft-dedupe=20261022-v1&original-history-slim=20261022-v1&rich-text=20261025-v1&country-language=20261027-v1&buyers-audit=20261031-v1`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&step6-subject=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&subject-toolbar=20261011-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1&style-selection=20261010-v1&style-recovery=20261010-v1&core-renderer=20261011-v3&writing-assistant=20261012-v1&event-flow=20261012-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&audit-delivery=20261015-v1&assistant-contract=20261015-v2&test-email=20261015-v1&phone-sidebar=20261015-v1&inmail=20261015-v1&startup-order=20261016-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&message-speed=20261017-v1&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&quick-template=20261017-v1&writing-mentors=20261017-v1&messages-audit=20261021-v1&message-draft-recovery=20261022-v1&all-style-facts=20261022-v1&shared-message-brief=20261022-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&single-writing-assistant=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2&message-usability=20261024-v2&manual-edit=20261024-v1&rich-text=20261025-v1&meeting-options=20261025-v1&message-saving=20261025-v1&reviewed-delivery=20261025-v1&simple-writing=20261025-v1&shell-two-columns=20261026-v1&edit-formatting=20261025-v1&kazakhstan-support=20261024-v1&storyselling=20261026-v1&story-layout=20261026-v1&story-style=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&country-language=20261027-v1&sidebar-width=20261027-v2&message-text-space=20261027-v1&language-panel=20261027-v3`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&adjust-panel=20261011-v1&adjust-actions=20261012-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&style-retry=20261012-v1&remove-reset=20261012-v1&step6-subject=20261011-v1&message-header=20261011-v2&explicit-message=20261011-v1&subject-toolbar=20261011-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&language-controls=20261011-v1&default-language-shortcut=20261012-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1&style-selection=20261010-v1&style-recovery=20261010-v1&core-renderer=20261011-v3&writing-assistant=20261012-v1&event-flow=20261012-v1&rescue=20261013-v1&step6-rescue=20261013-v11&assistant-window=20261015-v3&audit-delivery=20261015-v1&assistant-contract=20261015-v2&test-email=20261015-v1&phone-sidebar=20261015-v1&inmail=20261015-v1&startup-order=20261016-v2&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&message-speed=20261017-v1&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&quick-template=20261017-v1&writing-mentors=20261017-v1&messages-audit=20261021-v1&message-draft-recovery=20261022-v1&all-style-facts=20261022-v1&shared-message-brief=20261022-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&single-writing-assistant=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2&message-usability=20261024-v2&manual-edit=20261024-v1&rich-text=20261025-v1&meeting-options=20261025-v1&message-saving=20261025-v1&reviewed-delivery=20261025-v1&simple-writing=20261025-v1&shell-two-columns=20261026-v1&edit-formatting=20261025-v1&kazakhstan-support=20261024-v1&storyselling=20261026-v1&story-layout=20261026-v1&story-style=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&country-language=20261027-v1&sidebar-width=20261027-v2&message-text-space=20261027-v1&language-panel=20261027-v3&buyers-audit=20261031-v1`,true))
     .then(()=>{if(!window.LeadIntelOutreachUI?.openBuyerScripts)throw new Error('Messages could not initialize. Your recipient is saved; refresh and retry.');})
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;
@@ -3716,39 +3927,56 @@ function initDiscoveryWhenReady(attempt=0){if(window.LeadIntelAccountCache&&(win
 // Campaigns reuse the existing lazy workspace without selecting or replacing a buyer draft.
 window.LeadIntelCampaignModuleLoader=async step=>{await loadOutreachModules();if(Number(step)===7&&!document.getElementById('step-7'))await new Promise((resolve,reject)=>{const observer=new MutationObserver(()=>{if(document.getElementById('step-7')){clearTimeout(timer);observer.disconnect();resolve();}});const timer=setTimeout(()=>{observer.disconnect();reject(Error('Delivery could not load. Your campaign is saved; retry.'));},15000);observer.observe(document.body,{childList:true,subtree:true});if(document.getElementById('step-7')){clearTimeout(timer);observer.disconnect();resolve();}});};
 window.LeadIntelAdditionalContacts?.register({
+  context:()=>discoveryOperationContext(),
   rows:()=>[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])],
   assessment:c=>qualificationAssessment(c),
   saveOutcome:()=>saveDiscovery(),
   email:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{}),
   publicSource:(c,p)=>publicBuyerSource(c,p),
   baseEmail:(c,p)=>verifiedBuyerEmail(c,p,enrichmentResults.get(personKey(c,p))?.contact||{},{skipAdditional:true}),
-  phone:(c,p)=>{const contact=enrichmentResults.get(personKey(c,p))?.contact;return Boolean(contact?.phone_number&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase())||p.contactData?.phone?.status==='provider_listed'&&p.contactData.phone.number);},
+  phone:(c,p)=>{const saved=enrichmentResults.get(personKey(c,p))?.contact,contact=LeadIntelDiscovery.buyerPhoneContact({contacts:saved?[saved]:[]},p),data=LeadIntelDiscovery.safeContactData(p.contactData,p,canonicalDomain(c.domain));return Boolean(contact?.phone_number&&(!c.crmId||String(contact.company_id)===String(c.crmId))&&(!contact.workspace_id||String(contact.workspace_id)===String(bridge()?.workspace?.id))&&(!contact.title||String(contact.title).trim().toLowerCase()===String(p.title).trim().toLowerCase())&&['verified','provider_listed'].includes(String(contact.phone_status).toLowerCase())||data?.phone?.status==='provider_listed'&&data.phone.number);},
   saveHunter:async(c,p,email,check)=>{
-    const workspaceId=bridge()?.workspace?.id,personId=p.id;
-    const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c)&&c.people?.some(row=>String(row.id)===String(personId));
-    if(!same())throw Error('Workspace or buyer context changed.');
-    // Paid evidence must survive transient synchronization errors; never buy it twice.
-    p.hunterChecks={...(p.hunterChecks||{}),[email]:check};saveDiscovery();
-    const saved=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});
-    if(!same())throw Error('Workspace or buyer context changed.');
-    if(!saved?.ok)throw Error(saved?.error||'Hunter verification is retained locally; CRM synchronization needs retry.');
-    const synced=await bridge().saveNow({saveIntent:true,explicitSave:true});
-    if(!same())throw Error('Workspace or buyer context changed.');
+    const owner=captureBuyerAction(c,p,{contact:true}),b=owner.bridge;requireBuyerAction(owner);
+    const address=String(email||'').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)||check?.status!=='valid'||check?.deliverability!=='deliverable')throw Error('Hunter did not verify this buyer contact.');
+    // Retain paid evidence before synchronization so a transient failure cannot require repurchase.
+    p.hunterChecks={...(p.hunterChecks||{}),[address]:{...check}};saveDiscovery();requireBuyerAction(owner);
+    const saved=await b.saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});requireBuyerAction(owner);
+    const company=validateCompanySave(c,saved);if(c.crmId&&String(company.id)!==String(c.crmId))throw Error('Saved company identity changed. Review this exact buyer.');
+    const synced=await b.saveNow({saveIntent:true,explicitSave:true});requireBuyerAction(owner);
     if(!synced?.saved)showToast('Hunter verification saved. Workspace synchronization needs retry.');
   },
-  pending:function pending(c,p,value,token){const owners=pending.owners||(pending.owners=new Map()),key=personKey(c,p);if(value)owners.set(key,token);else if(token&&owners.get(key)!==token)return;else owners.delete(key);if(value)enrichmentPending.add(key);else enrichmentPending.delete(key);},
-  render:()=>{if(discoveryMounted)renderAll();},toast:showToast,
-  prepare:async c=>{
-    const workspaceId=bridge()?.workspace?.id;
-    const same=()=>bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&[...(discovery?.selectedProspects||[]),...(discovery?.candidates||[]),...(discovery?.pipeline||[])].includes(c);
-    if(!same())throw Error('Workspace or company context changed.');
-    c.qualification=qualificationAssessment(c);if(!c.qualification.eligible)throw Error('Company qualification needs review.');
-    const company=await ensureCrmCompany(c);
-    if(!same())throw Error('Workspace or company context changed.');
-    const saved=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});
-    if(!same())throw Error('Workspace or company context changed.');
-    if(!saved?.ok)throw Error(saved?.error||'Qualified buyer research could not be saved.');return company;
+  pending:function pending(c,p,value,token){
+    const owners=pending.owners||(pending.owners=new Map()),key=personKey(c,p),prior=owners.get(key);
+    if(!value){if(!prior||prior.external!==token)return;endBuyerPending(key,prior.pending);owners.delete(key);return;}
+    const owner=captureBuyerAction(c,p);requireBuyerAction(owner);
+    if(prior?.external===token&&buyerActionCurrent(prior.owner))return;
+    if(prior)endBuyerPending(key,prior.pending);
+    const active=beginBuyerPending(owner);if(!active)throw Error('A contact check is already active for this buyer.');
+    owners.set(key,{external:token,pending:active,owner});
   },
-  accept:async(c,p,result)=>{enrichmentResults.set(personKey(c,p),result);if(result.contactData)p.contactData=result.contactData;p.contactVerification={status:verifiedBuyerEmail(c,p,result.contact)?result.contact.email_status==='public_confirmed'?'public_confirmed':'verified':'not_verified',checkedAt:new Date().toISOString(),issues:[]};saveDiscovery();await refreshCrmState({render:false});window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:result.contact.company_id,contact_id:result.contact.id}}));}
+  render:()=>{if(discoveryMounted)renderAll();},toast:showToast,
+  prepare:async(c,p)=>{
+    const owner=p?captureBuyerAction(c,p,{contact:true}):captureCompanyAction(),b=owner.bridge;
+    const companyIdentity=JSON.stringify([c.domain,c.company,c.crmId||'',(c.people||[]).map(person=>buyerActionIdentity(c,person,true)).sort()]);
+    const check=()=>{if(p){requireBuyerAction(owner);return;}if(!companyActionCurrent(owner)||!crmAuthenticated()||b.conflict||![...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.pipeline||[])].includes(c)||companyIdentity!==JSON.stringify([c.domain,c.company,c.crmId||'',(c.people||[]).map(person=>buyerActionIdentity(c,person,true)).sort()]))throw Error('Workspace or company context changed.');};
+    check();c.qualification=qualificationAssessment(c);if(!c.qualification.eligible)throw Error('Company qualification needs review.');
+    const company=await ensureCrmCompany(c);check();
+    validateCompanySave(c,{ok:true,company});if(c.crmId&&String(company.id)!==String(c.crmId))throw Error('Saved company identity changed. Review this exact buyer.');
+    const saved=await b.saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});check();
+    const retained=validateCompanySave(c,saved);if(String(retained.id)!==String(company.id))throw Error('Saved company identity changed. Review this exact buyer.');return company;
+  },
+  accept:async(c,p,result)=>{
+    const owner=captureBuyerAction(c,p,{contact:true});requireBuyerAction(owner);
+    const contact=result?.contact,name=value=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase(),expectedProfile=LeadIntelDiscovery.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url),profiles=[contact?.public_linkedin_url,contact?.linkedin_url].filter(Boolean),companyId=c.crmId||crmCompanyByDomain(c.domain)?.id;
+    if(!contact||Array.isArray(contact)||String(contact.external_person_id||'')!==String(p.id)||name(contact.name)!==name(p.publicName||p.name)||!name(contact.name)||contact.archived_at||['suppressed','archived'].includes(c.lifecycle_status)||(!companyId||String(contact.company_id)!==String(companyId))||contact.workspace_id&&String(contact.workspace_id)!==String(owner.bridge.workspace.id)||contact.title&&name(contact.title)!==name(p.title)||contact.organization&&name(contact.organization)!==name(p.organization)||profiles.some(profile=>!LeadIntelDiscovery.normalizeLinkedInUrl(profile)||expectedProfile&&LeadIntelDiscovery.normalizeLinkedInUrl(profile)!==expectedProfile)||new Set(profiles.map(LeadIntelDiscovery.normalizeLinkedInUrl)).size>1)throw Error('Contact result identity does not match this exact buyer.');
+    const data=result.contactData?LeadIntelDiscovery.safeContactData(result.contactData,p,canonicalDomain(c.domain)):null;
+    if(result.contactData&&!data)throw Error('Contact data identity does not match this exact buyer.');
+    const retained=JSON.parse(JSON.stringify({...result,...(data?{contactData:data}:{})}));requireBuyerAction(owner);
+    enrichmentResults.set(personKey(c,p),retained);if(data)p.contactData=data;
+    p.contactVerification={status:verifiedBuyerEmail(c,p,retained.contact)?retained.contact.email_status==='public_confirmed'?'public_confirmed':'verified':'not_verified',checkedAt:new Date().toISOString(),issues:[]};saveDiscovery();requireBuyerAction(owner);
+    await refreshCrmState({render:false});requireBuyerAction(owner);
+    window.dispatchEvent(new CustomEvent('leadintel:crm-changed',{detail:{company_id:retained.contact.company_id,contact_id:retained.contact.id}}));
+  }
 });
 initDiscoveryWhenReady();

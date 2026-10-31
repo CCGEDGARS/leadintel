@@ -5,7 +5,9 @@
     try{const source=new URL(url);return source.protocol==='https:'&&!source.username&&!source.password&&domain(source.href)===domain(companyDomain)&&String(name||'').trim().split(/\s+/).length>=2&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&String(email).toLowerCase().endsWith('@'+domain(companyDomain))&&!/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email);}catch{return false;}
   }
   function accepted(contact={},companyDomain='',confirmationLevel='public_confirmed',now=Date.now()){
-    const email=String(contact.normalized_email||contact.work_email||contact.email||'').toLowerCase();
+    const addresses=[contact.normalized_email,contact.work_email,contact.email].filter(value=>value!==undefined&&value!==null&&String(value).trim()!=='').map(value=>String(value).trim().toLowerCase());
+    if(new Set(addresses).size!==1)return false;
+    const email=addresses[0]||'';
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||String(contact.name||'').trim().split(/\s+/).length<2||/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email)||contact.archived_at)return false;
     const personal=contact.email_type==='personal'&&Boolean(contact.external_person_id);
     if(!email.endsWith('@'+domain(companyDomain))&&!personal)return false;

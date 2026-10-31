@@ -1,0 +1,2 @@
+const vm=require('node:vm'),fs=require('node:fs');
+module.exports=ctx=>{const source=fs.readFileSync(require.resolve('../../outreach-ui.js'),'utf8');vm.runInContext(source.slice(source.indexOf('function captureCrmAuthority('),source.indexOf('async function durableCompany(')),ctx);};

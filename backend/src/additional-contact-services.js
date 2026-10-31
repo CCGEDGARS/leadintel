@@ -10,6 +10,7 @@ import {withWorkspaceServiceCredentials,resolveWorkspaceServiceCredential} from 
 import {sha256,cookieValue} from './security.js';
 import {APOLLO_PEOPLE_SEARCH_URL} from './enrichment.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
+import {contactRequestGuard} from './contact-operation-authority.js';
 const D=globalThis.LeadIntelDiscovery,P=globalThis.LeadIntelAdditionalContactPolicy,C=globalThis.LeadIntelContactPolicy;
 const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=409,code='ADDITIONAL_CONTACT_HOLD')=>Object.assign(new Error(message),{status,code});
@@ -74,6 +75,8 @@ function requireAutomaticReview(candidate,person){
 export async function lookupAdditionalEmail(env,context,companyId,input={},deps={}){
   const checkCancelled=()=>{if(deps.signal?.aborted)throw fail('Contact research was cancelled. No further provider lookup was started.',499,'ADDITIONAL_CONTACT_CANCELLED');};
   const parentGuard=async()=>{checkCancelled();await deps.guard?.();checkCancelled();};
+  parentGuard.writeAuthority=context.writeAuthority||deps.guard?.writeAuthority;
+  context={...context,guard:parentGuard,writeAuthority:parentGuard.writeAuthority};
   checkCancelled();
   if(!['owner','researcher','sales'].includes(context.role))throw fail('Workspace role is not permitted',403);
   const providerName=input.provider||'apollo';
@@ -85,9 +88,10 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   if(providerName==='treg'&&(policy.provider!=='treg'||includeEmail&&!policy.enabled||includePhone&&!policy.phoneEnabled||!includeEmail&&!includePhone))throw fail('The requested paid email or phone search is off. Activate it in Setup.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   if(input.automatic===true?(providerName!=='treg'&&(!policy.enabled||policy.provider!==providerName)):input.approved!==true)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=fromSnapshot(detail);
-  const person=candidate.people.find(p=>String(p.id)===String(input.person_id));
-  if(!person)throw fail('Qualified buyer is missing from the saved company research');
-  const readiness=P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName});if(!readiness.eligible)throw fail(readiness.reason);
+  const selectedId=String(input.person_id??'').trim(),identities=selectedId?candidate.people.filter(p=>String(p.id)===selectedId):[];
+  if(identities.length!==1)throw fail('The saved buyer needs one unique nonempty identity. Refresh the company research before contact lookup.',409,'ADDITIONAL_CONTACT_IDENTITY_REQUIRED');
+  const person=identities[0];
+  const readiness=P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
   const confirmationLevel=await loadConfirmationLevel(env,context.workspaceId);
   let existing=detail.contacts?.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()).find(c=>C.accepted(c,candidate.domain,confirmationLevel));
   const canonicalTitle=value=>{const title=String(value||'').trim().toLowerCase(),name=String(person.publicName||person.name).trim().toLowerCase();return title.startsWith(name)?title.slice(name.length).replace(/^[\s—–:|-]+/,'').trim():title;};
@@ -118,8 +122,13 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   let capabilities={};try{capabilities=JSON.parse(provider?.metadata_json||'{}');}catch{}
   if(providerName==='treg'?!(await (deps.credential||resolveWorkspaceServiceCredential)(env,context.workspaceId,'treg')).configured:providerName==='apollo'?(!env.APOLLO_API_KEY||capabilities.email_enrichment_enabled!==true):capabilities.additional_verification_enabled!==true)throw fail('Connect and enable the selected email provider in Settings',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
   const month=new Date().toISOString().slice(0,7),args=[context.workspaceId,companyId,String(person.id),month,providerName];
+  const identityInput=(company,buyer)=>JSON.stringify([company.company,company.domain,String(buyer.id),buyer.publicName||buyer.name,buyer.title,buyer.organization,D.normalizeLinkedInUrl(buyer.publicLinkedinUrl||buyer.linkedin_url)]);
+  const originalIdentity=identityInput(candidate,person),lookupIdentity=await sha256(originalIdentity);
   let cached=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(...args).first();
   if(cached){
+    const retained=JSON.parse(cached.result_json||'{}');
+    const unspent=cached.status==='retryable'&&retained.provider_started===false;
+    if(!unspent&&retained.lookup_identity!==lookupIdentity)throw fail('The saved lookup belongs to an earlier or unbound buyer identity. Review its retained receipt before further paid research.',409,'ADDITIONAL_CONTACT_IDENTITY_CHANGED');
     if(cached.status==='retryable'&&(providerName==='treg'?JSON.parse(cached.result_json||'{}').provider_started===false:input.automatic!==true&&input.approved===true)){
       await env.DB.prepare("DELETE FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=? AND status='retryable' AND (?!='treg' OR json_extract(result_json,'$.provider_started')=0)").bind(...args,providerName).run();
       cached=null;
@@ -130,19 +139,23 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   // A single SQLite statement reserves all three limits and the identity key atomically.
   const resuming=providerName==='treg'&&cached&&(['processing','retryable'].includes(cached.status)||dataLookup);
   await parentGuard();
-  const reserved=resuming?{meta:{changes:1}}:await env.DB.prepare(`INSERT OR IGNORE INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND created_at>=date('now'))<COALESCE((SELECT daily_limit FROM additional_contact_policies WHERE workspace_id=?),3) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND month=?)<COALESCE((SELECT monthly_limit FROM additional_contact_policies WHERE workspace_id=?),30) AND (?=0 OR (SELECT COUNT(DISTINCT person_id) FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND ${budgetAttempt} AND month=? AND person_id!=?)<COALESCE((SELECT max_per_company FROM additional_contact_policies WHERE workspace_id=?),2)) AND (?=0 OR EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND ((?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))))`).bind(...args,context.workspaceId,context.workspaceId,context.workspaceId,month,context.workspaceId,Number(enforceCompany),context.workspaceId,companyId,month,String(person.id),context.workspaceId,Number(input.automatic===true),context.workspaceId,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone)).run();
+  const reserved=resuming?{meta:{changes:1}}:await env.DB.prepare(`INSERT OR IGNORE INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider,result_json) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND created_at>=date('now'))<COALESCE((SELECT daily_limit FROM additional_contact_policies WHERE workspace_id=?),3) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND month=?)<COALESCE((SELECT monthly_limit FROM additional_contact_policies WHERE workspace_id=?),30) AND (?=0 OR (SELECT COUNT(DISTINCT person_id) FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND ${budgetAttempt} AND month=? AND person_id!=?)<COALESCE((SELECT max_per_company FROM additional_contact_policies WHERE workspace_id=?),2)) AND (?=0 OR EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND ((?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))))`).bind(...args,JSON.stringify({lookup_identity:lookupIdentity,provider_started:false}),context.workspaceId,context.workspaceId,context.workspaceId,month,context.workspaceId,Number(enforceCompany),context.workspaceId,companyId,month,String(person.id),context.workspaceId,Number(input.automatic===true),context.workspaceId,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone)).run();
   if(!reserved?.meta?.changes){const duplicate=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(...args).first();if(duplicate)return reuseAttempt(duplicate,detail,person,confirmationLevel);throw await reservationHold(env,context,companyId,person.id,month,enforceCompany);}
   let providerStarted=false;
   const guard=async({phase}={})=>{
     await parentGuard();
     const fresh=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),active=fromSnapshot(fresh);
-    const selected=active.people.find(p=>String(p.id)===String(person.id)&&String(p.publicName||p.name)===String(person.publicName||person.name)&&p.title===person.title&&D.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url)===D.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url));
-    if(['suppressed','archived'].includes(fresh.company.lifecycle_status)||active.domain!==candidate.domain||!selected)throw fail('Workspace company or buyer changed; reload the saved research.');
-    const currentReadiness=P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName});if(!currentReadiness.eligible)throw fail(currentReadiness.reason);
+    const matching=active.people.filter(p=>String(p.id)===String(person.id)),selected=matching.length===1&&identityInput(active,matching[0])===originalIdentity?matching[0]:null;
+    if(['suppressed','archived'].includes(fresh.company.lifecycle_status)||active.domain!==candidate.domain||active.company!==candidate.company||!selected)throw fail('Workspace company or buyer changed; reload the saved research.');
+    const currentReadiness=P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName});if(!currentReadiness.eligible)throw fail(currentReadiness.reason,409,currentReadiness.code);
     if(input.contact_id&&!fresh.contacts?.some(canonicalMatch))throw fail('The saved contact changed; reload before phone research.');
     if(providerName!=='treg'&&input.automatic===true){
       const current=await readAdditionalContactPolicy(env,context.workspaceId);
       if(!current.enabled||current.provider!==providerName)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
+    }
+    if(providerName==='hunter'){
+      const row=await env.DB.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider='hunter'").bind(context.workspaceId).first();let metadata={};try{metadata=JSON.parse(row?.metadata_json||'{}');}catch{}
+      if(metadata.additional_verification_enabled!==true)throw fail('Hunter verification permission changed. Review the saved attempt before retrying.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
     }
     if(providerName==='treg'){
       if(input.automatic===true)requireAutomaticReview(active,selected);
@@ -151,16 +164,30 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     }
     await parentGuard();
   };
+  guard.writeAuthority=parentGuard.writeAuthority?()=>{
+    const prior=parentGuard.writeAuthority(),predicates=[prior.sql],values=[...prior.args];
+    predicates.push("EXISTS(SELECT 1 FROM crm_companies WHERE id=? AND workspace_id=? AND normalized_domain=? AND company_name=? AND lifecycle_status NOT IN ('suppressed','archived'))");values.push(companyId,context.workspaceId,candidate.domain,candidate.company);
+    predicates.push("EXISTS(SELECT 1 FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p WHERE i.company_id=? AND i.workspace_id=? AND (SELECT COUNT(*) FROM json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p2 WHERE CAST(json_extract(p2.value,'$.id') AS TEXT)=?)=1 AND CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=?)");values.push(companyId,context.workspaceId,String(person.id),String(person.id),person.publicName||person.name||'',person.title||'',typeof person.organization==='object'?JSON.stringify(person.organization):person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'');
+    if(providerName==='treg'||input.automatic===true){predicates.push('EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND provider=? AND (?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))');values.push(context.workspaceId,providerName,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone));}
+    if(providerName==='hunter'){predicates.push("EXISTS(SELECT 1 FROM workspace_service_integrations WHERE workspace_id=? AND provider='hunter' AND json_extract(metadata_json,'$.additional_verification_enabled')=1)");values.push(context.workspaceId);}
+    return {sql:predicates.map(s=>'('+s+')').join(' AND '),args:values};
+  }:undefined;
+  context={...context,guard,writeAuthority:guard.writeAuthority};
+  const onDispatch=async()=>{
+    const marked=await env.DB.prepare("UPDATE additional_contact_attempts SET result_json=json_set(result_json,'$.provider_started',json('true')),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=? AND json_extract(result_json,'$.lookup_identity')=?").bind(...args,lookupIdentity).run();
+    if(!marked?.meta?.changes)throw fail('The saved lookup reservation changed before dispatch.',409,'ADDITIONAL_CONTACT_RESERVATION_HOLD');
+    providerStarted=true;
+  };
   try{
     if(providerName==='treg'){
-      await guard();providerStarted=true;
-      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,dataLookup,includePhone,includeEmail,existingContact:existing||null});
-      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found',JSON.stringify(result),...args).run();return result;
+      await guard();
+      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,dataLookup,includePhone,includeEmail,existingContact:existing||null});
+      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
     }
     if(providerName==='hunter'){
-      await guard();providerStarted=true;
-      const result=await (deps.findHunter||findHunterWorkEmail)(env,context,candidate,person,companyId,{guard});
-      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact?'verified':'not_found',JSON.stringify(result),...args).run();return result;
+      await guard();
+      const result=await (deps.findHunter||findHunterWorkEmail)(env,context,candidate,person,companyId,{guard,onDispatch});
+      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact?'verified':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
     }
     const resolved=await (deps.resolvePerson||((p)=>resolvePerson(env,candidate,p)))(person);
     const request=new Request('https://leadintel.internal/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,allow_personal_email:false,phone_lookup:false}),...(deps.signal?{signal:deps.signal}:{})});
@@ -174,10 +201,10 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     }
     const status=result.contact?'verified':'not_found';
     result.research={provider:'apollo',status,checkedAt:new Date().toISOString()};
-    await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify(result),...args).run();return result;
+    await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
   }catch(error){
     const retryable=error.code==='TREG_RETRY_SAME_LOOKUP'||!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
-    await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,provider_started:providerStarted||Boolean(resuming)}),...args).run();throw error;
+    await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=json_set(?,'$.provider_started',json(CASE WHEN COALESCE(json_extract(result_json,'$.provider_started'),1)=1 OR ?=1 THEN 'true' ELSE 'false' END)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,lookup_identity:lookupIdentity}),Number(providerStarted||Boolean(resuming)),...args).run();throw error;
   }
 }
 export async function handleAdditionalContactRoute(request,env,cors={}){
@@ -194,8 +221,9 @@ export async function handleAdditionalContactRoute(request,env,cors={}){
       if(request.method==='PUT')return json({policy:await saveAdditionalContactPolicy(env,context,await request.json())},200,cors);
     }
     if(url.pathname.endsWith('/email')&&request.method==='POST'){
-      const input=await request.json(),runtime=await withWorkspaceServiceCredentials(request,env);
-      return json(await lookupAdditionalEmail(runtime,context,String(input.company_id||''),input,{signal:request.signal}),200,cors);
+      const guard=await contactRequestGuard(request,env,context);
+      const input=await request.json(),runtime=await withWorkspaceServiceCredentials(request,env);await guard();
+      return json(await lookupAdditionalEmail(runtime,{...context,writeAuthority:guard.writeAuthority},String(input.company_id||''),input,{signal:request.signal,guard}),200,cors);
     }
     throw fail('Method not allowed',405);
   }catch(error){return json({error:error.message,code:error.code||'ADDITIONAL_CONTACT_HOLD'},error.status||500,cors);}

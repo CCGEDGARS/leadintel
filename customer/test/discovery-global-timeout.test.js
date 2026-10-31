@@ -539,8 +539,8 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.lv',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'apollo-12345',name:'Marta Berzina'}]}]});
   context.__setCrmCompanies([{id:'c1',normalized_domain:'example.lv'}]);
   const candidate=context.__discoveryState().selectedProspects[0];
-  const emailBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'email',personIndex:'0'},checked:true};
-  const phoneBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'phone',personIndex:'0'},checked:true};
+  const emailBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'email',personIndex:'0',personId:'apollo-12345'},checked:true};
+  const phoneBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'phone',personIndex:'0',personId:'apollo-12345'},checked:true};
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
@@ -611,13 +611,13 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
     if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{}})};
     assert.match(String(url),/firecrawl(?:-search|\/search)/);
     requests++;
-    if(requests<=2)return {ok:true,json:async()=>({data:[]})};
-    if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
-    assert.match(JSON.parse(options.body).query,/"Jacob".*"Södra"/);
+    const query=JSON.parse(options.body).query;
+    if(!query.includes('site:linkedin.com/in/')||!query.includes('"Jacob"'))return {ok:true,json:async()=>({data:[]})};
+    assert.match(query,/"Jacob".*"Södra"/);
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}]})};
   }});
   context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
@@ -637,37 +637,36 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
 });
 
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
-  let requests=0;
+  let requests=0;const queries=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
     if(String(url).includes('/ai/'))return {ok:false,json:async()=>({})};
     if(/firecrawl(?:-scrape|\/scrape)/.test(String(url)))return {ok:true,json:async()=>({data:{}})};
     if(isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};
     requests++;
-    if(requests<4)return {ok:true,json:async()=>({data:[]})};
-    if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
-    assert.match(JSON.parse(options.body).query,/"Jacob" "Södra" "Team Leader"/);
+    const query=JSON.parse(options.body).query;queries.push(query);
+    if(!query.includes('site:linkedin.com/in/')||!query.includes('"Jacob" "Södra" "Team Leader"'))return {ok:true,json:async()=>({data:[]})};
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader | LinkedIn',description:'Team Leader at Södra'}]})};
   }});
   context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,0,'opening saved Buyers must not start provider work');
   await context.__findPublicProspectContacts(context.__discoveryState().selectedProspects[0].domain);
-  assert.ok(requests>0);
+  assert.ok(requests>0);assert.ok(queries.some(query=>query.includes('site:linkedin.com/in/')&&query.includes('("Jacob Jonstoij")')), 'the combined query must actually miss before focused recovery');assert.ok(queries.some(query=>query.includes('"Jacob" "Södra" "Team Leader"')));
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
 });
 
 test('grounded follow-up extracts an official person email and keeps company phone separate',async()=>{
-  let apolloCalls=0,openAiCalls=0,scrapes=0,geminiCalls=0;
+  let apolloCalls=0,openAiCalls=0,scrapes=0,geminiCalls=0;const readSources=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async(url,options)=>{
       const target=String(url);
       if(target.includes('/api/ai/web-search')){openAiCalls++;return {ok:true,json:async()=>({results:[{url:'https://sodra.com/team',title:'Södra team',description:'Jacob Jonstoij — Team Leader'}]})};}
-      if((/\/firecrawl(?:-scrape|\/scrape)/.test(target))){scrapes++;const targetUrl=JSON.parse(options.body).url;return {ok:true,json:async()=>({data:targetUrl.endsWith('/team')?{metadata:{sourceURL:targetUrl},title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}:{metadata:{sourceURL:targetUrl},markdown:'Contact Södra: info@sodra.com · +46 470 890 00'}})};}
+      if((/\/firecrawl(?:-scrape|\/scrape)/.test(target))){scrapes++;const targetUrl=JSON.parse(options.body).url;readSources.push(targetUrl);return {ok:true,json:async()=>({data:targetUrl.endsWith('/team')?{metadata:{sourceURL:targetUrl},title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}:{metadata:{sourceURL:targetUrl},markdown:'Contact Södra: info@sodra.com · +46 470 890 00'}})};}
       if(target.includes('/api/ai/contact-evidence-review')){geminiCalls++;return {ok:true,json:async()=>({status:'complete',provider:'gemini',web_search:false,conflicts:[]})};}
       if((/\/firecrawl(?:-search|\/search)/.test(target))){
         const query=JSON.parse(options.body).query;
@@ -677,16 +676,16 @@ test('grounded follow-up extracts an official person email and keeps company pho
       throw new Error(`Unexpected request ${target}`);
     }
   });
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   assert.equal(await context.__findPublicProspectContacts('sodra.com'),true);
   const candidate=context.__discoveryState().selectedProspects[0],person=candidate.people[0];
   assert.equal(person.publicEmail,'jacob.jonstoij@sodra.com');
   assert.equal(person.publicEmailUrl,'https://sodra.com/team');
   assert.equal(person.phone_number,undefined);
   assert.ok(candidate.publicContacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
-  assert.equal(candidate.publicResearch.openai,'complete');
+  assert.ok(candidate.publicResearch.accountability.tools.find(row=>row.provider==='grounded').succeeded>0);assert.ok(person.contactResearch.checks.direct_email.queryLog.some(row=>row.status==='complete'&&row.providers?.includes('grounded')));
   assert.equal(candidate.publicResearch.gemini,'complete');
-  assert.ok(openAiCalls>=1);assert.equal(scrapes,4);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
+  assert.ok(openAiCalls>=1);assert.equal(scrapes,3);assert.equal(new Set(readSources).size,3);assert.ok(readSources.includes('https://sodra.com/team'));assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
 });
 
 test('refresh repairs a truncated name, matches LinkedIn, and shows official company contacts separately',async()=>{
@@ -737,11 +736,11 @@ test('independent grounded Gemini source resolves a profile missed by Firecrawl 
 test('email button stops at a sourced public work email without calling Apollo',async()=>{
   let searches=0,apolloCalls=0,savedContacts=0,confirmations=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
-    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async(_company,contacts)=>{savedContacts++;return {ok:true,contacts:contacts.map((contact,index)=>({...contact,id:'public-contact-'+index}))};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async(url,options)=>{if(/firecrawl(?:-scrape|\/scrape)/.test(String(url))||isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};searches++;return {ok:true,json:async()=>({data:searches===1?[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]:[]})};}
   });
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
   assert.equal(apolloCalls,0);
   assert.equal(confirmations,0);
@@ -750,15 +749,15 @@ test('email button stops at a sourced public work email without calling Apollo',
 });
 
 test('email button offers Apollo only after a completed public search has no person match',async()=>{
-  let searches=0,apolloCalls=0,confirmations=0;
+  let searches=0,apolloCalls=0,confirmations=0;const queries=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
-    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),enrichCrmContact:async()=>{apolloCalls++;return {ok:true,contact:{work_email:'jacob@sodra.com'}};}},
-    fetchImpl:async(url,options)=>{if(/firecrawl(?:-scrape|\/scrape)/.test(String(url))||isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};searches++;return {ok:true,json:async()=>({data:[]})};}
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),enrichCrmContact:async()=>{apolloCalls++;return {ok:true,contact:{id:'crm-jacob',external_person_id:'p-jacob',name:'Jacob Jonstoij',company_id:'crm-sodra',workspace_id:'workspace-1',work_email:'jacob@sodra.com'}};}},
+    fetchImpl:async(url,options)=>{if(/firecrawl(?:-scrape|\/scrape)/.test(String(url))||isOfficialInventoryQuery(JSON.parse(options.body).query))return {ok:true,json:async()=>({data:[]})};searches++;queries.push(JSON.parse(options.body).query||'');return {ok:true,json:async()=>({data:[]})};}
   });
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,11); // Includes four grounded retries after empty public results; counts person search requests; page reads and the three official scans are handled separately.
+  assert.equal(searches,queries.length);const researched=context.__discoveryState().selectedProspects[0],plan=Discovery.buyerResearchQueryPlan(researched,researched.people[0]);for(const key of Discovery.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks)for(const query of plan[key])assert.ok(queries.includes(query),key+' mandatory query executed before Apollo');
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });
@@ -769,7 +768,7 @@ test('public search failure does not silently activate Apollo',async()=>{
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async()=>({ok:false,status:503,json:async()=>({})})
   });
-  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0,{confirmed:true}),false);
   assert.equal(apolloCalls,0);
 });
@@ -777,11 +776,11 @@ test('public search failure does not silently activate Apollo',async()=>{
 test('qualified company email action uses public evidence before Apollo',async()=>{
   let apolloCalls=0,savedContacts=0,confirmations=0;
   const context=loadDiscoveryRunner({renderNodes:false,requestTimeout:1000,
-    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async(_company,contacts)=>{savedContacts++;return {ok:true,contacts:contacts.map((contact,index)=>({...contact,id:'public-contact-'+index}))};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
     fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]})})
   });
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.LeadIntelDialogs={confirm:async ()=>{confirmations++;return true;}};
-  context.__setDiscovery({candidates:[{company:'Södra',domain:'sodra.com',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'s1'}],evidence:[{url:'https://sodra.com/news',title:'Södra news'}],people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.__setDiscovery({candidates:[{company:'Södra',domain:'sodra.com',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'s1'}],evidence:[{url:'https://sodra.com/news',title:'Södra news'}],people:[{id:'p-jacob',name:'Jacob Jonstoij',title:'Team Leader',organization:'Södra',publicNameUrl:'https://sodra.com/team'}]}]});
   assert.equal(await context.__enrichContact(0,0),true);
   assert.equal(apolloCalls,0);
   assert.equal(confirmations,0);
@@ -1308,7 +1307,7 @@ test('a failed personal phone query keeps the overall contact pass incomplete de
 
 test('completed public evidence is synced to CRM when an optional grounded follow-up times out',async()=>{
   let snapshots=0,savedContacts=0;
-  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveCrmContacts:async()=>{savedContacts++;return {ok:true};},saveCrmCompany:async()=>{snapshots++;return {ok:true};}},fetchImpl:async(url)=>{
+  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveCrmContacts:async()=>{savedContacts++;return {ok:true};},saveCrmCompany:async()=>{snapshots++;return {ok:true,company:{id:'c1',normalized_domain:'example.com',workspace_id:'w1'}};}},fetchImpl:async(url)=>{
     if(String(url).includes('/ai/web-search'))throw Object.assign(new Error('Request timed out'),{name:'AbortError'});
     return {ok:true,json:async()=>({data:[{url:'https://example.com/team',title:'Leadership',markdown:'Jane Example — Head of Procurement\njane.example@example.com +46 70 235 51 61'}]})};
   }});
@@ -1348,7 +1347,7 @@ test('ranked buyer controls retain the original candidate index after ranking cl
 
 test('manual opportunity review holds persist without paid contact enrichment',async()=>{
  let snapshots=0;
- const ctx=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:true}),saveCrmCompany:async()=>{snapshots++;return {ok:true};}}});
+ const ctx=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:true}),saveCrmCompany:async()=>{snapshots++;return {ok:true,company:{id:'c1',normalized_domain:'example.com',workspace_id:'w1'}};}}});
  ctx.LeadIntelCrm=require('../crm-engine.js');
  ctx.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
  ctx.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Buyer',title:'Operations Manager',organization:'Example',linkedin_url:'https://linkedin.com/in/jane-buyer'}]}]});
@@ -1433,9 +1432,9 @@ test('authentication recovery keeps retained research read-only until explicit r
 });
 
 test('newer same-company CRM research restores the shortlist, sources and local confirmations',()=>{
- const context=loadDiscoveryRunner();
- const candidate={domain:'example.com',company:'Example',buyerRoles:'Procurement Director',people:[{id:'p1',name:'Anna Buyer',kept:true,flowSelected:true,linkedinConfirmationMethod:'automatic',linkedinConfirmedUrl:'https://www.linkedin.com/in/anna-buyer',contactResearch:{version:1,checks:{gmail:{status:'complete'}},channels:{gmail:{status:'complete'}}}}],buyerDiscovery:{checkedAt:'2026-10-01T00:00:00Z',pool:[{id:'obsolete',name:'Old',title:'Procurement Director',identityStatus:'pending'}]}};
- const detail={company:{normalized_domain:'example.com'},contacts:[{external_person_id:'p1',linkedin_url:'https://www.linkedin.com/in/anna-buyer',public_linkedin_url:'https://www.linkedin.com/in/anna-buyer'}],intelligence:{research_snapshot:{buyerResearch:{checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()},contactEvidence:{email:'anna@example.com',emailUrl:'https://example.com/contact',phone:'+371 12345678',phoneUrl:'https://example.com/contact'}}],unresolved:[{id:'pending',name:'John',title:'Procurement Director'}]}}}};
+ const context=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'hydration-workspace'}}});
+ const candidate={domain:'example.com',company:'Example',buyerRoles:'Procurement Director',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',kept:true,flowSelected:true,linkedinConfirmationMethod:'automatic',linkedinConfirmedUrl:'https://www.linkedin.com/in/anna-buyer',contactResearch:{version:1,checks:{gmail:{status:'complete'}},channels:{gmail:{status:'complete'}}}}],buyerDiscovery:{checkedAt:'2026-10-01T00:00:00Z',pool:[{id:'obsolete',name:'Old',title:'Procurement Director',identityStatus:'pending'}]}};
+ const detail={company:{id:'c1',workspace_id:'hydration-workspace',normalized_domain:'example.com'},contacts:[{id:'contact-p1',company_id:'c1',workspace_id:'hydration-workspace',name:'Anna Buyer',title:'Procurement Director',external_person_id:'p1',linkedin_url:'https://www.linkedin.com/in/anna-buyer',public_linkedin_url:'https://www.linkedin.com/in/anna-buyer'}],intelligence:{research_snapshot:{buyerResearch:{checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()},contactEvidence:{email:'anna@example.com',emailUrl:'https://example.com/contact',phone:'+371 12345678',phoneUrl:'https://example.com/contact'}}],unresolved:[{id:'pending',name:'John',title:'Procurement Director'}]}}}};
  assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),true);
  const person=candidate.people[0];assert.equal(person.linkedinConfirmationMethod,'automatic');assert.equal(person.contactResearch.channels.gmail.status,'complete');assert.equal(person.linkedin_url,'https://www.linkedin.com/in/anna-buyer');assert.equal(person.publicLinkedinUrl,'https://www.linkedin.com/in/anna-buyer');assert.equal(person.publicEmailUrl,'https://example.com/contact');assert.equal(person.publicPhone,'+371 12345678');assert.equal(person.kept,true);assert.equal(person.flowSelected,true);assert.equal(person.emailResearch.searches,3);assert.equal(candidate.buyerDiscovery.researchIncomplete,true);assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),true);assert.equal(candidate.buyerDiscovery.pool.some(p=>p.id==='obsolete'),false);
  assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
@@ -1446,9 +1445,9 @@ test('newer same-company CRM research restores the shortlist, sources and local 
 
 
 test('restored legacy research keeps unresolved identities and incomplete coverage visible',()=>{
- const context=loadDiscoveryRunner({renderNodes:true});
+ const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'hydration-workspace'}}});
  const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_target',buyerRoles:['Procurement Director'],people:[],buyerDiscovery:{}};
- context.__restoreNewerBuyerResearch(candidate,{company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:1,checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,unresolved:[{id:'pending',name:'John',title:'Procurement Director'}],buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}]}}}});
+ context.__restoreNewerBuyerResearch(candidate,{company:{id:'c1',workspace_id:'hydration-workspace',normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:1,checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,unresolved:[{id:'pending',name:'John',title:'Procurement Director'}],buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}]}}}});
  const html=context.__renderSelectedProspects([candidate]);assert.match(html,/1 unresolved identities/);assert.match(html,/Research incomplete/);assert.match(html,/Aggregate provider activity was not retained/);assert.match(html,/3 email evidence searches/);
 });
 
@@ -2106,10 +2105,11 @@ test('manual public contact research confirms sourced work emails in CRM without
 test('automatic public source confirmation keeps failed checks pending and never falls through to paid lookup',async()=>{
  const calls=[],context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url)=>{calls.push(String(url));return {ok:false,status:503,json:async()=>({error:'Official source unavailable'})};}});
  context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setBuyerConfirmationPolicy();context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
- const person={id:'anna',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicEmail:'anna.buyer@example.com',publicEmailUrl:'https://example.com/team'};
- const candidate={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:[person]};
- await context.confirmResearchedPublicEmails(candidate,new AbortController().signal);
- assert.equal(person.contactVerification.status,'error');assert.equal(person.publicEmailSourceCheck,undefined);assert.match(person.contactVerification.issues[0],/unavailable/);
+ const inputPerson={id:'anna',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicEmail:'anna.buyer@example.com',publicEmailUrl:'https://example.com/team'};
+ const candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',people:[inputPerson]};
+ context.__setDiscovery({selectedProspects:[candidate]});const retained=context.__discoveryState().selectedProspects[0],person=retained.people[0];
+ await context.confirmResearchedPublicEmails(retained,new AbortController().signal);
+ assert.equal(person.contactVerification.status,'error');assert.equal(person.publicEmailSourceCheck,null);assert.match(person.contactVerification.issues[0],/unavailable/);
  assert.equal(calls.filter(url=>url.includes('/confirm-public-email')).length,1);assert.equal(calls.some(url=>/hunter|enrich|additional-contact-services/.test(url)),false);
 });
 
@@ -2130,12 +2130,13 @@ test('cached official identities reread their shared source once and confirm exp
   return {ok:true,json:async()=>({data:{markdown:'## Anna Buyer\nProcurement\nanna.buyer(at)example(dot)com\n\n## Eva Buyer\nProcurement\neva.buyer(at)example(dot)com',metadata:{sourceURL:url}}})};
  }});
  context.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
- const candidate={company:'Example',domain:'example.com',buyerRoles:'Procurement Director',people:['Anna Buyer','Eva Buyer'].map((name,i)=>({id:String(i),name,title:'Procurement Director',organization:'Example',publicNameUrl:url}))};
- await context.confirmResearchedPublicEmails(candidate,new AbortController().signal);
- assert.deepEqual(Array.from(candidate.people,p=>p.publicEmail),['anna.buyer@example.com','eva.buyer@example.com']);
+ const candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:'Procurement Director',people:['Anna Buyer','Eva Buyer'].map((name,i)=>({id:String(i),name,publicName:name,title:'Procurement Director',organization:'Example',publicNameUrl:url}))};
+ context.__setDiscovery({selectedProspects:[candidate]});const retained=context.__discoveryState().selectedProspects[0];
+ await context.confirmResearchedPublicEmails(retained,new AbortController().signal);
+ assert.deepEqual(Array.from(retained.people,p=>p.publicEmail),['anna.buyer@example.com','eva.buyer@example.com']);
  assert.equal(calls.filter(path=>path.includes('/firecrawl/scrape')).length,1);
  assert.equal(calls.filter(path=>path.includes('/confirm-public-email')).length,2);
- assert.ok(candidate.people.every(p=>p.publicEmailSourceCheck.status==='confirmed'));
+ assert.ok(retained.people.every(p=>p.publicEmailSourceCheck.status==='confirmed'));
 });
 
 
