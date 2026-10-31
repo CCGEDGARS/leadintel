@@ -1,3 +1,5 @@
+import {contactRequestGuard} from './contact-operation-authority.js';
+import {messageBatch} from './message-operation-authority.js';
 import {validSkillAttribution} from './workspace-skill-attribution.js';
 import {validCompanyMaterialAttribution} from './company-materials-context.js';
 import RichText from '../../customer/rich-text.js';
@@ -57,9 +59,10 @@ export async function handleWritingWorkspaceRoute(request,env,cors={}){
   const user=await env.DB.prepare("SELECT users.id FROM users JOIN sessions ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')").bind(await sha256(token)).first();if(!user)fail('Authentication required',401);
   const workspace=url.searchParams.get('workspace_id')||'';
   const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).first();if(!member)fail('Workspace access denied',403);
+  const context={workspaceId:workspace,userId:user.id,role:member.role};context.guard=await contactRequestGuard(request,env,context);context.writeAuthority=context.guard.writeAuthority;const respond=async(...args)=>{await context.guard();return json(...args);};
   if(path==='/api/writing-workspace'&&request.method==='GET'){
    const rows=await env.DB.prepare('SELECT id,payload_json,revision,updated_at FROM writing_workspace_records WHERE workspace_id=? AND user_id=? AND archived=0 ORDER BY updated_at DESC,id').bind(workspace,user.id).all();
-   return json({records:(rows.results||[]).map(record)},200,cors);
+   return await respond({records:(rows.results||[]).map(record)},200,cors);
   }
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
   if(!['owner','researcher','sales'].includes(member.role))fail('Write access required',403);
@@ -68,19 +71,19 @@ export async function handleWritingWorkspaceRoute(request,env,cors={}){
   let next,result;
   if(request.method==='DELETE'){
    if(Object.keys(body).some(key=>key!=='expectedRevision')||expected===0)fail('This record changed elsewhere. Refresh before deleting.',409);
-   result=await env.DB.prepare('UPDATE writing_workspace_records SET archived=1,revision=revision+1,updated_at=? WHERE workspace_id=? AND user_id=? AND id=? AND revision=? AND archived=0').bind(updatedAt,workspace,user.id,id,expected).run();
+   result=(await messageBatch(env,context,[env.DB.prepare('UPDATE writing_workspace_records SET archived=1,revision=revision+1,updated_at=? WHERE workspace_id=? AND user_id=? AND id=? AND revision=? AND archived=0').bind(updatedAt,workspace,user.id,id,expected)])).at(-1);
   }else{
    next=payload(body,workspace);
    if(expected===0){
     // Count and insertion share one statement: two concurrent creates cannot
     // both claim the final slot, and existing IDs are never overwritten.
-    result=await env.DB.prepare('INSERT OR IGNORE INTO writing_workspace_records(workspace_id,user_id,id,payload_json,revision,updated_at) SELECT ?,?,?,?,1,? WHERE (SELECT COUNT(*) FROM writing_workspace_records WHERE workspace_id=? AND user_id=? AND archived=0)<60').bind(workspace,user.id,id,JSON.stringify(next),updatedAt,workspace,user.id).run();
-   }else result=await env.DB.prepare('UPDATE writing_workspace_records SET payload_json=?,revision=revision+1,updated_at=? WHERE workspace_id=? AND user_id=? AND id=? AND revision=? AND archived=0').bind(JSON.stringify(next),updatedAt,workspace,user.id,id,expected).run();
+    result=(await messageBatch(env,context,[env.DB.prepare('INSERT OR IGNORE INTO writing_workspace_records(workspace_id,user_id,id,payload_json,revision,updated_at) SELECT ?,?,?,?,1,? WHERE (SELECT COUNT(*) FROM writing_workspace_records WHERE workspace_id=? AND user_id=? AND archived=0)<60').bind(workspace,user.id,id,JSON.stringify(next),updatedAt,workspace,user.id)])).at(-1);
+   }else result=(await messageBatch(env,context,[env.DB.prepare('UPDATE writing_workspace_records SET payload_json=?,revision=revision+1,updated_at=? WHERE workspace_id=? AND user_id=? AND id=? AND revision=? AND archived=0').bind(JSON.stringify(next),updatedAt,workspace,user.id,id,expected)])).at(-1);
   }
   if(!result.meta?.changes){
    if(expected===0){const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM writing_workspace_records WHERE workspace_id=? AND user_id=? AND archived=0').bind(workspace,user.id).first();if(count.n>=60)fail('Your writing workspace holds up to 60 drafts and templates. Delete or edit an existing record.',409);}
    fail('This record changed elsewhere. Refresh before saving; your edits are preserved.',409);
   }
-  return request.method==='DELETE'?json({ok:true,revision:expected+1},200,cors):json({record:{...next,id,revision:expected+1,updatedAt}},200,cors);
+  return request.method==='DELETE'?await respond({ok:true,revision:expected+1},200,cors):await respond({record:{...next,id,revision:expected+1,updatedAt}},200,cors);
  }catch(error){const storage=storageErrorResponse(error,cors);if(storage)return storage;if(!error.status)throw error;return json({error:error.message},error.status,cors);}
 }

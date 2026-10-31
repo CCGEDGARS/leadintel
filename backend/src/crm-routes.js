@@ -1,3 +1,4 @@
+import {validateCrmScriptPackage} from './message-crm-package.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {reserveCrmEnrichment} from './apollo-crm-reservation.js';
 import {applyApolloCrmPhoneResult} from './apollo-crm-webhook.js';
@@ -232,7 +233,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
       }
       if(company.action==='activities'){
         if(request.method==='GET')return json(await listCrmActivities(env.DB,access.context,company.id,{limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
-        if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});return json(result,200,cors);}
+        if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');access.context.guard=await contactRequestGuard(request,env,access.context);access.context.writeAuthority=access.context.guard.writeAuthority;await access.context.guard();access.context.messageAssertions=await validateCrmScriptPackage(env,access.context,company.id,body);const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});await access.context.guard();return json(result,200,cors);}
         return error('Method not allowed',405,cors);
       }
       return error('Not found',404,cors);

@@ -433,7 +433,7 @@ test('pause during final recipient checks prevents an automatic sequence from be
  const env=await fixture(),approved=await approve(env);env.DB.raw.exec("INSERT INTO approved_workflow_runs(id,workspace_id,revision,status) VALUES('queue-race','w1',1,'running');INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('queued-company','w1','queue.example','Queued company','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source,created_at,updated_at) VALUES('queued-buyer','w1','queued-company','Alex Buyer','COO','alex@queue.example','alex@queue.example','verified','apollo',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
  const prepare=env.DB.prepare.bind(env.DB);let authorized=true;
  env.DB.prepare=sql=>{const statement=prepare(sql);if(sql.startsWith('SELECT id FROM gmail_messages WHERE workspace_id=')){const first=statement.first.bind(statement);statement.first=async()=>{const value=await first();authorized=false;return value;};}return statement;};
- const candidate={company:'Queued company',domain:'queue.example',contact:{id:'queued-buyer',name:'Alex Buyer',email:'alex@queue.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
+ const candidate={company:'Queued company',domain:'queue.example',contact:{id:'queued-buyer',name:'Alex Buyer',title:'COO',email:'alex@queue.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
  await assert.rejects(()=>executeWorkflowStage('delivery',{env,row:{workspace_id:'w1',revision:1,approved_by:'u1',approved_at:approved.approvedAt},run:{id:'queue-race'},result:{candidates:[candidate]},context:approvedContext(main),config,guard:async()=>{if(!authorized)throw Error('Workflow paused');}}),/Workflow paused/);
  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_sequences').get().n,0);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_queue').get().n,0);
 });
@@ -517,7 +517,7 @@ for(const change of ['pause','revoke-owner','material-source','progress','contin
  env.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('commit-company','w1','commit.example','Commit Company','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source,created_at,updated_at) VALUES('commit-buyer','w1','commit-company','Alex Buyer','COO','alex@commit.example','alex@commit.example','verified','apollo',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
  let queueCommits=0;const batch=env.DB.batch.bind(env.DB),stages=[];
  env.DB.batch=async statements=>{
-  if(statements[0]?.sql.startsWith('INSERT OR IGNORE INTO outreach_automation_sequences')){
+  if(statements.some(statement=>statement.sql?.startsWith('INSERT OR IGNORE INTO outreach_automation_sequences'))){
    queueCommits++;
    if(queueCommits===1||change==='continuous-progress'){
     if(change==='pause')env.DB.raw.exec("UPDATE approved_workflows SET status='paused' WHERE workspace_id='w1'");
@@ -527,7 +527,7 @@ for(const change of ['pause','revoke-owner','material-source','progress','contin
   }
   return batch(statements);
  };
- const candidate={company:'Commit Company',domain:'commit.example',contact:{id:'commit-buyer',name:'Alex Buyer',email:'alex@commit.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
+ const candidate={company:'Commit Company',domain:'commit.example',contact:{id:'commit-buyer',name:'Alex Buyer',title:'COO',email:'alex@commit.example'},message:{subject:'Reviewed subject',body:'Reviewed body'}};
  const outcome=await runApprovedWorkflows(env,{execute:async(stage,args)=>{stages.push(stage);return stage==='delivery'?executeWorkflowStage(stage,{...args,result:{...args.result,candidates:[candidate]}}):args.result;}});
  const succeeded=change==='progress';assert.deepEqual(stages,WORKFLOW_STAGES,'local retries never replay provider or delivery stages');assert.equal(queueCommits,succeeded?2:change==='continuous-progress'?3:1);assert.equal(outcome.completed,succeeded?1:0);assert.equal(outcome.blocked,succeeded?0:1);
  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_sequences').get().n,succeeded?1:0,'no active sequence persists after authority is lost');assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_queue').get().n,succeeded?1:0,'no queued item persists after authority is lost');

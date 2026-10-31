@@ -102,12 +102,17 @@ test('normal Firecrawl scrape branding survives saved state and becomes verified
     {filename: 'app.js'}
   );
   const scraped = await context.__scrapeSource('https://acme.example/', 'website');
+  assert.ok(Number.isFinite(Date.parse(scraped.extractedAt)), 'a successful scrape records its actual read time');
   assert.deepEqual(JSON.parse(JSON.stringify(scraped)), {
     type: 'website',
     url: 'https://acme.example/',
     title: 'Acme Industrial',
     text: 'Acme manufactures industrial equipment for European buyers.',
     status: 'ready',
+    extracted: true,
+    sourceRead: true,
+    evidenceKind: 'page_read',
+    extractedAt: scraped.extractedAt,
     logoUrl: 'https://acme.example/assets/logo.png',
     primaryColor: '#12ab34'
   });
@@ -128,6 +133,10 @@ test('normal Firecrawl scrape branding survives saved state and becomes verified
   const saved = Profile.normalizeSavedState({...base, profile: built});
   assert.equal(saved.scrapedSources[0].logoUrl, 'https://acme.example/assets/logo.png');
   assert.equal(saved.scrapedSources[0].primaryColor, '#12ab34');
+  assert.equal(saved.scrapedSources[0].sourceRead, true);
+  assert.equal(saved.scrapedSources[0].extracted, true);
+  assert.equal(saved.scrapedSources[0].evidenceKind, 'page_read');
+  assert.equal(saved.scrapedSources[0].extractedAt, scraped.extractedAt);
   assert.equal(saved.profile.logoUrl, 'https://acme.example/assets/logo.png');
   assert.equal(saved.profile.primaryColor, '#12ab34');
 

@@ -12,8 +12,8 @@ const SUPPORT_MODULES=[
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',
   './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1&saving-mode=1&balanced-saving=1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&customer-only-billing=20261012-v1',
   './linkedin-signals.js?v=20260907-public-index-v1',
-  './company-research-security.js?v=20260916-latency-fix-v2&profile-audit=20261030-v1',
-  './company-research-ui.js?v=20260926-guidance-status-v3&website-answer-handoff=20261012-v2&message-evidence=20261010-v1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&customer-only-billing=20261012-v1&rescue=20261013-v1&profile-research-status=20261014-v2&research-lifecycle=20261018-v4&profile-audit=20261030-v1',
+  './company-research-security.js?v=20260916-latency-fix-v2&profile-audit=20261030-v1&messages-reliability=20261031-v1',
+  './company-research-ui.js?v=20260926-guidance-status-v3&website-answer-handoff=20261012-v2&message-evidence=20261010-v1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&customer-only-billing=20261012-v1&rescue=20261013-v1&profile-research-status=20261014-v2&research-lifecycle=20261018-v4&profile-audit=20261030-v1&messages-reliability=20261031-v1',
   './company-profile-handoff.js?v=20260924-friendly-workflow-labels-v1&in-place-handoff=20261024-v1&profile-audit=20261030-v1',
   './reference-customers.js?v=20260927-opportunity-map-durable-v1&target-segments=1&target-status=1&reference-discovery=5&reference-similarity=20260930-v1&research-quality=6&reference-save-stability=2&profile-audit=20261030-v1',
   './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1',
@@ -27,7 +27,7 @@ const SUPPORT_MODULES=[
   './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&company-evidence=20261002-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&qualification=20261003-qualified-v2&icp-intent=20261015-v1&profile-audit=20261030-v1',
   './intelligence-sources-ui.js?v=20260924-friendly-workflow-labels-v1&reset-center=1&strategy=20261001-v2&app-dialogs=20261017-v1&monitoring-location=20261018-v1',
   './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1',
-  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&treg-paid-search=20261021-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2'
+  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&treg-paid-search=20261021-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2&messages-reliability=20261031-v1'
 ];
 
 async function loadSupportModules(){

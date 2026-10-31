@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelFollowUpAssistant=api;})(typeof window!=='undefined'?window:globalThis,function(){
 'use strict';
 const STYLES=Object.freeze(['Professional','Diplomatic','Direct','Consultative']);
-function scopeKey(scope){return JSON.stringify([scope?.workspaceId,scope?.companyId,scope?.contactId,scope?.recipient]);}
+function scopeKey(scope){return JSON.stringify([scope?.workspaceId,scope?.accountKey,scope?.recipientAuthorityKey,scope?.companyId,scope?.contactId,scope?.recipient]);}
 function usable(scope){return Boolean(scope?.usable&&scope?.isPrivate&&scope.workspaceId&&scope.companyId&&scope.recipient);}
 function blocked(context,result){return Boolean(context?.suppression?.optedOut||context?.suppression?.suppressed||result?.canSave===false||/opt.?out|unsubscribe|do.?not.?contact/i.test(result?.intent?.label||''));}
 function validateInput(input,context){

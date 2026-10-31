@@ -13,7 +13,7 @@ test('Delivery handoff emits approved package plus explicit recipient without au
   assert.match(handoff,/delivery-recipient/);
   assert.match(handoff,/approvedAt/);
   assert.match(handoff,/emailSubject/);
-  assert.match(handoff,/emailBody/);
+  assert.match(handoff,/buildApprovedSendPayload/);
   assert.match(handoff,/followUp/);
   assert.match(handoff,/contact_identity/);
   assert.doesNotMatch(handoff,/enqueueOutreachAutomation\(/,'handoff may announce but must never enqueue automatically');
@@ -34,7 +34,7 @@ test('early handoff waits for Delivery readiness and then announces the exact se
   const {JSDOM}=require('jsdom'),engine=require('../delivery-engine.js');
   const dom=new JSDOM('<input id="delivery-recipient" value="bob@buyer.test">',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window,timers=[],announced=[];
   try{
-    const make=id=>({domain:'buyer.test',channel:'email',approved:true,approvedAt:'2026-10-24T10:00:00Z',selectedPersonId:id,drafts:{emailSubject:'Hello '+id,emailBody:'Message for '+id}}),alice=make('alice'),bob=make('bob');
+    const O=require('../outreach-engine.js');w.LeadIntelOutreach=O;const make=id=>{const item={domain:'buyer.test',company:'Buyer',channel:'email',selectedPersonId:id,dossier:{domain:'buyer.test',company:'Buyer',people:[{id,name:id,email:id+'@buyer.test'}]},drafts:{emailSubject:'Hello '+id,emailBody:'Message for '+id},campaignScenario:{id:'core',language:'en',resolvedLanguage:'en'},localizationStatus:'complete',localizationApprovalBlocked:false,localizationProvenance:{provider:'manual',model:'reviewed',language:'en',selectionSource:'manual'}};return O.approveOutreachItem(item,item.drafts,'2026-10-24T10:00:00Z');},alice=make('alice'),bob=make('bob');
     w.localStorage.setItem('leadintel_customer_v2_outreach',JSON.stringify({items:[alice,bob]}));
     w.localStorage.setItem('leadintel_customer_v2_delivery',JSON.stringify({selectedDomain:'buyer.test',selectedPackageKey:engine.packageKey(bob)}));
     w.setTimeout=fn=>{timers.push(fn);return timers.length;};

@@ -323,7 +323,7 @@ async function scrapeSource(url,type){
     const safeColor=value=>typeof value==="string"&&/^#[0-9a-f]{6}$/i.test(value.trim())?value.trim().toLowerCase():"";
     const logoUrl=[metadata.logoUrl,metadata.logo,metadata.ogImage,metadata.ogImageUrl,metadata.image].map(safeLogo).find(Boolean)||"";
     const primaryColor=[metadata.primaryColor,metadata.themeColor,metadata["theme-color"],data.primaryColor].map(safeColor).find(Boolean)||"";
-    return {type,url:resolved.href,...(resolved.href!==url?{requestedUrl:url}:{}),title:metadata.title||data.title||new URL(url).hostname,text,status:"ready",...(logoUrl?{logoUrl}:{}),...(primaryColor?{primaryColor}:{})};
+    return {type,url:resolved.href,...(resolved.href!==url?{requestedUrl:url}:{}),title:metadata.title||data.title||new URL(url).hostname,text,status:"ready",extracted:true,sourceRead:true,evidenceKind:"page_read",extractedAt:new Date().toISOString(),...(logoUrl?{logoUrl}:{}),...(primaryColor?{primaryColor}:{})};
     })(),deadline]);
   }catch(error){
     if(error?.name==="AbortError")throw new Error(`Source scrape timed out after ${Math.round(ANALYSIS_SOURCE_TIMEOUT_MS/1000)} seconds`);

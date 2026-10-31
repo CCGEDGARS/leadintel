@@ -12,7 +12,7 @@
   context.maximumWords=maximumWritingWords({item,studio,language:context.language});
   const sourceRefs=refs?.workspaceId===workspace?refs.sourceRefs||[]:[],referenceRevision=refs?.workspaceId===workspace?refs.referenceRevision:null;
   const applied=item?.messageStudioDraft?.writingAssistantDraft,assistant=item?.messageStudioDraft?.writingAssistant;
-  const draftAssistant=assistant?.workspaceId===workspace&&applied?.subject===currentDraft.subject&&applied?.message===currentDraft.message?assistant:null;
+  const draftAssistant=assistant?.workspaceId===workspace&&applied?.subject===currentDraft.subject&&applied?.message===currentDraft.message&&(applied?.messageHtml||'')===(currentDraft.messageHtml||'')?assistant:null;
   return {draftAssistant,scope:JSON.stringify([workspace,item?.domain,item?.selectedPersonId,context.channel]),fingerprint:JSON.stringify(context),context,skillRefs:refs?.workspaceId===workspace?(refs.skillRefs||[]):[],sourceRefs,referenceRevision,usable:Boolean(usable&&workspace&&person?.name&&referenceRevision!==null)};
  }
  function validateWritingDraft(draft,context={}){

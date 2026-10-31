@@ -4,8 +4,8 @@ let loadPromise=null;
 function loadAutomation(){
   if(loadPromise)return loadPromise;
   loadPromise=Promise.all([
-    import('./outreach-automation-bridge.js?v=20260930-contact-suppression-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1').then(()=>import('./outreach-automation-ui.js?buyer-actions=20261029-v2&v=20261002-settings-v5&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1&app-dialogs=20261017-v1&treg-paid-search=20261021-v1&delivery-experience=20261024-v1&delivery-spacing=20261024-v2')),
-    import('./outreach-automation-delivery-handoff.js?v=20260930-contact-suppression-v1&delivery-records=20261024-v2&delivery-ready=20261024-v1')
+    import('./outreach-automation-bridge.js?v=20260930-contact-suppression-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1').then(()=>import('./outreach-automation-ui.js?buyer-actions=20261029-v2&v=20261002-settings-v5&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1&optional-verification=20261014-v1&automatic-limits=20261014-v1&app-dialogs=20261017-v1&treg-paid-search=20261021-v1&delivery-experience=20261024-v1&delivery-spacing=20261024-v2&messages-reliability=20261031-v1')),
+    import('./outreach-automation-delivery-handoff.js?v=20260930-contact-suppression-v1&delivery-records=20261024-v2&delivery-ready=20261024-v1&messages-reliability=20261031-v1')
   ]).catch(error=>{loadPromise=null;console.error('[LeadIntel] Outreach automation failed to load',error);return [];});
   return loadPromise;
 }

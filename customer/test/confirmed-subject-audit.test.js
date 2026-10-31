@@ -23,9 +23,9 @@ test('unreviewed evidence, unrelated sellers and missing facts never inherit ste
  assert.doesNotMatch(resolve('benefit',{...context,trigger:{...context.trigger,verification:'unreviewed'}}),/Malmberget/);
  const legal={...e,sender:'Robin Lane',company:'LawCo',offer:'Contract review',approach:''};
  assert.equal(resolve('development',context,legal),null);assert.equal(resolve('benefit',context,legal),'Malmberget: compare now or later?');
- assert.equal(resolve('relevance',{trigger:{title:'Project Alpha',verification:'user_reviewed'}},legal),'Contract review for Project Alpha');
+ assert.equal(resolve('relevance',{trigger:{title:'Project Alpha',projectName:'Project Alpha',excerpt:'Project Alpha is under construction.',url:'https://buyer.example/project',verification:'user_reviewed'}},legal),'Contract review for Project Alpha');
  assert.equal(resolve('introduction',{},legal),'Robin Lane. LawCo');
- assert.doesNotMatch(resolve('relevance',{trigger:{title:'Project Alpha',verification:'user_reviewed'}},legal),/Ercon|Malmberget|steel/i);
+ assert.doesNotMatch(resolve('relevance',{trigger:{title:'Project Alpha',projectName:'Project Alpha',excerpt:'Project Alpha is under construction.',url:'https://buyer.example/project',verification:'user_reviewed'}},legal),/Ercon|Malmberget|steel/i);
 });
 test('chooser never reveals placeholders when evidence is missing and keeps manual subject/body on reload',()=>{
  const {JSDOM}=require('jsdom'),source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8'),start=source.indexOf('const subjectOptions=linkedin||item?.messageStudioDraft?.eventSnapshot?[]:');
@@ -57,6 +57,6 @@ test('real selector context resolves project with an article and uses approved f
  const studio=S.normalize({mode:'curiosity'},essentials);
  assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','project'),{...ctx,strictSubjectChoice:true},essentials),'Malmberget: engineering');
  assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','success'),{...ctx,strictSubjectChoice:true},essentials),'Malmberget: another success story?');
- const other={...ctx,trigger:{...ctx.trigger,title:'Expansion in Oldtown',summary:'A new facility at Riverport.'}};
+ const other={...ctx,trigger:{...ctx.trigger,title:'Expansion in Oldtown',summary:'A new facility at Riverport.',excerpt:'A new facility at Riverport.'}};
  assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','project'),{...other,strictSubjectChoice:true},essentials),'Riverport: engineering');
  });

@@ -1,3 +1,7 @@
+import {assertReviewedRecipient} from './reviewed-recipient.js';
+import {contactRequestGuard} from './contact-operation-authority.js';
+import {messageBatch,messageRowAssertion} from './message-operation-authority.js';
+import {queuedRecipientBinding} from './queued-recipient-authority.js';
 import {loadConfirmationLevel} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
 import {allowedOrigin,corsHeaders,sha256,cookieValue} from './security.js';
@@ -39,24 +43,25 @@ async function savePolicy(env,workspaceId,userId,policy){await env.DB.prepare(`I
 async function enqueueSequence(request,env,cors,workspaceId){
   const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body)return error('Approved outreach snapshot is required',400,cors);
-  return enqueueApprovedSequence(env,cors,workspaceId,access,body);
+  try{access.guard=await contactRequestGuard(request,env,{workspaceId,userId:access.user.id,role:access.member.role});return await enqueueApprovedSequence(env,cors,workspaceId,access,body);}catch(cause){return error(cause.message,cause.status||409,cors);}
 }
 
 export async function enqueueApprovedSequence(env,cors,workspaceId,access,body,workflow=null){
-  const policy=await policyFor(env,workspaceId);if(!automaticGmailDeliveryEnabled(env)&&!(workflow&&env.APPROVED_WORKFLOW_DELIVERY_MODE==='enabled'))return error('Automatic Gmail delivery is disabled. Use the explicit Send with Gmail action instead.',409,cors,{code:'AUTOMATIC_GMAIL_DISABLED'});if(policy.mode!=='automatic'||!policy.enabled)return error('Automatic outreach is not enabled for this workspace',409,cors,{code:'AUTOMATION_DISABLED'});
+  const policySnapshot=await policyRow(env,workspaceId),policy=rowToPolicy(policySnapshot);if(!automaticGmailDeliveryEnabled(env)&&!(workflow&&env.APPROVED_WORKFLOW_DELIVERY_MODE==='enabled'))return error('Automatic Gmail delivery is disabled. Use the explicit Send with Gmail action instead.',409,cors,{code:'AUTOMATIC_GMAIL_DISABLED'});if(policy.mode!=='automatic'||!policy.enabled)return error('Automatic outreach is not enabled for this workspace',409,cors,{code:'AUTOMATION_DISABLED'});
   if(policy.paused)return error('Automatic outreach is paused',409,cors,{code:'AUTOMATION_PAUSED'});
   if(policy.emergencyStop)return error('Automatic outreach emergency stop is active',409,cors,{code:'AUTOMATION_EMERGENCY_STOP'});
   if(body.approved!==true)return error('Explicitly approved outreach is required',400,cors,{code:'OUTREACH_NOT_APPROVED'});
-  const domain=normalizeDomain(body.domain),recipient=normalizeEmail(body.recipient),subject=cleanText(body.subject,500),messageBody=cleanText(body.body,100000),followupBody=cleanText(body.followup_body,100000),approvedAt=safeIso(body.approved_at),contactIdentity=cleanText(body.contact_identity,500);
+  const domain=normalizeDomain(body.domain),recipient=normalizeEmail(body.recipient),subject=cleanText(body.subject,500),messageBody=cleanText(body.body,100000),followupBody=cleanText(body.followup_body,100000),approvedAt=safeIso(body.approved_at);let contactIdentity=cleanText(body.contact_identity,500);
   if(!domain||!recipient||!subject||!messageBody||!approvedAt)return error('Valid domain, recipient, subject, body and approval timestamp are required',400,cors);
   let messageHtml='',followupHtml='';try{messageHtml=validateEmailContent({body:messageBody,html_body:body.html_body}).htmlBody;if(followupBody)followupHtml=validateEmailContent({body:followupBody,html_body:body.followup_html_body}).htmlBody;}catch(cause){return error(String(cause?.message||'Invalid email content'),400,cors,{code:'AUTOMATION_EMAIL_CONTENT_INVALID'});}
   const connection=await env.DB.prepare(`SELECT workspace_id,google_email,status FROM gmail_connections WHERE workspace_id=? AND status='connected'`).bind(workspaceId).first();if(!connection)return error('Gmail is not connected for this workspace',409,cors,{code:'GMAIL_NOT_CONNECTED'});
-  const company=await env.DB.prepare(`SELECT id,lifecycle_status FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL LIMIT 1`).bind(workspaceId,domain).first();if(company?.lifecycle_status==='suppressed')return error('Suppressed companies cannot receive automated outreach',409,cors,{code:'CRM_COMPANY_SUPPRESSED'});
+  const company=await env.DB.prepare(`SELECT * FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL LIMIT 1`).bind(workspaceId,domain).first();if(company?.lifecycle_status==='suppressed')return error('Suppressed companies cannot receive automated outreach',409,cors,{code:'CRM_COMPANY_SUPPRESSED'});
   if(!company)return error('Save the target company in CRM before automatic delivery',409,cors,{code:'CRM_COMPANY_REQUIRED'});
   if(await isContactSuppressed(env.DB,workspaceId,recipient))return error('Contact is on the do-not-contact list',409,cors,{code:'CONTACT_SUPPRESSED'});
+  const confirmationPolicy=await env.DB.prepare('SELECT config_json FROM approved_workflows WHERE workspace_id=?').bind(workspaceId).first();
   const verified=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND normalized_email=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL LIMIT 1`).bind(workspaceId,company.id,recipient).first();
   if(!verified||!globalThis.LeadIntelContactPolicy.accepted(verified,domain,await loadConfirmationLevel(env,workspaceId)))return error('Automatic delivery requires a confirmed work email on this CRM company',409,cors,{code:'CRM_EMAIL_NOT_VERIFIED'});
-  const sourcePackageKey=await sha256(`${workspaceId}|${domain}|${recipient}|${approvedAt}`);const sequenceId=`auto-seq-${sourcePackageKey.slice(0,24)}`;const queueId=`auto-q-${sourcePackageKey.slice(0,24)}-0`;const idempotencyKey=`auto-${sourcePackageKey}-0`;
+  assertReviewedRecipient(body.recipient_snapshot,verified,company);if(!contactIdentity.startsWith('campaign:'))contactIdentity=await queuedRecipientBinding(verified,company);const sourcePackageKey=await sha256(`${workspaceId}|${domain}|${recipient}|${approvedAt}`);const sequenceId=`auto-seq-${sourcePackageKey.slice(0,24)}`;const queueId=`auto-q-${sourcePackageKey.slice(0,24)}-0`;const idempotencyKey=`auto-${sourcePackageKey}-0`;
   const existing=await env.DB.prepare(`SELECT * FROM outreach_automation_sequences WHERE workspace_id=? AND source_package_key=?`).bind(workspaceId,sourcePackageKey).first();
   if(existing){const {results=[]}=await env.DB.prepare(`SELECT * FROM outreach_automation_queue WHERE sequence_id=? ORDER BY step_index`).bind(existing.id).all();return json({sequence:existing,queue_items:results,duplicate:true},200,cors);}
   const previous=await env.DB.prepare(`SELECT id FROM outreach_automation_sequences WHERE workspace_id=? AND recipient=? AND status IN ('active','completed','stopped_reply') LIMIT 1`).bind(workspaceId,recipient).first();
@@ -68,10 +73,10 @@ export async function enqueueApprovedSequence(env,cors,workspaceId,access,body,w
     await access.guard?.();const authority=access.guard?.writeAuthority?.();
     if(workflow&&!authority)return error('Current workflow authority is required to queue approved outreach',409,cors,{code:'AUTOMATION_WORKFLOW_AUTHORITY_REQUIRED'});
     const values=placeholders=>authority?`SELECT ${placeholders} WHERE (${authority.sql})`:`VALUES(${placeholders})`,authorityArgs=authority?.args||[];
-    results=await env.DB.batch([
+    results=(await messageBatch(env,{},[
       env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,contact_identity,approved_at,initial_subject,initial_body,followup_body,followup_html_body,status,created_by,workflow_run_id,workflow_revision) ${values('?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?')}`).bind(sequenceId,workspaceId,connection.workspace_id,sourcePackageKey,domain,recipient,contactIdentity,approvedAt,subject,messageBody,followupBody,followupHtml,'active',access.user.id,workflow?.runId||null,workflow?.revision||null,...authorityArgs),
       env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,html_body,status,earliest_send_at,scheduled_send_at,idempotency_key) ${values('?,?,?,?,?,?,?,?,?,?,?,?,?')}`).bind(queueId,workspaceId,sequenceId,connection.workspace_id,0,recipient,subject,messageBody,messageHtml,'queued',scheduled,scheduled,idempotencyKey,...authorityArgs)
-    ]);
+    ],[messageRowAssertion(env.DB,'approved_workflows','workspace_id=?',[workspaceId],confirmationPolicy),messageRowAssertion(env.DB,'outreach_contact_suppression','workspace_id=? AND email=?',[workspaceId,recipient],null),messageRowAssertion(env.DB,'crm_contacts','workspace_id=? AND id=?',[workspaceId,verified.id],verified),messageRowAssertion(env.DB,'crm_companies','workspace_id=? AND id=?',[workspaceId,company.id],company),messageRowAssertion(env.DB,'outreach_automation_policies','workspace_id=?',[workspaceId],policySnapshot)])).slice(-2);
     if(!authority||results.every(result=>Number(result?.meta?.changes||0)>0))break;
     // Refresh only this local commit after a benign progress save. Revocation
     // or material source changes stop here; research and stages are not replayed.

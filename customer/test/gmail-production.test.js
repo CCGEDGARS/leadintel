@@ -15,7 +15,7 @@ test('production Gmail UI exposes connect send sync disconnect controls',()=>{
 });
 
 test('production send remains explicit and manual Compose fallback remains in delivery UI',()=>{
-  assert.match(ui,/confirm\(`Send this approved email/);assert.match(ui,/q\('confirm-delivery-sent'\)\?\.click\(\)/);assert.match(delivery,/Open Gmail draft/);assert.match(delivery,/Confirm sent/);
+  assert.match(ui,/Send this approved email/);assert.match(ui,/LeadIntelDialogs\?\.confirm\(question\)/);assert.match(ui,/q\('confirm-delivery-sent'\)\?\.click\(\)/);assert.match(delivery,/Open Gmail draft/);assert.match(delivery,/Confirm sent/);
 });
 
 test('production Gmail UI handles synced replies through existing delivery engine and does not store OAuth tokens',()=>{
