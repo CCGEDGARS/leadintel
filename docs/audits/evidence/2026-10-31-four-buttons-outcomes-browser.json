@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 2,
+  "checkedAt": "2026-10-31T21:04:54.962Z",
+  "contract": "docs/policies/buyer-contact-button-contract.md",
+  "environment": "Local Chromium, shipping Buyers assets with controlled session/CRM/provider responses; no external requests or real paid lookup",
+  "browser": "/usr/bin/chromium",
+  "sourceSnapshotSha256": {
+    "customer/additional-contact-policy.js": "5acbc25b16713c47a96dda25d2ed8b00fa0c5936287b09b789ed0fe24d137caa",
+    "customer/additional-contact-services.js": "60f9a588d67dd97cbe2c5a19a55f466774838835d6c09a818d8d4800cdd906fd",
+    "customer/app-shell.css": "7d02d2a334554f859373e47c084d14bcac581a70ee905334e311fc0f57f11399",
+    "customer/attention-centre.css": "2dcaa49f48f1008fd69e49e8f83407c2db0acecb9ad79735ed0d518e9420aa3d",
+    "customer/background-task-centre.css": "c754c820652eb14b787ee595558b39078e419e1d1fb216956e5161d5e749c2fe",
+    "customer/brand-identity.css": "19ebd98adce07c05309a9ef3f6f6965f0fb522c94e775ef30873037a6c0e0ff2",
+    "customer/compact-sources.css": "df7b1a24a752a247d50841b35f85eed04e14748cfe6e9817953a3161876dd572",
+    "customer/company-dossier.js": "b88ba7654e2bfcf93dfd26b77f82c8ad1fd719fde3497ba8b7e03b61bb4f60e8",
+    "customer/company-materials.css": "2fc1abf1761b5150cf32ffb18f787782d3d028e45daa5c0619433cc9dd807866",
+    "customer/confirmation-dialog.css": "006bc773ffbfdf8d3f63cbccea51b96655d5a8de4562b0763a8fe77e0688ddfc",
+    "customer/confirmation-dialog.js": "68e8c40f3338e047ebf3197ff612c143c629dfad941b5eb642d967a011faa863",
+    "customer/contact-confirmation-policy.js": "d508d0bc2a22dc73cd36720f003182ff824e7fc9d87fded1aa0eeae4074ebc2f",
+    "customer/content-language.js": "ab0194be82aa509d0ce15d6686b0cd2db101e39abcc50b9badd35465a2f52d74",
+    "customer/conversation.css": "d7df3a631e472a096554d6c86a22151f373cd0fa530cdf116ae6cc44ac4b764f",
+    "customer/crm-engine.js": "443f85adfa307f46215e92e7e18ea7a0f0c2f5ab3fe5259dcce78f3fb348d2d3",
+    "customer/discovery-engine.js": "2416fd7382c57602bb8f43760e3e64291f95d7b501e0a138725abbe2fab525e4",
+    "customer/discovery-ui.js": "6ce391cdba6d58b5218a06447cc41bf4dff4b7e793ac416420f355c61afa7b95",
+    "customer/discovery.css": "ce73e236dacd3d6c69f308a35f50fa502296571eb1c4a3f449174be2c95ec6b6",
+    "customer/email-campaigns.css": "98d3f35239d4ab89e9babede99f6316d424686059979c4f0512109860e3762ff",
+    "customer/event-campaigns.css": "40b0e065edc03d6489a0924529784bc63a99fde67823645c60ad89275a29dc6c",
+    "customer/evidence-policy.js": "2d449a54641f102c07398d1658ed19d89bc514c93e29cbac18609f79eec827eb",
+    "customer/evidence-sources.css": "57c3d4e2db992fdf36971816e594b7d9045e68c32ef27d3557d27b0088286cb3",
+    "customer/first-party-research.js": "b11035925aa2608e569faba6043b9d50d4142a2f31a28192f585187510894b45",
+    "customer/index.html": "a8a726ebc8620c27020d18236b331f7ff4befd7597fb401b858646c8aae45def",
+    "customer/market-conditions-engine.js": "401d8a724b416c216f27f71ec78c459a76aad33dcf691841c5018620f61e4586",
+    "customer/market-engine.js": "ecbe040b44459de9d4462348371ae474bd0fbff6e1e4df5911a35290e67d1bd6",
+    "customer/market-selector.css": "db5ebb38e542de9028628deaf06dae0a4a0c2cdd3b4f0577027dcdb9d38224f9",
+    "customer/market.css": "9a6a141aeeb0650423e1f11ddd976b768404d249b05fff90d9107ffcf31c57ae",
+    "customer/premium.css": "866333d57a0adf2c920ecc0f909f069d102ac47bf8cc30bb4925f845672e5fd6",
+    "customer/research-costs.css": "419db04f2d95053cfe5d9c1f868a9f5a6958a819be8780530398d98d3fd77210",
+    "customer/rich-text.css": "e9676fe1145aa9ff04c79db63348596db5c1afa29110c949bb84f3ce3fd6cc99",
+    "customer/setup-focus.css": "43cd5cdfe431b0c27c5046c815699fb78483f15b5af8310b52147f073ce62c37",
+    "customer/setup-operation-trace.js": "2cb2e771172b77c284f34e4055d467a3c6af76f7b2409f2c5eae967155983a2a",
+    "customer/step-action-guidance.css": "48dbfb83af107ed6cf8b4eb45be327ad0c17aa24e0078a9c0d3267fc4c5650cd",
+    "customer/strategy-integrity.js": "997e0032cae963cabb4d75171b567955292b1967282be48d51ef987b8d1b309f",
+    "customer/styles.css": "a09d6253de2cc519be6d60287283ea6eb174d3e97c48b18e8bdf8324e494c864",
+    "customer/targeting-policy.js": "51294400e89c00b1a2a839a516106baaec69560f4960b0f4dd32f74902a62d7e",
+    "customer/workspace-controls.css": "dc96877e5fdc395535f7bd602d58f157b1ad10fbe4a536c194615d25e0ef2fa2",
+    "customer/workspace-save.css": "68ce7aecd1436b82f65916a55172185ee1d480a097f88e75ef4638dcb296cd2f",
+    "customer/writing-references.css": "07f78bbed27f7b3a8b32b0ecbb5481f8ac318d8da75a49c34f375837c55de2fa"
+  },
+  "runner": "scripts/audit-buyer-button-contract.cjs",
+  "runnerSha256": "2e146be2ae2405225b52f41c6f60d7f86ffc40a933b6bf4574f5902284a937d5",
+  "sourceChangedOnDiskDuringRun": false,
+  "boundedFreeResearchReceipts": {
+    "queries": 22,
+    "reads": 1
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "successfulApiOrders": [
+        {
+          "order": "email→phone",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        },
+        {
+          "order": "phone→email",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        }
+      ],
+      "whiteMissingData": true,
+      "greenExactConfirmedChannels": true,
+      "emailAloneEnablesProceed": true,
+      "paidPhoneEmailSeparate": true,
+      "noFreeSearchFromPaidClick": true,
+      "modalCancelNoPaidRequests": true,
+      "focusRestored": true,
+      "stableIdentityAcrossReorder": true,
+      "noRepurchaseOfConfirmedData": true,
+      "saveReloadConfirmedStates": true,
+      "selectedRecipient": "synthetic-teemu",
+      "freeOnlyRecheckWithControlledOutage": true,
+      "pageErrors": 0,
+      "consoleErrors": 0,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 720,
+      "successfulApiOrders": [
+        {
+          "order": "email→phone",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        },
+        {
+          "order": "phone→email",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        }
+      ],
+      "whiteMissingData": true,
+      "greenExactConfirmedChannels": true,
+      "emailAloneEnablesProceed": true,
+      "paidPhoneEmailSeparate": true,
+      "noFreeSearchFromPaidClick": true,
+      "modalCancelNoPaidRequests": true,
+      "focusRestored": true,
+      "stableIdentityAcrossReorder": true,
+      "noRepurchaseOfConfirmedData": true,
+      "saveReloadConfirmedStates": true,
+      "selectedRecipient": "synthetic-teemu",
+      "freeOnlyRecheckWithControlledOutage": true,
+      "pageErrors": 0,
+      "consoleErrors": 0,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 390,
+      "successfulApiOrders": [
+        {
+          "order": "email→phone",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        },
+        {
+          "order": "phone→email",
+          "apiResultsConsumedByActualAdapter": true,
+          "exactReviewedRecipient": true,
+          "independentChannels": true,
+          "phoneListingRemainsUnconfirmed": true,
+          "allFourPhaseIdsAndCostsRetained": true,
+          "crmAndWorkspaceReload": true,
+          "noResearchOrRepurchaseOnReopen": true
+        }
+      ],
+      "whiteMissingData": true,
+      "greenExactConfirmedChannels": true,
+      "emailAloneEnablesProceed": true,
+      "paidPhoneEmailSeparate": true,
+      "noFreeSearchFromPaidClick": true,
+      "modalCancelNoPaidRequests": true,
+      "focusRestored": true,
+      "stableIdentityAcrossReorder": true,
+      "noRepurchaseOfConfirmedData": true,
+      "saveReloadConfirmedStates": true,
+      "selectedRecipient": "synthetic-teemu",
+      "freeOnlyRecheckWithControlledOutage": true,
+      "pageErrors": 0,
+      "consoleErrors": 0,
+      "horizontalOverflow": false
+    }
+  ],
+  "limits": [
+    "Authenticated customer session unavailable",
+    "Baseline source/verified contacts explicitly seeded; successful paid API responses also consumed by actual adapter with deterministic server persistence",
+    "Native browser zoom, screen reader and actual provider charges not tested"
+  ],
+  "acceptance": {
+    "controlledBrowser": "PASS",
+    "authenticatedCustomerWorkflow": "BLOCKED",
+    "realContactYield": "NOT TESTED",
+    "productionRelease": "NOT TESTED"
+  }
+}

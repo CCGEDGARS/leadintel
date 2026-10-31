@@ -327,3 +327,119 @@ test('pause while decoding Apollo response prevents late identity remapping and 
  assert.equal(f.raw.prepare("SELECT external_person_id FROM crm_contacts WHERE id='saved'").get().external_person_id,'apollo-person');
  const attempt=f.raw.prepare('SELECT status,result_json FROM additional_contact_attempts').get();assert.equal(attempt.status,'needs_review');assert.equal(JSON.parse(attempt.result_json).provider_started,true);
 });
+
+async function concurrentTregFixture({failedEmail=false,blockPhase=failedEmail?'find':'profile'}={}){
+ const {findTregWorkEmail}=await import('../src/treg-contact-research.js'),f=fixture();
+ for(const file of ['0011_master_crm.sql','0012_crm_contact_enrichment.sql','0022_crm_public_contact_sources.sql'])f.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
+ f.raw.exec("ALTER TABLE workspace_service_integrations ADD COLUMN last_used_at TEXT;ALTER TABLE workspace_service_integrations ADD COLUMN updated_at TEXT;INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('c','w','example.com','Example','prospect','now','now','now','now');INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider) VALUES('w',1,1,'treg');");
+ f.raw.prepare("INSERT INTO crm_intelligence(company_id,workspace_id,research_snapshot_json,intelligence_updated_at) VALUES('c','w',?,'now')").run(JSON.stringify(f.detail.intelligence.research_snapshot));
+ const load=()=>({...f.detail,contacts:f.raw.prepare('SELECT * FROM crm_contacts').all(),intelligence:{research_snapshot:JSON.parse(f.raw.prepare("SELECT research_snapshot_json FROM crm_intelligence WHERE company_id='c'").get().research_snapshot_json)}});
+ let release,entered;const wait=new Promise(r=>release=r),started=new Promise(r=>entered=r),calls=[];
+ const providerDeps={credential:async()=>({configured:true,source:'customer',apiKey:'test-only'}),fetch:async(url,options)=>{
+  calls.push({url,options});let payload;const phase=url.includes('email.find')?'find':url.includes('email.verify')?'verify':url.includes('people.enrich')?'profile':'phone';
+  if(phase===blockPhase){entered();await wait;}
+  if(failedEmail&&phase==='find')return new Response('{}',{status:503,headers:{'X-Treg-Call-Id':'billed-finder','X-Treg-Cost-Micro':'7000'}});
+  if(url.includes('email.find'))payload={output:{email:'anna@example.com',full_name:'Anna BuyerZero',company_domain:'example.com'}};
+  else if(url.includes('email.verify'))payload={output:{email:'anna@example.com',status:'valid'},raw:{email:'anna@example.com',result:'deliverable',is_accept_all:false}};
+  else if(url.includes('people.enrich'))payload={output:{full_name:'Anna BuyerZero',company_domain:'example.com',title:'Head of Procurement',city:'Riga'}};
+  else payload={output:{phone:'+37120000001',full_name:'Anna BuyerZero',company_domain:'example.com'}};
+  return Response.json(payload,{headers:{'X-Treg-Call-Id':url.split('/').pop(),'X-Treg-Cost-Micro':'4000'}});
+ }};
+ let authorized=true;
+ const deps={guard:async()=>{if(!authorized)throw Object.assign(Error('Contact authorization was revoked.'),{code:'CONTACT_SESSION_REVOKED'});},getCompany:async()=>load(),credential:providerDeps.credential,findTreg:(...args)=>findTregWorkEmail(...args,providerDeps)};
+ const input={person_id:'p0',provider:'treg',approved:true,data_lookup:true};
+ return {...f,load,calls,release,started,revoke:()=>{authorized=false;},email:()=>lookupAdditionalEmail(f.env,f.context,'c',{...input,email_lookup:true,phone_approved:false},deps),phone:()=>lookupAdditionalEmail(f.env,f.context,'c',{...input,email_lookup:false,phone_approved:true},deps),attempt:()=>JSON.parse(f.raw.prepare('SELECT result_json FROM additional_contact_attempts').get().result_json)};
+}
+test('a late email completion preserves a concurrent phone result and all settled phase receipts after reload',async()=>{
+ const f=await concurrentTregFixture();try{
+  const email=f.email();await f.started;await f.phone();f.release();const result=await email;
+  const data=f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData,attempt=f.attempt();
+  for(const retained of [data,result.contactData,attempt.contactData]){
+   assert.equal(retained.phone.number,'+37120000001');assert.equal(retained.phone.status,'provider_listed');assert.equal(retained.profile.city,'Riga');
+   assert.deepEqual([...retained.callIds].sort(),['treg.people.email.find','treg.people.email.verify','treg.people.enrich','treg.people.phone.find'].sort());assert.equal(retained.costMicro,16000);
+  }
+  assert.equal(attempt.contact.phone_number,'+37120000001');assert.equal(attempt.contact.work_email,'anna@example.com');assert.equal(attempt.research.costMicro,16000);
+  const before=f.calls.length;const replay=await f.phone();assert.equal(f.calls.length,before);assert.equal(replay.contactData.phone.number,data.phone.number);assert.equal(replay.contactData.profile.city,'Riga');assert.equal(replay.research.costMicro,16000);
+ }finally{f.release();f.raw.close();}
+});
+test('a failed concurrent email worker retains the successful phone evidence and both billed phase receipts',async()=>{
+ const f=await concurrentTregFixture({failedEmail:true});try{
+  const email=f.email();await f.started;await f.phone();f.release();await assert.rejects(email,/saved lookup/);
+  const attempt=f.attempt();assert.ok(attempt.contactData,'A failed worker must retain the successful sibling data');assert.equal(attempt.contactData.phone.number,'+37120000001');assert.equal(attempt.contact.phone_number,'+37120000001');
+  assert.equal(attempt.research.costMicro,11000);assert.deepEqual([...attempt.research.callIds].sort(),['billed-finder','treg.people.phone.find'].sort());assert.match(attempt.error,/saved lookup/);
+  const data=f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData;
+  assert.equal(data.phone.number,'+37120000001');assert.equal(data.costMicro,11000);assert.equal(attempt.provider_started,true);
+  const history=f.raw.prepare("SELECT metadata_json FROM crm_activities WHERE activity_type='contact.enriched' ORDER BY rowid DESC LIMIT 1").get();assert.equal(JSON.parse(history.metadata_json).contact_data.costMicro,11000);
+ }finally{f.release();f.raw.close();}
+});
+test('a late phone response retains the completed email, professional data and aggregate phase cost',async()=>{
+ const f=await concurrentTregFixture({blockPhase:'phone'});try{
+  const phone=f.phone();await f.started;await f.email();f.release();const result=await phone;
+  assert.equal(result.contact.work_email,'anna@example.com');assert.equal(result.contact.email_status,'verified');assert.equal(result.contact.phone_number,'+37120000001');
+  for(const data of [result.contactData,f.attempt().contactData,f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData]){
+   assert.equal(data.profile.city,'Riga');assert.equal(data.phone.number,'+37120000001');assert.equal(data.costMicro,16000);assert.equal(new Set(data.callIds).size,4);
+  }
+ }finally{f.release();f.raw.close();}
+});
+test('simultaneous retries retain one settled charge per idempotent paid phase',{timeout:5000},async()=>{
+ const f=await concurrentTregFixture();try{
+  const first=f.email();await f.started;const second=f.email();
+  // The second worker reaches the same saved profile phase before either completes.
+  while(f.calls.filter(row=>row.url.includes('people.enrich')).length<2)await new Promise(setImmediate);
+  f.release();await Promise.all([first,second]);
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM treg_contact_calls').get().n,3);assert.equal(f.attempt().research.costMicro,12000);assert.equal(f.attempt().research.callIds.length,3);
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM additional_contact_attempts').get().n,1);
+  const byPhase=new Map();for(const call of f.calls){const phase=call.url.split('/').pop(),keys=byPhase.get(phase)||new Set();keys.add(call.options.headers['Idempotency-Key']);byPhase.set(phase,keys);}assert.ok([...byPhase.values()].every(keys=>keys.size===1));
+ }finally{f.release();f.raw.close();}
+});
+test('a contact-data write retries a raced save and retains the newer same-buyer phone',async()=>{
+ const f=await concurrentTregFixture({blockPhase:'none'});try{
+  const original=f.env.DB.prepare;let raced=false;
+  f.env.DB.prepare=sql=>{
+   if(!raced&&sql.startsWith('UPDATE crm_intelligence SET research_snapshot_json')){
+    raced=true;const snapshot=f.load().intelligence.research_snapshot,person=snapshot.buyerResearch.buyers[0],checkedAt=new Date(Date.now()+1000).toISOString();
+    person.contactData={version:1,personId:person.id,identityName:person.name,identityTitle:person.title,identityOrganization:person.organization,domain:'example.com',checkedAt,status:'updated',profile:{status:'not_requested'},phone:{status:'provider_listed',number:'+37120000002',source:'newer-response',checkedAt},callIds:[],costMicro:0};
+    f.raw.prepare("UPDATE crm_intelligence SET research_snapshot_json=? WHERE company_id='c'").run(JSON.stringify(snapshot));f.raw.prepare("UPDATE crm_contacts SET phone_number='+37120000002' WHERE external_person_id='p0'").run();
+   }
+   return original(sql);
+  };
+  const result=await f.phone();assert.equal(raced,true);assert.equal(result.contactData.phone.number,'+37120000002');assert.equal(result.contact.phone_number,'+37120000002');assert.equal(f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData.phone.source,'newer-response');
+  assert.equal(f.calls.length,1,'A raced local save must not replay a paid phase');
+ }finally{f.raw.close();}
+});
+test('a phone arriving before the CRM phone write is consistent across CRM, snapshot and response',async()=>{
+ const f=await concurrentTregFixture({blockPhase:'none'});try{
+  const original=f.env.DB.prepare;let raced=false;
+  f.env.DB.prepare=sql=>{
+   if(!raced&&sql.startsWith('UPDATE crm_contacts SET phone_number=CASE')){
+    raced=true;const snapshot=f.load().intelligence.research_snapshot,person=snapshot.buyerResearch.buyers[0],checkedAt=new Date(Date.now()+1000).toISOString();
+    person.contactData={version:1,personId:person.id,identityName:person.name,identityTitle:person.title,identityOrganization:person.organization,domain:'example.com',checkedAt,status:'updated',profile:{status:'not_requested'},phone:{status:'provider_listed',number:'+37120000002',source:'newer-response',checkedAt},callIds:[],costMicro:0};
+    f.raw.prepare("UPDATE crm_intelligence SET research_snapshot_json=? WHERE company_id='c'").run(JSON.stringify(snapshot));f.raw.prepare("UPDATE crm_contacts SET phone_number='+37120000002' WHERE external_person_id='p0'").run();
+   }
+   return original(sql);
+  };
+  const result=await f.phone();assert.equal(raced,true);
+  for(const retained of [result,f.attempt()]){assert.equal(retained.contact.phone_number,'+37120000002');assert.equal(retained.contactData.phone.number,'+37120000002');}
+  assert.equal(f.load().contacts[0].phone_number,'+37120000002');assert.equal(f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData.phone.number,'+37120000002');
+ }finally{f.raw.close();}
+});
+test('a held stale nonempty CRM row cannot replace a newer phone in a late email response',async()=>{
+ const f=await concurrentTregFixture({blockPhase:'none'});let release;try{
+  const {upsertCrmContacts}=await import('../src/crm.js');await upsertCrmContacts(f.env.DB,f.context,'c',[{external_person_id:'p0',name:'Anna BuyerZero',title:'Head of Procurement',source:'treg'}]);f.raw.prepare("UPDATE crm_contacts SET phone_number='+37120000000',phone_status='provider_listed'").run();
+  const original=f.env.DB.prepare;let held=false,ready;const started=new Promise(r=>ready=r),wait=new Promise(r=>release=r);
+  f.env.DB.prepare=sql=>{const statement=original(sql);if(sql==='SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL ORDER BY updated_at DESC'){
+   const all=statement.all.bind(statement);statement.all=async()=>{const result=await all();if(!held&&f.load().intelligence.research_snapshot.buyerResearch.buyers[0].contactData?.profile?.status==='provider_reported'){held=true;ready();await wait;}return result;};
+  }return statement;};
+  const email=f.email();await started;const phone=await f.phone();release();const result=await email;
+  assert.equal(phone.contact.phone_number,'+37120000001');assert.equal(result.contact.phone_number,'+37120000001');assert.equal(f.attempt().contact.phone_number,'+37120000001');assert.equal(result.contactData.phone.number,'+37120000001');
+ }finally{release?.();f.release();f.raw.close();}
+});
+test('a billed failed phase remains in the ledger without CRM projection after authorization is revoked',async()=>{
+ const f=await concurrentTregFixture({failedEmail:true});try{
+  const email=f.email();await f.started;await f.phone();
+  const snapshot=f.raw.prepare("SELECT research_snapshot_json FROM crm_intelligence WHERE company_id='c'").get().research_snapshot_json,activities=f.raw.prepare('SELECT COUNT(*) n FROM crm_activities').get().n;
+  f.revoke();f.release();await assert.rejects(email,/saved lookup/);
+  assert.equal(f.attempt().research.costMicro,11000);assert.equal(f.attempt().provider_started,true);assert.equal(f.raw.prepare('SELECT SUM(cost_micro) n FROM treg_contact_calls').get().n,11000);
+  assert.equal(f.raw.prepare("SELECT research_snapshot_json FROM crm_intelligence WHERE company_id='c'").get().research_snapshot_json,snapshot);assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM crm_activities').get().n,activities);
+ }finally{f.release();f.raw.close();}
+});

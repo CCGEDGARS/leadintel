@@ -6459,7 +6459,55 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "buyer-buttons=20261031-v1"
+        "buyer-buttons=20261031-v2"
+      ]
+    },
+    {
+      "id": "buyer-buttons-reviewed-recipient-boundary",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const reviewedMatches=verified.filter(matchesReviewed)",
+        "reviewedCurrent()",
+        "selectOnly:true,personId:String(person.id),reviewedRecipient",
+        "The confirmed email changed."
+      ]
+    },
+    {
+      "id": "buyer-buttons-current-source-generations",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "options.force?(options.currentRows||[])",
+        "Source read failed: ",
+        "freshRows.push(row)",
+        "checkedAt:Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt",
+        "if(row.sourceRead!==true)passage.phone=",
+        "if(evidence.sourceRead!==true&&!legacyRead)return",
+        "page.url,page.metadata?.sourceURL,page.metadata?.url",
+        "url:actual,markdown:text"
+      ]
+    },
+    {
+      "id": "buyer-buttons-recheck-current-source-handoff",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(force)existingRows=officialResult?.freshRows||[]",
+        "currentRows:evidence",
+        "Retained/dossier quotes stay historical until a source read succeeds."
+      ]
+    },
+    {
+      "id": "buyer-buttons-dossier-excerpt-provenance",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "sourceRead:false,evidenceKind:'dossier_excerpt'"
       ]
     }
   ],

@@ -12,7 +12,7 @@ function runtime(){
  return {c,b,person,other,candidate,dom,calls,now,eval:code=>vm.runInContext(code,c),controls(){const node=dom.window.document.getElementById('customer-pipeline');node.innerHTML=c.prospectContactControls(candidate,person);return node;},close:()=>dom.window.close()};
 }
 function savedEmail(r){r.c.contact={id:'saved',external_person_id:r.person.id,name:r.person.name,company_id:'company',workspace_id:'w',work_email:'teemu@example.com',email_status:'verified',verification_provider:'Apollo'};r.eval('enrichmentResults.set("example.com|teemu",{contact})');}
-function officialPhone(r){Object.assign(r.person,{publicPhone:'+371 2211 3344',publicPhoneUrl:'https://example.com/team',publicPhoneSourceCheck:{version:2,status:'attributed',url:'https://example.com/team',checkedAt:r.now},publicPhoneEvidence:{version:2,url:'https://example.com/team',quote:'Teemu Suursalmi — Head of Procurement, Example. Phone +371 2211 3344',sourceKind:'official',checkedAt:r.now}});}
+function officialPhone(r){Object.assign(r.person,{publicPhone:'+371 2211 3344',publicPhoneUrl:'https://example.com/team',publicPhoneSourceCheck:{version:2,status:'attributed',url:'https://example.com/team',checkedAt:r.now},publicPhoneEvidence:{version:2,url:'https://example.com/team',quote:'Teemu Suursalmi — Head of Procurement, Example. Phone +371 2211 3344',sourceKind:'official',sourceRead:true,checkedAt:r.now}});}
 function installPaid(r){
  let confirmed=false;
  const policy={provider:'treg',enabled:true,phoneEnabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2};
