@@ -17,11 +17,12 @@ class DB{
       CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT,PRIMARY KEY(workspace_id,user_id));
       CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT);
       CREATE TABLE gmail_connections(workspace_id TEXT PRIMARY KEY,user_id TEXT,google_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT,history_id TEXT,connected_at TEXT,updated_at TEXT,disconnected_at TEXT);
+      CREATE TABLE microsoft_mail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,status TEXT,sent_at TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE gmail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,idempotency_key TEXT,domain TEXT,recipient TEXT,subject TEXT,gmail_message_id TEXT,gmail_thread_id TEXT,sent_by TEXT,sent_at TEXT,status TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,idempotency_key));
       INSERT INTO workspaces(id,name,market) VALUES('w1','Test','LV');`);
     this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0024_automation_brand_html.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0025_contact_suppression.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0027_approved_workflow.sql',import.meta.url),'utf8'));
   }
-  prepare(sql){return new Statement(this.raw,sql);}async batch(rows){for(const row of rows)await row.run();}
+  prepare(sql){return new Statement(this.raw,sql);}async batch(rows){this.raw.exec('BEGIN');try{const results=[];for(const row of rows)results.push(await row.run());this.raw.exec('COMMIT');return results;}catch(cause){this.raw.exec('ROLLBACK');throw cause;}}
 }
 async function fixture(role='owner'){
   const db=new DB();const token=`token-${role}`;const hash=await sha256(token);
@@ -103,4 +104,46 @@ sqliteTest('verification retry is owner-only and scoped to held active sequences
  let response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'other'}}),env,{});assert.equal((await response.json()).retried,false);
  db.raw.prepare("UPDATE workspace_members SET role='sales'").run();response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'q'}}),env,{});assert.equal(response.status,403);
  db.raw.prepare("UPDATE workspace_members SET role='owner'").run();response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'q'}}),env,{});assert.equal((await response.json()).retried,true);assert.equal(db.raw.prepare("SELECT status FROM outreach_automation_queue WHERE id='q'").get().status,'queued');
+});
+
+sqliteTest('policy activation cannot continue after owner role or session changes while reading its body',async()=>{
+  for(const mutation of ["UPDATE workspace_members SET role='viewer' WHERE user_id='u1'",'DELETE FROM sessions']){
+    const f=await fixture();const req=request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:f.token,body:{mode:'automatic',enabled:true}});const read=req.json.bind(req);req.json=async()=>{const body=await read();f.db.raw.exec(mutation);return body;};
+    const response=await handleOutreachAutomationRoute(req,f.env,{});assert.ok([401,403].includes(response.status));assert.equal(f.db.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_policies WHERE enabled=1').get().n,0);
+  }
+});
+
+sqliteTest('policy activation commits only with current owner authority and unchanged policy',async()=>{
+  const f=await fixture();const batch=f.db.batch.bind(f.db);f.db.batch=async rows=>{if(rows.some(row=>row.sql.includes('INSERT INTO outreach_automation_policies'))){f.db.raw.exec("UPDATE workspace_members SET role='viewer' WHERE user_id='u1'");}return batch(rows);};
+  const response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:f.token,body:{mode:'automatic',enabled:true}}),f.env,{});
+  assert.ok([403,409].includes(response.status));assert.equal(f.db.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_policies WHERE enabled=1').get().n,0);
+});
+
+sqliteTest('suppression and verification retry retain their original owner through body reads',async()=>{
+  for(const [path,body] of [['suppression',{email:'buyer@example.com'}],['retry-verification',{id:'q1'}]]){
+    const f=await fixture();const req=request(`/api/outreach-automation/${path}?workspace_id=w1`,{method:'POST',token:f.token,body});const read=req.json.bind(req);req.json=async()=>{const payload=await read();f.db.raw.exec("UPDATE workspace_members SET role='viewer' WHERE user_id='u1'");return payload;};
+    const response=await handleOutreachAutomationRoute(req,f.env,{});assert.equal(response.status,403);assert.equal(f.db.raw.prepare('SELECT COUNT(*) n FROM outreach_contact_suppression').get().n,0);
+  }
+});
+
+sqliteTest('status separates accepted shared-mailbox sends from uncertain reservations across providers',async()=>{
+  const f=await fixture();f.db.raw.exec("INSERT INTO microsoft_mail_messages(id,workspace_id,status,sent_at,created_at) VALUES('ms-sent','w1','sent','2026-09-08T08:00:00Z','2026-09-08T08:00:00Z'),('ms-unknown','w1','sending',NULL,'2026-09-08T08:00:00Z');INSERT INTO gmail_messages(id,workspace_id,idempotency_key,status,created_at) VALUES('gmail-unknown','w1','gmail-unknown','sending','2026-09-08T08:00:00Z')");
+  const response=await handleOutreachAutomationRoute(request('/api/outreach-automation/status?workspace_id=w1',{token:f.token}),f.env,{}),result=await response.json();assert.equal(response.status,200);assert.equal(result.usage.workspaceSentToday,1);assert.equal(result.usage.mailboxSentToday,1);assert.equal(result.usage.workspaceReservedToday,2);assert.equal(result.usage.mailboxReservedToday,2);
+});
+
+sqliteTest('explicit owner takeover cancels only known pending queue rows and preserves sent history and policy',async()=>{
+ const f=await fixture();f.db.raw.exec("INSERT INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,approved_at,initial_subject,initial_body,status,created_by) VALUES('takeover','w1','w1','takeover-package','example.com','buyer@example.com','2026-09-08T08:00:00Z','Saved subject','Saved body','active','u1');INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('takeover-q','w1','takeover','w1',0,'buyer@example.com','Saved subject','Saved body','queued','2026-09-08T08:00:00Z','2026-09-08T08:00:00Z','takeover-key')");
+ const response=await handleOutreachAutomationRoute(request('/api/outreach-automation/cancel-sequence?workspace_id=w1',{method:'POST',token:f.token,body:{id:'takeover',approved:true}}),f.env,{});assert.equal(response.status,200);assert.equal((await response.json()).cancelled,true);assert.equal(f.db.raw.prepare("SELECT status FROM outreach_automation_sequences WHERE id='takeover'").get().status,'cancelled');const queue=f.db.raw.prepare("SELECT status,subject,body FROM outreach_automation_queue WHERE id='takeover-q'").get();assert.equal(queue.status,'cancelled_pause');assert.equal(queue.body,'Saved body');assert.equal(queue.subject,'Saved subject');
+});
+function takeoverSeed(f,{status='queued',code=null,history=false}={}){
+ f.db.raw.exec("INSERT INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,approved_at,initial_subject,initial_body,status,created_by) VALUES('takeover','w1','w1','takeover-package','example.com','buyer@example.com','2026-09-08T08:00:00Z','Saved subject','Saved body','active','u1')");
+ f.db.raw.prepare("INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,last_error_code,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('takeover-q','w1','takeover','w1',?,'buyer@example.com','Saved subject','Saved body',?,?,'2026-09-08T08:00:00Z','2026-09-08T08:00:00Z','takeover-key')").run(history?1:0,status,code);
+ if(history)f.db.raw.exec("INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key,gmail_message_id,sent_at) VALUES('past-sent','w1','takeover','w1',0,'buyer@example.com','Original','Original sent body','sent','2026-09-08T07:00:00Z','2026-09-08T07:00:00Z','past-sent-key','sent-id','2026-09-08T07:00:00Z');INSERT INTO gmail_messages(id,workspace_id,idempotency_key,recipient,status,gmail_message_id,sent_at) VALUES('past-sent','w1','past-sent-key','buyer@example.com','sent','sent-id','2026-09-08T07:00:00Z')");
+}
+const cancelRequest=f=>request('/api/outreach-automation/cancel-sequence?workspace_id=w1',{method:'POST',token:f.token,body:{id:'takeover',approved:true}});
+sqliteTest('takeover refuses uncertain, active or changed-owner attempts and keeps saved original rows',async()=>{
+ for(const kind of ['sending','ambiguous','legacy','accepted-pending','role','claim-race']){const f=await fixture();takeoverSeed(f,{status:kind==='sending'?'sending':['ambiguous','legacy'].includes(kind)?'failed':'queued',code:kind==='ambiguous'?'ambiguous_send_state':kind==='legacy'?'transient':null});if(kind==='accepted-pending')f.db.raw.exec("INSERT INTO gmail_messages(id,workspace_id,idempotency_key,status,gmail_message_id,sent_at) VALUES('accepted','w1','takeover-key','sent','accepted-id','2026-09-08T08:00:00Z')");if(kind==='role'){const req=cancelRequest(f),read=req.json.bind(req);req.json=async()=>{const body=await read();f.db.raw.exec("UPDATE workspace_members SET role='viewer'");return body;};const response=await handleOutreachAutomationRoute(req,f.env,{});assert.equal(response.status,403);}else {if(kind==='claim-race'){const batch=f.db.batch.bind(f.db);f.db.batch=async rows=>{f.db.raw.exec("UPDATE outreach_automation_queue SET status='sending' WHERE id='takeover-q'");return batch(rows);};}assert.equal((await handleOutreachAutomationRoute(cancelRequest(f),f.env,{})).status,409,kind);}assert.equal(f.db.raw.prepare("SELECT status FROM outreach_automation_sequences WHERE id='takeover'").get().status,'active');assert.equal(f.db.raw.prepare("SELECT body FROM outreach_automation_queue WHERE id='takeover-q'").get().body,'Saved body');}
+});
+sqliteTest('takeover cancels future followups idempotently while preserving original accepted history',async()=>{
+ const f=await fixture();takeoverSeed(f,{history:true});const before=f.db.raw.prepare("SELECT * FROM outreach_automation_queue WHERE id='past-sent'").get(),receipt=f.db.raw.prepare("SELECT * FROM gmail_messages WHERE id='past-sent'").get();assert.equal((await handleOutreachAutomationRoute(cancelRequest(f),f.env,{})).status,200);const duplicate=await handleOutreachAutomationRoute(cancelRequest(f),f.env,{});assert.equal(duplicate.status,200);assert.equal((await duplicate.json()).duplicate,true);assert.deepEqual(f.db.raw.prepare("SELECT * FROM outreach_automation_queue WHERE id='past-sent'").get(),before);assert.deepEqual(f.db.raw.prepare("SELECT * FROM gmail_messages WHERE id='past-sent'").get(),receipt);assert.equal(f.db.raw.prepare("SELECT status FROM outreach_automation_queue WHERE id='takeover-q'").get().status,'cancelled_pause');
 });

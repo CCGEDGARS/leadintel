@@ -1,4 +1,4 @@
-import {validateEmailContent} from './email-content.js';
+import {validateEmailContent,validateEmailSubject} from './email-content.js';
 
 const encoder=new TextEncoder();
 const decoder=new TextDecoder();
@@ -9,7 +9,7 @@ function base64ToBytes(value){const binary=atob(value);const out=new Uint8Array(
 export function base64UrlEncode(value){return bytesToBase64(encoder.encode(String(value??''))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
 export function base64UrlDecode(value){const base=String(value||'').replaceAll('-','+').replaceAll('_','/');const padded=base+'='.repeat((4-base.length%4)%4);return decoder.decode(base64ToBytes(padded));}
 export function normalizeEmail(value){const raw=String(value??'').trim().toLowerCase();if(!raw||/[\r\n]/.test(raw)||raw.length>254)return '';return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)?raw:'';}
-function safeHeader(value,max=500){const text=String(value??'');if(/[\r\n]/.test(text))throw new Error('Email header contains invalid newline characters');return text.trim().slice(0,max);}
+function safeHeader(value,max=500){const text=String(value??'');if(/[\r\n]/.test(text))throw new Error('Email header contains invalid newline characters');if(text.length>max)throw new Error('Email subject is too large');return text;}
 function encodeHeader(value){const bytes=encoder.encode(safeHeader(value,998));return `=?UTF-8?B?${bytesToBase64(bytes)}?=`;}
 function crlf(value){return String(value??'').replace(/\r\n|\r|\n/g,'\r\n');}
 function mimeBase64(value){const encoded=bytesToBase64(encoder.encode(String(value)));return encoded.match(/.{1,76}/g)?.join('\r\n')||'';}
@@ -18,7 +18,7 @@ function mimeBoundary(){return `leadintel_${crypto.randomUUID().replaceAll('-','
 export function buildMimeMessage({from='',to,subject,body,textBody,htmlBody}){
   const recipient=normalizeEmail(to);if(!recipient)throw new Error('Valid recipient email is required');
   const sender=from?normalizeEmail(from):'';if(from&&!sender)throw new Error('Valid sender email is required');
-  const cleanSubject=safeHeader(subject,500);if(!cleanSubject)throw new Error('Email subject is required');
+  const cleanSubject=validateEmailSubject(subject);
   const content=validateEmailContent({body,text_body:textBody,html_body:htmlBody});
   const headers=[];if(sender)headers.push(`From: ${sender}`);headers.push(`To: ${recipient}`,`Subject: ${encodeHeader(cleanSubject)}`,'MIME-Version: 1.0');
   if(!content.htmlBody){headers.push('Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: 8bit');return `${headers.join('\r\n')}\r\n\r\n${crlf(content.textBody)}`;}
@@ -38,7 +38,7 @@ export async function refreshGoogleAccessToken(refreshToken,{clientId,clientSecr
 export async function sendGmailMessage(accessToken,message,fetchImpl=fetch,threadId=null){
   if(!accessToken)throw new Error('Gmail access token is required');const raw=base64UrlEncode(message);
   const response=await fetchImpl('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(threadId?{raw,threadId}:{raw})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.id)throw Object.assign(new Error(payload.error?.message||`Gmail send failed (${response.status})`),{deliveryRejected:response.status>=400&&response.status<500&&response.status!==408,retryable:response.status===429});
+  const payload=await response.json().catch(()=>({}));if(!response.ok||typeof payload.id!=='string'||!/^[-A-Za-z0-9_]{1,256}$/.test(payload.id)||payload.threadId!==undefined&&(typeof payload.threadId!=='string'||!/^[-A-Za-z0-9_]{1,256}$/.test(payload.threadId)))throw Object.assign(new Error(payload.error?.message||`Gmail send failed (${response.status})`),{deliveryRejected:response.status>=400&&response.status<500&&response.status!==408,retryable:response.status===429});
   return {id:String(payload.id),threadId:String(payload.threadId||payload.id),labelIds:Array.isArray(payload.labelIds)?payload.labelIds:[]};
 }
 export async function fetchGmailThread(accessToken,threadId,fetchImpl=fetch){

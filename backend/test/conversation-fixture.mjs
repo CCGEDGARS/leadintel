@@ -1,3 +1,4 @@
+import {seedConversationSource} from './delivery-source-fixture.mjs';
 import {D1Fixture} from './writing-reference-fixture.mjs';
 import {readFileSync} from 'node:fs';
 import {base64UrlEncode} from '../src/gmail.js';
@@ -8,7 +9,7 @@ CREATE TABLE gmail_replies(id TEXT PRIMARY KEY,workspace_id TEXT,domain TEXT,gma
 CREATE TABLE crm_companies(id TEXT PRIMARY KEY,workspace_id TEXT,normalized_domain TEXT,deleted_at TEXT,lifecycle_status TEXT,pipeline_stage TEXT,updated_at TEXT);INSERT INTO crm_companies VALUES('co','w1','example.com',NULL,'prospect','Contacted','1');
 CREATE TABLE crm_contacts(id TEXT PRIMARY KEY,workspace_id TEXT,company_id TEXT,normalized_email TEXT,email_status TEXT,archived_at TEXT,updated_at TEXT,name TEXT,verification_provider TEXT,source TEXT,verified_at TEXT,public_email_url TEXT);INSERT INTO crm_contacts VALUES('ct','w1','co','buyer@example.com','verified',NULL,'1','Alice Buyer','Apollo','Apollo',NULL,NULL);
 CREATE TABLE crm_activities(id TEXT PRIMARY KEY,workspace_id TEXT,company_id TEXT,contact_id TEXT,activity_type TEXT,channel TEXT,direction TEXT,subject TEXT,summary TEXT,metadata_json TEXT,occurred_at TEXT,created_at TEXT,actor_user_id TEXT);
-CREATE TABLE microsoft_mail_messages(id TEXT,workspace_id TEXT,status TEXT,sent_at TEXT,created_at TEXT);`);for(const m of ['0015_outreach_automation.sql','0025_contact_suppression.sql','0049_supervised_follow_up.sql'])DB.raw.exec(readFileSync(new URL('../migrations/'+m,import.meta.url),'utf8'));return {DB,APPROVED_WORKFLOW_DELIVERY_MODE:'enabled',AUTOMATIC_GMAIL_DELIVERY_MODE:'manual_only'};}
+CREATE TABLE microsoft_mail_messages(id TEXT,workspace_id TEXT,status TEXT,sent_at TEXT,created_at TEXT);`);for(const m of ['0015_outreach_automation.sql','0025_contact_suppression.sql','0049_supervised_follow_up.sql'])DB.raw.exec(readFileSync(new URL('../migrations/'+m,import.meta.url),'utf8'));seedConversationSource(DB);return {DB,APPROVED_WORKFLOW_DELIVERY_MODE:'enabled',AUTOMATIC_GMAIL_DELIVERY_MODE:'manual_only'};}
 export function msg(id,body,{at='2026-10-23T09:00:00Z',from='buyer@example.com',sent=false}={}){return {id,threadId:'t1',internalDate:String(Date.parse(at)),labelIds:sent?['SENT']:['INBOX'],payload:{headers:[{name:'From',value:from},{name:'Message-ID',value:`<${id}@test>`}],mimeType:'text/plain',body:{data:base64UrlEncode(body)}}};}
 export const initial=msg('g1','Actual initial body',{at:'2026-10-23T07:00:00Z',from:'sender@seller.test',sent:true});
 export const fetchThread=async()=>({id:'t1',messages:[initial]});

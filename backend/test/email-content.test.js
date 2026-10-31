@@ -7,8 +7,8 @@ const ASSET_URL=`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand
 
 test('body-only content preserves the canonical plain-text body',()=>{
   assert.deepEqual(validateEmailContent({body:'  Hello buyer.  '}),{
-    body:'Hello buyer.',
-    textBody:'Hello buyer.',
+    body:'  Hello buyer.  ',
+    textBody:'  Hello buyer.  ',
     htmlBody:''
   });
 });

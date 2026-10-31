@@ -40,3 +40,22 @@ sqliteTest('unsubscribe reply persists a workspace-wide contact block',async()=>
   assert.deepEqual({...block},{email:'buyer@example.com',reason:'unsubscribe'});
   assert.equal(env.DB.raw.prepare(`SELECT COUNT(*) n FROM outreach_automation_queue WHERE sequence_id='s1' AND step_index>0 AND status='queued'`).get().n,0);
 });
+
+sqliteTest('reply stop and dedupe receipt commit atomically so a failed stop can be retried',async()=>{
+  const env=fixture();const batch=env.DB.batch.bind(env.DB);let fail=true;
+  env.DB.batch=async rows=>{if(fail&&rows.some(row=>row.sql.includes("status='stopped_reply'"))){fail=false;throw Error('Injected stop transaction failure');}return batch(rows);};
+  const first=await pollOutreachReplies(env,{now,fetchThread:async()=>threadFor({}),onReply:async()=>{}});assert.equal(first.failed,1);
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_processed_replies').get().n,0);
+  const second=await pollOutreachReplies(env,{now:new Date('2026-09-08T10:30:00Z'),fetchThread:async()=>threadFor({}),onReply:async()=>{}});assert.equal(second.stopped,1);
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM outreach_automation_queue WHERE step_index>0 AND status='queued'").get().n,0);
+});
+
+sqliteTest('mailbox replacement during polling cannot commit private replies into replacement context',async()=>{
+  const env=fixture();let crm=0;const result=await pollOutreachReplies(env,{now,fetchThread:async()=>{env.DB.raw.exec("UPDATE gmail_connections SET google_email='replacement@example.com',encrypted_refresh_token='new'");return threadFor({});},onReply:async()=>{crm++;}});
+  assert.equal(result.replies,0);assert.equal(crm,0);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_processed_replies').get().n,0);
+});
+
+sqliteTest('reply and unsubscribe after the final scheduled message are still synchronized',async()=>{
+  const env=fixture();env.DB.raw.exec("UPDATE outreach_automation_sequences SET status='completed';UPDATE outreach_automation_queue SET status='sent' WHERE step_index>0");let crm=0;
+  const result=await pollOutreachReplies(env,{now,fetchThread:async()=>threadFor({text:'Please unsubscribe me'}),onReply:async()=>{crm++;}});assert.equal(result.replies,1);assert.equal(result.stopped,1);assert.equal(crm,1);assert.equal(env.DB.raw.prepare('SELECT email FROM outreach_contact_suppression').get().email,'buyer@example.com');
+});

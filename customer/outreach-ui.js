@@ -475,7 +475,7 @@ async function approveOutreach({announce=true}={}){if(globalThis.LeadIntelMessag
  const contact=handoffContact?.contact||{},person=selectedContact(source),recipient=String(contact.work_email||contact.normalized_email||person?.email||person?.work_email||'').trim();
  const recipientIdentity=readJson(DISCOVERY_META_KEY).scriptBuyer?.recipientIdentity;
  const approvalSource={...source,messageStudioDraft:{...source.messageStudioDraft,...(recipientIdentity?{recipientIdentity}:{})},dossier:{...source.dossier,people:(source.dossier.people||[]).map(row=>row.id===source.selectedPersonId?{...row,...contact,id:row.id,...(contact.id?{contact_id:contact.id}:{}),name:contact.name||person?.name||row.name,publicName:contact.name||person?.publicName||person?.name||row.publicName||row.name,...(Object.hasOwn(contact,'linkedin_url')?Object.fromEntries(['linkedinConfirmedUrl','publicLinkedinUrl','linkedin_url','linkedinUrl'].map(key=>[key,String(contact.linkedin_url||'')])):{}),title:contact.title||person?.title||row.title,email:recipient,work_email:recipient,normalized_email:recipient}:row)}};
- const item=LeadIntelOutreach.approveOutreachItem(approvalSource,edited.drafts,new Date().toISOString(),{brandIdentity:mainState().brandIdentity,campaignScenario:campaign,recipient:contact});
+ const item=LeadIntelOutreach.approveOutreachItem(approvalSource,edited.drafts,new Date().toISOString(),{brandIdentity:mainState().brandIdentity,campaignScenario:campaign,recipient:contact,canonicalState:mainState(),canonicalStudio:outreach.messageStudio||{}});
  if(!item.approved){toast(item.error);renderDossier();return {ok:false,error:item.error};}
  const sourceStamp=JSON.stringify(editorDraft()),approvedStamp=JSON.stringify(currentItem()),scope=LeadIntelMessageEditor.scope(crmBridge()?.workspace?.id,currentItem(),studioState(),studioMessageContext());
  const operation={key:captured.key};messageApprovalOperation=operation;
@@ -606,12 +606,12 @@ function loadDeliveryModules(){
   const ready=()=>{clearTimeout(timer);if(window.LeadIntelDeliveryUI?.ready)resolve();else fail();};
   const loadUi=()=>{
    let ui=document.querySelector('script[data-delivery-ui]');
-   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2&message-usability=20261024-v2&messages-reliability=20261031-v1`;ui.dataset.deliveryUi='true';}
+   if(!ui){ui=document.createElement('script');ui.type='module';ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3&page-procedures=20261010-v1&audit-delivery=20261015-v1&test-email=20261015-v1&app-dialogs=20261017-v1&buyer-company-actions=20261021-v2&delivery-handoff=20261022-v2&conversations=20261023-v1&delivery-experience=20261024-v1&delivery-records=20261024-v2&delivery-spacing=20261024-v2&message-usability=20261024-v2&messages-reliability=20261031-v1&delivery-reliability=20261031-v1`;ui.dataset.deliveryUi='true';}
    ui.addEventListener('load',ready,{once:true});ui.addEventListener('error',()=>{ui.remove();fail();},{once:true});if(!ui.isConnected)document.body.appendChild(ui);
   };
   if(window.LeadIntelDelivery){loadUi();return;}
   let engine=document.querySelector('script[data-delivery-engine]');
-  if(!engine){engine=document.createElement('script');engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}&delivery-records=20261024-v2&messages-reliability=20261031-v1`;engine.dataset.deliveryEngine='true';}
+  if(!engine){engine=document.createElement('script');engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}&delivery-records=20261024-v2&messages-reliability=20261031-v1&delivery-reliability=20261031-v1`;engine.dataset.deliveryEngine='true';}
   engine.addEventListener('load',loadUi,{once:true});engine.addEventListener('error',()=>{engine.remove();fail();},{once:true});if(!engine.isConnected)document.body.appendChild(engine);
  });
  const pending=deliveryModulesReady;pending.catch(()=>{if(deliveryModulesReady===pending)deliveryModulesReady=null;});return pending;
@@ -844,8 +844,8 @@ async function sendCurrentApprovedEmail(){
  if(!recipient){q('mw-send-status').textContent='Confirm a verified recipient email in Buyers before sending.';return;}
  button.disabled=true;button.textContent='Preparing delivery…';
  try{
-  await import('./delivery-engine.js?v=20261009-message-send-v1&delivery-records=20261024-v2&messages-reliability=20261031-v1');
-  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1&app-dialogs=20261017-v1&delivery-records=20261024-v2&messages-reliability=20261031-v1');
+  await import('./delivery-engine.js?v=20261009-message-send-v1&delivery-records=20261024-v2&messages-reliability=20261031-v1&delivery-reliability=20261031-v1');
+  await import('./production-gmail-ui.js?v=20261009-message-send-v2&audit-delivery=20261015-v1&app-dialogs=20261017-v1&delivery-records=20261024-v2&messages-reliability=20261031-v1&delivery-reliability=20261031-v1');
   const result=await window.LeadIntelProductionMail.sendApprovedFromMessages({domain:item.domain,recipient,approvedAt:item.approvedAt,personId:item.selectedPersonId});
   q('mw-send-status').textContent=result.ok?(result.duplicate?'Already sent; duplicate prevented.':result.crmSynced?'Email sent and CRM record saved.':'Email sent; CRM synchronization needs attention. Do not resend.'):(result.cancelled?'Send cancelled.':result.error||'Email could not be sent.');
   if(result.ok){renderAll();window.LeadIntelJourney?.refresh?.();}

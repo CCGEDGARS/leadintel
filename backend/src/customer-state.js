@@ -1,3 +1,4 @@
+import {messageBatch} from './message-operation-authority.js';
 import {WORKSPACE_RECORD_CODEC,MAX_WORKSPACE_TRANSFER_BYTES,preparePayloadRecord,payloadRecordWrites,payloadRecordCleanup,readStoredPayload,readOwnedPayload} from './workspace-record-store.js';
 import {flowProjectionStatements} from './saved-flow-store.js';
 import {validatePlatformOriginalScriptsWrite} from './original-scripts-policy.js';
@@ -27,7 +28,7 @@ export async function getCustomerState(env,workspaceId){
   const owned=await readOwnedPayload(env,workspaceId,row);row=owned.row;const payload=normalizeCustomerPayload(owned.payload);
   return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,record_backed:JSON.parse(row.payload_json||'{}')?.format==='leadintel-workspace-records-v1',updated_at:row.updated_at||null,state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1',compression_codec:'workspace-lzw-v2',record_codec:WORKSPACE_RECORD_CODEC,max_sync_bytes:MAX_WORKSPACE_TRANSFER_BYTES};
 }
-export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role,allowFlowSwitch=false}){
+export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role,allowFlowSwitch=false,operationContext=null,operationAssertions=[]}){
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload,maxBytes:MAX_WORKSPACE_TRANSFER_BYTES});if(decision.conflict)return decision;
   const restored=stateBudget.restoreFromSync(decision.next.payload);
   if(!allowFlowSwitch&&current.payload?.main?.myFlow?.id!==restored.main?.myFlow?.id&&(current.payload?.main?.myFlow?.id||restored.main?.myFlow?.id))throw new Error('Open a flow through My Flows before changing the active flow');
@@ -46,7 +47,7 @@ export async function putCustomerState(env,{workspaceId,userId,expectedVersion,s
   const writes=[statement,...projection.writes];
   if(record.chunks.length||current.record_codec&&customerStateSize(current.payload)>384*1024)writes.push(payloadRecordCleanup(env,workspaceId));
   writes.push(...chunks);
-  const result=writes.length>1?(await env.DB.batch(writes))[0]:await statement.run();
+  const result=operationContext?(await messageBatch(env,operationContext,writes,operationAssertions)).slice(-writes.length)[0]:writes.length>1?(await env.DB.batch(writes))[0]:await statement.run();
   if(Number(result?.meta?.changes||0)<1)return {conflict:true,current:await getCustomerState(env,workspaceId)};
   // Return the revision this CAS committed, never a later writer's payload.
   return {conflict:false,state:{workspace_id:workspaceId,...next,updated_at:null}};

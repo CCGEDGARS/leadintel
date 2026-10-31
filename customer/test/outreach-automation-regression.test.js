@@ -20,7 +20,7 @@ test('legacy manual Gmail delivery remains explicit and automation stays separat
 
 test('automatic handoff requires a Step 6 approved package and explicit Step 7 recipient',()=>{
   const handoff=read('outreach-automation-delivery-handoff.js');
-  assert.match(handoff,/engine\.approvedDeliveryPackages\(outreach\)/);
+  assert.match(handoff,/engine\.approvedDeliveryPackages\(outreach,read\(/);
   assert.match(handoff,/delivery\.selectedDomain/);
   assert.match(handoff,/delivery-recipient/);
   assert.match(handoff,/approved:true/);

@@ -48,13 +48,13 @@
     return {id:clean(value?.id)||eventId("reply",value?.domain||"reply",value?.at),text,category,at:safeIso(value?.at)};
   }
   function packageKey(item={}){return JSON.stringify([normalizeDomain(item.domain),clean(item.selectedPersonId),item.channel==='linkedin'?'linkedin':'email',clean(item.approvedAt)]);}
-  function approvedDeliveryPackages(state={}){
+  function approvedDeliveryPackages(state={},canonicalState){
     const packages=new Map(),seen=new Set();
     for(const item of [...(state.items||[]),...Object.values(state.buyerDrafts||{})]){
       if(!item?.domain)continue;
       const buyer=JSON.stringify([normalizeDomain(item.domain),clean(item.selectedPersonId),item.channel||'email']);
       if(seen.has(buyer))continue;seen.add(buyer);
-      if(!item.approved||item.channel==='linkedin'||item.reapprovalRequired||!Outreach?.approvalCurrent?.(item))continue;
+      if(!item.approved||item.channel==='linkedin'||item.reapprovalRequired||!Outreach?.approvalCurrent?.(item)||!Outreach?.sourceAuthorityCurrent?.(item,canonicalState,state.messageStudio||{}))continue;
       // Active items own the buyer's current revision; archived buyer drafts are fallbacks.
       if(!packages.has(buyer))packages.set(buyer,item);
     }
@@ -72,6 +72,20 @@
     if(exact.length)return exact.length===1?exact[0]:null;
     const legacy=candidates.filter(row=>!row.approvedAt);
     return legacy.length===1?legacy[0]:null;
+  }
+  function submissionStorageKey(workspace,user,packageItem,recipient){return 'leadintel_mail_submission_v1:'+workspace+':'+user+':'+encodeURIComponent(JSON.stringify([normalizeDomain(packageItem?.domain),clean(packageItem?.selectedPersonId),clean(packageItem?.approvedAt),normalizeEmail(recipient)]));}
+  function pendingRecipientKey(workspace,user,packageItem,recipient){return 'leadintel_mail_pending_v1:'+workspace+':'+user+':'+encodeURIComponent(JSON.stringify([normalizeDomain(packageItem?.domain),normalizeEmail(recipient)]));}
+  function readSubmissionReceipt(storage,workspace,user,packageItem,recipient){
+    const exact=submissionStorageKey(workspace,user,packageItem,recipient),legacy='leadintel_mail_submission_v1:'+workspace+':'+user;
+    for(const key of [exact,pendingRecipientKey(workspace,user,packageItem,recipient),legacy]){const raw=storage?.getItem(key);if(!raw)continue;let value;try{value=JSON.parse(raw);}catch{return {status:'unconfirmed'};}
+      if(!value||!['unconfirmed','sent'].includes(value.status))continue;
+      if(key!==legacy||!value.domain||normalizeDomain(value.domain)===normalizeDomain(packageItem?.domain)&&(value.status==='unconfirmed'||String(value.personId||'')===String(packageItem?.selectedPersonId||''))&&(value.status==='unconfirmed'||value.approvedAt===packageItem?.approvedAt)&&normalizeEmail(value.recipient)===normalizeEmail(recipient))return value;
+    }return null;
+  }
+  function saveSubmissionReceipt(storage,workspace,user,packageItem,recipient,receipt){
+    const value=JSON.stringify({...receipt,workspaceId:workspace,domain:normalizeDomain(packageItem?.domain),personId:clean(packageItem?.selectedPersonId),approvedAt:clean(packageItem?.approvedAt),recipient:normalizeEmail(recipient)});
+    const pending=pendingRecipientKey(workspace,user,packageItem,recipient);if(receipt.status==='unconfirmed')storage.setItem(pending,value);else if(['sent','failed'].includes(receipt.status))storage.removeItem?.(pending);
+    storage.setItem(submissionStorageKey(workspace,user,packageItem,recipient),value);storage.setItem('leadintel_mail_submission_v1:'+workspace+':'+user,value);
   }
   function selectedRecord(state,selector){
     let matches;
@@ -235,5 +249,5 @@
     return {metrics:{sent:records.length,replied,replyRate:percent(replied,records.length),meetings,meetingRate:percent(meetings,records.length),proposals,won,lost,winRate:percent(won,won+lost)},byTone,byMarket,byOffer,bySignal,recommendations:recommendations.slice(0,6),minimumSample:sample};
   }
 
-  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,packageKey,approvedDeliveryPackages,approvedRecipient,findDeliveryRecord,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState};
+  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,submissionStorageKey,readSubmissionReceipt,saveSubmissionReceipt,packageKey,approvedDeliveryPackages,approvedRecipient,findDeliveryRecord,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState};
 });

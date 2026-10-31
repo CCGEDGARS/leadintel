@@ -85,3 +85,15 @@ test('fully eligible automatic send is allowed',()=>{
   const result=evaluateAutomaticSend(eligibleContext());
   assert.deepEqual(result,{allowed:true,reason:'eligible',nextEligibleAt:null});
 });
+
+test('daily exhaustion resumes at the next eligible local opening rather than the same time next day',()=>{
+  const result=evaluateAutomaticSend(eligibleContext({now:new Date('2026-09-11T12:00:00Z'),workspaceSentToday:5}));
+  assert.equal(result.nextEligibleAt,'2026-09-14T06:00:00.000Z');
+});
+
+test('local day exhaustion follows the calendar across both Riga daylight-saving changes',()=>{
+  const policy={...defaultAutomationPolicy(),mode:'automatic',enabled:true,workingDays:[1,2,3,4,5,6,7],sendWindowStart:'00:30',sendWindowEnd:'23:59'};
+  for(const [at,expected] of [['2026-03-28T20:00:00Z','2026-03-28T22:30:00.000Z'],['2026-10-24T19:00:00Z','2026-10-24T21:30:00.000Z']]){
+    const result=evaluateAutomaticSend({policy,now:new Date(at),recipient:'buyer@example.com',workspaceSentToday:5});assert.equal(result.nextEligibleAt,expected);
+  }
+});

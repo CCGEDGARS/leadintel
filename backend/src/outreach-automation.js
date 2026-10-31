@@ -54,6 +54,10 @@ export function nextEnabledWindow(policy,now=new Date()){
 export function boundedDelayMinutes(policy,random=Math.random){
   const p=normalizeAutomationPolicy(policy,policy);let r=Number(random());if(!Number.isFinite(r))r=0;r=Math.max(0,Math.min(0.999999999999,r));return p.minDelayMinutes+Math.floor(r*(p.maxDelayMinutes-p.minDelayMinutes+1));
 }
+function nextLocalDayWindow(policy,now){
+  const current=localClockParts(now,policy.timezone),cursor=new Date(now);cursor.setUTCSeconds(0,0);cursor.setUTCMinutes(cursor.getUTCMinutes()+1);
+  for(let minute=0;minute<48*60;minute++){const local=localClockParts(cursor,policy.timezone);if(local.year!==current.year||local.month!==current.month||local.day!==current.day)return nextEnabledWindow(policy,cursor);cursor.setUTCMinutes(cursor.getUTCMinutes()+1);}throw Error('No next local day found');
+}
 export function evaluateAutomaticSend(context={}){
   let p;try{p=normalizeAutomationPolicy(context.policy,context.policy);}catch{return {allowed:false,reason:'invalid_policy',nextEligibleAt:null};}
   const now=context.now instanceof Date?context.now:new Date(context.now||Date.now());if(!Number.isFinite(now.getTime()))return {allowed:false,reason:'invalid_time',nextEligibleAt:null};
@@ -64,8 +68,8 @@ export function evaluateAutomaticSend(context={}){
   if(context.suppressed)return {allowed:false,reason:'suppressed',nextEligibleAt:null};
   if(!EMAIL.test(String(context.recipient||'').trim().toLowerCase()))return {allowed:false,reason:'invalid_recipient',nextEligibleAt:null};
   if(context.replyStopped)return {allowed:false,reason:'reply_stopped',nextEligibleAt:null};
-  if((Number(context.workspaceSentToday)||0)>=p.workspaceDailyLimit)return {allowed:false,reason:'workspace_daily_limit',nextEligibleAt:nextEnabledWindow(p,new Date(now.getTime()+24*60*60*1000))};
-  if((Number(context.mailboxSentToday)||0)>=p.mailboxDailyLimit)return {allowed:false,reason:'mailbox_daily_limit',nextEligibleAt:nextEnabledWindow(p,new Date(now.getTime()+24*60*60*1000))};
+  if((Number(context.workspaceSentToday)||0)>=p.workspaceDailyLimit)return {allowed:false,reason:'workspace_daily_limit',nextEligibleAt:nextLocalDayWindow(p,now)};
+  if((Number(context.mailboxSentToday)||0)>=p.mailboxDailyLimit)return {allowed:false,reason:'mailbox_daily_limit',nextEligibleAt:nextLocalDayWindow(p,now)};
   const local=localClockParts(now,p.timezone);if(!p.workingDays.includes(local.weekday))return {allowed:false,reason:'disabled_weekday',nextEligibleAt:nextEnabledWindow(p,now)};
   if(!isWithinSendWindow(p,now))return {allowed:false,reason:'outside_window',nextEligibleAt:nextEnabledWindow(p,now)};
   if(context.lastAutomaticSentAt){const last=new Date(context.lastAutomaticSentAt);if(Number.isFinite(last.getTime())){const minAt=new Date(last.getTime()+p.minDelayMinutes*60000);if(now<minAt)return {allowed:false,reason:'minimum_spacing',nextEligibleAt:isWithinSendWindow(p,minAt)?minAt.toISOString():nextEnabledWindow(p,minAt)};}}

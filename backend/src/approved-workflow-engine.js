@@ -1,3 +1,4 @@
+import Outreach from '../../customer/outreach-engine.js';
 import Studio from '../../customer/message-studio.js';
 import MessageEditor from '../../customer/message-editor.js';
 import MessageFacts from '../../customer/message-facts.js';
@@ -26,7 +27,7 @@ export function approvedContext(main={}){
 
   const outreachDefault=Studio.defaultTemplate(main.messageStudio||{});
   const outreachLanguage=Studio.normalize(main.messageStudio||{}).languageSettings?.defaultLanguage||'en';
-  return {...(outreachLanguage!=='en'?{outreachLanguage}:{}),...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:strategy.current,strategySignature:strategy.signature,
+  return {messageSourceAuthority:Outreach.messageSourceAuthority(main,main.messageStudio||{}),...(outreachLanguage!=='en'?{outreachLanguage}:{}),...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:strategy.current,strategySignature:strategy.signature,
     icps:market.icps||[],signals:market.signals||[],researchSourceTypes:market.researchSourceTypes||[],researchCustomSources:market.researchCustomSources||[],researchInstructions:market.researchInstructions||'',knownEvidence:(market.researchResults||[]).slice(0,20).map(item=>({url:item.url||item.link||'',title:item.title||'',description:item.description||'',text:String(item.text||item.markdown||'').slice(0,4000),date:item.date||item.publishedDate||'',market:item.market||''}))};
 }
 export function normalizeWorkflowConfig(input={},context=null){
