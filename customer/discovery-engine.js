@@ -2104,6 +2104,8 @@
     if(matched&&!contact.archived_at&&['apollo','treg'].includes(clean(contact.source).toLowerCase())&&String(contact.external_person_id||'')===String(person.id)&&String(contact.phone_status||'').toLowerCase()==='verified'&&valid(contact.phone_number)&&(!contact.company_id||companyId&&String(contact.company_id)===String(companyId))&&(!contact.workspace_id||String(contact.workspace_id)===String(options.workspaceId||''))&&(!contact.title||clean(contact.title).toLowerCase()===clean(person.title).toLowerCase())&&(!contact.organization||companyNameMatches(contact.organization,candidate.company)))return clean(contact.phone_number);
     const evidence=person.publicPhoneEvidence,check=person.publicPhoneSourceCheck,url=normalizeUrl(person.publicPhoneUrl),quote=clean(evidence?.quote);
     if(!valid(person.publicPhone)||!url||evidence?.version!==2||normalizeUrl(evidence.url)!==url||check?.version!==2||check.status!=='attributed'||normalizeUrl(check.url)!==url||!quote.toLowerCase().includes(name)||!quote.includes(clean(person.publicPhone)))return '';
+    const now=new Date(options.now??Date.now()).getTime(),fresh=stamp=>{const age=now-Date.parse(stamp||'');return Number.isFinite(age)&&age>=0&&age<30*86400000;};
+    if(!fresh(evidence.checkedAt)||!fresh(check.checkedAt))return '';
     if(evidence.sourceKind==='official'&&canonicalDomain(url)===domain||attributedBusinessListing(person,domain,'phone'))return clean(person.publicPhone);
     return '';
   }

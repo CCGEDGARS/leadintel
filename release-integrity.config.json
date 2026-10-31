@@ -6427,7 +6427,9 @@
       "contains": [
         "function confirmedBuyerPhone(",
         "Provider listings alone remain unconfirmed.",
-        "check.status!=='attributed'"
+        "check.status!=='attributed'",
+        "fresh(evidence.checkedAt)",
+        "!contact.archived_at"
       ]
     },
     {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-10-31T19:52:02.365Z",
+  "checkedAt": "2026-10-31T19:57:58.903Z",
   "contract": "docs/policies/buyer-contact-button-contract.md",
   "environment": "Local Chromium, shipping Buyers assets with controlled session/CRM/provider responses; no external requests or real paid lookup",
   "browser": "/usr/bin/chromium",
@@ -20,8 +20,8 @@
     "customer/content-language.js": "ab0194be82aa509d0ce15d6686b0cd2db101e39abcc50b9badd35465a2f52d74",
     "customer/conversation.css": "d7df3a631e472a096554d6c86a22151f373cd0fa530cdf116ae6cc44ac4b764f",
     "customer/crm-engine.js": "443f85adfa307f46215e92e7e18ea7a0f0c2f5ab3fe5259dcce78f3fb348d2d3",
-    "customer/discovery-engine.js": "55b34e39eab899165c628f3eb1de16c971afccc25985465d70507560b06dc07d",
-    "customer/discovery-ui.js": "b81facaa7d590d4653b8afd4c39814af1f990c6095ca2d693d7e0aaee856a88f",
+    "customer/discovery-engine.js": "8dac0abd4c4c421c3a813199f617dffb15d860d9ba25797291df533a67df2784",
+    "customer/discovery-ui.js": "31d2e349297dada6f3d2dfd9a17af42ad68a7443038b7388e2dfd38ec7903040",
     "customer/discovery.css": "ce73e236dacd3d6c69f308a35f50fa502296571eb1c4a3f449174be2c95ec6b6",
     "customer/email-campaigns.css": "98d3f35239d4ab89e9babede99f6316d424686059979c4f0512109860e3762ff",
     "customer/event-campaigns.css": "40b0e065edc03d6489a0924529784bc63a99fde67823645c60ad89275a29dc6c",
