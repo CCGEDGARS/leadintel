@@ -2,14 +2,15 @@
 'use strict';
 const ID='outreach-automation-panel';
 let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=null;
-let policyLoadError='',policyWorkspace='',refreshRequest=0,suppressionLoadError='',stateOwner='',policyOwner='',operationOwner=0;
+let policyLoadError='',policyWorkspace='',refreshRequest=0,suppressionLoadError='',stateOwner='',policyOwner='',operationOwner=0,queueOperationOwner=0;
 const identities=new WeakMap();let identitySequence=0;
 function objectId(value){if(!value||typeof value!=='object')return '';if(!identities.has(value))identities.set(value,++identitySequence);return identities.get(value);}
 function accountKey(){const b=bridge(),cache=root.LeadIntelAccountCache;return JSON.stringify([objectId(b),b?.workspace?.id,b?.workspace?.role,b?.session?.user?.id,b?.session?.user?.role,b?.session?.authenticated,b?.gmail,b?.ready,b?.conflict,b?.resolvingSync,objectId(cache),cache?.current?cache.current():true,typeof localStorage==='undefined'?null:localStorage.getItem('leadintel_account_context_v1')]);}
-function syncOwner(){const key=accountKey();if(stateOwner!==key){stateOwner=key;policy=null;status=null;approvedPackage=null;suppressedContacts=null;policyWorkspace='';policyOwner='';busy=false;operationOwner++;}return key;}
-function authority({withPolicy=false}={}){const key=syncOwner(),b=bridge(),policyKey=withPolicy?JSON.stringify(serverPolicy()):'',accountCurrent=()=>accountKey()===key&&Boolean(b?.session?.authenticated&&b?.workspace?.id&&b.ready!==false&&!b.conflict&&!b.resolvingSync);return {bridge:b,key,accountCurrent,current:()=>accountCurrent()&&(!withPolicy||JSON.stringify(serverPolicy())===policyKey)};}
-function canonicalItems(){try{const saved=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}');return Array.isArray(saved.items)?saved.items:[];}catch{return [];}}
+function syncOwner(){const key=accountKey();if(stateOwner!==key){stateOwner=key;policy=null;status=null;approvedPackage=null;suppressedContacts=null;policyWorkspace='';policyOwner='';busy=false;queueOperationOwner=0;operationOwner++;}return key;}
+function authority({withPolicy=false}={}){const key=syncOwner(),b=bridge(),policyKey=withPolicy?JSON.stringify(serverPolicy()):'',accountCurrent=()=>accountKey()===key&&Boolean(b?.session?.authenticated&&b?.workspace?.id&&b.ready!==false&&!b.conflict&&!b.resolvingSync);return {bridge:b,key,accountCurrent,current:()=>accountCurrent()&&(!root.LeadIntelAccountCache?.current||root.LeadIntelAccountCache.current())&&(!withPolicy||JSON.stringify(serverPolicy())===policyKey)};}
+function canonicalItems(){try{const saved=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}');const seen=new Set();return [...(Array.isArray(saved.items)?saved.items:[]),...Object.values(saved.buyerDrafts||{})].filter(item=>{const key=JSON.stringify([item?.domain,item?.selectedPersonId,item?.channel||'email']);if(seen.has(key))return false;seen.add(key);return true;});}catch{return [];}}
 function canonicalItem(item){return canonicalItems().find(row=>row.domain===item?.domain&&String(row.selectedPersonId)===String(item?.selectedPersonId)&&JSON.stringify(row)===JSON.stringify(item))||null;}
+function sourceCurrent(item){let main={},studio={};try{main=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}');studio=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}').messageStudio||{};}catch{return false;}return root.LeadIntelOutreach?.sourceAuthorityCurrent?.(item,main,studio)===true;}
 function activeAutomatic(){const p=serverPolicy(),b=bridge();return Boolean(isOwner()&&p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled&&!p.paused&&!p.emergencyStop&&b?.gmail?.connected);}
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
@@ -19,16 +20,18 @@ function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){syncOwner();return policyOwner===stateOwner&&String(status?.role||policy?.role||'')==='owner'&&(!bridge()?.workspace?.role||bridge().workspace.role==='owner');}
 function serverPolicy(){syncOwner();return policyOwner===stateOwner?(policy?.policy||policy||{automaticDelivery:'manual_only'}):{automaticDelivery:'manual_only'};}
 function serverStatus(){syncOwner();return status||{};}
-function approvedItems(){return canonicalItems().filter(item=>root.LeadIntelOutreach?.approvalCurrent?.(item));}
-async function queueApprovedPackages(domain=''){
+function approvedItems(){return canonicalItems().filter(item=>root.LeadIntelOutreach?.approvalCurrent?.(item)&&sourceCurrent(item));}
+function deliveryTrace(action){let op;try{op=root.LeadIntelReliabilityTrace?.begin(action);}catch{}return {checkpoint(phase,outcome){try{op?.checkpoint(phase,outcome);}catch{}},finish(outcome){try{op?.finish(outcome);}catch{}}};}
+async function queueApprovedPackages(domain=''){const trace=deliveryTrace('delivery_queue');trace.checkpoint('request','pending');try{const result=await queueApprovedPackagesOperation(domain,trace);trace.finish(result.queued?(result.skipped?'partial':'pass'):'blocked');return result;}catch(error){trace.finish('fail');throw error;}}
+async function queueApprovedPackagesOperation(domain='',trace=deliveryTrace('delivery_queue')){
   syncOwner();const owned=authority({withPolicy:true}),b=owned.bridge;if(busy||!owned.current()||!activeAutomatic()||!b?.getCrmCompany||!b?.listCrmCompanies||!b?.enqueueOutreachAutomation)return {queued:0,skipped:0};
-  const items=approvedItems().filter(item=>!domain||String(item.domain||'')===domain).slice(0,50);let queued=0,skipped=0;const token=++operationOwner;busy=true;
-  const current=item=>token===operationOwner&&owned.current()&&activeAutomatic()&&(!item||canonicalItem(item)&&root.LeadIntelOutreach?.approvalCurrent?.(item));
+  const items=approvedItems().filter(item=>!domain||String(item.domain||'')===domain).slice(0,50);let queued=0,skipped=0;const token=++operationOwner;queueOperationOwner=token;busy=true;
+  const current=item=>token===operationOwner&&owned.current()&&activeAutomatic()&&(!item||canonicalItem(item)&&sourceCurrent(item)&&root.LeadIntelOutreach?.approvalCurrent?.(item));
   try{for(const item of items){if(!current(item))break;try{
     const key=String(item.domain||'').toLowerCase(),personId=String(item.selectedPersonId||''),recipient=root.LeadIntelOutreach?.approvedRecipient?.(item);if(!key||!personId||!recipient){skipped++;continue;}
     const list=await b.listCrmCompanies({q:key,limit:20});if(!current(item))break;
-    const company=list?.ok?(list.companies||[]).find(row=>String(row.normalized_domain||'').toLowerCase()===key):null;if(!company){skipped++;continue;}
-    const detail=await b.getCrmCompany(company.id);if(!current(item))break;if(!detail?.ok||detail.company?.id&&String(detail.company.id)!==String(company.id)||detail.company?.normalized_domain&&String(detail.company.normalized_domain).toLowerCase()!==key||detail.company?.lifecycle_status==='suppressed'){skipped++;continue;}
+    const companies=list?.ok?(list.companies||[]).filter(row=>String(row.normalized_domain||'').toLowerCase()===key):[],company=companies.length===1?companies[0]:null;if(!company){skipped++;continue;}
+    const detail=await b.getCrmCompany(company.id);if(!current(item))break;if(!detail?.ok||String(detail.company?.id||'')!==String(company.id)||detail.company?.workspace_id!==b.workspace.id||String(detail.company?.normalized_domain||'').toLowerCase()!==key||['suppressed','archived'].includes(detail.company?.lifecycle_status)){skipped++;continue;}
     const expected=item.approvalAuthority?.recipient,level=root.LeadIntelBuyerConfirmationPolicy?.level?.()||root.LeadIntelServiceSettings?.confirmationLevel?.();
     const matches=(detail.contacts||[]).filter(row=>{
       const external=String(row.external_person_id||''),id=String(row.id||''),email=String(row.normalized_email||row.work_email||row.email||'').trim().toLowerCase(),name=String(row.full_name||row.name||row.public_name||'').trim();
@@ -42,7 +45,7 @@ async function queueApprovedPackages(domain=''){
     });
     if(matches.length!==1){skipped++;continue;}
     const payload=root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(item,recipient);if(!payload||!current(item)){skipped++;continue;}
-    const result=await b.enqueueOutreachAutomation(payload);if(!current(item))break;if(result?.ok){if(!result.duplicate)queued++;}else skipped++;
+    trace.checkpoint('persistence','pending');const result=await b.enqueueOutreachAutomation(payload);trace.checkpoint('persistence',result?.ok?'pass':'fail');if(!current(item))break;if(result?.ok){if(!result.duplicate)queued++;}else skipped++;
   }catch{if(!current(item))break;skipped++;}}}finally{if(token===operationOwner){busy=false;if(owned.current())await refresh();}}
   if(owned.current())message(`${queued} approved verified contact${queued===1?'':'s'} queued.${skipped?` ${skipped} skipped; review contact verification or previous outreach.`:''}`);
   return {queued,skipped};
@@ -113,10 +116,21 @@ function renderVerificationReview(destination){
   el.innerHTML='<h4>Email verification · Needs review</h4>'+rows.map(row=>`<div><strong>${esc(row.recipient)}</strong><p>${esc(row.last_error_message)}</p><button class="secondary-btn small" data-retry-verification="${esc(row.id)}" ${isOwner()?'':'disabled'}>Retry verification</button></div>`).join('');
   el.querySelectorAll('[data-retry-verification]').forEach(button=>button.addEventListener('click',async()=>{const owned=authority({withPolicy:true});if(busy||!owned.current()||!isOwner())return;const token=++operationOwner;busy=true;button.disabled=true;try{const response=await root.fetch('https://leadintel-api.edgars-7e7.workers.dev/api/outreach-automation/retry-verification?workspace_id='+encodeURIComponent(owned.bridge.workspace.id),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:button.dataset.retryVerification}),signal:AbortSignal.timeout(10000)});if(token!==operationOwner||!owned.current())return;if(!response.ok)throw new Error('Could not retry verification');await refresh();}catch(e){if(owned.current())message(e.message,true);}finally{if(token===operationOwner){busy=false;button.disabled=false;}syncOwner();}}));
 }
+function renderQueueTakeover(destination){
+ const rows=Array.isArray(serverStatus().queue?.sequences)?serverStatus().queue.sequences:[];let section=document.getElementById('oa-manual-takeover');if(!rows.length){section?.remove();return;}if(!section){section=document.createElement('section');section.id='oa-manual-takeover';section.className='outreach-automation-panel';destination.appendChild(section);}
+ section.innerHTML=`<h3>Queued delivery</h3><p>Cancel future automatic steps before taking over manually. Saved message history stays available. Sent or in-flight email cannot be recalled.</p><ul>${rows.map(row=>`<li>${esc(row.recipient)} · ${esc(row.pendingSteps)} pending <button class="secondary-btn small" type="button" data-oa-cancel-sequence="${esc(row.id)}" ${!isOwner()||busy||row.canCancel!==true?'disabled':''}>${row.canCancel===true?'Cancel future steps':'Reconcile submission first'}</button></li>`).join('')}</ul><p data-oa-takeover-status role="status" aria-live="polite"></p>`;
+ section.querySelectorAll('[data-oa-cancel-sequence]').forEach(button=>button.addEventListener('click',()=>cancelQueuedSequence(button.dataset.oaCancelSequence)));
+}
+async function cancelQueuedSequence(id){
+ const owned=authority({withPolicy:true}),row=serverStatus().queue?.sequences?.find(row=>row.id===id),stamp=JSON.stringify(row);if(busy||!owned.current()||!isOwner()||row?.canCancel!==true)return false;const token=++operationOwner,trace=deliveryTrace('delivery_pause');let outcomeMessage='',failed=false,traceOutcome='canceled';busy=true;render();
+ const currentAccount=()=>token===operationOwner&&owned.current()&&isOwner(),current=()=>currentAccount()&&JSON.stringify(serverStatus().queue?.sequences?.find(row=>row.id===id))===stamp;
+ try{const confirmed=await (root.LeadIntelDialogs?.confirm(`Cancel future automatic steps for ${row.recipient}? Sent or in-flight email cannot be recalled. You must separately review and send any manual message.`)??false);if(!confirmed||!current())return false;trace.checkpoint('persistence','pending');const response=await root.fetch('https://leadintel-api.edgars-7e7.workers.dev/api/outreach-automation/cancel-sequence?workspace_id='+encodeURIComponent(owned.bridge.workspace.id),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,approved:true}),signal:AbortSignal.timeout(10000)});if(!currentAccount())return false;const value=await response.json();if(!currentAccount())return false;if(!response.ok)throw Error(value.error||'Future steps could not be cancelled');busy=false;await refresh();if(owned.accountCurrent()){outcomeMessage='Future automatic steps cancelled. Review the saved message before sending manually.';traceOutcome='pass';}return true;
+ }catch(error){outcomeMessage=error.message||'Future steps could not be cancelled';failed=true;traceOutcome='fail';return false;}finally{trace.finish(traceOutcome);if(token===operationOwner){busy=false;render();if(owned.current()){if(outcomeMessage){message(outcomeMessage,failed);const status=document.querySelector('[data-oa-takeover-status]');if(status)status.textContent=outcomeMessage;}const button=[...document.querySelectorAll('[data-oa-cancel-sequence]')].find(button=>button.dataset.oaCancelSequence===id);(button||document.getElementById('oa-refresh'))?.focus();}}}
+}
 function render(){
   renderSetup();
   const destination=anchor();if(!destination)return;
-  renderSuppression(destination);renderVerificationReview(destination);
+  renderSuppression(destination);renderVerificationReview(destination);renderQueueTakeover(destination);
   const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';}const mailbox=destination.querySelector('.connector-card');if(mailbox)mailbox.after(el);else if(el.parentNode!==destination)destination.appendChild(el);
   if(policyLoadError||!policy||policyWorkspace!==bridge()?.workspace?.id){
     el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Delivery mode</span><h3>${policyLoadError?'Delivery status unavailable':'Checking delivery settings'}</h3><p>${esc(policyLoadError||(!bridge()?.session?.authenticated?'Sign in to load your saved delivery mode.':'Loading the saved sending mode for this workspace…'))}</p></div><span class="oa-role">${policyLoadError?'Needs attention':'Not verified'}</span></div>${policyLoadError?'<button class="secondary-btn small" type="button" data-oa-retry>Retry delivery status</button>':''}`;
@@ -146,7 +160,7 @@ function render(){
       <span class="oa-label">Delay range</span><div class="oa-two"><label>Min minutes<input id="oa-delay-min" type="number" min="1" value="${esc(p.minDelayMinutes||8)}"></label><label>Max minutes<input id="oa-delay-max" type="number" min="1" value="${esc(p.maxDelayMinutes||18)}"></label></div>
     </div>
     <div class="oa-card"><h4>Follow-ups</h4><label>Follow-ups<input id="oa-followups" type="number" min="0" max="5" value="${esc(p.maxFollowups??2)}"></label><label>Follow-up delays, days<input id="oa-followup-days" value="${esc((p.followupDelaysDays||[3,7]).join(','))}"></label><label>Reply polling, minutes<input id="oa-reply-poll" type="number" min="60" value="${esc(p.replyPollIntervalMinutes||60)}"></label></div>
-    <div class="oa-card oa-status"><h4>Live status</h4><div><strong>${esc(usage.workspaceSentToday||0)} / ${esc(usage.workspaceLimit||p.workspaceDailyLimit||20)}</strong><span>Sent today</span></div><div><strong>${esc(q.queued||0)}</strong><span>Queue</span></div><div><strong>${esc(q.nextEligibleSendAt||'—')}</strong><span>Next send</span></div><div><strong>${esc(q.blockedByLimit||0)}</strong><span>Blocked reason: daily limit</span></div></div>
+    <div class="oa-card oa-status"><h4>Live status</h4><div><strong>${esc(usage.workspaceSentToday||0)} / ${esc(usage.workspaceLimit||p.workspaceDailyLimit||20)}</strong><span>Sent today${Number(usage.workspaceReservedToday)>0?` · ${esc(usage.workspaceReservedToday)} reserved or unconfirmed`:''}</span></div><div><strong>${esc(q.queued||0)}</strong><span>Queue</span></div><div><strong>${esc(q.nextEligibleSendAt||'—')}</strong><span>Next send</span></div><div><strong>${esc(q.blockedByLimit||0)}</strong><span>Blocked reason: daily limit</span></div></div>
   </div>
   <div class="oa-actions"><button id="oa-save" class="oa-primary">Save settings</button><button id="oa-pause">${p.paused?'Resume automation':'Pause automation'}</button><button id="oa-stop" class="oa-danger">${p.emergencyStop?'Clear emergency stop':'Emergency stop'}</button><button id="oa-refresh">Refresh status</button></div>
   <div class="oa-activity" aria-label="Automatic delivery outcomes"><div><strong>${esc(activity.sent||0)}</strong><span>Sent</span></div><div><strong>${esc(activity.failed||0)}</strong><span>Failed</span></div><div><strong>${esc(activity.replies||0)}</strong><span>Replies</span></div><div><strong>${esc(activity.interested||0)}</strong><span>Interested replies</span></div><div><strong>${esc(activity.meetingRequests||0)}</strong><span>Meeting requests</span></div></div>
@@ -155,6 +169,7 @@ function render(){
   <p id="oa-message" class="oa-message" aria-live="polite"></p>`;
   el.querySelectorAll('input,select,button').forEach(node=>{if(!owner&&node.id!=='oa-refresh')node.disabled=true;});
   const limit=el.querySelector('#oa-workspace-limit');if(limit)limit.value=custom?'custom':String(p.workspaceDailyLimit||20);limit?.addEventListener('change',()=>{el.querySelector('#oa-custom-limit').hidden=limit.value!=='custom';});
+  for(const id of ['oa-pause','oa-stop']){const button=el.querySelector('#'+id);if(button&&busy&&queueOperationOwner!==operationOwner)button.disabled=true;}
   bind(el);
 }
 function message(text,error=false){const el=document.getElementById('oa-message');if(el){el.textContent=text||'';el.dataset.error=error?'1':'0';}}
@@ -179,21 +194,27 @@ async function mutate(next,success,owned=authority({withPolicy:true})){
  catch(error){if(owned.current())message(error.message||'Settings were not saved',true);return false;}finally{if(token===operationOwner){busy=false;render();}}
 }
 async function save(){const owned=authority({withPolicy:true});if(busy||!owned.current()||!isOwner())return;const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const token=++operationOwner;busy=true;let confirmed=false;try{const ok=(await (window.LeadIntelDialogs?.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.')??false));if(!ok)return;confirmed=true;}catch{}finally{if(token===operationOwner)busy=false;}if(!confirmed)return;if(token!==operationOwner||!owned.current()){syncOwner();render();return;}}await mutate(next,'Automation settings saved.',owned);}
+async function safetyControl(next,success){
+ const trace=deliveryTrace('delivery_pause');trace.checkpoint('request','pending');
+ if(busy&&queueOperationOwner===operationOwner&&(next.paused===true||next.emergencyStop===true)){operationOwner++;queueOperationOwner=0;busy=false;}
+ try{const result=await mutate(next,success);trace.finish(result?'pass':'blocked');return result;}catch(error){trace.finish('fail');throw error;}
+}
 function bind(el){
   el.querySelector('#oa-save')?.addEventListener('click',save);
   el.querySelector('#oa-refresh')?.addEventListener('click',refresh);
-  el.querySelector('#oa-pause')?.addEventListener('click',()=>mutate({...serverPolicy(),paused:!serverPolicy().paused},serverPolicy().paused?'Automation resumed.':'Automation paused.'));
-  el.querySelector('#oa-stop')?.addEventListener('click',()=>mutate({...serverPolicy(),emergencyStop:!serverPolicy().emergencyStop},serverPolicy().emergencyStop?'Emergency stop cleared.':'Emergency stop activated.'));
+  el.querySelector('#oa-pause')?.addEventListener('click',()=>safetyControl({...serverPolicy(),paused:!serverPolicy().paused},serverPolicy().paused?'Automation resumed.':'Automation paused.'));
+  el.querySelector('#oa-stop')?.addEventListener('click',()=>safetyControl({...serverPolicy(),emergencyStop:!serverPolicy().emergencyStop},serverPolicy().emergencyStop?'Emergency stop cleared.':'Emergency stop activated.'));
   el.querySelector('#oa-enqueue')?.addEventListener('click',enqueueApproved);
   el.querySelector('#oa-enqueue-all')?.addEventListener('click',()=>queueApprovedPackages());
 }
-async function enqueueApproved(){
+async function enqueueApproved(){const trace=deliveryTrace('delivery_queue');trace.checkpoint('persistence','pending');try{const result=await enqueueApprovedOperation();trace.finish(result?'pass':'blocked');return result;}catch(error){trace.finish('fail');throw error;}}
+async function enqueueApprovedOperation(){
  const owned=authority({withPolicy:true}),b=owned.bridge,proposal=approvedPackage;if(busy||!owned.current()||!activeAutomatic()||!proposal||!b?.enqueueOutreachAutomation)return false;
- const item=canonicalItems().find(row=>root.LeadIntelOutreach?.approvalCurrent?.(row)&&JSON.stringify(root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(row,proposal.recipient))===JSON.stringify(proposal));if(!item){approvedPackage=null;render();message('The approved message or recipient changed. Review the exact message again.',true);return false;}
- const token=++operationOwner;busy=true;render();try{const result=await b.enqueueOutreachAutomation(proposal);if(token!==operationOwner||!owned.current()||!canonicalItem(item))return false;if(!result?.ok){message(result?.error||'Approved contact was not queued',true);return false;}approvedPackage=null;busy=false;await refresh();if(owned.current())message('Approved contact added to automatic queue.');return true;}catch(error){if(owned.current())message(error.message||'Approved contact was not queued',true);return false;}finally{if(token===operationOwner){busy=false;render();}}
+ const item=canonicalItems().find(row=>root.LeadIntelOutreach?.approvalCurrent?.(row)&&JSON.stringify(root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(row,proposal.recipient))===JSON.stringify(proposal));if(!item||!sourceCurrent(item)){approvedPackage=null;render();message('The approved message or recipient changed. Review the exact message again.',true);return false;}
+ const token=++operationOwner;queueOperationOwner=token;busy=true;render();try{const result=await b.enqueueOutreachAutomation(proposal);if(token!==operationOwner||!owned.current()||!canonicalItem(item))return false;if(!result?.ok){message(result?.error||'Approved contact was not queued',true);return false;}approvedPackage=null;busy=false;await refresh();if(owned.current())message('Approved contact added to automatic queue.');return true;}catch(error){if(owned.current())message(error.message||'Approved contact was not queued',true);return false;}finally{if(token===operationOwner){busy=false;render();}}
 }
 function receivePackage(event){syncOwner();const value=event?.detail;if(!value||typeof value!=='object')return;const item=canonicalItems().find(row=>root.LeadIntelOutreach?.approvalCurrent?.(row)&&JSON.stringify(root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(row,value.recipient))===JSON.stringify(value));approvedPackage=item?JSON.parse(JSON.stringify(value)):null;render();}
 function init(){if(typeof document==='undefined')return;css();root.addEventListener?.('leadintel:approved-outreach-package',receivePackage);root.addEventListener?.('leadintel:outreach-approved',event=>{if(event.detail?.domain)void queueApprovedPackages(String(event.detail.domain));});for(const name of ['leadintel:server-ready','leadintel:workspace-changed','leadintel:server-conflict','leadintel:sync-resolving','leadintel:sync-settled'])root.addEventListener?.(name,()=>{syncOwner();void refresh();});root.addEventListener?.('leadintel:module-opened',()=>{if(!document.getElementById(ID))render();});render();setTimeout(refresh,0);}
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();}
-root.LeadIntelOutreachAutomationUI={getPolicy:serverPolicy,refresh,receivePackage,enqueueApproved,queueApprovedPackages,setupBadge};
+root.LeadIntelOutreachAutomationUI={getPolicy:serverPolicy,refresh,receivePackage,enqueueApproved,queueApprovedPackages,setupBadge,cancelQueuedSequence};
 })(typeof window!=='undefined'?window:globalThis);

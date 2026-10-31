@@ -4,6 +4,7 @@ const O=require('../outreach-engine.js'),E=require('../message-editor.js');
 const source=fs.readFileSync(require.resolve('../delivery-ui.js'),'utf8');
 async function setup({deliveryReady=true}={}){
  const h=mounted({selected:'professional'}),w=h.w;
+ const main=require('./helpers/delivery-canonical-context.cjs')(JSON.parse(w.localStorage.getItem('leadintel_customer_v2_state')));w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
  w.scrollTo=()=>{};w.LeadIntelDelivery=require('../delivery-engine.js');
  h.mountDelivery=()=>{w.document.querySelector('script[data-delivery-engine]')?.dispatchEvent(new w.Event('load'));w.eval('(function(){'+source.replace(/^import .*;\s*$/gm,'')+'\n})();');w.document.querySelector('script[data-delivery-ui]')?.dispatchEvent(new w.Event('load'));};
  if(deliveryReady)h.mountDelivery();
@@ -11,7 +12,7 @@ async function setup({deliveryReady=true}={}){
  const valid=E.apply(h.item(),{subject:'A project discussion',message:'Hi Alex,\n\nOur team supports industrial projects. Would you be open to a 20-minute Zoom conversation?\n\nChoose a suitable time: https://calendly.com/north/intro\n\nBest regards,\nRobin Lane'},{origin:'manual',style:'original',essentials:h.w.studioState().essentials});valid.messageStudioDraft.scriptSavedAt='2026-10-31';valid.messageStudioDraft.savedDraft=E.workingDraft(valid);
  const input={...valid,localizationStatus:'native',localizationApprovalBlocked:false,campaignScenario:{language:'en'},localizationProvenance:{provider:'native-template',model:'approved-template',language:'en',selectionSource:'message-settings'}};
  w.upsertItem(input);w.renderAll();const result=await w.approveOutreach({announce:false});
- assert.equal(result?.ok,true,w.document.getElementById('toast').textContent);assert.equal(O.approvalCurrent(h.item()),true);w.renderAll();
+ assert.equal(result?.ok,true,w.document.getElementById('toast').textContent);assert.equal(O.approvalCurrent(h.item()),true);assert.equal(O.sourceAuthorityCurrent(h.item(),JSON.parse(w.localStorage.getItem('leadintel_customer_v2_state')),JSON.parse(w.localStorage.getItem('leadintel_customer_v2_outreach')).messageStudio),true);w.renderAll();
  return h;
 }
 test('saved message handoff selects the exact buyer in Delivery and survives CRM restore without sending',async()=>{

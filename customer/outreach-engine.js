@@ -341,7 +341,7 @@
     const next={...item,drafts,campaignScenario:sourceScenario,approvedEventSnapshot:item.messageStudioDraft?.eventSnapshot?freezeCopy(item.messageStudioDraft.eventSnapshot):null,approvedSource,brandSnapshot,campaignSnapshot,localizationSnapshot,approvedEmail,approvalSchemaVersion:2,approvalBrandMode:brandSnapshot?"branded":"plain",brandRevision:brandSnapshot?.revision||null,approved:true,approvedAt:clean(approvedAt),reapprovalRequired:false,error:""};
     const authority=approvalContext(next);
     if(!authority)return {...item,drafts,approved:false,approvalAuthority:null,error:'Confirm the exact selected buyer name and email before approving this message.'};
-    return {...next,approvalAuthority:freezeCopy({version:2,...authority})};
+    return {...next,approvalAuthority:freezeCopy({version:2,...authority,...(options.canonicalState?{sourceAuthority:messageSourceAuthority(options.canonicalState,options.canonicalStudio||{})}:{})})};
   }
 
   // Approval belongs to the reviewed recipient and exact message/context. It
@@ -370,6 +370,22 @@
       brief:dossier.researchBrief||null,appliedBrief:info.researchBrief||null,trigger:dossier.selectedTrigger||null,appliedTrigger:info.appliedTriggerSnapshot||null,triggerSourceUrl:info.triggerSourceUrl||'',
       scenario:normalizeCampaignScenario(item.campaignScenario||{}, {},item.campaignScenario?.language||'en'),localizationStatus:item.localizationStatus||'',localizationProvenance:item.localizationProvenance||null,contentLanguage:item.contentLanguage||'',event:info.eventSnapshot||null};
     return {recipient,contextKey:scopeHash(JSON.stringify(stable(context)))};
+  }
+  function messageSourceAuthority(main={},studio={}){
+    const Strategy=typeof module==='object'&&module.exports?require('./strategy-integrity.js'):globalThis.LeadIntelStrategyIntegrity;
+    const Studio=typeof module==='object'&&module.exports?require('./message-studio.js'):globalThis.LeadIntelMessageStudio;
+    if(!Strategy?.signature||!Studio?.foundation)return null;
+    const brand=BrandIdentity?.normalize?.(main.brandIdentity)||{};delete brand.revision;delete brand.updatedAt;
+    for(const asset of Object.values(brand.assets||{}))if(asset)delete asset.updatedAt;
+    const settings=Studio.foundation(studio||{},main,{},'').essentials;
+    return {version:1,profileApproved:main.approved===true,strategyApproved:Strategy.status(main).current,strategySignature:Strategy.signature(main),senderSignature:Strategy.digest(JSON.stringify(stable({brand,settings})))};
+  }
+  function sourceAuthorityCurrent(item,main,studio={}){
+    if(!main||typeof main!=='object')return true;
+    const currentAuthority=messageSourceAuthority(main,studio);if(!currentAuthority?.profileApproved||!currentAuthority?.strategyApproved)return false;
+    const saved=item?.approvalAuthority?.sourceAuthority;
+    if(saved)return saved.version===1&&JSON.stringify(stable(saved))===JSON.stringify(stable(currentAuthority));
+    return false; // Legacy approval history remains visible; sending needs explicit source review.
   }
   function approvalCurrent(item={}){
     if(!item?.approved||item.reapprovalRequired||item.contextNeedsRefresh||item.localizationApprovalBlocked||!['native','complete'].includes(item.localizationStatus)||item.approvalAuthority?.version!==2||!item.approvedSource||!translationReady(item))return false;
@@ -478,5 +494,5 @@
     const buyerDrafts=Object.fromEntries(Object.entries(input.buyerDrafts||{}).filter(([key,item])=>item&&key===buyerDraftKey(item.domain,item.selectedPersonId,item.channel)).slice(-100).map(([key,item])=>[key,normalizeItem(item)]).filter(([key,item])=>active.get(key)!==JSON.stringify(item)));
     return {buyerDrafts,...(input.messageStudio&&typeof input.messageStudio==='object'?{messageStudio:JSON.parse(JSON.stringify(input.messageStudio))}:{}),selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items};}
 
-  return {approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
+  return {messageSourceAuthority,sourceAuthorityCurrent,approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
 });

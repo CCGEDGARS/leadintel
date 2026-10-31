@@ -43,6 +43,9 @@ import {handleStoryBankRoute} from './storyselling.js';
 import {handleCompanyMaterialsRoute} from './company-materials.js';
 import {runCompanyMaterialJobs} from './company-materials-analysis.js';
 import {handleAccessRoute} from './access-invitations.js';
+import {observeScheduledTask} from './operational-observability.js';
+
+const scheduledJobs={reconcileStorageObjects,runWritingReferenceJobs,runWorkspaceSkillJobs,runCompanyMaterialJobs,runLanguagePackJobs,runSavedFlows,runApprovedWorkflows,pollConversations,enrollConversationWorkflows,runConversationPlans,pollOutreachReplies,runOutreachAutomation,runDueMarketMonitoring,runDueSourceHealthChecks};
 
 export default {
   async fetch(request,env,ctx){
@@ -118,16 +121,17 @@ export default {
       const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     }
   },
-  async scheduled(controller,env,ctx){
+  async scheduled(controller,env,ctx,jobs=scheduledJobs){
     const now=new Date(controller.scheduledTime||Date.now());
     if(controller.cron==='* * * * *')env=withBookInvocationBudget(env);
     const storageEnv=env;env=withWorkspaceStorage(env);
-    if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
-    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([runWritingReferenceJobs(env,{now:now.getTime()}),runWorkspaceSkillJobs(env,{now:now.getTime()}),runCompanyMaterialJobs(env,{now:now.getTime()}),runLanguagePackJobs(env,{now:now.getTime()})]));return;}
-    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollConversations(env,{now})).then(()=>enrollConversationWorkflows(env,{now}).catch(cause=>console.error('Conversation workflow enrollment cycle failed',cause))).then(()=>runConversationPlans(env,{now})).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
+    const observed=(task,operation)=>observeScheduledTask(env,task,operation,{scheduledAt:now.getTime()});
+    if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(observeScheduledTask(storageEnv,'storage_reconciliation',()=>jobs.reconcileStorageObjects(storageEnv),{scheduledAt:now.getTime()}).catch(()=>console.warn('Workspace file accounting needs a retry')));
+    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([observed('writing_references',()=>jobs.runWritingReferenceJobs(env,{now:now.getTime()})),observed('workspace_skills',()=>jobs.runWorkspaceSkillJobs(env,{now:now.getTime()})),observed('company_materials',()=>jobs.runCompanyMaterialJobs(env,{now:now.getTime()})),observed('language_packs',()=>jobs.runLanguagePackJobs(env,{now:now.getTime()}))]));return;}
+    const outreachCycle=observed('saved_flows',()=>jobs.runSavedFlows(env,{now})).then(()=>observed('approved_workflows',()=>jobs.runApprovedWorkflows(env,{now}))).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>observed('conversation_poll',()=>jobs.pollConversations(env,{now}))).then(()=>observed('conversation_enrollment',()=>jobs.enrollConversationWorkflows(env,{now})).catch(cause=>console.error('Conversation workflow enrollment cycle failed',cause))).then(()=>observed('conversation_plans',()=>jobs.runConversationPlans(env,{now}))).then(()=>observed('outreach_replies',()=>jobs.pollOutreachReplies(env,{now})).then(()=>observed('outreach_delivery',()=>jobs.runOutreachAutomation(env,{now}))));
     ctx.waitUntil(Promise.allSettled([
-      runDueMarketMonitoring(env,now),
-      runDueSourceHealthChecks(env,now),
+      observed('market_monitoring',()=>jobs.runDueMarketMonitoring(env,now)),
+      observed('source_health',()=>jobs.runDueSourceHealthChecks(env,now)),
       outreachCycle
     ]));
   }

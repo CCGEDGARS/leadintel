@@ -26,8 +26,9 @@ const STYLE_PROPERTIES=new Set([
 function byteLength(value){return encoder.encode(value).byteLength;}
 function contentError(message){throw new Error(message);}
 function normalizedText(value,label,maxBytes,{required=false}={}){
-  const text=String(value??'').trim();
-  if(required&&!text)contentError(label+' is required');
+  if(value!==undefined&&value!==null&&typeof value!=='string')contentError(label+' must be text');
+  const text=String(value??'');
+  if(required&&!text.trim())contentError(label+' is required');
   if(byteLength(text)>maxBytes)contentError(label+' is too large');
   return text;
 }
@@ -145,8 +146,16 @@ export function validateEmailContent({body,text_body,html_body}={}){
   const canonical=normalizedText(body,'Email body',MAX_TEXT_BYTES,{required:true});
   const text=text_body===undefined||text_body===null?canonical:normalizedText(text_body,'Email text body',MAX_TEXT_BYTES,{required:true});
   const html=html_body===undefined||html_body===null||html_body===''?'':normalizedText(html_body,'Email HTML body',MAX_HTML_BYTES,{required:true});
-  if(html)validateHtml(html);
+  if(html)validateHtml(html.trim());
   return {body:canonical,textBody:text,htmlBody:html};
 }
 
 export const emailContentLimits=Object.freeze({textBytes:MAX_TEXT_BYTES,htmlBytes:MAX_HTML_BYTES});
+
+// Validation never changes the explicitly approved subject.
+export function validateEmailSubject(value){
+ if(typeof value!=='string'||!value.trim())contentError('Email subject is required');
+ if(/[\u0000-\u001f\u007f]/.test(value))contentError('Email header contains invalid control characters');
+ if(value.length>500)contentError('Email subject is too large');
+ return value;
+}

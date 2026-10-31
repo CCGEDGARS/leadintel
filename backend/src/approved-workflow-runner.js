@@ -1,3 +1,4 @@
+import {recordOperationalStage} from './operational-observability.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
 import '../../customer/additional-contact-policy.js';
@@ -381,6 +382,19 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
   }
   throw new Error('No executor for workflow stage');
 }
+export async function observeWorkflowStage(env,{row,run,stage,config,guard},operation){
+ const operationId=crypto.randomUUID(),receipt={operationId,runId:run.id,revision:row.revision,action:stage},visibleStage={profile:2,strategy:3,companies:4,buyers:5,triggers:4,messages:6,crm:6,delivery:7}[stage],started=Date.now();
+ await recordOperationalStage(env,{...receipt,workspaceId:row.workspace_id,stage:visibleStage,outcome:'started'});
+ try{
+  await guard();const result=await operation();await guard();
+ // Profile/Strategy here validate existing approvals. They do not run
+ // research and therefore record reviewed counts, never research yield.
+ const candidates=result.candidates?.length||0,counts=stage==='profile'||stage==='strategy'?{reviewed:1}:stage==='companies'?{requested:config.companies.limit,qualified:result.qualifiedCount||0,held:Math.max(0,config.companies.limit-(result.qualifiedCount||0)),sources:result.sourceCount||0,queries:result.queries?.length||0}:stage==='buyers'?{usable:candidates,held:result.reviewBuyers?.length||0}:stage==='triggers'?{ready:candidates}:stage==='messages'?{ready:candidates,held:result.reviewMessages?.length||0}:stage==='crm'?{persisted:candidates}:{ready:result.queued||0,skipped:result.skipped||0};
+ await recordOperationalStage(env,{...receipt,workspaceId:row.workspace_id,stage:visibleStage,outcome:counts.held>0||stage==='delivery'&&counts.skipped>0?'partial':'completed',durationMs:Date.now()-started,counts});
+
+  return result;
+ }catch(cause){await recordOperationalStage(env,{...receipt,workspaceId:row.workspace_id,stage:visibleStage,outcome:/paused|stopped|changed|approval no longer valid/.test(String(cause.message))?'stale':'failed',durationMs:Date.now()-started,counts:{failed:1}});throw cause;}
+}
 export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,execute=executeWorkflowStage,now=new Date()}={}){
   const sql=workspaceId?"SELECT * FROM approved_workflows WHERE workspace_id=? AND status='automatic'":"SELECT w.* FROM approved_workflows w WHERE w.status='automatic' AND NOT EXISTS (SELECT 1 FROM approved_workflow_runs r WHERE r.workspace_id=w.workspace_id AND r.flow_id IS NULL AND r.revision=w.revision AND r.status='blocked') ORDER BY w.next_run_at LIMIT ?";
   const {results:rows=[]}=await env.DB.prepare(sql).bind(workspaceId||maxWorkspaces).all();const summary={completed:0,blocked:0,skipped:0};
@@ -402,8 +416,11 @@ export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,e
     let result=parse(run.result_json);try{
       const context=approvedContext(await workflowMain(env,row.workspace_id)),config=normalizeWorkflowConfig(parse(row.config_json),context);
       for(let index=run.stage_index;index<WORKFLOW_STAGES.length;index++){
-        result=await execute(WORKFLOW_STAGES[index],{env,row,run,result,context,config,guard});await guard();
+        const stage=WORKFLOW_STAGES[index];
+        result=await observeWorkflowStage(env,{row,run,stage,config,guard},async()=>{
+        result=await execute(stage,{env,row,run,result,context,config,guard});await guard();
         let checkpoint;for(let attempt=0;attempt<3;attempt++){const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);checkpoint=await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND '+authority.sql).bind(index+1,JSON.stringify(result),run.id,...authority.args).run();if(checkpoint.meta?.changes)break;await guard();}if(!checkpoint?.meta?.changes)stop();
+        return result;});
       }
       let completed;for(let attempt=0;attempt<3;attempt++){await guard();const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);completed=await env.DB.batch([env.DB.prepare("UPDATE approved_workflow_runs SET status='completed',lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND "+authority.sql).bind(run.id,...authority.args),env.DB.prepare("UPDATE approved_workflows SET next_run_at=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic' AND approved_by=? AND EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=approved_workflows.workspace_id AND user_id=approved_workflows.approved_by AND role='owner') AND EXISTS(SELECT 1 FROM approved_workflow_runs WHERE id=? AND status='completed')").bind(new Date(now.getTime()+(config.delivery.frequency==='weekly'?7:1)*86400000).toISOString(),row.workspace_id,row.revision,row.approved_by,run.id)]);if(completed[0]?.meta?.changes)break;}if(!completed?.[0]?.meta?.changes)stop();summary.completed++;
     }catch(cause){await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message=?,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(String(cause.message||'Execution failed').slice(0,500),run.id,token).run();summary.blocked++;}

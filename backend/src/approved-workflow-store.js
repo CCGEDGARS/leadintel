@@ -23,25 +23,22 @@ export async function workflowExecutionSnapshot(env,row,run){
   const found=flowId?await savedFlowRow(env,workspaceId,flowId):await workflowRow(env,workspaceId);
   if(!found)return {valid:false};
   const saved=flowId?await readOwnedPayload(env,workspaceId,found,{flowId}):null,control=saved?.row||found;
-  if(control.status!=='automatic'||Number(control.revision)!==Number(row.revision)||!control.approved_by||flowId&&parse(control.review_json,[]).length)return {valid:false};
+  if(control.status!=='automatic'||Number(control.revision)!==Number(row.revision)||!control.approved_by||!control.approved_at||flowId&&parse(control.review_json,[]).length)return {valid:false};
   const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,control.approved_by).first();if(member?.role!=='owner')return {valid:false};
   const payload=flowId?FlowState.composePayload(flowId==='legacy-'+workspaceId&&!workspace.payload.main?.myFlow?.id?workspace.payload:saved.payload,workspace.payload,control):workspace.payload;
   const context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}),hash=await fingerprint(context);
   let valid=false;try{valid=hash===control.context_hash&&(await approvalStatus(context,normalizeWorkflowConfig(parse(control.config_json),context),parse(control.approvals_json))).every(stage=>stage.approved)&&(!flowId||(control.shared_hash||await sharedHash(saved.payload))===await sharedHash(workspace.payload));}catch{}
   const snapshot={valid,workspace:workspace.row,control};
   if(!valid){
-    const changed=await env.DB.prepare(`UPDATE ${flowId?'saved_flows':'approved_workflows'} SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic' AND context_hash=? AND approvals_json=? ${flowId?'AND id=? AND state_version=? AND payload_json=?':''} AND EXISTS(SELECT 1 FROM customer_workspace_state source WHERE source.workspace_id=? AND source.version=? AND source.payload_json=?)`).bind(workspaceId,control.revision,control.context_hash,control.approvals_json,...(flowId?[flowId,control.state_version,control.payload_json]:[]),workspaceId,workspace.row.version,workspace.row.payload_json).run();
+    const changed=await env.DB.prepare(`UPDATE ${flowId?'saved_flows':'approved_workflows'} SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic' AND context_hash=? AND approvals_json=? AND config_json=? AND approved_by IS ? AND approved_at IS ? ${flowId?'AND id=? AND state_version=? AND payload_json=?':''} AND EXISTS(SELECT 1 FROM customer_workspace_state source WHERE source.workspace_id=? AND source.version=? AND source.payload_json=?)`).bind(workspaceId,control.revision,control.context_hash,control.approvals_json,control.config_json,control.approved_by,control.approved_at,...(flowId?[flowId,control.state_version,control.payload_json]:[]),workspaceId,workspace.row.version,workspace.row.payload_json).run();
     snapshot.retry=!changed.meta?.changes;
   }
   return snapshot;
 }
 export async function workflowAuthorized(env,workspaceId,revision,flowId=null){
   if(flowId)return savedFlowAuthorized(env,workspaceId,revision,flowId);
-  const row=await workflowRow(env,workspaceId);if(!row||row.status!=='automatic'||Number(row.revision)!==Number(revision)||!row.approved_by)return false;
-  const member=await env.DB.prepare("SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?").bind(workspaceId,row.approved_by).first();if(member?.role!=='owner')return false;
-  const context=approvedContext(await workflowMain(env,workspaceId)),hash=await fingerprint(context);
-  let stagesApproved=false;try{stagesApproved=(await approvalStatus(context,normalizeWorkflowConfig(parse(row.config_json),context),parse(row.approvals_json))).every(stage=>stage.approved);}catch{}
-  if(hash!==row.context_hash||!stagesApproved){await env.DB.prepare("UPDATE approved_workflows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic'").bind(workspaceId,revision).run();return false;}return true;
+  const row=await workflowRow(env,workspaceId);if(!row||row.status!=='automatic'||Number(row.revision)!==Number(revision)||!row.approved_by||!row.approved_at)return false;
+  return (await workflowExecutionSnapshot(env,row,{flow_id:null})).valid;
 }
 export async function workflowDeliveryAuthorized(env,sequence){
   if(!sequence.workflow_run_id)return true;
@@ -51,8 +48,8 @@ export async function workflowDeliveryAuthorized(env,sequence){
   const policy=await env.DB.prepare('SELECT * FROM outreach_automation_policies WHERE workspace_id=?').bind(sequence.workspace_id).first();
   if(!delivery||!policy)return false;
   if(Number(policy.workspace_daily_limit)!==delivery.dailyLimit||Number(policy.mailbox_daily_limit)!==delivery.dailyLimit||policy.timezone!==delivery.timezone||policy.send_window_start!==delivery.sendWindowStart||policy.send_window_end!==delivery.sendWindowEnd||JSON.stringify(parse(policy.working_days_json,[]))!==JSON.stringify(delivery.workingDays)||(run?.flow_id?Number(policy.max_followups)<delivery.maxFollowups:Number(policy.max_followups)!==delivery.maxFollowups)||Number(policy.min_delay_minutes)!==8||Number(policy.max_delay_minutes)!==18||JSON.stringify(parse(policy.followup_delays_days_json,[]))!==JSON.stringify([3])){
-    if(run?.flow_id)await env.DB.prepare("UPDATE saved_flows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=?").bind(sequence.workspace_id,run.flow_id,sequence.workflow_revision).run();
-    else await env.DB.prepare("UPDATE approved_workflows SET status='needs_review',approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=?").bind(sequence.workspace_id,sequence.workflow_revision).run();return false;
+    if(run?.flow_id)await env.DB.prepare("UPDATE saved_flows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=?").bind(sequence.workspace_id,run.flow_id,sequence.workflow_revision).run();
+    else await env.DB.prepare("UPDATE approved_workflows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=?").bind(sequence.workspace_id,sequence.workflow_revision).run();return false;
   }
   return run?.status==='completed'&&run.workspace_id===sequence.workspace_id&&Number(run.revision)===Number(sequence.workflow_revision);
 }

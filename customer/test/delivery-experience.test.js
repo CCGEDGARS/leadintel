@@ -1,10 +1,11 @@
-const {approveMessage}=require('./helpers/approved-message.cjs');
+const approveFixture=require('./helpers/approved-message.cjs').approveMessage,canonicalMain=require('./helpers/delivery-canonical-context.cjs')();
+const approveMessage=(input,options={})=>approveFixture(input,{...options,approvalOptions:{...options.approvalOptions,canonicalState:canonicalMain}});
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
 const read=name=>fs.readFileSync(require.resolve('../'+name),'utf8');
 function fixture(){
  const dom=new JSDOM('<main class="content"><section id="step-6"><div class="outreach-drafts"></div></section></main>',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{LeadIntelServerBridge:{ready:true,workspace:{id:'w1',role:'owner'},session:{authenticated:true,user:{id:'fixture-user'}},listCrmCompanies:async()=>({ok:false,error:'Controlled CRM offline'})},LeadIntelDelivery:require('../delivery-engine.js'),LeadIntelOutreach:require('../outreach-engine.js'),LeadIntelDiscovery:require('../discovery-engine.js'),LeadIntelContentLanguage:{workspaceContentLanguage:()=> 'en'},LeadIntelCustomerNavigation:{setStep:step=>{w.navigated=step;return true;}}});
- w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){w.scrolled=this.id;};
+ w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(canonicalMain));w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){w.scrolled=this.id;};
  w.eval('(function(){'+read('delivery-ui.js').replace(/^import .*;\s*$/gm,'')+'\n})();');
  return {w,q:id=>w.document.getElementById(id),close:()=>w.close()};
 }

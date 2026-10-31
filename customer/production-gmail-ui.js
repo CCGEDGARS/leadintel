@@ -7,9 +7,9 @@
   function write(key,value){localStorage.setItem(key,JSON.stringify(value));}
   function toast(message){const el=q('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),3000);}
   function bridge(){return root.LeadIntelServerBridge;}
-  function buildProviderSendRequest(pkg,recipient,idempotencyKey){const message=Outreach?.buildApprovedSendPayload?.(pkg,recipient);if(!message||!Outreach?.approvalCurrent?.(pkg)||!pkg.approvalAuthority?.recipient)return null;return {recipientSnapshot:{...pkg.approvalAuthority.recipient,companyDomain:pkg.domain,company:pkg.company},domain:pkg.domain,recipient:message.recipient,subject:message.subject,body:message.textBody,textBody:message.textBody,htmlBody:message.htmlBody,idempotencyKey};}
+  function buildProviderSendRequest(pkg,recipient,idempotencyKey){const message=Outreach?.buildApprovedSendPayload?.(pkg,recipient);if(!message||!Outreach?.approvalCurrent?.(pkg)||!pkg.approvalAuthority?.recipient)return null;return {source_authority:pkg.approvalAuthority.sourceAuthority||null,recipientSnapshot:{...pkg.approvalAuthority.recipient,companyDomain:pkg.domain,company:pkg.company},domain:pkg.domain,recipient:message.recipient,subject:message.subject,body:message.textBody,textBody:message.textBody,htmlBody:message.htmlBody,idempotencyKey};}
   function selectedDomain(){return read(DELIVERY).selectedDomain||q('delivery-company-select')?.value||'';}
-  function approvedPackages(){const state=Outreach.normalizeOutreachState(read(OUTREACH));return root.LeadIntelDelivery?.approvedDeliveryPackages?.(state)||state.items.filter(item=>Outreach.approvalCurrent(item));}
+  function approvedPackages(){const state=Outreach.normalizeOutreachState(read(OUTREACH));return root.LeadIntelDelivery?.approvedDeliveryPackages?.(state,read(MAIN))||[];}
   function approvedRecipient(pkg){return Outreach?.approvedRecipient?.(pkg)||'';}
   function approvedPackage(){const key=read(DELIVERY).selectedPackageKey;const rows=approvedPackages();if(key)return rows.find(item=>root.LeadIntelDelivery?.packageKey?.(item)===key)||null;const matches=rows.filter(item=>item.domain===selectedDomain());return matches.length===1?matches[0]:null;}
   async function deterministicKey(pkg,recipient,provider='gmail'){const selected=provider==='microsoft'?'microsoft':'gmail';const raw=`${selected}|${pkg?.domain||''}|${pkg?.approvedAt||''}|${String(recipient||'').trim().toLowerCase()}|${pkg?.approvalAuthority?.contextKey||''}`;const bytes=new TextEncoder().encode(raw);const digest=await crypto.subtle.digest('SHA-256',bytes);return `${selected}-${Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')}`;}
@@ -37,9 +37,14 @@
     return provider==='microsoft'?message.provider==='microsoft'&&message.provider_status==='accepted':(!message.provider||message.provider==='gmail')&&typeof message.gmail_message_id==='string'&&Boolean(message.gmail_message_id.trim());
   }
   function confirmedWarning(provider,recipient,extra=''){return {ok:true,providerConfirmed:true,crmSynced:false,syncWarning:true,provider,recipient,warning:'Provider confirmed the send. Review Delivery in the original workspace before recording it. Do not resend.'+(extra?' '+extra:'')};}
-  async function submitApproved(pkg,email,provider,{delivery=false,quality=null,ticket=null}={}){
+  function deliveryTrace(action){let op;try{op=root.LeadIntelReliabilityTrace?.begin(action);}catch{}return {checkpoint(phase,outcome){try{op?.checkpoint(phase,outcome);}catch{}},finish(outcome){try{op?.finish(outcome);}catch{}}};}
+  async function submitApproved(pkg,email,provider,options={}){
+    const trace=deliveryTrace('delivery_send');try{const result=await submitApprovedOperation(pkg,email,provider,{...options,trace});trace.finish(result.duplicateHold?'duplicate_hold':result.providerConfirmed?(result.syncWarning?'partial':'pass'):result.submissionUncertain?'uncertain':result.cancelled?'canceled':result.stale?'stale':'blocked');return result;}catch(error){trace.finish('fail');throw error;}
+  }
+  async function submitApprovedOperation(pkg,email,provider,{delivery=false,quality=null,ticket=null,trace=deliveryTrace('delivery_send')}={}){
     const authority=captureSendAuthority(pkg,email,provider,{delivery,quality,ticket});
-    if(!authority.current())return {ok:false,error:'Delivery context changed. Review the approved recipient and message before retrying.'};
+    const prior=root.LeadIntelDelivery?.readSubmissionReceipt?.(sessionStorage,authority.workspace,authority.user,pkg,email);if(prior)return prior.status==='sent'?{...confirmedWarning(prior.provider||provider,email),duplicateHold:true}:{ok:false,submissionUncertain:true,duplicateHold:true,error:'Delivery is unconfirmed. Check your mailbox Sent folder and reconcile the original submission before another send.'};
+    if(!authority.current())return {ok:false,stale:true,error:'Delivery context changed. Review the approved recipient and message before retrying.'};
     if(activeSend?.current())return {ok:false,error:'An email send is already in progress.'};
     const operation={...authority};activeSend=operation;
     const b=authority.bridge,label=provider==='microsoft'?'Microsoft':'Gmail',button=delivery?q(provider==='microsoft'?'send-with-microsoft':'send-with-gmail'):null;
@@ -47,25 +52,26 @@
     if(button){button.disabled=true;button.textContent='Sending…';}
     try{
       const preview=buildProviderSendRequest(pkg,email,'');if(!preview?.textBody?.trim()||!preview.subject?.trim())return {ok:false,error:'An unchanged approved email for this exact recipient is required.'};
+      trace.checkpoint('request','pending');
       const question=delivery?`Send this approved email to ${email} with ${label}?`:'Send now from '+(authority.connection.email||provider)+' to '+email+'?\nSubject: '+preview.subject;
       if(!(await (root.LeadIntelDialogs?.confirm(question)??false)))return {ok:false,cancelled:true};
-      if(activeSend!==operation||!authority.current())return {ok:false,error:'Delivery context changed during confirmation. Review the saved recipient and approved message before retrying.'};
-      const key=await deterministicKey(pkg,email,provider);if(activeSend!==operation||!authority.current())return {ok:false,error:'Delivery context changed before submission. Review and retry.'};
+      if(activeSend!==operation||!authority.current())return {ok:false,stale:true,error:'Delivery context changed during confirmation. Review the saved recipient and approved message before retrying.'};
+      const key=await deterministicKey(pkg,email,provider);if(activeSend!==operation||!authority.current())return {ok:false,stale:true,error:'Delivery context changed before submission. Review and retry.'};
       const payload=buildProviderSendRequest(pkg,email,key),action=provider==='microsoft'?b.sendMicrosoftMail:b.sendGmail;if(!payload||typeof action!=='function')return {ok:false,error:'Connected mail delivery is unavailable.'};
-      const receiptKey='leadintel_mail_submission_v1:'+authority.workspace+':'+authority.user;
-      sessionStorage.setItem(receiptKey,JSON.stringify({key,workspaceId:authority.workspace,provider,status:'unconfirmed',at:new Date().toISOString()}));
-      dispatched=true;
+      const saveReceipt=receipt=>root.LeadIntelDelivery.saveSubmissionReceipt(sessionStorage,authority.workspace,authority.user,pkg,email,{key,provider,...receipt});
+      saveReceipt({status:'unconfirmed',at:new Date().toISOString()});
+      trace.checkpoint('provider','pending');dispatched=true;
       const deadline=new Promise((_,reject)=>{requestTimer=setTimeout(()=>reject(Error('Delivery is unconfirmed. Check your mailbox Sent folder before another send; this request will not be submitted again.')),60000);});
       const result=await Promise.race([action.call(b,payload),deadline]);clearTimeout(requestTimer);requestTimer=null;
-      if(!result?.ok)return {ok:false,submissionUncertain:Boolean(result?.code==='DELIVERY_UNCONFIRMED'||result?.reconciliation_required||result?.message?.status==='sending'),error:result?.code==='CRM_COMPANY_SUPPRESSED'?'Suppressed companies cannot receive normal outreach':result?.error||'The sending provider rejected the request.'};
+      if(!result?.ok&&(result?.submission_not_attempted===true||result?.delivery_rejected===true))saveReceipt({status:'failed',at:new Date().toISOString()});
+      if(!result?.ok)return {ok:false,submissionUncertain:!(result?.submission_not_attempted===true||result?.delivery_rejected===true),error:result?.code==='CRM_COMPANY_SUPPRESSED'?'Suppressed companies cannot receive normal outreach':result?.error||'The sending provider rejected the request.'};
       if(!matchingSentReceipt(result,payload,provider))return {ok:false,submissionUncertain:true,error:'Delivery is unconfirmed. Check your mailbox Sent folder before another send; this request will not be submitted again.'};
-      confirmedResult=result;
+      trace.checkpoint('provider','pass');confirmedResult=result;
       if(activeSend!==operation||!authority.current())return confirmedWarning(provider,email);
-      sessionStorage.setItem(receiptKey,JSON.stringify({key,workspaceId:authority.workspace,provider,status:'sent',at:new Date().toISOString()}));
-      let recorded=null,syncResult=null;
+      saveReceipt({status:'sent',at:result.message.sent_at,threadId:result.message.gmail_thread_id||'',providerMessageId:result.message.gmail_message_id||result.message.id});
+      trace.checkpoint('persistence','pending');let recorded=null,syncResult=null;
       if(delivery){
-        const activityId=`${provider}-send-${key}`.replace(/[^A-Za-z0-9._:-]/g,'-').slice(0,128);sessionStorage.setItem('leadintel_email_crm_activity_key',activityId);sessionStorage.setItem('leadintel_email_crm_channel',provider);if(provider==='gmail')sessionStorage.setItem('leadintel_gmail_crm_activity_key',activityId);
-        if(root.LeadIntelDeliveryUI?.confirmSent)recorded=await root.LeadIntelDeliveryUI.confirmSent({deliveryChannel:provider,threadId:result.message.gmail_thread_id,providerMessageId:result.message.gmail_message_id||result.message.id});else {q('confirm-delivery-sent')?.click();recorded={ok:false};}
+        if(root.LeadIntelDeliveryUI?.confirmSent)recorded=await root.LeadIntelDeliveryUI.confirmSent({deliveryChannel:provider,submissionKey:key,sentAt:result.message.sent_at,threadId:result.message.gmail_thread_id,providerMessageId:result.message.gmail_message_id||result.message.id});else {q('confirm-delivery-sent')?.click();recorded={ok:false};}
       }else{
         const d=root.LeadIntelDelivery,record=d.confirmSend(d.normalizeDeliveryState(read(DELIVERY)),pkg,email,result.message.sent_at||new Date().toISOString(),{deliveryChannel:provider,threadId:result.message.gmail_thread_id,providerMessageId:result.message.gmail_message_id||result.message.id});
         if(record.error)return confirmedWarning(provider,email,record.error);
@@ -75,6 +81,7 @@
       if(activeSend!==operation||!authority.current({afterRecord:true}))return confirmedWarning(provider,email);
       syncResult=await b.saveNow?.();
       if(activeSend!==operation||!authority.current({afterRecord:true}))return confirmedWarning(provider,email);
+      trace.checkpoint('persistence',result.sync_warning||recorded?.ok===false||!syncResult?.saved?'partial':'pass');
       if(!delivery)root.dispatchEvent(new root.CustomEvent('leadintel:outreach-sent',{detail:{domain:pkg.domain,recipient:email,provider}}));
       return {ok:true,providerConfirmed:true,duplicate:Boolean(result.duplicate),provider,recipient:email,crmSynced:!result.sync_warning&&recorded?.ok!==false&&Boolean(syncResult?.saved),syncWarning:Boolean(result.sync_warning||recorded?.ok===false||!syncResult?.saved)};
     }catch(error){if(confirmedResult)return confirmedWarning(provider,email,String(error?.message||error));return {ok:false,submissionUncertain:dispatched,error:dispatched?'Delivery is unconfirmed. Check your mailbox Sent folder before another send; this request will not be submitted again. '+String(error?.message||error):String(error?.message||error)};}
@@ -83,7 +90,7 @@
   async function send(provider='gmail'){
     const quality=root.LeadIntelPageQuality,ticket=quality?.capture('delivery','send');if(quality&&!ticket){toast(quality.getReport('delivery').message);return {ok:false,error:'Review Delivery first.'};}
     const selected=provider==='microsoft'?'microsoft':'gmail',b=bridge(),connection=selected==='microsoft'?b?.microsoftMail:b?.gmail,pkg=approvedPackage(),recipient=root.LeadIntelDelivery?.normalizeEmail(q('delivery-recipient')?.value||'');
-    if(!connection?.connected){toast(`Connect ${selected==='microsoft'?'Microsoft mail':'Gmail'} first`);return {ok:false};}if(!pkg||!recipient){toast('Choose an approved outreach package and its exact recipient');return {ok:false};}
+    if(!connection?.connected){toast(`Connect ${selected==='microsoft'?'Microsoft mail':'Gmail'} first`);return {ok:false};}if(!pkg||!recipient){toast('Review and approve the message in Messages after any Profile or Strategy changes');return {ok:false};}
     const outcome=await submitApproved(pkg,recipient,selected,{delivery:true,quality,ticket});
     if(outcome.cancelled)return outcome;
     toast(outcome.warning||outcome.error||(outcome.syncWarning?`Email ${selected==='microsoft'?'accepted by Microsoft':'sent with Gmail'} · CRM or activity sync needs attention`:outcome.duplicate?'This approved send was already recorded · no duplicate email sent':selected==='microsoft'?'Email accepted by Microsoft · Pipeline Contacted':'Email sent with Gmail · Pipeline Contacted'));return outcome;
@@ -91,7 +98,7 @@
   async function sendApprovedFromMessages({domain,recipient,approvedAt,personId}={}){
     const quality=root.LeadIntelPageQuality,ticket=quality?.capture('messages','send');if(quality&&!ticket)return {ok:false,error:quality.getReport('messages').message};
     const b=bridge(),d=root.LeadIntelDelivery;if(!b?.session?.authenticated||!d)return {ok:false,error:'Sign in to the workspace and open Delivery setup first.'};
-    const email=d.normalizeEmail(recipient),pkg=approvedPackages().find(row=>row.domain===domain&&row.approvedAt===approvedAt&&(!personId||row.selectedPersonId===personId)&&approvedRecipient(row)===String(email||'').toLowerCase());if(!pkg||pkg.channel==='linkedin'||!email)return {ok:false,error:'An approved email for this exact recipient is required.'};
+    const email=d.normalizeEmail(recipient),pkg=approvedPackages().find(row=>row.domain===domain&&row.approvedAt===approvedAt&&(!personId||row.selectedPersonId===personId)&&approvedRecipient(row)===String(email||'').toLowerCase());if(!pkg||pkg.channel==='linkedin'||!email)return {ok:false,error:'Review and approve the exact message and recipient in Messages after any Profile or Strategy changes.'};
     const previous=d.findDeliveryRecord?.(read(DELIVERY),pkg,email)||(!d.findDeliveryRecord?d.normalizeDeliveryState(read(DELIVERY)).opportunities.find(row=>row.domain===domain):null);if(previous?.sentAt)return {ok:false,error:'This approved email already has a recorded send for this recipient. Review Delivery before another direct email.'};
     const provider=b.gmail?.connected?'gmail':b.microsoftMail?.connected?'microsoft':null;if(!provider)return {ok:false,error:'Connect Gmail or Microsoft in Delivery settings first.'};
     return submitApproved(pkg,email,provider,{quality,ticket});

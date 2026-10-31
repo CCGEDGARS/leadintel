@@ -1,5 +1,5 @@
 import {normalizeEmail} from './gmail.js';
-import {validateEmailContent} from './email-content.js';
+import {validateEmailContent,validateEmailSubject} from './email-content.js';
 
 export async function refreshMicrosoftAccessToken(refreshToken,{clientId,clientSecret,scopes=[]},fetchImpl=fetch){
   if(!refreshToken)throw new Error('Microsoft mail refresh token is missing');
@@ -13,7 +13,7 @@ export async function refreshMicrosoftAccessToken(refreshToken,{clientId,clientS
 export async function sendMicrosoftMessage(accessToken,{to,subject,body,textBody,htmlBody},fetchImpl=fetch){
   if(!accessToken)throw new Error('Microsoft mail access token is required');
   const recipient=normalizeEmail(to);if(!recipient)throw new Error('Valid recipient email is required');
-  const cleanSubject=String(subject??'').trim();if(!cleanSubject)throw new Error('Email subject is required');if(/[\r\n]/.test(cleanSubject))throw new Error('Email header contains invalid newline characters');if(cleanSubject.length>500)throw new Error('Email subject is too large');
+  const cleanSubject=validateEmailSubject(subject);
   const content=validateEmailContent({body,text_body:textBody,html_body:htmlBody});
   const graphBody=content.htmlBody?{contentType:'HTML',content:content.htmlBody}:{contentType:'Text',content:content.textBody};
   const payload={message:{subject:cleanSubject,body:graphBody,toRecipients:[{emailAddress:{address:recipient}}]},saveToSentItems:true};

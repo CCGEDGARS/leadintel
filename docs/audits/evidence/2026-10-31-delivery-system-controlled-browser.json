@@ -1,0 +1,1157 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-31T10:31:26.861Z",
+  "reproduction": {
+    "command": "node scripts/audit-delivery-connected-browser.cjs",
+    "runnerSha256": "292cfa7f74a8f1d19f47d692b3f0fcc3bfbbe2656f77951e49160bd5a6da3247",
+    "requirements": [
+      "Local Playwright",
+      "/usr/bin/chromium",
+      "repository dependencies"
+    ]
+  },
+  "baseGitSha": "b52d0acf43369b65ead24c6f812ecd5f36c71c1a",
+  "browser": {
+    "executable": "/usr/bin/chromium",
+    "version": "154.0.8037.57"
+  },
+  "environment": "Controlled synthetic session, company/contact/source evidence and CRM acknowledgements; all network intercepted",
+  "sourceSnapshotSha256": {
+    "customer/app-shell.css": "7d02d2a334554f859373e47c084d14bcac581a70ee905334e311fc0f57f11399",
+    "customer/approved-linkedin-inmail.js": "508cc5ec22879f31cffd4ffe87a44bef18507ffbbe0671928539dac0d852bac4",
+    "customer/approved-reference-scripts.js": "a6452804a184455fce36efbacf51a032fb7e4e570bbfc0c9209ba980db42eb92",
+    "customer/attention-centre.css": "2dcaa49f48f1008fd69e49e8f83407c2db0acecb9ad79735ed0d518e9420aa3d",
+    "customer/background-task-centre.css": "c754c820652eb14b787ee595558b39078e419e1d1fb216956e5161d5e749c2fe",
+    "customer/brand-identity.css": "19ebd98adce07c05309a9ef3f6f6965f0fb522c94e775ef30873037a6c0e0ff2",
+    "customer/brand-identity.js": "cf879b24a2fba11eefc31f5bffa22caaf06625504fc463c95ed2dc0b7cc7a760",
+    "customer/channel-scripts.css": "f48ccf207a43cf556eecd218d17687cd6ac9eadd1105147fc038a95f0d8b34d5",
+    "customer/channel-scripts.js": "5ad530b6403faef092f38ef657e7126aff6a9b8a410b8601fc64f39e96d30f16",
+    "customer/compact-sources.css": "df7b1a24a752a247d50841b35f85eed04e14748cfe6e9817953a3161876dd572",
+    "customer/company-dossier.js": "b88ba7654e2bfcf93dfd26b77f82c8ad1fd719fde3497ba8b7e03b61bb4f60e8",
+    "customer/company-materials.css": "2fc1abf1761b5150cf32ffb18f787782d3d028e45daa5c0619433cc9dd807866",
+    "customer/confirmation-dialog.css": "006bc773ffbfdf8d3f63cbccea51b96655d5a8de4562b0763a8fe77e0688ddfc",
+    "customer/confirmation-dialog.js": "68e8c40f3338e047ebf3197ff612c143c629dfad941b5eb642d967a011faa863",
+    "customer/contact-confirmation-policy.js": "d508d0bc2a22dc73cd36720f003182ff824e7fc9d87fded1aa0eeae4074ebc2f",
+    "customer/content-language.js": "ab0194be82aa509d0ce15d6686b0cd2db101e39abcc50b9badd35465a2f52d74",
+    "customer/content-materials.js": "aef238237ba55193b2c26d77481dae6fbeee5662fca601c76b59782521db41fe",
+    "customer/content-variants.js": "53868323bd3346987afc112d44ef5658b104e471e9ee6594a31a6bcc08964d06",
+    "customer/conversation.css": "d7df3a631e472a096554d6c86a22151f373cd0fa530cdf116ae6cc44ac4b764f",
+    "customer/crm-engine.js": "443f85adfa307f46215e92e7e18ea7a0f0c2f5ab3fe5259dcce78f3fb348d2d3",
+    "customer/delivery-engine.js": "65d7784ae2b63db81cc945a1ba3f2d5eaf708d50d1664d838c6112690158aadf",
+    "customer/delivery-ui.js": "6c4fd3c1b41efb953ada55fcad266eb226f818be7de186dde3766dfa907d6d09",
+    "customer/delivery.css": "bc81af34765f56255efb5c64602bdfe54b3cdc0e2cc4424e4ccbdc07285a6d34",
+    "customer/discovery-engine.js": "b441d43f44a61271c3a20c7973faebabc8627a1de15fca4e7ae4789f27e9e852",
+    "customer/email-campaigns.css": "98d3f35239d4ab89e9babede99f6316d424686059979c4f0512109860e3762ff",
+    "customer/event-campaigns.css": "40b0e065edc03d6489a0924529784bc63a99fde67823645c60ad89275a29dc6c",
+    "customer/event-campaigns.js": "57b9ec4d684767b9165dd4e73defb7955b5cd8bf1a09be4ab190396b311c6d20",
+    "customer/evidence-policy.js": "2d449a54641f102c07398d1658ed19d89bc514c93e29cbac18609f79eec827eb",
+    "customer/evidence-sources.css": "57c3d4e2db992fdf36971816e594b7d9045e68c32ef27d3557d27b0088286cb3",
+    "customer/follow-up-assistant-ui.js": "a68d0b10d78befeb7e90d30126f4b7a08e9cce04ef6a2df43460d6714c9ec9cc",
+    "customer/follow-up-assistant.css": "9f89afc6240c7e8a166e1f1633adca7391d251c671791f58fb6e26bbb8870039",
+    "customer/follow-up-assistant.js": "f4c99c71155b20bb0cb9ba85713a65f157a16bcfebba6ddbcf9028679ad24da5",
+    "customer/index.html": "0f53861c194c8a47dc63507c2da9a64686d939f91daab704353f7a85e6fe32c9",
+    "customer/language-pack-catalogue.js": "72edfd0384c7c92537a9caeef512a4862a092aceacf9dd8af83d8dd5fadd44b3",
+    "customer/language-pack-ui.js": "048b5946134ccd6f6e3615e3364e162628715586e98b495acb733c35bb293248",
+    "customer/linkedin-inmail-engine.js": "51979e31b9500edad95816895f2278473fc4809c1ee45285ef30752ab7d15ea7",
+    "customer/linkedin-inmail-ui.js": "03cbac337e85b245209a212bdad5246efcca9ce1ed60c98fecc20b8f0a66d98e",
+    "customer/linkedin-inmail.css": "405d3a3f773df4a8186834082a31424769a740080ea23d6d055324703d1d7255",
+    "customer/market-conditions-engine.js": "401d8a724b416c216f27f71ec78c459a76aad33dcf691841c5018620f61e4586",
+    "customer/market-engine.js": "ecbe040b44459de9d4462348371ae474bd0fbff6e1e4df5911a35290e67d1bd6",
+    "customer/market-selector.css": "db5ebb38e542de9028628deaf06dae0a4a0c2cdd3b4f0577027dcdb9d38224f9",
+    "customer/market.css": "9a6a141aeeb0650423e1f11ddd976b768404d249b05fff90d9107ffcf31c57ae",
+    "customer/message-draft-history.js": "bf9768184900063bb2065fab3a0027e87a64d9d69d4355e2dffe7e827a74c3ba",
+    "customer/message-editor.js": "5cbdedbed75344282f090cc1a00a12a4ade9f200e280009b0bdcc093d66164e9",
+    "customer/message-evidence.js": "4611966d47ab4d0b3da6316f14d5bb2cea71fb9aa420fce90eb657ce6b613082",
+    "customer/message-facts.js": "183e150622a0233937250660088491c69de344ab2b4cdc6f2f1de4d3ad9bb000",
+    "customer/message-meeting-options.js": "71f437f459532666d54a736152e29e57a50da8bc5da724a3c53fb9f9d87c84f2",
+    "customer/message-studio.js": "a23b80440627939f2a86e3ee0a95d5ee62efd7b6e345bfe1a50216b100456ccb",
+    "customer/message-translation-ui.js": "196d84dcffa6a95ef75c25a69d912085a0a9efd6913008f206e5bfb344fdad97",
+    "customer/message-translations.js": "e11a486886579a2ca5f149f5fbb7abafdedf921d3101a95b2e34143f31126371",
+    "customer/message-workspace.css": "766a705c1aef787167f40076f026e9c5caf501c490e3e926359a2160ff936622",
+    "customer/message-workspace.js": "3c5787821c75d2c93ce6f0b1d0e3bf75272ceee278a433907c9be6aac593bd6c",
+    "customer/original-scripts-ui.js": "0dccb1feabc14e0a0d3c1e64a3db7937653fc32ddbdc80029b4ba5fd5c1e05ac",
+    "customer/original-scripts.js": "1d29900e915dc1c35eb9b3895743f322135fa3471502f9b44a5ca8fb60ce29db",
+    "customer/outreach-engine.js": "bd35dd3b4e25bafeda43d30627fbe448c7d93eefa7cd2a3bd68f4e48e2e51297",
+    "customer/outreach-ui.js": "e530c66ef86216952e1e7d6029531859c239af0bdb3629db45777caf19a5a6e8",
+    "customer/outreach.css": "b3b9eb2be98a852d3748cd885bcc432a414879d01576f8c8afba7137148abddd",
+    "customer/personal-template-library.js": "c41b4a7a93a58f07ccefc43d2e991f29128c884e5df69ad90587f7b88f7a748f",
+    "customer/premium.css": "866333d57a0adf2c920ecc0f909f069d102ac47bf8cc30bb4925f845672e5fd6",
+    "customer/production-gmail-ui.js": "eb5407ab358d646591491da1f65bcce6ac9cf2f206f994f6efea0d08b0b65534",
+    "customer/profile-engine.js": "a88d0ff43ae45c11d50b1d3730862fb16013ea7abc1adbedf721df27dc85cfd6",
+    "customer/research-brief.js": "ebb5cbaac1cc42921e8324d68a4f99ed376d0941ce0fa7655087b4b217b056c9",
+    "customer/research-costs.css": "419db04f2d95053cfe5d9c1f868a9f5a6958a819be8780530398d98d3fd77210",
+    "customer/rich-text-editor.js": "af312f99f77d8da3a9cd31f08cb76d77c48a7a111b22a8d6c322ad6dbc1d9e94",
+    "customer/rich-text.css": "e9676fe1145aa9ff04c79db63348596db5c1afa29110c949bb84f3ce3fd6cc99",
+    "customer/rich-text.js": "8dbad52075136f29e63a715281e827af3b7a8219a546296c053f6bb46d5deead",
+    "customer/server-bridge.js": "4f21a434b0500fb09bee3770c69057662363ffca1298a72f473a06758f76a9fd",
+    "customer/setup-focus.css": "43cd5cdfe431b0c27c5046c815699fb78483f15b5af8310b52147f073ce62c37",
+    "customer/setup-operation-trace.js": "2cb2e771172b77c284f34e4055d467a3c6af76f7b2409f2c5eae967155983a2a",
+    "customer/step-action-guidance.css": "48dbfb83af107ed6cf8b4eb45be327ad0c17aa24e0078a9c0d3267fc4c5650cd",
+    "customer/step2-brief-schema.js": "39f9f170909396d0caac109671b67f1eb42a786557524b0c516713368e32949d",
+    "customer/storyselling-native.js": "84b696e36a5f409a84608e84a4390667ab565e2fd5e6cd3f5865f0d0fceefa52",
+    "customer/strategy-integrity.js": "997e0032cae963cabb4d75171b567955292b1967282be48d51ef987b8d1b309f",
+    "customer/styles.css": "a09d6253de2cc519be6d60287283ea6eb174d3e97c48b18e8bdf8324e494c864",
+    "customer/subject-editor.js": "637571963282f15cf00bc1847d5300abca21fd9c97dff31dca90579fe7f857f1",
+    "customer/targeting-policy.js": "51294400e89c00b1a2a839a516106baaec69560f4960b0f4dd32f74902a62d7e",
+    "customer/test-email-ui.js": "dbdab4aa5433cb155bec321008418eb12a8c65af44b0400e990a589e8852bd4d",
+    "customer/test/helpers/delivery-connected-fixture.cjs": "52a5297e1d465b465b0cd6dfb90049c702435378cb6c1b84c77470f5cc975d8d",
+    "customer/test/helpers/recipient-identity.cjs": "505e0c994ed870c8526902e7880b435ad1375421702bc01f232b472f649182c0",
+    "customer/translation-preview.js": "73164b0a15aa52fc2e6e86dff7fe6a62aab9083387bd8cb32e366efd6b5c7771",
+    "customer/trigger-preview.js": "17a353788404e9c171d30453a535d2e253bde38f8e6805071195ad004ce0fb4e",
+    "customer/workspace-controls.css": "dc96877e5fdc395535f7bd602d58f157b1ad10fbe4a536c194615d25e0ef2fa2",
+    "customer/workspace-save.css": "68ce7aecd1436b82f65916a55172185ee1d480a097f88e75ef4638dcb296cd2f",
+    "customer/writing-assistant-context.js": "7eebada1da778636002e2c22dde3e10f8ef1e94f6773a18484b767f8d1445ebb",
+    "customer/writing-assistant-ui.js": "4974fbf1516296fc6be0306ae78f4567ec8a05ff355dd63f850ba06e965047a8",
+    "customer/writing-assistant.css": "c5363989d003b6bb53c6b295f8cede1b54949c6a28a7f43f77843d19d9ca096b",
+    "customer/writing-assistant.js": "d2b48493ccb7dbae6d28a61f0c388360b0efe251c2b016a5c7376287cbd27469",
+    "customer/writing-references.css": "07f78bbed27f7b3a8b32b0ecbb5481f8ac318d8da75a49c34f375837c55de2fa",
+    "customer/writing-workspace.js": "ec3e87f63c4d492b595fd94dd379c8a361b0780e1628f3d4ad9097f22cf99291",
+    "scripts/audit-delivery-connected-browser.cjs": "292cfa7f74a8f1d19f47d692b3f0fcc3bfbbe2656f77951e49160bd5a6da3247"
+  },
+  "sourceSnapshotScope": "Exact shipping browser assets plus executed Node fixture/helper and runner sources; external Playwright/Chromium versions are reported separately",
+  "sourceChangedOnDiskDuringRun": [],
+  "finalDiskHashVerification": {
+    "checkedAt": "2026-10-31T10:31:26.870Z",
+    "mismatches": []
+  },
+  "viewports": [
+    {
+      "seller": "industrial",
+      "width": 1440,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-industrial-1440-zoom1.png",
+        "sha256": "0ca775ca44c1dbf9262c9a2350e07c8eada6ccdd9802f49f93cc55df9e1d2654"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:16.186Z\"]",
+      "recipient": "teemu@industrial-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 699,
+          "right": 1367,
+          "width": 668,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 700,
+          "right": 1366,
+          "width": 666,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 713,
+          "right": 1353,
+          "width": 640,
+          "viewport": 1440
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 399,
+          "right": 869,
+          "width": 470,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 893,
+          "right": 1363,
+          "width": 470,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 399,
+          "right": 558.96875,
+          "width": 159.96875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 568.96875,
+          "right": 704.9375,
+          "width": 135.96875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 561,
+          "right": 1201,
+          "width": 640,
+          "visible": true,
+          "viewport": 1440
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "industrial",
+      "width": 720,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-industrial-720-zoom1.png",
+        "sha256": "235a96cab8501cd861d3e87a35505ad5a466a37fd38147f9ffb327d4de8464a8"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:26.073Z\"]",
+      "recipient": "teemu@industrial-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 685,
+          "width": 650,
+          "viewport": 720
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 684,
+          "width": 648,
+          "viewport": 720
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 40,
+          "right": 680,
+          "width": 640,
+          "viewport": 720
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 49,
+          "right": 348,
+          "width": 299,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 372,
+          "right": 671,
+          "width": 299,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 49,
+          "right": 208.96875,
+          "width": 159.96875,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 218.96875,
+          "right": 354.9375,
+          "width": 135.96875,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 40,
+          "right": 680,
+          "width": 640,
+          "visible": true,
+          "viewport": 720
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "industrial",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-industrial-390-zoom1.png",
+        "sha256": "0f59d6bc8094547b2a27120b50dbde045237822ba840da503b61197d67f8c346"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:35.665Z\"]",
+      "recipient": "teemu@industrial-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 354,
+          "width": 318,
+          "viewport": 390
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 20,
+          "right": 370,
+          "width": 350,
+          "visible": true,
+          "viewport": 390
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "industrial",
+      "width": 1440,
+      "zoom": 2,
+      "screenshot": {
+        "path": "work/delivery-connected-industrial-1440-zoom2.png",
+        "sha256": "4d585968fa07160f65f4f9e31e410bd822404cda2a4cfd3cfd4d3535d808514f"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:45.394Z\"]",
+      "recipient": "teemu@industrial-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 780,
+          "right": 1304,
+          "width": 524,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 798,
+          "right": 1018,
+          "width": 220,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 1066,
+          "right": 1286,
+          "width": 220,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 798,
+          "right": 1117.9375,
+          "width": 319.9375,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 798,
+          "right": 1069.921875,
+          "width": 271.921875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 740,
+          "right": 1344,
+          "width": 604,
+          "visible": true,
+          "viewport": 1440
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "clinical",
+      "width": 1440,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-clinical-1440-zoom1.png",
+        "sha256": "0ca775ca44c1dbf9262c9a2350e07c8eada6ccdd9802f49f93cc55df9e1d2654"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:55.213Z\"]",
+      "recipient": "teemu@clinical-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 699,
+          "right": 1367,
+          "width": 668,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 700,
+          "right": 1366,
+          "width": 666,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 713,
+          "right": 1353,
+          "width": 640,
+          "viewport": 1440
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 399,
+          "right": 869,
+          "width": 470,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 893,
+          "right": 1363,
+          "width": 470,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 399,
+          "right": 558.96875,
+          "width": 159.96875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 568.96875,
+          "right": 704.9375,
+          "width": 135.96875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 561,
+          "right": 1201,
+          "width": 640,
+          "visible": true,
+          "viewport": 1440
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "clinical",
+      "width": 720,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-clinical-720-zoom1.png",
+        "sha256": "e3b1f041cf6579d69dfbfc7a71e7d5f2c8054b2a9d774f156d834c23f4655b79"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:04.767Z\"]",
+      "recipient": "teemu@clinical-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 685,
+          "width": 650,
+          "viewport": 720
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 684,
+          "width": 648,
+          "viewport": 720
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 40,
+          "right": 680,
+          "width": 640,
+          "viewport": 720
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 49,
+          "right": 348,
+          "width": 299,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 372,
+          "right": 671,
+          "width": 299,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 49,
+          "right": 208.96875,
+          "width": 159.96875,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 218.96875,
+          "right": 354.9375,
+          "width": 135.96875,
+          "visible": true,
+          "viewport": 720
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 40,
+          "right": 680,
+          "width": 640,
+          "visible": true,
+          "viewport": 720
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "clinical",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": {
+        "path": "work/delivery-connected-clinical-390-zoom1.png",
+        "sha256": "2f8223666110ac0300c5f33ce31cd2fb6bb1b6bcb5bba5e37f219ea5d2c12324"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:14.264Z\"]",
+      "recipient": "teemu@clinical-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 354,
+          "width": 318,
+          "viewport": 390
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "visible": true,
+          "viewport": 390
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 20,
+          "right": 370,
+          "width": 350,
+          "visible": true,
+          "viewport": 390
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    },
+    {
+      "seller": "clinical",
+      "width": 1440,
+      "zoom": 2,
+      "screenshot": {
+        "path": "work/delivery-connected-clinical-1440-zoom2.png",
+        "sha256": "51a7a890f0eb5292de0ded92ab7813ae47267bfc2d9cd492517635315fbbd44f"
+      },
+      "status": "PASS",
+      "keyboardEditCancelExact": true,
+      "saveCrmReopenExact": true,
+      "keyboardCrmReopen": true,
+      "pendingSameWorkspaceUserChangeRejected": true,
+      "teemuKlasReorderRetainsRecipient": true,
+      "deliveryReloadRetainsExactRecipient": true,
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:23.950Z\"]",
+      "recipient": "teemu@clinical-buyer.example",
+      "messageGeometry": [
+        {
+          "id": "outreach-email-subject",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 780,
+          "right": 1304,
+          "width": 524,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        }
+      ],
+      "geometry": [
+        {
+          "id": "delivery-company-select",
+          "left": 798,
+          "right": 1018,
+          "width": 220,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-recipient",
+          "left": 1066,
+          "right": 1286,
+          "width": 220,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "open-gmail-draft",
+          "left": 798,
+          "right": 1117.9375,
+          "width": 319.9375,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "confirm-delivery-sent",
+          "left": 798,
+          "right": 1069.921875,
+          "width": 271.921875,
+          "visible": true,
+          "viewport": 1440
+        },
+        {
+          "id": "delivery-workflow-status",
+          "left": 740,
+          "right": 1344,
+          "width": 604,
+          "visible": true,
+          "viewport": 1440
+        }
+      ],
+      "horizontalOverflow": false,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "content.approved",
+        "dossier.built"
+      ],
+      "noSentCrmActivity": true
+    }
+  ],
+  "composedModuleCaseEvidence": {
+    "path": "docs/audits/evidence/2026-10-31-delivery-system-connected-cases.json",
+    "sha256": "bb790d358d1d6e7941e2548a30d8097377388073f6a8b988ef34116b39e65e56",
+    "checkedAt": "2026-10-31T10:24:51.671Z",
+    "sourceMismatches": [],
+    "acceptance": {
+      "composedControlledModuleCases": "PASS",
+      "singleSevenStageShippingUI": "NOT TESTED",
+      "authenticatedCustomerWorkflow": "BLOCKED",
+      "realExternalResearch": "BLOCKED",
+      "realCloudSyncConflict": "BLOCKED",
+      "realQuotaSpendingReconciliation": "BLOCKED",
+      "realSend": "NOT TESTED",
+      "buyersStage": "OPEN",
+      "fourQualifiedBuyersAndTwoPriorityEmails": "BLOCKED"
+    }
+  },
+  "cases": [
+    {
+      "id": 1,
+      "name": "Upstream rejection, recovery and persisted handoff",
+      "files": [
+        "delivery-connected-acceptance.test.js",
+        "website-activation-reliability.test.js",
+        "profile-approval-integrity.test.js",
+        "strategy-app-reliability.test.js",
+        "strategy-discovery-boundary.test.js"
+      ],
+      "proves": "Actual website activation state, Profile build/approval, Strategy activation/signature and Companies request gates; missing/stale upstream authority rejects before provider work; explicit recovery survives JSON reload.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 2,
+      "name": "Two materially different seller industries",
+      "files": [
+        "delivery-connected-acceptance.test.js"
+      ],
+      "proves": "Industrial fabrication and clinical software carry their own offer/market/roles through actual qualification, mandatory research, CRM snapshot, shared brief and exact Message/Delivery preparation; source fixtures remain synthetic.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 3,
+      "name": "Teemu/Klas identity reorder through recipient",
+      "files": [
+        "delivery-connected-acceptance.test.js"
+      ],
+      "proves": "Stable person ID rather than array order controls approved recipient; wrong Klas address cannot compose Teemu message. Browser evidence separately checks reorder through shipping Save/Reopen/Delivery/reload.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 4,
+      "name": "Pending user/workspace switches",
+      "files": [
+        "message-crm-operation-ownership.test.js",
+        "strategy-discovery-boundary.test.js",
+        "strategy-app-reliability.test.js"
+      ],
+      "proves": "Actual continuations reject account/bridge/cache/workspace/recipient drift during pending persistence/research and preserve prior work.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 5,
+      "name": "Cancel, retained partial work, resume and retry",
+      "files": [
+        "official-contact-cancellation-checkpoint.test.js",
+        "messages-automation-authority.test.js",
+        "delivery-policy-recovery.test.js"
+      ],
+      "proves": "Actual official-contact engine checkpoints completed sources, cancellation retains them and resume reads outstanding queue; failed queue/policy operation can explicitly retry without overlap.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 6,
+      "name": "Competing sync revisions and explicit resolution",
+      "files": [
+        "workspace-sync.test.js",
+        "workspace-sync-recovery.test.js",
+        "profile-approval-integrity.test.js"
+      ],
+      "proves": "Actual workspace merge/persistence/bridge handles competing versioned fixture responses, retains both recovery copies and requires explicit resolution. Real customer cloud conflicts remain BLOCKED.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 7,
+      "name": "Quota, revoked authority and uncertain submission",
+      "files": [
+        "additional-contact-services.test.mjs",
+        "crm-enrichment.test.mjs",
+        "delivery-provider-reliability.test.mjs",
+        "message-delivery-authority.test.mjs",
+        "delivery-submission-recovery.test.js",
+        "outreach-automation-runner.test.mjs"
+      ],
+      "proves": "Actual routes and local full-migration DBs with controlled provider replies reject quotas/revoked sessions or contacts; ambiguous dispatch stays uncertain and cannot replay or manufacture CRM sent success. Actual controlled Treg/Hunter/Apollo reservation and phase receipts retain uncertain charges, revoked consent stops subsequent phases, and sufficient remaining budget cannot repurchase an uncertain email. Real paid-spend reconciliation remains BLOCKED.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        },
+        {
+          "id": "backend",
+          "log": "work/delivery-connected-backend-acceptance.tap",
+          "logSha256": "317cf21d7f43c4f103ca2313d077aafc649628ca257608c8ec5c1248a4091a09"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 8,
+      "name": "Changed upstream evidence stales downstream",
+      "files": [
+        "delivery-connected-acceptance.test.js",
+        "delivery-submission-recovery.test.js",
+        "strategy-discovery-boundary.test.js"
+      ],
+      "proves": "Changed seller source or Strategy invalidates authorization, changed trigger revokes exact-message approval, saved text is retained and provider send does not start.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 9,
+      "name": "Manual permission versus already approved automation, pause and stop",
+      "files": [
+        "approved-workflow-ui.test.js",
+        "conversation-workflow-ui.test.js",
+        "approved-workflow.test.mjs",
+        "email-campaigns.test.mjs",
+        "conversation-workflows.test.mjs",
+        "messages-automation-authority.test.js",
+        "outreach-automation-manual-only.test.mjs",
+        "outreach-automation-runner.test.mjs",
+        "outreach-automation-queue.test.mjs"
+      ],
+      "proves": "Manual approval does not create automatic permission; existing exact approved package queues through current identity, pause/emergency stop/limits/revoked contact block dispatch. No live automation was activated.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        },
+        {
+          "id": "backend",
+          "log": "work/delivery-connected-backend-acceptance.tap",
+          "logSha256": "317cf21d7f43c4f103ca2313d077aafc649628ca257608c8ec5c1248a4091a09"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    },
+    {
+      "id": 10,
+      "name": "Saved Delivery preparation and CRM reopen",
+      "files": [
+        "delivery-connected-acceptance.test.js",
+        "message-crm-operation-ownership.test.js"
+      ],
+      "proves": "Actual Message CRM serialization/restoration preserves exact approved recipient/message; shipping controlled Chromium Save/Reopen/Delivery/reload is recorded separately. No send occurs.",
+      "status": "PASS",
+      "execution": [
+        {
+          "id": "customer",
+          "log": "work/delivery-connected-customer-acceptance.tap",
+          "logSha256": "7f9772c8fb2a4a0e4bcc9d9d6c99034e11b355aaa84c63b1ee15f672f1abfbed"
+        }
+      ],
+      "scope": "Controlled actual-module tests; independent authenticated and business gates remain blocked"
+    }
+  ],
+  "seams": [
+    "Shipping HTML/CSS/dependency modules and actual outreach-ui/Delivery loader execute; fixture navigation replaces app bootstrap",
+    "Setup/Profile/Strategy/Companies/Buyers are composed through separate actual-module tests; this is not one uninterrupted seven-stage shipping UI journey",
+    "Two distinct synthetic sellers, declared source excerpts and manually reviewed contacts; no external research or contact verification claimed",
+    "CRM activities persist in browser localStorage, with shipping Save/Reopen continuations; a distinct local recovery draft is seeded through MessageEditor before actual CRM Reopen; no actual authenticated customer database",
+    "200% is root CSS zoom, not native browser zoom",
+    "No external compose, send, enqueue, account creation, provider calls or automation activation"
+  ],
+  "externalAcceptanceCases": [
+    {
+      "id": "two-industry-messages-delivery",
+      "status": "PASS",
+      "evidence": "8 browser configurations, actual save/reopen/approval/Delivery loader and persisted exact selected recipient"
+    },
+    {
+      "id": "identity-teemu-klas-reorder",
+      "status": "PASS",
+      "evidence": "Both sellers reverse dossier/pipeline people before CRM reopen and Delivery handoff; exact Teemu address retained"
+    },
+    {
+      "id": "pending-user-switch",
+      "status": "PASS",
+      "evidence": "Actual Save held during CRM lookup; same-workspace user replaced; no activity written"
+    },
+    {
+      "id": "cancel-recovery",
+      "status": "PASS",
+      "evidence": "Keyboard editor cancel restores exact prior draft; explicit Save/CRM reopen/reload succeeds"
+    },
+    {
+      "id": "single-seven-stage-ui-journey",
+      "status": "NOT TESTED",
+      "reason": "Actual app bootstrap and upstream shipping controls are not mounted by this runner; separate composed module tests cover boundary contracts"
+    },
+    {
+      "id": "real-authenticated-crm-sync-conflict",
+      "status": "BLOCKED",
+      "reason": "No customer session/database; bridge simulation is not a genuine cloud conflict"
+    },
+    {
+      "id": "real-research-provider-results",
+      "status": "BLOCKED",
+      "reason": "No customer/provider authorization; fixture sources are synthetic"
+    },
+    {
+      "id": "buyers-four-person-two-priority-email-business-outcome",
+      "status": "BLOCKED",
+      "reason": "Intentionally only two synthetic identities. Buyers remains OPEN."
+    },
+    {
+      "id": "real-quota-spending-reconciliation",
+      "status": "BLOCKED",
+      "reason": "No paid providers or real ledger accessed"
+    },
+    {
+      "id": "real-send-provider-receipt",
+      "status": "NOT TESTED",
+      "reason": "No real sending authorized or executed"
+    }
+  ],
+  "acceptance": {
+    "controlledBrowser": "PASS",
+    "composedControlledModuleCases": "PASS",
+    "completeSevenStageShippingUI": "NOT TESTED",
+    "authenticatedCustomerWorkflow": "BLOCKED",
+    "productionRelease": "NOT TESTED",
+    "buyersStage": "OPEN",
+    "businessOutcome": "BLOCKED"
+  }
+}

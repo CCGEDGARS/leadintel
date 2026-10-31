@@ -1457,3 +1457,9 @@ test('workspace reset reports queued cleanup separately from deleted and failed 
   assert.equal(localStorage.getItem(resetKey), null);
   assert.equal(events.at(-1).detail.queued, 1);
 });
+
+test('both real provider bridge serializers retain the original reviewed canonical source authority',async()=>{
+ const calls=[],{bridge}=loadBridge(async(url,options)=>{calls.push(JSON.parse(options.body));return new Response(JSON.stringify({message:{status:'sending'}}),{status:200});});
+ const source_authority=Object.freeze({version:1,profileApproved:true,strategyApproved:true,strategySignature:'reviewed-strategy-fixture',senderSignature:'reviewed-sender-fixture'}),input={domain:'buyer.example',recipient:'alex@buyer.example',subject:'Reviewed subject',body:'Exact manual body',idempotencyKey:'source-authority-key',source_authority};
+ await bridge.sendGmail(input);await bridge.sendMicrosoftMail(input);for(const body of calls)assert.deepEqual(body.source_authority,source_authority);
+});

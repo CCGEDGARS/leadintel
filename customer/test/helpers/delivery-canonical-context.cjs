@@ -1,0 +1,4 @@
+const I=require('../../strategy-integrity.js');
+module.exports=function canonicalMain(value={}){
+ const main=JSON.parse(JSON.stringify(value));main.approved=true;main.website||='https://seller.example';main.profile={companyName:'Seller',priorityOffers:'Reviewed services',targetMarkets:'Sweden',...main.profile};main.targetMarkets=main.targetMarkets?.length?main.targetMarkets:['Sweden'];main.market={icps:[{id:'fixture-icp',name:'Reviewed target companies',active:true}],signals:[{id:'fixture-signal',name:'Reviewed expansion',keywords:'expansion',weight:5,active:true}],...main.market};main.market.strategyApproved=true;main.market.strategyApproval=I.approval(main,'2026-10-31T08:00:00Z');if(!I.status(main).current)throw Error('Controlled Delivery fixture requires an actually approved Strategy');return main;
+};

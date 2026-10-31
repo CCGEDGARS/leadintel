@@ -58,7 +58,9 @@
       "profile_integrity_version": "20261030-v1",
       "strategy_integrity_version": "20261030-strategy-v1",
       "companies_integrity_version": "20261031-v1",
-      "messages_integrity_version": "20261031-messages-v1"
+      "messages_integrity_version": "20261031-messages-v1",
+      "delivery_integrity_version": "20261031-delivery-v1",
+      "operational_diagnostics_version": "20261031-operations-v1"
     }
   },
   "smokeChecks": [
@@ -6008,7 +6010,7 @@
       "url": "/customer/setup-operation-trace.js",
       "status": 200,
       "contains": [
-        "20261031-companies-v1",
+        "20261031-delivery-v1",
         "leadintel:companies-operation",
         "company_selection"
       ]
@@ -6126,7 +6128,7 @@
       "url": "/customer/setup-operation-trace.js",
       "status": 200,
       "contains": [
-        "20261031-buyers-v1",
+        "20261031-delivery-v1",
         "leadintel:buyers-operation",
         "buyer_selection"
       ]
@@ -6247,7 +6249,7 @@
       "url": "/customer/setup-operation-trace.js",
       "status": 200,
       "contains": [
-        "20261031-messages-v1",
+        "20261031-delivery-v1",
         "leadintel:messages-operation",
         "stage===6?'messages-'"
       ]
@@ -6271,6 +6273,138 @@
         "!owner.bridge.resolvingSync",
         "window.LeadIntelAccountCache===owner.cache",
         "requireDeliveryAction(owner);const recorded="
+      ]
+    },
+    {
+      "id": "delivery-canonical-source-authority",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function messageSourceAuthority(",
+        "function sourceAuthorityCurrent(",
+        "profileApproved",
+        "strategyApproved"
+      ]
+    },
+    {
+      "id": "delivery-provider-original-approval",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "source_authority:pkg.approvalAuthority.sourceAuthority",
+        "function captureSendAuthority(",
+        "function matchingSentReceipt("
+      ]
+    },
+    {
+      "id": "delivery-submission-recovery-receipts",
+      "type": "text",
+      "url": "/customer/delivery-engine.js",
+      "status": 200,
+      "contains": [
+        "function submissionStorageKey(",
+        "function readSubmissionReceipt(",
+        "function saveSubmissionReceipt("
+      ]
+    },
+    {
+      "id": "delivery-provider-uncertain-hold",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "duplicateHold:true",
+        "submissionUncertain:true",
+        "trace.checkpoint('provider','pending')"
+      ]
+    },
+    {
+      "id": "delivery-manual-provider-record-authority",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": [
+        "function deliverySubmission(",
+        "submission.key",
+        "An unconfirmed API submission cannot be recorded as a manual send."
+      ]
+    },
+    {
+      "id": "delivery-queue-policy-source-controls",
+      "type": "text",
+      "url": "/customer/outreach-automation-ui.js",
+      "status": 200,
+      "contains": [
+        "function sourceCurrent(",
+        "Only the workspace owner",
+        "reserved or unconfirmed",
+        "separate activation in Delivery."
+      ]
+    },
+    {
+      "id": "delivery-original-queue-package",
+      "type": "text",
+      "url": "/customer/outreach-automation-delivery-handoff.js",
+      "status": 200,
+      "contains": [
+        "source_authority:pkg.approvalAuthority.sourceAuthority",
+        "recipient_snapshot:{...pkg.approvalAuthority.recipient",
+        "approvedDeliveryPackages(outreach,read("
+      ]
+    },
+    {
+      "id": "delivery-safe-operation-diagnostics",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "20261031-delivery-v1",
+        "leadintel:delivery-operation",
+        "action.startsWith('delivery_')?7",
+        "records.length>100"
+      ]
+    },
+    {
+      "id": "delivery-browser-accepted-package",
+      "type": "text",
+      "url": "/customer/delivery-engine.js",
+      "status": 200,
+      "contains": [
+        "sourceAuthorityCurrent?.(item,canonicalState",
+        "Outreach?.approvalCurrent?.(item)"
+      ]
+    },
+    {
+      "id": "delivery-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "delivery-reliability=20261031-v1"
+      ]
+    },
+    {
+      "id": "delivery-explicit-queued-takeover",
+      "type": "text",
+      "url": "/customer/outreach-automation-ui.js",
+      "status": 200,
+      "contains": [
+        "function renderQueueTakeover(",
+        "async function cancelQueuedSequence(",
+        "/api/outreach-automation/cancel-sequence",
+        "Sent or in-flight email cannot be recalled.",
+        "Reconcile submission first"
+      ]
+    },
+    {
+      "id": "operations-diagnostics-auth",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/operations/diagnostics?workspace_id=audit-unauth",
+      "status": 401,
+      "contains": [
+        "Authentication required"
       ]
     }
   ],
