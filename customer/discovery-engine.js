@@ -2113,8 +2113,7 @@
     if(!valid(person.publicPhone)||!url||evidence?.version!==2||normalizeUrl(evidence.url)!==url||check?.version!==2||check.status!=='attributed'||normalizeUrl(check.url)!==url||!quote.toLowerCase().includes(name)||!quote.includes(clean(person.publicPhone)))return '';
     const now=new Date(options.now??Date.now()).getTime(),fresh=stamp=>{const age=now-Date.parse(stamp||'');return Number.isFinite(age)&&age>=0&&age<30*86400000;};
     if(!fresh(evidence.checkedAt)||!fresh(check.checkedAt))return '';
-    const legacyRead=evidence.sourceRead===undefined&&(candidate.publicResearch?.accountability?.officialPageReads||[]).some(row=>row.sourceRead===true&&normalizeUrl(row.url)===url&&canonicalDomain(row.url)===domain&&fresh(row.checkedAt)&&Date.parse(row.checkedAt)>=Date.parse(evidence.checkedAt));
-    if(evidence.sourceRead!==true&&!legacyRead)return '';
+    if(evidence.sourceRead!==true)return '';
     if(evidence.sourceKind==='official'&&canonicalDomain(url)===domain||attributedBusinessListing(person,domain,'phone'))return clean(person.publicPhone);
     return '';
   }

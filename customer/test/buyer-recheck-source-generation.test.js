@@ -76,12 +76,13 @@ test('unread same-source bodies cannot erase retained phone evidence under older
  }
 });
 
-test('legacy phone attribution requires a matching fresh official read no earlier than its attribution',()=>{
+test('unversioned legacy phone attribution stays unconfirmed even with a fabricated fresh read ledger',()=>{
  const now=Date.now(),checkedAt=new Date(now-86400000).toISOString(),c=fixture();
  c.people=D.matchPublicBuyerDetails(c.people,[page(checkedAt)],c.domain,c.company);const person=c.people[0];delete person.publicPhoneEvidence.sourceRead;
  const receipt={url,sourceRead:true,checkedAt};
  const confirmed=reads=>{c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),officialPageReads:reads}};return D.confirmedBuyerPhone(c,person,{}, {now});};
- assert.equal(confirmed([]),'');assert.equal(confirmed([receipt]),phone);
+ const before=structuredClone(person);
+ assert.equal(confirmed([]),'');assert.equal(confirmed([receipt]),'','old refresh code could fabricate both timestamps from cached bodies');assert.deepEqual(person,before,'retain the number and historical evidence unchanged');
  for(const change of [{url:'https://example.com/other'},{url:'https://other.example/team'},{sourceRead:false},{checkedAt:new Date(now-31*86400000).toISOString()},{checkedAt:new Date(now+1000).toISOString()},{checkedAt:new Date(Date.parse(checkedAt)-1).toISOString()}])assert.equal(confirmed([{...receipt,...change}]),'',JSON.stringify(change));
  person.publicPhoneEvidence.sourceRead=false;assert.equal(confirmed([receipt]),'','an explicit unread flag never receives legacy fallback');
 });

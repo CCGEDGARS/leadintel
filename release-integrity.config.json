@@ -6485,7 +6485,7 @@
         "freshRows.push(row)",
         "checkedAt:Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt",
         "if(row.sourceRead!==true)passage.phone=",
-        "if(evidence.sourceRead!==true&&!legacyRead)return",
+        "if(evidence.sourceRead!==true)return",
         "page.url,page.metadata?.sourceURL,page.metadata?.url",
         "url:actual,markdown:text"
       ]
