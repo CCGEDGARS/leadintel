@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-10-31T10:21:16.196Z",
+  "checkedAt": "2026-10-31T10:31:26.861Z",
   "reproduction": {
     "command": "node scripts/audit-delivery-connected-browser.cjs",
-    "runnerSha256": "c6f40cae2ed80d1d22dcc57c9a962448a9cb607b36a9b1031ec52801f67bd727",
+    "runnerSha256": "292cfa7f74a8f1d19f47d692b3f0fcc3bfbbe2656f77951e49160bd5a6da3247",
     "requirements": [
       "Local Playwright",
       "/usr/bin/chromium",
       "repository dependencies"
     ]
   },
-  "baseGitSha": "69a5905b20d469c3ca3c14ac80121013a65892ad",
+  "baseGitSha": "b52d0acf43369b65ead24c6f812ecd5f36c71c1a",
   "browser": {
     "executable": "/usr/bin/chromium",
     "version": "154.0.8037.57"
@@ -106,12 +106,12 @@
     "customer/writing-assistant.js": "d2b48493ccb7dbae6d28a61f0c388360b0efe251c2b016a5c7376287cbd27469",
     "customer/writing-references.css": "07f78bbed27f7b3a8b32b0ecbb5481f8ac318d8da75a49c34f375837c55de2fa",
     "customer/writing-workspace.js": "ec3e87f63c4d492b595fd94dd379c8a361b0780e1628f3d4ad9097f22cf99291",
-    "scripts/audit-delivery-connected-browser.cjs": "c6f40cae2ed80d1d22dcc57c9a962448a9cb607b36a9b1031ec52801f67bd727"
+    "scripts/audit-delivery-connected-browser.cjs": "292cfa7f74a8f1d19f47d692b3f0fcc3bfbbe2656f77951e49160bd5a6da3247"
   },
   "sourceSnapshotScope": "Exact shipping browser assets plus executed Node fixture/helper and runner sources; external Playwright/Chromium versions are reported separately",
   "sourceChangedOnDiskDuringRun": [],
   "finalDiskHashVerification": {
-    "checkedAt": "2026-10-31T10:24:51.765Z",
+    "checkedAt": "2026-10-31T10:31:26.870Z",
     "mismatches": []
   },
   "viewports": [
@@ -121,7 +121,7 @@
       "zoom": 1,
       "screenshot": {
         "path": "work/delivery-connected-industrial-1440-zoom1.png",
-        "sha256": "b889aef422c5cbb3796208ffefe0f0ec680d54820fbec6199cd5417ad5759b06"
+        "sha256": "0ca775ca44c1dbf9262c9a2350e07c8eada6ccdd9802f49f93cc55df9e1d2654"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -130,7 +130,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:19:02.833Z\"]",
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:16.186Z\"]",
       "recipient": "teemu@industrial-buyer.example",
       "messageGeometry": [
         {
@@ -214,7 +214,7 @@
       "zoom": 1,
       "screenshot": {
         "path": "work/delivery-connected-industrial-720-zoom1.png",
-        "sha256": "c788a45c827f3bc6e80a04bd9ac08867e02fe72f9fa7048bde432aafea9d89bd"
+        "sha256": "235a96cab8501cd861d3e87a35505ad5a466a37fd38147f9ffb327d4de8464a8"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -223,7 +223,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:19:23.342Z\"]",
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:26.073Z\"]",
       "recipient": "teemu@industrial-buyer.example",
       "messageGeometry": [
         {
@@ -307,7 +307,7 @@
       "zoom": 1,
       "screenshot": {
         "path": "work/delivery-connected-industrial-390-zoom1.png",
-        "sha256": "9fe2bca5030526f9240ff337c02e069471e59cbed3146d2ef427c8a9439b366b"
+        "sha256": "0f59d6bc8094547b2a27120b50dbde045237822ba840da503b61197d67f8c346"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -316,7 +316,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:19:43.066Z\"]",
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:35.665Z\"]",
       "recipient": "teemu@industrial-buyer.example",
       "messageGeometry": [
         {
@@ -400,7 +400,7 @@
       "zoom": 2,
       "screenshot": {
         "path": "work/delivery-connected-industrial-1440-zoom2.png",
-        "sha256": "c3312f58cce390d41313af04f8f7f85826b8e7eab5bb2a671a4cc8de9dca049f"
+        "sha256": "4d585968fa07160f65f4f9e31e410bd822404cda2a4cfd3cfd4d3535d808514f"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -409,7 +409,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:20:11.472Z\"]",
+      "savedPackageKey": "[\"industrial-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:45.394Z\"]",
       "recipient": "teemu@industrial-buyer.example",
       "messageGeometry": [
         {
@@ -502,7 +502,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:20:32.744Z\"]",
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:30:55.213Z\"]",
       "recipient": "teemu@clinical-buyer.example",
       "messageGeometry": [
         {
@@ -586,7 +586,7 @@
       "zoom": 1,
       "screenshot": {
         "path": "work/delivery-connected-clinical-720-zoom1.png",
-        "sha256": "979923ccf462f601b170dd78298379e4fc258cbd07b15b859a076521f096ea39"
+        "sha256": "e3b1f041cf6579d69dfbfc7a71e7d5f2c8054b2a9d774f156d834c23f4655b79"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -595,7 +595,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:20:45.458Z\"]",
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:04.767Z\"]",
       "recipient": "teemu@clinical-buyer.example",
       "messageGeometry": [
         {
@@ -679,7 +679,7 @@
       "zoom": 1,
       "screenshot": {
         "path": "work/delivery-connected-clinical-390-zoom1.png",
-        "sha256": "9f44901781ceb6e34ae2ac05f03a8bcc5a3ca47d53b242cf2c8d1a2bd7622ce9"
+        "sha256": "2f8223666110ac0300c5f33ce31cd2fb6bb1b6bcb5bba5e37f219ea5d2c12324"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -688,7 +688,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:20:56.069Z\"]",
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:14.264Z\"]",
       "recipient": "teemu@clinical-buyer.example",
       "messageGeometry": [
         {
@@ -772,7 +772,7 @@
       "zoom": 2,
       "screenshot": {
         "path": "work/delivery-connected-clinical-1440-zoom2.png",
-        "sha256": "eb3768535627dc3d73c3948e0ab4d82ef5a6bfaf132eba70a3ae1250513bc4c2"
+        "sha256": "51a7a890f0eb5292de0ded92ab7813ae47267bfc2d9cd492517635315fbbd44f"
       },
       "status": "PASS",
       "keyboardEditCancelExact": true,
@@ -781,7 +781,7 @@
       "pendingSameWorkspaceUserChangeRejected": true,
       "teemuKlasReorderRetainsRecipient": true,
       "deliveryReloadRetainsExactRecipient": true,
-      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:21:11.085Z\"]",
+      "savedPackageKey": "[\"clinical-buyer.example\",\"teemu\",\"email\",\"2026-10-31T10:31:23.950Z\"]",
       "recipient": "teemu@clinical-buyer.example",
       "messageGeometry": [
         {
@@ -1153,7 +1153,5 @@
     "productionRelease": "NOT TESTED",
     "buyersStage": "OPEN",
     "businessOutcome": "BLOCKED"
-  },
-  "composedEvidenceBoundAt": "2026-10-31T10:24:51.765Z",
-  "compositionMethod": "Fresh controlled module cases bound to the earlier browser execution only after exact loaded-source and runner hash verification; browser checkedAt remains its actual execution time."
+  }
 }

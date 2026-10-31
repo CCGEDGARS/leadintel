@@ -34,7 +34,7 @@ async function run(){
   const keyboard=async id=>{await reveal(id);await page.locator('#'+id).focus();assert.equal(await page.locator('#'+id).evaluate(e=>e===document.activeElement),true);await page.keyboard.press('Enter');};
   await keyboard('mw-edit-message');await page.locator('#outreach-email-subject').fill('Canceled subject');await keyboard('mw-cancel-edit');assert.deepEqual(await page.evaluate(()=>fixtureMessages.draft()),f.copy);
   await keyboard('mw-edit-message');const subject=f.copy.subject+' reviewed';await page.locator('#outreach-email-subject').fill(subject);await keyboard('mw-save-message');await page.waitForFunction(s=>fixtureMessages.item().messageStudioDraft.savedDraft?.subject===s&&document.getElementById('mw-save-message').textContent!=='Saving…',subject);
-  
+
   await page.waitForTimeout(350);const saved=await page.evaluate(()=>fixtureMessages.draft());await page.evaluate(()=>fixtureMessages.replaceLocalDraft());await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>fixtureMessages.draft().subject),'Local recovery draft');await keyboard('restore-trigger-scripts');await page.waitForFunction(s=>fixtureMessages.draft().subject===s, saved.subject);assert.deepEqual(await page.evaluate(()=>fixtureMessages.draft()),saved);
   await page.evaluate(()=>fixtureMessages.reorder());assert.equal(await page.evaluate(()=>fixtureMessages.item().selectedPersonId),'teemu');
   // Hold the real Save continuation at the CRM bridge, then replace same-workspace user.

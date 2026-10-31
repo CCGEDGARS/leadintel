@@ -84,7 +84,9 @@
     "loadedBrowserHashes": 90,
     "completeRuntimeTestMigrationHashes": 1273,
     "status": "PASS",
-    "singleUninterruptedSevenStageShippingUI": "NOT TESTED"
+    "singleUninterruptedSevenStageShippingUI": "NOT TESTED",
+    "browserCheckedAt": "2026-10-31T10:31:26.861Z",
+    "browserRunnerSha256": "292cfa7f74a8f1d19f47d692b3f0fcc3bfbbe2656f77951e49160bd5a6da3247"
   },
   "independentReview": {
     "tests": 509,
@@ -96,5 +98,7 @@
   "authenticatedCustomerWorkflow": "BLOCKED",
   "businessOutcome": "BLOCKED",
   "buyersStage": "OPEN",
-  "liveSend": "BLOCKED: no exact-recipient/final-message authorization"
+  "liveSend": "BLOCKED: no exact-recipient/final-message authorization",
+  "productRuntimeCommit": "b52d0acf43369b65ead24c6f812ecd5f36c71c1a",
+  "permanentEvidenceContinuation": "https://github.com/CCGEDGARS/leadintel/pull/787"
 }
