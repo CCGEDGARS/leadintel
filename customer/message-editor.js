@@ -1,6 +1,7 @@
 (function(root,factory){const S=typeof module==='object'&&module.exports?require('./message-studio.js'):root.LeadIntelMessageStudio;const A=typeof module==='object'&&module.exports?require('./approved-reference-scripts.js'):root.LeadIntelApprovedReferences;const api=factory(S,A);if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageEditor=api;})(typeof globalThis==='object'?globalThis:this,function(S,A){
  'use strict';
  const Rich=()=>typeof module==='object'&&module.exports?require('./rich-text.js'):globalThis.LeadIntelRichText;
+ const Evidence=typeof module==='object'&&module.exports?require('./message-evidence.js'):globalThis.LeadIntelMessageEvidence;
  const copy=value=>JSON.parse(JSON.stringify(value));
  const line=value=>String(value||'').trim().replace(/[.!?]+$/,'');
  function safeWebsite(value){try{const u=new URL(String(value||''));return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?String(value):'';}catch{return '';}}
@@ -27,11 +28,11 @@
  // remains the anchor; full official source paragraphs supply its factual detail.
  function buyerFactText(context={}){
   const t=context.trigger;if(!['source_verified','user_reviewed'].includes(t?.verification)||!t.url)return '';
-  const base=[t.summary,t.excerpt].filter(Boolean).join(' '),project=S.projectFact(context),host=S.subjectDomain(t.url),out=[base];
+  const base=String(t.excerpt||t.summary||''),project=S.projectFact(context),host=S.subjectDomain(t.url),out=[base];
   if(!project)return base;
   const needle=String(project).toLocaleLowerCase();
   for(const row of context.buyerFactEvidence||[]){
-   if(S.subjectDomain(row.url)!==host||row.extracted===false||/error|failed|pending/i.test(row.status||''))continue;
+   if(S.subjectDomain(row.url)!==host||!Evidence.sourceRead(row))continue;
    const text=String(row.text||row.excerpt||row.markdown||'');if(!text||/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(text))continue;
    const sameSource=row.url===t.url,article=(String(row.title||'').toLocaleLowerCase().includes(needle)||text.slice(0,900).toLocaleLowerCase().includes(needle))&&new URL(row.url).pathname.replace(/^\/(?:en|sv|lv)?\/?$/,'').length>1;
    const paragraphs=text.split(/\n\s*\n/).filter(v=>v.toLocaleLowerCase().includes(needle));
@@ -56,7 +57,7 @@
  function factOwnerKey(workspace,item,studio,context){const input=JSON.stringify([studio.essentials,context.profileEvidence]),hash=seed=>{let value=seed;for(let i=0;i<input.length;i++)value=Math.imul(value^input.charCodeAt(i),16777619);return (value>>>0).toString(16);};return JSON.stringify([FACT_POLICY,workspace,item.domain,item.selectedPersonId,context.sellerWebsite,hash(2166136261)+hash(2246822519)]);}
  function openingKeys(style){if(!['curiosity','friendly','brutal'].includes(style))return [];const paragraph=referencePattern(style).split('\n\n')[style==='brutal'?2:1]||'';return [...new Set([...paragraph.matchAll(/{{(\w+)}}/g)].map(match=>match[1]))];}
  function prepareFactContext(studio,context={}){
-  const original=context.researchTrigger===undefined?context.trigger:context.researchTrigger;
+  const original=Evidence.factualTrigger(context.researchTrigger===undefined?context.trigger:context.researchTrigger,context.buyerCompany);
   const raw={...context,trigger:original},style=context.channel==='linkedin'?studio.linkedinMode:studio.mode;
   const values=factualValues(studio,raw),years=[...new Set([...buyerFactText(raw).matchAll(/\b(?:due to (?:run|open|start)(?: in)?|scheduled to (?:open|start|run)(?: in)?|ready (?:in|by)|operational (?:in|by))\s+(20\d{2})\b/gi)].map(match=>match[1]))];if(years.length>1||values.openingYear&&/^20\d{2}$/.test(values.openingYear)&&Number(values.openingYear)<new Date(context.now||Date.now()).getUTCFullYear())values.openingYear='[Add verified opening-year]';
   const keys=openingKeys(style).filter(key=>key!=='friendlyScale'),missing=keys.filter(key=>String(values[key]||'').startsWith('[Add verified ')||!String(values[key]||'').trim());
@@ -98,9 +99,12 @@
  // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
  function sourceVoiceValues(style,e,raw,context,values){
   const approved=Object.entries(context.sellerAnswers||{}).filter(([k])=>['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(([,v])=>String(v));
-  const statements=[raw.offer,raw.difference,raw.proof,raw.approach,...approved,...S.subjectEvidenceSources(context).map(row=>row.text)].filter(Boolean).flatMap(v=>String(v).split(/(?<=[.!?])\s+|\n+/)).filter(v=>! /\b(?:no|not|never|without|unconfirmed|unknown)\b/i.test(v));
+  const statements=[raw.offer,raw.difference,raw.proof,raw.approach,...approved,...S.subjectEvidenceSources(context).map(row=>row.text)].filter(Boolean).flatMap(Evidence.sellerStatements).filter(v=>! /\b(?:unconfirmed|unknown)\b/i.test(v));
   const seller=statements.join(' '),facts=S.subjectSellerFacts(context,raw),manufacturing=/\b(?:fabricat\w*|manufactur\w*|turn\w* drawings)\b/i.test(seller);
-  const origin=[['Latvian',/\b(?:Latvian|based in Latvia|located in Latvia|Latvia-based|Riga,? Latvia)\b/i],['Swedish',/\b(?:Swedish|based in Sweden)\b/i],['Norwegian',/\b(?:Norwegian|based in Norway)\b/i],['German',/\b(?:German|based in Germany)\b/i],['British',/\b(?:British|based in the UK)\b/i]].find(([,r])=>r.test(seller))?.[0]||'';
+  const origin=[['Latvian','Latvia'],['Swedish','Sweden'],['Norwegian','Norway'],['German','Germany'],['British','the UK']].find(([adjective,country])=>statements.some(text=>{
+   const self=raw.company?text.replace(new RegExp('^'+String(raw.company).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+' is\\b','i'),'We are'):text;
+   return new RegExp('^(?:(?:we are|our company is)\\s+)?(?:a|an)\\s+'+adjective+'\\b[^.!?]{0,100}\\b(?:company|manufacturer|fabricator|supplier)\\b|^(?:(?:we are|our company is)\\s+)?(?:based|located) in '+country+'\\b','i').test(self.trim());
+  }))?.[0]||'';
   const specialization=/\bspeciali[sz]\w*[^.!?]{0,70}\bScandinavian?\b/i.test(seller)?' specialising in the Scandinavian market':'';
   const duration=seller.match(/\b(?:(?:more than|over|at least)\s+)?\d+\+?\s+years\b/i)?.[0]?.toLowerCase()||'';
   const discipline=facts.steel?['steel',manufacturing?'fabrication':'',facts.installation?(manufacturing?'and installation':'installation'):''].filter(Boolean).join(' '):line(e.offer);
@@ -112,8 +116,11 @@
   const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
   // Only affirmative source clauses establish factual atoms. AI triggerSummary
   // never supplies an opening sentence or owns the approved paragraph structure.
-  const event=reviewed?[buyerFactText(context),context.preparedFields?.fields?.triggerSummary||''].filter(Boolean).join(' '):'';
-  const clauses=event.split(/(?<=[.!?])\s+|\n+/).filter(v=>! /\b(?:not|never|no|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(v)),positiveEvent=clauses.join(' '),project=values.subjectProject;
+  const sourceEvent=reviewed?buyerFactText(context):'',translatedEvent=foreignText(sourceEvent,context,raw)&&context.preparedFields?.source===fieldFingerprint({mode:style,essentials:raw},context)?context.preparedFields.fields?.triggerSummary||'':'';
+  // English metadata is never another evidence source. A validated translation
+  // may supply English atoms only for its own non-English source field.
+  const event=[sourceEvent,translatedEvent].filter(Boolean).join(' ');
+  const clauses=event.split(/(?<=[.!?])\s+|\n+/).filter(v=>! /\b(?:if|unless|whether|hypothetical|not|never|no|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(v)),positiveEvent=clauses.join(' '),project=values.subjectProject;
   const kind=positiveEvent.match(/\b(new )?(sorting plant|factory|plant|office|hospital|warehouse|data cent(?:re|er)|distribution cent(?:re|er)|production facilit(?:y|ies))\b/i);
   const foundation=clauses.some(v=>/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:is under way|is underway|has (?:already )?(?:started|begun)|started|begun)\b|\bgetting the foundation work started\b|\b(?:is(?: now)? laying|has begun laying|has started laying) the foundations?\b(?=[^.!?]{0,100}\b(?:plant|factory|building|warehouse|facility)\b)/i.test(v));
   const year=positiveEvent.match(/\b(?:due to (?:run|open|start)(?: in)?|scheduled to (?:open|start|run)(?: in)?|ready (?:in|by)|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
@@ -204,7 +211,7 @@
  function professionalDevelopment(text){return String(text||'').replace(/^(.+?) (?:is|are) investing\b/i,'$1’s investment').replace(/^(.+?) announced (?:an? )?investment\b/i,'$1’s investment').replace(/^(.+?) announced (?:an? )?expansion\b/i,'$1’s expansion').replace(/\binvestment (?=(?:\d+(?:[.,]\d+)*|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:billion|million|thousand|kronor|euros?|dollars?)\b)/i,'investment of ');}
  function fixedProfessional(studio,context={}){return context.channel!=='linkedin'&&studio.mode==='professional'&&!studio.personalStyles?.professional?.active&&!studio.templates?.find(t=>t.id==='professional')?.isPersonal;}
  function fieldSources(studio,context={}){
-  const e=studio.essentials||{},t=context.trigger;
+  const e=studio.essentials||{},t=Evidence.factualTrigger(context.trigger,context.buyerCompany);
   const sources={triggerSummary:['user_reviewed','source_verified'].includes(t?.verification)&&t?.url?String(t.summary||t.excerpt||''):'',...Object.fromEntries(Object.keys(fieldLimits).filter(k=>k!=='triggerSummary').map(k=>[k,String(e[k]||'')]))};
   if(fixedProfessional(studio,context)){
    sources.triggerSummary=professionalDevelopment(sources.triggerSummary);
@@ -268,7 +275,7 @@
   const template=context.channel==='linkedin'?S.linkedinTemplate(studio):studio.templates?.find(t=>t.id===style);
   if(style==='original'||!template)throw Error('Choose an approved or saved template for controlled personalization.');
   // Only reviewed/source-verified facts can enter a designated event slot.
-  const trigger=['user_reviewed','source_verified'].includes(context.trigger?.verification)&&context.trigger?.url?line(prepared?.fields.triggerSummary??context.trigger.summary??context.trigger.excerpt):'';
+  const sourceTrigger=Evidence.factualTrigger(context.trigger,context.buyerCompany),trigger=['user_reviewed','source_verified'].includes(sourceTrigger?.verification)&&sourceTrigger?.url?line(prepared?.fields.triggerSummary??sourceTrigger.summary??sourceTrigger.excerpt):'';
   const website=safeWebsite(context.sellerWebsite),profile=S.approvedSenderLinkedIn(context.senderLinkedInUrl);
   const proof=String(e.proof||'').trim(),referenceUrl=(proof.match(/https?:\/\/[^\s<>"\])]+/)||[])[0]?.replace(/[.,;!?]+$/,'')||S.subjectReference(context)?.url||'',capabilities=website?'Our website outlines our capabilities: '+website:'';
   const values={...e,value:benefit(e.value,e.company),firstName:context.firstName||context.buyerName||'[Add recipient name]',buyerName:context.buyerName||'',buyerCompany:context.buyerCompany||'',buyerRole:context.buyerRole||'',referenceUrl,sellerWebsite:website,senderLinkedInUrl:profile,senderFullName:e.sender||'',senderFirstName:String(e.sender||'').trim().split(/\s+/)[0]||'',senderName:e.sender||'',senderCompany:e.company||'',recipientCompany:context.buyerCompany||'',verifiedProjectOrExpansion:trigger,supportedBenefit:benefit(e.value,e.company),fitScore:context.fitScore??'',subjectProject:S.projectFact(context)||'',deliveryAngle:e.offer||'',

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const Editor=require('../message-editor.js'),Outreach=require('../outreach-engine.js');
 const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
 const item=()=>({domain:'buyer.example',company:'Buyer',selectedPersonId:'p1',channel:'email',dossier:{},drafts:{emailSubject:'Subject',emailBody:'My exact body'},messageStudioDraft:{scriptSavedAt:'2026-10-09',savedDraft:{subject:'Subject',message:'My exact body'}}});
-function saveHarness(sync){let active=item();const bridge={workspace:{id:'w1'}},ctx={LeadIntelMessageEditor:Editor,LeadIntelOutreach:Outreach,crmBridge:()=>bridge,currentItem:()=>active,readDraftEdits:()=>active,selectedCandidate:()=>({domain:active.domain}),upsertItem:x=>{active=x},outreach:{selectedDomain:active.domain},crmActivityId:()=> 'save-id',syncCrmActivity:sync,toast(){},q:()=>({textContent:''})};vm.createContext(ctx);require('./helpers/message-crm-authority.cjs')(ctx);vm.runInContext(source.slice(source.indexOf('async function saveScriptPackage('),source.indexOf('async function restoreScriptPackage(')),ctx);return {ctx,bridge,get active(){return active},set active(x){active=x}};}
+function saveHarness(sync){let active=item();const bridge={workspace:{id:'w1'}},ctx={scriptSaveOperation:null,editorDraft:()=>Editor.workingDraft(active),LeadIntelMessageEditor:Editor,LeadIntelOutreach:Outreach,crmBridge:()=>bridge,currentItem:()=>active,readDraftEdits:()=>active,selectedCandidate:()=>({domain:active.domain}),upsertItem:x=>{active=x},outreach:{selectedDomain:active.domain},crmActivityId:()=> 'save-id',syncCrmActivity:sync,toast(){},q:()=>({textContent:''})};vm.createContext(ctx);require('./helpers/message-crm-authority.cjs')(ctx);vm.runInContext(source.slice(source.indexOf('async function saveScriptPackage('),source.indexOf('async function restoreScriptPackage(')),ctx);return {ctx,bridge,get active(){return active},set active(x){active=x}};}
 test('failed, local-only and throwing CRM saves clear pending and never mark edited content saved',async()=>{
  for(const sync of [async()=>({ok:false}),async()=>({ok:true,localOnly:true}),async()=>{throw Error('offline')}]){const h=saveHarness(sync);h.active.drafts.emailBody='Edited';await h.ctx.saveScriptPackage();assert.equal(h.active.messageStudioDraft.savePending,false);assert.equal(h.active.drafts.emailBody,'Edited');assert.equal(Editor.savedDraft(h.active),false);}
 });
@@ -12,7 +12,7 @@ test('a late save acknowledges only captured text and cannot replace a newer edi
   if(change==='buyer')h.active={...item(),selectedPersonId:'p2'};
   if(change==='workspace')h.bridge.workspace.id='w2';
   finish({ok:true});await pending;
-  if(change==='edit'){assert.equal(h.active.drafts.emailBody,'Newer edit');assert.equal(h.active.messageStudioDraft.savedDraft.message,'Captured');assert.equal(Editor.savedDraft(h.active),false);}
+  if(change==='edit'){assert.equal(h.active.drafts.emailBody,'Newer edit');assert.equal(h.active.messageStudioDraft.savedDraft.message,'My exact body');assert.equal(Editor.savedDraft(h.active),false);}
   if(change==='buyer'){assert.equal(h.active.selectedPersonId,'p2');assert.equal(h.active.messageStudioDraft.savedDraft.message,'My exact body');}
  }
 });

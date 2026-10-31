@@ -3,7 +3,7 @@ const S=require('../message-studio.js'),E=require('../message-editor.js'),O=requ
 const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
 const e={sender:'Robin Lane',company:'North Works',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team works internationally.',target:'Industrial projects',problem:'Supplier handoffs',value:'simplify project delivery',approach:'Project delivery',meetingValue:'relevant project lessons',proof:'',nextAction:'Choose a suitable time here: {{calendly}}',calendly:'https://calendly.com/north/intro',language:'en'};
 const trigger={companyDomain:'buyer.example',url:'https://buyer.example/news',excerpt:'Buyer is investing in a new sorting plant at Northport.',summary:'Buyer is investing in a new sorting plant at Northport.',verification:'source_verified'};
-const official={url:'https://seller.example/project',text:'Construction steel. Manufacturing and installation of steel structures. Manufacturing was done according to EN 1090 EXC2 and EXC3 specifications. After delivery it was installed by our staff.'};
+const official={sourceRead:true,url:'https://seller.example/project',text:'Construction steel. Manufacturing and installation of steel structures. Manufacturing was done according to EN 1090 EXC2 and EXC3 specifications. After delivery it was installed by our staff.'};
 function studio(){return S.chooseSubject(S.normalize({mode:'professional',essentials:e}),'professional','relevance');}
 const ctx={sellerWebsite:'https://seller.example/',sellerEvidence:[official],trigger};
 test('real metal wording uses extracted seller steel and standards evidence to produce all five governed subjects',()=>{
@@ -29,7 +29,7 @@ test('unreviewed project, old seller domains, third-party snippets, negated capa
  const audit=S.subjectAudit(studio(),{...ctx,trigger:{...trigger,verification:'unreviewed'}});assert.equal(audit.rows[0].ready,false);assert.equal(audit.rows[3].ready,false);assert.equal(audit.rows[4].ready,true);assert.doesNotMatch(audit.rows[4].subject,/Northport/);
 });
 test('length limits retain literals and use supported shorter location aliases without cutting names or inventing abbreviations',()=>{
- const st=studio(),long={...trigger,projectName:'Northport Industrial Processing Plant',locationName:'Northport'};
+ const st=studio(),long={...trigger,excerpt:trigger.excerpt+' The Northport Industrial Processing Plant is under construction.',projectName:'Northport Industrial Processing Plant',locationName:'Northport'};
  const audit=S.subjectAudit(st,{...ctx,trigger:long});assert.ok(audit.rows.every(row=>row.ready&&S.validSubject(row.subject)));assert.ok(audit.rows[0].subject.endsWith('for Northport'));assert.ok(audit.rows[4].subject.startsWith('Northport Industrial Processing Plant:'));
  const oversized=S.normalize({mode:'professional',essentials:{...e,sender:'Robin '.repeat(15)+'Lane'}});const invalid=S.subjectAudit(oversized,ctx).rows[1];assert.equal(invalid.ready,false);assert.match(invalid.reason,/60 characters/);
  const compound={...ctx,trigger:{...trigger,summary:'Buyer is investing in a new facility at New York.',excerpt:'Buyer is investing in a new facility at New York.'}};assert.equal(S.subjectAudit(st,compound).rows[0].subject,'Steel and installation for New York');
@@ -68,7 +68,7 @@ test('an empty research result records missing evidence rather than a successful
 });
 test('a changed Profile evidence corpus invalidates a previous unsuccessful attempt',async()=>{
  const h=harness({fail:true});await h.c.prepareSubjectEvidence();const count=h.requests.length;
- h.state.scrapedSources=[{url:'https://seller.example/offers',text:'We manufacture metal equipment for industrial companies.'}];
+ h.state.scrapedSources=[{url:'https://seller.example/offers',sourceRead:true,text:'We manufacture metal equipment for industrial companies.'}];
  await h.c.prepareSubjectEvidence();assert.ok(h.requests.length>count);
 });
 test('verified seller project references fill the declared link slot without changing masters or saved drafts',()=>{
@@ -83,7 +83,7 @@ test('verified seller project references fill the declared link slot without cha
  assert.doesNotMatch(E.tailor(manual,context).message,/industrial-tower/);
 });
 test('reference preparation works for other industries without injecting metalworking claims',()=>{
- const healthcare=S.normalize({mode:'professional',essentials:{...e,company:'Clinical Systems',offer:'diagnostic equipment',difference:'Our team supports clinical services.'}}),medical={sellerWebsite:'https://clinical.example',sellerEvidence:[{url:'https://clinical.example/case-studies/diagnostic-centre',text:'We delivered diagnostic equipment and completed the installation at a medical centre.'}],buyerCompany:'Clinic',firstName:'Alex'};
+ const healthcare=S.normalize({mode:'professional',essentials:{...e,company:'Clinical Systems',offer:'diagnostic equipment',difference:'Our team supports clinical services.'}}),medical={sellerWebsite:'https://clinical.example',sellerEvidence:[{url:'https://clinical.example/case-studies/diagnostic-centre',sourceRead:true,text:'We delivered diagnostic equipment and completed the installation at a medical centre.'}],buyerCompany:'Clinic',firstName:'Alex'};
  const draft=E.tailor(healthcare,medical);assert.match(draft.message,/https:\/\/clinical.example\/case-studies\/diagnostic-centre/);assert.doesNotMatch(draft.message,/steel|metalworking|North Works/);
  const plan=S.subjectResearchPlan(healthcare,{sellerWebsite:medical.sellerWebsite});assert.ok(plan.every(row=>!row.query.includes('EN 1090')&&!row.query.includes('steel')));
 });
@@ -108,7 +108,7 @@ test('real page navigation cannot crowd material and specification facts out of 
  assert.doesNotMatch(h.item.messageStudioDraft.subjectResearch.sources[0].text,/manufacturing 0/);
 });
 test('a known official project is reread when an older excerpt omitted its material',async()=>{
- const old={owner:'seller',url:'https://seller.example/project/tower',text:'Manufacturing, delivery and installation on site. Manufacturing was done according to EN 1090.',verification:'source_verified'};
+ const old={sourceRead:true,owner:'seller',url:'https://seller.example/project/tower',text:'Manufacturing, delivery and installation on site. Manufacturing was done according to EN 1090.',verification:'source_verified'};
  const h=harness({sources:[old]});h.c.fetch=async(url,opts)=>{h.requests.push({url,opts});return {ok:true,json:async()=>url.includes('/scrape?')?{success:true,data:{markdown:'Construction steel. Manufacturing and installation according to EN 1090 EXC2 standard.'}}:{success:true,data:[]}};};
  await h.c.prepareSubjectEvidence();
  assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);
@@ -127,7 +127,7 @@ test('late research cannot cross a changed workspace, recipient, seller, trigger
 });
 
 test('an invalid provider response preserves previously extracted source facts and the saved message',async()=>{
- const h=harness({invalidPayload:true}),prior={owner:'seller',url:'https://seller.example/capabilities',text:'We manufacture steel structures and provide installation.',verification:'source_verified'};h.item.messageStudioDraft.subjectResearch={key:'earlier context',status:'checked',sources:[prior]};
+ const h=harness({invalidPayload:true}),prior={sourceRead:true,owner:'seller',url:'https://seller.example/capabilities',text:'We manufacture steel structures and provide installation.',verification:'source_verified'};h.item.messageStudioDraft.subjectResearch={key:'earlier context',status:'checked',sources:[prior]};
  await h.c.prepareSubjectEvidence({retry:true});assert.equal(h.item.messageStudioDraft.subjectResearch.status,'incomplete');assert.equal(h.item.messageStudioDraft.subjectResearch.sources[0].text,prior.text);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);assert.equal(h.item.drafts.emailBody,'My exact saved message');
 });
 

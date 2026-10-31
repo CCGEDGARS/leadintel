@@ -1133,11 +1133,14 @@ test('mail senders map optional HTML and text bodies without changing legacy bod
     calls.push({url, body: JSON.parse(options.body)});
     return new Response(JSON.stringify({sent: true}), {status: 200});
   });
-  const base = {domain: 'example.com', recipient: 'buyer@example.com', subject: 'Hello', body: 'Legacy text', idempotencyKey: 'send-1'};
+  const recipientSnapshot={id:'p1',name:'Alex Buyer',email:'buyer@example.com',title:'Director',linkedin:'https://linkedin.com/in/alex',companyDomain:'example.com',company:'Buyer'};
+  const base = {domain: 'example.com', recipient: 'buyer@example.com', subject: 'Hello', body: 'Legacy text', idempotencyKey: 'send-1',recipientSnapshot};
 
   await bridge.sendGmail({...base, textBody: 'Plain alternative', htmlBody: '<p>Branded</p>'});
   await bridge.sendMicrosoftMail({...base, idempotencyKey: 'send-2'});
 
+  assert.deepEqual(calls[0].body.recipient_snapshot,recipientSnapshot);
+  assert.deepEqual(calls[1].body.recipient_snapshot,recipientSnapshot);
   assert.equal(calls[0].body.body, 'Legacy text');
   assert.equal(calls[0].body.text_body, 'Plain alternative');
   assert.equal(calls[0].body.html_body, '<p>Branded</p>');

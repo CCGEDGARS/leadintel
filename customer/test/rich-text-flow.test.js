@@ -1,6 +1,7 @@
+const {messageFixture}=require('./helpers/approved-message.cjs');
 const test=require('node:test'),assert=require('node:assert/strict');
 const O=require('../outreach-engine.js'),E=require('../message-editor.js'),R=require('../rich-text.js');
-const original={domain:'example.com',selectedPersonId:'p1',channel:'email',localizationStatus:'complete',campaignScenario:{language:'en'},localizationProvenance:{provider:'manual',model:'manual',language:'en',selectionSource:'manual'},drafts:{emailSubject:'Hello',emailBody:'Hello Alex'},messageStudioDraft:{scriptSavedAt:'now',savedDraft:{subject:'Hello',message:'Hello Alex'}}};
+const original=messageFixture({domain:'example.com',selectedPersonId:'p1',channel:'email',localizationStatus:'complete',campaignScenario:{language:'en'},localizationProvenance:{provider:'manual',model:'manual',language:'en',selectionSource:'manual'},drafts:{emailSubject:'Hello',emailBody:'Hello Alex'},messageStudioDraft:{scriptSavedAt:'now',savedDraft:{subject:'Hello',message:'Hello Alex'}}},{email:'alex@example.com',name:'Alex Fixture'});
 test('formatting-only edit requires save, survives normalization and CRM snapshots and frozen approval',()=>{
  const draft={subject:'Hello',message:'Hello Alex',messageHtml:'Hello <strong>Alex</strong>'};const changed=E.apply(original,draft);assert.equal(E.savedDraft(changed),false);assert.equal(changed.approved,false);assert.equal(changed.drafts.emailBodyHtml,draft.messageHtml);
  const normalized=O.normalizeOutreachState({items:[changed]}).items[0];assert.equal(normalized.drafts.emailBodyHtml,draft.messageHtml);const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(changed),'example.com');assert.equal(restored.drafts.emailBodyHtml,draft.messageHtml);

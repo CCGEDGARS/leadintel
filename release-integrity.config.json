@@ -57,7 +57,8 @@
       "setup_integrity_version": "20261030-v1",
       "profile_integrity_version": "20261030-v1",
       "strategy_integrity_version": "20261030-strategy-v1",
-      "companies_integrity_version": "20261031-v1"
+      "companies_integrity_version": "20261031-v1",
+      "messages_integrity_version": "20261031-messages-v1"
     }
   },
   "smokeChecks": [
@@ -430,8 +431,9 @@
       "url": "/customer/production-gmail-ui.js",
       "status": 200,
       "contains": [
-        "Email sent; synchronization needs attention. Do not resend.",
-        "saved?.saved===false",
+        "providerConfirmed:true",
+        "syncWarning:true",
+        "Provider confirmed the send. Review Delivery in the original workspace before recording it. Do not resend.",
         "confirmedResult=result"
       ]
     },
@@ -5230,6 +5232,17 @@
       ]
     },
     {
+      "id": "messages-composer-container-reflow",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        "messages-container-reflow-20261031-v1",
+        "container:message-composer / inline-size",
+        "@container message-composer (max-width:900px)"
+      ]
+    },
+    {
       "id": "message-text-space",
       "type": "text",
       "url": "/customer/message-workspace.css",
@@ -6137,6 +6150,127 @@
         "function buyerHydrationSameIdentity(",
         "function buyerHydrationContact(",
         "Saved CRM buyer identity conflicts with retained local work."
+      ]
+    },
+    {
+      "id": "messages-owned-save-approval",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function captureMessageAuthority(",
+        "async function saveScriptPackage(",
+        "messageApprovalOperation===operation&&captured.current()"
+      ]
+    },
+    {
+      "id": "messages-exact-approval-authority",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function approvalCurrent(",
+        "function approvedRecipient(",
+        "approvalAuthority:freezeCopy({version:2",
+        "translationReady(item)"
+      ]
+    },
+    {
+      "id": "messages-read-factual-authority",
+      "type": "text",
+      "url": "/customer/message-evidence.js",
+      "status": 200,
+      "contains": [
+        "function sourceRead(",
+        "function sellerStatements(",
+        "function factualTrigger("
+      ]
+    },
+    {
+      "id": "messages-brief-source-boundary",
+      "type": "text",
+      "url": "/customer/research-brief.js",
+      "status": 200,
+      "contains": [
+        "fromResearchBrief===true&&!reads.has",
+        "quote.indexOf(excerpt)",
+        "const withheld="
+      ]
+    },
+    {
+      "id": "messages-assistant-source-ownership",
+      "type": "text",
+      "url": "/customer/writing-assistant.js",
+      "status": 200,
+      "contains": [
+        "c.referenceRevision,c.sourceRefs||[],c.skillRefs||[]",
+        "draft.message.length>12000",
+        "async function applyPreview("
+      ]
+    },
+    {
+      "id": "messages-translation-source-undo",
+      "type": "text",
+      "url": "/customer/translation-preview.js",
+      "status": 200,
+      "contains": [
+        "preview.sourceStamp===stamp(",
+        "saved.context.owner!==stamp(undoContext(item))",
+        "English source changed after translation. Undo is unavailable"
+      ]
+    },
+    {
+      "id": "messages-delivery-approved-recipient",
+      "type": "text",
+      "url": "/customer/delivery-engine.js",
+      "status": 200,
+      "contains": [
+        "function approvedDeliveryPackages(",
+        "function approvedRecipient(",
+        "Outreach?.approvedRecipient?.(pkg)"
+      ]
+    },
+    {
+      "id": "messages-automation-exact-package",
+      "type": "text",
+      "url": "/customer/outreach-automation-delivery-handoff.js",
+      "status": 200,
+      "contains": [
+        "buildApprovedSendPayload?.(pkg,recipientValue)",
+        "recipient_snapshot:{...pkg.approvalAuthority.recipient",
+        "matches.length===1?matches[0]:null"
+      ]
+    },
+    {
+      "id": "messages-safe-operation-trace",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "20261031-messages-v1",
+        "leadintel:messages-operation",
+        "stage===6?'messages-'"
+      ]
+    },
+    {
+      "id": "messages-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "messages-reliability=20261031-v1"
+      ]
+    },
+    {
+      "id": "messages-delivery-owned-actions",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": [
+        "function requireDeliveryAction(owner)",
+        "!owner.bridge.resolvingSync",
+        "window.LeadIntelAccountCache===owner.cache",
+        "requireDeliveryAction(owner);const recorded="
       ]
     }
   ],

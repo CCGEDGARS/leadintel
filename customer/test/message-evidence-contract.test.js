@@ -9,12 +9,12 @@ test('the fifth subject uses a relevant service comparison without technical evi
 });
 test('one execution class or EN 1090 alone cannot invent a two-class comparison',()=>{
  for(const text of ['We manufacture steel according to EN 1090.','We manufacture steel structures to EXC2.']){
-  const row=fifth({...essentials,offer:'steel'},{sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',text}]});
+  const row=fifth({...essentials,offer:'steel'},{sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',sourceRead:true,text}]});
   assert.equal(row.ready,true);assert.equal(row.subject,'Northport: compare now or later?');
  }
 });
 test('two evidenced execution classes provide a question without claiming buyer requirements',()=>{
- const row=fifth({...essentials,offer:'steel'},{sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',text:'We manufacture steel structures to EXC2 and EXC3 standards.'}]});assert.equal(row.subject,'Northport: EXC2 or EXC3?');
+ const row=fifth({...essentials,offer:'steel'},{sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',sourceRead:true,text:'We manufacture steel structures to EXC2 and EXC3 standards.'}]});assert.equal(row.subject,'Northport: EXC2 or EXC3?');
 });
 test('the fifth subject remains complete for unknown, long and unrelated-industry contexts',()=>{
  for(const change of [{trigger:null},{trigger:{...trigger,shortName:'An Extremely Long Project Name With No Safe Abbreviation',summary:'',excerpt:''},buyerCompany:'A company with an extraordinarily long registered legal name'},{trigger:null,buyerCompany:''},{subjectLanguage:'lv'},{subjectLanguage:'de'}]){
@@ -44,7 +44,7 @@ test('gap searches are independent, seller-scoped, bounded and do not research b
  assert.deepEqual(R.plan({essentials,context:{sellerWebsite:'javascript:alert(1)'}}),[]);
 });
 test('official reference evidence is reusable but snippets, failed sources and another seller never complete a field',()=>{
- const R=contract(),page={url:'https://seller.example/projects/hospital',text:'We delivered diagnostic equipment and completed installation at the hospital.',extractedAt:'2026-10-10'};
+ const R=contract(),page={sourceRead:true,url:'https://seller.example/projects/hospital',text:'We delivered diagnostic equipment and completed installation at the hospital.',extractedAt:'2026-10-10'};
  const good=R.assess({style:'friendly',essentials,context:{sellerWebsite:'https://seller.example',sellerEvidence:[page]}}).facts.find(row=>row.id==='reference');assert.equal(good.status,'confirmed');assert.equal(good.url,page.url);assert.ok(good.excerpt);
  for(const source of [{url:page.url,description:page.text},{...page,status:'failed'},{...page,url:'https://other.example/projects/hospital'},{...page,text:'We do not provide installation or delivery services.'}])assert.equal(R.assess({essentials,context:{sellerWebsite:'https://seller.example',sellerEvidence:[source]}}).facts.find(row=>row.id==='reference').status,'missing');
 });
@@ -57,11 +57,11 @@ test('bounded website reading reserves coverage for references and technical spe
  const selected=F.selectInternalLinks({links},'https://clinical.example/','company',4);assert.ok(selected.includes('https://clinical.example/projects'));assert.ok(selected.includes('https://clinical.example/quality'));
 });
 test('trigger research searches a reviewed project separately for location, schedule and specifications',()=>{
- const plan=Facts.queries({company:'Buyer',domain:'buyer.example'},{...essentials,offer:'diagnostic equipment'},{trigger:{...trigger,projectName:'Northport clinic'}});
+ const plan=Facts.queries({company:'Buyer',domain:'buyer.example'},{...essentials,offer:'diagnostic equipment'},{trigger:{...trigger,excerpt:'A new Northport clinic is being built in Northport.',projectName:'Northport clinic'}});
  assert.ok(plan.some(row=>row.query.includes('Northport clinic')&&/schedule|specifications/.test(row.query)));assert.ok(plan.every(row=>row.domain==='buyer.example'));assert.doesNotMatch(JSON.stringify(plan),/EXC|steel/);
 });
 test('Profile facts retain their extracted evidence and never confuse research with user confirmation',()=>{
- const R=contract(),context={sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/services',text:'We provide design and installation services. Our team has more than 20 years of experience.',extractedAt:'2026-10-10'}]};
+ const R=contract(),context={sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/services',sourceRead:true,text:'We provide design and installation services. Our team has more than 20 years of experience.',extractedAt:'2026-10-10'}]};
  const report=R.assess({essentials:{},context}),offer=report.facts.find(row=>row.id==='offer'),experience=report.facts.find(row=>row.id==='experience');
  assert.equal(offer.status,'confirmed');assert.equal(offer.verification,'source_verified');assert.equal(offer.url,context.sellerEvidence[0].url);assert.equal(experience.status,'confirmed');
  const plan=R.plan({essentials:{},context});assert.ok(!plan.some(row=>row.fields.includes('offer')),'Known source facts must not be researched again');
@@ -71,7 +71,7 @@ test('upstream Profile plans use the same missing-field contract as message prep
  assert.ok(queries.some(row=>row.fields?.includes('reference')));assert.ok(queries.some(row=>row.fields?.includes('technical')));assert.ok(queries.some(row=>row.fields?.includes('offer')));
 });
 test('known references and certification cannot suppress research for a missing material',()=>{
- const st=S.normalize({mode:'professional',essentials}),context={sellerWebsite:'https://seller.example',trigger,sellerEvidence:[{url:'https://seller.example/projects/site',text:'We delivered machinery and completed installation. Our company holds quality certification.'}]};
+ const st=S.normalize({mode:'professional',essentials}),context={sellerWebsite:'https://seller.example',trigger,sellerEvidence:[{url:'https://seller.example/projects/site',sourceRead:true,text:'We delivered machinery and completed installation. Our company holds quality certification.'}]};
  assert.ok(S.subjectResearchPlan(st,context).some(row=>row.fields.includes('materials')));
 });
 test('a real reviewed trigger excerpt supplies the follow-up location without a manually supplied project label',()=>{
@@ -88,6 +88,6 @@ test('Profile search snippets retain their origin and cannot be promoted into ve
  assert.equal(R.assess({essentials:{},context:{sellerWebsite:'https://seller.example',sellerEvidence:[{url,text:description,extracted:false}]}}).facts.find(row=>row.id==='reference').status,'missing');
 });
 test('an execution class in a URL cannot invent a second technical alternative',()=>{
- const context={sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',text:'We manufacture steel structures to EXC2. See https://seller.example/downloads/EXC3-guide.pdf for more.'}]};
+ const context={sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/quality',sourceRead:true,text:'We manufacture steel structures to EXC2. See https://seller.example/downloads/EXC3-guide.pdf for more.'}]};
  assert.equal(fifth({...essentials,offer:'steel'},context).subject,'Northport: compare now or later?');
 });

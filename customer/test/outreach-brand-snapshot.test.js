@@ -33,8 +33,9 @@ const readyIdentity={
 function item(body='Hello buyer,\n\nUseful context.\n\nBest,\n[Your name]\nSellerCo'){
   return {
     domain:'buyer.example',
+    selectedPersonId:'buyer',
     company:'Buyer AB',
-    dossier:{company:'Buyer AB',domain:'buyer.example',people:[],evidence:[],hypotheses:[]},
+    dossier:{company:'Buyer AB',domain:'buyer.example',people:[{id:'buyer',name:'Buyer Person',email:'buyer@example.com'}],evidence:[],hypotheses:[]},
     drafts:{
       tone:'consultative',
       emailSubject:'A grounded subject',
@@ -74,7 +75,7 @@ test('approval freezes the valid ready identity revision and resolved managed as
   assert.equal(approved.brandSnapshot.assets.logo.id,LOGO_ID);
 });
 
-test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft mutations and use the frozen rendering',()=>{
+test('manual Gmail compose and Gmail/Microsoft API payloads use the reviewed rendering and reject later draft mutations',()=>{
   const draft=item();
   const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
   const preview=Outreach.renderApprovedEmail(approved);
@@ -85,8 +86,6 @@ test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft m
   );
   assert.equal(send.body,preview.textBody,'legacy body must carry the exact rendered text fallback');
   assert.equal(approved.drafts.emailBody,approved.approvedSource.emailBody,'approval must retain the plain approved source rather than cache rendered branding in drafts');
-  approved.drafts.emailSubject='MUTATED SUBJECT';
-  approved.drafts.emailBody='MUTATED BODY';
   const compose=new URL(Delivery.buildGmailComposeUrl(approved,'buyer@example.com'));
   assert.equal(compose.searchParams.get('su'),preview.subject);
   assert.equal(compose.searchParams.get('body'),preview.textBody);
@@ -111,14 +110,17 @@ test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft m
   later.senderName='Different Step 1 Sender';
   later.revision=8;
   assert.deepEqual(Outreach.renderApprovedEmail(approved),preview,'later Step 1 changes must not affect the approved rendering');
+  approved.drafts.emailSubject='MUTATED SUBJECT';
+  approved.drafts.emailBody='MUTATED BODY';
+  assert.equal(Delivery.buildGmailComposeUrl(approved,'buyer@example.com'),'');
+  assert.equal(production.buildProviderSendRequest(approved,'buyer@example.com','changed'),null);
+  assert.equal(Outreach.renderApprovedEmail(approved),null);
 });
 
 test('automatic handoff queues the frozen branded rendering and follow-up',()=>{
   const draft=item();
   const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
   const preview=Outreach.renderApprovedEmail(approved);
-  approved.drafts.emailSubject='MUTATED AUTOMATION SUBJECT';
-  approved.drafts.emailBody='MUTATED AUTOMATION BODY';
 
   const handoff=loadBrowserConsumer('outreach-automation-delivery-handoff.js',{LeadIntelOutreach:Outreach,LeadIntelBrandIdentity:require('../brand-identity.js')}).LeadIntelOutreachAutomationDeliveryHandoff;
   assert.equal(typeof handoff?.buildApprovedAutomationPackage,'function','automatic handoff must expose its real queue payload builder');
@@ -131,7 +133,10 @@ test('automatic handoff queues the frozen branded rendering and follow-up',()=>{
   assert.match(queued.followup_html_body,/SellerCo/);
   assert.equal('brandSnapshot' in queued,false);
   assert.equal(queued.recipient,'buyer@example.com');
-  assert.equal(queued.contact_identity,'buyer.example');
+  assert.equal(queued.contact_identity,'buyer');
+  approved.drafts.emailSubject='MUTATED AUTOMATION SUBJECT';
+  approved.drafts.emailBody='MUTATED AUTOMATION BODY';
+  assert.equal(handoff.buildApprovedAutomationPackage(approved,'buyer@example.com'),null);
 });
 
 test('CRM sent activity records the frozen approved subject after drafts mutate',()=>{
@@ -252,16 +257,18 @@ test('explicit branded approval provenance blocks downgrade even when cached HTM
   assert.equal(Outreach.buildApprovedSendPayload(restored,'buyer@example.com'),null);
 });
 
-test('legacy approved packages with no brand snapshot remain approved plain text',()=>{
+test('legacy approved packages preserve historical plain text but require a recipient-bound review before delivery',()=>{
   const legacy=item('Legacy approved plain text.');
   legacy.approved=true;
   legacy.approvedAt='2026-09-01T09:00:00.000Z';
   delete legacy.brandSnapshot;
   delete legacy.approvedSource;
   const restored=Outreach.normalizeOutreachState({selectedDomain:'buyer.example',items:[legacy]}).items[0];
-  assert.equal(restored.approved,true);
-  assert.equal(restored.reapprovalRequired,false);
-  assert.deepEqual(Outreach.renderApprovedEmail(restored),{subject:'A grounded subject',textBody:'Legacy approved plain text.',htmlBody:null});
+  assert.equal(restored.approved,false);
+  assert.equal(restored.reapprovalRequired,true);
+  assert.equal(restored.approvedSource.emailBody,'Legacy approved plain text.');
+  assert.equal(Outreach.renderApprovedEmail(restored),null);
+  assert.equal(Outreach.buildApprovedSendPayload(restored,'buyer@example.com'),null);
 });
 
 test('outreach UI snapshots Step 1 identity, preserves edit detection and invalidates approval on regeneration',()=>{
@@ -271,10 +278,10 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
   const automationLoader=fs.readFileSync(path.join(__dirname,'..','outreach-automation-loader.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
-  assert.match(source,/approveOutreachItem\(source,edited\.drafts,[\s\S]*brandIdentity:mainState\(\)\.brandIdentity/);
+  assert.match(source,/approveOutreachItem\((?:source|approvalSource),edited\.drafts,[\s\S]*brandIdentity:/);
   assert.match(source,/regenerateDrafts\(\)[\s\S]*invalidateOutreachApproval\(current\)/);
   assert.match(source,/renderApprovedEmail\(item\)/);
-  assert.match(source,/buildApprovedSendPayload\(item\)/);
+  assert.match(source,/buildApprovedSendPayload\((?:item|currentItem\(\))\)/);
   assert.match(source,/Reapproval required/);
   assert.match(source,/Regenerate & reapprove/);
   assert.match(source,/Sending is blocked/);

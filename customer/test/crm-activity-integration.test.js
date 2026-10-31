@@ -26,8 +26,14 @@ test('manual Delivery writes durable send, reply and outcome events',()=>{
 });
 
 test('manual outbound checks durable CRM suppression before opening Gmail compose',()=>{
-  assert.match(delivery,/lifecycle_status\s*===\s*["']suppressed["']/);
-  assert.match(delivery,/Suppressed/);
+  const guard=delivery.slice(delivery.indexOf('async function outboundAllowed('),delivery.indexOf('function injectDeliveryUI('));
+  const compose=delivery.slice(delivery.indexOf('async function openGmailDraft('),delivery.indexOf('async function confirmSent('));
+  assert.match(guard,/await durableCompany\(domain,owner\);requireDeliveryAction\(owner\)/);
+  assert.match(guard,/\['suppressed','archived'\]\.includes\(resolved\.company\?\.lifecycle_status\)/);
+  assert.match(guard,/\['suppressed','archived'\]\.includes\(detail\.company\.lifecycle_status\)/);
+  assert.match(guard,/Restore the CRM company/);
+  assert.match(compose,/await outboundAllowed\(pkg\.domain,\{owner,pkg,recipient:owner\.recipient\}\);requireDeliveryAction\(owner\);if\(!allowed\.ok\)/);
+  assert.ok(compose.indexOf('await outboundAllowed(')<compose.indexOf('window.open('));
 });
 
 test('Gmail API send hands its idempotency key to Delivery confirmation',()=>{

@@ -28,8 +28,8 @@ test('a selected event without a project still plans buyer research for every st
 test('new schedule evidence invalidates the exact template scope even when the subject stays the same',()=>{
  const studio=S.normalize({mode:'curiosity',essentials}),item={domain:'buyer.example',selectedPersonId:'sam',channel:'email'};
  const trigger={verification:'source_verified',url:'https://buyer.example/news/riverport',excerpt:'Buyer is building a new sorting plant at Riverport.',summary:'Buyer is building a new sorting plant at Riverport.'};
- const first={...base,trigger,buyerFactEvidence:[{url:trigger.url,text:'Foundation work is under way for the new sorting plant at Riverport. The plant is due to run in 2029.'}]};
- const second={...first,buyerFactEvidence:[{url:trigger.url,text:'Foundation work is under way for the new sorting plant at Riverport. The plant is due to run in 2030.'}]};
+ const first={...base,trigger,buyerFactEvidence:[{url:trigger.url,sourceRead:true,text:'Foundation work is under way for the new sorting plant at Riverport. The plant is due to run in 2029.'}]};
+ const second={...first,buyerFactEvidence:[{url:trigger.url,sourceRead:true,text:'Foundation work is under way for the new sorting plant at Riverport. The plant is due to run in 2030.'}]};
  assert.notEqual(E.scope('w1',item,studio,first),E.scope('w1',item,studio,second));
 });
 test('unresolved required fields stay Needs information for every style; ordinary bracketed citations are allowed',()=>{

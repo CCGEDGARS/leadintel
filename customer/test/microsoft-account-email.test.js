@@ -3,7 +3,6 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
-const {webcrypto}=require('node:crypto');
 
 const bridgeSource=fs.readFileSync(path.join(__dirname,'..','server-bridge.js'),'utf8');
 const mailSource=fs.readFileSync(path.join(__dirname,'..','production-gmail-ui.js'),'utf8');
@@ -31,13 +30,19 @@ test('delivery connector renders Microsoft connect, send, status, and disconnect
 });
 
 test('approved Microsoft send uses the Microsoft bridge and confirms only provider-accepted requests',async()=>{
-  let confirmed=0,sendPayload=null;
-  const nodes={'delivery-company-select':{value:'example.com'},'delivery-recipient':{value:'buyer@example.com'},'send-with-microsoft':{},'confirm-delivery-sent':{click(){confirmed++;}},toast:{classList:{add(){},remove(){}},textContent:''}};
-  const outreachApi={normalizeOutreachState:()=>({items:[{domain:'example.com',approved:true,approvedAt:'2026-09-15',drafts:{emailSubject:'Tailored subject',emailBody:'Tailored body'}}]}),buildApprovedSendPayload:(_pkg,recipient)=>({recipient,subject:'Tailored subject',textBody:'Tailored body',htmlBody:null})};
-  const window={LeadIntelOutreach:outreachApi,LeadIntelServerBridge:{microsoftMail:{connected:true},sendMicrosoftMail:async(payload)=>{sendPayload=payload;return {ok:true,duplicate:false,message:{status:'sent',provider:'microsoft',provider_status:'accepted'}};},saveNow:async()=>{}}};
-  const source=mailSource.replace(/\}\)\(typeof window!==['"]undefined['"]\?window:globalThis\);\s*$/,'root.sendForTest=send;})(typeof window!==\'undefined\'?window:globalThis);');
-  vm.runInNewContext(source,{window,document:{readyState:'loading',addEventListener(){},getElementById:id=>nodes[id]||null},localStorage:{getItem(){return null;}},sessionStorage:{setItem(){}},LeadIntelOutreach:outreachApi,LeadIntelDelivery:{normalizeEmail:value=>value},LeadIntelDialogs:{confirm:async()=>true},crypto:webcrypto,TextEncoder,setTimeout,clearTimeout});
-  await window.sendForTest('microsoft');
-  assert.ok(sendPayload,'Microsoft provider must receive the approved message');
-  assert.equal(sendPayload.subject,'Tailored subject');assert.equal(sendPayload.body,'Tailored body');assert.equal(confirmed,1);assert.equal(nodes['send-with-microsoft'].disabled,false);
+  const {mailRuntime,providerReceipt}=require('./helpers/production-mail-runtime.js');
+  for(const providerStatus of ['accepted','unknown']){
+    const h=mailRuntime('microsoft',providerReceipt('microsoft','sent',{provider_status:providerStatus}));
+    try{
+      const result=await h.send();
+      assert.equal(h.calls.length,1,'Microsoft receives the current approved message');
+      const {provider,payload}=h.calls[0];assert.equal(provider,'microsoft');
+      assert.equal(payload.subject,h.pkg.drafts.emailSubject);assert.equal(payload.body,h.pkg.drafts.emailBody);
+      assert.equal(payload.recipientSnapshot.name,'Alex Buyer');assert.equal(payload.recipientSnapshot.email,'alex@buyer.example');
+      assert.equal(payload.recipientSnapshot.companyDomain,'buyer.example');
+      assert.equal(result.providerConfirmed===true,providerStatus==='accepted');
+      assert.equal(h.records,providerStatus==='accepted'?1:0);
+      assert.equal(h.q('send-with-microsoft').disabled,false);
+    }finally{h.w.close();}
+  }
 });

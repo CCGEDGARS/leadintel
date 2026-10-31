@@ -1,3 +1,4 @@
+const {messageFixture}=require('./helpers/approved-message.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const Outreach=require('../outreach-engine.js');
@@ -97,7 +98,7 @@ test('legacy automatic language settings migrate to English and manual localizat
   assert.equal(drafts.resolvedLanguage,'de');
   assert.equal(drafts.requiresAiLocalization,true);
   assert.match(drafts.emailBody,/Hello|I came across/);
-  const approved=Outreach.approveOutreachItem({drafts,campaignScenario:{...scenario,resolvedLanguage:'de',languageSource:'manual'},localizationStatus:'complete',localizationProvenance:{provider:'anthropic',model:'claude-sonnet-4-6',language:'de',selectionSource:'manual'}},drafts,'2026-09-16T12:00:00.000Z');
+  const approved=Outreach.approveOutreachItem(messageFixture({domain:'nordhaus.de',drafts,campaignScenario:{...scenario,resolvedLanguage:'de',languageSource:'manual'},localizationStatus:'complete',localizationProvenance:{provider:'anthropic',model:'claude-sonnet-4-6',language:'de',selectionSource:'manual'}},{email:'anna@nordhaus.de',name:'Anna Fixture'}),drafts,'2026-09-16T12:00:00.000Z');
   assert.equal(approved.campaignSnapshot.language,'de');
   assert.equal(approved.campaignSnapshot.resolvedLanguage,'de');
   assert.equal(approved.campaignSnapshot.languageSource,'manual');
@@ -134,7 +135,7 @@ test('approval requires a resolved campaign language and complete provider prove
 test('approval freezes the resolved language and AI localization provenance',()=>{
   const drafts={tone:'consultative',emailSubject:'Betreff',emailBody:'Guten Tag',linkedinMessage:'Guten Tag',callOpener:'Guten Tag',followUp:'Nachfrage',objectionReply:'Verstanden'};
   const provenance={provider:'anthropic',model:'claude-sonnet-4-6',language:'de',selectionSource:'market'};
-  const approved=Outreach.approveOutreachItem({domain:'nordhaus.de',drafts,campaignScenario:{language:'auto',resolvedLanguage:'de',languageSource:'market'},localizationStatus:'complete',localizationProvenance:provenance},drafts,'2026-09-16T12:30:00.000Z');
+  const approved=Outreach.approveOutreachItem(messageFixture({domain:'nordhaus.de',drafts,campaignScenario:{language:'auto',resolvedLanguage:'de',languageSource:'market'},localizationStatus:'complete',localizationProvenance:provenance},{email:'anna@nordhaus.de',name:'Anna Fixture'}),drafts,'2026-09-16T12:30:00.000Z');
   assert.deepEqual(approved.localizationSnapshot,provenance);
   provenance.language='fr';
   assert.equal(approved.localizationSnapshot.language,'de');
@@ -153,7 +154,7 @@ test('campaign context influences generated scripts and is snapshotted on approv
   assert.match(drafts.emailBody,/German furniture retailers/i);
   assert.match(drafts.emailBody,/15-minute call/i);
   assert.doesNotMatch(drafts.emailBody,/This campaign is for|Suggested next step/i);
-  const approved=Outreach.approveOutreachItem({domain:'nordhaus.example',dossier,drafts,localizationStatus:'native',localizationProvenance:{provider:'built-in',model:'LeadIntel native templates',language:'en',selectionSource:'manual'}},drafts,'2026-09-16T10:10:00.000Z',{campaignScenario:scenario});
+  const approved=Outreach.approveOutreachItem(messageFixture({domain:'nordhaus.example',dossier,drafts,localizationStatus:'native',localizationProvenance:{provider:'built-in',model:'LeadIntel native templates',language:'en',selectionSource:'manual'}},{email:'anna@nordhaus.example',name:'Anna Fixture'}),drafts,'2026-09-16T10:10:00.000Z',{campaignScenario:scenario});
   assert.equal(approved.approved,true);
   assert.equal(approved.campaignSnapshot.segment,'German furniture retailers');
   scenario.segment='Changed later';

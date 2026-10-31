@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
 function harness(){
  const pending=[],items=[];const bridge={session:{authenticated:true},workspace:{id:'w1'}};
- const context={scriptGenerationRequest:0,outreach:{selectedDomain:'maker.se'},window:{},LeadIntelContentLanguage:{},crmBridge:()=>bridge,upsertItem:item=>items.push(item),renderDossier:()=>{},LeadIntelOutreachLocalization:{prepareCampaignDrafts:()=>new Promise(resolve=>pending.push(resolve))}};
+ const context={captureMessageAuthority:()=>({current:()=>true}),editorDraft:()=>({}),scriptGenerationRequest:0,outreach:{selectedDomain:'maker.se'},window:{},LeadIntelContentLanguage:{},crmBridge:()=>bridge,upsertItem:item=>items.push(item),renderDossier:()=>{},LeadIntelOutreachLocalization:{prepareCampaignDrafts:()=>new Promise(resolve=>pending.push(resolve))}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function prepareLocalizedItem('),source.indexOf('async function buildDossier(')),context);
  return {context,bridge,pending,items};
 }

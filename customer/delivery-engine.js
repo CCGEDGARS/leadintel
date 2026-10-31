@@ -30,8 +30,8 @@
   function buildGmailComposeUrl(packageItem,recipient){
     const to=normalizeEmail(recipient);
     const frozen=Outreach?.buildApprovedSendPayload?.(packageItem,to);
-    const subject=clean(frozen?.subject??packageItem?.drafts?.emailSubject);
-    const body=cleanMultiline(frozen?.textBody??packageItem?.drafts?.emailBody);
+    if(!frozen)return "";
+    const subject=String(frozen.subject??""),body=String(frozen.textBody??"");
     if(!packageItem?.approved||!to||!subject||!body)return "";
     const url=new URL("https://mail.google.com/mail/");
     url.searchParams.set("view","cm");
@@ -54,18 +54,14 @@
       if(!item?.domain)continue;
       const buyer=JSON.stringify([normalizeDomain(item.domain),clean(item.selectedPersonId),item.channel||'email']);
       if(seen.has(buyer))continue;seen.add(buyer);
-      if(!item.approved||item.channel==='linkedin'||item.reapprovalRequired)continue;
+      if(!item.approved||item.channel==='linkedin'||item.reapprovalRequired||!Outreach?.approvalCurrent?.(item))continue;
       // Active items own the buyer's current revision; archived buyer drafts are fallbacks.
       if(!packages.has(buyer))packages.set(buyer,item);
     }
     return [...packages.values()];
   }
   function approvedRecipient(pkg={},workspaceId=''){
-    if(!pkg)return '';
-    const entry=pkg.messageStudioDraft?.flowMembership,person=pkg.dossier?.people?.find(row=>row.id===pkg.selectedPersonId);
-    const captured=normalizeEmail(entry?.recipient);
-    if(captured&&entry.workspaceId===workspaceId&&entry.personId===pkg.selectedPersonId&&entry.approvedAt===pkg.approvedAt&&entry.subject===pkg.drafts?.emailSubject&&entry.message===pkg.drafts?.emailBody)return captured;
-    return normalizeEmail(person?.email||person?.work_email||person?.normalized_email);
+    return pkg?normalizeEmail(Outreach?.approvedRecipient?.(pkg)||''):'';
   }
   function findDeliveryRecord(state,packageItem={},recipient=''){
     if(!packageItem)return null;

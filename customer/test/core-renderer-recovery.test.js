@@ -77,7 +77,7 @@ test('mounted update creates a recoverable working draft when an unused subject 
 
 test('approved Brutal wording budgets factual fields and uses the benefit once',()=>{
  const raw={...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',value:'reduce coordination burden through one full-service industrial project partner',meetingValue:'relevant production data and lessons from previous projects'};
- const studio=S.normalize({mode:'brutal',essentials:raw}),c={...context(),sellerEvidence:[{url:'https://north.example/projects/tower',text:'We manufacture steel structures and provide installation for industrial projects.'}],trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a new sorting plant at Northport.'}};
+ const studio=S.normalize({mode:'brutal',essentials:raw}),c={...context(),sellerEvidence:[{url:'https://north.example/projects/tower',sourceRead:true,text:'We manufacture steel structures and provide installation for industrial projects.'}],trigger:{...context().trigger,excerpt:'Buyer is investing six billion kronor in a new sorting plant at Northport.',summary:'Buyer is investing six billion kronor in a new sorting plant at Northport.'}};
  assert.ok(E.preparationWordLimits(studio,c).value<=E.fieldWords.value);
  const limits=E.preparationWordLimits(studio,c);assert.ok(limits.value<=E.fieldWords.value);
  const prepared=E.preparedResponse({triggerSummary:'Buyer’s investment in a sorting plant at Northport',offer:'metal manufacturing and installation',value:'reduce coordination burden',difference:'Our team has more than 30 years of experience.',approach:'Project delivery',meetingValue:'relevant production data and lessons'},studio,c);
@@ -93,7 +93,7 @@ test('investment summaries cannot replace protected opening frames or fill absen
  }
 });
 test('source fingerprints retain rendering facts without duplicating official page corpora in draft history',()=>{
- const studio=S.normalize({mode:'friendly',essentials}),source={url:'https://north.example/projects/tower',text:'We manufacture steel and provide installation. '+ 'Official project source '.repeat(400)};
+ const studio=S.normalize({mode:'friendly',essentials}),source={url:'https://north.example/projects/tower',sourceRead:true,text:'We manufacture steel and provide installation. '+ 'Official project source '.repeat(400)};
  const ctx={...context(),sellerEvidence:[source]},key=E.scope('w1',{domain:'buyer.example'},studio,ctx);
  assert.ok(key.length<4000);assert.ok(!key.includes('Official project source'));
  const changed={...ctx,sellerEvidence:[{...source,text:'We provide business advisory for commercial customers.'}]};
@@ -102,14 +102,14 @@ test('source fingerprints retain rendering facts without duplicating official pa
 });
 
 test('Professional combined budget can shorten one otherwise-valid field for a grammatical investment quantity',()=>{
- const studio=S.normalize({mode:'professional',essentials:{...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.'}}),ctx={...context(),firstName:'Joakim',buyerName:'Joakim Winsa',trigger:{...context().trigger,summary:'LKAB is investing six billion kronor in a new sorting plant at Malmberget.'}};
+ const studio=S.normalize({mode:'professional',essentials:{...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.'}}),ctx={...context(),firstName:'Joakim',buyerName:'Joakim Winsa',trigger:{...context().trigger,excerpt:'LKAB is investing six billion kronor in a new sorting plant at Malmberget.',summary:'LKAB is investing six billion kronor in a new sorting plant at Malmberget.'}};
  assert.ok(E.preparationWordLimits(studio,ctx).offer<=E.fieldWords.offer);const limits=E.preparationWordLimits(studio,ctx);assert.ok(limits.offer<=E.fieldWords.offer);
  const sources=E.fieldSources(studio,ctx),prepared=E.preparedResponse({...sources,difference:'Our team brings more than 30 years of metalworking experience, including projects in Scandinavia.'},studio,ctx),draft=E.tailor(studio,E.preparedContext(studio,ctx,prepared));
  assert.match(draft.message,/Malmberget|six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=require('../approved-reference-scripts').coreContract('professional').maximumMessageWords);assert.equal(prepared.fields.offer,sources.offer);assert.equal(prepared.fields.triggerSummary,sources.triggerSummary.replace(/[.!?]+$/,''));
 });
 
 test('Brutal keeps financial evidence in prepared fields without inserting it into the protected opening',()=>{
- const studio=S.normalize({mode:'brutal',essentials}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
+ const studio=S.normalize({mode:'brutal',essentials}),ctx={...context(),trigger:{...context().trigger,excerpt:'Buyer is investing six billion kronor in a plant at Northport.',summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
  assert.ok(E.preparationWordLimits(studio,ctx).offer<=E.fieldWords.offer);
  const prepared=E.preparedResponse({...E.fieldSources(studio,ctx),triggerSummary:'Buyer’s investment of six billion kronor at Northport',value:'simplify delivery',meetingValue:'project data'},studio,ctx);
  const next=E.preparedContext(studio,ctx,prepared),draft=E.tailor(studio,next);

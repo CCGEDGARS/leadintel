@@ -9,21 +9,23 @@ function fact(row,target){const url=D.url(row.url||row.sourceUrl),quote=clean(ro
 function safe(prior,target){if(prior?.version!==VERSION||D.domain(prior.domain)!==D.domain(target))return null;return {...prior,facts:(prior.facts||[]).filter(row=>row.verification==='source_verified').map(row=>fact(row,D.domain(target))).filter(Boolean).slice(0,16)};}
 function build(candidate={},profile={},person=null,prior=null){
  const target=D.domain(candidate.domain||candidate.website),d=D.safe(candidate.buyerDiscovery?.companyDossier,target),previous=safe(prior,target),facts=[];
- const reads=new Set((d?.passes||[]).flatMap(p=>[...(p.extractedSources||[]),...(p.sourceReads||[]).filter(row=>row.status==='succeeded').map(row=>row.url)]));
+ // An explicit read outcome owns its URL; a legacy extraction label cannot
+ // promote a failed/pending read into verified source evidence.
+ const reads=new Set((d?.passes||[]).flatMap(p=>[...(p.extractedSources||[]).filter(url=>!(p.sourceReads||[]).some(row=>row.url===url&&row.status!=='succeeded')),...(p.sourceReads||[]).filter(row=>row.status==='succeeded').map(row=>row.url)]));
  // Older validated passes recorded extracted page URLs and exact cited claims before per-read receipts existed.
  const legacyAggregatePass=pass=>!d.plan&&!pass.planSignature&&!(pass.searchFamilies||[]).length&&!['facts','people','channels'].some(kind=>(pass[kind]||[]).length)&&Number.isFinite(Date.parse(d.checkedAt))&&(d.receipts||[]).some(receipt=>receipt.provider===pass.provider&&receipt.status==='complete'&&receipt.phase==='complete'&&receipt.readCount>0&&receipt.sourceCount>=receipt.readCount);
  const legacyValidatedClaim=(row,kind)=>(d?.passes||[]).some(pass=>pass.webSearch&&['complete','partial'].includes(pass.status)&&!(pass.extractedSources||[]).length&&!(pass.sourceReads||[]).length&&(pass.sources||[]).includes(row.sourceUrl)&&(legacyAggregatePass(pass)||(pass[kind]||[]).some(claim=>claim.sourceUrl===row.sourceUrl&&clean(claim.quote)===clean(row.quote)&&(kind==='facts'||clean(claim.name).toLowerCase()===clean(row.name).toLowerCase()&&clean(claim.title).toLowerCase()===clean(row.title).toLowerCase()&&claim.status===row.status))));
  const provenFacts=(d?.facts||[]).filter(row=>reads.has(row.sourceUrl)||legacyValidatedClaim(row,'facts')),provenPeople=(d?.people||[]).filter(row=>reads.has(row.sourceUrl)||legacyValidatedClaim(row,'people'));
  for(const row of [...provenFacts,...provenPeople])reads.add(row.sourceUrl);
  const extracted=[];
- for(const row of candidate.evidence||[]){if(row.sourceRead===false||/snippet|model_summary/i.test(row.evidenceKind||'')||!(row.sourceRead===true||row.extracted===true||row.verification==='source_verified'&&Number.isFinite(Date.parse(row.extractedAt||'')))||!row.text)continue;
+ for(const row of candidate.evidence||[]){if(d&&row.fromResearchBrief===true&&!reads.has(D.url(row.url))||row.sourceRead===false||/snippet|model_summary/i.test(row.evidenceKind||'')||!(row.sourceRead===true||row.extracted===true||row.verification==='source_verified'&&Number.isFinite(Date.parse(row.extractedAt||'')))||!row.text)continue;
   for(const sentence of clean(row.text).split(/(?<=[.!?])\s+/).filter(text=>text.length>=12&&text.length<=600).slice(0,12)){const item=fact({...row,text:sentence},target);if(item)extracted.push({...item,fromResearchBrief:row.fromResearchBrief===true});}}
  const newer=new Map();for(const row of extracted){const time=Date.parse(row.checkedAt);if(time>0&&time<=Date.now()+60000)newer.set(row.url,Math.max(newer.get(row.url)||0,time));}
  const dossierReadAt=url=>{const times=(d?.passes||[]).flatMap(pass=>(pass.sourceReads||[]).filter(row=>row.url===url&&row.status==='succeeded').map(row=>Date.parse(row.checkedAt))).filter(Number.isFinite);return times.length?Math.max(...times):Date.parse(d?.checkedAt)||0;},replacesDossier=url=>newer.has(url)&&newer.get(url)>dossierReadAt(url);
  for(const row of provenFacts){if(replacesDossier(row.sourceUrl))continue;const item=fact({...row,origin:'dossier',checkedAt:dossierReadAt(row.sourceUrl)?new Date(dossierReadAt(row.sourceUrl)).toISOString():''},target);if(item)facts.push(item);}
  for(const row of extracted){if(d&&reads.has(row.url)&&!replacesDossier(row.url)||newer.has(row.url)&&Date.parse(row.checkedAt)!==newer.get(row.url))continue;const {fromResearchBrief,...item}=row;facts.push(item);}
  if(!d&&!facts.length)facts.push(...(previous?.facts||[]));
- const unique=[...new Map(facts.map(row=>[row.url+'|'+row.quote,row])).values()],terms=clean([profile.priorityOffers,person?.title].filter(Boolean).join(' ')).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(v=>v.length>4),rank=row=>terms.filter(t=>row.quote.toLowerCase().includes(t)).length+(row.kind==='development'?10:0)+(row.origin==='dossier'?10:0);
+ const unique=[...new Map(facts.map(row=>[row.url+'|'+row.quote,row])).values()],terms=[...new Set(clean([profile.priorityOffers,person?.title].filter(Boolean).join(' ')).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(v=>v.length>4))],rank=row=>terms.filter(t=>row.quote.toLowerCase().includes(t)).length+(row.kind==='development'?10:0);
  unique.sort((a,b)=>rank(b)-rank(a)||a.url.localeCompare(b.url));unique.splice(16);
  const sourcePerson=provenPeople.find(row=>clean(row.name).toLowerCase()===clean(person?.publicName||person?.name).toLowerCase()&&clean(row.title).toLowerCase()===clean(person?.title).toLowerCase()),hold=person&&d?D.holdReason(person,d):'',verified=Boolean(sourcePerson&&sourcePerson.status==='current'&&!sourcePerson.roleConflict&&!hold&&reads.has(sourcePerson.sourceUrl)),gaps=[...(d?.gaps||[])];
  if(!unique.length)gaps.push('No extracted official company fact available for personalization.');if(person&&!verified)gaps.push(hold||'Selected buyer role requires source verification.');if(d?.conflicts.length)gaps.push('Research conflicts need review.');if(d?.lastAttempt)gaps.push('Latest company research attempt needs attention.');
@@ -33,14 +35,19 @@ function build(candidate={},profile={},person=null,prior=null){
  return {...body,key:VERSION+':'+fingerprint([target,[profile.companyName,profile.priorityOffers,profile.valueProposition,profile.differentiation,profile.commercialObjective],unique,buyer,body.gaps])};
 }
 function evidenceRows(brief){return (safe(brief,brief?.domain)?.facts||[]).map(row=>({url:row.url,text:row.quote,title:brief.company,date:row.date,verification:'source_verified',sourceRead:true,sourceType:'Official',extractedAt:row.checkedAt,fromResearchBrief:true}));}
-function supports(brief,trigger){return (safe(brief,brief?.domain)?.facts||[]).some(row=>row.url===D.url(trigger?.url)&&(clean(row.quote).includes(clean(trigger?.excerpt||trigger?.summary))||clean(trigger?.excerpt||trigger?.summary).includes(clean(row.quote))));}
+function supports(brief,trigger){const excerpt=clean(trigger?.excerpt||trigger?.summary);return Boolean(excerpt)&&(safe(brief,brief?.domain)?.facts||[]).some(row=>{
+ const quote=clean(row.quote),start=quote.indexOf(excerpt);if(row.url!==D.url(trigger?.url)||start<0)return false;
+ // Selecting an interior phrase must not discard its own sentence's qualifier.
+ const withheld=quote.slice(0,start).split(/(?<=[.!?])\s+/).at(-1)+' '+quote.slice(start+excerpt.length).split(/(?<=[.!?])\s+/)[0];
+ return !/\b(?:if|unless|whether|hypothetical|not|never|no|unconfirmed|unknown|cancelled|delayed|could|might|may|previously|formerly)\b/i.test(withheld);
+});}
 function opening(context={}){
  const trigger=context.trigger;if(!['source_verified','user_reviewed'].includes(trigger?.verification)||!D.url(trigger.url))return null;
  const target=D.domain(context.buyerDomain||trigger.companyDomain||trigger.url);if(trigger.verification==='source_verified'&&D.domain(trigger.url)!==target)return null;
  if(context.researchBrief&&trigger.verification==='source_verified'&&!supports(context.researchBrief,trigger))return null;
  const corpus=clean(trigger.excerpt||trigger.summary);if(!corpus||unsafe(corpus))return null;
  const now=new Date(context.now||Date.now()).getUTCFullYear();if(trigger.sourceDate&&Number.isFinite(Date.parse(trigger.sourceDate))&&new Date(context.now||Date.now())-new Date(trigger.sourceDate)>365*86400000)return null;if([...corpus.matchAll(/(?:open|opening|operational|run|start|commission(?:ed|ing))[^.!?]{0,30}\b(20\d{2})\b/gi)].some(m=>Number(m[1])<now))return null;if([...corpus.matchAll(/(?:due to (?:open|run|start)|scheduled to (?:open|run|start)|operational (?:in|by))(?: in)?\s+(20\d{2})/gi)].some(m=>Number(m[1])<now))return null;
- const sentences=corpus.split(/(?<=[.!?])\s+/).filter(sentence=>development(sentence)&&! /\b(?:no|not|never|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(sentence)&&! /[āčēģīķļņšūžåäö]|\b(?:är|och|som|har|ska|att|ett)\b/i.test(sentence)&&sentence.split(/\s+/).length<=32);
+ const sentences=corpus.split(/(?<=[.!?])\s+/).filter(sentence=>development(sentence)&&! /\b(?:if|unless|whether|hypothetical|no|not|never|unconfirmed|unknown|cancelled|delayed|could|might|may|was|were|previously|formerly)\b/i.test(sentence)&&! /[āčēģīķļņšūžåäö]|\b(?:är|och|som|har|ska|att|ett)\b/i.test(sentence)&&sentence.split(/\s+/).length<=32);
  const sentence=sentences.find(row=>! /\b(?:20\d{2}|due|scheduled)\b/i.test(row))||sentences[0];if(!sentence)return null;
  let statement=sentence.replace(/[.!?]+$/,'').replace(/^Our\b/,'your').replace(/^We are\b/,'you are').replace(/^We\b/,'you');
  if(!/^(?:your|you)\b/.test(statement))statement='that '+statement;

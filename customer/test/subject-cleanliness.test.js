@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const M=require('../message-studio.js'),T=require('../message-translations.js'),E=require('../message-editor.js');
 const e={sender:'Alex Smith',company:'LegalCo',language:'en',calendly:'https://calendly.com/alex/call',value:'Reduce admin time',offer:'Contract review'};
-const context={buyerCompany:'ClientCo',fitScore:87,trigger:{title:'Project Alpha',summary:'A long research paragraph '.repeat(20),verification:'source_verified',url:'https://example.com/news',positive:true}};
+const context={buyerCompany:'ClientCo',fitScore:87,trigger:{title:'Project Alpha',summary:'A long research paragraph '.repeat(20),excerpt:'Project Alpha. '+'A long research paragraph '.repeat(20),verification:'source_verified',url:'https://example.com/news',positive:true}};
 test('every approved generated subject is one clean line within 60 characters across all message languages',()=>{
  for(const language of Object.keys(T.languages))for(const mode of ['professional','curiosity','friendly','brutal'])for(const choice of M.subjectsFor(mode)){
   const studio=M.chooseSubject(M.normalize({mode},e),mode,choice.id),subject=M.resolvedSubject(studio,{...context,subjectLanguage:language},e);

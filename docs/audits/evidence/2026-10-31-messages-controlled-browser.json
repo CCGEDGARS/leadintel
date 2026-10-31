@@ -1,0 +1,439 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-31T09:19:31.694Z",
+  "environment": "Local headless Chromium with synthetic authenticated fixture and intercepted network; no customer session",
+  "browser": {
+    "executable": "/usr/bin/chromium",
+    "version": "154.0.8037.57"
+  },
+  "baseGitSha": "3f43cc2160911180ad0aa678ac7e313dd8071b35",
+  "sourceSnapshotSha256": {
+    "customer/app-shell.css": "7d02d2a334554f859373e47c084d14bcac581a70ee905334e311fc0f57f11399",
+    "customer/approved-linkedin-inmail.js": "508cc5ec22879f31cffd4ffe87a44bef18507ffbbe0671928539dac0d852bac4",
+    "customer/approved-reference-scripts.js": "a6452804a184455fce36efbacf51a032fb7e4e570bbfc0c9209ba980db42eb92",
+    "customer/attention-centre.css": "2dcaa49f48f1008fd69e49e8f83407c2db0acecb9ad79735ed0d518e9420aa3d",
+    "customer/background-task-centre.css": "c754c820652eb14b787ee595558b39078e419e1d1fb216956e5161d5e749c2fe",
+    "customer/brand-identity.css": "19ebd98adce07c05309a9ef3f6f6965f0fb522c94e775ef30873037a6c0e0ff2",
+    "customer/brand-identity.js": "cf879b24a2fba11eefc31f5bffa22caaf06625504fc463c95ed2dc0b7cc7a760",
+    "customer/channel-scripts.css": "f48ccf207a43cf556eecd218d17687cd6ac9eadd1105147fc038a95f0d8b34d5",
+    "customer/channel-scripts.js": "5ad530b6403faef092f38ef657e7126aff6a9b8a410b8601fc64f39e96d30f16",
+    "customer/compact-sources.css": "df7b1a24a752a247d50841b35f85eed04e14748cfe6e9817953a3161876dd572",
+    "customer/company-dossier.js": "b88ba7654e2bfcf93dfd26b77f82c8ad1fd719fde3497ba8b7e03b61bb4f60e8",
+    "customer/company-materials.css": "2fc1abf1761b5150cf32ffb18f787782d3d028e45daa5c0619433cc9dd807866",
+    "customer/confirmation-dialog.css": "006bc773ffbfdf8d3f63cbccea51b96655d5a8de4562b0763a8fe77e0688ddfc",
+    "customer/confirmation-dialog.js": "68e8c40f3338e047ebf3197ff612c143c629dfad941b5eb642d967a011faa863",
+    "customer/contact-confirmation-policy.js": "d508d0bc2a22dc73cd36720f003182ff824e7fc9d87fded1aa0eeae4074ebc2f",
+    "customer/content-language.js": "ab0194be82aa509d0ce15d6686b0cd2db101e39abcc50b9badd35465a2f52d74",
+    "customer/content-materials.js": "aef238237ba55193b2c26d77481dae6fbeee5662fca601c76b59782521db41fe",
+    "customer/content-variants.js": "53868323bd3346987afc112d44ef5658b104e471e9ee6594a31a6bcc08964d06",
+    "customer/conversation.css": "d7df3a631e472a096554d6c86a22151f373cd0fa530cdf116ae6cc44ac4b764f",
+    "customer/crm-engine.js": "443f85adfa307f46215e92e7e18ea7a0f0c2f5ab3fe5259dcce78f3fb348d2d3",
+    "customer/delivery-engine.js": "0f425c4be3262b2d672a07e3d98edaec56b498407c7ef90dd583c9d1850cbe56",
+    "customer/delivery-ui.js": "90f229b407082a49df62a078294de65ebd3254cd5ad1c4e58136ef3854f3b1df",
+    "customer/delivery.css": "bc81af34765f56255efb5c64602bdfe54b3cdc0e2cc4424e4ccbdc07285a6d34",
+    "customer/discovery-engine.js": "b441d43f44a61271c3a20c7973faebabc8627a1de15fca4e7ae4789f27e9e852",
+    "customer/email-campaigns.css": "98d3f35239d4ab89e9babede99f6316d424686059979c4f0512109860e3762ff",
+    "customer/event-campaigns.css": "40b0e065edc03d6489a0924529784bc63a99fde67823645c60ad89275a29dc6c",
+    "customer/event-campaigns.js": "57b9ec4d684767b9165dd4e73defb7955b5cd8bf1a09be4ab190396b311c6d20",
+    "customer/evidence-policy.js": "2d449a54641f102c07398d1658ed19d89bc514c93e29cbac18609f79eec827eb",
+    "customer/evidence-sources.css": "57c3d4e2db992fdf36971816e594b7d9045e68c32ef27d3557d27b0088286cb3",
+    "customer/follow-up-assistant-ui.js": "a68d0b10d78befeb7e90d30126f4b7a08e9cce04ef6a2df43460d6714c9ec9cc",
+    "customer/follow-up-assistant.css": "9f89afc6240c7e8a166e1f1633adca7391d251c671791f58fb6e26bbb8870039",
+    "customer/follow-up-assistant.js": "f4c99c71155b20bb0cb9ba85713a65f157a16bcfebba6ddbcf9028679ad24da5",
+    "customer/index.html": "362a7cee28f5d314214084dfe39a74863febb63ae76895b1cfa20657e3cc1abb",
+    "customer/language-pack-catalogue.js": "72edfd0384c7c92537a9caeef512a4862a092aceacf9dd8af83d8dd5fadd44b3",
+    "customer/language-pack-ui.js": "048b5946134ccd6f6e3615e3364e162628715586e98b495acb733c35bb293248",
+    "customer/linkedin-inmail-engine.js": "51979e31b9500edad95816895f2278473fc4809c1ee45285ef30752ab7d15ea7",
+    "customer/linkedin-inmail-ui.js": "03cbac337e85b245209a212bdad5246efcca9ce1ed60c98fecc20b8f0a66d98e",
+    "customer/linkedin-inmail.css": "405d3a3f773df4a8186834082a31424769a740080ea23d6d055324703d1d7255",
+    "customer/market-conditions-engine.js": "401d8a724b416c216f27f71ec78c459a76aad33dcf691841c5018620f61e4586",
+    "customer/market-engine.js": "ecbe040b44459de9d4462348371ae474bd0fbff6e1e4df5911a35290e67d1bd6",
+    "customer/market-selector.css": "db5ebb38e542de9028628deaf06dae0a4a0c2cdd3b4f0577027dcdb9d38224f9",
+    "customer/market.css": "9a6a141aeeb0650423e1f11ddd976b768404d249b05fff90d9107ffcf31c57ae",
+    "customer/message-draft-history.js": "bf9768184900063bb2065fab3a0027e87a64d9d69d4355e2dffe7e827a74c3ba",
+    "customer/message-editor.js": "5cbdedbed75344282f090cc1a00a12a4ade9f200e280009b0bdcc093d66164e9",
+    "customer/message-evidence.js": "4611966d47ab4d0b3da6316f14d5bb2cea71fb9aa420fce90eb657ce6b613082",
+    "customer/message-facts.js": "183e150622a0233937250660088491c69de344ab2b4cdc6f2f1de4d3ad9bb000",
+    "customer/message-meeting-options.js": "71f437f459532666d54a736152e29e57a50da8bc5da724a3c53fb9f9d87c84f2",
+    "customer/message-studio.js": "a23b80440627939f2a86e3ee0a95d5ee62efd7b6e345bfe1a50216b100456ccb",
+    "customer/message-translation-ui.js": "196d84dcffa6a95ef75c25a69d912085a0a9efd6913008f206e5bfb344fdad97",
+    "customer/message-translations.js": "e11a486886579a2ca5f149f5fbb7abafdedf921d3101a95b2e34143f31126371",
+    "customer/message-workspace.css": "766a705c1aef787167f40076f026e9c5caf501c490e3e926359a2160ff936622",
+    "customer/message-workspace.js": "3c5787821c75d2c93ce6f0b1d0e3bf75272ceee278a433907c9be6aac593bd6c",
+    "customer/original-scripts-ui.js": "0dccb1feabc14e0a0d3c1e64a3db7937653fc32ddbdc80029b4ba5fd5c1e05ac",
+    "customer/original-scripts.js": "1d29900e915dc1c35eb9b3895743f322135fa3471502f9b44a5ca8fb60ce29db",
+    "customer/outreach-engine.js": "61a84fdd4ac9f70fba51b6ce9ff0263c4e1f547caa58446d14f30ff3caa989b8",
+    "customer/outreach-ui.js": "7dc6867ee4cbd7a75b2464901c622079b862da92925c34d4d04d24e2ca9d92e2",
+    "customer/outreach.css": "b3b9eb2be98a852d3748cd885bcc432a414879d01576f8c8afba7137148abddd",
+    "customer/personal-template-library.js": "c41b4a7a93a58f07ccefc43d2e991f29128c884e5df69ad90587f7b88f7a748f",
+    "customer/premium.css": "866333d57a0adf2c920ecc0f909f069d102ac47bf8cc30bb4925f845672e5fd6",
+    "customer/production-gmail-ui.js": "352937bb1f28d009f052c232f3d9a07d65e31828387a817da24f6ce35c4f59b0",
+    "customer/research-brief.js": "ebb5cbaac1cc42921e8324d68a4f99ed376d0941ce0fa7655087b4b217b056c9",
+    "customer/research-costs.css": "419db04f2d95053cfe5d9c1f868a9f5a6958a819be8780530398d98d3fd77210",
+    "customer/rich-text-editor.js": "af312f99f77d8da3a9cd31f08cb76d77c48a7a111b22a8d6c322ad6dbc1d9e94",
+    "customer/rich-text.css": "e9676fe1145aa9ff04c79db63348596db5c1afa29110c949bb84f3ce3fd6cc99",
+    "customer/rich-text.js": "8dbad52075136f29e63a715281e827af3b7a8219a546296c053f6bb46d5deead",
+    "customer/server-bridge.js": "571c063a2141accf44fe8c3bae3d5baa481f50fe33887935a9421f0d01e69401",
+    "customer/setup-focus.css": "43cd5cdfe431b0c27c5046c815699fb78483f15b5af8310b52147f073ce62c37",
+    "customer/setup-operation-trace.js": "0d730f91b63b393e464f8a17593a0e34ba1cb1d6d937229bc7712ab5d1d7521d",
+    "customer/step-action-guidance.css": "48dbfb83af107ed6cf8b4eb45be327ad0c17aa24e0078a9c0d3267fc4c5650cd",
+    "customer/storyselling-native.js": "84b696e36a5f409a84608e84a4390667ab565e2fd5e6cd3f5865f0d0fceefa52",
+    "customer/strategy-integrity.js": "997e0032cae963cabb4d75171b567955292b1967282be48d51ef987b8d1b309f",
+    "customer/styles.css": "a09d6253de2cc519be6d60287283ea6eb174d3e97c48b18e8bdf8324e494c864",
+    "customer/subject-editor.js": "637571963282f15cf00bc1847d5300abca21fd9c97dff31dca90579fe7f857f1",
+    "customer/targeting-policy.js": "51294400e89c00b1a2a839a516106baaec69560f4960b0f4dd32f74902a62d7e",
+    "customer/test-email-ui.js": "dbdab4aa5433cb155bec321008418eb12a8c65af44b0400e990a589e8852bd4d",
+    "customer/translation-preview.js": "73164b0a15aa52fc2e6e86dff7fe6a62aab9083387bd8cb32e366efd6b5c7771",
+    "customer/trigger-preview.js": "17a353788404e9c171d30453a535d2e253bde38f8e6805071195ad004ce0fb4e",
+    "customer/workspace-controls.css": "dc96877e5fdc395535f7bd602d58f157b1ad10fbe4a536c194615d25e0ef2fa2",
+    "customer/workspace-save.css": "68ce7aecd1436b82f65916a55172185ee1d480a097f88e75ef4638dcb296cd2f",
+    "customer/writing-assistant-context.js": "7eebada1da778636002e2c22dde3e10f8ef1e94f6773a18484b767f8d1445ebb",
+    "customer/writing-assistant-ui.js": "4974fbf1516296fc6be0306ae78f4567ec8a05ff355dd63f850ba06e965047a8",
+    "customer/writing-assistant.css": "c5363989d003b6bb53c6b295f8cede1b54949c6a28a7f43f77843d19d9ca096b",
+    "customer/writing-assistant.js": "d2b48493ccb7dbae6d28a61f0c388360b0efe251c2b016a5c7376287cbd27469",
+    "customer/writing-references.css": "07f78bbed27f7b3a8b32b0ecbb5481f8ac318d8da75a49c34f375837c55de2fa",
+    "customer/writing-workspace.js": "ec3e87f63c4d492b595fd94dd379c8a361b0780e1628f3d4ad9097f22cf99291"
+  },
+  "sourceChangedOnDiskDuringRun": [],
+  "rendering": "Shipping customer HTML and CSS; initial app script tags removed, actual dependency modules loaded explicitly, actual outreach-ui.js with its static imports and Delivery module loader executed. App bootstrap/navigation are isolated fixture seams. Red CSS zoom evidence is retained in work/messages-zoom-red.txt and work/messages-zoom-red-geometry.txt; container reflow corrects a zero-width editor track without changing shell navigation.",
+  "fixture": {
+    "recipient": "Synthetic Alex Buyer, Operations Director at Buyer (buyer.example); fixture CRM contact alex@buyer.example",
+    "seller": "Synthetic Robin Lane at North Works",
+    "workspace": "Local fixture w1, user fixture-user",
+    "sourceEvidence": "Synthetic reviewed project/source evidence supplied by existing mounted message test helper; no real page research executed",
+    "translation": "Controlled Russian subject/body JSON returned through the actual translator/reviewer fetch path; four controlled responses per viewport. Native fluency and real provider execution are unproven."
+  },
+  "seams": [
+    "App-level PageQuality and Step 2 confirmation modules are not mounted; separate deterministic/full-application gates remain necessary",
+    "Appended fixture hooks expose state; audited actions use shipping DOM controls via keyboard",
+    "Synthetic authenticated workspace/session and CRM list/detail/activity/pipeline acknowledgements; CRM snapshots persist only in browser localStorage",
+    "Minimal fixture navigation toggles shipping step views; complete Setup/Profile/Buyers application bootstrap and sidebar state are outside this isolated Messages check",
+    "Initial saved manual draft, selected-person proof and fixture verified contact seeded explicitly; no claim of real contact verification",
+    "All external network intercepted, no real provider calls, sending, enqueueing, service activation or settings connection mutation",
+    "Translation provider/reviewer replies are controlled fixtures. Unavailable optional channel/content-library services report controlled fixture errors; these do not establish their integration acceptance",
+    "Explicit focus plus Enter activates shipping controls and details; automated keyboard interaction is not screen-reader or native assistive-technology acceptance",
+    "200% is CSS zoom on the root element, not native browser UI zoom"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100,
+      "cssZoom": 1,
+      "keyboardEditCancelExactRestore": true,
+      "keyboardSaveExactDraft": true,
+      "translationPreviewCancelPreservesSource": true,
+      "translationApplyAndSave": true,
+      "translationReopenExact": true,
+      "translationUndoAfterReopen": true,
+      "englishSourceUnchanged": true,
+      "translationProvider": "controlled-fixture-translator",
+      "translationProviderResponses": 4,
+      "realProviderCalls": 0,
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "dossier.built",
+        "dossier.built",
+        "dossier.built"
+      ],
+      "geometryChecks": [
+        {
+          "id": "outreach-email-subject",
+          "left": 699,
+          "right": 1367,
+          "width": 668,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 700,
+          "right": 1366,
+          "width": 666,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 713,
+          "right": 1353,
+          "width": 640,
+          "viewport": 1440
+        }
+      ],
+      "layout": {
+        "scrollWidth": 1440,
+        "viewportWidth": 1440,
+        "horizontalOverflow": false,
+        "bodyWidth": 666,
+        "bodyVisible": true
+      },
+      "delivery": {
+        "status": "PASS",
+        "recipient": "alex@buyer.example",
+        "approved": true,
+        "reason": "Added to flow. Review Delivery before sending or activating automation."
+      },
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "width": 720,
+      "height": 1100,
+      "cssZoom": 1,
+      "keyboardEditCancelExactRestore": true,
+      "keyboardSaveExactDraft": true,
+      "translationPreviewCancelPreservesSource": true,
+      "translationApplyAndSave": true,
+      "translationReopenExact": true,
+      "translationUndoAfterReopen": true,
+      "englishSourceUnchanged": true,
+      "translationProvider": "controlled-fixture-translator",
+      "translationProviderResponses": 4,
+      "realProviderCalls": 0,
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "dossier.built",
+        "dossier.built",
+        "dossier.built"
+      ],
+      "geometryChecks": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 685,
+          "width": 650,
+          "viewport": 720
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 684,
+          "width": 648,
+          "viewport": 720
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 40,
+          "right": 680,
+          "width": 640,
+          "viewport": 720
+        }
+      ],
+      "layout": {
+        "scrollWidth": 720,
+        "viewportWidth": 720,
+        "horizontalOverflow": false,
+        "bodyWidth": 648,
+        "bodyVisible": true
+      },
+      "delivery": {
+        "status": "PASS",
+        "recipient": "alex@buyer.example",
+        "approved": true,
+        "reason": "Added to flow. Review Delivery before sending or activating automation."
+      },
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "width": 390,
+      "height": 1100,
+      "cssZoom": 1,
+      "keyboardEditCancelExactRestore": true,
+      "keyboardSaveExactDraft": true,
+      "translationPreviewCancelPreservesSource": true,
+      "translationApplyAndSave": true,
+      "translationReopenExact": true,
+      "translationUndoAfterReopen": true,
+      "englishSourceUnchanged": true,
+      "translationProvider": "controlled-fixture-translator",
+      "translationProviderResponses": 4,
+      "realProviderCalls": 0,
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "dossier.built",
+        "dossier.built",
+        "dossier.built"
+      ],
+      "geometryChecks": [
+        {
+          "id": "outreach-email-subject",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 36,
+          "right": 354,
+          "width": 318,
+          "viewport": 390
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 35,
+          "right": 355,
+          "width": 320,
+          "viewport": 390
+        }
+      ],
+      "layout": {
+        "scrollWidth": 390,
+        "viewportWidth": 390,
+        "horizontalOverflow": false,
+        "bodyWidth": 318,
+        "bodyVisible": true
+      },
+      "delivery": {
+        "status": "PASS",
+        "recipient": "alex@buyer.example",
+        "approved": true,
+        "reason": "Added to flow. Review Delivery before sending or activating automation."
+      },
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "width": 1440,
+      "height": 1100,
+      "cssZoom": 2,
+      "keyboardEditCancelExactRestore": true,
+      "keyboardSaveExactDraft": true,
+      "translationPreviewCancelPreservesSource": true,
+      "translationApplyAndSave": true,
+      "translationReopenExact": true,
+      "translationUndoAfterReopen": true,
+      "englishSourceUnchanged": true,
+      "translationProvider": "controlled-fixture-translator",
+      "translationProviderResponses": 4,
+      "realProviderCalls": 0,
+      "sendRequests": 0,
+      "crmActivityTypes": [
+        "dossier.built",
+        "dossier.built",
+        "dossier.built",
+        "dossier.built"
+      ],
+      "geometryChecks": [
+        {
+          "id": "outreach-email-subject",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        },
+        {
+          "id": "outreach-email-body-rich",
+          "left": 780,
+          "right": 1304,
+          "width": 524,
+          "viewport": 1440
+        },
+        {
+          "id": "mw-add-flow",
+          "left": 778,
+          "right": 1306,
+          "width": 528,
+          "viewport": 1440
+        }
+      ],
+      "layout": {
+        "scrollWidth": 1440,
+        "viewportWidth": 1440,
+        "horizontalOverflow": false,
+        "bodyWidth": 524,
+        "bodyVisible": true
+      },
+      "delivery": {
+        "status": "PASS",
+        "recipient": "alex@buyer.example",
+        "approved": true,
+        "reason": "Added to flow. Review Delivery before sending or activating automation."
+      },
+      "pageErrors": [],
+      "consoleErrors": []
+    }
+  ],
+  "limitations": [
+    "No authenticated customer workflow, production release freshness, real provider correctness, semantic translation equivalence, native language fluency or business contact yield established",
+    "No actual email send or Gmail compose launch performed; Delivery handoff and exact recipient/current approval only",
+    "This controlled test does not cover every style generation, manual subject category mutation, paid InMail/Phone workflow, optional content-library modal, real sync conflict, screen reader or native zoom"
+  ],
+  "acceptance": {
+    "controlledMessagesWorkflow": "PASS",
+    "productionRelease": "NOT TESTED",
+    "authenticatedCustomerWorkflow": "BLOCKED",
+    "businessOutcome": "NOT ESTABLISHED",
+    "buyersStage": "OPEN"
+  },
+  "reproduction": {
+    "command": "node scripts/audit-messages-controlled-browser.cjs",
+    "requires": [
+      "Local Playwright",
+      "JSDOM",
+      "/usr/bin/chromium"
+    ],
+    "runnerSha256": "1a66afcc4bb48aef9c8eabab7b05393d17b87ac44ce0d1e6fd0f7c106f0357c3",
+    "provenance": "Successful work/messages-browser-fixture.cjs runner persisted here with logging cleanup and evidence metadata only; interaction/geometry checks unchanged."
+  },
+  "finalDiskHashVerification": {
+    "checkedAt": "2026-10-31T09:20:24.367Z",
+    "mismatches": []
+  },
+  "screenshots": [
+    {
+      "width": 1440,
+      "cssZoom": 1,
+      "files": [
+        "work/messages-1440-zoom1-preview.png",
+        "work/messages-1440-zoom1-restored.png",
+        "work/messages-1440-zoom1-delivery.png"
+      ]
+    },
+    {
+      "width": 720,
+      "cssZoom": 1,
+      "files": [
+        "work/messages-720-zoom1-preview.png",
+        "work/messages-720-zoom1-restored.png",
+        "work/messages-720-zoom1-delivery.png"
+      ]
+    },
+    {
+      "width": 390,
+      "cssZoom": 1,
+      "files": [
+        "work/messages-390-zoom1-preview.png",
+        "work/messages-390-zoom1-restored.png",
+        "work/messages-390-zoom1-delivery.png"
+      ]
+    },
+    {
+      "width": 1440,
+      "cssZoom": 2,
+      "files": [
+        "work/messages-1440-zoom2-preview.png",
+        "work/messages-1440-zoom2-restored.png",
+        "work/messages-1440-zoom2-delivery.png"
+      ]
+    }
+  ],
+  "cssZoomRegression": {
+    "before": {
+      "editorTrackCssPixels": 0,
+      "bodyRenderedWidth": 104,
+      "bodyRight": 1504,
+      "viewportWidth": 1440
+    },
+    "after": {
+      "bodyRenderedWidth": 524,
+      "bodyRight": 1304,
+      "viewportWidth": 1440
+    },
+    "assertions": "At initial view, translation preview and restored draft: visible subject/body/translation/footer controls must stay inside horizontal viewport bounds; body requires at least 240 rendered pixels. Native browser zoom is not tested.",
+    "redEvidence": "work/messages-zoom-red.txt",
+    "greenVisual": "work/messages-1440-zoom2-restored.png"
+  }
+}

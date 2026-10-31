@@ -4,11 +4,12 @@ const {
   normalizeEmail,buildGmailComposeUrl,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState
 }=require('../delivery-engine.js');
 
-const approvedPackage={
+const {approveMessage}=require('./helpers/approved-message.cjs');
+const approvedPackage=approveMessage({
   domain:'example.com',company:'Example Manufacturing',approved:true,approvedAt:'2026-08-23T08:00:00.000Z',
   drafts:{tone:'consultative',emailSubject:'Capacity expansion',emailBody:'Hello Anna,\n\nI noticed your expansion programme. Would it be useful to compare options?\n\nBest,'},
   dossier:{recommendedOffer:'Industrial engineering',market:'Sweden',matchedSignals:[{name:'Expansion'}]}
-};
+},{email:'anna@example.com',name:'Anna Fixture'});
 
 function emptyState(){return normalizeDeliveryState({});}
 
@@ -93,7 +94,7 @@ test('buildLearningSummary calculates funnel metrics and waits for minimum sampl
   let state=emptyState();
   const outreach=[];const pipeline=[];
   for(let i=0;i<5;i++){
-    const pkg={...approvedPackage,domain:`c${i}.com`,company:`C${i}`,drafts:{...approvedPackage.drafts,tone:i<3?'consultative':'direct'},dossier:{...approvedPackage.dossier,market:'Sweden',recommendedOffer:'Industrial engineering',matchedSignals:[{name:'Expansion'}]}};
+    const pkg=approveMessage({...approvedPackage,domain:`c${i}.com`,company:`C${i}`,drafts:{...approvedPackage.drafts,tone:i<3?'consultative':'direct'},dossier:{...approvedPackage.dossier,market:'Sweden',recommendedOffer:'Industrial engineering',matchedSignals:[{name:'Expansion'}]}},{email:`buyer${i}@c${i}.com`});
     state=confirmSend(state,pkg,`buyer${i}@c${i}.com`,`2026-08-23T0${i}:00:00.000Z`).state;
     outreach.push(pkg);
     pipeline.push({domain:pkg.domain,market:'Sweden',matchedSignals:[{name:'Expansion'}],stage:'Contacted'});
@@ -113,7 +114,7 @@ test('buildLearningSummary calculates funnel metrics and waits for minimum sampl
 test('learning recommendations are generated in selected Latvian',()=>{
   let state=emptyState();const outreach=[];const pipeline=[];
   for(let i=0;i<3;i++){
-    const pkg={...approvedPackage,domain:`lv${i}.com`,company:`LV ${i}`,drafts:{...approvedPackage.drafts,tone:'consultative'},dossier:{...approvedPackage.dossier,market:'Latvija',recommendedOffer:'Darba vietu aprīkojums',matchedSignals:[{name:'Paplašināšanās'}]}};
+    const pkg=approveMessage({...approvedPackage,domain:`lv${i}.com`,company:`LV ${i}`,drafts:{...approvedPackage.drafts,tone:'consultative'},dossier:{...approvedPackage.dossier,market:'Latvija',recommendedOffer:'Darba vietu aprīkojums',matchedSignals:[{name:'Paplašināšanās'}]}},{email:`buyer${i}@lv${i}.com`});
     state=confirmSend(state,pkg,`buyer${i}@lv${i}.com`,`2026-08-23T0${i}:00:00.000Z`).state;
     state=recordReply(state,pkg.domain,'Can we schedule a call?',`2026-08-24T0${i}:00:00.000Z`).state;
     outreach.push(pkg);pipeline.push({domain:pkg.domain,market:'Latvija',matchedSignals:[{name:'Paplašināšanās'}]});

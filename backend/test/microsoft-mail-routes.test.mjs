@@ -41,9 +41,10 @@ async function fixture(){
   DB.raw.prepare(`INSERT INTO workspaces(id,name,market,owner_user_id) VALUES('w1','Workspace','Global','u1')`).run();
   DB.raw.prepare(`INSERT INTO workspace_members VALUES('w1','u1','owner')`).run();
   DB.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(tokenHash,'u1');
+  DB.raw.exec("CREATE TABLE crm_contacts(id TEXT,workspace_id TEXT,company_id TEXT,name TEXT,title TEXT,work_email TEXT,normalized_email TEXT,email_status TEXT,source TEXT,verification_provider TEXT,linkedin_url TEXT,archived_at TEXT);CREATE TABLE approved_workflows(workspace_id TEXT,config_json TEXT);CREATE TABLE customer_workspace_state(workspace_id TEXT,payload_json TEXT);INSERT OR REPLACE INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('c1','w1','example.com','Example','prospect');INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,work_email,normalized_email,email_status,source) VALUES('buyer','w1','c1','Buyer Person','CEO','buyer@example.com','buyer@example.com','verified','apollo');");
   return {DB,token,env:{DB,APP_ORIGIN:'https://leadintel.ccgroup.lv',CUSTOMER_APP_URL:'https://leadintel.ccgroup.lv/customer/',GOOGLE_OAUTH_CLIENT_ID:'google-client',GOOGLE_OAUTH_CLIENT_SECRET:'google-secret',GMAIL_OAUTH_REDIRECT_URI:'https://api.example.test/api/integrations/gmail/callback',MICROSOFT_OAUTH_CLIENT_ID:'microsoft-client',MICROSOFT_OAUTH_CLIENT_SECRET:'microsoft-secret',MICROSOFT_OAUTH_REDIRECT_URI:'https://api.example.test/api/auth/microsoft/callback',MICROSOFT_MAIL_OAUTH_REDIRECT_URI:'https://api.example.test/api/integrations/microsoft-mail/callback',OAUTH_TOKEN_ENCRYPTION_KEY:encryption}};
 }
-function req(path,{method='GET',token,body,idempotencyKey}={}){return new Request(`https://api.example.test${path}`,{method,headers:{'x-leadintel-first-party':'1',...(token?{Cookie:`leadintel_session=${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},body:body?JSON.stringify(body):undefined});}
+function req(path,{method='GET',token,body,idempotencyKey}={}){if(body?.recipient)body={recipient_snapshot:{contactId:'buyer',name:'Buyer Person',title:'CEO',email:'buyer@example.com',linkedin:'',companyDomain:'example.com'},...body};return new Request(`https://api.example.test${path}`,{method,headers:{'x-leadintel-first-party':'1',...(token?{Cookie:`leadintel_session=${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},body:body?JSON.stringify(body):undefined});}
 
 test('owner can begin Microsoft mailbox consent with PKCE and least-privilege scopes',async()=>{
   const {env,DB,token}=await fixture();
@@ -129,7 +130,7 @@ test('manual Gmail and Microsoft sends remain available after more than twenty d
   }
 });
 
-test('Microsoft idempotent retry succeeds even when the shared daily limit is reached',async()=>{
+test('unbound historical Microsoft key stays held without provider submission',async()=>{
   const {env,DB,token}=await fixture();
   DB.raw.prepare(`INSERT INTO microsoft_mail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_by,sent_at,status,provider_status) VALUES('m-existing','w1','microsoft-existing-1234','example.com','buyer@example.com','Subject','u1',datetime('now'),'sent','accepted')`).run();
   for(let i=0;i<19;i++)DB.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,status,sent_at) VALUES(?,?,?,?,?,?,?,datetime('now'))`).run(`g${i}`,'w1',`gmail-${i}`,'example.com',`buyer${i}@example.com`,'Subject','sent');
@@ -137,7 +138,7 @@ test('Microsoft idempotent retry succeeds even when the shared daily limit is re
   try{
     const body={domain:'example.com',recipient:'buyer@example.com',subject:'Subject',body:'Body',idempotency_key:'microsoft-existing-1234'};
     const response=await handleSaasRoute(req('/api/integrations/microsoft-mail/send?workspace_id=w1',{method:'POST',token,body,idempotencyKey:body.idempotency_key}),env,{});
-    assert.equal(response.status,200);const result=await response.json();assert.equal(result.duplicate,true);assert.equal(result.message.id,'m-existing');assert.equal(called,false);
+    assert.equal(response.status,409);const result=await response.json();assert.equal(result.code,'DELIVERY_IDEMPOTENCY_CONFLICT');assert.equal(result.message.id,'m-existing');assert.equal(called,false);
   }finally{globalThis.fetch=originalFetch;}
 });
 
@@ -164,8 +165,8 @@ test('confirmed provider sends survive activity or CRM persistence failures with
     const {env,DB,token}=await fixture();const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret('refresh-1',key);
     DB.raw.prepare("INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);
     DB.raw.prepare("INSERT INTO microsoft_mail_connections(workspace_id,user_id,microsoft_email,encrypted_refresh_token,status) VALUES('w1','u1','owner@example.com',?,'connected')").run(encrypted);
-    DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('c1','w1','example.com','Example','prospect')");
-    DB.raw.exec(`CREATE TRIGGER fail_sync BEFORE INSERT ON ${failure} BEGIN SELECT RAISE(ABORT,'simulated sync failure'); END`);
+    DB.raw.exec("INSERT OR REPLACE INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('c1','w1','example.com','Example','prospect')");
+    DB.raw.exec(`CREATE TRIGGER fail_sync BEFORE INSERT ON ${failure} ${failure==='audit_events'?"WHEN NEW.event_type!='email.delivery_reserved'":''} BEGIN SELECT RAISE(ABORT,'simulated sync failure'); END`);
     let submissions=0;const originalFetch=globalThis.fetch;
     globalThis.fetch=async(url)=>{
       if(String(url).includes('oauth2.googleapis.com/token')||String(url).includes('login.microsoftonline.com/'))return Response.json({access_token:'access'});
@@ -190,7 +191,7 @@ function manualSend({env,token,provider,key='manual-regression-123456'}){const b
 
 test('manual provider sends reject archived CRM companies before provider submission',async()=>{
   for(const provider of ['gmail','microsoft-mail']){
-    const {env,DB,token}=await connectedFixture();DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('archived','w1','example.com','Archived','archived')");
+    const {env,DB,token}=await connectedFixture();DB.raw.exec("INSERT OR REPLACE INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status) VALUES('archived','w1','example.com','Archived','archived')");
     let calls=0;const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{calls++;return Response.json({access_token:'access',id:'sent',threadId:'sent'});};
     try{const response=await manualSend({env,token,provider});assert.equal(response.status,409);assert.equal((await response.json()).code,'CRM_COMPANY_ARCHIVED');assert.equal(calls,0);assert.equal(DB.raw.prepare('SELECT COUNT(*) count FROM gmail_messages').get().count,0);assert.equal(DB.raw.prepare('SELECT COUNT(*) count FROM microsoft_mail_messages').get().count,0);}finally{globalThis.fetch=originalFetch;}
   }
@@ -228,3 +229,5 @@ test('Gmail connection pre-selects the signed-in account, offers another on requ
   const denied=await handleSaasRoute(req('/api/integrations/gmail/start?workspace_id=w1'),env,{});
   assert.equal(denied.status,401);
 });
+test('a manual delivery key cannot report another recipient or subject as delivered',async()=>{for(const provider of ['gmail','microsoft-mail']){const {env,DB,token}=await fixture(),table=provider==='gmail'?'gmail_messages':'microsoft_mail_messages';DB.raw.prepare(`INSERT INTO ${table}(id,workspace_id,idempotency_key,domain,recipient,subject,status,sent_at) VALUES('prior','w1','fixed-delivery-key-1234','example.com','buyer@example.com','Original','sent',CURRENT_TIMESTAMP)`).run();for(const change of [{subject:'Different'},{recipient:'different@example.com'}]){const r=await handleSaasRoute(req(`/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',token,body:{domain:'example.com',recipient:'buyer@example.com',subject:'Original',body:'Text',idempotency_key:'fixed-delivery-key-1234',...change}}),env,{});assert.equal(r.status,409);assert.equal((await r.json()).code,'DELIVERY_IDEMPOTENCY_CONFLICT');}DB.raw.close();}});
+test('same manual delivery key cannot relabel changed text, HTML or mailbox as the old sent revision',async()=>{for(const provider of ['gmail','microsoft-mail']){const {env,DB,token}=await connectedFixture(),old=globalThis.fetch;let submissions=0;globalThis.fetch=async url=>{if(String(url).includes('token'))return Response.json({access_token:'token'});submissions++;return provider==='gmail'?Response.json({id:'sent',threadId:'thread'}):new Response(null,{status:202});};try{const body={domain:'example.com',recipient:'buyer@example.com',subject:'Original',body:'Text',idempotency_key:'content-bound-delivery-1234'},request=next=>req(`/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',token,body:next});assert.equal((await handleSaasRoute(request(body),env,{})).status,201);for(const update of [{body:'Changed text'},{html_body:'<p>Changed HTML</p>',text_body:'Changed HTML'}])assert.equal((await handleSaasRoute(request({...body,...update}),env,{})).status,409);DB.raw.exec('UPDATE '+(provider==='gmail'?'gmail_connections SET google_email':'microsoft_mail_connections SET microsoft_email')+"='different-sender@example.com' WHERE workspace_id='w1'");assert.equal((await handleSaasRoute(request(body),env,{})).status,409);assert.equal(submissions,1);}finally{globalThis.fetch=old;DB.raw.close();}}});

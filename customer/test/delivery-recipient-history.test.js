@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const D=require('../delivery-engine.js');
-const pkg=(person='alice',approvedAt='2026-10-24T08:00:00Z')=>({domain:'buyer.example',company:'Buyer',channel:'email',selectedPersonId:person,approvedAt,approved:true,drafts:{emailSubject:'Hello '+person,emailBody:'Approved email for '+person}});
+const D=require('../delivery-engine.js'),{approveMessage}=require('./helpers/approved-message.cjs');
+const pkg=(person='alice',approvedAt='2026-10-24T08:00:00Z')=>approveMessage({domain:'buyer.example',company:'Buyer',channel:'email',selectedPersonId:person,approvedAt,approved:true,drafts:{emailSubject:'Hello '+person,emailBody:'Approved email for '+person}},{personId:person,email:person+'@buyer.example',name:person+' Fixture'});
 const sent=(state,person='alice',approvedAt)=>D.confirmSend(state,pkg(person,approvedAt),person+'@buyer.example','2026-10-24T09:00:00Z');
 test('separate buyers and approvals retain separate sends through save/reload',()=>{
  let state=sent({}).state;state=sent(state,'bob').state;state=sent(state,'alice','2026-10-25T08:00:00Z').state;
@@ -24,7 +24,7 @@ test('legacy sent records block only their recipient and ambiguous company repli
  assert.equal(specific.error,'');assert.equal(specific.record.recipientEmail,'bob@buyer.example');assert.equal(specific.state.opportunities.find(r=>r.recipientEmail==='alice@buyer.example').replies.length,0);
 });
 test('history, replies and scorecard retain records beyond former display limits',()=>{
- let state={};for(let i=0;i<70;i++)state=D.confirmSend(state,{...pkg(),domain:`company${i}.example`},`alice@company${i}.example`,'2026-10-24T09:00:00Z').state;
+ let state={};for(let i=0;i<70;i++)state=D.confirmSend(state,approveMessage({...pkg(),domain:`company${i}.example`},{email:`alice@company${i}.example`}),`alice@company${i}.example`,'2026-10-24T09:00:00Z').state;
  for(let i=0;i<25;i++)state=D.recordReply(state,'company0.example','Reply '+i,`2026-10-24T10:${String(i).padStart(2,'0')}:00Z`).state;
  state=D.normalizeDeliveryState(JSON.parse(JSON.stringify(state)));
  assert.equal(state.opportunities.length,70);assert.equal(state.opportunities.find(r=>r.domain==='company0.example').replies.length,25);

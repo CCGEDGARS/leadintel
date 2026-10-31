@@ -83,7 +83,7 @@ function prepareCrmWrite(db,statement,authority){
 async function executeCrmWrites(db,context,statements,primaryStatementIndex=0){
   let result;for(let attempt=0;attempt<3;attempt++){
     await context?.guard?.();const authority=context?.writeAuthority?.();
-    result=await db.batch(statements.map(statement=>prepareCrmWrite(db,statement,authority)));
+    const assertions=context?.messageAssertions||[];try{result=(await db.batch([...assertions,...statements.map(statement=>prepareCrmWrite(db,statement,authority))])).slice(assertions.length);}catch(cause){await context?.guard?.();if(assertions.length&&/malformed JSON/i.test(String(cause.message)))throw crmError('CRM_SCRIPT_CONTEXT_CHANGED','Message context changed. Your draft is preserved; reload and review.',409);throw cause;}
     if(!authority||Number(result?.[primaryStatementIndex]?.meta?.changes||0)>0)return result;
     // Refresh only the local write after a benign source save. A revoked or
     // materially changed workflow throws here; provider work is never replayed.

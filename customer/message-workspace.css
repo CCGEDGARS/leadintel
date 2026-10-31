@@ -712,3 +712,27 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-message-footer button[hidden]{display:none!important}
 #message-studio .mw-message-footer #mw-add-flow:focus-visible,#message-studio .mw-message-footer #mw-flow-resolve:focus-visible{outline:3px solid #79a590;outline-offset:3px}
 @media(max-width:720px){#message-studio .mw-message-footer #mw-add-flow,#message-studio .mw-message-footer #mw-flow-resolve{grid-column:1;grid-row:auto;width:100%}}
+
+/* messages-container-reflow-20261031-v1: zoom and narrow panes reduce the
+   composer's available width without changing viewport media queries. */
+#message-studio{container:message-composer / inline-size}
+@container message-composer (max-width:900px){
+ #message-studio .mw-layout{grid-template-columns:minmax(0,1fr)}
+ #message-studio .mw-styles{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #message-studio .mw-style,#message-studio .mw-style:last-child{text-align:center}
+ #message-studio .mw-editor .outreach-drafts{padding:18px}
+ #message-studio .mw-editor-head{display:block}
+ #message-studio #mw-header-actions{width:100%;margin-top:16px;justify-content:flex-start}
+ #message-studio .mw-message-footer{grid-template-columns:minmax(0,1fr)}
+ #message-studio .mw-message-footer #mw-add-flow,#message-studio .mw-message-footer #mw-flow-resolve{grid-column:1;grid-row:auto;width:100%}
+ #message-studio .mw-flow-readiness{align-items:flex-start;flex-direction:column}
+ #message-studio .mw-language-row{flex-wrap:wrap}
+ #message-studio .mw-language-row>button:first-child{flex-basis:100%}
+ #message-studio #mw-language-tools.mw-disclosure>summary{padding-right:0}
+ #message-studio #mw-language-tools>summary .mw-language-quick{position:static;margin-top:12px}
+ #message-studio .mw-translation-actions>span{flex-basis:100%}
+ #step-6.message-workspace #message-studio #mw-sender-details{grid-template-columns:minmax(0,1fr)}
+}
+@container message-composer (max-width:400px){
+ #message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
