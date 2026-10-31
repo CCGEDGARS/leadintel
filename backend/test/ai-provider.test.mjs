@@ -128,9 +128,17 @@ test('OpenAI web search forwards the caller abort signal to the upstream request
   assert.equal(requestSignal,controller.signal);
 });
 
-test('web-search route forwards the incoming request abort signal',()=>{
-  const routes=fs.readFileSync(new URL('../src/ai-routes.js',import.meta.url),'utf8');
-  assert.match(routes,/searchWorkspaceResearch\(env,workspaceId,\{query,maxResults,purpose:body\.purpose===.*contact_research.*signal:request\.signal\}\)/);
+test('web-search route links request cancellation to its bounded provider signal and prevents fallback',async()=>{
+  const {handleAiRoute}=await import('../src/ai-routes.js'),{storageDb}=await import('./workspace-storage-fixture.mjs'),{sha256}=await import('../src/security.js'),{importAesKey,encryptSecret}=await import('../src/oauth.js');
+  const DB=storageDb(),env={DB,OAUTH_TOKEN_ENCRYPTION_KEY:btoa('a'.repeat(32))},controller=new AbortController(),old=globalThis.fetch;let providerSignal,calls=0;
+  DB.raw.prepare("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES('storage-owner',?,datetime('now','+1 day'))").run(await sha256('abort-test'));
+  const encrypted=await encryptSecret('private-test-key',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
+  for(const provider of ['openai','gemini'])DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES('storage-w1',?,?,'hidden','test',?)").run(provider,encrypted,provider==='openai'?1:0);
+  globalThis.fetch=async(_url,options)=>{calls++;providerSignal=options.signal;assert.equal(providerSignal.aborted,false);controller.abort();assert.equal(providerSignal.aborted,true);throw new DOMException('Canceled','AbortError');};
+  try{
+    const response=await handleAiRoute(new Request('https://api.test/api/ai/web-search?workspace_id=storage-w1',{method:'POST',signal:controller.signal,headers:{Cookie:'leadintel_session=abort-test','Content-Type':'application/json'},body:JSON.stringify({query:'Example projects'})}),env);
+    assert.equal(response.status,499);assert.equal(providerSignal.aborted,true);assert.equal(calls,1);assert.equal(DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='ai.web_search_completed'").get().n,0);
+  }finally{globalThis.fetch=old;}
 });
 
 test('Anthropic adapter uses Messages API and extracts text',async()=>{

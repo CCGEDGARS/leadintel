@@ -55,7 +55,7 @@ test('direct HTML extraction with split headings and a footer logo keeps the fin
 });
 test('official-only inventory restores from CRM with no buyer timestamp or selected buyers',()=>{
  const vm=require('node:vm'),fs=require('node:fs'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),candidate={...company,people:[]},inventory=D.officialCompanyContactInventory(pages,company),detail={company:{normalized_domain:company.domain},intelligence:{research_snapshot:{buyerResearch:{version:2,discovery:{officialContactInventory:inventory},buyers:[]}}}};
- const ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
+ const ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};require('./helpers/crm-hydration-context.cjs')(ctx);vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);assert.equal(candidate.buyerDiscovery.officialContactInventory.contacts.length,7);assert.equal(candidate.people.length,0);assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),false);
  candidate.buyerDiscovery={};detail.company.normalized_domain='other.example';assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),false);assert.equal(candidate.buyerDiscovery.officialContactInventory,undefined);
  detail.company.normalized_domain=company.domain;candidate.publicContactStatus='loading';assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),false);

@@ -84,7 +84,7 @@ test('canceling buyer-fit never starts a fallback provider request',async()=>{
   };
   try{
     const response=await handleAiRoute(generationRequest('buyer-fit',controller.signal),env,{});
-    assert.equal(response.status,502);assert.equal(calls.length,1);assert.deepEqual(env.DB.lastUsed,[]);
+    assert.equal(response.status,499);assert.equal(calls.length,1);assert.deepEqual(env.DB.lastUsed,[]);
   }finally{globalThis.fetch=originalFetch;}
 });
 

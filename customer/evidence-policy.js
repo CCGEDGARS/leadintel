@@ -21,7 +21,7 @@
   function publication(source={}){
     const metadata=source.metadata||{};
     const fields=[['date',source.date],['publishedDate',source.publishedDate],['published_at',source.published_at],['datePublished',source.datePublished],['metadata.publishedTime',metadata.publishedTime],['metadata.publishedDate',metadata.publishedDate],['metadata.datePublished',metadata.datePublished],['article:published_time',metadata['article:published_time']],['metadata.dcDate',metadata.dcDate]];
-    for(const [dateSource,value] of fields){const date=parseDate(value);if(date)return {date,dateSource:source.dateSource||dateSource};}
+    for(const [dateSource,value] of fields){if(dateSource==='date'&&/detected|fetched|scraped|extracted|verified|checked|retriev/i.test(source.dateSource||''))continue;const date=parseDate(value);if(date)return {date,dateSource:(dateSource==='date'?source.dateSource:'')||dateSource};}
     const url=String(source.url||metadata.sourceURL||'');let match=url.match(/\/(19\d{2}|20\d{2})\/(\d{1,2})\/(\d{1,2})(?:\/|$)/);if(match){const date=calendarDate(match[1],match[2],match[3]);if(date)return {date,dateSource:'dated-url'};}
     const title=clean(source.title||metadata.title);let date=parseDate(title);if(date)return {date,dateSource:'page-title'};
     // Publication datelines only: never turn footer copyright, scrape time or a bare planning year into publication time.

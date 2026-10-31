@@ -1,0 +1,44 @@
+[
+  {
+    "width": 1440,
+    "qualifiedCount": 2,
+    "requestedCount": 50,
+    "honestShortfall": true,
+    "keyboardSelection": true,
+    "companyHandoff": true,
+    "retainedSources": true,
+    "selectedReload": true,
+    "noAutomaticResearchOnReload": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "Shipping Companies DOM/modules/CSS and controls; seeded evidence-backed company fixtures; controlled session, navigation seam and CRM acknowledgements; unavailable provider responses; no actual discovery/customer/provider accuracy or usable-buyer result"
+  },
+  {
+    "width": 720,
+    "qualifiedCount": 2,
+    "requestedCount": 50,
+    "honestShortfall": true,
+    "keyboardSelection": true,
+    "companyHandoff": true,
+    "retainedSources": true,
+    "selectedReload": true,
+    "noAutomaticResearchOnReload": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "Shipping Companies DOM/modules/CSS and controls; seeded evidence-backed company fixtures; controlled session, navigation seam and CRM acknowledgements; unavailable provider responses; no actual discovery/customer/provider accuracy or usable-buyer result"
+  },
+  {
+    "width": 390,
+    "qualifiedCount": 2,
+    "requestedCount": 50,
+    "honestShortfall": true,
+    "keyboardSelection": true,
+    "companyHandoff": true,
+    "retainedSources": true,
+    "selectedReload": true,
+    "noAutomaticResearchOnReload": true,
+    "overflow": false,
+    "pageErrors": 0,
+    "scope": "Shipping Companies DOM/modules/CSS and controls; seeded evidence-backed company fixtures; controlled session, navigation seam and CRM acknowledgements; unavailable provider responses; no actual discovery/customer/provider accuracy or usable-buyer result"
+  }
+]

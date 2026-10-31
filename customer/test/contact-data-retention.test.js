@@ -5,9 +5,11 @@ test('retained paid data rehydrates without an aggregate research timestamp and 
  const person={id:'klas',name:'Klas Nilsson',title:'Head of Procurement'},candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[person]};
  const data={version:1,domain:'example.com',personId:'klas',identityName:'Klas Nilsson',checkedAt:'2026-10-21T18:00:00Z',status:'updated',profile:{status:'provider_reported',title:'Head of Procurement',city:'Stockholm'},phone:{status:'not_requested'},costMicro:14500,callIds:['saved-call']};
  const ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
+ require('./helpers/crm-hydration-context.cjs')(ctx);
  vm.runInNewContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  const detail={company:{normalized_domain:'example.com'},contactData:[data],intelligence:{research_snapshot:{buyerResearch:{buyers:[]}}}};
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);
+ assert.equal(candidate.people[0],person,'company context restore must retain the active buyer owner reference');
  const stored=JSON.parse(JSON.stringify(D.normalizeDiscoveryState({selectedProspects:[candidate]}))),restored=D.normalizeDiscoveryState(stored).selectedProspects[0].people[0];
  assert.equal(restored.contactData.profile.city,'Stockholm');assert.equal(restored.contactData.status,'updated');assert.equal(restored.contactData.callIds[0],'saved-call');
  const wrong={...candidate,people:[{...person,name:'Someone Else',contactData:null}]};ctx.restoreNewerBuyerResearch(wrong,detail);assert.equal(wrong.people[0].contactData,null);

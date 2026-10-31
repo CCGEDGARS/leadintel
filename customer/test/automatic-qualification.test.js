@@ -54,9 +54,9 @@ test('a provider failure on retry clears an old semantic rejection instead of re
  assert.deepEqual(failures,[502]);assert.equal(result.buyerFitIssue,undefined);
 });
 test('a malformed sibling row cannot discard a valid company assessment',async()=>{
- const second={...raw,domain:'other.se'},failures=[];
+ const second={...raw,company:'Other',domain:'other.se',evidence:[{...evidence[0],url:'https://other.se/products',text:evidence[0].text.replaceAll('Nordic','Other'),sourceRead:true}]},failures=[];
  const results=await D.researchBuyerFit([raw,second],profile,async()=>JSON.stringify({companies:[{domain:raw.domain,fit:90,offerId:'offer-0',reason:'Assembly uses frames.',buyerRole:'manufacturer',evidence:[{sourceId:'source-0',quote:evidence[0].text}]},null]}),{onFailure:(error,batch)=>failures.push(batch.map(c=>c.domain))});
- assert.equal(results[0].buyerFit?.fit,90);assert.deepEqual(failures,[['other.se']]);
+ assert.equal(results[0].buyerFit?.fit,90);assert.equal(results[1].buyerFitIssueCode,'invalid_assessment');assert.deepEqual(failures,[['other.se']]);
 });
 test('70 fit without signals stays a monitored lookalike; signals complete qualification',()=>{
  const c={...candidate,evidence:[evidence[0],{...evidence[2],date:'',text:'Nordic operates equipment assembly for renewable energy machines in Sweden.'}]};

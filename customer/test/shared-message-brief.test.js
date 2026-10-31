@@ -61,11 +61,14 @@ test('the compact brief displays a concise verbatim development sentence while r
  const source='Kontakt](https://buyer.example/contact) News and stories. Stegra is implementing changes to the organization of its project in Boden. This includes changes to the management team. '+ 'Additional source detail. '.repeat(25),c=candidate(source),brief=O.buildResearchBrief(c,profile,person),UI=require('../company-dossier-ui'),html=UI.render(c,{profile,person}),summary=html.split('aria-label="Message brief"')[1].split('</section>')[0];
  assert.equal(brief.facts[0].quote,source.trim());assert.equal(brief.facts[0].text,'Stegra is implementing changes to the organization of its project in Boden.');assert.match(summary,/implementing changes/);assert.doesNotMatch(summary,/Kontakt|Additional source detail/);
 });
-test('the original dossier serializer keeps validated aggregate quotes after dropping per-provider claim lists',()=>{
+test('the original dossier serializer preserves receipt-bound historical quotes separately from current verification',()=>{
  const c=candidate(),d=c.buyerDiscovery.companyDossier;delete d.plan;d.receipts=d.passes.map(pass=>({provider:pass.provider,status:'complete',phase:'complete',sourceCount:1,readCount:1}));
  d.passes=d.passes.map(pass=>({provider:pass.provider,webSearch:pass.webSearch,status:pass.status,sources:pass.sources}));
- const brief=O.buildResearchBrief(c,profile,person);assert.ok(brief.facts.some(row=>row.quote===quote));assert.equal(brief.buyer.verified,true);assert.equal(brief.researchStatus,'partial');
- d.receipts=[];assert.equal(O.buildResearchBrief(c,profile,person).facts.length,0);
+ const first=D.safe(d,c.domain),reopened=D.safe(JSON.parse(JSON.stringify(first)),c.domain);
+ for(const saved of [first,reopened]){assert.equal(saved.status,'partial');assert.equal(saved.historicalEvidence.status,'requires_reverification');assert.equal(saved.historicalEvidence.checkedAt,d.checkedAt);assert.ok(saved.historicalEvidence.facts.some(row=>row.quote===quote));assert.ok(saved.historicalEvidence.people.some(row=>row.name===person.name));assert.equal(saved.facts.length,0);assert.equal(saved.people.length,0);}
+ const Discovery=require('../discovery-engine'),CRM=require('../crm-engine'),normalized=Discovery.normalizeDiscoveryState({selectedProspects:[{...c,buyerSearchMode:'user_selected_target',buyerDiscovery:{companyDossier:reopened}}]}).selectedProspects[0],crm=CRM.mapDiscoveryCandidateToCrm(normalized),restored=D.safe(JSON.parse(JSON.stringify(crm.intelligence.research_snapshot.buyerResearch.discovery.companyDossier)),c.domain);assert.equal(restored.historicalEvidence.facts[0].quote,quote);assert.equal(restored.people.length,0);
+ const brief=O.buildResearchBrief({...c,buyerDiscovery:{companyDossier:reopened}},profile,person);assert.equal(brief.facts.length,0);assert.equal(brief.buyer.verified,false);assert.equal(brief.researchStatus,'partial');
+ d.receipts=[];assert.equal(D.safe(d,c.domain).historicalEvidence,null);
 });
 test('legacy aggregate compatibility requires actual matching completed extraction receipts and cannot bypass a newer research plan',()=>{
  const c=candidate(),d=c.buyerDiscovery.companyDossier;delete d.plan;d.passes=d.passes.map(pass=>({provider:pass.provider,webSearch:true,status:'complete',sources:pass.sources}));

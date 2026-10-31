@@ -19,3 +19,27 @@ test('compact extraction restores quotes from supplied passage IDs and searches 
 
 test('compact references cannot replace the source quote or point to an invented passage',()=>{const passages=dossierPassages([{url:'https://example.com/team',text:'Alex Smith is Operations Director.'}]);const result=restoreDossierEvidence({people:[{name:'Alex Smith',title:'Operations Director',evidenceId:'s0p0',quote:'forged',sourceUrl:'https://attacker.example/'},{name:'Jane Doe',evidenceId:'invented'}]},passages);assert.equal(result.people.length,1);assert.equal(result.people[0].quote,'Alex Smith is Operations Director.');assert.equal(result.people[0].sourceUrl,'https://example.com/team');});
 test('contact-only success cannot cache failed leadership research and retry resumes the missing family',async()=>{const company={company:'Example',domain:'example.com'};let first=true,checkpoint;const calls=[];const common={connections:connections.slice(0,2),company,onCheckpoint:async r=>{checkpoint=r},search:async(c,q)=>{const family=q.includes('CONTACT ROUTES')?'contacts':'leadership';calls.push(c.provider+':'+family);if(first&&family==='leadership')throw Error('Unavailable');return {web_search:true,results:[{url:'https://example.com/team'}]};},read:async()=>({text:'Alex Smith is Head of Learning at Example. Email press@example.com for media.'}),extract:async()=>({people:[{name:'Alex Smith',title:'Head of Learning',sourceUrl:'https://example.com/team',quote:'Alex Smith is Head of Learning at Example.'}],facts:[],channels:[]})};const partial=await runDossierResearch(common);assert.equal(partial.status,'partial');first=false;calls.length=0;const complete=await runDossierResearch({...common,prior:checkpoint});assert.equal(complete.status,'complete');assert.deepEqual(calls,['openai:leadership','anthropic:leadership']);});
+
+test('Anthropic interrupted search at its turn cap stays partial instead of satisfying dossier coverage',async()=>{
+ const {searchAnthropicWeb}=await import('../src/dossier-provider-search.js');let calls=0;
+ const result=await searchAnthropicWeb({apiKey:'test',model:'test',query:'Example current leaders',fetchImpl:async()=>{calls++;return Response.json({stop_reason:'pause_turn',content:[{type:'server_tool_use',name:'web_search'},{type:'web_search_tool_result',content:[{type:'web_search_result',url:'https://example.com/team'}]}]});}});
+ assert.equal(calls,3);assert.equal(result.web_search,true,'the dispatched tool execution remains recorded');assert.equal(result.status,'partial');assert.match(result.warning,/incomplete/i);
+ const dossier=await runDossierResearch({connections:connections.slice(0,2),company:{company:'Example',domain:'example.com'},search:async()=>result,read:async()=>({text:'Example manufactures valves.'}),extract:async()=>({facts:[{kind:'project',text:'Example manufactures valves.',quote:'Example manufactures valves.',sourceUrl:'https://example.com/team'}]})});
+ assert.equal(dossier.status,'partial');assert.ok(dossier.passes.every(p=>p.searchFamilies.every(f=>f.status==='partial')));
+});
+for(const badPage of [
+ {success:false,data:{text:'Example manufactures industrial valves and pumps.'}},
+ {data:{text:'Example manufactures industrial valves and pumps.',metadata:{statusCode:404}}},
+ {data:{text:'Example manufactures industrial valves and pumps.',metadata:{sourceURL:'https://example.com/team',url:'https://unrelated.example/team'}}},
+ {data:{text:'Example manufactures industrial valves and pumps.',metadata:{sourceURL:'http://localhost/private'}}}
+])test('dossier rejects failed or contradictory source identity '+JSON.stringify(badPage),async()=>{
+ let extracts=0;const result=await runDossierResearch({connections:connections.slice(0,2),company:{company:'Example',domain:'example.com'},search:async()=>({web_search:true,results:[{url:'https://example.com/team'}]}),read:async()=>badPage,extract:async()=>{extracts++;return {}}});
+ assert.equal(extracts,0);assert.equal(result.status,'partial');assert.ok(result.passes.every(p=>p.sourceReads.every(r=>r.status==='failed')));
+});
+
+test('a complete cached dossier is revalidated before reuse without repeating successful research',async()=>{
+ const company={company:'Example',domain:'example.com'},common={connections:connections.slice(0,2),company,search:async()=>({web_search:true,results:[{url:'https://example.com/team'}]}),read:async()=>({text:'Alex Smith is Operations Director at Example.'}),extract:async()=>({people:[{name:'Alex Smith',title:'Operations Director',quote:'Alex Smith is Operations Director at Example.',sourceUrl:'https://example.com/team'}]})};
+ const prior=await runDossierResearch(common);prior.people[0].name='Fabricated Person';let calls=0;
+ const result=await runDossierResearch({...common,prior,search:async()=>{calls++;throw Error('Must reuse settled research');}});
+ assert.equal(calls,0);assert.equal(result.people[0].name,'Alex Smith');assert.equal(result.status,'complete');
+});
