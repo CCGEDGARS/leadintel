@@ -95,7 +95,7 @@ The seller scrape receipt fix retains actual successful-read flags and timestamp
 
 Investigate an incident by comparing the safe operation/context ID with existing backend audits, CRM script/activity revisions, source/provider execution receipts, idempotency/queue/receipt records and the original approved recipient snapshot. Preserve both conflict versions and uncertain-submission evidence. No numeric latency/error/yield baseline, production alarm delivery, new monitoring platform or SLA has been demonstrated.
 
-## Verification record and remaining fields
+## Verification record and release continuation
 
 Reproductions used actual shipping helpers and mounted DOM modules, controlled provider/CRM responses and local full-migration backend databases. Source-only assertions remain supplementary. Meaningful positive paths accompany rejected races: exact approved identity, current compose, already-activated automatic queueing, real approval/save-reopen, supported factual observations and formatting/Undo.
 
@@ -111,17 +111,17 @@ Scoped evidence available during preparation:
 - Local release contract: backend health marker `messages_integrity_version:20261031-messages-v1`; 12 new mandatory Messages artifact/cache gates bring the contract to 546 checks. The initial 545-gate contract passed all 1,757 local source assertions and 68 focused release/proof/dependency/cache tests; the additional composer reflow gate is verified by the final release checks and Chromium run. Cache token `messages-reliability=20261031-v1` covers changed recursive static references and the Delivery lazy asset; this is local artifact verification, not a live release proof.
 - Syntax and whitespace checks passed in owned scopes. These scoped runs do not replace the pending final full-tree gates.
 
-Root finalization fields — deliberately unfilled until the matching evidence exists:
+Final local evidence and permanent release continuation:
 
 | Field | Pending final evidence |
 |---|---|
-| Final executable Git SHA and frozen source hashes | **PENDING ROOT FINALIZATION** |
+| Final executable Git SHA and frozen source hashes | `c4c7579e8d4aa6a6e80f2ed1120831f0b25d19f8`; 85 loaded browser source hashes match. The following documentation-only commit adds the permanent PR continuation. |
 | Full customer suite, including root legacy suites | **PASS — 4,934/4,934, zero failures/skips; `work/messages-customer-verified.txt`** |
 | Full backend suite | **PASS — 1,455/1,455 frozen backend tests; `work/messages-backend-final.txt`** |
 | Final build/dependency/syntax/whitespace gates | **PASS — static build, release/dependency checks and changed JavaScript syntax/whitespace; final exact revision CI remains required** |
 | Controlled Chromium artifact, viewport outcomes and final source-hash match | **PASS — [browser evidence](evidence/2026-10-31-messages-controlled-browser.json), 2026-10-31T09:19:31.694Z; 85/85 matching loaded source hashes; 1440/720/390px and 200% CSS zoom; zero sends/page/console errors** |
 | Final independent review against frozen runtime | **PASS — no unresolved Critical/Important findings in reviewed runtime; exact original reproductions and final Delivery 48/48 independently green. Independent real Chromium confirmed final CSS geometry and 24/24 layout tests; only the stylesheet cache URL changed JavaScript since the prior review.** |
-| PR, CI and exact production proof | **NOT TESTED — PENDING FINAL PR/PROOF** |
+| PR, CI and exact production proof | **NOT TESTED in this pre-release snapshot** — [audit PR #786](https://github.com/CCGEDGARS/leadintel/pull/786) records final head/main CI, exact merged SHA, manifest/backend and downloaded release proof. Never substitute the earlier Buyers proof. |
 
 A later documentation-only handoff must not claim its own deployment merely by naming a prior runtime revision. Keep final release evidence in the permanent PR/proof continuation and distinguish local code, exact release, authenticated workflow and business outcome.
 
@@ -142,3 +142,5 @@ With an owner-approved authenticated workspace, acceptance must observe:
 7. For any separately authorized real send, bind the exact recipient snapshot/message/mailbox and operation/idempotency key; inspect provider and DB receipts, uncertain submission handling, reload/reopen and duplicate prevention. Reconcile known and uncertain charges rather than assuming zero. Actual sending, paid verification, connection changes and activation require their own explicit existing authorization; this audit/handoff grants none.
 
 Authenticated absence is a real blocker. Controlled tests, build success and an exact code release cannot substitute for these observations or for real provider correctness, delivery and business outcomes.
+
+Permanent Instruction 6 evidence continuation: [Messages audit PR #786](https://github.com/CCGEDGARS/leadintel/pull/786). Complete executable revision `c4c7579e8d4aa6a6e80f2ed1120831f0b25d19f8` contains the tested implementation, fixture regressions, controlled browser record and enlarged-layout fix. The following documentation-only commit changes no executable behavior. Final exact head/main CI and inspected production proof belong to the PR; this avoids a documentation-only deployment loop to describe its own release. Authenticated/customer-business acceptance remains BLOCKED and Buyers OPEN.
