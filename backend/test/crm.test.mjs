@@ -338,3 +338,45 @@ sqliteTest('corporate newsroom and investor aliases reuse saved CRM identity and
  await assert.rejects(upsertCrmCompany(db,ctx(),{company:{...candidate('polestar.com').company,pipeline_stage:'Qualified'}}),error=>error.code==='CRM_COMPANY_SUPPRESSED');
  const other=await upsertCrmCompany(db,ctx('w2'),candidate('media.polestar.com'));assert.notEqual(other.company.id,original.company.id);
 });
+
+sqliteTest('company identity cannot be silently replaced by a supplied CRM id or unrelated website',async()=>{
+ const db=new D1Db(),saved=await upsertCrmCompany(db,ctx(),candidate());
+ await assert.rejects(upsertCrmCompany(db,ctx(),{company:{id:saved.company.id,company_name:'Different',domain:'other.example'}}),error=>error.code==='CRM_COMPANY_IDENTITY_CONFLICT');
+ await assert.rejects(upsertCrmCompany(db,ctx('w2'),{company:{id:saved.company.id,company_name:'Different',domain:'example.com'}}),error=>error.code==='CRM_COMPANY_NOT_FOUND');
+ await assert.rejects(upsertCrmCompany(db,ctx(),{company:{company_name:'Different',domain:'example.com',website:'https://other.example/'}}),error=>error.code==='CRM_COMPANY_IDENTITY_CONFLICT');
+ await assert.rejects(crm.updateCrmCompany(db,ctx(),saved.company.id,{website:'https://other.example/'}),error=>error.code==='CRM_COMPANY_IDENTITY_CONFLICT');
+ const detail=await getCrmCompany(db,ctx(),saved.company.id);assert.equal(detail.company.company_name,'Example Manufacturing');assert.equal(detail.company.normalized_domain,'example.com');assert.equal((await listCrmCompanies(db,ctx(),{})).companies.length,1);
+ const alias=await upsertCrmCompany(db,ctx(),{company:{id:saved.company.id,company_name:'Example Manufacturing',domain:'media.example.com',website:'https://media.example.com/news'}});assert.equal(alias.company.id,saved.company.id);
+});
+
+sqliteTest('replacing CRM intelligence retains immutable complete previous snapshots in scoped paginated history',async()=>{
+ const db=new D1Db(),pack=candidate();pack.contacts=[];pack.intelligence.research_snapshot={companyResearch:{version:1,domain:'example.com',strategyFingerprint:'historical',buyerRoles:'Manual engineering role',buyerRolesSource:'manual'},buyerResearch:{discovery:{companyDossier:{facts:[{quote:'Original dossier quote'}]}}}};
+ pack.intelligence.evidence=Array.from({length:28},(_,i)=>({url:`https://example.com/source/${i}`,text:`Quote ${i}`}));
+ const saved=await upsertCrmCompany(db,ctx(),pack);
+ const replacement={matched_signals:[],evidence:[{url:'https://example.com/new',text:'New quote'}],research_snapshot:{companyResearch:{version:1,domain:'example.com',strategyFingerprint:'new',qualification:{eligible:false}}}};
+ await crm.upsertCrmIntelligence(db,ctx(),saved.company.id,replacement);
+ await crm.upsertCrmIntelligence(db,ctx(),saved.company.id,replacement);
+ for(let i=0;i<45;i++)await appendCrmActivity(db,ctx(),{companyId:saved.company.id,type:'company.saved',occurredAt:'2099-10-31T10:00:00Z'});
+ let cursor=null,history=[];do{const page=await crm.listCrmActivities(db,ctx(),saved.company.id,{limit:20,cursor});history.push(...page.activities);cursor=page.next_cursor;}while(cursor);
+ const archives=history.filter(row=>row.activity_type==='intelligence.snapshot');assert.equal(archives.length,1);const old=archives[0].metadata.intelligence;assert.equal(old.evidence.length,28);assert.equal(old.research_snapshot.companyResearch.buyerRoles,'Manual engineering role');assert.equal(old.research_snapshot.buyerResearch.discovery.companyDossier.facts[0].quote,'Original dossier quote');
+ const current=await getCrmCompany(db,ctx(),saved.company.id);assert.equal(current.intelligence.evidence[0].text,'New quote');assert.equal(current.intelligence.research_snapshot.companyResearch.strategyFingerprint,'new');assert.equal(current.intelligence.research_snapshot.companyResearch.qualification.eligible,false);
+ await assert.rejects(crm.listCrmActivities(db,ctx('w2'),saved.company.id,{}),error=>error.code==='CRM_COMPANY_NOT_FOUND');
+});
+
+sqliteTest('failed intelligence replacement rolls back its historical snapshot with the current update',async()=>{
+ const db=new D1Db(),pack=candidate(),saved=await upsertCrmCompany(db,ctx(),pack);
+ db.raw.exec(`CREATE TRIGGER reject_intelligence_update BEFORE UPDATE ON crm_intelligence BEGIN SELECT RAISE(ABORT,'intelligence storage rejected'); END;`);
+ await assert.rejects(crm.upsertCrmIntelligence(db,ctx(),saved.company.id,{evidence:[{url:'https://example.com/new',text:'New quote'}]}),/storage rejected/);
+ assert.deepEqual((await getCrmCompany(db,ctx(),saved.company.id)).intelligence.evidence,pack.intelligence.evidence);
+ assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM crm_activities WHERE activity_type='intelligence.snapshot'").get().n,0);
+});
+
+sqliteTest('concurrent intelligence replacements archive each actual preceding revision once',async()=>{
+ const db=new D1Db(),pack=candidate(),saved=await upsertCrmCompany(db,ctx(),pack);
+ const versions=['Second quote','Third quote'];
+ await Promise.all(versions.map(text=>crm.upsertCrmIntelligence(db,ctx(),saved.company.id,{evidence:[{url:'https://example.com/revision',text}]})));
+ const rows=(await crm.listCrmActivities(db,ctx(),saved.company.id,{limit:100})).activities.filter(row=>row.activity_type==='intelligence.snapshot');
+ assert.equal(rows.length,2);const retained=rows.flatMap(row=>row.metadata.intelligence.evidence.map(item=>item.text||item.title));
+ assert.ok(retained.includes('Expansion'));assert.equal(retained.filter(value=>versions.includes(value)).length,1);
+ const current=(await getCrmCompany(db,ctx(),saved.company.id)).intelligence.evidence[0].text;assert.ok(versions.includes(current));assert.ok(!retained.includes(current));
+});

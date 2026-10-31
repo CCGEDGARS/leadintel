@@ -83,6 +83,7 @@ test('newer paid Hunter evidence restores from CRM without repeating equal-times
  const candidate=fixture(),stamp=new Date(Date.now()-60000).toISOString(),checked_at=new Date().toISOString();candidate.buyerDiscovery={checkedAt:stamp};
  const saved=JSON.parse(JSON.stringify(candidate.people));saved[0].hunterChecks={'anna@example.com':{status:'valid',deliverability:'deliverable',checked_at}};
  const detail={company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:2,checkedAt:stamp,buyers:saved}}}},source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={Date,LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain};
+ require('./helpers/crm-hydration-context.cjs')(ctx);
  vm.runInNewContext(source.slice(source.indexOf('function restoreNewerBuyerResearch('),source.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  assert.equal(ctx.restoreNewerBuyerResearch(candidate,detail),true);assert.equal(candidate.people[0].hunterChecks['anna@example.com'].checked_at,checked_at);
 });

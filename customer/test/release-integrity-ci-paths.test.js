@@ -43,3 +43,14 @@ test('backend release evidence ignores skipped runs while retaining real failure
 test('a skipped upstream workflow cannot initiate a failed production proof',()=>{
  assert.match(workflow,/prove-production:\s*\n\s*if:\s*\$\{\{ github\.event_name != 'workflow_run' \|\| github\.event\.workflow_run\.conclusion != 'skipped' \}\}/);
 });
+
+function importedCustomerPaths(){
+ const queue=fs.readdirSync(path.join(root,'backend/src')).filter(name=>name.endsWith('.js')).map(name=>path.join(root,'backend/src',name)),visited=new Set(),customerFiles=new Set();
+ while(queue.length){const file=queue.shift();if(visited.has(file))continue;visited.add(file);const text=fs.readFileSync(file,'utf8');
+  for(const match of text.matchAll(/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)['"](\.[^'"]+?\.js)(?:\?[^'"]*)?['"]/g)){const dependency=path.resolve(path.dirname(file),match[1]);if(dependency.startsWith(path.join(root,'customer')+path.sep)&&fs.existsSync(dependency)){customerFiles.add(path.relative(root,dependency));queue.push(dependency);}}
+ }
+ return [...customerFiles].sort();
+}
+function requiresBackend(filename){const line=workflow.split('\n').find(line=>line.trim().startsWith('changed_backend='));const expression=line.match(/jq -r '([^']+)'/)[1];const result=spawnSync('jq',['-r',expression],{input:JSON.stringify({files:[{filename}]}),encoding:'utf8'});assert.equal(result.status,0,result.stderr);return result.stdout.trim()==='true';}
+test('every customer module imported by backend triggers exact backend deployment evidence',()=>{for(const file of importedCustomerPaths())assert.equal(requiresBackend(file),true,file);assert.equal(requiresBackend('customer/discovery-ui.js'),false,'a frontend-only UI change does not require an unrelated backend deployment');assert.equal(requiresBackend('backend/src/crm.js'),true);});
+test('Backend CI runs for every imported shared module on both push and PR',()=>{const backend=fs.readFileSync(path.join(root,'.github/workflows/backend-ci.yml'),'utf8');for(const section of [backend.split('  push:')[1].split('  pull_request:')[0],backend.split('  pull_request:')[1].split('\njobs:')[0]]){const paths=[...section.matchAll(/^\s+- '([^']+)'/gm)].map(match=>match[1]);for(const file of importedCustomerPaths())assert.ok(paths.some(pattern=>new RegExp('^'+pattern.split('*').map(part=>part.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$').test(file)),file);}});

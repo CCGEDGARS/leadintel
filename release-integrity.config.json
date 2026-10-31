@@ -56,7 +56,8 @@
       "buyer_integrity_version": "20261030-audit-v1",
       "setup_integrity_version": "20261030-v1",
       "profile_integrity_version": "20261030-v1",
-      "strategy_integrity_version": "20261030-strategy-v1"
+      "strategy_integrity_version": "20261030-strategy-v1",
+      "companies_integrity_version": "20261031-v1"
     }
   },
   "smokeChecks": [
@@ -1174,12 +1175,13 @@
       "status": 200,
       "contains": [
         "async function researchBuyerFit(candidates=[],profile={},generate,",
-        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined,buyerFitIssue:undefined,buyerFitIssueCode:undefined}))",
         "BUYER_FIT_EVIDENCE_REJECTED",
         "offerOptions:splitList(profile.priorityOffers)",
         "function buyerFitSources(candidate={})",
         "function assessAutomaticCompanyQualification(",
-        "Company fit below automatic-flow minimum 80/100"
+        "Company fit below automatic-flow minimum 80/100",
+        "reviewBatch=batch.filter(candidate=>buyerFitSources(candidate).length)",
+        "insufficient_evidence"
       ]
     },
     {
@@ -4185,7 +4187,7 @@
         "Read this source first",
         "Company contact sources",
         "data-official-contact-url",
-        "if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;",
+        "incomplete saved work requires explicit Refresh.",
         "company-published-routes",
         "Official linking page",
         "Resume company contacts"
@@ -5897,6 +5899,114 @@
       "contains": [
         "strategy-integrity.js?strategy-audit=20261030-v1",
         "strategy-audit=20261030-v1"
+      ]
+    },
+    {
+      "id": "companies-stable-selection",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function companyActionCandidate(",
+        "function claimCompanySelection(",
+        "data-company-key=",
+        "function validateCompanySave("
+      ]
+    },
+    {
+      "id": "companies-owned-cancellation",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function awaitDiscoveryRun(",
+        "activeDiscoveryTaskId===taskId",
+        "persistence:'failed'"
+      ]
+    },
+    {
+      "id": "companies-retained-handoff",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function companyStrategyCurrent(",
+        "function retainDiscoveryEvidence(",
+        "candidate.evidence=retainDiscoveryEvidence(candidate.evidence||[]"
+      ]
+    },
+    {
+      "id": "companies-read-only-reopen",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function scheduleSavedBuyerPublicChecks(){",
+        "incomplete saved work requires explicit Refresh."
+      ]
+    },
+    {
+      "id": "companies-source-ownership",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function companyClaimActorMatches(",
+        "function evidenceSupportsTargetMarket(",
+        "sourceRead:item.sourceRead"
+      ]
+    },
+    {
+      "id": "companies-dated-evidence",
+      "type": "text",
+      "url": "/customer/evidence-policy.js",
+      "status": 200,
+      "contains": [
+        "function publication(source={})",
+        "source.dateSource",
+        "detected|fetched|scraped|extracted|verified|checked|retriev"
+      ]
+    },
+    {
+      "id": "companies-durable-context",
+      "type": "text",
+      "url": "/customer/crm-engine.js",
+      "status": 200,
+      "contains": [
+        "function restoreCompanyResearch(",
+        "companyResearch:companyResearchSnapshot",
+        "strategyFingerprint"
+      ]
+    },
+    {
+      "id": "companies-dossier-history",
+      "type": "text",
+      "url": "/customer/company-dossier.js",
+      "status": 200,
+      "contains": [
+        "historicalEvidence",
+        "requires_reverification",
+        "function validatePass("
+      ]
+    },
+    {
+      "id": "companies-safe-diagnostics",
+      "type": "text",
+      "url": "/customer/setup-operation-trace.js",
+      "status": 200,
+      "contains": [
+        "20261031-companies-v1",
+        "leadintel:companies-operation",
+        "company_selection"
+      ]
+    },
+    {
+      "id": "companies-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "companies-audit=20261031-v1"
       ]
     }
   ],

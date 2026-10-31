@@ -68,6 +68,7 @@ test('CRM hydration keeps newer saved query receipts while preserving local buye
  const detail={company:{normalized_domain:c.domain},contacts:[],intelligence:C.mapDiscoveryCandidateToCrm(c).intelligence};
  const local=structuredClone(c);local.buyerDiscovery.checkedAt=new Date(Date.now()-60000).toISOString();local.people[0].kept=true;local.people[0].contactResearch={policyVersion:'20261021-adaptive-depth-v2',checks:{gmail:{status:'complete',checkedAt:new Date(Date.now()-60000).toISOString()}}};
  const ui=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,enrichmentResults:new Map(),personKey:(c,p)=>p.id,BUYER_RESEARCH_VERSION:'test',PUBLIC_NAME_CHECK_VERSION:'test'};
+ require('./helpers/crm-hydration-context.cjs')(ctx);
  vm.createContext(ctx);vm.runInContext(ui.slice(ui.indexOf('function restoreNewerBuyerResearch('),ui.indexOf('function hydrateLocalPipelineFromCrm(')),ctx);
  assert.equal(ctx.restoreNewerBuyerResearch(local,detail),true);assert.equal(local.people[0].contactResearch.checks.gmail.queryLog.length,3);assert.equal(local.people[0].contactResearch.checks.direct_email.queryLog.length,2);assert.equal(local.people[0].kept,true);
 });

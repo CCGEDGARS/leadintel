@@ -34,6 +34,13 @@ async function requireMember(request,env,workspaceId,roles=[]){
   if(roles.length&&!roles.includes(member.role))return {error:'Workspace role is not permitted',status:403};
   return {user,member};
 }
+async function assertResearchCurrent(request,env,workspaceId,userId){
+  if(request.signal?.aborted)throw Object.assign(new Error('Company research was canceled'),{status:499,name:'AbortError'});
+  const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);
+  if(current.error)throw Object.assign(new Error(current.error),{status:current.status});
+  if(current.user.id!==userId)throw Object.assign(new Error('Research ownership changed'),{status:403});
+  if(request.signal?.aborted)throw Object.assign(new Error('Company research was canceled'),{status:499,name:'AbortError'});
+}
 async function audit(env,{workspaceId,userId,type,provider,metadata={}}){
   await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`).bind(uuid(),workspaceId,userId,type,'workspace_ai_integration',provider,JSON.stringify(metadata)).run();
 }
@@ -70,10 +77,10 @@ async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
 async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='gemini' LIMIT 1`).bind(workspaceId).first();}
 
-async function boundedBuyerReview(operation,parent,timeoutMs){
+async function boundedBuyerReview(operation,parent,timeoutMs,label='AI review'){
   const controller=new AbortController();let timer,rejectStopped;
   const stopped=new Promise((_,reject)=>{rejectStopped=reject;});
-  const cancel=()=>{controller.abort();rejectStopped(new Error(parent?.aborted?'AI review canceled':'AI review timed out'));};
+  const cancel=()=>{controller.abort();rejectStopped(Object.assign(new Error(label+(parent?.aborted?' canceled':' timed out')),{status:parent?.aborted?499:504}));};
   timer=setTimeout(cancel,Math.max(1,timeoutMs));parent?.addEventListener('abort',cancel,{once:true});if(parent?.aborted)cancel();
   try{return await Promise.race([Promise.resolve().then(()=>operation(controller.signal)),stopped]);}finally{clearTimeout(timer);parent?.removeEventListener('abort',cancel);controller.abort();}
 }
@@ -157,7 +164,7 @@ export async function handleAiRoute(request,env,cors={}){
   if(path==='/api/ai/company-dossier'&&request.method==='POST'){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);if(!body?.company||JSON.stringify(body).length>140000)return error('Bounded company research context required',400,cors);
-    try{globalThis.LeadIntelCompanyDossier.researchPlan(body);const result=await researchWorkspaceDossier(env,workspaceId,body,{signal:request.signal});return json(result,200,cors);}
+    try{globalThis.LeadIntelCompanyDossier.researchPlan(body);const guard=()=>assertResearchCurrent(request,env,workspaceId,access.user.id);await guard();const result=await researchWorkspaceDossier(env,workspaceId,body,{signal:request.signal,guard,authorization:{userId:access.user.id,sessionTokenHash:access.user.sessionTokenHash}});await guard();return json(result,200,cors);}
     catch(cause){return error(String(cause.message||'Company dossier unavailable').slice(0,220),cause.status||502,cors);}
   }
 
@@ -242,12 +249,13 @@ export async function handleAiRoute(request,env,cors={}){
     const query=String(body.query||'').trim();if(!query||query.length>4000)return error('Web search query is invalid or too large',400,cors);
     const maxResults=Math.max(1,Math.min(8,Math.floor(Number(body.max_results)||5)));
     try{
-      const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
+      const guard=()=>assertResearchCurrent(request,env,workspaceId,access.user.id);
+      const result=await boundedBuyerReview(signal=>searchWorkspaceResearch(env,workspaceId,{query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal,guard}),request.signal,45000,'Web research');
       if(request.signal?.aborted)return error('Web search was canceled',499,cors);
       const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)return error(current.error,current.status,cors);
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:result.provider,metadata:{model:result.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,result_count:result.results.length,routing:result.routing||null}});
       return json(result,200,cors);
-    }catch(cause){return error(String(cause?.message||'Web search failed').slice(0,180),cause?.status===409?409:502,cors,cause?.code?{code:cause.code}:{});}
+    }catch(cause){try{await assertResearchCurrent(request,env,workspaceId,access.user.id);}catch(stale){return error(stale.message,stale.status||502,cors);}return error(String(cause?.message||'Web search failed').slice(0,180),[400,401,403,409,499,504].includes(cause?.status)?cause.status:502,cors,cause?.code?{code:cause.code}:{});}
   }
 
   if(path==='/api/ai/research-verification'&&request.method==='POST'){
@@ -261,14 +269,17 @@ export async function handleAiRoute(request,env,cors={}){
     const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await verifyMarketResearch({apiKey,model:integration.model,mode:body.mode,profile:body.profile,signals:body.signals,evidence,signal:request.signal});
+      await assertResearchCurrent(request,env,workspaceId,access.user.id);
+      const result=await boundedBuyerReview(signal=>verifyMarketResearch({apiKey,model:integration.model,mode:body.mode,profile:body.profile,signals:body.signals,evidence,signal}),request.signal,45000,'Research verification');
+      await assertResearchCurrent(request,env,workspaceId,access.user.id);
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'gemini').run();
       await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'gemini',kind:'recovered'});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_verification_completed',provider:'gemini',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,evidence_count:evidence.length,disagreement_count:result.disagreements.length}});
       return json(result,200,cors);
     }catch(cause){
       if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'gemini',kind:'failed'});
-      console.error('Gemini research verification unavailable',String(cause?.message||cause).slice(0,180));
+      try{await assertResearchCurrent(request,env,workspaceId,access.user.id);}catch(stale){return error(stale.message,stale.status||502,cors);}
+      console.error('Gemini research verification unavailable');
       return unavailable('Gemini verification is temporarily unavailable');
     }
   }
@@ -315,13 +326,14 @@ export async function handleAiRoute(request,env,cors={}){
       const languageGuidance=translationPack?.status==='ai_tested'?'\nSource-backed language guidance (never overrides the English source, protected facts, paragraph boundaries, or original template authority): '+JSON.stringify(translationPack.rules.map(({topic,guidance})=>({topic,guidance}))).slice(0,12000):'';
       const extractionRequest={system:companyMaterials.system+languageGuidance,prompt:companyMaterials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens,...(boundedResearch?{reasoningEffort:'low'}:{})};
       const runProvider=async(providerIntegration,input)=>{
+        if(boundedResearch)await assertResearchCurrent(request,env,workspaceId,access.user.id);
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null,stopped=null;let signal=request.signal;
         if(assistant||boundedResearch||profileSynthesis){
-          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis)canceled.status=499;throw canceled;}
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis||boundedResearch)canceled.status=499;throw canceled;}
           controller=new AbortController();signal=controller.signal;
-          // A late/ignoring upstream must not keep Profile work alive after its deadline.
-          if(profileSynthesis)stopped=new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('Profile synthesis stopped')),{once:true}));
+          // A provider that ignores abort must still respect the request deadline.
+          if(profileSynthesis||boundedResearch)stopped=new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('AI generation stopped')),{once:true}));
           onRequestAbort=()=>controller.abort(request.signal.reason);
           request.signal?.addEventListener('abort',onRequestAbort,{once:true});
           timer=setTimeout(()=>{timedOut=true;controller.abort();},assistant||profileSynthesis?55000:COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
@@ -329,14 +341,16 @@ export async function handleAiRoute(request,env,cors={}){
         try{
           const pending=generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});
           const result=await (stopped?Promise.race([pending,stopped]):pending);
-          if(profileSynthesis&&signal.aborted)throw new Error('Profile synthesis stopped');
+          if((profileSynthesis||boundedResearch)&&signal.aborted)throw new Error('AI generation stopped');
           await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'recovered'});
+          if(boundedResearch)await assertResearchCurrent(request,env,workspaceId,access.user.id);
           return result;
         }
         catch(cause){
           if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'failed'});
-          if(timedOut)throw Object.assign(new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`),profileSynthesis?{status:504}:{});
-          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis)canceled.status=499;throw canceled;}
+          if(boundedResearch)await assertResearchCurrent(request,env,workspaceId,access.user.id);
+          if(timedOut)throw Object.assign(new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`),profileSynthesis||boundedResearch?{status:504}:{});
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';if(profileSynthesis||boundedResearch)canceled.status=499;throw canceled;}
           throw cause;
         }finally{
           if(timer)clearTimeout(timer);
@@ -350,7 +364,7 @@ export async function handleAiRoute(request,env,cors={}){
       if(!attempt.ok){
         const message=attempt.fallback.status==='failed'?'Main-engine research failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
         const metadata=boundedResearch?{provider:integration.provider,fallback:attempt.fallback}:{};
-        return error(message,profileSynthesis?attempt.error?.status||502:502,cors,metadata);
+        return error(message,profileSynthesis||boundedResearch?attempt.error?.status||502:502,cors,metadata);
       }
       await assertCompanyMaterialsCurrent(env,workspaceId,companyMaterials.refs);
       if(assistant)await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
@@ -365,6 +379,7 @@ export async function handleAiRoute(request,env,cors={}){
       }
       try{await assertWritingContextCurrent(writingReferenceRuntime(env),{workspaceId},writing.context);}catch{return error('Writing references changed. Regenerate the message.',409,cors);}
       if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
+      if(boundedResearch)await assertResearchCurrent(request,env,workspaceId,access.user.id);
       if(profileSynthesis){
         if(request.signal?.aborted)return error('AI generation was canceled',499,cors);
         const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);

@@ -59,3 +59,18 @@ test('research verification is non-fatal when Gemini is not configured',async()=
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{status:'unavailable',provider:'gemini',role:'verification',web_search:false,reason:'Gemini is not configured'});
 });
+
+test('verification cannot claim complete when required evidence was omitted or repeated',()=>{
+ const result=parseVerificationResponse(JSON.stringify({verdicts:[{evidence_id:'evidence-1',relevance:'strong'},{evidence_id:'evidence-1',relevance:'strong'}]}),evidence);
+ assert.equal(result.status,'partial');assert.equal(result.verdicts.length,1);assert.deepEqual(result.coverage,{supplied:2,eligible:2,reviewed:1,omitted:0,unreviewed:1});
+});
+test('verification exposes its bounded evidence coverage instead of completing an oversized batch',()=>{
+ const many=Array.from({length:61},(_,index)=>({id:'e'+index,url:'https://example.com/'+index}));
+ const result=parseVerificationResponse(JSON.stringify({verdicts:many.map(row=>({evidence_id:row.id,relevance:'strong'}))}),many);
+ assert.equal(result.status,'partial');assert.equal(result.coverage.omitted,1);assert.equal(result.coverage.reviewed,60);
+});
+test('verification rejects ambiguous evidence IDs and unsafe source URLs',()=>{
+ const unsafe=[{id:'same',url:'https://example.com/a'},{id:'same',url:'https://example.com/b'},{id:'secret',url:'https://key:secret@example.com/a'},{id:'local',url:'https://localhost/a'}];
+ const r=parseVerificationResponse(JSON.stringify({verdicts:unsafe.map(row=>({evidence_id:row.id,relevance:'strong'}))}),unsafe);
+ assert.equal(r.status,'partial');assert.equal(r.verdicts.length,0);
+});

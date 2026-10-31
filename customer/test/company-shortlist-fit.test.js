@@ -87,7 +87,7 @@ test('company verification deliberately obtains independent company-attributed e
  const queries=D.buildCandidateVerificationQueries([{company:'Nordic',domain:'nordic.se',market:'Sweden'}],{}, {},1);
  assert.equal(queries.length,2);assert.ok(queries.some(q=>q.kind==='verification'));
  const independent=queries.find(q=>q.kind==='corroboration');assert.ok(independent);assert.match(independent.query,/-site:nordic.se/);assert.match(independent.query,/Nordic/);
- const rows=D.normalizeCompanySearchResults({results:[{url:'https://journal.example/nordic',title:'Nordic company profile',text:'Nordic manufactures industrial equipment in Sweden.'},{url:'https://journal.example/other',title:'Other Company',text:'Other Company manufactures industrial equipment.'}]},independent);
+ const rows=D.normalizeCompanySearchResults({results:[{url:'https://journal.example/nordic',title:'Nordic company profile',sourceRead:true,verifiedAt:researchedAt,text:'Nordic manufactures industrial equipment in Sweden.'},{url:'https://journal.example/other',title:'Other Company',text:'Other Company manufactures industrial equipment.'}]},independent);
  assert.equal(rows.length,1);assert.equal(rows[0].domain,'nordic.se');assert.equal(rows[0].sourceDomain,'journal.example');assert.match(rows[0].text,/Nordic/);
  const pool=D.buildPotentialCompanyCandidates(rows,{},{});assert.equal(pool.length,1);assert.equal(pool[0].company,'Nordic');
 });

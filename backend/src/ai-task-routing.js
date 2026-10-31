@@ -23,7 +23,7 @@ export async function searchGeminiWeb({apiKey,model,query,maxResults=5,purpose='
 }
 export async function routeResearchSearch({primary,specialist,signal}={}){
  cancelled(signal);let initial,cause;
- if(primary){try{initial=await primary();}catch(e){cancelled(signal);if(e?.name==='AbortError')throw e;cause=e;}if(initial?.results?.length)return initial;}
+ if(primary){try{initial=await primary();}catch(e){cancelled(signal);if(e?.name==='AbortError')throw e;cause=e;}cancelled(signal);if(initial?.results?.length)return initial;}
  cancelled(signal);
  if(specialist){try{const result=await specialist();cancelled(signal);return {...result,routing:{role:'research_specialist',reason:initial?'insufficient_evidence':'primary_unavailable'}};}catch(e){cancelled(signal);if(e?.name==='AbortError')throw e;cause=cause||e;if(initial)return {...initial,warning:'Research specialist unavailable; no additional evidence was established.'};}}
  if(initial)return initial;
@@ -34,14 +34,23 @@ export async function workspaceCredential(env,workspaceId,provider){
  const row=await env.DB.prepare('SELECT provider,model,encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND provider=? LIMIT 1').bind(workspaceId,provider).first();if(!row)return null;
  const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);return {...row,apiKey:await decryptSecret(row.encrypted_api_key,key)};
 }
-export async function observeSpecialist(env,workspaceId,credential,task,run){
- try{const result=await run();await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,credential.provider).run();await recordProviderCredit(env,{workspaceId,provider:credential.provider,kind:'recovered'});await env.DB.prepare('INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,null,'ai.specialist_completed','workspace_ai_integration',credential.provider,JSON.stringify({task,model:credential.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0})).run();return result;}catch(e){if(creditFailure(0,e?.message))await recordProviderCredit(env,{workspaceId,provider:credential.provider,kind:'failed'});throw e;}
+export async function observeSpecialist(env,workspaceId,credential,task,run,{guard=()=>{},signal}={}){
+ let result;
+ try{await guard();cancelled(signal);result=await run();await recordProviderCredit(env,{workspaceId,provider:credential.provider,kind:'recovered'});}
+ catch(e){if(creditFailure(0,e?.message))await recordProviderCredit(env,{workspaceId,provider:credential.provider,kind:'failed'});throw e;}
+ // Retain the actual execution receipt, while stale/canceled work cannot update projections.
+ let stopped;
+ try{await guard();cancelled(signal);}catch(e){stopped=e;}
+ await env.DB.prepare('INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,null,stopped?'ai.specialist_superseded':'ai.specialist_completed','workspace_ai_integration',credential.provider,JSON.stringify({task,model:credential.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,...(stopped?{outcome:'completed_after_context_stopped'}:{})})).run();
+ if(stopped)throw stopped;
+ await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,credential.provider).run();
+ return result;
 }
-export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch}){
- const openai=await workspaceCredential(env,workspaceId,'openai');
+export async function searchWorkspaceResearch(env,workspaceId,{query,maxResults=5,purpose='general',signal,fetchImpl=fetch,guard=()=>{}}){
+ await guard();cancelled(signal);const openai=await workspaceCredential(env,workspaceId,'openai');
  // Customer-only billing: a missing search provider must fail with 409 before any paid call is made.
  if(!openai&&!(await workspaceCredential(env,workspaceId,'gemini')))throw Object.assign(Error('Connect OpenAI or Google Gemini in Settings before running research discovery. No search was started.'),{status:409,code:'AI_SEARCH_PROVIDER_NOT_CONNECTED'});
- return routeResearchSearch({signal,primary:openai?()=>observeSpecialist(env,workspaceId,openai,'primary_web_search',()=>searchWeb({...openai,query,maxResults,purpose,signal,fetchImpl})):null,specialist:async()=>{const gemini=await workspaceCredential(env,workspaceId,'gemini');if(!gemini)throw Error('Gemini research specialist is not connected');return observeSpecialist(env,workspaceId,gemini,'grounded_search_fallback',()=>searchGeminiWeb({...gemini,query,maxResults,purpose,signal,fetchImpl}));}});
+ return routeResearchSearch({signal,primary:openai?()=>observeSpecialist(env,workspaceId,openai,'primary_web_search',()=>searchWeb({...openai,query,maxResults,purpose,signal,fetchImpl}),{guard,signal}):null,specialist:async()=>{const gemini=await workspaceCredential(env,workspaceId,'gemini');if(!gemini)throw Error('Gemini research specialist is not connected');return observeSpecialist(env,workspaceId,gemini,'grounded_search_fallback',()=>searchGeminiWeb({...gemini,query,maxResults,purpose,signal,fetchImpl}),{guard,signal});}});
 }
 export async function extractGeminiPdf({bytes,pages,apiKey,model,signal,fetchImpl=fetch}){
  if(!bytes?.length||bytes.length>8*1024*1024||!Number.isInteger(pages)||pages<1||pages>60)throw Error('Native PDF specialist limit: 8 MiB / 60 pages');cancelled(signal);

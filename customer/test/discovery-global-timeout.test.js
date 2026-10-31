@@ -582,7 +582,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 
-test('a saved first-name-only buyer receives one automatic public check when Buyers opens',async()=>{
+test('opening a saved first-name-only buyer stays read-only and explicit refresh researches the identity',async()=>{
   let requests=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{
     requests++;
@@ -593,7 +593,9 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
-  await new Promise(resolve=>setTimeout(resolve,30));
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(requests,0,'opening saved Buyers must not start provider work');
+  await context.__findPublicProspectContacts(context.__discoveryState().selectedProspects[0].domain);
   assert.ok(requests>0);const finishedRequests=requests;
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
@@ -618,7 +620,9 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
-  await new Promise(resolve=>setTimeout(resolve,30));
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(requests,0,'opening saved Buyers must not start provider work');
+  await context.__findPublicProspectContacts(context.__discoveryState().selectedProspects[0].domain);
   assert.ok(requests>0);
   const finishedRequests=requests;
   const person=context.__discoveryState().selectedProspects[0].people[0];
@@ -648,7 +652,9 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
-  await new Promise(resolve=>setTimeout(resolve,30));
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(requests,0,'opening saved Buyers must not start provider work');
+  await context.__findPublicProspectContacts(context.__discoveryState().selectedProspects[0].domain);
   assert.ok(requests>0);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
@@ -1392,7 +1398,7 @@ test('buyers with incomplete research have visible reasons and cannot occupy the
  assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Checks incomplete/);
 });
 
-test('a company-level completed check does not conceal an unresearched individual and follow-up runs only once',async()=>{
+test('explicit refresh researches an unresearched individual while retained company checks stay read-only on entry',async()=>{
  let requests=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
@@ -1402,7 +1408,8 @@ test('a company-level completed check does not conceal an unresearched individua
  context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0);
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
  context.__scheduleSavedBuyerPublicChecks();context.__scheduleSavedBuyerPublicChecks();
- await new Promise(resolve=>setTimeout(resolve,50));
+ await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0,'opening saved Buyers must not start missing checks');
+ await context.__findPublicProspectContacts('example.com');
  assert.ok(requests>0);assert.ok(context.__discoveryState().selectedProspects[0].people[0].emailResearch.searches>0);
  const completed=requests;context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,completed);
 });
@@ -1414,13 +1421,14 @@ test('a stale role shows its actual hold reason beside a disabled proceed action
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);assert.doesNotMatch(html,/Recommended · researched match/);
 });
 
-test('authentication delay does not consume the one automatic buyer check',async()=>{
+test('authentication recovery keeps retained research read-only until explicit refresh',async()=>{
  let requests=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,bridgeImpl:{session:null,workspace:null},fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'error',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
  context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,10));assert.equal(requests,0);
  context.LeadIntelServerBridge.session={authenticated:true};context.LeadIntelServerBridge.workspace={id:'test'};
- context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,80));assert.ok(requests>0);
+ context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.equal(requests,0,'signing in must not automatically restart saved research');
+ await context.__findPublicProspectContacts('example.com');assert.ok(requests>0);
  const finished=requests;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,10));assert.equal(requests,finished);
 });
 
@@ -1463,7 +1471,7 @@ test('default contact research attempts all ten, retains four recommendations an
  const roundtrip=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(roundtrip.publicResearch.researchedPersonIds.length,10);assert.equal(roundtrip.people[0].gmailCandidates.length,3);
  queries.length=0;assert.equal(await context.__findPublicProspectContacts('example.com',{personIds:['p7'],force:true}),true);
  c=context.__discoveryState().selectedProspects[0];assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,10);assert.ok(queries.some(q=>q.includes('Anna Hotel')));assert.ok(!queries.some(q=>/Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|India|Juliet/.test(q)));
- const before=queries.length;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.ok(queries.slice(before).every(query=>!/Anna (Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliet)/.test(query)),'Entry may resume missing company evidence while completed person checks are reused');
+ const before=queries.length;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.equal(queries.length,before,'entry must reuse saved person and company research without new provider calls');
 });
 
 test('one failed contact source does not prevent research for the other nine and retry skips completed checks',async()=>{
@@ -1650,10 +1658,10 @@ test('saved checked low-score research returns to the ranked list without anothe
  context.__setDiscovery({lastRunAt:at,candidates:full,potentialMatches:[{...candidate,qualificationGaps:['Buyer fit below the old minimum']}]});
  context.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify(context.__discoveryState()));
  context.__syncStrategyFingerprint();
- assert.equal(context.__discoveryState().candidates.length,50);
- assert.equal(context.__discoveryState().potentialMatches[0]?.domain,candidate.domain,'checked overflow must remain in review rather than disappear at the shortlist cap');
+ assert.equal(context.__discoveryState().candidates.length,51,'checked overflow must remain in the ranked list without a durable fifty-company cap');
+ assert.ok(context.__discoveryState().candidates.some(row=>row.domain===candidate.domain));
  const overflow=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')||JSON.stringify(context.__discoveryState())));
- assert.ok(overflow.potentialMatches.some(c=>c.domain===candidate.domain));
+ assert.equal(overflow.candidates.length,51);assert.ok(overflow.candidates.some(c=>c.domain===candidate.domain));
 });
 
 test('zero-result search clearly retains selected companies for Buyers without claiming a new match',()=>{

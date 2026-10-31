@@ -18,7 +18,7 @@
       const finish=result=>{if(finished)return;finished=true;clearTimeout(timer);worker?.terminate();resolve(result);};
       const fallback=()=>{if(finished)return;finished=true;clearTimeout(timer);worker?.terminate();resolve(chunked(batch));};
       try{
-        worker=new root.Worker('qualification-worker.js?v=20261020-v1&strategy-audit=20261030-v1');
+        worker=new root.Worker('qualification-worker.js?v=20261020-v1&strategy-audit=20261030-v1&companies-audit=20261031-v1');
         worker.onmessage=event=>Array.isArray(event.data?.results)?finish(event.data.results):fallback();
         worker.onerror=fallback;
         timer=setTimeout(fallback,15000);

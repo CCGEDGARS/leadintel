@@ -62,10 +62,12 @@ function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;"
 function mainState(){try{return JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||"{}");}catch{return {};}}
 function selectedTargets(main=mainState()){return window.LeadIntelReferenceCustomers?.normalizeTargetCompanies?.(main.targetCompanies,main.website||main.profile?.website)||(Array.isArray(main.targetCompanies)?main.targetCompanies.slice(0,50):[]);}
 function mergeWorkflowCompanies(previous=[],current=[],{replaceDomains=[]}={}){
-  const replaced=new Set(replaceDomains.map(canonicalDomain));const byDomain=new Map();
+  const replaced=new Set(replaceDomains.map(canonicalDomain)),byDomain=new Map();
+  const retained=(old=[],rows=[])=>[...new Map([...old,...rows].map(row=>[JSON.stringify([row.url||row.id||'',row.quote||'',row.text||row.description||'',row.date||'']),row])).values()];
   for(const item of previous){const key=canonicalDomain(item.domain||item.website);if(key&&!replaced.has(key))byDomain.set(key,item);}
-  for(const item of current){const key=canonicalDomain(item.domain||item.website);if(!key)continue;const old=previous.find(row=>canonicalDomain(row.domain||row.website)===key);byDomain.set(key,{...old,...item,needsRecheck:item.needsRecheck===true,people:old?.people?.length?old.people:item.people||[],peopleStatus:old?.people?.length?old.peopleStatus:item.peopleStatus,saved:old?.saved||item.saved});}
-  return [...byDomain.values()].slice(0,50);
+  for(const item of current){const key=canonicalDomain(item.domain||item.website);if(!key)continue;const old=previous.find(row=>canonicalDomain(row.domain||row.website)===key);
+    byDomain.set(key,{...old,...item,evidence:retained(old?.evidence,item.evidence),matchedSignals:retained(old?.matchedSignals,item.matchedSignals),...(old?.buyerRolesSource==='manual'?{buyerRoles:old.buyerRoles,buyerRolesSource:'manual',buyerRolesChanged:old.buyerRolesChanged}:{}),needsRecheck:item.needsRecheck===true,people:old?.people?.length?old.people:item.people||[],peopleStatus:old?.people?.length?old.peopleStatus:item.peopleStatus,saved:old?.saved||item.saved});}
+  return [...byDomain.values()];
 }
 function existingCompanyResearchTargets(main=mainState(),targetDomain=""){
   const items=[...selectedTargets(main),...discovery.candidates,...(discovery.potentialMatches||[]),...(discovery.selectedProspects||[])];
@@ -201,6 +203,20 @@ function restoreCheckedCompanyResearch(){
 }
 function canonicalDomain(value){return window.LeadIntelCrm?.canonicalDomain(value)||LeadIntelDiscovery.canonicalDomain(value);}
 function crmCompanyByDomain(value){const domain=canonicalDomain(value);return crmCompanies.find(company=>canonicalDomain(company.normalized_domain||company.website)===domain)||null;}
+const companySelectionOperations=new Map();
+function companyActionCandidate(reference){return typeof reference==='number'?discovery.candidates[reference]:(discovery.candidates||[]).find(row=>researchReviewKey(row)===String(reference));}
+function validateCompanySave(candidate,result){
+  const company=result?.company;
+  if(!result?.ok||!company?.id)throw new Error(result?.error||'Company save was not acknowledged. Retry from this card.');
+  if(['suppressed','archived'].includes(company.lifecycle_status))throw new Error('Restore this company in CRM before starting new buyer research.');
+  const returnedDomain=canonicalDomain(company.normalized_domain||company.website);
+  if(returnedDomain&&returnedDomain!==canonicalDomain(candidate.domain||candidate.website)||company.workspace_id&&company.workspace_id!==bridge()?.workspace?.id)throw new Error('Saved company identity changed. Reload the company before continuing.');
+  return company;
+}
+function captureCompanyAction(){return {state:discovery,bridge:bridge(),context:discoveryOperationContext()};}
+function companyActionCurrent(owner){return discovery===owner.state&&bridge()===owner.bridge&&discoveryOperationContext()===owner.context&&(!owner.selectionKey||companySelectionOperations.get(owner.selectionKey)===owner);}
+function claimCompanySelection(key){const owner=captureCompanyAction(),prior=companySelectionOperations.get(key);if(prior&&companyActionCurrent(prior))return null;owner.selectionKey=key;owner.trace=window.LeadIntelReliabilityTrace?.begin('company_selection');companySelectionOperations.set(key,owner);return owner;}
+function finishCompanySelection(key,owner){owner.trace?.finish(companyActionCurrent(owner)?owner.outcome||'blocked':'stale');if(companySelectionOperations.get(key)===owner)companySelectionOperations.delete(key);}
 function personKey(candidate,person){return `${canonicalDomain(candidate?.domain||candidate?.website)}|${String(person?.id||"")}`;}
 function crmToLocalPipeline(company){const domain=canonicalDomain(company.normalized_domain||company.website);const existing=discovery.pipeline.find(item=>canonicalDomain(item.domain||item.website)===domain);return {...(existing||{}),id:existing?.id||company.id,crmId:company.id,company:company.company_name||existing?.company||domain,domain,website:company.website||existing?.website||(domain?`https://${domain}/`:""),score:existing?.score||{total:Number(company.opportunity_score)||0},confidence:company.confidence||existing?.confidence||"",matchedSignals:existing?.matchedSignals||[],evidence:existing?.evidence||[],people:existing?.people||[],stage:window.LeadIntelCrm?.normalizeCrmStage(company.pipeline_stage)||"Discovered",savedAt:existing?.savedAt||company.created_at||new Date().toISOString(),updatedAt:company.updated_at||new Date().toISOString()};}
 function currentWorkspaceCrmPipeline(){
@@ -212,6 +228,9 @@ function currentWorkspaceCrmPipeline(){
 function restoreNewerBuyerResearch(candidate,detail){
   const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
   if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
+  const companyContext=window.LeadIntelCrm?.restoreCompanyResearch?.(candidate,detail,{workspaceId:bridge()?.workspace?.id,strategyFingerprint:typeof fingerprint==='function'?fingerprint():undefined});
+  const companyRestored=Boolean(companyContext&&Object.entries(companyContext).some(([key,value])=>JSON.stringify(value)!==JSON.stringify(candidate[key])));
+  if(companyRestored)Object.assign(candidate,companyContext);
   const inventory=LeadIntelDiscovery.safeOfficialContactInventory?.(saved?.discovery?.officialContactInventory,candidate.domain),inventoryStamp=Date.parse(inventory?.checkedAt||''),localInventoryStamp=Date.parse(candidate.buyerDiscovery?.officialContactInventory?.checkedAt||'')||0;
   const inventoryRestored=Number.isFinite(inventoryStamp)&&inventoryStamp<=Date.now()&&inventoryStamp>localInventoryStamp;
   if(inventoryRestored)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};
@@ -231,7 +250,7 @@ function restoreNewerBuyerResearch(candidate,detail){
   }
   const stamp=Date.parse(saved?.checkedAt||'');
   const localStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0;
-  if(!Number.isFinite(stamp)||stamp>Date.now()||!saved?.buyers?.length)return Boolean(inventoryRestored||dossierRestored||retainedDataRestored||phoneTraceRestored);
+  if(!Number.isFinite(stamp)||stamp>Date.now()||!saved?.buyers?.length)return Boolean(companyRestored||inventoryRestored||dossierRestored||retainedDataRestored||phoneTraceRestored);
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   // Contact verification may be newer while the underlying public research is unchanged.
   let paidEvidenceRestored=false;
@@ -246,7 +265,7 @@ function restoreNewerBuyerResearch(candidate,detail){
   }
   const obsoletePending=candidate.buyerDiscovery?.pool?.some(p=>p.identityStatus==='pending'&&!p.kept&&!(saved?.unresolved||[]).some(row=>String(row.id)===String(p.id)));
   const legacyRepair=stamp===localStamp&&saved?.version!==2&&(!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot')||obsoletePending||!candidate.buyerDiscovery?.providerStatus);
-  if(stamp<=localStamp&&!legacyRepair)return paidEvidenceRestored||inventoryRestored||retainedDataRestored||phoneTraceRestored;
+  if(stamp<=localStamp&&!legacyRepair)return companyRestored||paidEvidenceRestored||inventoryRestored||retainedDataRestored||phoneTraceRestored;
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   const previous=candidate.people||[];
   candidate.people=saved.buyers.map(row=>{
@@ -271,19 +290,26 @@ function restoreNewerBuyerResearch(candidate,detail){
 }
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
 function registerCrmRecoveryRetry(){
-  const currentBridge=bridge(),currentWorkspaceId=currentBridge?.workspace?.id,tasks=window.LeadIntelTaskCentre;
+  const currentBridge=bridge(),currentWorkspaceId=currentBridge?.workspace?.id,currentUserId=currentBridge?.session?.user?.id,tasks=window.LeadIntelTaskCentre;
   // Task history is durable but action closures are not. Restore the scoped
   // Retry even before the Buyers view mounts after a page reload.
   const storedTaskId=`crm-refresh:${currentWorkspaceId}`;
   if(currentWorkspaceId&&crmAuthenticated()&&tasks?.get?.(storedTaskId))tasks.registerActions?.(storedTaskId,{retry:()=>{
-    if(bridge()!==currentBridge||bridge()?.workspace?.id!==currentWorkspaceId||!crmAuthenticated())return false;
+    if(bridge()!==currentBridge||bridge()?.workspace?.id!==currentWorkspaceId||bridge()?.session?.user?.id!==currentUserId||!crmAuthenticated())return false;
     if(!discoveryMounted)ensureDiscoveryMounted({refreshCrm:false});
     return refreshCrmState();
   }});
 }
 async function refreshCrmState({render=true}={}){
   registerCrmRecoveryRetry();
-  if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const revision=crmRefreshRevision,b=bridge(),workspaceId=b.workspace.id,refreshTaskId=`crm-refresh:${workspaceId}`,recoverRuntime=window.LeadIntelAttention?.prepareCrmRecovery?.(workspaceId);crmRefreshing=true;try{
+  if(!discoveryMounted)return false;
+  if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}
+  const b=bridge(),identity=()=>JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated??crmAuthenticated(),typeof localStorage==='object'?localStorage.getItem('leadintel_account_context_v1')||'':'']);
+  const context=identity(),previous=refreshCrmState.owner;
+  if(crmRefreshing&&(!previous||previous.bridge===b&&previous.context===context))return false;
+  const owner={bridge:b,context},stateAtStart=discovery,revision=crmRefreshRevision,workspaceId=b.workspace.id,refreshTaskId=`crm-refresh:${workspaceId}`,recoverRuntime=window.LeadIntelAttention?.prepareCrmRecovery?.(workspaceId);
+  const current=()=>refreshCrmState.owner===owner&&discovery===stateAtStart&&revision===crmRefreshRevision&&crmAuthenticated()&&bridge()===b&&identity()===context;
+  refreshCrmState.owner=owner;crmRefreshing=true;try{
   let allResult,pipelineResult;
   try{[allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);}
   catch(error){
@@ -291,7 +317,7 @@ async function refreshCrmState({render=true}={}){
     // remain usable. Handle that transport result here; programming errors in
     // this refresh, hydration or rendering must still reach runtime reporting.
     if(error?.transient!==true||!['request_timeout','response_body_failed'].includes(error?.code)||error?.requestPath!=='/api/crm/companies')throw error;
-    if(revision!==crmRefreshRevision||!crmAuthenticated()||b.workspace?.id!==workspaceId||bridge()!==b||bridge()?.workspace?.id!==workspaceId)return false;
+    if(!current())return false;
     crmAvailable=false;
     const tasks=window.LeadIntelTaskCentre;
     tasks?.start?.({id:refreshTaskId,type:'crm-refresh',title:'CRM connection needs attention',stage:'CRM refresh did not finish',total:1,completed:0,canRetry:true,metadata:{workspaceId,code:error.code,requestPath:error.requestPath}});
@@ -299,11 +325,11 @@ async function refreshCrmState({render=true}={}){
     tasks?.fail?.(refreshTaskId,`${error.code==='request_timeout'?'CRM refresh timed out':'CRM connection was interrupted'}. Retry the CRM connection; saved companies and buyer evidence are kept in this browser.`,{canRetry:true});
     if(render)renderAll();return false;
   }
-  if(revision!==crmRefreshRevision||!crmAuthenticated()||b.workspace?.id!==workspaceId||bridge()!==b||bridge()?.workspace?.id!==workspaceId)return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}if(!Array.isArray(allResult.companies)||!Array.isArray(pipelineResult.companies))throw Object.assign(new Error('CRM returned an invalid company list; cached companies were preserved.'),{code:'invalid_crm_response',requestPath:'/api/crm/companies'});crmAvailable=true;crmCompanies=allResult.companies;crmPipeline=pipelineResult.companies;hydrateLocalPipelineFromCrm();
-  const selected=(discovery.selectedProspects||[]).filter(item=>crmCompanyByDomain(item.domain)).slice(0,10);
-  await Promise.all(selected.map(async candidate=>{
+  if(!current())return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}if(!Array.isArray(allResult.companies)||!Array.isArray(pipelineResult.companies))throw Object.assign(new Error('CRM returned an invalid company list; cached companies were preserved.'),{code:'invalid_crm_response',requestPath:'/api/crm/companies'});crmAvailable=true;crmCompanies=allResult.companies;crmPipeline=pipelineResult.companies;hydrateLocalPipelineFromCrm();
+  const selected=[...new Map([...(discovery.selectedProspects||[]).filter(item=>crmCompanyByDomain(item.domain)),...(discovery.pipeline||[]).filter(item=>crmPipeline.some(company=>company.normalized_domain===item.domain))].map(item=>[item.domain,item])).values()];
+  let nextCompany=0;const hydrateCompany=async candidate=>{
     const company=crmCompanyByDomain(candidate.domain);
-    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||revision!==crmRefreshRevision||!crmAuthenticated()||b.workspace?.id!==workspaceId||bridge()!==b||bridge()?.workspace?.id!==workspaceId)return;
+    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||!current())return;
       if(restoreNewerBuyerResearch(candidate,detail))saveDiscovery();
       let recoveredProfiles=false;
       for(const person of candidate.people){const contact=typeof LeadIntelDiscovery.buyerPhoneContact==='function'?LeadIntelDiscovery.buyerPhoneContact(detail,person):(detail.contacts||[]).find(row=>String(row.external_person_id||"")===String(person.id));if(!contact)continue;
@@ -315,10 +341,11 @@ async function refreshCrmState({render=true}={}){
       if(typeof hydratePublishedCompanyEmails==='function'&&hydratePublishedCompanyEmails(candidate,detail.contacts||[]))recoveredProfiles=true;
       if(recoveredProfiles)saveDiscovery();
     }catch{ /* CRM history remains available even if this display refresh fails. */ }
-  }));
-  if(revision!==crmRefreshRevision||!crmAuthenticated()||b.workspace?.id!==workspaceId||bridge()!==b||bridge()?.workspace?.id!==workspaceId)return false;
+  };
+  await Promise.all(Array.from({length:Math.min(4,selected.length)},async()=>{while(current()){const candidate=selected[nextCompany++];if(!candidate)return;await hydrateCompany(candidate);}}));
+  if(!current())return false;
   if(window.LeadIntelTaskCentre?.get?.(refreshTaskId))window.LeadIntelTaskCentre.complete(refreshTaskId,{title:'CRM connection refreshed',stage:'CRM connection refreshed',resultCount:crmCompanies.length});
-  if(render)renderAll();recoverRuntime?.();return true;}finally{crmRefreshing=false;scheduleSavedBuyerPublicChecks();}}
+  if(render)renderAll();recoverRuntime?.();return true;}finally{if(refreshCrmState.owner===owner){crmRefreshing=false;delete refreshCrmState.owner;}}}
 
 function injectDiscoveryUI(){
   if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css");link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
@@ -414,9 +441,19 @@ async function withDiscoveryDeadline(operation,parentSignal,timeoutMs=COMPANY_EX
   try{const result=await Promise.race([Promise.resolve().then(()=>{throwIfDiscoveryRunAborted(controller.signal);return operation(controller.signal);}),cancelled]);throwIfDiscoveryRunAborted(parentSignal);return result;}
   finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);parentSignal?.removeEventListener('abort',abort);}
 }
+// The operation can ignore AbortSignal; release the UI on cancel/deadline anyway.
+// All callbacks must still check the owning signal before applying late work.
+let discoveryRunSequence=0;
+async function awaitDiscoveryRun(operation,controller,timeoutMs){
+  let stop,timer;
+  const stopped=new Promise((_,reject)=>{stop=()=>reject(controller.signal.reason||new DOMException('Company research canceled','AbortError'));if(controller.signal.aborted)stop();else controller.signal.addEventListener('abort',stop,{once:true});});
+  timer=setTimeout(()=>controller.abort(new DOMException('Company research deadline reached','TimeoutError')),timeoutMs);
+  try{return await Promise.race([Promise.resolve(operation),stopped]);}
+  finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);}
+}
 function throwIfDiscoveryRunAborted(signal){if(signal?.leadIntelScopeValid&&!signal.leadIntelScopeValid()){const error=new Error('Workspace changed. Company research stopped.');error.name='AbortError';throw error;}if(!signal?.aborted)return;const reason=signal.reason;if(reason instanceof Error)throw reason;const error=new Error("Company discovery was canceled");error.name="AbortError";throw error;}
 function discoveryFailureReason(error={}){const status=Number(error?.status)||0;if(error?.code==="DISCOVERY_SEARCH_TIMEOUT"||error?.name==="AbortError"||status===408)return "timeout";if(status===429)return "rate_limit";if(status===402)return "quota_exhausted";if(status>=500)return "provider_unavailable";if(status===401||status===403)return "auth_error";if(status>=400)return "request_rejected";if(error?.name==="TypeError")return "network_error";return "unknown_error";}
-function discoveryFailureLabel(failure={}){if(failure.phase==="buyer-fit"){if(failure.code==="BUYER_FIT_EVIDENCE_REJECTED")return failure.detail||"AI assessment did not verify against the supplied official evidence";if(Number(failure.status)===402)return "AI provider credits or billing limit reached (HTTP 402)";return discoveryFailureLabel({...failure,phase:"searching"}).replace(/Search provider/g,"Purchasing-fit provider").replace(/search provider/g,"purchasing-fit provider");}const status=Number(failure.status)||0;if(status===402)return "Firecrawl credits or billing limit reached (HTTP 402)";switch(failure.reason){case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
+function discoveryFailureLabel(failure={}){if(failure.phase==="buyer-fit"){if(failure.code==="BUYER_FIT_EVIDENCE_REJECTED")return failure.detail||"AI assessment did not verify against the supplied official evidence";if(Number(failure.status)===402)return "AI provider credits or billing limit reached (HTTP 402)";return discoveryFailureLabel({...failure,phase:"searching"}).replace(/Search provider/g,"Purchasing-fit provider").replace(/search provider/g,"purchasing-fit provider");}const status=Number(failure.status)||0;if(status===402)return "Firecrawl credits or billing limit reached (HTTP 402)";switch(failure.reason){case 'canceled':return 'Research canceled; check incomplete';case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
 function discoverySearchFailure(error,queryMeta={},phase="searching"){const reason=discoveryFailureReason(error);return {id:`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:queryMeta.company||"",domain:queryMeta.domain||"",...(error?.code==='BUYER_FIT_EVIDENCE_REJECTED'?{code:error.code,detail:String(error.detail||'').slice(0,240)}:{}),reason,status:Number(error?.status)||(reason==="timeout"?408:0)};}
 function waitForDiscoveryRetry(signal){return new Promise(resolve=>{const finish=()=>{clearTimeout(timer);signal?.removeEventListener?.("abort",finish);resolve();};const timer=setTimeout(finish,DISCOVERY_RETRY_DELAY_MS);signal?.addEventListener?.("abort",finish,{once:true});});}
 function retryableDiscoveryFailure(error){const reason=discoveryFailureReason(error);return ["timeout","rate_limit","provider_unavailable","network_error"].includes(reason);}
@@ -426,17 +463,19 @@ async function openAiCompanySearch(queryMeta,runSignal){
   try{return await withDiscoveryDeadline(async signal=>{
     const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query:queryMeta.query,max_results:activeDiscoverySavingMode?SAVING_SEARCH_RESULT_LIMIT:MAX_DISCOVERY_RESULTS_PER_QUERY}),signal});
     if(!response.ok)return [];const payload=await response.json().catch(()=>({}));
-    return LeadIntelDiscovery.normalizeCompanySearchResults({results:payload.results},queryMeta);
+    return LeadIntelDiscovery.normalizeCompanySearchResults({results:payload.results},queryMeta).map(row=>({...row,sourceRead:false,evidenceKind:'model_summary',verifiedAt:''}));
   },runSignal,DISCOVERY_REQUEST_TIMEOUT_MS);}catch(error){throwIfDiscoveryRunAborted(runSignal);return [];}
 }
 async function scrapeCompanyWebsiteForVerification(queryMeta,runSignal){
+  throwIfDiscoveryRunAborted(runSignal);
   if(queryMeta.kind!=="verification"||!queryMeta.domain)return [];
   if(discoveryBudgetExhausted())return [];
   try{
-    const research=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:`https://${queryMeta.domain}/`,purpose:'verification',maxPages:activeDiscoverySavingMode?1:3,maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2,seedUrls:queryMeta.seedUrls||[],skipHome:queryMeta.skipHome===true,signal:runSignal,fetchImpl:async(url,init)=>{throwIfDiscoveryRunAborted(runSignal);reserveFirecrawlCall('page');return fetch(url,init);}});
+    const research=await withDiscoveryDeadline(signal=>window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:`https://${queryMeta.domain}/`,purpose:'verification',maxPages:activeDiscoverySavingMode?1:3,maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2,seedUrls:queryMeta.seedUrls||[],skipHome:queryMeta.skipHome===true,signal,fetchImpl:async(url,init)=>{throwIfDiscoveryRunAborted(runSignal);reserveFirecrawlCall('page');return fetch(url,init);}}),runSignal,DISCOVERY_REQUEST_TIMEOUT_MS*2);
+    throwIfDiscoveryRunAborted(runSignal);
     if(research.terminalStatus)discoveryWebsiteReadFailures.set(queryMeta.domain,research.terminalStatus);
-    return LeadIntelDiscovery.normalizeCompanySearchResults({results:window.LeadIntelFirstPartyResearch.boundedSources(research.pages,12000).map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource}))},queryMeta);
-  }catch(error){if(runSignal?.aborted)throw error;discoveryWebsiteReadFailures.set(queryMeta.domain,Number(error.status)||0);return [];}
+    return LeadIntelDiscovery.normalizeCompanySearchResults({results:window.LeadIntelFirstPartyResearch.boundedSources(research.pages,12000).map(page=>({url:page.url,title:page.title,markdown:page.text,sourceRead:true,evidenceKind:'page_read',extractedAt:page.fetchedAt,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource}))},queryMeta);
+  }catch(error){throwIfDiscoveryRunAborted(runSignal);discoveryWebsiteReadFailures.set(queryMeta.domain,Number(error.status)||0);return [];}
 }
 async function firecrawlCompanySearch(queryMeta,runSignal){
   throwIfDiscoveryRunAborted(runSignal);
@@ -463,7 +502,7 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
           const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
           const payload=await response.json().catch(()=>({}));
           if(!response.ok)throw Object.assign(new Error('Company search provider request failed'),{status:response.status});
-          return LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta).map(item=>({...item,verifiedAt:!resolution&&item.text?.length>=120?new Date().toISOString():''}));
+          return LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta).map(item=>({...item,verifiedAt:!resolution&&item.sourceRead===true&&item.text?.length>=120?new Date().toISOString():''}));
         },runSignal,DISCOVERY_REQUEST_TIMEOUT_MS);
       }catch(error){
         throwIfDiscoveryRunAborted(runSignal);lastError=error;
@@ -501,15 +540,19 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
   let nextIndex=0;
   const workers=Array.from({length:Math.min(phase==="verifying"?DISCOVERY_SEARCH_CONCURRENCY/2:DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
     while(nextIndex<items.length){
-      if(runSignal?.aborted)break;
+      throwIfDiscoveryRunAborted(runSignal);
       const index=nextIndex++;
       if(discoveryBudgetExhausted()){searches[index]={results:[],error:null,skipped:'budget',phase,queryMeta:items[index]};discoveryBudgetSkips++;discovery.funnel.budgetSkippedChecks=discoveryBudgetSkips;discoveryProgress.completed+=1;continue;}
-      try{if(runSignal?.aborted)throw new Error("Company search timed out");const results=await firecrawlCompanySearch(items[index],runSignal);searches[index]={results,error:results.some(source=>source.eventSearchUnavailable)?Object.assign(new Error("Company website checked; event search unavailable"),{status:results.find(source=>source.eventSearchFailure)?.eventSearchFailure?.status||0,code:results.find(source=>source.eventSearchFailure)?.eventSearchFailure?.reason==='timeout'?'DISCOVERY_SEARCH_TIMEOUT':''}):null,phase,queryMeta:items[index]};}
-      catch(error){if(error?.code==='DISCOVERY_BUDGET_REACHED'){searches[index]={results:[],error:null,skipped:'budget',phase,queryMeta:items[index]};discoveryBudgetSkips++;discovery.funnel.budgetSkippedChecks=discoveryBudgetSkips;}else searches[index]={results:[],error,phase,queryMeta:items[index]};}
+      try{if(runSignal?.aborted)throw new Error("Company search timed out");const results=await firecrawlCompanySearch(items[index],runSignal);throwIfDiscoveryRunAborted(runSignal);searches[index]={results,error:results.some(source=>source.eventSearchUnavailable)?Object.assign(new Error("Company website checked; event search unavailable"),{status:results.find(source=>source.eventSearchFailure)?.eventSearchFailure?.status||0,code:results.find(source=>source.eventSearchFailure)?.eventSearchFailure?.reason==='timeout'?'DISCOVERY_SEARCH_TIMEOUT':''}):null,phase,queryMeta:items[index]};}
+      catch(error){throwIfDiscoveryRunAborted(runSignal);if(error?.code==='DISCOVERY_BUDGET_REACHED'){searches[index]={results:[],error:null,skipped:'budget',phase,queryMeta:items[index]};discoveryBudgetSkips++;discovery.funnel.budgetSkippedChecks=discoveryBudgetSkips;}else searches[index]={results:[],error,phase,queryMeta:items[index]};}
       finally{if(!runSignal?.aborted&&(!runSignal?.leadIntelScopeValid||runSignal.leadIntelScopeValid())){
         const completed=searches[index];
-        for(const result of completed?.results||[]){if(result.url)discoveryEvidenceUrls.add(result.url);}
+        for(const result of completed?.results||[]){
+          discovery.funnel.evidenceRowsObserved=(Number(discovery.funnel.evidenceRowsObserved)||0)+1;
+          if(result.url){if(discoveryEvidenceUrls.has(result.url))discovery.funnel.duplicateEvidenceRows=(Number(discovery.funnel.duplicateEvidenceRows)||0)+1;discoveryEvidenceUrls.add(result.url);}
+        }
         discovery.funnel.evidencePages=discoveryEvidenceUrls.size;
+        if(completed?.results?.length){discovery.rawResults=retainDiscoveryEvidence(discovery.rawResults,completed.results);saveDiscovery();}
         if(!retryOnly&&!completed?.skipped&&(phase==="searching"||phase==="following")){discovery.funnel.marketSearchesCompleted+=1;}
         else if(phase==="verifying"&&(completed?.results||[]).some(row=>canonicalDomain(row.url)===canonicalDomain(items[index].domain)&&window.LeadIntelFirstPartyResearch.usableText(row.markdown||row.content||row.text))){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.checkedCompanyDomains=[...discoveryCheckedCompanyDomains];discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
         discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.latestRunCandidateCount});renderDiscoverySafely();
@@ -524,6 +567,7 @@ function setCompanyExtraction(status,method,message){
   discovery.extraction={status,method,message};
   renderDiscoverySafely();
 }
+function retainDiscoveryEvidence(previous=[],current=[]){const rows=new Map();for(const row of [...previous,...current])if(row?.url)rows.set(row.url,{...rows.get(row.url),...row});return [...rows.values()];}
 function failedDiscoverySearches(groups=[]){return groups.flatMap(group=>(group.rows||[]).flatMap((row,index)=>row?.error?[discoverySearchFailure(row.error,row.queryMeta||group.queries?.[index]||{},group.phase)]:[]));}
 function buildCompanyExtractionPrompt({profile={},references=[],market="",sources=[]}={}){
   const text=(value,max)=>String(Array.isArray(value)?value.join("; "):value??"").slice(0,max);
@@ -537,6 +581,7 @@ function buildCompanyExtractionPrompt({profile={},references=[],market="",source
   return `Identify operating companies matching the target customer profile or active market signals in these sources. Include relevant buyers even when no current buying event is confirmed; later verification handles qualification. Target profile: ${JSON.stringify(target)}. Reference similarity examples: ${JSON.stringify(examples)}. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name appears. Return {"companies":[{"company":"Exact company name","market":${JSON.stringify(text(market,120))},"sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(evidence)}`;
 }
 async function extractCompaniesFromEvidence(evidence,market,targetCount,runSignal){
+  throwIfDiscoveryRunAborted(runSignal);
   const profile=companyQualificationProfile(mainState());profile.searchFeedback=LeadIntelDiscovery.searchFeedbackForProfile(discovery.searchFeedback,profile);
   const fallback=LeadIntelDiscovery.prioritizeCompanyMentions(LeadIntelDiscovery.extractCompanyMentions(evidence,targetCount),evidence,profile,targetCount);
   const b=bridge();const workspace=b?.workspace;
@@ -562,7 +607,7 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount,runSigna
       if(!response.ok){aiFailures++;companyExtractionFailures.push(discoverySearchFailure(Object.assign(new Error("Company extraction request failed"),{status:response.status}),{id:`extract-${offset}`,market},"extracting"));continue;}
       aiProvider=payload.provider||aiProvider;usedGemini=usedGemini||payload.fallback?.used===true;
       aiNames.push(...LeadIntelDiscovery.parseCompanyExtraction(payload.text,chunk,targetCount-aiNames.length));
-    }catch(error){if(runSignal?.aborted)throw error;aiFailures++;companyExtractionFailures.push(discoverySearchFailure(error,{id:`extract-${offset}`,market},"extracting"));}
+    }catch(error){throwIfDiscoveryRunAborted(runSignal);aiFailures++;companyExtractionFailures.push(discoverySearchFailure(error,{id:`extract-${offset}`,market},"extracting"));}
   }
   const seen=new Set();const combined=[...aiNames,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
   const outcome=LeadIntelDiscovery.describeCompanyExtractionOutcome({provider:aiProvider,fallback:{used:usedGemini,provider:usedGemini?"gemini":""},aiNames:aiNames.length,textNames:Math.max(0,combined.length-aiNames.length),responseOk:aiFailures<Math.ceil(unique.length/16)});
@@ -595,7 +640,8 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(targetOnly&&!targetPool.length){showToast("Add target companies before researching them");return;}
   activeDiscoverySavingMode=savingMode;
   const targetCount=campaignPlan?Math.max(1,Math.min(50,Number(campaignPlan.targetCount)||10)):campaignTargets||recheckOnly?Math.max(1,targetPool.length):persistDiscoveryTarget();
-  const runContext={startedAt:new Date().toISOString(),scope:recheckOnly?'recheck':'find',requestedCount:targetCount,market:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets||'',fingerprint:fingerprint(),autoPass,...(reviewBatchId?{reviewBatchId}:{})};saveMeta({...loadMeta(),lastCompanyRun:runContext});
+  const runContext={runId:++discoveryRunSequence,startedAt:new Date().toISOString(),scope:recheckOnly?'recheck':'find',requestedCount:targetCount,market:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets||'',fingerprint:fingerprint(),autoPass,...(reviewBatchId?{reviewBatchId}:{})};saveMeta({...loadMeta(),lastCompanyRun:runContext});
+  const previousRawResults=(discovery.rawResults||[]).slice();
   const previousPotentialMatches=(discovery.potentialMatches||[]).slice();const previousCheckedDomains=(discovery.checkedCompanyDomains||[]).slice();
   const limits=LeadIntelDiscovery.discoveryLimits(targetCount);
   // Pass 1 opens the request budget; automatic broadening passes keep drawing from it. Campaign passes are separate requests.
@@ -626,14 +672,14 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(!queries.length){showToast("Add optional market or offer context to make discovery more precise");return;}
   const previousCandidates=discovery.candidates.slice();
   const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
-  discoveryWebsiteChecks=new Map();discoveryWebsiteReadFailures=new Map();recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.savingMode=savingMode;discovery.queries=queries;discovery.rawResults=[];discovery.candidates=previousCandidates;discovery.companyMentions=[];discovery.searchFailures=[];discovery.providerFallbacks=[];discovery.checkedCompanyDomains=previousCheckedDomains;discovery.latestRunCandidateCount=0;discovery.lastSuccessfulRunAt=previousRunAt;discovery.retainedLastSuccessfulResults=previousCandidates.length>0;discovery.extraction=targetOnly?{status:"targets",method:"Target list",message:savingMode?"Saving Mode: testing one saved target with bounded public evidence.":"Using your saved target names; checking their public evidence."}:{status:"pending",method:"",message:"Company-name extraction will report its method after the evidence search."};discovery.potentialMatches=previousPotentialMatches;
+  discoveryWebsiteChecks=new Map();discoveryWebsiteReadFailures=new Map();recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.savingMode=savingMode;discovery.queries=queries;discovery.rawResults=previousRawResults;discovery.candidates=previousCandidates;discovery.companyMentions=[];discovery.searchFailures=[];discovery.providerFallbacks=[];discovery.checkedCompanyDomains=previousCheckedDomains;discovery.latestRunCandidateCount=0;discovery.lastSuccessfulRunAt=previousRunAt;discovery.retainedLastSuccessfulResults=previousCandidates.length>0;discovery.extraction=targetOnly?{status:"targets",method:"Target list",message:savingMode?"Saving Mode: testing one saved target with bounded public evidence.":"Using your saved target names; checking their public evidence."}:{status:"pending",method:"",message:"Company-name extraction will report its method after the evidence search."};discovery.potentialMatches=previousPotentialMatches;
   discoveryEvidenceUrls=new Set();discoveryCheckedCompanyDomains=new Set();
   discovery.funnel={marketSearchesCompleted:0,marketSearchesTotal:queries.length,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0,firecrawlSearchCalls:discoveryFirecrawlCalls,firecrawlPageReads:discoveryFirecrawlPages,firecrawlCallLimit:discoveryCallLimit,budgetSkippedChecks:0};
   enrichmentResults.clear();enrichmentPending.clear();companyExtractionFailures=[];discoveryProgress={phase:"finding",completed:0,total:queries.length};discovery.status="running";
-  const taskCentre=window.LeadIntelTaskCentre;const taskId=`company-discovery:${Date.now()}`;
+  const taskCentre=window.LeadIntelTaskCentre;const taskId=`company-discovery:${Date.now()}:${runContext.runId}`;
   activeDiscoveryTaskId=taskId;
-  try{saveDiscovery();}catch(error){discovery.status="error";renderDiscoverySafely();showToast("Discovery could not save its running state. You can try again.");return;}
-  if(!renderDiscoverySafely()){discovery.status="error";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
+  try{saveDiscovery();}catch(error){discovery.status="error";if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId="";renderDiscoverySafely();showToast("Discovery could not save its running state. You can try again.");return;}
+  if(!renderDiscoverySafely()){discovery.status="error";if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId="";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
   let failures=0;
   let fatalError=null;
   let searches=Array(queries.length).fill(null);
@@ -649,7 +695,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   const runController=new AbortController();
   const discoveryAtStart=discovery,bridgeAtStart=bridge(),identityAtStart=JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'']);
   const scopeNow=()=>JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated||false,localStorage.getItem('leadintel_account_context_v1')||'',window.LeadIntelAccountCache?.current?.()??null,LeadIntelDiscovery.searchContextKey(companyQualificationProfile(mainState())),!sameStrategyFingerprint(runContext.fingerprint,fingerprint())?'changed':'']),scopeAtStart=scopeNow();
-  runController.signal.leadIntelScopeValid=()=>discovery===discoveryAtStart&&bridge()===bridgeAtStart&&scopeNow()===scopeAtStart;
+  runController.signal.leadIntelScopeValid=()=>activeDiscoveryTaskId===taskId&&discovery===discoveryAtStart&&bridge()===bridgeAtStart&&scopeNow()===scopeAtStart;
   const stopForScope=()=>{if(scopeNow()!==scopeAtStart)runController.abort(new DOMException('Workspace changed','AbortError'));};
   window.addEventListener?.('leadintel:workspace-changed',stopForScope);window.addEventListener?.('leadintel:server-ready',stopForScope);
   taskCentre?.start({id:taskId,type:'company-discovery',title:'Company discovery',stage:'Searching market evidence',total:Math.max(queries.length,1),completed:0,canCancel:true,canRetry:true});
@@ -674,7 +720,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
       const assessPool=pool=>{
         throwIfDiscoveryRunAborted(runController.signal);
         const researchedAt=new Date().toISOString(),settings={...window.LeadIntelQualificationSettings?.get?.(),researchedAt};
-        return LeadIntelDiscovery.rankQualifiedCompanies(pool.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,market,settings);return {...c,qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified===true,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};}));
+        return LeadIntelDiscovery.rankQualifiedCompanies(pool.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,market,settings);return {...c,strategyFingerprint:runContext.fingerprint,searchContextKey:LeadIntelDiscovery.searchContextKey(profile),qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified===true,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};}));
       };
       const researchPool=async input=>{
         throwIfDiscoveryRunAborted(runController.signal);
@@ -693,7 +739,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         taskCentre?.update(taskId,{stage:'Checking purchasing fit',completed:0,total:Math.max(1,discoveryProgress.total)});renderDiscoverySafely();
         const researched=await LeadIntelDiscovery.researchBuyerFit(pending,profile,prompt=>generateDiscoveryBuyerFit(prompt,runController.signal),{
           signal:runController.signal,
-          onFailure:(error,batch)=>{const domains=new Set(batch.map(c=>canonicalDomain(c.domain)));buyerFitFailures=buyerFitFailures.filter(f=>!domains.has(canonicalDomain(f.domain)));for(const company of batch)buyerFitFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${company.domain}`,company:company.company,domain:company.domain},'buyer-fit'));},
+          onFailure:(error,batch)=>{throwIfDiscoveryRunAborted(runController.signal);const domains=new Set(batch.map(c=>canonicalDomain(c.domain)));buyerFitFailures=buyerFitFailures.filter(f=>!domains.has(canonicalDomain(f.domain)));for(const company of batch)buyerFitFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${company.domain}`,company:company.company,domain:company.domain},'buyer-fit'));},
           onProgress:({completed,total,candidates})=>{throwIfDiscoveryRunAborted(runController.signal);const done=new Set(candidates.filter(c=>c.buyerFit||c.buyerFitIssueCode==='insufficient_evidence').map(c=>canonicalDomain(c.domain)));buyerFitFailures=buyerFitFailures.filter(f=>!done.has(canonicalDomain(f.domain)));
             discoveryProgress={phase:'buyer-fit',completed,total};
             const completedByDomain=new Map(candidates.map(c=>[canonicalDomain(c.domain),c]));
@@ -727,7 +773,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         resolutionSearches.push(...resolutionRows);
         throwIfDiscoveryRunAborted(runController.signal);
         const resolved=resolutionRows.flatMap(item=>item?.results||[]);allResolved.push(...resolved);
-        discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+        discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
         discovery.funnel.officialDomainsResolved=new Set(allResolved.map(item=>item.domain).filter(Boolean)).size;
         const knownDomains=knownMentions.map(item=>{const target=knownTargets.get(item.company.toLowerCase());return {domain:target.domain,company:target.companyName,market:item.market,sourceUrl:item.sourceUrl};});
         const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries([...knownDomains,...resolved],profile,market,remainingLimit,{includeIndependent:!savingMode,excludeDomains:verificationSearches.map(row=>row?.queryMeta?.domain).filter(Boolean)});
@@ -735,7 +781,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal,verificationRows);
         verificationSearches.push(...verificationRows);
         const verified=verificationRows.flatMap(item=>item?.results||[]);allVerified.push(...verified);
-        discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+        discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
         discovery.funnel.verifiedCompanies=new Set(allVerified.map(item=>item.domain).filter(Boolean)).size;
         return LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,unresolvedMentions,allMarketEvidence);
       };
@@ -753,7 +799,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
       await runDiscoverySearchBatch(queries,"searching",runController.signal,searches);
       throwIfDiscoveryRunAborted(runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...firstPass);
-      discovery.rawResults=[...allMarketEvidence];
+      discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence]);
       const firstMentions=targetOnly?[]:await extractCompaniesFromEvidence(firstPass,targetMarket,savingMode?SAVING_COMPANY_CHECK_LIMIT:Math.min(Math.max(targetCount*5,20),60),runController.signal);
       const prioritizedFirstMentions=firstMentions.slice(0,savingMode?SAVING_COMPANY_CHECK_LIMIT:Math.min(targetCount*3,MAX_DISCOVERY_COMPANY_CHECKS));
       const targetMentions=queries.filter(query=>query.kind==='target-evidence').flatMap(query=>{
@@ -808,7 +854,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
           await runDiscoverySearchBatch(followUpQueries,"following",runController.signal,followUpSearches);
           throwIfDiscoveryRunAborted(runController.signal);
           const followUpEvidence=followUpSearches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...followUpEvidence);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+          discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
           const followUpMentions=await extractCompaniesFromEvidence(followUpEvidence,targetMarket,remainingLimit,runController.signal);
           const knownNames=new Set(companyMentions.map(item=>LeadIntelDiscovery.companyMentionKey(item.company)));
           rememberMentions(followUpMentions);
@@ -818,13 +864,13 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
           await runDiscoverySearchBatch(followUpResolutionQueries,"resolving",runController.signal,followUpResolutionSearches);
           throwIfDiscoveryRunAborted(runController.signal);
           const followUpResolved=followUpResolutionSearches.flatMap(item=>item?.results||[]);allResolved.push(...followUpResolved);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+          discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
           discovery.funnel.officialDomainsResolved=new Set(allResolved.map(item=>item.domain).filter(Boolean)).size;
           const followUpVerificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(followUpResolved,profile,market,remainingLimit,{includeIndependent:!savingMode,excludeDomains:verificationSearches.map(item=>item?.queryMeta?.domain).filter(Boolean)});
           followUpVerificationSearches=Array(followUpVerificationQueries.length).fill(null);expectedSearches+=followUpVerificationQueries.length;
           await runDiscoverySearchBatch(followUpVerificationQueries,"verifying",runController.signal,followUpVerificationSearches);
           const followUpVerified=followUpVerificationSearches.flatMap(item=>item?.results||[]);allVerified.push(...followUpVerified);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+          discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
           discovery.funnel.verifiedCompanies=new Set(allVerified.map(item=>item.domain).filter(Boolean)).size;
           linkedEvidence=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(allResolved,companyMentions,allMarketEvidence);
           runCandidates=LeadIntelDiscovery.mergeCompanyCandidates([...linkedEvidence,...allVerified],profile,market,MAX_DISCOVERY_COMPANY_CHECKS);
@@ -852,15 +898,11 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
       runCandidates=assessed.filter(c=>c.qualification.eligible);
       runPotentialMatches=assessed.filter(c=>!c.qualification.eligible);
       discovery.potentialMatches=mergeWorkflowCompanies(previousPotentialMatches,runPotentialMatches);
-      discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
+      discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
     })();
-    let runTimeout;
-    const runTimeoutMs=discoveryRunTimeoutMs(targetCount,queries.length);
     let timedOut=false;
-    try{timedOut=await Promise.race([
-      allSearches.then(()=>false),
-      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},runTimeoutMs);})
-    ]);}finally{clearTimeout(runTimeout);}
+    try{await awaitDiscoveryRun(allSearches,runController,discoveryRunTimeoutMs(targetCount,queries.length));}
+    catch(error){if(runController.signal.reason?.name==='TimeoutError')timedOut=true;else throw error;}
     if(!runController.signal.leadIntelScopeValid())throwIfDiscoveryRunAborted(runController.signal);
     const completedSearches=[...searches,...resolutionSearches,...verificationSearches,...followUpSearches,...followUpResolutionSearches,...followUpVerificationSearches].filter(Boolean);
     failures=completedSearches.filter(item=>item.error).length+buyerFitFailures.length+companyExtractionFailures.length+(timedOut?Math.max(1,expectedSearches-completedSearches.length):0);
@@ -872,7 +914,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
     fatalError=error instanceof Error?error:new Error(String(error||"Company discovery failed"));
     if(runController.signal.leadIntelScopeValid())discovery.status=runCandidates.length?"partial":"error";
   }
-  window.removeEventListener?.('leadintel:workspace-changed',stopForScope);window.removeEventListener?.('leadintel:server-ready',stopForScope);if(!runController.signal.leadIntelScopeValid()){if(discovery===discoveryAtStart&&identityAtStart===JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||''])){discovery.status='partial';discovery.needsRefresh=true;saveDiscovery();renderDiscoverySafely();}taskCentre?.fail(taskId,new Error('Company or workspace context changed. Research stopped.'),{canRetry:false});if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';return false;}
+  window.removeEventListener?.('leadintel:workspace-changed',stopForScope);window.removeEventListener?.('leadintel:server-ready',stopForScope);if(!runController.signal.leadIntelScopeValid()){if(activeDiscoveryTaskId===taskId&&discovery===discoveryAtStart&&identityAtStart===JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||''])){discovery.status='partial';discovery.needsRefresh=true;saveDiscovery();renderDiscoverySafely();}taskCentre?.fail(taskId,new Error('Company or workspace context changed. Research stopped.'),{canRetry:false});if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';return false;}
   const canceled=runController.signal.aborted&&runController.signal.reason?.name!=='TimeoutError';
   if(canceled){
     discovery.status='partial';fatalError=new Error('Company search cancelled. Completed evidence was kept.');
@@ -906,7 +948,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   discovery.checkedCompanyDomains=[...new Set([...previousCheckedDomains,...discovery.checkedCompanyDomains])];
 
   discoveryProgress={phase:"complete",completed:discoveryProgress.completed,total:discoveryProgress.total};
-  try{saveDiscovery();}catch(error){console.error("Companies state could not be saved",error);}
+  try{saveDiscovery();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});}catch(error){fatalError=new Error('Company evidence could not be saved. Keep this page open and retry saving.');discovery.status='partial';try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,status:'partial',persistence:'failed'}});}catch{}console.error("Companies state could not be saved",error);}
   renderDiscoverySafely();
   if(crmAuthenticated()){
     void refreshCrmState({render:false}).then(()=>renderAll()).catch(error=>{
@@ -930,7 +972,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
     try{saveDiscovery();}catch{}
     renderDiscoverySafely();
     showToast(`${totalQualified} of ${targetCount} qualified · LeadIntel is broadening the search automatically`);
-    setTimeout(()=>{if(scopeNow()!==scopeAtStart||!sameStrategyFingerprint(runContext.fingerprint,fingerprint()))return;void runCompanyDiscovery({savingMode:false,autoPass:autoPass+1});},80);
+    setTimeout(()=>{if(activeDiscoveryTaskId||loadMeta().lastCompanyRun?.runId!==runContext.runId||scopeNow()!==scopeAtStart||!sameStrategyFingerprint(runContext.fingerprint,fingerprint()))return;void runCompanyDiscovery({savingMode:false,autoPass:autoPass+1});},80);
     return true;
   }
   const budgetReached=!campaignPlan&&!savingMode&&!targetOnly&&!recheckOnly&&totalQualified<targetCount&&!budgetAllowsPass;
@@ -952,145 +994,143 @@ async function retryPurchasingFitChecks(){
   const pool=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates||[]).filter(c=>domains.has(canonicalDomain(c.domain))).slice(0,10);
   if(!pool.length){showToast('Saved company evidence is unavailable; recheck the company websites.');return false;}
   const profile={...companyQualificationProfile(main),referenceSimilarityModel:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(Array.isArray(main.referenceCustomerPortfolio?.lists)?null:window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}))};
-  const startedDiscovery=discovery,startedBridge=bridge(),scope=discoveryOperationContext,startedScope=scope();
-  const controller=new AbortController(),scopeIsCurrent=()=>discovery===startedDiscovery&&bridge()===startedBridge&&scope()===startedScope,stop=()=>{if(!scopeIsCurrent())controller.abort(new DOMException('Workspace or strategy changed','AbortError'));};
+  const startedDiscovery=discovery,startedBridge=bridge(),scope=discoveryOperationContext,startedScope=scope(),accountAtStart=discoveryAccountContext();
+  const task=window.LeadIntelTaskCentre,runId=++discoveryRunSequence,id=`company-fit-retry:${Date.now()}:${runId}`;activeDiscoveryTaskId=id;
+  saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,runId,status:'running'}});
+  const controller=new AbortController(),scopeIsCurrent=()=>activeDiscoveryTaskId===id&&discovery===startedDiscovery&&bridge()===startedBridge&&scope()===startedScope,stop=()=>{if(!scopeIsCurrent())controller.abort(new DOMException('Workspace or strategy changed','AbortError'));};
   controller.signal.leadIntelScopeValid=scopeIsCurrent;
   window.addEventListener?.('leadintel:workspace-changed',stop);window.addEventListener?.('leadintel:server-ready',stop);
-  const task=window.LeadIntelTaskCentre,id=`company-fit-retry:${Date.now()}`;activeDiscoveryTaskId=id;
-  const originalFailures=(discovery.searchFailures||[]).slice(),attempted=new Set(pool.map(c=>canonicalDomain(c.domain))),retryFailures=[];let completed=[];
+  const originalFailures=(discovery.searchFailures||[]).slice(),attempted=new Set(pool.map(c=>canonicalDomain(c.domain))),retryFailures=[];let completed=[],qualified=[];
+  const checkpoint=()=>{
+    throwIfDiscoveryRunAborted(controller.signal);
+    const at=new Date().toISOString(),assessed=completed.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,main.market||{},{...window.LeadIntelQualificationSettings?.get?.(),researchedAt:at});return {...c,strategyFingerprint:fingerprint(),searchContextKey:LeadIntelDiscovery.searchContextKey(profile),qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};});
+    qualified=assessed.filter(c=>c.qualification.eligible);
+    discovery.candidates=mergeWorkflowCompanies(discovery.candidates,qualified);
+    const qualifiedDomains=new Set(discovery.candidates.map(c=>canonicalDomain(c.domain)));
+    discovery.potentialMatches=mergeWorkflowCompanies(discovery.potentialMatches||[],assessed.filter(c=>!c.qualification.eligible)).filter(c=>!qualifiedDomains.has(canonicalDomain(c.domain)));
+    discovery.latestRunCandidateCount=qualified.length;discovery.funnel.qualifiedCompanies=qualified.length;discovery.retainedLastSuccessfulResults=qualified.length===0&&discovery.candidates.length>0;
+    discovery.lastRunAt=at;if(qualified.length)discovery.lastSuccessfulRunAt=at;
+    saveDiscovery();
+  };
   discovery.status='running';discoveryProgress={phase:'buyer-fit',completed:0,total:Math.ceil(pool.length/2)};
   task?.start({id,type:'company-discovery',title:'Retry purchasing fit',stage:'Reusing verified company evidence',total:discoveryProgress.total,completed:0,canCancel:true,canRetry:true});
-  task?.registerActions(id,{cancel:()=>controller.abort(),retry:()=>retryPurchasingFitChecks()});renderDiscoverySafely();
-  // Two concurrent workers, two companies per batch, and one recovery per company.
-  // Every provider request allows both bounded primary and specialist attempts.
-  const retryTimeoutMs=Math.ceil(pool.length/4)*3*COMPANY_EXTRACTION_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS;
-  const deadline=setTimeout(()=>controller.abort(new DOMException('Purchasing-fit retry deadline reached','TimeoutError')),retryTimeoutMs);
+  task?.registerActions(id,{cancel:()=>controller.abort(),retry:()=>retryPurchasingFitChecks()});
+  let stoppedError;
   try{
-    completed=await LeadIntelDiscovery.researchBuyerFit(pool,profile,prompt=>generateDiscoveryBuyerFit(prompt,controller.signal),{signal:controller.signal,batchSize:2,
-      onFailure:(error,batch)=>{for(const c of batch)retryFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${c.domain}`,domain:c.domain,company:c.company},'buyer-fit'));},
-      onProgress:progress=>{stop();if(controller.signal.aborted)return;completed=progress.candidates;discoveryProgress={phase:'buyer-fit',completed:progress.completed,total:progress.total};task?.update(id,{stage:'Checking purchasing fit',completed:progress.completed,total:progress.total});renderDiscoverySafely();}
-    });
-  }catch(error){
-    for(const c of pool.filter(c=>!completed.some(row=>row.domain===c.domain)))retryFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${c.domain}`,domain:c.domain,company:c.company},'buyer-fit'));
-  }finally{clearTimeout(deadline);window.removeEventListener?.('leadintel:workspace-changed',stop);window.removeEventListener?.('leadintel:server-ready',stop);}
-  if(discovery!==startedDiscovery||bridge()!==startedBridge||scope()!==startedScope){if(discovery===startedDiscovery)discovery.status='partial';task?.fail(id,new Error('Workspace or strategy changed; results were not applied.'),{canRetry:true});if(activeDiscoveryTaskId===id)activeDiscoveryTaskId='';return false;}
-  const at=new Date().toISOString(),assessed=completed.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,main.market||{},{...window.LeadIntelQualificationSettings?.get?.(),researchedAt:at});return {...c,qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};});
-  const qualified=assessed.filter(c=>c.qualification.eligible);
-  discovery.candidates=mergeWorkflowCompanies(discovery.candidates,qualified);
-  const qualifiedDomains=new Set(discovery.candidates.map(c=>canonicalDomain(c.domain)));
-  discovery.potentialMatches=mergeWorkflowCompanies(discovery.potentialMatches||[],assessed.filter(c=>!c.qualification.eligible)).filter(c=>!qualifiedDomains.has(canonicalDomain(c.domain)));
-  discovery.searchFailures=[...originalFailures.filter(f=>f.phase!=='buyer-fit'||!attempted.has(canonicalDomain(f.domain||f.queryMeta?.domain))),...retryFailures];
-  discovery.latestRunCandidateCount=qualified.length;discovery.funnel.qualifiedCompanies=discovery.candidates.length;
-  discovery.status=discovery.searchFailures.length?'partial':discovery.candidates.length?'complete':'no_results';discovery.lastRunAt=at;
-  saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,canceled:false,completedAt:at,status:discovery.status,qualifiedCount:discovery.candidates.length}});
-  discoveryProgress={phase:'complete',completed:discoveryProgress.completed,total:discoveryProgress.total};saveDiscovery();renderDiscoverySafely();
-  if(retryFailures.length)task?.fail(id,new Error('Some purchasing-fit checks remain unavailable.'),{canRetry:true,resultCount:qualified.length});
+    saveDiscovery();renderDiscoverySafely();
+    const retryTimeoutMs=Math.ceil(pool.length/4)*3*COMPANY_EXTRACTION_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS;
+    completed=await awaitDiscoveryRun(LeadIntelDiscovery.researchBuyerFit(pool,profile,prompt=>generateDiscoveryBuyerFit(prompt,controller.signal),{signal:controller.signal,batchSize:2,
+      onFailure:(error,batch)=>{throwIfDiscoveryRunAborted(controller.signal);for(const c of batch)retryFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${c.domain}`,domain:c.domain,company:c.company},'buyer-fit'));},
+      onProgress:progress=>{throwIfDiscoveryRunAborted(controller.signal);completed=progress.candidates;checkpoint();discoveryProgress={phase:'buyer-fit',completed:progress.completed,total:progress.total};task?.update(id,{stage:'Checking purchasing fit',completed:progress.completed,total:progress.total});renderDiscoverySafely();}
+    }),controller,retryTimeoutMs);
+    checkpoint();
+  }catch(error){stoppedError=error;
+    if(scopeIsCurrent()&&error?.name!=='AbortError')for(const c of pool.filter(c=>!completed.some(row=>row.domain===c.domain)))retryFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${c.domain}`,domain:c.domain,company:c.company},'buyer-fit'));
+  }finally{window.removeEventListener?.('leadintel:workspace-changed',stop);window.removeEventListener?.('leadintel:server-ready',stop);}
+  if(!scopeIsCurrent()){if(activeDiscoveryTaskId===id&&discovery===startedDiscovery)startedDiscovery.status='partial';if(activeDiscoveryTaskId===id&&discovery===startedDiscovery&&bridge()===startedBridge&&discoveryAccountContext()===accountAtStart){discovery.status='partial';discovery.needsRefresh=true;saveDiscovery();renderDiscoverySafely();}task?.fail(id,new Error('Workspace or strategy changed; results were not applied.'),{canRetry:false});if(activeDiscoveryTaskId===id)activeDiscoveryTaskId='';return false;}
+  const canceled=controller.signal.aborted&&controller.signal.reason?.name!=='TimeoutError';
+  const completedDomains=new Set(completed.map(c=>canonicalDomain(c.domain)));
+  discovery.searchFailures=[...originalFailures.filter(f=>f.phase!=='buyer-fit'||!attempted.has(canonicalDomain(f.domain||f.queryMeta?.domain))||stoppedError&&!completedDomains.has(canonicalDomain(f.domain||f.queryMeta?.domain))),...retryFailures];
+  discovery.status=stoppedError||discovery.searchFailures.length?'partial':qualified.length?'complete':'no_results';discovery.lastRunAt=new Date().toISOString();
+  saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,canceled,completedAt:discovery.lastRunAt,status:discovery.status,qualifiedCount:qualified.length}});
+  discoveryProgress={phase:'complete',completed:discoveryProgress.completed,total:discoveryProgress.total};
+  try{saveDiscovery();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});}catch(error){stoppedError=error;discovery.status='partial';try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,status:'partial',persistence:'failed'}});}catch{}}
+  renderDiscoverySafely();
+  if(stoppedError||retryFailures.length)task?.fail(id,new Error(canceled?'Purchasing-fit retry canceled. Completed evidence was kept.':'Some purchasing-fit checks remain unavailable.'),{canRetry:true,resultCount:qualified.length});
   else task?.complete(id,{status:discovery.status,stage:'Purchasing fit rechecked',resultCount:qualified.length});
-  activeDiscoveryTaskId='';showToast(`${qualified.length} companies verified from saved evidence · ${discovery.candidates.length} available`);return !retryFailures.length;
+  if(activeDiscoveryTaskId===id)activeDiscoveryTaskId='';showToast(canceled?'Purchasing-fit retry canceled · completed evidence kept':`${qualified.length} companies verified from saved evidence · ${discovery.candidates.length} available`);return !stoppedError&&!retryFailures.length;
 }
 async function retryFailedDiscoveryChecks(){
   if(discovery.status==='running')return false;
   const meta=loadMeta(),batch=meta.companyReviewQueue?.lastBatch;
   if(batch?.id&&meta.lastCompanyRun?.reviewBatchId===batch.id)return reviewNextCompanyBatch({domains:batch.domains});
-  discoveryWebsiteChecks=new Map();
   if(discovery.searchFailures?.some(item=>item.phase==='extracting'))return runCompanyDiscovery();
   if(discovery.searchFailures?.some(item=>item.phase==='buyer-fit'))return retryPurchasingFitChecks();
-  if(discovery.status==="running")return false;
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];
-  let resolutionOnly=failures.length>0&&failures.every(item=>item.phase==="resolving"&&item.queryMeta?.query&&item.queryMeta?.company);
-  if(!resolutionOnly&&(!failures.length||failures.some(item=>item.phase!=="verifying"||!item.queryMeta?.query||!item.queryMeta?.domain)))return runCompanyDiscovery();
-  const main=mainState();if(!currentStrategyApproval(main))return false;if(!window.LeadIntelTargeting?.isConfirmed(main))return runCompanyDiscovery();const market=main.market||{};const profile=companyQualificationProfile(main);
+  let resolutionOnly=failures.length>0&&failures.every(item=>item.phase==='resolving'&&item.queryMeta?.query&&item.queryMeta?.company);
+  if(!resolutionOnly&&(!failures.length||failures.some(item=>item.phase!=='verifying'||!item.queryMeta?.query||!item.queryMeta?.domain)))return runCompanyDiscovery();
+  const main=mainState();if(!currentStrategyApproval(main))return false;if(!window.LeadIntelTargeting?.isConfirmed(main))return runCompanyDiscovery();const market=main.market||{},profile=companyQualificationProfile(main),strategyAtStart=fingerprint();
+  discoveryWebsiteChecks=new Map();discoveryWebsiteReadFailures=new Map();
   activeDiscoverySavingMode=discovery.savingMode===true;startDiscoveryBudget(LeadIntelDiscovery.discoveryCallBudget({targetCount:selectedDiscoveryTarget(),savingMode:activeDiscoverySavingMode}));discovery.funnel.firecrawlSearchCalls=0;discovery.funnel.firecrawlPageReads=0;discovery.funnel.firecrawlCallLimit=discoveryCallLimit;discovery.funnel.budgetSkippedChecks=0;
-  const previousCandidates=discovery.candidates.slice();const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
-  const targetCount=persistDiscoveryTarget();let queries=failures.map(item=>item.queryMeta);
+  const previousCandidates=discovery.candidates.slice(),previousPotentialMatches=(discovery.potentialMatches||[]).slice();
+  persistDiscoveryTarget();let queries=failures.map(item=>item.queryMeta);
   if(resolutionOnly&&discovery.savingMode){
-    const targets=selectedTargets(main);
-    const known=queries.map(query=>targets.find(item=>item.domain&&item.companyName.toLowerCase()===query.company.toLowerCase()));
-    if(known.every(Boolean)){
-      queries=LeadIntelDiscovery.buildCandidateVerificationQueries(known.map((target,index)=>({domain:target.domain,company:target.companyName,market:queries[index].market})),profile,market,known.length,{includeIndependent:!activeDiscoverySavingMode});
-      resolutionOnly=false;
-    }
+    const targets=selectedTargets(main),known=queries.map(query=>targets.find(item=>item.domain&&item.companyName.toLowerCase()===query.company.toLowerCase()));
+    if(known.every(Boolean)){queries=LeadIntelDiscovery.buildCandidateVerificationQueries(known.map((target,index)=>({domain:target.domain,company:target.companyName,market:queries[index].market})),profile,market,known.length,{includeIndependent:!activeDiscoverySavingMode});resolutionOnly=false;}
   }
-  discovery.status="running";discovery.searchFailures=[];discovery.providerFallbacks=[];discovery.funnel.openAiFallbackSearches=0;discoveryProgress={phase:resolutionOnly?"resolving":"verifying",completed:0,total:queries.length};
-  discoveryEvidenceUrls=new Set((discovery.rawResults||[]).map(item=>item.url).filter(Boolean));
-  discoveryCheckedCompanyDomains=new Set(discovery.checkedCompanyDomains||[]);
-  activeDiscoveryTaskId=`company-verification-retry:${Date.now()}`;
-  const taskCentre=window.LeadIntelTaskCentre;const taskId=activeDiscoveryTaskId;const runController=new AbortController();
-  const discoveryAtStart=discovery,bridgeAtStart=bridge(),accountAtStart=discoveryAccountContext(),scopeAtStart=discoveryOperationContext();
-  const scopeIsCurrent=()=>discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryOperationContext()===scopeAtStart;
+  discovery.status='running';discovery.searchFailures=[];discovery.providerFallbacks=[];discovery.latestRunCandidateCount=0;discovery.funnel.openAiFallbackSearches=0;discoveryProgress={phase:resolutionOnly?'resolving':'verifying',completed:0,total:queries.length};
+  discoveryEvidenceUrls=new Set((discovery.rawResults||[]).map(item=>item.url).filter(Boolean));discoveryCheckedCompanyDomains=new Set(discovery.checkedCompanyDomains||[]);
+  const taskCentre=window.LeadIntelTaskCentre,runId=++discoveryRunSequence,taskId=`company-verification-retry:${Date.now()}:${runId}`;activeDiscoveryTaskId=taskId;
+  saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,runId,status:'running'}});
+  const runController=new AbortController(),discoveryAtStart=discovery,bridgeAtStart=bridge(),accountAtStart=discoveryAccountContext(),scopeAtStart=discoveryOperationContext();
+  const scopeIsCurrent=()=>activeDiscoveryTaskId===taskId&&discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryOperationContext()===scopeAtStart,stop=()=>{if(!scopeIsCurrent())runController.abort(new DOMException('Workspace or Strategy changed','AbortError'));};
   runController.signal.leadIntelScopeValid=scopeIsCurrent;
-  taskCentre?.start({id:taskId,type:"company-discovery",title:resolutionOnly?"Retry official domain lookups":"Retry company website checks",stage:resolutionOnly?"Resolving company websites":"Verifying company websites",total:queries.length,completed:0,canCancel:true,canRetry:true});
+  window.addEventListener?.('leadintel:workspace-changed',stop);window.addEventListener?.('leadintel:server-ready',stop);
+  taskCentre?.start({id:taskId,type:'company-discovery',title:resolutionOnly?'Retry official domain lookups':'Retry company website checks',stage:resolutionOnly?'Resolving company websites':'Verifying company websites',total:queries.length,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>retryFailedDiscoveryChecks()});
-  let timedOut=false;
-  try{
-    const rows=Array(queries.length).fill(null);
-    let verificationQueries=[];let verificationRows=[];
-    const searches=(async()=>{
-      await runDiscoverySearchBatch(queries,resolutionOnly?"resolving":"verifying",runController.signal,rows,{retryOnly:true});
-      if(resolutionOnly){
-        const previousResolved=(discovery.rawResults||[]).filter(item=>String(item.queryId||"").startsWith("resolve-"));
-        verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries([...previousResolved,...rows.flatMap(item=>item?.results||[])],profile,market,MAX_DISCOVERY_COMPANY_CHECKS,{includeIndependent:!activeDiscoverySavingMode});
-        verificationRows=Array(verificationQueries.length).fill(null);
-        await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal,verificationRows,{retryOnly:true});
-      }
-      return rows;
-    })();
-    let runTimeout;
-    try{timedOut=await Promise.race([searches.then(()=>false),new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Verification retry deadline reached","TimeoutError"));resolve(true);},Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*2,DISCOVERY_RUN_TIMEOUT_MIN_MS));})]);}
-    finally{clearTimeout(runTimeout);}
-    const rowsResult=await searches.catch(()=>rows);
-    throwIfDiscoveryRunAborted(runController.signal);
-    discovery.searchFailures=failedDiscoverySearches([{phase:resolutionOnly?"resolving":"verifying",rows:rowsResult,queries},...(resolutionOnly?[{phase:"verifying",rows:verificationRows,queries:verificationQueries}]:[])]);
-    const raw=Array.isArray(discovery.rawResults)?discovery.rawResults:[];
-    const marketEvidence=raw.filter(item=>String(item.queryId||"").startsWith("discover-"));
-    const resolved=[...raw.filter(item=>String(item.queryId||"").startsWith("resolve-")),...(resolutionOnly?rowsResult.flatMap(item=>item?.results||[]):[])];
-    const verified=[...raw.filter(item=>String(item.queryId||"").startsWith("verify-")),...(resolutionOnly?verificationRows:rowsResult).flatMap(item=>item?.results||[])];
-    const candidateEvidence=(discovery.potentialMatches||[]).flatMap(candidate=>(candidate.evidence||[]).map(item=>({
-      queryId:`review-${candidate.id}`,market:candidate.market,domain:candidate.domain,company:candidate.company,url:item.url,sourceDomain:item.sourceDomain,
-      title:item.title,description:item.description,text:item.text,date:item.date,dateSource:item.dateSource,verifiedAt:item.verifiedAt,statusCode:item.statusCode
-    })));
-    const linked=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,discovery.companyMentions||[],marketEvidence);
-    const provisional=LeadIntelDiscovery.mergeCompanyCandidates([...candidateEvidence,...linked,...verified],profile,market,MAX_DISCOVERY_COMPANY_CHECKS);
-    const pool=[...new Map([...provisional,...LeadIntelDiscovery.buildPotentialCompanyCandidates([...candidateEvidence,...linked,...verified],profile,market,provisional,MAX_DISCOVERY_COMPANY_CHECKS)].map(c=>[c.domain,c])).values()];
-    discoveryProgress={phase:'buyer-fit',completed:0,total:Math.ceil(pool.length/4)};renderDiscoverySafely();
-    const researched=await LeadIntelDiscovery.researchBuyerFit(pool,profile,prompt=>generateDiscoveryBuyerFit(prompt,runController.signal),{
-      signal:runController.signal,
-      onFailure:(error,batch)=>{if(!scopeIsCurrent())return;for(const company of batch)discovery.searchFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${company.domain}`,company:company.company,domain:company.domain},'buyer-fit'));},
-      onProgress:({completed,total})=>{if(!scopeIsCurrent())return;discoveryProgress={phase:'buyer-fit',completed,total};taskCentre?.update(taskId,{stage:'Checking purchasing fit',completed,total});renderDiscoverySafely();}
-    });
+  const rows=Array(queries.length).fill(null);let verificationQueries=[],verificationRows=[],retryError,fitPool=[],completedFits=[],runCandidates=[];
+  const checkpoint=researched=>{
     throwIfDiscoveryRunAborted(runController.signal);
     const settings={...window.LeadIntelQualificationSettings?.get?.(),researchedAt:new Date().toISOString()};
-    const assessed=LeadIntelDiscovery.rankQualifiedCompanies(researched.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,market,settings);return {...c,qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified===true,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};}));
-    const runCandidates=assessed.filter(c=>c.qualification.eligible);
-
-  discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);
-    discovery.latestRunCandidateCount=runCandidates.length;
-    discovery.retainedLastSuccessfulResults=runCandidates.length===0&&previousCandidates.length>0;
-    discovery.potentialMatches=mergeWorkflowCompanies(discovery.potentialMatches||[],assessed.filter(c=>!c.qualification.eligible)).filter(c=>!discovery.candidates.some(row=>row.domain===c.domain));
-    discovery.rawResults=[...marketEvidence,...resolved,...verified].filter((item,index,array)=>array.findIndex(other=>other.url===item.url)===index).slice(0,50);
-    discovery.funnel.evidencePages=discoveryEvidenceUrls.size;
-    discovery.funnel.officialDomainsResolved=new Set([...resolved,...verified].map(item=>item.domain).filter(Boolean)).size;
-    discovery.funnel.verifiedCompanies=new Set(verified.map(item=>item.domain).filter(Boolean)).size;
-    discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;
+    const assessed=LeadIntelDiscovery.rankQualifiedCompanies(researched.map(c=>{const qualification=LeadIntelDiscovery.assessCompanyQualification(c,profile,market,settings);return {...c,strategyFingerprint:strategyAtStart,searchContextKey:LeadIntelDiscovery.searchContextKey(profile),qualification,qualified:qualification.eligible,marketVerified:qualification.eligible||c.marketVerified===true,buyerVerified:qualification.eligible,qualificationGaps:qualification.gaps,matchedSignals:qualification.matchedSignals,score:{total:qualification.score,fit:qualification.buyerFitPoints,signal:qualification.signalPoints}};}));
+    runCandidates=assessed.filter(c=>c.qualification.eligible);
+    discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);
+    discovery.latestRunCandidateCount=runCandidates.length;discovery.retainedLastSuccessfulResults=runCandidates.length===0&&previousCandidates.length>0;
+    discovery.potentialMatches=mergeWorkflowCompanies(mergeWorkflowCompanies(previousPotentialMatches,fitPool),assessed.filter(c=>!c.qualification.eligible)).filter(c=>!discovery.candidates.some(row=>canonicalDomain(row.domain)===canonicalDomain(c.domain)));
     discovery.funnel.qualifiedCompanies=runCandidates.length;
-    discovery.status=LeadIntelDiscovery.discoveryOutcomeStatus({timedOut,failures:discovery.searchFailures.length,candidateCount:runCandidates.length});
-    discovery.lastRunAt=new Date().toISOString();
-    saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,canceled:false,completedAt:discovery.lastRunAt,status:discovery.status,qualifiedCount:runCandidates.length}});
-    Object.assign(discovery,LeadIntelDiscovery.retainLastSuccessfulDiscoveryCandidates({...discovery,candidates:previousCandidates,lastSuccessfulRunAt:previousRunAt},runCandidates,discovery.lastRunAt));
-  }catch(error){
-    if(!scopeIsCurrent()){if(discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryAccountContext()===accountAtStart){discovery.status='partial';discovery.needsRefresh=true;saveDiscovery();renderDiscoverySafely();}taskCentre?.fail(taskId,new Error('Workspace or Strategy changed; retry results were not applied.'),{canRetry:false});if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';return false;}
-    discovery.searchFailures=failedDiscoverySearches([{phase:"verifying",rows:[],queries}]);
-    discovery.status=previousCandidates.length?"partial":"error";
-    taskCentre?.fail(taskId,error,{canRetry:true,resultCount:discovery.latestRunCandidateCount});
-    showToast(error?.message||"Company website checks could not be retried");
-  }
-  discoveryProgress={phase:"complete",completed:discoveryProgress.completed,total:discoveryProgress.total};
-  try{saveDiscovery();}catch(error){console.error("Company verification retry could not be saved",error);}
+    discovery.lastRunAt=new Date().toISOString();if(runCandidates.length)discovery.lastSuccessfulRunAt=discovery.lastRunAt;
+    saveDiscovery();
+  };
+  const searchGroups=()=>[{phase:resolutionOnly?'resolving':'verifying',rows,queries},...(resolutionOnly?[{phase:'verifying',rows:verificationRows,queries:verificationQueries}]:[])];
+  try{
+    saveDiscovery();renderDiscoverySafely();
+    const operation=(async()=>{
+      await runDiscoverySearchBatch(queries,resolutionOnly?'resolving':'verifying',runController.signal,rows,{retryOnly:true});throwIfDiscoveryRunAborted(runController.signal);
+      if(resolutionOnly){
+        const previousResolved=(discovery.rawResults||[]).filter(item=>String(item.queryId||'').startsWith('resolve-'));
+        verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries([...previousResolved,...rows.flatMap(item=>item?.results||[])],profile,market,MAX_DISCOVERY_COMPANY_CHECKS,{includeIndependent:!activeDiscoverySavingMode});verificationRows=Array(verificationQueries.length).fill(null);
+        await runDiscoverySearchBatch(verificationQueries,'verifying',runController.signal,verificationRows,{retryOnly:true});throwIfDiscoveryRunAborted(runController.signal);
+      }
+      discovery.searchFailures=failedDiscoverySearches(searchGroups());
+      const raw=Array.isArray(discovery.rawResults)?discovery.rawResults:[],fresh=[...rows,...verificationRows].flatMap(item=>item?.results||[]);
+      discovery.rawResults=retainDiscoveryEvidence(raw,fresh);
+      const marketEvidence=raw.filter(item=>String(item.queryId||'').startsWith('discover-'));
+      const resolved=[...raw.filter(item=>String(item.queryId||'').startsWith('resolve-')),...(resolutionOnly?rows.flatMap(item=>item?.results||[]):[])];
+      const verified=[...raw.filter(item=>String(item.queryId||'').startsWith('verify-')),...(resolutionOnly?verificationRows:rows).flatMap(item=>item?.results||[])];
+      const candidateEvidence=previousPotentialMatches.flatMap(candidate=>(candidate.evidence||[]).map(item=>({...item,queryId:`review-${candidate.id}`,market:candidate.market,domain:candidate.domain,company:candidate.company})));
+      const linked=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,discovery.companyMentions||[],marketEvidence);
+      const provisional=LeadIntelDiscovery.mergeCompanyCandidates([...candidateEvidence,...linked,...verified],profile,market,MAX_DISCOVERY_COMPANY_CHECKS);
+      fitPool=[...new Map([...provisional,...LeadIntelDiscovery.buildPotentialCompanyCandidates([...candidateEvidence,...linked,...verified],profile,market,provisional,MAX_DISCOVERY_COMPANY_CHECKS)].map(c=>[c.domain,c])).values()];
+      discovery.potentialMatches=mergeWorkflowCompanies(previousPotentialMatches,fitPool);saveDiscovery();
+      discoveryProgress={phase:'buyer-fit',completed:0,total:Math.ceil(fitPool.length/4)};renderDiscoverySafely();
+      const researched=await LeadIntelDiscovery.researchBuyerFit(fitPool,profile,prompt=>generateDiscoveryBuyerFit(prompt,runController.signal),{
+        signal:runController.signal,
+        onFailure:(error,batch)=>{throwIfDiscoveryRunAborted(runController.signal);for(const company of batch)discovery.searchFailures.push(discoverySearchFailure(error,{id:`buyer-fit-${company.domain}`,company:company.company,domain:company.domain},'buyer-fit'));},
+        onProgress:({completed,total,candidates})=>{throwIfDiscoveryRunAborted(runController.signal);completedFits=candidates||[];checkpoint(completedFits);discoveryProgress={phase:'buyer-fit',completed,total};taskCentre?.update(taskId,{stage:'Checking purchasing fit',completed,total});renderDiscoverySafely();}
+      });
+      throwIfDiscoveryRunAborted(runController.signal);completedFits=researched;checkpoint(researched);
+      discovery.funnel.evidencePages=discoveryEvidenceUrls.size;discovery.funnel.officialDomainsResolved=new Set([...resolved,...verified].map(item=>item.domain).filter(Boolean)).size;discovery.funnel.verifiedCompanies=new Set(verified.map(item=>item.domain).filter(Boolean)).size;discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;
+    })();
+    await awaitDiscoveryRun(operation,runController,discoveryRunTimeoutMs(queries.length,queries.length));
+    discovery.status=LeadIntelDiscovery.discoveryOutcomeStatus({failures:discovery.searchFailures.length,candidateCount:runCandidates.length});
+  }catch(error){retryError=error;
+    if(scopeIsCurrent()){
+      const canceled=runController.signal.aborted&&runController.signal.reason?.name!=='TimeoutError';
+      const pending=searchGroups().flatMap(group=>group.queries.filter((query,index)=>!group.rows[index]).map(query=>discoverySearchFailure(error,query,group.phase)));
+      const fitPending=fitPool.filter(c=>!completedFits.some(row=>row.domain===c.domain)).map(c=>discoverySearchFailure(error,{id:`buyer-fit-${c.domain}`,domain:c.domain,company:c.company},'buyer-fit'));
+      discovery.searchFailures=[...discovery.searchFailures,...failedDiscoverySearches(searchGroups()),...pending.map(item=>canceled?{...item,reason:'canceled',status:0}:item),...fitPending.map(item=>canceled?{...item,reason:'canceled',status:0}:item)].filter((item,index,array)=>array.findIndex(other=>other.id===item.id)===index);
+      discovery.status=canceled||discovery.candidates.length||discovery.potentialMatches.length?'partial':'error';
+    }
+  }finally{window.removeEventListener?.('leadintel:workspace-changed',stop);window.removeEventListener?.('leadintel:server-ready',stop);}
+  if(!scopeIsCurrent()){if(activeDiscoveryTaskId===taskId&&discovery===discoveryAtStart)discoveryAtStart.status='partial';if(activeDiscoveryTaskId===taskId&&discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryAccountContext()===accountAtStart){discovery.status='partial';discovery.needsRefresh=true;saveDiscovery();renderDiscoverySafely();}taskCentre?.fail(taskId,new Error('Workspace or Strategy changed; retry results were not applied.'),{canRetry:false});if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';return false;}
+  const canceled=runController.signal.aborted&&runController.signal.reason?.name!=='TimeoutError';
+  discovery.lastRunAt=new Date().toISOString();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,canceled,completedAt:discovery.lastRunAt,status:discovery.status,qualifiedCount:runCandidates.length}});
+  discoveryProgress={phase:'complete',completed:discoveryProgress.completed,total:discoveryProgress.total};
+  try{saveDiscovery();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});}catch(error){retryError=error;discovery.status='partial';try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,status:'partial',persistence:'failed'}});}catch{}}
   renderDiscoverySafely();
-  if(discovery.searchFailures.length){taskCentre?.fail(taskId,new Error(`${discovery.searchFailures.length} company website check${discovery.searchFailures.length===1?"":"s"} still failed after retry.`),{canRetry:true,resultCount:discovery.latestRunCandidateCount});showToast("Company checks retried · some still need attention");}
-  else{taskCentre?.complete(taskId,{status:discovery.status,stage:"Company website checks retried",resultCount:discovery.latestRunCandidateCount});showToast(discovery.latestRunCandidateCount?`${discovery.latestRunCandidateCount} qualified compan${discovery.latestRunCandidateCount===1?"y":"ies"} now ready for buyer search`:"Checks completed · no company passed every qualification check");}
-  activeDiscoveryTaskId="";
-  return discovery.searchFailures.length===0;
+  if(retryError||discovery.searchFailures.length){taskCentre?.fail(taskId,retryError||new Error(`${discovery.searchFailures.length} company checks still need attention.`),{canRetry:true,resultCount:runCandidates.length});showToast(canceled?'Company checks canceled · completed evidence kept':'Company checks retried · some still need attention');}
+  else{taskCentre?.complete(taskId,{status:discovery.status,stage:'Company website checks retried',resultCount:runCandidates.length});showToast(runCandidates.length?`${runCandidates.length} qualified companies now ready for buyer search`:'Checks completed · no company passed every qualification check');}
+  if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';return !retryError&&discovery.searchFailures.length===0;
 }
 function scoreCell(label,value,max){return `<div><span>${label}</span><strong>${Number(value)||0}/${max}</strong><i style="--score:${Math.round((Number(value)||0)/max*20)}"></i></div>`;}
 function linkedInSearchUrl(person={},candidate={}){
@@ -1205,7 +1245,8 @@ function peopleHtml(candidate,candidateIndex){
   }).join("")}</div>`;
 }
 function candidateCrmMeta(candidate){const company=crmCompanyByDomain(candidate.domain||candidate.website);const inPipeline=currentWorkspaceCrmPipeline().some(item=>canonicalDomain(item.normalized_domain||item.website)===canonicalDomain(candidate.domain||candidate.website));return {company,suppressed:company?.lifecycle_status==="suppressed",inPipeline};}
-function candidateIsActionable(candidate){return candidate?.needsRecheck!==true&&qualificationAssessment(candidate).eligible;}
+function companyStrategyCurrent(candidate){return !discovery.needsRefresh&&(!candidate?.strategyFingerprint||sameStrategyFingerprint(candidate.strategyFingerprint,fingerprint()));}
+function candidateIsActionable(candidate){return candidate?.needsRecheck!==true&&companyStrategyCurrent(candidate)&&qualificationAssessment(candidate).eligible;}
 function renderDiscoveryFunnel(){
   const target=$("discovery-funnel");if(!target)return;
   const funnel=discovery.funnel||{};
@@ -1349,6 +1390,7 @@ function selectResearchReviewForBuyers(key){
   saveDiscovery();renderAll();showToast(`${candidate.company} selected for Buyers · qualification still unverified`);void startSelectedBuyerResearch(copy);return true;
 }
 function unselectResearchReviewForBuyers(key){
+  companySelectionOperations.delete(key);
   const candidate=researchReviewRows().find(item=>researchReviewKey(item)===key);if(!candidate)return false;
   const domain=canonicalDomain(candidate.domain||candidate.website);
   discovery.selectedProspects=(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain||item.website)!==domain);
@@ -1426,8 +1468,8 @@ function discoveryRecoveryHtml(){
   const noNames=companyExtractionMiss();const noEvidence=!discovery.rawResults.length;
   return `<div class="market-empty discovery-recovery"><span class="eyebrow">Next action</span><h4>${noNames?"No company names identified":noEvidence?"No usable company evidence found":discovery.savingMode?"Earlier search checked a limited sample":"No newly qualified opportunities"}</h4><p>${esc(guidance.summary)}</p><p class="discovery-recovery-valid">${noNames?"The search did not confirm a market no-match; it did not identify company names from this evidence set.":noEvidence?"The search did not collect evidence, so it cannot conclude that no companies match.":discovery.savingMode?"This is an earlier limited search. Run a new company search with your current settings.":"A zero-result run can be valid when qualifying public evidence is unavailable."}</p><ol>${guidance.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${noNames?"":`<p class="discovery-recovery-note"><strong>Keep the selected amount for now.</strong> Increasing it repeats the same qualification checks; it does not create missing evidence.</p>`}<button class="secondary-btn" type="button" data-action="${action}">${esc(guidance.primaryLabel)} <span>→</span></button></div>`;
 }
-function rankedCheckedCompanies(){return LeadIntelDiscovery.rankQualifiedCompanies(discovery.candidates.map((c,index)=>({...c,storedIndex:index,qualification:qualificationAssessment(c)}))).filter(c=>c.qualification.eligible&&!c.needsRecheck);}
-function companyCandidateCardHtml(row,rank){const c={...row,matchedSignals:row.qualification.matchedSignals||[]};const index=c.storedIndex;const presentation=LeadIntelDiscovery.companyQualificationPresentation(c,c.qualification);const crm=candidateCrmMeta(c);const crmLabel=crm.suppressed?"Suppressed":crm.company?"Saved in CRM ✓":"Save in CRM";const crmDisabled=!crmAuthenticated()||crm.suppressed||c.needsRecheck;return `<article class="company-card ${crm.inPipeline||c.saved?"saved":""}" data-company-index="${index}">
+function rankedCheckedCompanies(){return LeadIntelDiscovery.rankQualifiedCompanies(discovery.candidates.map((c,index)=>({...c,storedIndex:index,qualification:qualificationAssessment(c)}))).filter(c=>c.qualification.eligible&&!c.needsRecheck&&companyStrategyCurrent(c));}
+function companyCandidateCardHtml(row,rank){const c={...row,matchedSignals:row.qualification.matchedSignals||[]};const index=c.storedIndex;const presentation=LeadIntelDiscovery.companyQualificationPresentation(c,c.qualification);const crm=candidateCrmMeta(c);const crmLabel=crm.suppressed?"Suppressed":crm.company?"Saved in CRM ✓":"Save in CRM";const crmDisabled=!crmAuthenticated()||crm.suppressed||c.needsRecheck;return `<article class="company-card ${crm.inPipeline||c.saved?"saved":""}" data-company-index="${index}" data-company-key="${esc(researchReviewKey(c))}">
     <div class="company-card-top"><div><span class="opportunity-market">#${rank+1} · ${esc(c.market||"Target market")} · ${esc(presentation.routeLabel)}${selectedTargets().some(item=>item.domain&&item.domain===canonicalDomain(c.domain)||item.companyName.toLowerCase()===String(c.company).toLowerCase())?' · Your target':''}</span><h4>${esc(c.company)}</h4><a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.domain)} ↗</a></div><div class="company-total"><strong>${qualificationAssessment(c).score??'—'}</strong><span>Company fit /100</span></div></div>
     <p class="company-match-reason">${esc(String(c.buyerFit?.reason||"Purchasing application verified from operating evidence.").slice(0,280))}</p><details class="company-research-details"><summary>Research details &amp; evidence</summary>${c.needsRecheck?'<p class="discovery-retained-results"><strong>Needs recheck</strong> · Saved research preserved. Recheck this company before selecting it for Buyers.</p>':qualificationHtml(c)}
     <div class="opportunity-trust-strip"><span><strong>Evidence confidence</strong> ${esc(c.qualification.confidence||'Medium')}</span><span><strong>Buying intent</strong> Unconfirmed</span><span><strong>Independent source families</strong> ${c.qualification.evidenceSources||0}</span></div>
@@ -1439,7 +1481,7 @@ function companyCandidateCardHtml(row,rank){const c={...row,matchedSignals:row.q
     <p class="candidate-narrative" lang="${contentLanguage()}">${esc(LeadIntelDiscovery.buildCandidateNarrative(c,contentLanguage()))}</p>
     <details class="candidate-evidence-details"><summary>Review evidence · ${c.evidence.length} pages from ${c.qualification.evidenceSources||new Set(c.evidence.map(e=>canonicalDomain(e.url))).size} source families</summary><div class="candidate-evidence">${c.evidence.map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener"><strong>${esc(e.title||c.domain)}</strong><small>${esc(e.description||e.text).slice(0,190)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(e)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div></details>
 
-    ${companySearchFeedbackHtml(c)}</details><div class="candidate-actions"><button class="primary-btn small" type="button" data-action="select-qualified-buyers" data-company-index="${index}" ${crm.suppressed||c.needsRecheck?"disabled":""}>${(discovery.selectedProspects||[]).some(item=>canonicalDomain(item.domain)===canonicalDomain(c.domain))?"Selected for Buyers ✓":"Select for Buyers"}</button><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button></div>
+    ${companySearchFeedbackHtml(c)}</details><div class="candidate-actions"><button class="primary-btn small" type="button" data-action="select-qualified-buyers" data-company-index="${index}" data-company-key="${esc(researchReviewKey(c))}" ${crm.suppressed||c.needsRecheck?"disabled":""}>${(discovery.selectedProspects||[]).some(item=>canonicalDomain(item.domain)===canonicalDomain(c.domain))?"Selected for Buyers ✓":"Select for Buyers"}</button><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" data-company-key="${esc(researchReviewKey(c))}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button></div>
   </article>`;
 }
 function renderCandidates(){const target=$("company-candidates");if(!target)return;
@@ -1461,7 +1503,7 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
 }const desired=selectedDiscoveryTarget();const autoResearch=loadMeta().autonomousDiscovery||{};const shortfall=discovery.status!=="running"&&ranked.length<desired?`<div class="discovery-retained-results" role="status"><strong>${ranked.length} of ${desired} checked companies available.</strong> ${autoResearch.exhausted?`LeadIntel automatically completed ${autoResearch.maxPasses||MAX_AUTONOMOUS_DISCOVERY_PASSES} discovery passes and exhausted the current research budget. Completed checks and scores are preserved; incomplete research stays in Research review.`:autoResearch.active?"LeadIntel is broadening the search automatically within this run’s research budget.":"This search has finished. Review its warnings or run a new search to collect more evidence."} Review uncertain companies below without treating missing evidence as rejection.</div>`:"";target.innerHTML=`${recovery}${shortfall}${previousNotice}<p class="discovery-pipeline-instruction"><strong>Your ${Math.min(desired,ranked.length)} qualified companies</strong> · Ranked by relevance. Select companies to continue to Buyers.</p>${ranked.slice(0,desired).map(companyCandidateCardHtml).join("")}`;}
 
 async function findDecisionMakers(index){
-  const candidate=discovery.candidates[index];if(!candidate)return false;
+  const candidate=companyActionCandidate(index);if(!candidate)return false;
   if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
   return searchDecisionMakers(candidate,{pipeline:Boolean(candidate.saved),retry:()=>findDecisionMakers(index)});
 }
@@ -1498,56 +1540,61 @@ async function startSelectedBuyerResearch(candidate){
   }
 }
 async function selectTargetForBuyers(domain){
-  const stateAtStart=discovery,workspaceAtStart=bridge()?.workspace?.id;
-  const item=selectedTargets().find(target=>canonicalDomain(target.domain||target.website)===canonicalDomain(domain));
+  const key=canonicalDomain(domain),item=selectedTargets().find(target=>canonicalDomain(target.domain||target.website)===key);
   if(!item?.domain){showToast("Add an official website to this target before finding buyers");return false;}
-  const existing=(discovery.selectedProspects||[]).find(candidate=>canonicalDomain(candidate.domain)===canonicalDomain(domain));
-  let candidate=existing||{company:item.companyName,domain:item.domain,website:item.website||`https://${item.domain}/`,market:(mainState().targetMarkets||[]).join(" · "),qualified:false,marketVerified:false,fitVerified:false,buyerVerified:false,evidence:[],qualificationGaps:["Customer fit and buying signal are unverified"],buyerSearchMode:"user_selected_target",people:[],peopleStatus:"idle"};
-  const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate);
-  const selectionKey=value=>LeadIntelDiscovery.buyerSelectionRoles({decisionMakers:value}).map(role=>role.toLowerCase()).join(';');
-  if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
-  if(crmAuthenticated()){try{if(!await ensureCrmCompany(candidate)){showToast('Unable to save target to CRM; your target remains available');return false;}}catch(error){showToast(error?.message||'Unable to save target to CRM; try again');return false;}}
-  if(discovery!==stateAtStart||bridge()?.workspace?.id!==workspaceAtStart)return false;
-  candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain))||candidate;
-  discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain)!==canonicalDomain(domain)),candidate];
-  focusBuyerCompany(candidate);saveDiscovery();renderAll();
-  showToast(`${candidate.company} selected for Buyers · opportunity unverified`);
-  void startSelectedBuyerResearch(candidate);
-  return true;
+  const owner=claimCompanySelection(key);if(!owner)return false;
+  try{
+    const existing=(discovery.selectedProspects||[]).find(candidate=>canonicalDomain(candidate.domain)===key);
+    let candidate=existing||{company:item.companyName,domain:item.domain,website:item.website||`https://${item.domain}/`,market:(mainState().targetMarkets||[]).join(" · "),qualified:false,marketVerified:false,fitVerified:false,buyerVerified:false,evidence:[],qualificationGaps:["Customer fit and buying signal are unverified"],buyerSearchMode:"user_selected_target",people:[],peopleStatus:"idle"};
+    const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate),selectionKey=value=>LeadIntelDiscovery.buyerSelectionRoles({decisionMakers:value}).map(role=>role.toLowerCase()).join(';');
+    if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
+    if(crmAuthenticated()&&!await ensureCrmCompany(candidate))return false;
+    if(!companyActionCurrent(owner))return false;
+    candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===key)||candidate;
+    discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain)!==key),candidate];
+    focusBuyerCompany(candidate);saveDiscovery();renderAll();showToast(`${candidate.company} selected for Buyers · opportunity unverified`);owner.outcome='pass';void startSelectedBuyerResearch(candidate);return true;
+  }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Unable to save target; retry from this company.');return false;}
+  finally{finishCompanySelection(key,owner);}
 }
-async function selectQualifiedForBuyers(index){
-  const stateAtStart=discovery,workspaceAtStart=bridge()?.workspace?.id;
-  const stored=discovery.candidates[index];if(!stored||!candidateIsActionable(stored))return false;const qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
-  if(crmAuthenticated()){try{if(!await saveCandidate(index,{pipeline:false}))return false;}catch(error){showToast(error?.message||'Unable to save company to CRM; try again');return false;}}
-  if(discovery!==stateAtStart||bridge()?.workspace?.id!==workspaceAtStart)return false;
-  const existing=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(candidate.domain||candidate.website));
-  const selected=existing||{...candidate,buyerSearchMode:'user_selected_qualified'};
-  rememberSelectedProspect(selected);renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);void startSelectedBuyerResearch(selected);return true;
+async function selectQualifiedForBuyers(reference){
+  const stored=companyActionCandidate(reference);if(!stored||!candidateIsActionable(stored))return false;
+  const key=researchReviewKey(stored),owner=claimCompanySelection(key);if(!owner)return false;
+  const qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
+  try{
+    if(crmAuthenticated()&&!await saveCandidate(reference,{pipeline:false}))return false;
+    if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
+    const existing=(discovery.selectedProspects||[]).find(item=>researchReviewKey(item)===key);
+    const selected=existing||{...candidate,buyerSearchMode:'user_selected_qualified'};
+    rememberSelectedProspect(selected);renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);owner.outcome='pass';void startSelectedBuyerResearch(selected);return true;
+  }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Unable to save selection; retained research is available for retry.');return false;}
+  finally{finishCompanySelection(key,owner);}
 }
 async function savePotentialProspect(domain){
   const candidate=discovery.potentialMatches.find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
   if(!candidate||!LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate)){showToast("Only companies with verified customer fit and market can be saved as prospects");return false;}
   if(!(discovery.checkedCompanyDomains||[]).some(checked=>canonicalDomain(checked)===canonicalDomain(candidate.domain))){showToast("Retry the company website check before saving this prospect");return false;}
   if(!crmAuthenticated()){showToast("Sign in with Google to save this prospect to Master CRM");return false;}
-  const existing=crmCompanyByDomain(candidate.domain);
-  if(existing?.lifecycle_status==="suppressed"){showToast("Suppressed companies must be restored in CRM first");return false;}
-  if(existing){rememberSelectedProspect(candidate);showToast(`${candidate.company} selected for Buyers · already in CRM`);renderAll();void startSelectedBuyerResearch(candidate);return true;}
-  const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm({...candidate,source:"user_selected_discovery",opportunity_hypothesis:"Customer fit and target market verified. No public buying signal confirmed; selected by the workspace user."});
-  if(!mapped){showToast("CRM mapping is unavailable");return false;}
-  const saved=await bridge().saveCrmCompany(mapped);
-  if(!saved.ok){showToast(saved.error||"Unable to save this prospect to CRM");return false;}
-  rememberSelectedProspect(candidate);
-  await refreshCrmState({render:false});renderAll();
-  window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:saved.company}}));
-  renderAll();
-  showToast(`${candidate.company} selected · continue to Buyers when ready`);
-  void startSelectedBuyerResearch(candidate);
-  return true;
+  const key=researchReviewKey(candidate),owner=claimCompanySelection(key);if(!owner)return false;
+  try{
+    const existing=crmCompanyByDomain(candidate.domain);
+    if(existing)validateCompanySave(candidate,{ok:true,company:existing});
+    if(!existing){const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm({...candidate,source:"user_selected_discovery",opportunity_hypothesis:"Customer fit and target market verified. No public buying signal confirmed; selected by the workspace user."});
+      if(!mapped){showToast("CRM mapping is unavailable");return false;}
+      const saved=await owner.bridge.saveCrmCompany(mapped);if(!companyActionCurrent(owner))return false;
+      if(!saved.ok){showToast(saved.error||"Unable to save this prospect to CRM");return false;}
+      validateCompanySave(candidate,saved);
+      await refreshCrmState({render:false});if(!companyActionCurrent(owner))return false;
+      window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:saved.company}}));
+    }
+    if(!(discovery.potentialMatches||[]).includes(candidate))return false;
+    rememberSelectedProspect(candidate);renderAll();showToast(`${candidate.company} selected for Buyers · buying signal unconfirmed`);owner.outcome='pass';void startSelectedBuyerResearch(candidate);return true;
+  }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Unable to save company; retry from this card.');return false;}
+  finally{finishCompanySelection(key,owner);}
 }
 function focusBuyerCompany(candidate){const domain=canonicalDomain(candidate?.domain||candidate?.website);if(domain)saveMeta({...loadMeta(),activeBuyerCompanyDomain:domain});}
 function rememberSelectedProspect(candidate){focusBuyerCompany(candidate);const domain=canonicalDomain(candidate.domain);discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain)!==domain),candidate];saveDiscovery();}
 function findPipelineDecisionMakers(index,{refreshDossier=false}={}){
-  const selected=pipelineRows()[Number(index)];if(!selected)return false;
+  const rows=pipelineRows(),selected=typeof index==='string'&&!/^\d+$/.test(index)?rows.find(row=>researchReviewKey(row)===index):rows[Number(index)];if(!selected)return false;
   const domain=canonicalDomain(selected.domain||selected.website);if(!domain){showToast("A verified company domain is required");return false;}
   const existingCandidate=discovery.candidates.find(item=>canonicalDomain(item.domain||item.website)===domain);
   const existingPipeline=discovery.pipeline.find(item=>canonicalDomain(item.domain||item.website)===domain);
@@ -1642,7 +1689,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     try{
       const verified=await waitForRun(()=>window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:8,maxDurationMs:35000,fetchImpl:(url,options)=>fetchBuyerResearch(url,{...options,researchAccountability}),seedUrls:(candidate.evidence||[]).filter(page=>canonicalDomain(page.url)===canonicalDomain(candidate.domain)&&/contact|kontakt|team|staff|people|management|leadership|about|om-oss/i.test(page.url)).map(page=>page.url),signal:controller.signal,onPage:page=>{if(!scopeIsCurrent()||controller.signal.aborted)return;const row={url:page.url,title:page.title,markdown:page.text,links:page.links||[],sourceRead:true,buyerSource:'official',date:page.date,verifiedAt:page.fetchedAt};rows.push(row);sourceReads.set(row.url,Promise.resolve(row));publishCompanyContacts();}}));
       rows.push(...verified.pages.filter(page=>!rows.some(row=>row.url===page.url)).map(page=>({url:page.url,title:page.title,markdown:page.text,sourceRead:true,buyerSource:'official',date:page.date,verifiedAt:page.fetchedAt})));
-      candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
+      candidate.evidence=retainDiscoveryEvidence(candidate.evidence||[],LeadIntelDiscovery.normalizeCompanySearchResults({results:verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,sourceRead:true,evidenceKind:'page_read',extractedAt:page.fetchedAt,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}));
       discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
     }catch(error){
       if(controller.signal.aborted||/insufficient readable company evidence/i.test(error.message||""))throw error;
@@ -1825,7 +1872,15 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   }
 }
 function saveLocalPipeline(candidate){discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);candidate.saved=true;saveDiscovery();}
-async function ensureCrmCompany(candidate){let company=crmCompanyByDomain(candidate.domain||candidate.website);if(company?.lifecycle_status==="suppressed")throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});if(company)return company;const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=saved.company;await refreshCrmState({render:false});return company;}
+async function ensureCrmCompany(candidate){
+  const owner=captureCompanyAction();let company=crmCompanyByDomain(candidate.domain||candidate.website);
+  if(['suppressed','archived'].includes(company?.lifecycle_status))throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});
+  if(company)return company;
+  const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");
+  const saved=await owner.bridge.saveCrmCompany(mapped);if(!companyActionCurrent(owner))return null;
+  if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=validateCompanySave(candidate,saved);
+  await refreshCrmState({render:false});return companyActionCurrent(owner)?company:null;
+}
 async function findPublicCandidateEmail(candidate,person){
   const domain=canonicalDomain(candidate.domain||candidate.website);
   const first=String(person.name||'').trim().split(/\s+/)[0];
@@ -2031,7 +2086,22 @@ async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirm
 }
 async function enrichContactWithApollo(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;const taskCentre=window.LeadIntelTaskCentre;const taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`;taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});taskCentre?.registerActions(taskId,{retry:()=>enrichContact(companyIndex,personIndex,{phoneLookup})});enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){taskCentre?.fail(taskId,error,{canRetry:true});enrichmentResults.set(key,{error:error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed"});showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
 async function refreshEnrichedContact(companyIndex,personIndex){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person?.id)return false;if(!crmAuthenticated()){showToast("Sign in to refresh Apollo contact status");return false;}const company=crmCompanyByDomain(candidate.domain||candidate.website);if(!company){showToast("Save this company to Master CRM before refreshing the phone");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const detail=await bridge().getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||"Unable to refresh CRM contact");const contact=typeof LeadIntelDiscovery.buyerPhoneContact==='function'?LeadIntelDiscovery.buyerPhoneContact(detail,person):(detail.contacts||[]).find(item=>String(item.external_person_id||"")===String(person.id))||null;const previous=enrichmentResults.get(key)||{};const result={...previous,request:{...(previous.request||{}),status:LeadIntelDiscovery.phoneLookupState(contact,detail.phoneRequests||[],person.id)},contact:contact||null};enrichmentResults.set(key,result);renderCandidates();showToast(contact?.phone_number?`${person.name} · verified phone loaded from Master CRM`:`${person.name} · ${result.request.status==='pending_phone'?'phone lookup is still pending':result.request.status==='failed'?'phone lookup failed; checks incomplete':result.request.status==='not_requested'?'no phone lookup is recorded':'phone lookup finished without a valid number'}`);return Boolean(contact?.phone_number);}catch(error){showToast(error.message||"Unable to refresh phone status");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
-async function saveCandidate(index,{pipeline=false}={}){const stored=discovery.candidates[index];if(!stored)return false;const qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}if(!crmAuthenticated()){if(pipeline){saveLocalPipeline(candidate);renderAll();showToast(`${candidate.company} saved to local Pipeline · sign in for durable CRM`);return true;}showToast("Sign in with Google to save this company to Master CRM");return false;}const existing=crmCompanyByDomain(candidate.domain||candidate.website);if(existing?.lifecycle_status==="suppressed"){showToast("Suppressed companies must be restored in CRM before pipeline activation");return false;}const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok){showToast(saved.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":saved.error||"CRM save failed");return false;}const company=saved.company;if(pipeline){const activated=await bridge().addCrmToPipeline(company.id,"Discovered");if(!activated.ok){showToast(activated.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":activated.error||"Pipeline update failed");return false;}saveLocalPipeline(candidate);}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));showToast(pipeline?`${candidate.company} added to durable Pipeline`:`${candidate.company} saved to Master CRM`);return true;}
+async function saveCandidate(reference,{pipeline=false}={}){
+  const stored=companyActionCandidate(reference);if(!stored)return false;
+  const owner=captureCompanyAction(),qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
+  try{
+  if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
+  if(!crmAuthenticated()){if(pipeline){saveLocalPipeline(candidate);renderAll();showToast(`${candidate.company} saved to local Pipeline · sign in for durable CRM`);return true;}showToast("Sign in with Google to save this company to Master CRM");return false;}
+  const existing=crmCompanyByDomain(candidate.domain||candidate.website);if(existing)validateCompanySave(candidate,{ok:true,company:existing});
+  const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),saved=await owner.bridge.saveCrmCompany(mapped);
+  if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
+  if(!saved.ok){showToast(saved.error||"CRM save failed");return false;}
+  const company=validateCompanySave(candidate,saved);
+  if(pipeline){const activated=await owner.bridge.addCrmToPipeline(company.id,"Discovered");if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;if(!activated.ok){showToast(activated.error||"Pipeline update failed");return false;}saveLocalPipeline(candidate);}
+  await refreshCrmState({render:false});if(!companyActionCurrent(owner))return false;
+  renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));showToast(pipeline?`${candidate.company} added to durable Pipeline`:`${candidate.company} saved to Master CRM`);return true;
+  }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Company save failed. Your evidence is retained; retry from this card.');return false;}
+}
 function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(crmToLocalPipeline):discovery.pipeline;}
 function selectedProspects(){return (discovery.selectedProspects||[]).filter(item=>{const company=crmCompanyByDomain(item.domain);const inLocalPipeline=(discovery.pipeline||[]).some(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(item.domain));return !inLocalPipeline&&company?.lifecycle_status!=="suppressed"&&(item.buyerSearchMode==="user_selected_target"||item.buyerSearchMode==="user_selected_qualified"||item.buyerSearchMode==="user_selected_without_signal"||!crmAvailable||Boolean(company&&!company.pipeline_stage));});}
 function buyerSelectionRows(){
@@ -3082,18 +3152,10 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
   }}
 }
 function scheduleSavedBuyerPublicChecks(){
-  if(currentJourneyFocus()!=="buyers"||!crmAuthenticated()||crmRefreshing||bridge()?.conflict)return;
-  if(typeof confirmPublishedCompanyContacts==='function')for(const candidate of selectedProspects())void confirmPublishedCompanyContacts(candidate);
-  for(const candidate of selectedProspects()){
-    const domain=canonicalDomain(candidate.domain),key=`${bridge()?.workspace?.id||''}|${domain}`;
-    if(!domain||automaticPublicChecks.has(key)||candidate.buyerRolesChanged||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')continue;
-    if(candidate.people?.length&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))continue;
-    automaticPublicChecks.add(key);
-    if(candidate.people?.length)void findPublicProspectContacts(domain,{researchOwner:candidate});
-    else void findPotentialDecisionMakers(domain);
-  }
+  // Opening retained work is a read. A new selection starts once through
+  // startSelectedBuyerResearch; incomplete saved work requires explicit Refresh.
+  return false;
 }
-
 async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,confirmed=false}={}){
   if(!phoneLookup&&window.LeadIntelAdditionalContacts)return confirmBuyerContact((discovery.selectedProspects||[]).find(c=>canonicalDomain(c.domain)===canonicalDomain(domain)),personIndex);
   const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(domain)),person=candidate?.people?.[personIndex];
@@ -3418,10 +3480,10 @@ function renderPipeline(){
   target.innerHTML=`<div class="pipeline-table"><div class="pipeline-row header"><span>Company</span><span>Score</span><span>People</span><span>Stage</span><span>Action</span></div>${rows.map((item,index)=>{
     const people=Array.isArray(item.people)?item.people:[];
     const summary=people.length?`<div class="pipeline-buyer-summary"><strong>Suggested buyers</strong>${people.slice(0,4).map(person=>`<span>${esc(person.name)} · ${esc(person.title)}</span>`).join("")}</div>`:item.peopleStatus==="empty"?`<small class="pipeline-buyer-status">${item.buyerDiscovery?.researchIncomplete?'Research incomplete · matching buyers remain unconfirmed':'Completed checks returned no matching buyer roles'}</small>`:item.peopleStatus==="error"?'<small class="pipeline-buyer-status">Buyer search failed. Try again.</small>':item.peopleStatus==="loading"?'<small class="pipeline-buyer-status">Searching for buyers…</small>':"";
-    const buyerAction=focus==="buyers"?`<button class="primary-btn small" type="button" data-find-pipeline-buyers="${index}" aria-label="Find buyers for ${esc(item.company)}" ${item.peopleStatus==="loading"?"disabled":""}>${item.people?.length?"Refresh buyers":item.peopleStatus==="loading"?"Searching…":"Find buyers"}</button>`:"";
+    const buyerAction=focus==="buyers"?`<button class="primary-btn small" type="button" data-find-pipeline-buyers="${esc(researchReviewKey(item))}" aria-label="Find buyers for ${esc(item.company)}" ${item.peopleStatus==="loading"?"disabled":""}>${item.people?.length?"Refresh buyers":item.peopleStatus==="loading"?"Searching…":"Find buyers"}</button>`:"";
     const crmActions=crmAvailable?`<button class="secondary-btn small" type="button" data-pipeline-remove="${esc(item.crmId||item.id)}" data-domain="${esc(item.domain)}">Remove</button><button class="secondary-btn small" type="button" data-open-crm-company="${esc(item.crmId||item.id)}">Open CRM</button>`:'';
     const crmStatus=crmAvailable?'<small class="pipeline-crm-status">Saved in CRM ✓</small>':item.crmId?'<small class="pipeline-local-status">Previously saved in CRM · reconnect to verify</small>':crmAuthenticated()?'<small class="pipeline-local-status">CRM not confirmed · local workflow safe</small>':'<small class="pipeline-local-status">CRM status unknown · browser copy retained</small>';
-    return `<div class="pipeline-row" data-pipeline-row="${index}"><div class="pipeline-company-cell"><strong>${esc(item.company)}</strong><a href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.domain)}</a>${crmStatus}${item.qualified===false?'<small>Buying signal unconfirmed · manually added</small>':''}${summary}</div><span class="pipeline-score">${item.qualified===false?"—":item.score?.total||0}</span><span>${people.length}</span><select data-pipeline-stage="${index}" ${crmAvailable?`data-crm-id="${esc(item.crmId||item.id)}"`:""}>${stages.map(stage=>`<option ${stage===item.stage?"selected":""}>${esc(stage)}</option>`).join("")}</select><span class="pipeline-actions">${buyerAction}${crmActions}</span></div>`;
+    return `<div class="pipeline-row" data-pipeline-row="${index}"><div class="pipeline-company-cell"><strong>${esc(item.company)}</strong><a href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.domain)}</a>${crmStatus}${item.qualified===false?'<small>Buying signal unconfirmed · manually added</small>':''}${summary}</div><span class="pipeline-score">${item.qualified===false?"—":item.score?.total||0}</span><span>${people.length}</span><select data-pipeline-stage="${index}" data-pipeline-key="${esc(researchReviewKey(item))}" ${crmAvailable?`data-crm-id="${esc(item.crmId||item.id)}"`:""}>${stages.map(stage=>`<option ${stage===item.stage?"selected":""}>${esc(stage)}</option>`).join("")}</select><span class="pipeline-actions">${buyerAction}${crmActions}</span></div>`;
   }).join("")}</div>${renderSelectedProspects(prospects)}`;
 }
 async function addSelectedProspectToPipeline(domain){
@@ -3441,8 +3503,17 @@ async function addSelectedProspectToPipeline(domain){
   showToast(`${candidate.company} added to Pipeline${candidateIsActionable(candidate)?"":" · buying signal unconfirmed"}`);
   return true;
 }
-async function changePipelineStage(select){const rows=pipelineRows();const item=rows[Number(select.dataset.pipelineStage)];if(!item)return;if(crmAvailable&&select.dataset.crmId){const stage=window.LeadIntelCrm?.normalizeCrmStage(select.value)||"Discovered";const result=await bridge().addCrmToPipeline(select.dataset.crmId,stage);if(!result.ok){showToast(result.error||"Pipeline stage update failed");await refreshCrmState();return;}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast(`${item.company} moved to ${stage}`);return;}item.stage=LeadIntelDiscovery.CRM_STAGES.includes(select.value)?select.value:"Discovered";item.updatedAt=new Date().toISOString();saveDiscovery();renderPipeline();showToast(`${item.company} moved to ${item.stage}`);}
-async function removePipelineCompany(id,domain){const result=await bridge()?.removeCrmFromPipeline(id);if(!result?.ok){showToast(result?.error||"Unable to remove company from Pipeline");return;}discovery.pipeline=discovery.pipeline.filter(item=>canonicalDomain(item.domain||item.website)!==canonicalDomain(domain));saveDiscovery();await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast("Removed from Pipeline · CRM history preserved");}
+async function changePipelineStage(select){
+  const rows=pipelineRows(),item=select.dataset.pipelineKey?rows.find(row=>researchReviewKey(row)===select.dataset.pipelineKey):rows[Number(select.dataset.pipelineStage)];if(!item)return false;
+  const owner=captureCompanyAction(),stage=window.LeadIntelCrm?.normalizeCrmStage(select.value)||"Discovered";
+  if(crmAvailable&&select.dataset.crmId){const result=await owner.bridge.addCrmToPipeline(select.dataset.crmId,stage);if(!companyActionCurrent(owner))return false;if(!result.ok){showToast(result.error||"Pipeline stage update failed");await refreshCrmState();return false;}await refreshCrmState({render:false});if(!companyActionCurrent(owner))return false;renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast(`${item.company} moved to ${stage}`);return true;}
+  item.stage=LeadIntelDiscovery.CRM_STAGES.includes(select.value)?select.value:"Discovered";item.updatedAt=new Date().toISOString();saveDiscovery();renderPipeline();showToast(`${item.company} moved to ${item.stage}`);return true;
+}
+async function removePipelineCompany(id,domain){
+  const owner=captureCompanyAction(),result=await owner.bridge?.removeCrmFromPipeline(id);if(!companyActionCurrent(owner))return false;
+  if(!result?.ok){showToast(result?.error||"Unable to remove company from Pipeline");return false;}
+  discovery.pipeline=discovery.pipeline.filter(item=>canonicalDomain(item.domain||item.website)!==canonicalDomain(domain));saveDiscovery();await refreshCrmState({render:false});if(!companyActionCurrent(owner))return false;renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast("Removed from Pipeline · CRM history preserved");return true;
+}
 function companySearchProgressText(){
   const {phase,completed,total}=discoveryProgress;
   if(phase==="extracting")return "Identifying companies named in market evidence…";
@@ -3532,10 +3603,10 @@ function bindDiscovery(){
   $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage);$("run-company-discovery")?.addEventListener("click",()=>{void runCompanyDiscovery({savingMode:false});});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderDiscoveryEstimate();renderStatus();renderCandidates();renderPotentialMatches();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderDiscoveryEstimate();renderStatus();renderCandidates();renderPotentialMatches();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
   $("company-search-preferences")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback)updateCompanySearchFeedback(feedback);});
   $("company-candidates")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback){updateCompanySearchFeedback(feedback);return;}const box=event.target.closest("[data-flow-confirm]");if(box)toggleBuyerContactFlow(box);});
-  $("company-candidates")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"email",dataLookup:true,personId:btn.dataset.personId});if(btn.dataset.action==="find-phone")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"phone",personId:btn.dataset.personId});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="select-qualified-buyers")void selectQualifiedForBuyers(index);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});});
+  $("company-candidates")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(btn.dataset.companyKey||index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"email",dataLookup:true,personId:btn.dataset.personId});if(btn.dataset.action==="find-phone")void confirmBuyerContact(btn.dataset.buyerDomain?discovery.candidates.find(c=>canonicalDomain(c.domain)===canonicalDomain(btn.dataset.buyerDomain)):discovery.candidates[index],personIndex,{scope:"company",kind:"phone",personId:btn.dataset.personId});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="select-qualified-buyers")void selectQualifiedForBuyers(btn.dataset.companyKey||index);if(btn.dataset.action==="save-crm")saveCandidate(btn.dataset.companyKey||index,{pipeline:false});});
   $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
   $("discovery-potential-matches")?.addEventListener("change",event=>{const feedback=event.target.closest("[data-company-search-feedback]");if(feedback)updateCompanySearchFeedback(feedback);});
-  $("discovery-potential-matches")?.addEventListener("click",event=>{const review=event.target.closest("[data-review-action]");if(review){const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomain:key});return;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="buyers"){selectResearchReviewForBuyers(key);return;}if(action==="unselect"){unselectResearchReviewForBuyers(key);return;}if(action==="remove"){removeResearchReviewCompany(key);return;}if(action==="clear"){clearResearchReview();return;}}const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="select-qualified-buyers"){void selectQualifiedForBuyers(Number(btn.dataset.companyIndex));return;}if(btn.dataset.action==="save-crm"){void saveCandidate(Number(btn.dataset.companyIndex),{pipeline:false});return;}if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
+  $("discovery-potential-matches")?.addEventListener("click",event=>{const review=event.target.closest("[data-review-action]");if(review){const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomain:key});return;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="buyers"){selectResearchReviewForBuyers(key);return;}if(action==="unselect"){unselectResearchReviewForBuyers(key);return;}if(action==="remove"){removeResearchReviewCompany(key);return;}if(action==="clear"){clearResearchReview();return;}}const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next,personId:next.dataset.personId});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="select-qualified-buyers"){void selectQualifiedForBuyers(btn.dataset.companyKey||Number(btn.dataset.companyIndex));return;}if(btn.dataset.action==="save-crm"){void saveCandidate(btn.dataset.companyKey||Number(btn.dataset.companyIndex),{pipeline:false});return;}if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company",personId:btn.dataset.personId});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
   $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box){toggleBuyerContactFlow(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;candidate.buyerRolesSource='manual';selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
   $("customer-pipeline")?.addEventListener("click",event=>{const button=event.target.closest("button");if(button?.disabled)return;if(button?.hasAttribute('data-review-buyer-sync')){window.LeadIntelAttention?.open?.();return;}if(button?.hasAttribute('data-remove-buyer-company')){void removeSelectedBuyerCompany(button.dataset.removeBuyerCompany);return;}if(button?.hasAttribute('data-show-confirmed-buyers')){const row=button.closest('.selected-prospect-row'),cards=[...row.querySelectorAll('.buyer-potential-list > li > details')].filter(card=>card.querySelector('[data-prospect-enrich-email][aria-pressed="true"]'));for(const card of cards){card.open=true;const group=card.closest('.buyer-other-contacts');if(group)group.open=true;}cards[0]?.scrollIntoView?.({behavior:'smooth',block:'center'});cards[0]?.querySelector('[data-keep-buyer]')?.focus?.();return;}if(button?.dataset.researchExecutive){void findExecutiveBuyer(button.dataset.researchExecutive);return;}if(button?.dataset.researchBuyer){void findPublicProspectContacts(button.dataset.researchBuyer,{personIds:[button.dataset.personId]});return;}if(button?.dataset.researchRemaining){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.researchRemaining));if(candidate){const ranked=LeadIntelDiscovery.rankedBuyerShortlist(candidate.people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);void findPublicProspectContacts(candidate.domain,{personIds:candidate.people.filter(person=>!ranked.recommendedIds.includes(person.id)).map(person=>String(person.id))});}return;}if(button?.dataset.buyerNext){void addBuyerToFlow(button.dataset.buyerNext,Number(button.dataset.personIndex),{scope:button.dataset.buyerScope,button,personId:button.dataset.personId});return;}if(button?.dataset.recheckPublicEmail){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.recheckPublicEmail)),person=candidate?.people?.[Number(button.dataset.personIndex)];if(person){button.disabled=true;void confirmPublicBuyerSource(candidate,person,{retryRejected:true}).catch(error=>showToast(error.message)).finally(()=>renderAll());}return;}if(button?.dataset.recheckBuyer){void recheckBuyerContact(button.dataset.recheckBuyer,Number(button.dataset.personIndex),{personId:button.dataset.personId});return;}if(button?.dataset.reviewLinkedin){reviewBuyerLinkedIn(button.dataset.reviewLinkedin,Number(button.dataset.personIndex));return;}if(button?.dataset.saveBuyerOnly){const candidate=discovery.selectedProspects.find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.saveBuyerOnly));if(!candidate?.people?.[Number(button.dataset.personIndex)]?.kept)void keepBuyer(button.dataset.saveBuyerOnly,Number(button.dataset.personIndex));return;}if(button?.dataset.useCompanyContact){void selectPublishedCompanyContact(button.dataset.useCompanyContact,button.dataset.contactId,{button});return;}if(button?.dataset.checkCompanyEmail){const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.checkCompanyEmail));if(candidate)void confirmPublishedCompanyContacts(candidate,{force:true,personId:button.dataset.contactId});return;}if(button?.dataset.keepBuyer){void saveBuyerAndProceed(button.dataset.keepBuyer,Number(button.dataset.personIndex),{button,personId:button.dataset.personId});return;}if(button?.dataset.saveBuyerResearch){void saveSelectedBuyerCompany(button.dataset.saveBuyerResearch);return;}if(button?.dataset.readOfficialContactSource){const input=button.closest('.company-contact-dossier')?.querySelector('[data-official-contact-url]');if(input?.value)void refreshOfficialCompanyContacts(button.dataset.readOfficialContactSource,{sourceUrl:input.value});else showToast('Enter an official contact or team page URL.');return;}if(button?.dataset.refreshCompanyContacts){void refreshOfficialCompanyContacts(button.dataset.refreshCompanyContacts);return;}if(button?.dataset.findPublicContacts){const candidate=selectedProspects().find(row=>canonicalDomain(row.domain)===canonicalDomain(button.dataset.findPublicContacts));findPublicProspectContacts(button.dataset.findPublicContacts,{force:Boolean(candidate&&LeadIntelDiscovery.buyerResearchCoveragePassed(candidate))});return;}if(button?.dataset.prospectEnrichEmail){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichEmail));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"email",dataLookup:true,personId:button.dataset.personId});return;}if(button?.dataset.prospectEnrichPhone){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichPhone));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"phone",personId:button.dataset.personId});return;}if(button?.dataset.prospectBatchEmail){enrichSelectedProspectBatch(button.dataset.prospectBatchEmail);return;}if(button?.dataset.prospectBatchPhone){enrichSelectedProspectBatch(button.dataset.prospectBatchPhone,true);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers,{refreshDossier:true});return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers,{refreshDossier:true});return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
@@ -3599,23 +3670,46 @@ async function openCampaignResearch(companies,{focus='companies'}={}){
  ensureDiscoveryMounted();if(focus==='buyers')for(const c of companies){const known=(discovery.candidates||[]).find(r=>canonicalDomain(r.domain)===c.domain)||(discovery.potentialMatches||[]).find(r=>canonicalDomain(r.domain)===c.domain);const existing=(discovery.selectedProspects||[]).find(r=>canonicalDomain(r.domain)===c.domain);rememberSelectedProspect(existing||{...known,company:c.company,domain:c.domain,website:c.website||`https://${c.domain}/`,buyerSearchMode:known?.qualification?.eligible?'user_selected_qualified':'user_selected_target',people:known?.people||[],peopleStatus:known?.peopleStatus||'idle',evidence:known?.evidence||[]});}
  showDiscoveryStep(focus);return Boolean($('step-5')?.classList.contains('active'));
 }
-async function researchCampaign(companies,options){if(!window.LeadIntelCampaignResearch)throw Error('Campaign research did not load. Retry.');const ticket=()=>JSON.stringify([bridge()?.workspace?.id,bridge()?.session?.user?.id]);return window.LeadIntelCampaignResearch.createRunner({workspace:ticket,runBatch:async batch=>{const scope=ticket();const ok=await runCompanyDiscovery({targetOnly:true,campaignTargets:batch,savingMode:options?.researchDepth==='quick',campaignPlan:{targetCount:batch.length,eventCampaignId:options?.eventCampaignId||''}});if(!ok||scope!==ticket())return false;for(const c of batch){const candidate=(discovery.candidates||[]).find(r=>canonicalDomain(r.domain)===c.domain)||(discovery.potentialMatches||[]).find(r=>canonicalDomain(r.domain)===c.domain);if(candidate){if(scope!==ticket())return false;const result=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]});if(!result.ok)throw Error(result.error||'Campaign research could not be saved to CRM');}}return true;}})(companies,{...options,batchSize:options?.researchDepth==='quick'?1:5});}
-async function discoverCampaign(plan={}){
- const scope=()=>JSON.stringify([bridge()?.workspace?.id,bridge()?.session?.user?.id]),ticket=scope();
- if(!crmAuthenticated())throw Error('Sign in before company discovery');
- const opened=await openCampaignResearch([]);if(!opened)throw Error('Review and confirm the seller Profile before discovery');
- const excluded=new Set((plan.exclude||[]).map(canonicalDomain)),found=[];
- for(let pass=1;pass<=(plan.researchDepth==='deep'?3:1);pass++){
-  plan.results=[];
-  const ok=await runCompanyDiscovery({savingMode:plan.researchDepth==='quick',campaignPlan:plan,autoPass:pass});if(scope()!==ticket)throw Error('Workspace changed. Discovery stopped.');if(!ok)throw Error('Company discovery is incomplete. Review the research report.');
-  for(const candidate of plan.results||[]){if(!candidate.qualification?.eligible||excluded.has(canonicalDomain(candidate.domain)))continue;const event=(mainState().eventCampaigns?.campaigns||[]).find(c=>c.id===plan.eventCampaignId&&!c.archived);if(event?.audienceMode==='participants'&&window.LeadIntelEventCampaigns.deriveAttendance(event,candidate,candidate.evidence).status==='unknown')continue;
-   const result=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]});if(scope()!==ticket)throw Error('Workspace changed. Discovery stopped.');if(!result.ok)throw Error(result.error||'Could not save discovered company');
-   const company=result.company||result.detail?.company||result.data?.company;if(!company?.id)throw Error('Discovered company identity could not be saved. Review CRM.');
-   found.push({companyId:company.id,company:candidate.company,domain:candidate.domain,website:candidate.website,qualified:true,attendance:(mainState().eventCampaigns?.campaigns||[]).find(c=>c.id===plan.eventCampaignId)?window.LeadIntelEventCampaigns.deriveAttendance((mainState().eventCampaigns.campaigns||[]).find(c=>c.id===plan.eventCampaignId),candidate,candidate.evidence):{status:'unknown'}});excluded.add(canonicalDomain(candidate.domain));
+async function researchCampaign(companies,options){
+ if(!window.LeadIntelCampaignResearch)throw Error('Campaign research did not load. Retry.');
+ const ownerBridge=bridge(),ticket=discoveryOperationContext(),scopeIsCurrent=()=>bridge()===ownerBridge&&discoveryOperationContext()===ticket;
+ const requireScope=()=>{if(!scopeIsCurrent())throw Error('Workspace or Strategy changed. Campaign research stopped.');};
+ return window.LeadIntelCampaignResearch.createRunner({workspace:()=>discoveryOperationContext(),runBatch:async batch=>{
+  requireScope();
+  const ok=await runCompanyDiscovery({targetOnly:true,campaignTargets:batch,savingMode:options?.researchDepth==='quick',campaignPlan:{targetCount:batch.length,eventCampaignId:options?.eventCampaignId||''}});
+  requireScope();if(!ok)return false;
+  for(const c of batch){
+   requireScope();const candidate=(discovery.candidates||[]).find(r=>canonicalDomain(r.domain)===c.domain)||(discovery.potentialMatches||[]).find(r=>canonicalDomain(r.domain)===c.domain);
+   if(candidate){const payload={...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]};requireScope();const result=await ownerBridge.saveCrmCompany(payload);requireScope();if(!result.ok)throw Error(result.error||'Campaign research could not be saved to CRM');}
   }
-  if(found.length>=plan.targetCount||discovery.status==='no_results')break;
+  return true;
+ }})(companies,{...options,batchSize:options?.researchDepth==='quick'?1:5});
+}
+async function discoverCampaign(plan={}){
+ if(!crmAuthenticated())throw Error('Sign in before company discovery');
+ if(discovery?.status==='running')throw Error('A company search is already running. Wait for it to finish or cancel it.');
+ const ownerBridge=bridge(),ticket=discoveryOperationContext(),scopeIsCurrent=()=>bridge()===ownerBridge&&discoveryOperationContext()===ticket;
+ const requireScope=()=>{if(!scopeIsCurrent())throw Error('Workspace or Strategy changed. Discovery stopped.');};
+ const opened=await openCampaignResearch([]);requireScope();if(!opened)throw Error('Review and confirm the seller Profile before discovery');
+ const targetCount=Math.max(1,Math.min(50,Math.floor(Number(plan.targetCount)||10))),excluded=new Set((plan.exclude||[]).map(canonicalDomain)),found=[];
+ for(let pass=1;pass<=(plan.researchDepth==='deep'?3:1);pass++){
+  requireScope();const runPlan={...plan,targetCount,results:[]};
+  const ok=await runCompanyDiscovery({savingMode:plan.researchDepth==='quick',campaignPlan:runPlan,autoPass:pass});
+  requireScope();if(!ok)throw Error('Company discovery is incomplete. Review the research report.');
+  plan.results=runPlan.results;
+  const candidates=runPlan.results;
+  for(const candidate of candidates){
+   requireScope();if(!candidate.qualification?.eligible||excluded.has(canonicalDomain(candidate.domain)))continue;
+   const event=(mainState().eventCampaigns?.campaigns||[]).find(c=>c.id===plan.eventCampaignId&&!c.archived),attendance=event?window.LeadIntelEventCampaigns.deriveAttendance(event,candidate,candidate.evidence):{status:'unknown'};
+   if(event?.audienceMode==='participants'&&attendance.status==='unknown')continue;
+   const payload={...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]};requireScope();const result=await ownerBridge.saveCrmCompany(payload);requireScope();if(!result.ok)throw Error(result.error||'Could not save discovered company');
+   const company=result.company||result.detail?.company||result.data?.company;if(!company?.id)throw Error('Discovered company identity could not be saved. Review CRM.');
+   found.push({companyId:company.id,company:candidate.company,domain:candidate.domain,website:candidate.website,qualified:true,attendance});excluded.add(canonicalDomain(candidate.domain));
+   if(found.length>=targetCount)break;
+  }
+  if(found.length>=targetCount||discovery.status==='no_results')break;
  }
- return found.slice(0,plan.targetCount);
+ return found.slice(0,targetCount);
 }
 function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;for(const page of ['companies','buyers'])window.LeadIntelPageQuality?.register(page,{read:()=>discoveryQualityContext(page)});injectDiscoveryUI();bindDiscovery();registerCrmRecoveryRetry();window.LeadIntelEventCampaignUI?.mount();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;window.LeadIntelDiscoveryUI.assessCompany=(...args)=>withQualificationPresentation(()=>qualificationAssessment(...args));window.LeadIntelDiscoveryUI.assessBuyerQuality=candidate=>LeadIntelDiscovery.buyerQualityAssessment(candidate,{confirmedEmail:person=>verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{})});window.LeadIntelDiscoveryUI.openCampaignResearch=openCampaignResearch;window.LeadIntelDiscoveryUI.discoverCampaign=(...args)=>discoverCampaign(...args);window.LeadIntelDiscoveryUI.researchCampaign=researchCampaign;window.LeadIntelDiscoveryUI.continueToMessages=continueBuyerMessages;window.LeadIntelDiscoveryUI.openMessageChannel=async channel=>{await loadOutreachModules();return window.LeadIntelOutreachUI.openMessageChannel(channel);};window.LeadIntelDiscoveryUI.readyBuyerCount=readyBuyerCount;window.LeadIntelDiscoveryUI.renderSelectedRecipient=renderSelectedEmailBuyer;window.LeadIntelDiscoveryUI.getSelectedCompanies=()=>[...pipelineRows(),...selectedProspects()];window.LeadIntelDiscoveryUI.firecrawlHealth=()=>{const state=discovery||loadDiscovery();return {lastRunAt:state.lastRunAt||"",blocked:[...(state.searchFailures||[]),...(state.providerFallbacks||[])].some(item=>Number(item.status)===402),usedFallback:Number(state.funnel?.openAiFallbackSearches)||0};};if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());else if(Number(mainState().step)>=6&&moduleReady())ensureDiscoveryMounted();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());}
 function initDiscoveryWhenReady(attempt=0){if(window.LeadIntelAccountCache&&(window.LeadIntelServerBridge?.ready!==true||!window.LeadIntelAccountCache.current())){window.LeadIntelAccountCache.afterVerification(()=>initDiscoveryWhenReady(attempt));return;}if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}

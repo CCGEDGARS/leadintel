@@ -8,7 +8,7 @@ const source=fs.readFileSync(path.join(__dirname,"..","discovery-ui.js"),"utf8")
 test("Apollo and CRM actions recheck candidate qualification",()=>{
   assert.match(source,/function candidateIsActionable\(/);
   assert.match(source,/async function findDecisionMakers\(index\).*?candidateIsActionable\(candidate\)/s);
-  assert.match(source,/async function saveCandidate\(index,\{pipeline=false\}=\{\}\).*?candidateIsActionable\(candidate\)/s);
+  assert.match(source,/async function saveCandidate\(reference,\{pipeline=false\}=\{\}\).*?candidateIsActionable\(candidate\)/s);
 });
 
 test("discovery labels results as qualified companies",()=>{

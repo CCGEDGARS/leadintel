@@ -163,8 +163,8 @@ test('domain verification keeps evidence only from the company being checked',()
 
 test('mergeCompanyCandidates deduplicates domains and builds transparent five-part scores',()=>{
   const raw=[
-    {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'manufacturer industrial automation new facility capacity expansion procurement. Project budget €50,000.',date:'2026-08-20'},
-    {queryId:'q2',market:'Sweden',url:'https://nordicmachines.se/news',domain:'nordicmachines.se',company:'Nordic Machines',title:'Expansion',description:'new factory',text:'new factory automation investment',date:'2026-08-21'},
+    {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'Nordic Machines manufactures production equipment in Sweden and announces capacity expansion for a new facility using industrial automation. Project budget €50,000.',date:'2026-08-20'},
+    {queryId:'q2',market:'Sweden',url:'https://nordicmachines.se/news',domain:'nordicmachines.se',company:'Nordic Machines',title:'Expansion',description:'new factory',text:'Nordic Machines plans a new factory in Sweden and an automation investment for its own production.',date:'2026-08-21'},
     {queryId:'q3',market:'Finland',url:'https://finnfab.fi/',domain:'finnfab.fi',company:'FinnFab',title:'FinnFab manufacturing',description:'production systems',text:'manufacturing equipment',date:''}
   ];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
@@ -313,7 +313,7 @@ test('upsertPipelineItem deduplicates by domain and preserves later stage',()=>{
   assert.equal(updated.length,1);assert.equal(updated[0].stage,'Qualified');assert.equal(updated[0].score.total,92);assert.equal(updated[0].people.length,1);
 });
 
-test('normalizeDiscoveryState caps candidates, pipeline and selected decision-makers and validates stages',()=>{
+test('normalizeDiscoveryState retains source and pipeline history while validating stages and buyer bounds',()=>{
   const state=Discovery.normalizeDiscoveryState({
     status:'complete',
     rawResults:Array.from({length:40},(_,i)=>({url:`https://c${i}.com`,domain:`c${i}.com`})),
@@ -321,9 +321,9 @@ test('normalizeDiscoveryState caps candidates, pipeline and selected decision-ma
     pipeline:Array.from({length:70},(_,i)=>({id:`p${i}`,company:`P${i}`,domain:`p${i}.com`,website:`https://p${i}.com`,stage:i===0?'INVALID':'Qualified'})),
     lastRunAt:'2026-08-22T10:00:00.000Z'
   });
-  assert.ok(state.rawResults.length<=20);
+  assert.equal(state.rawResults.length,40,'durable source history is independent of incoming search limits');
   assert.ok(state.candidates.length<=12);
-  assert.ok(state.pipeline.length<=50);
+  assert.equal(state.pipeline.length,70);
   assert.ok(state.candidates.every(x=>x.people.length<=4));
   assert.equal(state.pipeline[0].stage,'Discovered');
 });

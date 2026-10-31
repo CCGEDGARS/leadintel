@@ -6,7 +6,7 @@ test("discovery excludes the customer website and tender portals when tenders ar
   const results=discovery.mergeCompanyCandidates([
     {url:"https://ajprodukti.lv/levelpath",domain:"ajprodukti.lv",title:"Levelpath – AJ Produkti",description:"AJ Produkti office furniture",text:"AJ Produkti office furniture"},
     {url:"https://eis.gov.lv/EKEIS/Supplier/ViewProcurement",domain:"eis.gov.lv",title:"Public procurement tender",description:"Supplier procurement notice",text:"Tender procurement notice"},
-    {date:new Date().toISOString().slice(0,10),url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia. It needs office furniture for the new offices."}
+    {date:new Date().toISOString().slice(0,10),url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",market:"Latvia",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia. It needs office furniture for the new offices."}
   ],{website:"https://www.ajprodukti.lv",targetMarkets:"Latvia",priorityOffers:"Office furniture",idealCustomer:"Companies and institutions",exclusions:"Tenders"},{researchSourceTypes:["news"],signals:[{id:"facility-expansion",name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
   assert.deepEqual(results.map(item=>item.domain),["buyer.lv"]);
   assert.deepEqual(results[0].matchedSignals.map(item=>item.name),["Facility expansion"]);

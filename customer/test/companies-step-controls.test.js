@@ -26,7 +26,7 @@ test('company extraction sends bounded relevant context, not the complete saved 
 });
 test('failed AI extraction stays visible and cannot become a confirmed no-match',async()=>{
  const Discovery=require('../discovery-engine.js'),record=[],c={discovery:{searchFeedback:[]},companyExtractionFailures:[],discoveryProgress:{},activeDiscoveryTaskId:'task',LeadIntelDiscovery:{...Discovery,extractCompanyMentions:()=>[]},bridge:()=>({session:{authenticated:true},workspace:{id:'workspace'}}),window:{LeadIntelTaskCentre:{update:()=>{}}},renderDiscoverySafely:()=>{},mainState:()=>({profile:{}}),companyQualificationProfile:()=>({}),withDiscoveryDeadline:operation=>operation(),fetch:async()=>({ok:false,status:400,json:async()=>({error:'AI generation prompt is invalid or too large'})}),LEADINTEL_API:'https://api.example',setCompanyExtraction:(...args)=>record.push(args),discoverySearchFailure:(error,queryMeta,phase)=>({status:error.status,queryMeta,phase}),encodeURIComponent};
- vm.runInNewContext(part('function buildCompanyExtractionPrompt(','async function runCompanyDiscovery('),c);
+ vm.runInNewContext(part('function throwIfDiscoveryRunAborted(','function discoveryFailureReason(')+part('function buildCompanyExtractionPrompt(','async function runCompanyDiscovery('),c);
  await c.extractCompaniesFromEvidence([{url:'https://source.example/news',title:'Source',text:'Evidence'}],'Latvia',5);
  assert.equal(c.companyExtractionFailures.length,1);assert.equal(c.companyExtractionFailures[0].phase,'extracting');assert.equal(c.companyExtractionFailures[0].status,400);
  assert.equal(Discovery.discoveryOutcomeStatus({failures:c.companyExtractionFailures.length,candidateCount:0}),'error');

@@ -19,7 +19,7 @@ function runtime(){
   fetchBuyerResearch:async()=>{now+=60000;const task=centre.list()[0];snapshots.push({task,card:{...candidate.buyerResearchProgress},attention:buildAttentionItems({tasks:centre.list(),workspaceStarted:false,now})});return {ok:true,json:async()=>({results:[]})};},
   findPublicProspectContacts:async()=>{},refreshCrmState:async()=>{}};
  require('./helpers/dossier-boundary.cjs')(context);vm.createContext(context);
- const helpers=source.slice(source.indexOf('function buyerResearchIncomplete('),source.indexOf('function buyerProviderStatusHtml('));
+ const helpers=source.slice(source.indexOf('function retainDiscoveryEvidence('),source.indexOf('function failedDiscoverySearches('))+source.slice(source.indexOf('function buyerResearchIncomplete('),source.indexOf('function buyerProviderStatusHtml('));
  vm.runInContext(helpers+source.slice(source.indexOf('async function searchDecisionMakers('),source.indexOf('function saveLocalPipeline'))+'\nthis.run=searchDecisionMakers;',context);
  return {context,candidate,centre,snapshots,timers};
 }
