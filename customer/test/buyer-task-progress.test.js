@@ -351,7 +351,12 @@ test('researched roles are invalidated by a real core role edit after save and r
   assert.equal(loaded.buyerRolesChanged,true);assert.ok(loaded.buyerRoles.includes('Maintenance Director'));
  }
 });
-test('completed public research explicitly triggers approved paid research independently of rendering',async()=>{
+test('an explicitly automatic public research caller retains its approved paid continuation',async()=>{
  const {context,owner}=publicCrmRuntime(),automatic=[];context.window.LeadIntelAdditionalContacts={auto:async(candidate,options)=>automatic.push({candidate,options})};
- assert.equal(await context.run(owner.domain),true);assert.equal(automatic.length,1);assert.equal(automatic[0].candidate,owner);assert.equal(automatic[0].options.trigger,'research_completed');
+ assert.equal(await context.run(owner.domain,{manualContact:false}),true);assert.equal(automatic.length,1);assert.equal(automatic[0].candidate,owner);assert.equal(automatic[0].options.trigger,'research_completed');
+});
+
+test('default completed free research never starts paid lookup even when a paid handler is available',async()=>{
+ const {context,owner}=publicCrmRuntime(),automatic=[];context.window.LeadIntelAdditionalContacts={auto:async(...args)=>automatic.push(args)};
+ assert.equal(await context.run(owner.domain),true);assert.equal(automatic.length,0);
 });

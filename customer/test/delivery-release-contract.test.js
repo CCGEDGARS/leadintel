@@ -12,7 +12,7 @@ test('Delivery static entry and recursive browser loader references all invalida
 });
 test('browser cache invalidation never appends query tokens to CommonJS module resolution',()=>{for(const name of fs.readdirSync(path.join(root,'customer')).filter(name=>name.endsWith('.js'))){const source=fs.readFileSync(path.join(root,'customer',name),'utf8');for(const match of source.matchAll(/\brequire\(\s*(['"])([^'"]+)\1\s*\)/g))assert.ok(!match[2].includes('delivery-reliability='),name);}});
 test('Delivery release artifact checks match actual local files and require source, receipt, activation, diagnostics and cache controls',()=>{
- const gates=config.smokeChecks.slice(-12).filter(check=>check.id.startsWith('delivery-'));assert.equal(gates.length,11);
+ const gates=config.smokeChecks.slice(config.smokeChecks.findIndex(check=>check.id==='delivery-canonical-source-authority')).filter(check=>check.id.startsWith('delivery-'));assert.equal(gates.length,11);
  for(const gate of gates){const file=gate.url==='/customer/'?'customer/index.html':gate.url.slice(1),source=fs.readFileSync(path.join(root,file),'utf8');for(const marker of gate.contains)assert.ok(source.includes(marker),`${gate.id}: ${marker}`);}
  assert.equal(config.backendHealth.json.delivery_integrity_version,'20261031-delivery-v1');assert.equal(config.backendHealth.json.operational_diagnostics_version,'20261031-operations-v1');
  const auth=config.smokeChecks.find(check=>check.id==='operations-diagnostics-auth');assert.equal(auth.status,401);assert.match(auth.url,/\/api\/operations\/diagnostics\?workspace_id=audit-unauth$/);

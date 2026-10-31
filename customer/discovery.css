@@ -586,7 +586,7 @@
 /* Compact candidates follow the four detailed recommendations. */
 .buyer-potential-list{list-style:none;padding:0;margin:0;display:grid;gap:8px}.buyer-potential-list>li{border:1px solid var(--border,#dedfe4);border-radius:12px;padding:12px}.buyer-potential-list summary{display:flex;gap:12px;align-items:center;flex-wrap:wrap;cursor:pointer}.buyer-potential-list summary strong{min-width:160px}.buyer-potential-list summary small{margin-left:auto}.buyer-potential-list details>button{margin-top:10px}.buyer-contact-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.buyer-contact-fields>div{min-width:0;overflow-wrap:anywhere;grid-template-columns:1fr;align-content:start;border:1px solid #e0e8e3;border-radius:8px;padding:10px;min-height:100px}.buyer-contact-fields>small,.buyer-contact-fields>details{grid-column:1/-1}@media(max-width:700px){.buyer-contact-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.buyer-four-actions .buyer-confirm-needed{background:#fff3d4;border-color:#b77b12;color:#754b00;box-shadow:0 0 0 2px #e5b95740}
+.buyer-four-actions .buyer-confirm-needed{background:#fff;border-color:#d6ded9;color:#0d6453;box-shadow:none}
 .buyer-four-actions button:disabled{background:#edf0ef;color:#77817c;border-color:#d6ded9;box-shadow:none;cursor:not-allowed;opacity:1}
 .buyer-four-actions .buyer-proceed-ready{background:#0d6453;color:#fff;border-color:#0d6453}
 
@@ -662,6 +662,7 @@
 
 
 .buyer-four-actions button.buyer-email-confirmed,.person-actions button.buyer-email-confirmed{background:#0d6453;color:#fff;border-color:#0d6453;opacity:1}
+.buyer-four-actions button.buyer-phone-confirmed{background:#0d6453;color:#fff;border-color:#0d6453;opacity:1}
 
 .buyer-quality-supervisor{padding:16px 18px;margin:16px 0;border:1px solid #d6c18a;border-left:4px solid #b58623;border-radius:12px;background:#fffbf1}.buyer-quality-supervisor>strong{font-size:16px;color:#4c3c17}.buyer-quality-supervisor p{font-size:14px;line-height:1.5;margin:8px 0}.buyer-quality-supervisor details{font-size:13px;margin:10px 0}.buyer-quality-supervisor summary{cursor:pointer;font-weight:600}.buyer-quality-supervisor li{margin:6px 0}
 

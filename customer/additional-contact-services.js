@@ -17,7 +17,7 @@
     const owner=bridge(),ownerAdapter=adapter,context=policyContext(),researchContext=adapter?.context?.(),signature=buyerSignature(candidate,person),personId=String(person.id);
     return ()=>{const matches=candidate.people?.filter(p=>String(p.id)===personId)||[];return bridge()===owner&&adapter===ownerAdapter&&policyCurrent(context)&&adapter?.context?.()===researchContext&&!owner.conflict&&(adapter?.rows?.()||[]).includes(candidate)&&matches.length===1&&buyerSignature(candidate,matches[0])===signature;};
   }
-  const requestIntent=options=>JSON.stringify([Boolean(options.automatic),Boolean(options.dataLookup),Boolean(options.phoneOnly),Boolean(options.emailOnly)]);
+  const requestIntent=options=>JSON.stringify([Boolean(options.automatic),Boolean(options.dataLookup),Boolean(options.phoneOnly),Boolean(options.emailOnly),Boolean(options.paidOnly)]);
   const manualCompanyBusy=prefix=>[...publicChecking.entries()].some(([identity,task])=>identity.startsWith(prefix)&&task.current())||[...running.entries()].some(([identity,task])=>identity.startsWith(prefix)&&task.automatic!==true&&task.current());
   function authoritySignature(){return JSON.stringify([loadedCurrent(),busyPolicy,policy?.provider||'apollo',policy?.enabled,policy?.phoneEnabled,policy?.dailyLimit,policy?.monthlyLimit,policy?.maxPerCompany,[treg,provider,hunter].map(value=>[value?.configured,value?.source,value?.metadata])]);}
   async function api(path,options={}){
@@ -104,19 +104,26 @@
   }
   function label(candidate,person){if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return 'Verify email with Hunter';return adapter&&readiness(candidate,person).eligible?'Find email with additional services':'';}
   function openSettings(service='apollo'){document.getElementById('open-settings')?.click();setTimeout(()=>document.querySelector('[data-integration="'+service+'"]')?.scrollIntoView?.({behavior:'smooth',block:'center'}),100);}
-  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
-    const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly}),personId=String(person.id),existing=publicChecking.get(identity);
-    if(existing?.current()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return confirm(candidate,person,{automatic,freeConfirm,dataLookup,phoneOnly,emailOnly});}
+  async function confirm(candidate,person,{automatic=false,freeConfirm,dataLookup=false,paidOnly=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
+    const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly,paidOnly}),personId=String(person.id),existing=publicChecking.get(identity);
+    if(existing?.current()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return confirm(candidate,person,{automatic,freeConfirm,dataLookup,paidOnly,phoneOnly,emailOnly});}
     const task=(async()=>{try{
       if(!current())return false;
-      if(!dataLookup&&adapter?.email?.(candidate,person))return true;
+      if(paidOnly){
+        if(phoneOnly?adapter?.confirmedPhone?.(candidate,person):adapter?.email?.(candidate,person))return true;
+        if(!loadedCurrent()||!policy)await load();
+        if(!current())return false;
+        if(!loadedCurrent()||!policy)throw Error('Paid search preferences could not load. Check Settings and retry.');
+        dataLookup=policy.provider==='treg';
+      }
+      if(!phoneOnly&&!dataLookup&&adapter?.email?.(candidate,person))return true;
       // Every Find email action checks saved/public evidence before provider credits,
       // including people with no public address saved by an earlier research run.
-      if(!adapter?.email?.(candidate,person)){if(freeConfirm)await freeConfirm();}
+      if(!paidOnly&&!adapter?.email?.(candidate,person)){if(freeConfirm)await freeConfirm();}
       if(!current())return false;
       person=candidate.people.find(p=>String(p.id)===personId);
-      if(!dataLookup&&adapter?.email?.(candidate,person))return true;
-      if(!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
+      if(!phoneOnly&&!dataLookup&&adapter?.email?.(candidate,person))return true;
+      if(!phoneOnly&&!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
       return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly});
     }catch(error){if(current()){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
     task.intent=intent;task.current=current;publicChecking.set(identity,task);try{return await task;}finally{if(publicChecking.get(identity)===task)publicChecking.delete(identity);}
@@ -144,7 +151,7 @@
     const pendingToken={};const pendingPerson=person;
     const execute=(async()=>{
       const domain=candidate.domain,personId=person.id;
-      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason);};
+      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup||phoneOnly?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason+' Use Recheck for free-source research; review company qualification in Companies.');};
       const receipts=[];
       try{
         check();
