@@ -315,7 +315,7 @@
   }
   function safeContactAttribution(value){
     if(value?.version!==2||!normalizeUrl(value.url)||!clean(value.quote))return null;
-    return {version:2,url:normalizeUrl(value.url),quote:clean(value.quote).slice(0,700),sourceKind:value.sourceKind==='official'?'official':'public_listing',checkedAt:clean(value.checkedAt).slice(0,40)};
+    return {version:2,url:normalizeUrl(value.url),quote:clean(value.quote).slice(0,700),sourceKind:value.sourceKind==='official'?'official':'public_listing',checkedAt:clean(value.checkedAt).slice(0,40),...(typeof value.sourceRead==='boolean'?{sourceRead:value.sourceRead}:{})};
   }
   function attributedBusinessListing(person={},domain='',kind='email'){
     const name=clean(person.publicName||person.name).toLowerCase();
@@ -432,24 +432,24 @@
             const aliases=localBuyerRoleAliases(person.title);
             if(role&&role.length<120&&(clean(person.title).toLowerCase().includes(role.toLowerCase())||aliases.some(alias=>alias.toLowerCase()===role.toLowerCase()))&&/^(?:Tel(?:efon)?\.?|Phone)\s*[:.]?\s*(?:\[)?[+\d]/i.test(labelled))passage=directPhonePassage(name+'\n'+role+'\n'+labelled,0,name,person,personal);
           }
-          if(person.publicPhoneSourceCheck?.version===2&&person.publicPhoneSourceCheck.url===url&&!row.sourceRead)passage.phone='';
+          if(row.sourceRead!==true)passage.phone='';
           if(!roleSupported&&!personal)continue;
-          matches.push({name,url,date:evidenceDate(row),roleSupported,email:personal||"",emailQuote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
+          matches.push({name,url,date:evidenceDate(row),checkedAt:Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt:new Date().toISOString(),...(typeof row.sourceRead==='boolean'?{sourceRead:row.sourceRead}:{}),roleSupported,email:personal||"",emailQuote:clean(contactPassage),phone:passage.phone,quote:clean(text.slice(Math.max(0,match.index-90),match.index)+passage.quote),sourceKind:official?'official':'public_listing'});
         }
       }
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
       if(names.length!==1){
-        const rechecked=results.some(row=>normalizeUrl(row.url||row.metadata?.sourceURL)===person.publicPhoneUrl&&Boolean(row.markdown||row.content)&&(person.publicPhoneSourceCheck?.version!==2||row.sourceRead===true));
+        const rechecked=results.some(row=>normalizeUrl(row.url||row.metadata?.sourceURL)===person.publicPhoneUrl&&Boolean(row.markdown||row.content)&&row.sourceRead===true);
         return rechecked?{...person,publicPhone:'',publicPhoneUrl:'',publicPhoneEvidence:null,publicPhoneSourceCheck:{version:2,status:'not_attributed',url:person.publicPhoneUrl,checkedAt:new Date().toISOString()}}:person;
       }
       const match=matches.find(item=>item.email||item.phone)||matches[0];
       const identityMatch=matches.find(item=>item.roleSupported)||(!person.publicNameUrl?match:null);
-      const phoneMatch=matches.find(item=>item.phone),previousPhoneRechecked=results.some(row=>normalizeUrl(row.url||row.metadata?.sourceURL)===person.publicPhoneUrl&&Boolean(row.markdown||row.content)&&(person.publicPhoneSourceCheck?.version!==2||row.sourceRead===true));
+      const phoneMatch=matches.find(item=>item.phone),previousPhoneRechecked=results.some(row=>normalizeUrl(row.url||row.metadata?.sourceURL)===person.publicPhoneUrl&&Boolean(row.markdown||row.content)&&row.sourceRead===true);
       const previous=clean(person.publicName);
       if(previous&&previous.toLowerCase()!==match.name.toLowerCase()&&!match.name.toLowerCase().startsWith(previous.toLowerCase()))return person;
-      const attribution=(item,kind)=>item?{version:2,url:item.url,quote:kind==='email'?item.emailQuote:item.quote,sourceKind:item.sourceKind,checkedAt:new Date().toISOString()}:null;
+      const attribution=(item,kind)=>item?{version:2,url:item.url,quote:kind==='email'?item.emailQuote:item.quote,sourceKind:item.sourceKind,checkedAt:item.checkedAt,...(typeof item.sourceRead==='boolean'?{sourceRead:item.sourceRead}:{})}:null;
       const updated={...person,organization:person.organization||clean(companyName),identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:identityMatch?.url||person.publicNameUrl||match.url,identityEvidenceDate:identityMatch?(identityMatch.date||(identityMatch.url===person.publicNameUrl?person.identityEvidenceDate||'':'')):person.identityEvidenceDate||'',publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicEmailEvidence:match.email?attribution(match,'email'):person.publicEmailEvidence||null,publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||''),publicPhoneEvidence:phoneMatch?attribution(phoneMatch):previousPhoneRechecked?null:person.publicPhoneEvidence||null};
-      if(phoneMatch||previousPhoneRechecked)updated.publicPhoneSourceCheck={version:2,status:phoneMatch?'attributed':'not_attributed',url:phoneMatch?.url||person.publicPhoneUrl,checkedAt:new Date().toISOString()};
+      if(phoneMatch||previousPhoneRechecked)updated.publicPhoneSourceCheck={version:2,status:phoneMatch?'attributed':'not_attributed',url:phoneMatch?.url||person.publicPhoneUrl,checkedAt:phoneMatch?.checkedAt||new Date().toISOString()};
       return matchBuyerRoleEvidence(updated,results,{domain,company:companyName});
     });
   }
@@ -1869,7 +1869,10 @@
   async function runMandatoryBuyerResearch(candidate={},options={}){
     const {search,readPage,signal,onProgress}=options,policy=BUYER_CONTACT_RESEARCH_POLICY;
     const previousReport=safeBuyerResearchAccountability(candidate.publicResearch?.accountability);
-    const report=options.accountability||previousReport||createBuyerResearchAccountability(),people=(candidate.people||[]).slice(0,policy.maxPeople),pages=new Map((options.rows||[]).filter(row=>row.sourceRead===true&&String(row.markdown||row.content||'').trim()).slice(-policy.maxSourcePages).map(row=>[row.url,Promise.resolve(row)])),sourceRows=options.rows||[],started=Date.now(),duration=Math.min(policy.maxDurationMs,options.maxDurationMs||policy.maxDurationMs);let sourceReads=0;
+    // Explicit refresh accepts cached bodies only when the caller acquired them
+    // in this research generation. Historical rows remain available to the caller.
+    const sourceRows=options.force?(options.currentRows||[]):(options.rows||options.currentRows||[]);
+    const report=options.accountability||previousReport||createBuyerResearchAccountability(),people=(candidate.people||[]).slice(0,policy.maxPeople),pages=new Map(sourceRows.filter(row=>row.sourceRead===true&&String(row.markdown||row.content||'').trim()).slice(-policy.maxSourcePages).map(row=>[row.url,Promise.resolve(row)])),started=Date.now(),duration=Math.min(policy.maxDurationMs,options.maxDurationMs||policy.maxDurationMs);let sourceReads=0;
     const officialReads=new Map((options.force?[]:[...(previousReport?.officialPageReads||[]),...(report.officialPageReads||[])]).filter(row=>row?.sourceRead===true&&normalizeUrl(row.url)&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&Date.now()-Date.parse(row.checkedAt)>=0&&Date.now()-Date.parse(row.checkedAt)<30*86400000).map(row=>[normalizeUrl(row.url),{url:normalizeUrl(row.url),sourceRead:true,checkedAt:row.checkedAt}]));
     candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report};report.version=policy.version;report.status='running';report.totalPeople=people.length;
     Object.assign(report,{startedAt:new Date().toISOString(),completedAt:'',stopReason:'',gaps:[],reusedChecks:0,officialPages:0,officialPageReads:[...officialReads.values()],checkedPeople:0,deepPeople:0});
@@ -1904,12 +1907,15 @@
       const urls=[...new Set(rows.map(row=>row.url).filter(url=>{try{const u=new URL(url);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password&&!/(^|\.)linkedin\.com$/i.test(u.hostname);}catch{return false;}}))].slice(0,policy.pagesPerPerson);
       for(const url of urls){
         await guard();if(!pages.has(url)&&sourceReads>=policy.maxSourcePages){report.stopReason='page_budget';report.gaps.push('Source page budget reached; some discovered pages remain unread');throw Object.assign(new Error('Source page budget reached; selected source remains unread'),{contactPage:url});}if(!pages.has(url)){sourceReads++;if(pages.size>=policy.maxSourcePages)pages.delete(pages.keys().next().value);pages.set(url,(async()=>{
-          try{const page=await bounded(()=>readPage(url));await guard();const text=page.markdown||page.content||page.text||'';if(!String(text).trim())throw new Error('Contact source text unavailable');
+          try{const page=await bounded(()=>readPage(url));await guard();
+          const locations=[page.url,page.metadata?.sourceURL,page.metadata?.url].filter(value=>value!==undefined&&value!==null).map(contactResearchUrl),actual=locations.length?locations[0]:contactResearchUrl(url);
+          if(!actual||locations.some(value=>!value||companyIdentityDomain(value)!==companyIdentityDomain(actual))||companyIdentityDomain(actual)!==companyIdentityDomain(candidate.domain)&&actual!==contactResearchUrl(url))throw new Error('Contact source URL unavailable, conflicting or redirected outside its attribution');
+          const text=page.markdown||page.content||page.text||'';if(!String(text).trim())throw new Error('Contact source text unavailable');
           if(options.observeTools!==false){observePage(page);if(!page.researchTrace?.length){const source=page.metadata?.source,provider=source==='scrapling-fallback'?'scrapling':source==='direct-fallback'?'direct':source==='firecrawl'?'firecrawl':null;if(provider)recordBuyerResearchTool(report,{provider,status:'succeeded',results:1});}}
-          return {url:page.metadata?.sourceURL||url,markdown:text,sourceRead:true,title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:new Date().toISOString()};
+          return {url:actual,markdown:text,sourceRead:true,...(page.metadata?{metadata:page.metadata}:{}),title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:new Date().toISOString()};
           }catch(error){if(options.observeTools!==false)for(const entry of error.researchTrace||[])recordBuyerResearchTool(report,entry);throw error;}
         })());}
-        try{collect(person,[await pages.get(url)]);}catch(error){if(!error.code)error.contactPage=url;throw error;}
+        try{collect(person,[await pages.get(url)]);}catch(error){if(!error.code){error.contactPage=url;report.gaps.push(('Source read failed: '+url+' · '+clean(error.message)).slice(0,400));}throw error;}
       }
     };
     const researchPerson=async person=>{
@@ -1950,7 +1956,7 @@
       research.policyVersion=policy.version;
       research.channels={...research.channels,company:{status:research.checks.official?.status==='complete'&&research.checks.public?.status==='complete'&&(!priorities.includes(person)||attributable(person)||research.checks.deep?.status==='complete')?'complete':'partial'},phone:{status:research.checks.phone?.status||'not_searched'},linkedin:{status:research.checks.linkedin?.status||'not_searched'},gmail:research.checks.gmail?{...research.checks.gmail}:{status:'not_searched'}};
       const checks=[...policy.requiredChecks.map(key=>research.checks[key]),...(research.checks.independent&&research.checks.independent.status!=='not_needed'?[research.checks.independent]:[]),...(priorities.includes(person)&&!attributable(person)?[research.checks.deep]:[])];
-      person.emailResearch={...(person.emailResearch||{}),status:checks.every(row=>row?.status==='complete')?'complete':!successfulSearches&&failed?'unavailable':'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
+      person.emailResearch={...(person.emailResearch||{}),status:!failed&&!failedPages.size&&checks.every(row=>row?.status==='complete')?'complete':!successfulSearches&&failed?'unavailable':'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
       onProgress?.({label:`Verifying public contact evidence · ${people.filter(p=>p.emailResearch?.status==='complete').length}/${people.length} people checked`});
     };
     try{
@@ -1965,10 +1971,11 @@
     for(const person of people){const before=buyerResearchIdentityKey(candidate,person),matched=matchPublicLinkedInProfiles([person],sourceRows,candidate.company)[0];Object.assign(person,matched,matchBuyerScopeEvidence(matched,sourceRows,candidate));if(person.contactResearch?.identityKey===before)person.contactResearch.identityKey=buyerResearchIdentityKey(candidate,person);}
     for(const row of sourceRows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
-      if(url&&row.sourceRead===true&&row.evidenceKind!=='model_summary'&&String(row.markdown||row.content||'').trim()&&companyIdentityDomain(url)===companyIdentityDomain(candidate.domain))officialReads.set(url,{url,sourceRead:true,checkedAt:new Date().toISOString()});
+      const checkedAt=Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt:officialReads.get(url)?.checkedAt||report.startedAt,age=Date.now()-Date.parse(checkedAt);
+      if(url&&row.sourceRead===true&&row.evidenceKind!=='model_summary'&&String(row.markdown||row.content||'').trim()&&companyIdentityDomain(url)===companyIdentityDomain(candidate.domain)&&age>=0&&age<30*86400000)officialReads.set(url,{url,sourceRead:true,checkedAt});
     }
     report.officialPageReads=[...officialReads.values()].slice(-policy.maxSourcePages);report.officialPages=report.officialPageReads.length;
-    const finished=person=>person.contactResearch?.policyVersion===policy.version&&policy.requiredChecks.every(key=>person.contactResearch.checks[key]?.status==='complete')&&(!person.contactResearch.checks.independent||['complete','not_needed'].includes(person.contactResearch.checks.independent.status))&&(!priorities.includes(person)||attributable(person)||person.contactResearch.checks.deep?.status==='complete');
+    const finished=person=>!person.emailResearch?.failed&&person.contactResearch?.policyVersion===policy.version&&policy.requiredChecks.every(key=>person.contactResearch.checks[key]?.status==='complete')&&(!person.contactResearch.checks.independent||['complete','not_needed'].includes(person.contactResearch.checks.independent.status))&&(!priorities.includes(person)||attributable(person)||person.contactResearch.checks.deep?.status==='complete');
     for(const person of people)if(hasFullBuyerName(person.publicName||person.name)&&!finished(person))person.emailResearch={...(person.emailResearch||{}),status:person.emailResearch?.status==='unavailable'?'unavailable':'partial',checkedAt:new Date().toISOString()};
     report.checkedPeople=people.filter(finished).length;
     if(!report.officialPages)report.gaps.push('No underlying official page was read');
@@ -2106,6 +2113,7 @@
     if(!valid(person.publicPhone)||!url||evidence?.version!==2||normalizeUrl(evidence.url)!==url||check?.version!==2||check.status!=='attributed'||normalizeUrl(check.url)!==url||!quote.toLowerCase().includes(name)||!quote.includes(clean(person.publicPhone)))return '';
     const now=new Date(options.now??Date.now()).getTime(),fresh=stamp=>{const age=now-Date.parse(stamp||'');return Number.isFinite(age)&&age>=0&&age<30*86400000;};
     if(!fresh(evidence.checkedAt)||!fresh(check.checkedAt))return '';
+    if(evidence.sourceRead!==true)return '';
     if(evidence.sourceKind==='official'&&canonicalDomain(url)===domain||attributedBusinessListing(person,domain,'phone'))return clean(person.publicPhone);
     return '';
   }
@@ -2322,11 +2330,11 @@
   }
   async function runOfficialContactResearch(candidate,{rows=[],search,readPage,signal,guard=()=>{},onProgress=()=>{},onSignal=()=>{},onCheckpoint=()=>{},force=false,seedUrls=[],maxDurationMs=OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs}={}){
     const policy=OFFICIAL_CONTACT_RESEARCH_POLICY,previous=safeOfficialContactInventory(candidate.buyerDiscovery?.officialContactInventory,candidate.domain),ledgerAt=previous?.research?.status==='complete'?previous.checkedAt:previous?.research?.startedAt||previous?.checkedAt,reusable=!force&&previous?.research?.policyVersion===policy.version&&Date.now()-Date.parse(ledgerAt)>=0&&Date.now()-Date.parse(ledgerAt)<30*86400000,startedAt=reusable?previous.research.startedAt||previous.checkedAt:new Date().toISOString(),fresh=reusable&&officialContactCoveragePassed(candidate)&&Boolean(previous.contacts.length||previous.channels.length||previous.routes.length);
-    if(fresh&&!force)return {inventory:previous,rows};
+    if(fresh&&!force)return {inventory:previous,rows,freshRows:[]};
     const controller=new AbortController();onSignal(controller.signal);const cancel=()=>controller.abort(),timer=setTimeout(cancel,maxDurationMs);signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();
     const ensure=async()=>{if(controller.signal.aborted)throw new Error('Company contact research stopped');await guard();if(controller.signal.aborted)throw new Error('Company contact research stopped');};
     const bounded=async operation=>{await ensure();let abort;const stopped=new Promise((_,reject)=>{abort=()=>reject(new Error('Company contact research stopped'));controller.signal.addEventListener('abort',abort,{once:true});});try{const result=await Promise.race([operation(),stopped]);await ensure();return result;}finally{controller.signal.removeEventListener('abort',abort);}};
-    const domain=companyIdentityDomain(candidate.domain),official=url=>Boolean(contactResearchUrl(url)&&companyIdentityDomain(url)===domain),read=new Map(),queue=new Map(),attempted=new Set(),failures=[],receipts=[],reads=[],completed=new Set(reusable?(previous.research.completedUrls||previous.sourcePages):[]);let sourceLimit=reusable&&previous.research.discoveryTruncated===true,checkpointInventory=previous;
+    const domain=companyIdentityDomain(candidate.domain),official=url=>Boolean(contactResearchUrl(url)&&companyIdentityDomain(url)===domain),read=new Map(),queue=new Map(),attempted=new Set(),failures=[],receipts=[],reads=[],freshRows=[],completed=new Set(reusable?(previous.research.completedUrls||previous.sourcePages):[]);let sourceLimit=reusable&&previous.research.discoveryTruncated===true,checkpointInventory=previous;
     // Reach actionable company channels before spending the bounded pass on policy documents.
     const priority=url=>/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const add=(url,source=null,first=false)=>{url=contactResearchUrl(url);if(!url||read.has(url)||completed.has(url)||queue.has(url))return;if(queue.size+completed.size>=120){sourceLimit=true;return;}if(official(url)||url.startsWith('https:')&&(savedCompanyContactSource(source,candidate)||companyPublicationUrl(url,candidate)))queue.set(url,{url,source,priority:(first?-1:priority(url))+(previous?.research?.reads?.some(row=>row.url===url&&row.status==='failed')?20:0)});};
@@ -2348,8 +2356,8 @@
       attempted.add(entry.url);
       try{const page=await bounded(()=>readPage(entry.url,controller.signal)),actual=contactResearchUrl(page.url||page.metadata?.sourceURL||page.metadata?.url||entry.url),body=String(page.markdown||page.content||page.text||'');
         if(!actual||(!official(actual)&&actual!==entry.url)||!body.trim()||/^(?:access denied|just a moment|verify you are human)/i.test(body.trim()))throw new Error('Source unavailable or redirected outside its attribution');
-        const row={...page,url:actual,markdown:body,sourceRead:true,...(entry.source?{sourceEvidence:entry.source}:{})},source=companyContactSource(row,candidate);if(!source)throw new Error('Company attribution could not be established');
-        read.set(actual,row);completed.add(actual);completed.add(entry.url);rows.push(row);queue.delete(entry.url);queue.delete(actual);reads.push({url:actual,status:'complete',reason:''});links(row);finish(true,true);onProgress({label:`Reading company contact sources · ${read.size}/${policy.maxPages}`});
+        const row={...page,url:actual,markdown:body,sourceRead:true,extractedAt:new Date().toISOString(),...(entry.source?{sourceEvidence:entry.source}:{})},source=companyContactSource(row,candidate);if(!source)throw new Error('Company attribution could not be established');
+        read.set(actual,row);completed.add(actual);completed.add(entry.url);rows.push(row);freshRows.push(row);queue.delete(entry.url);queue.delete(actual);reads.push({url:actual,status:'complete',reason:''});links(row);finish(true,true);onProgress({label:`Reading company contact sources · ${read.size}/${policy.maxPages}`});
       }catch(error){if(controller.signal.aborted)throw error;failures.push('Could not read '+entry.url+': '+error.message);reads.push({url:entry.url,status:'failed',reason:String(error.message).slice(0,220)});}
     };
     const finish=(stopped,checkpoint=false)=>{
@@ -2358,7 +2366,7 @@
       const pending=[...queue.values()].filter(entry=>!read.has(entry.url)&&!completed.has(entry.url));
       inventory.research={policyVersion:policy.version,startedAt,status:stopped||sourceLimit||failures.length||pending.length||!completed.size&&!read.size?'partial':'complete',completedUrls:[...new Set([...completed,...read.keys()])].slice(0,120),pendingUrls:pending.map(row=>row.url).slice(0,120),pendingSources:pending.map(row=>row.source).filter(Boolean).slice(0,120),discoveryTruncated:sourceLimit,checkedAt:inventory.checkedAt,readPages:new Set([...(reusable?previous.research.reads||[]:[]).filter(row=>row.status==='complete').map(row=>row.url),...reads.filter(row=>row.status==='complete').map(row=>row.url),...read.keys()]).size,queries:receipts.map(row=>({...row})),reads:[...new Map([...(reusable?previous?.research?.reads||[]:[]),...reads].map(row=>[row.url,row])).values()].slice(0,120),failures:failures.slice(),stopReason:checkpoint?'research_in_progress':stopped?'deadline_or_context':sourceLimit?'source_discovery_limit':failures.length?'sources_unavailable':pending.length?'page_limit':'planned_sources_checked'};
       if(previous&&inventory.research.status==='partial'){inventory.checkedAt=previous.checkedAt;inventory.research.retainedPrevious=true;}
-      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};checkpointInventory=inventory;if(!controller.signal.aborted)onCheckpoint({inventory,rows});return {inventory,rows};
+      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),officialContactInventory:inventory};checkpointInventory=inventory;if(!controller.signal.aborted)onCheckpoint({inventory,rows,freshRows});return {inventory,rows,freshRows};
     };
     try{
       await ensure();finish(true,true);
@@ -2372,7 +2380,7 @@
         await bounded(()=>Promise.all(pending.slice(0,Math.min(policy.concurrency,policy.maxPages-attempted.size)).map(fetchOne)));
       }
       await ensure();return finish(false);
-    }catch(error){if(signal?.aborted)return {inventory:checkpointInventory,rows,canceled:true};try{await guard();}catch{return {inventory:checkpointInventory,rows,canceled:true};}failures.push(String(error.message||error));return finish(true);}
+    }catch(error){if(signal?.aborted)return {inventory:checkpointInventory,rows,freshRows,canceled:true};try{await guard();}catch{return {inventory:checkpointInventory,rows,freshRows,canceled:true};}failures.push(String(error.message||error));return finish(true);}
     finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
   }
   function discoverCompanyContacts(rows=[],candidate={},previous=[]){

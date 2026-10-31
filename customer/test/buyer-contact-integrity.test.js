@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const D=require('../discovery-engine.js'),C=require('../crm-engine.js');
 const company={company:'LKAB',domain:'lkab.com',market:'Sweden',buyerRoles:['CEO','Procurement Director','Production Manager']};
 const johan={id:'johan',name:'Johan Menckel',title:'CEO and President',organization:'LKAB',publicNameUrl:'https://lkab.com/press/interview',publicLinkedinUrl:'https://linkedin.com/in/johan-menckel'};
-const press={url:'https://lkab.com/press/interview',markdown:'Johan Menckel, CEO and President. Interviews: Mikko Viitala, Press Chief, +46 (0)70 309 81 63.'};
+const press={url:'https://lkab.com/press/interview',sourceRead:true,markdown:'Johan Menckel, CEO and President. Interviews: Mikko Viitala, Press Chief, +46 (0)70 309 81 63.'};
 
 test('a press contact number is never attached to the executive mentioned before it',()=>{
  const person=D.matchPublicBuyerDetails([johan],[press],company.domain,company.company)[0];
@@ -24,16 +24,16 @@ test('an extracted source overrides a misleading same-URL search snippet',()=>{
  assert.equal(extracted.publicPhone||'','');
 });
 test('phone ownership stops at an inline referral even without a heading or blank line',()=>{
- const row={url:press.url,markdown:'Johan Menckel, CEO and President. For interviews please contact the press office on +46 70 309 81 63.'};
+ const row={url:press.url,sourceRead:true,markdown:'Johan Menckel, CEO and President. For interviews please contact the press office on +46 70 309 81 63.'};
  assert.equal(D.matchPublicBuyerDetails([johan],[row],company.domain)[0].publicPhone||'','');
 });
 test('a different email owner before a phone number prevents attribution to the executive',()=>{
- const row={url:press.url,markdown:'Johan Menckel, CEO and President. For further information: mikko.viitala@lkab.com, +46 70 309 81 63.'};
+ const row={url:press.url,sourceRead:true,markdown:'Johan Menckel, CEO and President. For further information: mikko.viitala@lkab.com, +46 70 309 81 63.'};
  assert.equal(D.matchPublicBuyerDetails([johan],[row],company.domain)[0].publicPhone||'','');
 });
 test('a named company hiring contact retains the published email and phone with their exact source passage',()=>{
  const person={id:'david',name:'David Englund',title:'Recruiting manager, strategic procurement, Special Products',organization:'LKAB'};
- const row={url:'https://lkab.com/jobs/strategic-buyer',markdown:'Kontakt: rekryterande chef David Englund, david.englund@lkab.com, 070-261 89 54.'};
+ const row={url:'https://lkab.com/jobs/strategic-buyer',sourceRead:true,markdown:'Kontakt: rekryterande chef David Englund, david.englund@lkab.com, 070-261 89 54.'};
  const result=D.matchPublicBuyerDetails([person],[row],company.domain,company.company)[0];
  assert.equal(result.publicEmail,'david.englund@lkab.com');assert.equal(result.publicPhone,'070-261 89 54');
  assert.ok(result.publicPhoneEvidence?.quote.includes('David Englund'));
@@ -43,7 +43,7 @@ test('a named company hiring contact retains the published email and phone with 
 });
 test('a vacancy cannot establish the advertised role for its named recruiter',()=>{
  const person={id:'david',name:'David Englund',title:'Procurement Director',organization:'LKAB'};
- const row={url:'https://lkab.com/jobs/strategic-buyer',markdown:'Join us as Procurement Director. Rekryterande chef David Englund, david.englund@lkab.com, 070-261 89 54.'};
+ const row={url:'https://lkab.com/jobs/strategic-buyer',sourceRead:true,markdown:'Join us as Procurement Director. Rekryterande chef David Englund, david.englund@lkab.com, 070-261 89 54.'};
  const result=D.matchBuyerRoleEvidence(person,[row],company,{complete:true});
  assert.equal(result.roleReview?.status,'recruitment_contact');
  assert.equal(D.qualifyBuyer(result,{decisionMakers:'Procurement Director'},company).eligible,false);
@@ -53,7 +53,7 @@ test('a vacancy cannot establish the advertised role for its named recruiter',()
 });
 test('an external employer job listing can support a direct business phone without becoming an official-company source',()=>{
  const person={id:'tony',name:'Tony Bogdanoff',title:'Produktionschef',organization:'LKAB'};
- const row={url:'https://jobs.example/automation-technician',markdown:'Employer: LKAB. Contact produktionschef Tony Bogdanoff tony.bogdanoff@lkab.com alt. +46 76 822 1084.'};
+ const row={url:'https://jobs.example/automation-technician',sourceRead:true,markdown:'Employer: LKAB. Contact produktionschef Tony Bogdanoff tony.bogdanoff@lkab.com alt. +46 76 822 1084.'};
  const result=D.matchPublicBuyerDetails([person],[row],company.domain,company.company)[0];
  assert.equal(result.publicEmail,'tony.bogdanoff@lkab.com');assert.equal(result.publicPhone,'+46 76 822 1084');
  assert.equal(result.publicPhoneEvidence?.sourceKind,'public_listing');
@@ -66,8 +66,8 @@ test('an external employer job listing can support a direct business phone witho
 });
 test('an independently attributed listing phone survives alongside an official email source',()=>{
  const person={id:'tony',name:'Tony Bogdanoff',title:'Produktionschef',organization:'LKAB'};
- const official={url:'https://lkab.com/contacts',markdown:'Produktionschef Tony Bogdanoff, tony.bogdanoff@lkab.com.'};
- const listing={url:'https://jobs.example/automation-technician',markdown:'Employer: LKAB. Contact produktionschef Tony Bogdanoff tony.bogdanoff@lkab.com alt. +46 76 822 1084.'};
+ const official={url:'https://lkab.com/contacts',sourceRead:true,markdown:'Produktionschef Tony Bogdanoff, tony.bogdanoff@lkab.com.'};
+ const listing={url:'https://jobs.example/automation-technician',sourceRead:true,markdown:'Employer: LKAB. Contact produktionschef Tony Bogdanoff tony.bogdanoff@lkab.com alt. +46 76 822 1084.'};
  const result=D.matchPublicBuyerDetails([person],[listing,official],company.domain,company.company)[0];
  assert.equal(result.publicEmailUrl,official.url);assert.equal(result.publicPhoneUrl,listing.url);
  const restored=D.normalizeDiscoveryState({pipeline:[{...company,people:[result],publicResearch:{sources:[listing.url,official.url]}}],selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[result],publicResearch:{sources:[listing.url,official.url]}}]});

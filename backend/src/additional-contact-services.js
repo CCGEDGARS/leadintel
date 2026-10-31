@@ -1,4 +1,4 @@
-import {findTregWorkEmail} from './treg-contact-research.js';
+import {findTregWorkEmail,mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {findHunterWorkEmail} from './hunter-contact-research.js';
 import '../../customer/discovery-engine.js';
 import '../../customer/contact-confirmation-policy.js';
@@ -178,11 +178,34 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     if(!marked?.meta?.changes)throw fail('The saved lookup reservation changed before dispatch.',409,'ADDITIONAL_CONTACT_RESERVATION_HOLD');
     providerStarted=true;
   };
+  // Independent channels share a reservation, not permission to replace a
+  // sibling's completed evidence or submitted-charge history.
+  const retainTregAttempt=async({result,error,status})=>{
+    for(let retry=0;retry<5;retry++){
+      const current=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(...args).first();
+      const prior=JSON.parse(current?.result_json||'{}');
+      if(!current||prior.lookup_identity!==lookupIdentity)throw fail('The saved lookup reservation changed.',409,'ADDITIONAL_CONTACT_RESERVATION_HOLD');
+      const retained={...prior,...(result||{}),lookup_identity:lookupIdentity,provider_started:prior.provider_started===true||providerStarted||Boolean(resuming)};
+      if(result){
+        delete retained.error;delete retained.code;
+        if(result.contact&&prior.contact&&String(result.contact.external_person_id)===String(prior.contact.external_person_id)&&String(result.contact.name).trim().toLowerCase()===String(prior.contact.name).trim().toLowerCase())retained.contact={...prior.contact,...Object.fromEntries(Object.entries(result.contact).filter(([,value])=>value!==null&&value!==''&&value!==undefined))};
+        if(result.contactData)retained.contactData=mergeTregContactData(prior.contactData,result.contactData,{includeEmail,includePhone});
+        if(retained.contact&&retained.contactData?.phone?.status==='provider_listed'&&retained.contactData.phone.number&&String(retained.contact.phone_status||'').toLowerCase()!=='verified')retained.contact={...retained.contact,phone_number:retained.contactData.phone.number,phone_status:'provider_listed'};
+      }else{retained.error=error.message;retained.code=error.code;}
+      const accounting=await tregLookupAccounting(env,context,candidate,person,companyId,month,retained.contactData||retained.research||{});
+      retained.research={...(retained.research||{}),...accounting};
+      if(retained.contactData)Object.assign(retained.contactData,accounting);
+      const updated=await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=? AND result_json=?').bind(error&&current.status==='verified'?'verified':status,JSON.stringify(retained),...args,current.result_json).run();
+      if(updated?.meta?.changes)return retained;
+    }
+    throw fail('The saved lookup is still being reconciled. Retry it without starting a new purchase.',409,'ADDITIONAL_CONTACT_RESERVATION_HOLD');
+  };
   try{
     if(providerName==='treg'){
       await guard();
       const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,dataLookup,includePhone,includeEmail,existingContact:existing||null});
-      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
+      const retained=await retainTregAttempt({result,status:result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found'});
+      return {...result,...(retained.contact?{contact:retained.contact}:{}),...(retained.contactData?{contactData:retained.contactData}:{}),research:retained.research};
     }
     if(providerName==='hunter'){
       await guard();
@@ -204,6 +227,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
   }catch(error){
     const retryable=error.code==='TREG_RETRY_SAME_LOOKUP'||!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
+    if(providerName==='treg'){await retainTregAttempt({error,status:retryable?'retryable':'needs_review'});throw error;}
     await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=json_set(?,'$.provider_started',json(CASE WHEN COALESCE(json_extract(result_json,'$.provider_started'),1)=1 OR ?=1 THEN 'true' ELSE 'false' END)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,lookup_identity:lookupIdentity}),Number(providerStarted||Boolean(resuming)),...args).run();throw error;
   }
 }

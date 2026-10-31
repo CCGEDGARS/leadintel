@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const D=require('../discovery-engine.js'),C=require('../crm-engine.js'),P=require('../contact-confirmation-policy.js');
 const buyer={id:'anna',name:'Anna Andersson',title:'Head of Procurement',organization:'Example',publicNameUrl:'https://example.com/team'};
 const company=()=>({company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{...buyer}]});
-const source={url:'https://association.test/business-contacts',markdown:'Anna Andersson\nHead of Procurement, Example\nBusiness contact: anna.andersson@gmail.com',sourceRead:true};
+const source={url:'https://association.example.org/business-contacts',markdown:'Anna Andersson\nHead of Procurement, Example\nBusiness contact: anna.andersson@gmail.com',sourceRead:true};
 test('work-email ranking learns first-name-only formats from official named colleagues',()=>{
  const colleagues=[{name:'Catrin Haglund',publicEmail:'catrin@example.com',publicEmailUrl:'https://example.com/team'},{name:'Johnny Spang',publicEmail:'johnny@example.com',publicEmailUrl:'https://example.com/team'}];
  const guesses=D.rankedEmailGuesses(buyer,'example.com',colleagues);
@@ -74,7 +74,7 @@ test('CRM hydration keeps newer saved query receipts while preserving local buye
 });
 test('resuming a page-limited research run reads outstanding sources before reporting completion',async()=>{
  const c=company();c.people.push({...buyer,id:'bob',name:'Bob Svensson'});const plans=new Map(),read=[],rows=[];
- const search=async q=>{if(!plans.has(q))plans.set(q,plans.size);return [0,1].map(i=>({url:`https://association.test/query-${plans.get(q)}/${i}`}));};
+ const search=async q=>{if(!plans.has(q))plans.set(q,plans.size);return [0,1].map(i=>({url:`https://association.example.org/query-${plans.get(q)}/${i}`}));};
  const readPage=async url=>{read.push(url);return {markdown:'Example business source',metadata:{sourceURL:url}};};
  await D.runMandatoryBuyerResearch(c,{search,readPage,rows});assert.equal(c.publicResearch.accountability.status,'partial');
  assert.ok(c.people.some(p=>Object.values(p.contactResearch.checks).some(row=>row.queryLog?.some(q=>q.status==='partial'))));

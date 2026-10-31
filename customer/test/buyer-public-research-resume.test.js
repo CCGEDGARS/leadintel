@@ -37,7 +37,7 @@ test('refresh ambiguity holds an existing automatic profile match through worksp
  const row={url,title:'Alice Smith – Procurement Director – Northstar Steel | LinkedIn'};
  Object.assign(person,D.matchPublicLinkedInProfiles([person],[row],c.company)[0]);
  assert.equal(D.linkedInVerification(person,c).status,'automatic');
- await D.runMandatoryBuyerResearch(c,{force:true,rows:[official(c)],search:async q=>q.startsWith('site:linkedin.com/in/')?[row,{...row,url:'https://se.linkedin.com/in/alice-smith-2'}]:[]});
+ await D.runMandatoryBuyerResearch(c,{force:true,currentRows:[official(c)],search:async q=>q.startsWith('site:linkedin.com/in/')?[row,{...row,url:'https://se.linkedin.com/in/alice-smith-2'}]:[]});
  assert.equal(D.linkedInVerification(person,c).status,'review_required');
  assert.equal(person.publicLinkedinUrl,url,'the prior source remains available for explicit review');
  assert.ok(!person.linkedinIdentityEvidence,'ambiguity invalidates automatic public provenance');
@@ -75,7 +75,7 @@ test('previous employment and contradictory current-employer claims cannot confi
    Object.assign(person,D.matchPublicLinkedInProfiles([person],[current],company)[0]);
    Object.assign(person,{publicEmail:`buyer@${domain}`,publicEmailUrl:person.publicNameUrl,publicEmailSourceCheck:{status:'confirmed',email:`buyer@${domain}`,url:person.publicNameUrl,checkedAt:new Date().toISOString()}});
    assert.equal(D.qualifyBuyer(person,{decisionMakers:[title]},c).eligible,true);
-   await D.runMandatoryBuyerResearch(c,{force:true,rows:[official(c)],search:async q=>q.startsWith('site:linkedin.com/in/')?[row]:[]});
+   await D.runMandatoryBuyerResearch(c,{force:true,currentRows:[official(c)],search:async q=>q.startsWith('site:linkedin.com/in/')?[row]:[]});
    assert.equal(D.linkedInVerification(person,c).status,'review_required','new contradictory evidence holds earlier automatic provenance');
    assert.ok(!person.linkedinIdentityEvidence);
    assert.equal(D.qualifyBuyer(person,{decisionMakers:[title]},c).eligible,false,'contradictory current employment also holds buyer selection even when an earlier company email was confirmed');
