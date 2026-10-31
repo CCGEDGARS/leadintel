@@ -65,7 +65,7 @@ test('an official full staff page supplies the learned work-email format without
 test('CRM hydration keeps newer saved query receipts while preserving local buyer selections',async()=>{
  const c=company();await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Example team'})});
  const stamp=new Date().toISOString();c.buyerDiscovery={...c.buyerDiscovery,checkedAt:stamp};
- const detail={company:{normalized_domain:c.domain},contacts:[],intelligence:C.mapDiscoveryCandidateToCrm(c).intelligence};
+ const detail={company:{id:'company',workspace_id:'hydration-workspace',normalized_domain:c.domain},contacts:[],intelligence:C.mapDiscoveryCandidateToCrm(c).intelligence};
  const local=structuredClone(c);local.buyerDiscovery.checkedAt=new Date(Date.now()-60000).toISOString();local.people[0].kept=true;local.people[0].contactResearch={policyVersion:'20261021-adaptive-depth-v2',checks:{gmail:{status:'complete',checkedAt:new Date(Date.now()-60000).toISOString()}}};
  const ui=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,enrichmentResults:new Map(),personKey:(c,p)=>p.id,BUYER_RESEARCH_VERSION:'test',PUBLIC_NAME_CHECK_VERSION:'test'};
  require('./helpers/crm-hydration-context.cjs')(ctx);

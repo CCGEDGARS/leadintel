@@ -20,7 +20,7 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
 test('Discovery keeps Confirm data and its authenticated provider-confirmation path for selected people',()=>{
   assert.match(ui,/aria-label="\$\{person\.contactData\?\.status==='updated'\?'Data updated':'Confirm data'\}"/);
   assert.match(ui,/data-action="enrich-contact"/);
-  assert.match(ui,/bridge\(\)\.enrichCrmContact/);
+  assert.match(ui,/owner\.bridge\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);
   assert.doesNotMatch(ui,/X-Api-Key/);
 });
@@ -42,7 +42,7 @@ test('selected buyer card shows Apollo outcome and makes another lookup explicit
 test('Discovery requires durable CRM identity before paid enrichment',()=>{
   assert.match(ui,/crmCompanyByDomain/);
   assert.match(ui,/saveCrmCompany/);
-  assert.match(ui,/Sign in.*enrich/i);
+  assert.match(ui,/Sign in to confirm and save your recipient/i);
 });
 
 test('phone lookup is explicit or enabled by the buyer phone flow checkbox',()=>{

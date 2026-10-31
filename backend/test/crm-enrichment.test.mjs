@@ -36,6 +36,96 @@ function req(pathname,{method='GET',token,body}={}){return new Request(`https://
 async function payload(response){return response.json();}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 
+sqliteTest('uncertain email dispatch retains its credit reservation and prevents another paid attempt',async()=>{
+ const {env,token}=await fixture();env.DB.raw.exec("UPDATE enrichment_policies SET daily_credit_limit=1,monthly_credit_limit=1");
+ const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('transport interrupted after submission');};
+ try{
+  const url=`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,body={person_id:'apollo-p1',name:'Anna Andersson'};
+  await handleCrmRoute(req(url,{method:'POST',token,body}),env,{});
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_reserved,1);assert.equal(ledger.status,'cancelled');assert.equal(JSON.parse(ledger.response_summary_json).needs_review,1);
+  const second=await handleCrmRoute(req(url,{method:'POST',token,body:{...body,person_id:'apollo-other'}}),env,{});assert.equal(second.status,429);assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('revoking a CRM session during paid dispatch preserves charge evidence and blocks contact writes',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>{env.DB.raw.exec('DELETE FROM sessions');return Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});};
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,401);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_used,1);assert.equal(ledger.credits_reserved,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('unreadable successful Apollo response cannot become completed no-result evidence',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>new Response('bad-json');
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,502);const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_reserved,1);assert.equal(JSON.parse(ledger.response_summary_json).budget_retained,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('membership revoked between final guard and contact INSERT cannot commit a paid contact',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const batch=env.DB.batch.bind(env.DB);let revoked=false;env.DB.batch=async statements=>{if(!revoked&&statements.some(s=>/INSERT(?: OR IGNORE)? INTO crm_contacts/i.test(s.sql))){revoked=true;env.DB.raw.exec('DELETE FROM workspace_members');}return batch(statements);};
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(revoked,true);assert.equal(response.status,403);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_used,1);assert.equal(ledger.credits_reserved,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Apollo connection replacement after dispatch retains charge evidence and stops CRM writes',async()=>{
+ const {env,token}=await fixture();env.APOLLO_CREDENTIAL_REVISION='fixture';const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>{env.DB.raw.exec("UPDATE workspace_service_integrations SET encrypted_api_key='replacement'");return Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});};
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,409);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_used,1);assert.equal(ledger.credits_reserved,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('archiving a company during paid dispatch preserves charges without saving a contact',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>{env.DB.raw.prepare("UPDATE crm_companies SET lifecycle_status='archived' WHERE id=?").run(company.id);return Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});};
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,409);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);
+  const ledger=env.DB.raw.prepare('SELECT * FROM crm_enrichment_requests').get();assert.equal(ledger.credits_used,1);assert.equal(ledger.credits_reserved,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('uncertain email lookup cannot be purchased twice while other budget remains available',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('transport interrupted after submission');};
+ try{
+  const url=`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,body={person_id:'apollo-p1',name:'Anna Andersson'};
+  await handleCrmRoute(req(url,{method:'POST',token,body}),env,{});const second=await handleCrmRoute(req(url,{method:'POST',token,body}),env,{});
+  assert.equal(calls,1);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_enrichment_requests').get().n,1);assert.equal(second.status,202);assert.equal((await payload(second)).reason,'apollo_outcome_unknown');
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Apollo display name cannot hide conflicting returned name components',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({person:{id:'apollo-p1',name:'Anna Andersson',first_name:'Someone',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'acme.example'}}});
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,502);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);assert.equal(env.DB.raw.prepare('SELECT credits_used FROM crm_enrichment_requests').get().credits_used,1);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Apollo company email cannot hide a conflicting returned employer domain',async()=>{
+ const {env,token}=await fixture();const company=(await payload(await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{}))).company;
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({person:{id:'apollo-p1',name:'Anna Andersson',email:'anna@acme.example',email_status:'verified',organization:{primary_domain:'different.example'}}});
+ try{
+  const response=await handleCrmRoute(req(`/api/crm/companies/${company.id}/enrich-contact?workspace_id=w1`,{method:'POST',token,body:{person_id:'apollo-p1',name:'Anna Andersson'}}),env,{});
+  assert.equal(response.status,502);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n,0);assert.equal(env.DB.raw.prepare('SELECT credits_used FROM crm_enrichment_requests').get().credits_used,1);
+ }finally{globalThis.fetch=original;}
+});
+
 sqliteTest('CRM enrichment migration adds durable verification fields and request ledger',()=>{
   const db=new D1Db();
   const contactColumns=db.raw.prepare(`PRAGMA table_info(crm_contacts)`).all().map(row=>row.name);

@@ -199,14 +199,14 @@ export async function requireWorkspaceServiceCredential(env,workspaceId,provider
 }
 
 export async function withWorkspaceServiceCredentials(request,env){
-  const runtime=Object.create(env);runtime.APOLLO_API_KEY='';
+  const runtime=Object.create(env);runtime.APOLLO_API_KEY='';runtime.APOLLO_CREDENTIAL_REVISION='';
   runtime.APOLLO_WEBHOOK_SECRET=apolloWebhookSigningSecret(env);
   runtime.APOLLO_WEBHOOK_SERVER_BOUND=true;
   try{
     const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return runtime;
     const access=await requireMember(request,env,workspaceId);if(access.error)return runtime;
     const apolloCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
-    if(apolloCredential.source==='customer'&&apolloCredential.apiKey)runtime.APOLLO_API_KEY=apolloCredential.apiKey;
+    if(apolloCredential.source==='customer'&&apolloCredential.apiKey){runtime.APOLLO_API_KEY=apolloCredential.apiKey;runtime.APOLLO_CREDENTIAL_REVISION=apolloCredential.row?.encrypted_api_key||'';}
   }catch{}
   return runtime;
 }

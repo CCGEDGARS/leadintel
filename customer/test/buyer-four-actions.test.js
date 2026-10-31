@@ -2,8 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function runtime(automatic=false){
  const person={id:'public-anna',name:'Anna Andersson',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/anna'},candidate={domain:'example.com',people:[person]};
- const context={window:{LeadIntelOutreachAutomationUI:{getPolicy:()=>({preferredMode:automatic?'automatic':'manual'})}},document:{querySelector:()=>null},LeadIntelDiscovery:D,selectedBuyerKey:()=>person.id,personKey:()=>person.id,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),loadMeta:()=>({}),$:()=>null,currentJourneyFocus:()=>'buyers',buyerSelectionRows:()=>[candidate],esc:String,crmAuthenticated:()=>true,canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'w1'}})};
- vm.createContext(context);const start=source.indexOf('function buyerAutomaticMode('),end=source.indexOf('async function findPublicProspectContacts(',start);vm.runInContext(source.slice(start,end),context);
+ const stableBridge={workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};
+ const context={discovery:{selectedProspects:[candidate]},discoveryOperationContext:()=>JSON.stringify([stableBridge.workspace.id,stableBridge.session.user.id]),window:{LeadIntelContactPolicy:require('../contact-confirmation-policy.js'),LeadIntelOutreachAutomationUI:{getPolicy:()=>({preferredMode:automatic?'automatic':'manual'})}},document:{querySelector:()=>null},LeadIntelDiscovery:D,selectedBuyerKey:()=>person.id,personKey:()=>person.id,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),loadMeta:()=>({}),$:()=>null,currentJourneyFocus:()=>'buyers',buyerSelectionRows:()=>[candidate],esc:value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),crmAuthenticated:()=>true,canonicalDomain:D.canonicalDomain,bridge:()=>stableBridge};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('const buyerActionPendingOwners='),source.indexOf('function crmToLocalPipeline(')),context);context.personKey=()=>person.id;const start=source.indexOf('function buyerAutomaticMode('),end=source.indexOf('async function findPublicProspectContacts(',start);vm.runInContext(source.slice(start,end),context);
  return {context,person,candidate};
 }
 test('a saved profile update stays green without misrepresenting email verification or unlocking outreach',()=>{
@@ -31,7 +32,7 @@ test('LinkedIn review confirmation survives workspace state normalization',()=>{
 test('LinkedIn confirmation records CRM evidence and rolls back the UI state on failed sync',async()=>{
  for(const synced of [true,false]){
   const {context,person,candidate}=runtime();const activities=[];
-  Object.assign(context,{Date,ensureCrmCompany:async()=>({id:'company'}),bridge:()=>({workspace:{id:'w1'},saveCrmContacts:async()=>({ok:true}),recordCrmActivity:async(_,activity)=>{activities.push(activity);return {ok:activity.type==='contact.linkedin_confirmed',error:'Unsupported CRM activity type'};},saveNow:async()=>({saved:synced})}),saveDiscovery(){},renderAll(){}});context.window.LeadIntelCrm={mapContacts:()=>[]};
+  const reviewBridge={workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};Object.assign(context,{Date,ensureCrmCompany:async()=>({id:'company'}),bridge:()=>reviewBridge,saveDiscovery(){},renderAll(){}});Object.assign(reviewBridge,{saveCrmContacts:async()=>({ok:true}),recordCrmActivity:async(_,activity)=>{activities.push(activity);return {ok:activity.type==='contact.linkedin_confirmed',error:'Unsupported CRM activity type'};},saveNow:async()=>({saved:synced})});context.window.LeadIntelCrm={mapContacts:()=>[]};
   if(synced){assert.equal(await context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),true);assert.equal(person.linkedinConfirmedUrl,person.publicLinkedinUrl);}
   else{await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),/could not be synced/);assert.equal(person.linkedinConfirmedUrl,undefined);}
   assert.equal(activities[0].metadata.linkedin_url,person.publicLinkedinUrl);
@@ -46,7 +47,7 @@ test('stale workspace/profile review cannot confirm a changed match',async()=>{
 test('save and proceed stays disabled until verified company email exists',()=>{
  const {context,person,candidate}=runtime();
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Proceed/);
- context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ context.enrichmentResults.set(person.id,{contact:{name:'Anna Andersson',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
@@ -55,7 +56,7 @@ test('save and proceed awaits save, stops on failure and never toggles an alread
  for(const kept of [false,true])for(const saved of [false,true]){
   const {context,person,candidate}=runtime();person.kept=kept;const calls=[];
   Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},keepBuyer:async()=>{calls.push('save');return saved;},addBuyerToFlow:async()=>{calls.push('proceed');return true;}});
-  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+  context.enrichmentResults.set(person.id,{contact:{name:'Anna Andersson',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
   const result=await context.saveBuyerAndProceed('example.com',0);
   assert.deepEqual(calls,kept?['proceed']:saved?['save','proceed']:['save']);assert.equal(result,kept||saved);
  }
@@ -85,7 +86,7 @@ test('confirmed LinkedIn never unlocks the email proceed button or email/phone c
 });
 test('only an eligible email makes proceed green; pending and phone do not',()=>{
  const {context,person,candidate}=runtime();
- context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified',phone_number:'+37112345678'}});
+ context.enrichmentResults.set(person.id,{contact:{name:'Anna Andersson',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified',phone_number:'+37112345678'}});
  assert.match(context.prospectContactControls(candidate,person),/class="primary-btn small buyer-proceed-ready"[^>]*data-keep-buyer/);
  context.enrichmentPending.add(person.id);
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
@@ -95,7 +96,7 @@ test('only an eligible email makes proceed green; pending and phone do not',()=>
 
 test('proceed keeps its label through ready, selecting and selected states with a separate check',()=>{
  const {context,person,candidate}=runtime();
- context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ context.enrichmentResults.set(person.id,{contact:{name:'Anna Andersson',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  for(const state of ['ready','selecting','selected']){
   context.buyerSelectionPending.clear();
   context.loadMeta=()=>state==='selected'?{selectedEmailBuyer:{workspaceId:'w1',domain:candidate.domain,personId:person.id}}:{};
@@ -116,7 +117,7 @@ test('unconfirmed public listing cannot unlock proceed even under public confirm
 
 test('Recheck opens review even for an already verified buyer and waits for Proceed',async()=>{
  const person={id:'p1',name:'Sam Buyer',organization:'Example',title:'Procurement Director',linkedin_url:'https://linkedin.com/in/sam',linkedinConfirmedUrl:'https://linkedin.com/in/sam'},candidate={domain:'example.com',company:'Example',people:[person]};let dialogs=0,starts=0;const handlers={};const dialog={querySelector:selector=>({addEventListener:(_,f)=>{handlers[selector]=f;},value:'',textContent:''}),close(){}};
- const ctx={discovery:{selectedProspects:[candidate]},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'w1'}}),buyerReviewDialog:()=>{dialogs++;return dialog;},esc:String,crmAuthenticated:()=>true,saveBuyerLinkedInReview:async()=>true,startLinkedInBuyerMessage:async()=>{starts++;return true;},showToast(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function reviewBuyerLinkedIn('),source.indexOf('function selectedEmailBuyer(')),ctx);await ctx.reviewBuyerLinkedIn(candidate.domain,0);assert.equal(dialogs,1);assert.equal(starts,0);await handlers['[data-review-message]']({target:{disabled:false}});assert.equal(starts,1);
+ const stableBridge={workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};const ctx={window:{},discoveryOperationContext:()=>JSON.stringify([stableBridge.workspace.id,stableBridge.session.user.id]),discovery:{selectedProspects:[candidate]},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,bridge:()=>stableBridge,buyerReviewDialog:()=>{dialogs++;return dialog;},esc:value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),crmAuthenticated:()=>true,saveBuyerLinkedInReview:async()=>true,startLinkedInBuyerMessage:async()=>{starts++;return true;},showToast(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('const buyerActionPendingOwners='),source.indexOf('function crmToLocalPipeline(')),ctx);vm.runInContext(source.slice(source.indexOf('async function reviewBuyerLinkedIn('),source.indexOf('function selectedEmailBuyer(')),ctx);await ctx.reviewBuyerLinkedIn(candidate.domain,0);assert.equal(dialogs,1);assert.equal(starts,0);await handlers['[data-review-message]']({target:{disabled:false}});assert.equal(starts,1);
 });
 
 
@@ -147,7 +148,7 @@ test('an unconfirmed public address or another person’s saved email never pain
 });
 
 test('E-mail stays available after email confirmation and data-updated never grants an email recipient',()=>{
- const {context,person,candidate}=runtime();context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ const {context,person,candidate}=runtime();context.enrichmentResults.set(person.id,{contact:{name:'Anna Andersson',verification_provider:'Apollo',work_email:'anna@example.com',email_status:'verified'}});
  let html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*disabled/);
  context.enrichmentResults.clear();person.contactData={status:'updated',profile:{city:'Riga'}};html=context.prospectContactControls(candidate,person);assert.match(html,/data-prospect-enrich-email[^>]*>E-mail/);assert.match(html,/data-keep-buyer[^>]*disabled/);assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
 });
@@ -163,11 +164,11 @@ test('sync-blocked buyer controls expose a working recovery action without enabl
  context.bridge=()=>({workspace:{id:'w1'},conflict:false});assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-review-buyer-sync/);
 });
 
-test('a rendered email button routes by stable ID even when its old array position belongs to another buyer',()=>{
+test('a rendered email button routes by stable ID even when its old array position belongs to another buyer',async()=>{
  const {JSDOM}=require('jsdom'),{context,person,candidate}=runtime();
- const doc=new JSDOM(context.prospectContactControls(candidate,person)).window.document,button=doc.querySelector('[data-prospect-enrich-email]');
+ const doc=new JSDOM(context.prospectContactControls(candidate,person)).window.document,button=doc.querySelector('[data-prospect-enrich-email]');context.document=doc;vm.runInContext(source.slice(source.indexOf('function captureCompanyAction('),source.indexOf('function claimCompanySelection(')),context);
  assert.equal(button.dataset.personId,person.id);candidate.people.unshift({id:'klas',name:'Klas Buyer'});
  let handler,request;context.discovery={selectedProspects:[candidate]};context.$=()=>({addEventListener:(_name,fn)=>{handler=fn;}});context.confirmBuyerContact=(c,index,options)=>{request={c,index,options};};
  vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')&&line.includes('prospectEnrichEmail')),context);
- handler({target:button});assert.equal(request.options.personId,person.id);assert.equal(request.options.kind,'email');assert.notEqual(candidate.people[request.index].id,person.id);
+ handler({target:button});await new Promise(setImmediate);assert.equal(request.options.personId,person.id);assert.equal(request.options.kind,'email');assert.notEqual(candidate.people[request.index].id,person.id);
 });

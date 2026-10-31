@@ -11,3 +11,8 @@ test('database UTC confirmation timestamps remain usable in customer timezones',
   assert.doesNotThrow(()=>execFileSync(process.execPath,['-e',code],{env:{...process.env,TZ:timezone}}),timezone);
  }
 });
+
+test('conflicting saved email fields cannot validate one address while downstream uses another',()=>{
+ for(const change of [{work_email:'other@example.com'},{email:'other@example.com'},{work_email:'anna@gmail.com'},{work_email:'not-an-email'}])assert.equal(P.accepted({...contact,...change},'example.com'),false);
+ assert.equal(P.accepted({...contact,work_email:contact.normalized_email.toUpperCase()},'example.com'),true);
+});

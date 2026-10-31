@@ -6,10 +6,10 @@ const now=new Date().toISOString(),old='2013-01-01T00:00:00Z';
 // buyer-contact-evidence-v3. These are contract fixtures, not live yield data.
 function fixture(company='Factory Example',role='Procurement Director',domain='factory.example'){
  const roles=['CEO','COO',role,'Engineering Manager'];
- const c={company,domain,buyerSearchMode:'user_selected_target',buyerRoles:roles,people:roles.map((title,i)=>({id:'p'+i,name:'Anna Buyer'+i,publicName:'Anna Buyer'+i,title,organization:company,publicNameUrl:`https://${domain}/team`,identityEvidenceDate:now,emailResearch:{status:'complete',searches:12,failed:0,checkedAt:now},contactResearch:{version:1,evidenceVersion:2,policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,identityKey:[domain,company,'Anna Buyer'+i,title].join('|').toLowerCase(),checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(name=>[name,{status:'complete',checkedAt:now,...(name==='linkedin'?{profileMatchVersion:1}:{}),queryLog:Array.from({length:name==='gmail'?3:name==='direct_email'?2:1},(_,i)=>({query:name+' retained source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}))};
+ const c={company,domain,buyerSearchMode:'user_selected_target',buyerRoles:roles,people:roles.map((title,i)=>({id:'p'+i,name:['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],publicName:['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],title,organization:company,publicNameUrl:`https://${domain}/team`,identityEvidenceDate:now,emailResearch:{status:'complete',searches:12,failed:0,checkedAt:now},contactResearch:{version:1,evidenceVersion:2,policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,identityKey:[domain,company,['Anna Andersson','Bo Svensson','Cecilia Berg','David Lind'][i],title].join('|').toLowerCase(),checks:Object.fromEntries([...D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks,'deep'].map(name=>[name,{status:'complete',checkedAt:now,...(name==='linkedin'?{profileMatchVersion:1}:{}),queryLog:Array.from({length:name==='gmail'?3:name==='direct_email'?2:1},(_,i)=>({query:name+' retained source query '+i,status:'complete',checkedAt:now,resultCount:0}))}]))}}))};
  c.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',startedAt:now,completedAt:now,totalPeople:4,checkedPeople:4,officialPages:1,officialPageReads:[{url:`https://${domain}/team`,sourceRead:true,checkedAt:now}]}};
  c.buyerDiscovery={officialContactInventory:{version:1,domain,checkedAt:now,sourcePages:[`https://${domain}/team`],contacts:[],channels:[],research:{policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,status:'complete',checkedAt:now,readPages:1,queries:[],failures:[]}}};
- return reviewed(c);
+ return reviewed(require('./helpers/buyer-research-receipts.cjs')(c,now));
 }
 function reviewed(c){c.publicResearch.aiReview={status:'complete',provider:'gemini',checkedAt:now,inputSignature:D.buyerReviewSignature(c),reviewedPersonIds:c.people.map(p=>p.id),findings:[],conflicts:[]};return c;}
 function contact(c,p,status='verified'){
@@ -80,8 +80,8 @@ test('normalization and CRM snapshots retain source checks and receipts; evaluat
 });
 function unsortedRoster(){
  const c=fixture();c.buyerRoles.push('Project Manager');
- const extra=Array.from({length:4},(_,i)=>({...structuredClone(c.people[3]),id:'extra'+i,name:'Other Buyer'+i,publicName:'Other Buyer'+i,title:'Project Manager'}));
- c.people=[...extra,...c.people];c.publicResearch.accountability.checkedPeople=8;c.publicResearch.accountability.totalPeople=8;return reviewed(c);
+ const extra=Array.from({length:4},(_,i)=>({...structuredClone(c.people[3]),id:'extra'+i,name:['Eva Karlsson','Fredrik Holm','Greta Lund','Henrik Dahl'][i],publicName:['Eva Karlsson','Fredrik Holm','Greta Lund','Henrik Dahl'][i],title:'Project Manager'}));
+ c.people=[...extra,...c.people];c.publicResearch.accountability.checkedPeople=8;c.publicResearch.accountability.totalPeople=8;return reviewed(require('./helpers/buyer-research-receipts.cjs')(c,now));
 }
 test('deep-wave acceptance follows ranked priority buyers even when retained roster order differs',()=>{
  const c=unsortedRoster(),priority=D.rankedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds;

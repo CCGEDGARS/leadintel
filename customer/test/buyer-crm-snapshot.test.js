@@ -3,9 +3,9 @@ const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function setup(ok=true){
  const person={id:'anna',name:'Anna Andersson',title:'Project Manager',organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:'2026-10-01',contactVerification:{status:'verified',checkedAt:'2026-10-04'}};
  const candidate={domain:'example.com',company:'Example',people:[person],peopleStatus:'complete',buyerDiscovery:{opportunityRoles:['Project Manager'],pool:[person],researchIncomplete:true,checkedAt:'2026-10-04'}};
- const writes=[],events=[],bridge={workspace:{id:'w1'},saveCrmCompany:async value=>{writes.push(value);return {ok,error:'save failed'};}};
- const ctx={discovery:{selectedProspects:[candidate]},canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'company'}),bridge:()=>bridge,mainState:()=>({}),LeadIntelDiscovery:D,window:{LeadIntelCrm:C},saveDiscovery:()=>events.push('workspace'),refreshCrmState:async()=>events.push('refresh'),showToast:value=>events.push(value)};
- vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function saveBuyerResearch('),source.indexOf('function buyerAutomaticMode(')),ctx);
+ const writes=[],events=[],bridge={workspace:{id:'w1'},saveCrmCompany:async value=>{writes.push(value);return {ok,error:'save failed',company:{id:'company',normalized_domain:'example.com',workspace_id:'w1'}};}};
+ const ctx={discovery:{selectedProspects:[candidate]},canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'company'}),bridge:()=>bridge,discoveryOperationContext:()=>JSON.stringify([bridge.workspace?.id,bridge.session?.user?.id]),mainState:()=>({}),LeadIntelDiscovery:D,window:{LeadIntelCrm:C},saveDiscovery:()=>events.push('workspace'),refreshCrmState:async()=>events.push('refresh'),showToast:value=>events.push(value)};
+ vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function validateCompanySave('),source.indexOf('function captureCompanyAction(')),ctx);vm.runInContext(source.slice(source.indexOf('async function saveBuyerResearch('),source.indexOf('function buyerAutomaticMode(')),ctx);
  return {ctx,candidate,writes,events};
 }
 test('saving buyer research updates durable qualification without replacing verified contacts or advancing messages',async()=>{

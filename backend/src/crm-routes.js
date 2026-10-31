@@ -5,7 +5,8 @@ import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import {sha256,cookieValue} from './security.js';
-import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from './enrichment.js';
+import {contactRequestGuard} from './contact-operation-authority.js';
+import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail,normalizeDomain} from './enrichment.js';
 import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
   listCrmCompanies,listCrmActivities,getCrmCompany,upsertCrmCompany,updateCrmCompany,
@@ -37,17 +38,29 @@ const crmEnrichmentUsage=apolloCreditUsage;
 function immediateApolloCredits(person){return person&&clean(person.id||person.person_id,180)?1:0;}
 
 export async function enrichCrmContact(request,env,cors,access,companyId){
+  let capabilityRequired='',expectedCompany=null;
   const guard=async()=>{
     try{
       if(request.signal.aborted)throw Object.assign(Error('Contact research was cancelled.'),{status:499,code:'CRM_ENRICHMENT_CANCELLED'});
       await access.guard?.();
+      if(expectedCompany){const current=await env.DB.prepare('SELECT company_name,normalized_domain,lifecycle_status FROM crm_companies WHERE id=? AND workspace_id=?').bind(companyId,access.context.workspaceId).first();if(!current||['suppressed','archived'].includes(current.lifecycle_status)||current.normalized_domain!==expectedCompany.normalized_domain||current.company_name!==expectedCompany.company_name)throw Object.assign(Error('The selected company changed; reload its saved research.'),{status:409,code:'CRM_ENRICHMENT_COMPANY_CHANGED'});}
+      if(env.APOLLO_CREDENTIAL_REVISION){const current=await env.DB.prepare("SELECT encrypted_api_key,metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider='apollo'").bind(access.context.workspaceId).first();let metadata={};try{metadata=JSON.parse(current?.metadata_json||'{}');}catch{}if(current?.encrypted_api_key!==env.APOLLO_CREDENTIAL_REVISION||capabilityRequired&&metadata[capabilityRequired]!==true)throw Object.assign(Error('The Apollo connection or permission changed. Review the saved attempt before retrying.'),{status:409,code:'ADDITIONAL_CONTACT_PROVIDER_CHANGED'});}
       if(request.signal.aborted)throw Object.assign(Error('Contact research was cancelled.'),{status:499,code:'CRM_ENRICHMENT_CANCELLED'});
     }catch(cause){cause.enrichmentHold=true;throw cause;}
   };
+  const inheritedAuthority=access.context.writeAuthority||access.guard?.writeAuthority;
+  const writeAuthority=()=>{
+    const prior=inheritedAuthority?.(),predicates=[prior?.sql],args=[...(prior?.args||[])];
+    if(expectedCompany){predicates.push("EXISTS(SELECT 1 FROM crm_companies WHERE id=? AND workspace_id=? AND company_name=? AND normalized_domain=? AND lifecycle_status NOT IN ('suppressed','archived'))");args.push(companyId,access.context.workspaceId,expectedCompany.company_name,expectedCompany.normalized_domain);}
+    if(env.APOLLO_CREDENTIAL_REVISION){predicates.push("EXISTS(SELECT 1 FROM workspace_service_integrations WHERE workspace_id=? AND provider='apollo' AND encrypted_api_key=? AND (?='' OR json_extract(metadata_json,'$."+capabilityRequired+"')=1))");args.push(access.context.workspaceId,env.APOLLO_CREDENTIAL_REVISION,capabilityRequired);}
+    return {sql:predicates.filter(Boolean).map(s=>'('+s+')').join(' AND '),args};
+  };
+  access={...access,context:{...access.context,guard,writeAuthority}};
   await guard();
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Apollo person selection is required',400,cors,'CRM_ENRICHMENT_PAYLOAD_REQUIRED');
   const detail=await getCrmCompany(env.DB,access.context,companyId);const company=detail.company;
-  if(company.lifecycle_status==='suppressed')return error('Suppressed companies cannot be enriched',409,cors,'CRM_COMPANY_SUPPRESSED');
+  if(['suppressed','archived'].includes(company.lifecycle_status))return error('Blocked companies cannot be enriched',409,cors,'CRM_COMPANY_SUPPRESSED');
+  expectedCompany=company;
   const domain=clean(company.normalized_domain,253);if(!domain)return error('A verified company domain is required before enrichment',409,cors,'CRM_COMPANY_DOMAIN_REQUIRED');
   const personId=clean(body.person_id||body.personId,180);if(!personId)return error('Apollo person ID is required',400,cors,'CRM_APOLLO_PERSON_REQUIRED');
   if(!env.APOLLO_API_KEY)return error('Apollo API connection is not configured',503,cors,'CRM_APOLLO_NOT_CONFIGURED');
@@ -69,6 +82,9 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   if(body.contact_id){selectedContact=await env.DB.prepare('SELECT * FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL').bind(clean(body.contact_id,160),access.context.workspaceId,companyId).first();if(!selectedContact||String(selectedContact.source).toLowerCase()==='apollo'&&selectedContact.external_person_id&&selectedContact.external_person_id!==personId||body.name&&clean(body.name,180).toLowerCase()!==clean(selectedContact.name,180).toLowerCase())return error('Selected buyer identity does not match the CRM contact',409,cors,'CRM_PHONE_IDENTITY_MISMATCH');}
   const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
   if(existing&&!phoneRequested)return json({request:{status:'already_verified',credits_used:0},contact:existing,duplicate:true},200,cors);
+  const retainedEmail=()=>env.DB.prepare("SELECT * FROM crm_enrichment_requests WHERE workspace_id=? AND company_id=? AND provider='apollo' AND person_provider_id=? AND phone_requested=0 AND (status='processing' OR (status='cancelled' AND json_extract(response_summary_json,'$.budget_retained')=1)) ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(access.context.workspaceId,companyId,personId).first();
+  const emailHold=prior=>json({request:{id:prior.id,status:prior.status,credits_used:Number(prior.credits_used)||0,credits_reserved:Number(prior.credits_reserved)||0},duplicate:true,reason:'apollo_outcome_unknown'},202,cors);
+  if(!phoneRequested){const prior=await retainedEmail();if(prior)return emailHold(prior);}
 
   // Idempotency: do not buy the same phone reveal again while a previous
   // request is active, or after an actual number has already been returned.
@@ -88,6 +104,7 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
     if(savedPhone||selectedContact?.phone_number&&['verified','provider_listed'].includes(String(selectedContact.phone_status).toLowerCase()))return json({request:{status:'already_verified',credits_used:0},contact:savedPhone||selectedContact,duplicate:true,reason:'existing_verified_phone'},200,cors);
   }
   const capabilities=await apolloCapabilities(env,access.context.workspaceId);
+  capabilityRequired=phoneRequested?'phone_enrichment_enabled':'email_enrichment_enabled';
   if(phoneRequested?!capabilities.phone:!capabilities.email)return error('Enable Apollo '+(phoneRequested?'phone':'email')+' enrichment in Settings before using credits',409,cors,'CRM_APOLLO_CAPABILITY_DISABLED');
   const reserved=phoneRequested?9:1;const usage=await crmEnrichmentUsage(env.DB,access.context.workspaceId);
   if(usage.daily+reserved>Number(policy.daily_credit_limit)||usage.monthly+reserved>Number(policy.monthly_credit_limit))return error('Apollo enrichment blocked by workspace credit limit',429,cors,'CRM_APOLLO_CREDIT_LIMIT');
@@ -96,6 +113,7 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   const values=[requestId,access.context.workspaceId,companyId,selectedContact?.id||null,'apollo',personId,role,'processing',personalApproved?1:0,phoneRequested?1:0,reserved,0,'{}',access.context.userId,created,created];
   const reservation=await reserveCrmEnrichment(env.DB,{values,workspaceId:access.context.workspaceId,companyId,personId,contactId:selectedContact?.id,phone:phoneRequested,reserved},policy);
   if(!reservation){
+    if(!phoneRequested){const prior=await retainedEmail();if(prior)return emailHold(prior);}
     const prior=phoneRequested?await env.DB.prepare("SELECT * FROM crm_enrichment_requests WHERE workspace_id=? AND company_id=? AND provider='apollo' AND person_provider_id=? AND phone_requested=1 ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(access.context.workspaceId,companyId,personId).first():null;
     if(prior)return json({request:{id:prior.id,status:prior.status,credits_used:Number(prior.credits_used)||0,credits_reserved:Number(prior.credits_reserved)||0},duplicate:true,reason:'phone_request_already_recorded'},200,cors);
     return error('Apollo enrichment blocked by workspace credit limit or retained phone evidence',429,cors,'CRM_APOLLO_CREDIT_LIMIT');
@@ -113,11 +131,14 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
     await guard();dispatched=true;
     const response=await fetch(matchUrl,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':env.APOLLO_API_KEY}});
     if(!response.ok){definiteFailure=response.status>=400&&response.status<500&&response.status!==408;throw Object.assign(new Error(`Apollo match returned ${response.status}`),{code:`apollo_match_${response.status}`});}
-    const matched=await response.json().catch(()=>({}));const person=matched.person||{};
+    const matched=await response.json().catch(()=>null);if(!matched||typeof matched!=='object'||Array.isArray(matched))throw Object.assign(Error('Apollo returned an unreadable result'),{code:'CRM_APOLLO_RESPONSE_INVALID'});const person=matched.person||{};
     const actualName=clean(person.name||[person.first_name,person.last_name].filter(Boolean).join(' '),180),expectedName=clean(body.contact_id?selectedContact?.name:body.name,180);
     const profile=value=>{try{const url=new URL(value);return /(^|\.)linkedin\.com$/.test(url.hostname)?url.pathname.replace(/\/$/,'').toLowerCase():'';}catch{return '';}};
     const expectedProfile=profile(selectedContact?.public_linkedin_url||selectedContact?.linkedin_url),actualProfile=profile(person.linkedin_url);
-    if(person.id&&(String(person.id)!==personId||expectedName&&actualName&&expectedName.normalize('NFC').toLowerCase()!==actualName.normalize('NFC').toLowerCase()||expectedProfile&&actualProfile&&expectedProfile!==actualProfile))throw Object.assign(new Error('Apollo returned a different person identity'),{code:'CRM_APOLLO_IDENTITY_MISMATCH',providerCredits:immediateApolloCredits(person)});
+    const referenceName=expectedName||actualName,parts=referenceName.split(/\s+/),sameName=(a,b)=>clean(a,180).normalize('NFC').toLowerCase()===clean(b,180).normalize('NFC').toLowerCase();
+    const conflictingNames=referenceName&&([person.full_name,person.fullName].filter(Boolean).some(value=>!sameName(value,referenceName))||person.first_name&&!sameName(person.first_name,parts[0])||person.last_name&&!sameName(person.last_name,parts.slice(1).join(' ')));
+    const conflictingEmployer=[person.organization?.primary_domain,person.organization?.domain,person.organization?.website_url].filter(Boolean).some(value=>normalizeDomain(value)!==normalizeDomain(domain));
+    if(person.id&&(String(person.id)!==personId||conflictingNames||conflictingEmployer||expectedName&&actualName&&!sameName(expectedName,actualName)||expectedProfile&&actualProfile&&expectedProfile!==actualProfile))throw Object.assign(new Error('Apollo returned a different person identity'),{code:'CRM_APOLLO_IDENTITY_MISMATCH',providerCredits:immediateApolloCredits(person)});
     const summary={...publicPersonSummary(person),identity_verified:Boolean(String(person.id||'')===personId&&actualName&&(!expectedName||expectedName.normalize('NFC').toLowerCase()===actualName.normalize('NFC').toLowerCase()))};const creditsUsed=immediateApolloCredits(person);const providerRequestId=clean(matched.request_id||matched.requestId,180)||null;
     await env.DB.prepare(`UPDATE crm_enrichment_requests SET provider_request_id=?,credits_used=credits_used+?,response_summary_json=json_patch(?,response_summary_json),updated_at=? WHERE id=?`).bind(providerRequestId,creditsUsed,JSON.stringify(summary),stamp(),requestId).run();
     await guard();
@@ -151,6 +172,10 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
       await env.DB.prepare("UPDATE crm_enrichment_requests SET status='pending_phone',error_code=?,error_message=?,updated_at=? WHERE id=? AND webhook_received_at IS NULL").bind(code==='CRM_APOLLO_IDENTITY_MISMATCH'?code:'apollo_outcome_unknown',code==='CRM_APOLLO_IDENTITY_MISMATCH'?'Provider identity does not match the selected buyer; review required':'Provider outcome is uncertain; waiting for callback before another paid attempt',stamp(),requestId).run();
       const retained=await env.DB.prepare('SELECT * FROM crm_enrichment_requests WHERE id=?').bind(requestId).first();
       return json({request:{id:requestId,status:retained.status,credits_reserved:reserved},contact:retained.webhook_received_at?await applyApolloCrmPhoneResult(env.DB,retained):selectedContact,reason:'apollo_outcome_unknown'},202,cors);
+    }
+    if(dispatched&&!definiteFailure){
+      await env.DB.prepare("UPDATE crm_enrichment_requests SET status='cancelled',response_summary_json=json_set(response_summary_json,'$.budget_retained',1,'$.needs_review',1),error_code=?,error_message=?,completed_at=?,updated_at=? WHERE id=?").bind(code,message,stamp(),stamp(),requestId).run();
+      return error('Apollo outcome is uncertain. Review the saved attempt before another lookup.',502,cors,code);
     }
     await env.DB.prepare(`UPDATE crm_enrichment_requests SET status='failed',credits_reserved=0,error_code=?,error_message=?,completed_at=?,updated_at=? WHERE id=? AND webhook_received_at IS NULL`).bind(code,message,stamp(),stamp(),requestId).run();
     await appendCrmActivity(env.DB,access.context,{companyId,type:'contact.enrichment_failed',summary:'Apollo contact enrichment failed',metadata:{provider:'Apollo',request_id:requestId,person_provider_id:personId,code}});
@@ -198,7 +223,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
       if(company.action==='mark-customer'&&request.method==='POST')return json({company:await markCrmCustomer(env.DB,access.context,company.id)},200,cors);
       if(company.action==='confirm-public-email'&&request.method==='POST'){return json({contact:await confirmPublicWorkEmail(env,access.context,company.id,await request.json())},200,cors);}
       if(company.action==='enrich-contact'){
-        if(request.method==='POST')return enrichCrmContact(request,env,cors,access,company.id);
+        if(request.method==='POST'){access.guard=await contactRequestGuard(request,env,access.context);return await enrichCrmContact(request,env,cors,access,company.id);}
         return error('Method not allowed',405,cors);
       }
       if(company.action==='contacts'){
