@@ -56,12 +56,13 @@ test('public candidate email keeps the same retained person after a reorder duri
 test('a late failed policy refresh preserves the newer successful current-owner policy',async()=>{
  const r=runtime(),old=deferred();try{let requests=0;r.c.fetch=async()=>++requests===1?old.promise:{ok:true,json:async()=>({confirmationLevel:'public_confirmed'})};const first=r.c.refreshBuyerConfirmationPolicy();await r.c.refreshBuyerConfirmationPolicy();old.resolve({ok:false,status:503,json:async()=>({error:'Unavailable'})});await first;assert.equal(r.c.LeadIntelBuyerConfirmationPolicy.level(),'public_confirmed');}finally{r.close();}
 });
-test('a dispatched Email action keeps its original person owner through the real public research checkpoints',async()=>{
+test('an explicit legacy public confirmation keeps its original person owner through real research checkpoints',async()=>{
  const r=runtime(),started=deferred(),dossier=deferred();let pending,mandatory=0;try{delete r.teemu.publicEmail;delete r.teemu.publicEmailUrl;
  r.b.getCrmCompany=async()=>({ok:true,company:{id:'crm-company',normalized_domain:'company.example'},contacts:[]});
  r.c.LeadIntelDiscovery={...D,qualifyBuyer:()=>({eligible:true,gaps:[]}),buyerResearchCoveragePassed:candidate=>candidate.publicResearch?.accountability?.status==='complete',runOfficialContactResearch:async()=>({}),runMandatoryBuyerResearch:async(candidate,{accountability})=>{mandatory++;candidate.people[0].emailResearch={status:'complete',searches:11,failed:0};accountability.status='complete';accountability.gaps=[];return accountability;}};
  r.c.LeadIntelCompanyDossierUi={research:async()=>{started.resolve();return dossier.promise;},evidenceRows:()=>[]};r.c.reviewBuyerPublicEvidence=async()=>({status:'unavailable',conflicts:[]});r.c.confirmResearchedPublicEmails=async()=>{};r.c.fetch=async()=>({ok:true,json:async()=>({providers:[]})});r.c.LeadIntelDialogs={confirm:async()=>false};
- r.c.bindDiscovery();const original=r.c.confirmBuyerContact;r.c.confirmBuyerContact=(...args)=>{pending=original(...args);return pending;};r.c.document.getElementById('customer-pipeline').innerHTML='<button data-prospect-enrich-email="company.example" data-person-index="0" data-person-id="teemu">E-mail</button>';r.c.document.querySelector('button').click();await started.promise;
+ // Visible E-mail now requests paid-only work; exercise the retained legacy public path explicitly.
+ pending=r.c.confirmBuyerContact(r.candidate,0,{kind:'email',additionalHandled:true,dataLookup:true,personId:'teemu'});await started.promise;
  const retained=r.candidate.people.find(person=>person.id==='teemu');dossier.resolve({});await pending.catch(()=>false);
  assert.equal(retained,r.teemu,'the first real research checkpoint must preserve the selected action owner');assert.equal(r.candidate.people.find(person=>person.id==='teemu'),r.teemu,'completed checkpoints retain the same owner');assert.equal(mandatory,1);assert.equal(r.teemu.emailResearch.searches,11);
  }finally{r.close();}

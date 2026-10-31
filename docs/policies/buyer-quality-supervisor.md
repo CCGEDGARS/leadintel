@@ -35,3 +35,7 @@ The main journey includes a mandatory Buyers quality requirement, separate from 
 ## Explicit manual paid lookup scope — 21 October 2026
 
 A manually selected qualified buyer can enter paid lookup after that buyer's own fresh mandatory checks and the recorded official-company read. Other buyers' unresolved identities cannot block this action. Full-roster research and four qualified buyers remain mandatory for automatic paid enrichment. The exact readiness blocker and provider outcomes must appear and persist in the existing buyer card. Enabled Hunter finding is a separately approved manual fallback, never an automatic extension of Apollo consent. See `2026-10-21-paid-email-execution.md` for limits and provider receipt handling.
+
+## Visible button contract amendment — 31 October 2026
+
+The owner explicitly separated the visible controls: initial all-buyer free research, white missing-data E-mail/Phone buttons that request their own paid channel, green confirmed-data buttons, free-only Recheck, and email-dependent Proceed. Follow [buyer-contact-button-contract.md](buyer-contact-button-contract.md). Earlier public-first wording describes the research prerequisite and legacy/automatic confirmation path; it must not make an explicit paid-only button rerun free research. Preserve all qualification, identity, consent, limits and evidence gates.

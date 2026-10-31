@@ -6406,6 +6406,59 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "buyer-buttons-paid-only-actions",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "paidOnly:true",
+        "if(paidOnly&&!automatic&&!both)",
+        "force:true,manualContact:true,researchOwner:candidate",
+        "options={manualContact:true,...options,researchOwner}"
+      ]
+    },
+    {
+      "id": "buyer-buttons-independent-confirmation",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function confirmedBuyerPhone(",
+        "Provider listings alone remain unconfirmed.",
+        "check.status!=='attributed'"
+      ]
+    },
+    {
+      "id": "buyer-buttons-paid-intent-routing",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "Boolean(options.paidOnly)",
+        "if(!paidOnly&&!adapter?.email?.(candidate,person))",
+        "dataLookup=policy.provider==='treg'"
+      ]
+    },
+    {
+      "id": "buyer-buttons-white-and-green",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".buyer-four-actions .buyer-confirm-needed{background:#fff;",
+        ".buyer-four-actions button.buyer-phone-confirmed"
+      ]
+    },
+    {
+      "id": "buyer-buttons-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-buttons=20261031-v1"
+      ]
     }
   ],
   "retry": {
