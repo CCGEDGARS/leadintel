@@ -6753,9 +6753,8 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "const profileMeaning=",
-        "class=\"icp-purpose\"",
-        "Find companies similar to your reference customers, then check their fit and buying signals."
+        "LeadIntelMarket.profilePurposeHeadline(icp,state.profile,state.market)",
+        "class=\"icp-purpose\""
       ]
     }
   ],

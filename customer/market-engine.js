@@ -72,6 +72,21 @@
 
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
 
+  function profilePurposeHeadline(icp={},profile={},market={}){
+    const phrase=value=>clean(value).split(/[;\n]|[.!?](?:\s|$)/)[0].trim().replace(/[.!?]+$/,'');
+    const offer=phrase(icp.offers||profile.priorityOffers);
+    const buyers=offer?`potential buyers for ${offer}`:'potential buyers for your offer';
+    if(icp.type==='trigger-led'){
+      const configured=Array.isArray(market.signals)&&market.signals.length;
+      const signal=phrase(configured?market.signals.find(row=>row.active!==false)?.name:profile.buyingTriggers);
+      return signal?`Find ${buyers} through buying signals such as ${signal}.`:`Find ${buyers} by checking relevant company changes for demand.`;
+    }
+    if(icp.type==='opportunity-led')return `Find ${buyers} through researched commercial opportunities beyond your core customer profile.`;
+    if(['lookalike','lookalike-led'].includes(icp.type))return `Find ${buyers} among companies similar to your active reference customers.`;
+    const target=phrase(icp.description||profile.idealCustomer);
+    return target?`Find ${buyers} among ${target}.`:`Find ${buyers} that match your approved customer criteria.`;
+  }
+
   function buildIcpCandidates(profile={},language='en',referenceModel=undefined){
     const activeReferences=referenceModel?.active?(referenceModel.dna?.referenceProfiles||referenceModel.referenceProfiles||[]).map(item=>clean(item.companyName)).filter(Boolean):[];
     const anchors=referenceModel===undefined?clean(profile.lookalikeCustomers):[...new Set(activeReferences)].join('; ');
@@ -583,5 +598,5 @@
     return results;
   }
 
-  return {effectiveTargetingProfile,DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,removeSignal,restoreRemovedSignal,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {profilePurposeHeadline,effectiveTargetingProfile,DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,removeSignal,restoreRemovedSignal,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });
