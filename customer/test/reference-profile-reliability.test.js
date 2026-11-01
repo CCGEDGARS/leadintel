@@ -183,7 +183,7 @@ function discoveryProfile(state,withPortfolio=true){
 }
 function strategyAvailability(state,withPortfolio=true){
   const app=source('app.js'),start=app.indexOf('function icpActivationRequirement('),end=app.indexOf('\nfunction enforceIcpActivationRequirements',start);
-  const root={state,localStorage:{getItem:()=>JSON.stringify(state)},STORAGE_KEY:key,LeadIntelReferenceCustomers:Ref,LeadIntelReferenceCustomerPortfolio:withPortfolio?Portfolio:undefined};
+  const root={state:{...state,website:'https://seller.example/',targetMarkets:['Latvia'],profile:{},approved:true},LeadIntelMarket:require('../market-engine.js'),LeadIntelTargeting:{isConfirmed:()=>true},localStorage:{getItem:()=>JSON.stringify(state)},STORAGE_KEY:key,LeadIntelReferenceCustomers:Ref,LeadIntelReferenceCustomerPortfolio:withPortfolio?Portfolio:undefined};
   vm.runInNewContext(app.slice(start,end),root);return root.icpActivationRequirement({type:'lookalike'}).available;
 }
 for(const stateKind of ['deactivated','empty','deleted','active','legacy'])test(`Strategy and Discovery honor ${stateKind} reference portfolio state`,()=>{

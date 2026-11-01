@@ -108,11 +108,11 @@
     }).sort((a,b)=>(b.fitScore??0)-(a.fitScore??0)||b.priorityScore-a.priorityScore||b.lookalikeMatch.total-a.lookalikeMatch.total);
   }
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
-  function referenceCount(model={}){return Math.max(0,Number(model?.dna?.activeCount)||Number(model?.activeCount)||Number(model?.activeRows?.length)||0);}
+  function referenceCount(model={}){return Math.max(0,Number(model?.dna?.activeCount)||Number(model?.activeCount)||Number(model?.activeRows?.length)||Number(model?.dna?.referenceProfiles?.length)||0);}
   function syncReferenceLookalikeIcp(icps=[],profile={},model=null,language='en',options={}){
     const list=Array.isArray(icps)?icps:[];const existing=list.find(item=>item?.id===REFERENCE_ICP_ID)||null;const base=list.filter(item=>item?.id!==REFERENCE_ICP_ID);
-    const available=Boolean(model?.active&&model?.dna?.active);const fingerprint=available?clean(model.fingerprint||model.dna?.fingerprint):'';const count=available?referenceCount(model):0;const confidence=available?(clean(model?.dna?.confidence||model?.confidence)||'low'):'none';
-    const modelCount=available&&Array.isArray(model.models)?model.models.length:available?1:0;const requestedActive=typeof existing?.requestedActive==='boolean'?existing.requestedActive:existing?existing.active!==false:true;const active=available&&requestedActive;
+    const available=Boolean(model?.active&&model?.dna?.active&&referenceCount(model)>0);const fingerprint=available?clean(model.fingerprint||model.dna?.fingerprint):'';const count=available?referenceCount(model):0;const confidence=available?(clean(model?.dna?.confidence||model?.confidence)||'low'):'none';
+    const modelCount=available&&Array.isArray(model.models)?model.models.length:available?1:0;const requestedActive=available;const active=available;
     const targetMarkets=clean(profile.targetMarkets)||split(profile.currentMarkets).join('; ')||'Priority markets not yet defined';const common={targetMarkets,buyerRoles:clean(profile.decisionMakers),value:clean(profile.opportunityValue),exclusions:clean(profile.exclusions),offers:clean(profile.priorityOffers)};const lv=isLv(language);
     const status=available?(lv?`${modelCount} aktīvi Reference Customer modeļi · ${count} klienti · ${confidence} pārliecība.`:`${modelCount} active Reference Customer model${modelCount===1?'':'s'} · ${count} customers · ${confidence} confidence.`):(lv?'Nav aktīva Reference Customer modeļa. Aktivizējiet vienu vai vairākus saglabātos klientu sarakstus Reference Customer Intelligence.':'No active Reference Customer model. Activate one or more saved customer lists in Reference Customer Intelligence.');
     const pending=available&&options?.draftDirty?(lv?' Pašreizējā atvērtajā sarakstā ir nesaglabātas modeļa izmaiņas.':' The currently open list has model changes waiting to be saved or activated.'):'';

@@ -15,9 +15,9 @@ test('each profile purpose uses its own targeting without inventing customer fac
 });
 test('shipping signal change handler refreshes the visible profile after rename and disable',()=>{
  const fs=require('node:fs'),vm=require('node:vm'),app=fs.readFileSync(require.resolve('../app.js'),'utf8');
- const handler=app.match(/\$\("signal-designer"\)\.addEventListener\("change",\(\)=>\{([^}]+)\}\)/)[1];
+ const handler=app.match(/\$\("signal-designer"\)\.addEventListener\("change",event=>\{(.+)\}\);/)[1];
  const market={signals:[{name:'Plant expansion',active:true}]},p={priorityOffers:'Engineering'},icp={type:'trigger-led'};let visible=M.profilePurposeHeadline(icp,p,market),edit;
- const context={readMarketEdits:()=>edit(),renderIcps:()=>{visible=M.profilePurposeHeadline(icp,p,market);},renderSignalDesigner:()=>{},renderResearchControls:()=>{},renderMonitoringControls:()=>{}};
- edit=()=>{market.signals[0].name='Equipment replacement';};vm.runInNewContext(handler,context);assert.match(visible,/Equipment replacement/);assert.doesNotMatch(visible,/Plant expansion/);
- edit=()=>{market.signals[0].active=false;};vm.runInNewContext(handler,context);assert.doesNotMatch(visible,/Equipment replacement/);
+ const context={event:{target:{closest:()=>null}},readMarketEdits:()=>edit(),renderIcps:()=>{visible=M.profilePurposeHeadline(icp,p,market);},renderSignalDesigner:()=>{},renderResearchControls:()=>{},renderMonitoringControls:()=>{}};
+ edit=()=>{market.signals[0].name='Equipment replacement';};vm.runInNewContext('(function(){'+handler+'})()',context);assert.match(visible,/Equipment replacement/);assert.doesNotMatch(visible,/Plant expansion/);
+ edit=()=>{market.signals[0].active=false;};vm.runInNewContext('(function(){'+handler+'})()',context);assert.doesNotMatch(visible,/Equipment replacement/);
 });

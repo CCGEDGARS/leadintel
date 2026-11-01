@@ -17,12 +17,12 @@ test('missing Core starts on; existing deliberate Core off survives rendering an
  const core=h.state.market.icps.find(x=>x.type==='core');core.active=false;core.requestedActive=false;
  h.state.market=Market.normalizeMarketState(JSON.parse(JSON.stringify(h.state.market)));h.context.renderIcps();h.context.renderIcps();assert.equal(h.state.market.icps.find(x=>x.type==='core').active,false);
 });
-test('missing prerequisites suspend effective use without losing On, then restore it after reload',()=>{
+test('missing prerequisites clear On and do not silently activate after reload',()=>{
  const h=harness([{id:'opp',type:'opportunity-led',name:'Opportunity',active:true}]);h.context.renderIcps();
- let opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,false);assert.equal(opp.requestedActive,true);
- assert.equal(h.document.querySelector('[data-icp-field="active"]').checked,true);assert.match(h.document.body.textContent,/Temporarily unavailable/);
+ let opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,false);assert.equal(opp.requestedActive,false);
+ assert.equal(h.document.querySelector('[data-icp-field="active"]').checked,false);assert.match(h.document.body.textContent,/Setup required/);
  h.state.market=Market.normalizeMarketState(JSON.parse(JSON.stringify(h.state.market)));h.context.evidenceAvailable=true;h.context.renderIcps();
- opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,true);assert.equal(opp.requestedActive,true);
+ opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,false);assert.equal(opp.requestedActive,false);
 });
 test('user can switch a temporarily unavailable profile off and it stays off when evidence returns',()=>{
  const h=harness([{id:'opp',type:'opportunity-led',name:'Opportunity',active:true}]);h.context.renderIcps();const toggle=h.document.querySelector('[data-icp-field="active"]');assert.equal(toggle.disabled,false);toggle.checked=false;h.context.readMarketEdits();
@@ -37,11 +37,11 @@ test('Opportunity localization preserves On through absent evidence and restores
  state=Market.normalizeMarketState(JSON.parse(JSON.stringify(state)));state.opportunities=[{id:'op',active:true,profileOnly:false,evidence:[{url:'https://example.com/news'}]}];
  const restored=Market.localizeGeneratedState(state,{},'lv').icps.find(x=>x.type==='opportunity-led');assert.equal(restored.active,true);assert.equal(restored.requestedActive,true);
 });
-test('refreshing reference models preserves explicit Off and recovers temporarily blocked On',()=>{
+test('one usable reference automatically enables Lookalike and missing models keep it off',()=>{
  const model={active:true,fingerprint:'new',dna:{active:true,activeCount:1}};
  const off={id:'icp-reference-lookalike',type:'lookalike-led',active:false,requestedActive:false,referenceFingerprint:'old'};
- assert.equal(Lookalike.syncReferenceLookalikeIcp([off],{},model)[0].active,false);
- const on={...off,active:true,requestedActive:true};const blocked=Lookalike.syncReferenceLookalikeIcp([on],{},null)[0];assert.equal(blocked.active,false);assert.equal(blocked.requestedActive,true);
+ assert.equal(Lookalike.syncReferenceLookalikeIcp([off],{},model)[0].active,true);
+ const on={...off,active:true,requestedActive:true};const blocked=Lookalike.syncReferenceLookalikeIcp([on],{},null)[0];assert.equal(blocked.active,false);assert.equal(blocked.requestedActive,false);
  const saved=Market.normalizeMarketState({icps:[blocked]}).icps;assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,true);
 });
 test('hidden legacy reference profiles cannot bypass the canonical reference Off choice',()=>{
@@ -66,12 +66,12 @@ test('an explicit Core On survives edits, repeated rendering and normalized relo
  assert.equal(h.state.market.icps[0].active,true);assert.equal(h.state.market.icps[0].requestedActive,true);
 });
 
-test('first reference activation enables a generated unavailable lens without overriding explicit Off',()=>{
+test('first reference activation enables even a previously switched-off lens',()=>{
  const pending=Lookalike.syncReferenceLookalikeIcp([],{},null);assert.equal(pending[0].active,false);
  const saved=Market.normalizeMarketState(JSON.parse(JSON.stringify({icps:pending}))).icps;
  const model={active:true,fingerprint:'first',dna:{active:true,activeCount:1}};
  assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,true);
- saved[0].requestedActive=false;assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,false);
+ saved[0].requestedActive=false;assert.equal(Lookalike.syncReferenceLookalikeIcp(saved,{},model)[0].active,true);
 });
 
 test('localization never enables a missing optional Opportunity profile after evidence and reload',()=>{
