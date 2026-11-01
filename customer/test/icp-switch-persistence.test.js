@@ -79,3 +79,12 @@ test('localization never enables a missing optional Opportunity profile after ev
  const opportunity=Market.normalizeMarketState(JSON.parse(JSON.stringify(state))).icps.find(x=>x.type==='opportunity-led');
  assert.equal(opportunity.active,false);assert.equal(opportunity.requestedActive,false);
 });
+
+test('automatically enabled reference switches keep a green track when locked',()=>{
+ const css=fs.readFileSync(require.resolve('../market.css'),'utf8');
+ const dom=new JSDOM('<style>'+css+'</style><label class="market-toggle"><input type="checkbox" checked disabled><span></span></label>');
+ const track=dom.window.document.querySelector('.market-toggle span');
+ assert.equal(dom.window.getComputedStyle(track).backgroundColor,'rgb(13, 93, 79)');
+ const off=new JSDOM('<style>'+css+'</style><label class="market-toggle"><input type="checkbox" disabled><span></span></label>');
+ assert.equal(off.window.getComputedStyle(off.window.document.querySelector('.market-toggle span')).backgroundColor,'rgb(215, 221, 218)');
+});
