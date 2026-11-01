@@ -86,7 +86,7 @@ test('each brief group exposes a reviewed progress counter',()=>{
 test('research review names evidence drafts and AI hypotheses separately',()=>{
   const ui=fs.readFileSync(path.join(ROOT,'company-research-ui.js'),'utf8');
   assert.match(ui,/Evidence-backed draft/);
-  assert.match(ui,/AI hypothesis/);
+  assert.match(ui,/Commercial recommendation/);
   assert.match(ui,/evidence_draft/);
   assert.match(ui,/hypothesis_draft/);
 });

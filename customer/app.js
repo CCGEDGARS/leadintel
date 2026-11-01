@@ -1,6 +1,6 @@
 import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
-import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1';
+import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1';
 import './content-language.js?v=20260924-workspace-content-english-v1&kazakhstan-support=20261024-v1&country-language=20261027-v1';
 import './content-variants.js?v=20260929-public-first-email-v1&app-dialogs=20261017-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1&startup-token-scan=20261016-v1';

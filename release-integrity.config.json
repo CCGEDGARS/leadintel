@@ -6626,6 +6626,40 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "url": "/customer/commercial-profile-adviser.js",
+      "status": 200,
+      "contains": [
+        "buildAdvice",
+        "issuesFor",
+        "meeting_value",
+        "sourceIds:[]"
+      ],
+      "id": "analytical-profile-adviser",
+      "type": "text"
+    },
+    {
+      "url": "/customer/company-research-ui.js",
+      "status": 200,
+      "contains": [
+        "Review all 12 answers",
+        "Fill empty and unreviewed fields",
+        "Undo last change",
+        "profileAdvice.context=captureResearchContext"
+      ],
+      "id": "profile-adviser-review-controls",
+      "type": "text"
+    },
+    {
+      "url": "/customer/profile-adviser.css",
+      "status": 200,
+      "contains": [
+        "profile-advice-grid",
+        "@media"
+      ],
+      "id": "profile-adviser-responsive",
+      "type": "text"
     }
   ],
   "retry": {
