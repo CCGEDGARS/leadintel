@@ -1323,7 +1323,7 @@ test('completed public evidence is synced to CRM when an optional grounded follo
   assert.equal(snapshots,1);
 });
 
-test('known full identities receive contact evidence searches before optional profile follow-ups',async()=>{
+test('known full identities receive LinkedIn searches before slower contact source follow-ups',async()=>{
  const queries=[];
  const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(url,options)=>{
   if(String(url).includes('/firecrawl-search'))queries.push(JSON.parse(options.body).query);
@@ -1332,8 +1332,8 @@ test('known full identities receive contact evidence searches before optional pr
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Example',title:'Head of Procurement'}]}]});
  await context.__findPublicProspectContacts('example.com');
  const contact=queries.indexOf('site:example.com "Jane Example"');
- const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
- assert.equal(contact,6);assert.ok(queries.slice(0,6).every(isOfficialInventoryQuery));assert.ok(profiles>contact);
+ const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/')&&query.includes('Jane Example'));
+ assert.ok(contact>6);assert.ok(queries.slice(0,6).every(isOfficialInventoryQuery));assert.equal(profiles,6);
 });
 
 test('ranked buyer controls retain the original candidate index after ranking clones the people',()=>{

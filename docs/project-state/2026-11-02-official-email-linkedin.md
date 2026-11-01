@@ -1,0 +1,9 @@
+# Official email acceptance and early LinkedIn outcomes
+
+Owner clarification: an official company email published for the named buyer is accepted, with a green E-mail button. No extra mailbox-verification service or manual approval is required. The previous implementation could leave a read official email white while awaiting a separate CRM source-confirmation endpoint or rejecting it under an older provider-only preference.
+
+Accept actual fresh, versioned read attribution to the named person immediately in cards, paid-lookup reuse and outcome counts. Accept the same server-persisted official email under older provider-only preferences throughout Messages/delivery. Keep exact person/company/workspace bindings, changed-recipient protection, source URL/redirect checks, historical evidence dates, guessed-address rejection, suppression and separate paid-channel permissions. CRM handoff persists the exact association automatically; no outreach is authorized.
+
+LinkedIn checks previously ran after four slower channel checks for each concurrent pair. Run a bounded profile wave for every retained identity first, checkpoint direct indexed profile matches and receipts, then resume the remaining depth policy without repeating those searches. Preserve an existing ambiguous profile for review; clear a newly attached match when later results introduce another same-name profile. Automatic matching uses public indexed name/employer evidence and does not represent a direct restricted-profile read.
+
+Tests cover actual card color and paid reuse, exact official evidence and save/reopen, older policy compatibility on frontend/backend/delivery, all-person profile acquisition before slow reads, ambiguity across queries, ownership/cancellation and downstream recipient identity. No customer-specific names or links are runtime defaults. Authenticated workspace research is separate from code and deployment verification.

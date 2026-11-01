@@ -27,13 +27,17 @@ test('report counts policy-accepted contacts without inferring email yield from 
  c.people.forEach((p,i)=>{p.gmailCandidates=D.gmailGuessCandidates(p);p.gmailMatches=[{email:'possible@gmail.com',url:'https://association.example/contact'}];p.publicPhone='123456789';rows[p.id]={...contact(c,p),...(i===0?{work_email:'anna@gmail.com'}:i===1?{email_status:'guessed'}:i===2?{work_email:'info@'+c.domain}:{work_email:'p3@sub.'+c.domain})};});
  const report=evaluate(c,rows);assert.equal(report.outcomes.usablePriorityEmails,0);assert.ok(report.people.every(row=>row.confirmation==='unconfirmed'));
 });
-test('source confirmation and the active provider-only acceptance level are shown separately',()=>{
+test('official company email acceptance also applies to legacy provider-only settings',()=>{
  const c=fixture(),p=c.people[0],row=contact(c,p,'public_confirmed');
  Object.assign(p,{publicEmail:row.work_email,publicEmailUrl:row.public_email_url,publicEmailSourceCheck:{status:'confirmed',email:row.work_email,url:row.public_email_url,checkedAt:now}});reviewed(c);
  assert.equal(evaluate(c,{p0:row}).outcomes.sourceConfirmedPriorityEmails,1);assert.equal(evaluate(c,{p0:row}).outcomes.usablePriorityEmails,1);
- const strict=evaluate(c,{p0:row},{confirmationLevel:'provider_verified'});assert.equal(strict.outcomes.sourceConfirmedPriorityEmails,1);assert.equal(strict.outcomes.usablePriorityEmails,0);
+ const strict=evaluate(c,{p0:row},{confirmationLevel:'provider_verified'});assert.equal(strict.outcomes.sourceConfirmedPriorityEmails,1);assert.equal(strict.outcomes.usablePriorityEmails,1);
  row.verified_at=old;assert.equal(evaluate(c,{p0:row}).outcomes.usablePriorityEmails,0);
  p.publicEmailSourceCheck.checkedAt=old;assert.equal(evaluate(c,{p0:row}).outcomes.sourceConfirmedPriorityEmails,0);
+});
+test('read official email evidence is usable before a redundant CRM confirmation request',()=>{
+ const c=fixture(),p=c.people[0];Object.assign(p,{publicEmail:'anna.andersson@'+c.domain,publicEmailUrl:p.publicNameUrl,publicEmailEvidence:{version:2,url:p.publicNameUrl,quote:'Anna Andersson — CEO. anna.andersson@'+c.domain,sourceKind:'official',sourceRead:true,checkedAt:now}});
+ const report=evaluate(c,{}, {confirmationLevel:'provider_verified'});assert.equal(report.outcomes.usablePriorityEmails,1);assert.equal(report.people.find(row=>row.personId===p.id).usableEmail,p.publicEmail);
 });
 test('exact contact identity and company bindings reject cross-company or wrong-person reuse',()=>{
  const a=fixture(),b=fixture('Legal Example','Finance Director','legal.example'),rows={p0:contact(a,a.people[0]),p1:{...contact(b,b.people[1]),name:a.people[1].name}};

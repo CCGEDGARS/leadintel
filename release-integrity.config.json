@@ -762,7 +762,7 @@
       "status": 200,
       "contains": [
         "name=\"confirmationLevel\"",
-        "Public confirmation verifies the identity link, not mailbox delivery.",
+        "Official company emails are accepted automatically.",
         "Paid email and phone searches have separate controls in Setup."
       ]
     },
@@ -6980,6 +6980,27 @@
       "contains": [
         "status:['verified','public_confirmed','not_verified','error']",
         "isNonPersonBuyerHeading(person.publicName||person.name)"
+      ]
+    },
+    {
+      "id": "official-email-acceptance",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function acceptedOfficialBuyerEmail(",
+        "profilesOnly:true",
+        "profilesReady:true"
+      ]
+    },
+    {
+      "id": "official-email-card-policy",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Official company email · Accepted",
+        "progress(detail?.profilesReady===true)"
       ]
     }
   ],

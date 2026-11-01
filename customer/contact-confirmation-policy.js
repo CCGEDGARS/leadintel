@@ -13,7 +13,7 @@
     if(!email.endsWith('@'+domain(companyDomain))&&!personal)return false;
     if(String(contact.email_status).toLowerCase()==='verified')return [contact.verification_provider,contact.source].some(value=>['apollo','hunter','treg'].includes(String(value||'').toLowerCase()));
     const stamp=String(contact.verified_at||''),age=now-Date.parse(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(stamp)?stamp.replace(' ','T')+'Z':stamp);
-    return level(confirmationLevel)==='public_confirmed'&&contact.email_status==='public_confirmed'&&contact.verification_provider==='Public source'&&publicSource(email,contact.name,contact.public_email_url,companyDomain)&&age>=0&&age<30*86400000;
+    return ['public_confirmed','provider_verified'].includes(confirmationLevel)&&contact.email_status==='public_confirmed'&&contact.verification_provider==='Public source'&&publicSource(email,contact.name,contact.public_email_url,companyDomain)&&age>=0&&age<30*86400000;
   }
   return {level,publicSource,accepted};
 });
