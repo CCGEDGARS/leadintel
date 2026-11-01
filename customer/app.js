@@ -1440,6 +1440,7 @@ function strategyHandoffModel(){
   const actions=[];
   if(signals.length<3||unrelated.length)actions.push("review-signals","retry-signals");
   if(unrelatedRoles.length)actions.push("repair-buyer-roles");
+  const searchPlan=globalThis.LeadIntelDiscoveryUI?.companySearchPlan?.();
   return {
     blockers,warnings,actions,
     hasLimitedResults:lowSignalCoverage||lowEvidenceCoverage||incompleteResearch,
@@ -1451,7 +1452,8 @@ function strategyHandoffModel(){
       ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
       ["Evidence",evidence.length+" saved source"+(evidence.length===1?"":"s")],
       ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional)"],
-      ["Next", "The Companies stage will find and rank matching companies using this active strategy."]
+      ["Company search",searchPlan?`Up to ${searchPlan.targetCount} checked companies · up to ${searchPlan.callLimit} Firecrawl calls, billed on your connected plan. AI analysis uses your connected provider.`:"One bounded search using the saved company amount and existing provider limits. Research uses your connected plans."],
+      ["Next", "Continue starts company research when results are missing or stale. Current checked results are reused. Existing research and selections are preserved; buyer selection stays manual."]
     ]
   };
 }
@@ -1539,7 +1541,7 @@ async function activateMarketStrategy(){
   if(!requireConfirmedTargeting())return false;
   const button=$("activate-market-strategy"),confirm=$("confirm-strategy-handoff");
   if(button?.dataset.activationBusy==="true")return false;
-  const context=captureStrategyContext(),operation=window.LeadIntelReliabilityTrace?.begin('strategy_activation');let outcome='blocked',attemptedApproval=false;
+  const context=captureStrategyContext(),operation=window.LeadIntelReliabilityTrace?.begin('strategy_activation');let outcome='blocked',attemptedApproval=false,approvalSaved=false;
   try{
     assertStrategyContext(context);
     if(!strategyIntegrity())throw Error('Strategy verification is still loading. Retry in a moment.');
@@ -1551,13 +1553,17 @@ async function activateMarketStrategy(){
     setActivationFeedback('Saving your reviewed Strategy…','running');
     attemptedApproval=true;delete state.market.strategyApprovalInvalidated;state.market.strategyApproval=approval;state.market.strategyApproved=true;state.market.strategyApprovedAt=approval.approvedAt;saveState();
     if(!strategyReviewCurrent()||!strategyIntegrity().status(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')).current)throw Error('Strategy approval could not be saved locally. Your reviewed work is retained.');
-    operation?.checkpoint('persistence','pending');await saveStrategyApproval(context);operation?.checkpoint('persistence','pass');assertStrategyContext(context);
+    operation?.checkpoint('persistence','pending');await saveStrategyApproval(context);operation?.checkpoint('persistence','pass');assertStrategyContext(context);approvalSaved=true;
     closeStrategyHandoff();const opened=await openDiscoveryAfterActivation();assertStrategyContext(context);
     if(!opened){setActivationFeedback('Companies did not open. Please try again.','error');showToast('Companies did not open. Please try again.');if(button){button.disabled=false;button.textContent='Try Companies Again →';}return false;}
-    outcome='pass';setActivationFeedback('Companies opened.','success');showToast('Strategy approved · Companies are ready');return true;
+    const research=window.LeadIntelDiscoveryUI?.startFromStrategy?.();
+    if(!research||research.status==='blocked'){
+      outcome='needs-research';setActivationFeedback(research?.message||'Strategy saved. Company research is unavailable; refresh the page and retry research in Companies.','error');showToast(research?.message||'Company research unavailable · refresh the page and retry research');return false;
+    }
+    outcome='pass';const feedback=research.status==='ready'?'Strategy saved · checked companies are ready for review.':'Strategy saved · company research is running. Follow its progress in Companies.';setActivationFeedback(feedback,'success');showToast(feedback);return true;
   }catch(error){
     outcome=error.code==='STRATEGY_STALE'?'stale':'fail';
-    if(strategyContextCurrent(context)){if(attemptedApproval){state.market.strategyApproved=false;state.market.strategyApprovedAt='';try{if(strategyReviewCurrent())saveState();}catch{}}setActivationFeedback('Activation not confirmed · '+error.message,'error');showToast(error.message);}
+    if(strategyContextCurrent(context)){if(attemptedApproval&&!approvalSaved){state.market.strategyApproved=false;state.market.strategyApprovedAt='';try{if(strategyReviewCurrent())saveState();}catch{}}setActivationFeedback('Activation not confirmed · '+error.message,'error');showToast(error.message);}
     return false;
   }finally{operation?.finish(outcome);if(button){button.dataset.activationBusy='false';if(outcome!=='pass')button.disabled=false;}if(confirm)confirm.disabled=false;}
 }

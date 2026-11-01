@@ -66,6 +66,38 @@
   },
   "smokeChecks": [
     {
+      "id": "strategy-company-handoff-entry",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/",
+      "contains": [
+        "strategy-company-handoff=20261101-v1"
+      ]
+    },
+    {
+      "id": "strategy-company-handoff-runtime",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/discovery-ui.js",
+      "contains": [
+        "function startCompanyResearchFromStrategy()",
+        "window.LeadIntelDiscoveryUI.startFromStrategy=startCompanyResearchFromStrategy",
+        "Needs recheck",
+        "No checked companies"
+      ]
+    },
+    {
+      "id": "strategy-company-handoff-activation",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/app.js",
+      "contains": [
+        "window.LeadIntelDiscoveryUI?.startFromStrategy?.()",
+        "company research is running.",
+        "Current checked results are reused."
+      ]
+    },
+    {
       "id": "country-language-catalogue",
       "type": "text",
       "url": "/customer/language-pack-catalogue.js",

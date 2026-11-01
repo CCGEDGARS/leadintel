@@ -99,3 +99,36 @@ test('pipeline checkpointing retains every role in an expanded sixteen-role rese
  const saved=Discovery.upsertPipelineItem([],{company:'Target',domain:'target.example',buyerRoles:roles,buyerDiscovery:{opportunityRoles:roles}})[0];
  assert.deepEqual(saved.buyerRoles.split('; '),roles);assert.deepEqual(saved.buyerDiscovery.opportunityRoles,roles);
 });
+test('explicit Strategy handoff starts one bounded company run and retains saved evidence',async()=>{
+ const f=fixture();let cancel;f.ctx.LeadIntelTaskCentre={start(){},registerActions:(_id,actions)=>cancel=actions.cancel,fail(){},get:()=>({status:'running'}),update(){},complete(){}};f.ctx.hold=()=>new Promise(()=>{});
+ vm.runInContext(`discovery.rawResults=[{url:'https://saved.example/history',text:'Historical evidence'}];runDiscoverySearchBatch=async()=>hold();const originalRun=runCompanyDiscovery;runCompanyDiscovery=(...args)=>(globalThis.companyRun=originalRun(...args));`,f.ctx);
+ const result=vm.runInContext('startCompanyResearchFromStrategy()',f.ctx);
+ assert.equal(result.status,'running');assert.equal(f.state().status,'running');assert.equal(f.state().rawResults[0].url,'https://saved.example/history');
+ const runId=JSON.parse(f.ctx.localStorage.getItem('leadintel_customer_v2_discovery_meta')).lastCompanyRun.runId;
+ assert.equal(vm.runInContext('startCompanyResearchFromStrategy()',f.ctx).status,'running');
+ assert.equal(JSON.parse(f.ctx.localStorage.getItem('leadintel_customer_v2_discovery_meta')).lastCompanyRun.runId,runId);
+ cancel();await f.ctx.companyRun;
+});
+test('current checked shortlist is reused without any provider call on Strategy Continue',()=>{
+ const f=fixture();let calls=0;f.ctx.fetch=async()=>{calls++;throw Error('unexpected research');};
+ vm.runInContext(`discovery.status='complete';discovery.needsRefresh=false;rankedCheckedCompanies=()=>[{company:'Checked',domain:'checked.example'}];`,f.ctx);
+ assert.equal(vm.runInContext('startCompanyResearchFromStrategy()',f.ctx).status,'ready');assert.equal(calls,0);
+});
+test('stale shortlist cannot be reused by Strategy Continue',async()=>{
+ const f=fixture();let cancel;f.ctx.LeadIntelTaskCentre={start(){},registerActions:(_id,actions)=>cancel=actions.cancel,fail(){},get:()=>({status:'running'}),update(){},complete(){}};
+ vm.runInContext(`discovery.needsRefresh=true;rankedCheckedCompanies=()=>[{domain:'old.example'}];runDiscoverySearchBatch=()=>new Promise(()=>{});const originalRun=runCompanyDiscovery;runCompanyDiscovery=(...args)=>(globalThis.companyRun=originalRun(...args));`,f.ctx);
+ assert.equal(vm.runInContext('startCompanyResearchFromStrategy()',f.ctx).status,'running');cancel();await f.ctx.companyRun;
+});
+test('unapproved Strategy handoff fails before providers and preserves historical evidence',()=>{
+ const f=fixture();delete f.main.market.strategyApproval;f.write();let calls=0;f.ctx.fetch=async()=>{calls++;};
+ vm.runInContext(`discovery.rawResults=[{url:'https://history.example/source',text:'Saved source'}];`,f.ctx);
+ assert.equal(vm.runInContext('startCompanyResearchFromStrategy()',f.ctx).status,'blocked');assert.equal(calls,0);assert.equal(f.state().rawResults.length,1);
+});
+for(const change of ['account ticket','bridge','sign out'])test(`a late research startup exception cannot change Companies after ${change}`,async()=>{
+ const f=fixture();vm.runInContext(`runCompanyDiscovery=()=>{discovery.status='running';return Promise.reject(new Error('Delayed startup failure'));};`,f.ctx);
+ assert.equal(vm.runInContext('startCompanyResearchFromStrategy()',f.ctx).status,'running');
+ if(change==='account ticket')f.ctx.localStorage.setItem('leadintel_account_context_v1','replacement');
+ if(change==='bridge')f.ctx.LeadIntelServerBridge={...f.ctx.LeadIntelServerBridge};
+ if(change==='sign out')f.ctx.LeadIntelServerBridge.session.authenticated=false;
+ f.state().status='complete';await Promise.resolve();await Promise.resolve();assert.equal(f.state().status,'complete');
+});
