@@ -22,3 +22,11 @@ test('matching current checkpoints expose provider counts without promoting part
  await assert.rejects(UI.research(candidate,{},{timeoutMs:30,pollMs:5,onProgress:p=>events.push(p),readProgress:async()=>({dossier:checkpoint,updatedAt:new Date().toISOString()}),request:()=>new Promise(()=>{})}),/timed out/i);
  assert.ok(events.some(p=>p.providers?.some(r=>r.provider==='openai'&&r.completed===1)));assert.equal(candidate.buyerDiscovery?.companyDossier,undefined);
 });
+test('live progress updates preserve other company inputs, disclosures and focus',()=>{
+ const {JSDOM}=require('jsdom'),fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+ const dom=new JSDOM('<article data-buyer-company="example.com"><section class="buyer-research-progress"><p>Old progress</p></section><details open><summary>Dossier</summary><input value="draft source URL"></details></article>');
+ const input=dom.window.document.querySelector('input');input.focus();
+ const ctx={document:dom.window.document,canonicalDomain:x=>x,buyerResearchProgressHtml:()=>'<section class="buyer-research-progress"><p>New progress</p></section>'};vm.createContext(ctx);
+ const start=source.indexOf('function refreshBuyerProgress('),end=source.indexOf('function buyerResearchProgressHtml(',start);assert.ok(start>=0,'progress has a scoped renderer');vm.runInContext(source.slice(start,end),ctx);
+ ctx.refreshBuyerProgress({domain:'example.com'});assert.equal(input.value,'draft source URL');assert.equal(dom.window.document.activeElement,input);assert.equal(dom.window.document.querySelector('details').open,true);assert.match(dom.window.document.querySelector('.buyer-research-progress').textContent,/New progress/);
+});

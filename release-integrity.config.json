@@ -6916,7 +6916,9 @@
         "data-cancel-buyer-research",
         "Last saved research update:",
         "readProgress:signal=>withDiscoveryDeadline",
-        "clearTimeout(buyerPulse)"
+        "clearTimeout(buyerPulse)",
+        "function refreshBuyerProgress(candidate)",
+        "refreshBuyerProgress(candidate);buyerPulse="
       ]
     }
   ],
