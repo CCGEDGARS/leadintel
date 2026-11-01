@@ -68,6 +68,17 @@
   },
   "smokeChecks": [
     {
+      "id": "strategy-large-workspace-save",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "const STRATEGY_SAVE_TIMEOUT_MS=120000;",
+        "await saveStrategyApproval(context)",
+        "approvalSaved=true"
+      ]
+    },
+    {
       "id": "research-storage-codec",
       "type": "text",
       "url": "/customer/state-budget.js",
