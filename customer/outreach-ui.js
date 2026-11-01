@@ -1,3 +1,4 @@
+import './creator-library.js?v=20261101-v1';
 import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
 import './translation-preview.js?v=20261027-v1&messages-reliability=20261031-v1';
@@ -8,7 +9,7 @@ import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';
 import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&native-storyselling=20261026-v4';
 import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=20261019-v1&rich-text=20261025-v1';
-import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1';
 import './writing-workspace.js?v=20261023-v1&book-skills=20261027-v1&messages-reliability=20261031-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&storyselling=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
@@ -1140,7 +1141,7 @@ function installWritingAssistant(){
 
 function installChannelScripts(){
  if(globalThis.LeadIntelChannelWorkspace||!globalThis.LeadIntelChannelScripts)return;
- const css=document.createElement('link');css.rel='stylesheet';css.href='channel-scripts.css?v=20261015-v1&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2';document.head.append(css);
+ const css=document.createElement('link');css.rel='stylesheet';css.href='channel-scripts.css?v=20261101-v1&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2';document.head.append(css);
  globalThis.LeadIntelChannelWorkspace=globalThis.LeadIntelChannelScripts.mount(document,{
   context(){const b=crmBridge(),item=currentItem(),candidate=selectedCandidate(),choice=readJson(DISCOVERY_META_KEY).scriptBuyer,studio=studioState();return {workspaceId:b?.workspace?.id||'',userId:b?.session?.user?.id||'',companyId:candidate?.crmId||handoffContact?.contact?.company_id||followUpCompanyIds.get(JSON.stringify([b?.workspace?.id,crmDomain(item?.domain)]))||'',contactId:handoffContact?.contact?.id||choice?.contactId||'',channel:item?.channel||'email',style:item?.channel==='linkedin'?studio.linkedinMode:studio.mode,usable:messageWorkspaceUsable()&&messageRecipientReady(),busy:Boolean(messageEditor?.state().editing||messageEditor?.state().busy||messageEditor?.state().saving||writingAssistant?.state().busy||studioGenerationBusy||messageTranslationBusy||subjectBusy||subjectEditing)};},
   onStyleStatus:()=>renderMessageWorkspace(),
