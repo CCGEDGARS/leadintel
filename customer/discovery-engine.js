@@ -1474,7 +1474,16 @@
       queries.push(('"'+company+'" ('+titles+') '+terms.slice(0,2).map(term=>'"'+term+'"').join(' ')).trim());
     }
     for(const term of terms.slice(0,3))queries.push('"'+company+'" "'+term+'" (project OR procurement OR engineering OR operations OR inköp OR projektchef OR projektledare)');
-    return {target:30,roles,expandedRoles:expanded,opportunityTerms:terms,queries:[...new Set(queries)].slice(0,30),followUp:'Find current professionals at '+company+' ('+domain+') relevant to this specific opportunity: '+clean(candidate.buyerFit?.purchase||candidate.buyerFit?.reason||candidate.fitDescription||'current commercial opportunity')+'. Prioritize: '+roles.join('; ')+'. Opportunity/location terms: '+(terms.join('; ')||'none identified')+'. Search official company/project pages, news, procurement documents, associations, interviews and publicly indexed professional profiles. Return full names, current titles, source URLs and evidence of current employment. Include local-language title variants. Exclude former staff and unrelated departments.'};
+    // Company verification precedes identity discovery: do not execute every
+    // person-query variant twice as a prerequisite to starting the buyer search.
+    const dossierOffer=clean(candidate.buyerFit?.purchase||profile.priorityOffers||candidate.fitDescription||'commercial fit',700),dossierRoles=roles.join('; '),dossierTerms=terms.slice(0,3).join('; ');
+    const dossierFormulas=[
+      '"'+company+'" ('+domain+') current operations and projects relevant to '+dossierOffer,
+      '"'+company+'" current responsibility and department leaders for these buying functions: '+dossierRoles+'. Include local-language equivalents and underlying official sources.',
+      '"'+company+'" project and site responsibilities for '+dossierOffer+(dossierTerms?'. Project/location context: '+dossierTerms:''),
+      '"'+company+'" supplier qualification, procurement and purchasing process relevant to '+dossierOffer
+    ];
+    return {target:30,roles,expandedRoles:expanded,opportunityTerms:terms,dossierFormulas,queries:[...new Set(queries)].slice(0,30),followUp:'Find current professionals at '+company+' ('+domain+') relevant to this specific opportunity: '+clean(candidate.buyerFit?.purchase||candidate.buyerFit?.reason||candidate.fitDescription||'current commercial opportunity')+'. Prioritize: '+roles.join('; ')+'. Opportunity/location terms: '+(terms.join('; ')||'none identified')+'. Search official company/project pages, news, procurement documents, associations, interviews and publicly indexed professional profiles. Return full names, current titles, source URLs and evidence of current employment. Include local-language title variants. Exclude former staff and unrelated departments.'};
   }
   function buyerIdentity(person={}){
     return normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url)||(person.identityStatus==='pending'&&clean(person.id)?'apollo:'+clean(person.id):clean(person.publicName||person.name).toLowerCase());

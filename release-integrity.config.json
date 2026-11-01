@@ -6931,6 +6931,26 @@
         "border-left-width:6px",
         "background:#eaf6f1"
       ]
+    },
+    {
+      "id": "focused-company-dossier-plan",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "const dossierFormulas=[",
+        "opportunityTerms:terms,dossierFormulas,queries:"
+      ]
+    },
+    {
+      "id": "focused-company-dossier-entry",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "formulas:plan.dossierFormulas",
+        "formulas:dossierPlan.dossierFormulas"
+      ]
     }
   ],
   "retry": {
