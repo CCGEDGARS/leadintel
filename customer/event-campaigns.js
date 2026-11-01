@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelEventCampaigns=api;})(typeof globalThis==='object'?globalThis:this,function(){
  'use strict';
- const fields={name:120,website:2048,startDate:10,endDate:10,location:160,stand:80,meetingPoint:160,audience:400,objective:400,roles:240,visitValue:600,availability:240,bookingUrl:2048,exhibitorUrl:2048,sourceUrls:12000,country:100,venue:160,attendValue:600,registrationUrl:2048,admissionCost:160,guestPass:240,timezone:80,meetingDuration:40};
+ const fields={name:120,website:2048,websiteEvidence:12000,startDate:10,endDate:10,location:160,stand:80,meetingPoint:160,audience:400,objective:400,roles:240,visitValue:600,availability:240,bookingUrl:2048,exhibitorUrl:2048,sourceUrls:12000,country:100,venue:160,attendValue:600,registrationUrl:2048,admissionCost:160,guestPass:240,timezone:80,meetingDuration:40};
  const copy=x=>JSON.parse(JSON.stringify(x)),text=(x,n=2048)=>typeof x==='string'?x.trim().slice(0,n):'';
  function url(x){if(!x)return '';try{const u=new URL(x);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
  function normalizeCampaign(x={}){x=x&&typeof x==='object'?x:{};const c={id:text(x.id,100),revision:Math.max(1,Number(x.revision)||1),role:x.role==='visitor'?'visitor':'exhibitor',archived:Boolean(x.archived)};for(const [k,n] of Object.entries(fields))c[k]=text(x[k],n);c.audienceMode=['participants','outside','both'].includes(x.audienceMode)?x.audienceMode:'both';c.sourceChoice=['provided','discover','mixed'].includes(x.sourceChoice)?x.sourceChoice:'provided';c.targetCount=Math.max(1,Math.min(50,Number(x.targetCount)||10));c.contactsPerCompany=Math.max(1,Math.min(4,Number(x.contactsPerCompany)||1));c.researchDepth=['quick','basic','deep'].includes(x.researchDepth)?x.researchDepth:'basic';return c;}
@@ -13,6 +13,19 @@
  function archive(state,id){const s=normalize(state);return {...s,activeId:s.activeId===id?'':s.activeId,campaigns:s.campaigns.map(c=>c.id===id?{...c,archived:true}:c)};}
  function normalizeSearchContext(input={}){input=input&&typeof input==='object'?input:{};const name=text(input.name,120),website=url(text(input.website,2048)),year=text(input.year,4);if(input.website&&!website)throw Error('Use a valid HTTPS event website');if(!name&&!website)throw Error('Add an event name or official event website');if(year&&!/^\d{4}$/.test(year))throw Error('Enter the event edition as a four-digit year');return {name,website,year};}
  function quickSearchQueries(input,profile={}){const c=normalizeSearchContext(input),host=c.website?new URL(c.website).hostname:'',eventName=(c.name||host).replace(/["\r\n]/g,' ').trim(),edition=c.year?' '+c.year:'',fit=text(profile.idealCustomer||profile.targetIndustries||profile.priorityOffers,180),market=text(profile.targetMarkets||profile.market,120),roles=text(profile.buyerRoles||profile.decisionMakers,120).replace(/["\r\n]/g,' '),q=[];if(host)q.push({market,query:'site:'+host+' '+(c.name?'"'+eventName+'" ':'')+edition+' exhibitors sponsors participants companies '+fit,audience:'participants',eventSearchContext:true,sourceUrl:c.website});q.push({market,query:'"'+eventName+'"'+edition+' exhibitors sponsors companies '+fit,audience:'participants',eventSearchContext:true,...(c.website?{sourceUrl:c.website}:{})});q.push({market,query:'"'+eventName+'"'+edition+' speakers participants attendees companies '+roles+' '+fit,audience:'people',eventSearchContext:true,...(c.website?{sourceUrl:c.website}:{})});return q;}
+ function websiteSuggestions(sourceUrl,payload={},today=new Date().toISOString().slice(0,10)){
+  const source=url(sourceUrl);if(!source)throw Error('Use a valid HTTPS event website');
+  const data=payload.data||payload,body=text(data.markdown||data.content,60000);if(!body)throw Error('No readable event content. Add event details manually or try a participant page.');
+  const title=text(data.metadata?.title||body.match(/^#\s+(.+)$/m)?.[1],120),links=[];
+  for(const match of body.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)){if(!/exhibitor|participant|sponsor|speaker|attendee/i.test(match[1]))continue;let safe='';try{safe=url(new URL(match[2],source).href);}catch{}if(safe&&!links.includes(safe))links.push(safe);}
+  const dates=[...new Set(body.match(/\b\d{4}-\d{2}-\d{2}\b/g)||[])].filter(d=>Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d);
+  const suggestions={name:title,sourceUrls:links.slice(0,8).join('\n')};
+  for(const key of ['country','city','venue']){const match=body.match(new RegExp('^\\s*(?:\\*\\*)?'+key+'(?:\\*\\*)?\\s*:\\s*(.+)$','im'));if(match)suggestions[key==='city'?'location':key]=text(match[1],key==='country'?100:160);}
+
+  // Multiple dates may describe news or earlier editions: require manual review.
+  if(dates.length===1&&dates[0]>=today&&new RegExp('^(?:event date|date)\\s*:\\s*'+dates[0]+'\\s*$','im').test(body))suggestions.startDate=suggestions.endDate=dates[0];
+  return {...suggestions,websiteEvidence:('Source: '+source+'\nChecked: '+new Date().toISOString()+'\nExtracted page text (attendance unverified):\n'+body).slice(0,12000)};
+ }
  function attendance(c,buyer={},evidence={}){
   const known=evidence&&typeof evidence==='object'?evidence:{};
   const sourceUrl=url(known.sourceUrl),excerpt=text(known.excerpt,1600),personId=text(buyer.id||buyer.personId),edition=known.campaignId===c.id&&known.eventStartDate===c.startDate;
@@ -23,11 +36,11 @@
  function queries(c,profile={}){
   c=validateResearch(c);const fit=text(profile.idealCustomer||profile.targetIndustries||profile.priorityOffers,180),name=c.name.replace(/"/g,''),edition=c.startDate.slice(0,4),market=c.country||profile.targetMarkets||'',q=[];
   if(c.audienceMode!=='outside'){
-   q.push({market,query:(url(c.exhibitorUrl)?'site:'+new URL(c.exhibitorUrl).hostname+' ':'')+'"'+name+'" '+edition+' exhibitors companies '+fit,eventCampaignId:c.id,audience:'participants'});
+   q.push({market,query:(url(c.exhibitorUrl||c.website)?'site:'+new URL(c.exhibitorUrl||c.website).hostname+' ':'')+'"'+name+'" '+edition+' exhibitors companies '+fit,eventCampaignId:c.id,audience:'participants',...(url(c.exhibitorUrl||c.website)?{sourceUrl:url(c.exhibitorUrl||c.website)}:{})});
    for(const raw of c.sourceUrls.split(/\n/).filter(Boolean).slice(0,8)){const safe=url(raw.trim());if(safe)q.push({market,query:'site:'+new URL(safe).hostname+' "'+name+'" '+edition+' exhibitors '+fit,eventCampaignId:c.id,audience:'participants',sourceUrl:safe});}
    q.push({market,query:'"'+name+'" '+edition+' speakers attendees '+text(c.roles,120).replace(/"/g,''),eventCampaignId:c.id,audience:'participants'});
   }
-  if(c.audienceMode!=='participants')q.push({market,query:fit+' '+market+' '+text(profile.priorityOffers||c.objective,180)+' business partners manufacturers',eventCampaignId:c.id,audience:'outside'});
+  if(c.audienceMode!=='participants')q.push({market,query:fit+' '+market+' '+text(profile.priorityOffers||c.objective,180)+' business partners',eventCampaignId:c.id,audience:'outside'});
   return q;
  }
  function deriveAttendance(c,buyer={},evidence=[]){
@@ -60,5 +73,5 @@
  }
  function restoreBusinessDraft(item){const next=copy(item),info=next.messageStudioDraft||{},saved=info.businessDraftSnapshot;if(!saved)return null;Object.assign(next,copy(saved));next.messageStudioDraft={...next.messageStudioDraft,eventWritingDrafts:copy(info.eventWritingDrafts||[])};return next;}
  function validateDraft(c,d,e={},channel='email'){c=validate(c);if(typeof d.message!=='string'||!d.message.trim()||d.message.length>(channel==='linkedin'?3000:12000)||/\{\{|\}\}|\[(?:Calendly|reference link)/i.test(d.message))throw Error('Complete the event invitation before approval');if(channel!=='linkedin'&&(!d.subject?.trim()||Array.from(d.subject).length>60||/[\r\n]|https?:\/\/|<[^>]*>|^[\[{]|^(?:subject|error|exception|undefined|null|traceback)(?:\s*[:{]|\s*$)/i.test(d.subject)))throw Error('Use a clean subject of at most 60 characters');for(const required of [c.name,c.location,c.startDate,c.endDate,c.role==='exhibitor'?c.stand:c.meetingPoint,e.sender])if(required&&!d.message.includes(required))throw Error('Invitation must retain the event, dates, meeting location and sender');if(/(?:I (?:see|know) you(?:’|'| a)re attending|your attendance is confirmed|you will be attending|look forward to seeing you at)/i.test(d.message))throw Error('The recipient’s attendance is not confirmed; use a conditional invitation');return d;}
- return Object.freeze({fields,normalizeCampaign,normalize,active,validate,save,activate,archive,queries,normalizeSearchContext,quickSearchQueries,attendance,deriveAttendance,validateResearch,draft,stageDraft,restoreBusinessDraft,validateDraft});
+ return Object.freeze({fields,websiteSuggestions,normalizeCampaign,normalize,active,validate,save,activate,archive,queries,normalizeSearchContext,quickSearchQueries,attendance,deriveAttendance,validateResearch,draft,stageDraft,restoreBusinessDraft,validateDraft});
 });
