@@ -6920,6 +6920,17 @@
         "function refreshBuyerProgress(candidate)",
         "refreshBuyerProgress(candidate);buyerPulse="
       ]
+    },
+    {
+      "id": "buyer-live-progress-emphasis",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".selected-prospect-row>.buyer-research-progress{border:2px solid #117363",
+        "border-left-width:6px",
+        "background:#eaf6f1"
+      ]
     }
   ],
   "retry": {
