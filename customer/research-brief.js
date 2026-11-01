@@ -5,6 +5,23 @@ const unsafe=text=>/ignore (?:all |previous )?instructions|system prompt|pretend
 const development=text=>/\b(?:under construction|constructing|building|investing|expan(?:ding|sion)|new (?:plant|factory|warehouse|facility|office|hospital|system|platform)|launch(?:ed|ing)?|implement(?:ed|ing|ation)|moderni[sz](?:ed|ing|ation)|commission(?:ed|ing))\b/i.test(text);
 function conciseQuote(quote){const sentences=quote.split(/(?<=[.!?])\s+/).map(sentence=>sentence.includes('## ')?sentence.slice(sentence.lastIndexOf('## ')+3):sentence).filter(s=>s.length>=12&&s.length<=360&&/^[A-Z]/.test(s)&&!/https?:\/\/|\]\(/i.test(s));return sentences.find(development)||sentences[0]||(quote.length>320?quote.slice(0,320)+'…':quote);}
 function fingerprint(value){let n=2166136261;for(const c of JSON.stringify(value))n=Math.imul(n^c.charCodeAt(0),16777619);return (n>>>0).toString(16);}
+const SIGNAL_POLICY='offer-evidence-priority-20261101-v1';
+function signalPriority(row={},profile={},person=null,now=Date.now()){
+ // Source evidence is data, not an instruction. A hiring announcement alone
+ // never proves budget, pain, urgency, purchasing authority or demand.
+ const text=clean(row.quote||row.text),stop=new Set(['their','there','these','those','with','from','your','company','services','solutions','director','manager','chief','head','officer','provide','providing','and','for','the']);
+ const terms=value=>[...new Set(clean(value).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(t=>t.length>3&&!stop.has(t)))];
+ const matches=terms(profile.priorityOffers).filter(t=>terms(text).includes(t));
+ const roleMatches=terms(person?.title).filter(t=>terms(text).includes(t));
+ const parsed=/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')?Date.parse(row.date):NaN,date=Number.isFinite(parsed)&&new Date(parsed).toISOString().slice(0,10)===row.date?parsed:NaN,clock=new Date(now).getTime(),age=clock-date;
+ const future=Number.isFinite(date)&&age<0,stale=Number.isFinite(date)&&age>365*86400000;
+ const qualifiedText=text.replace(/\b(?:in|during|since|from|through|until|by)\s+May\b|\bMay\s+(?:\d{1,2}(?:st|nd|rd|th)?\b|20\d{2}\b)|\b\d{1,2}\s+May\b/gi,'[calendar date]');
+ const uncertain=/\b(?:if|unless|whether|hypothetical|no|not|never|unconfirmed|unknown|cancelled|canceled|delayed|could|might|may|previously|formerly)\b/i.test(qualifiedText);
+ const usable=row.verification==='source_verified'&&!unsafe(text)&&!future&&!stale&&!uncertain;
+ const freshness=!Number.isFinite(date)?'unknown':future?'future':stale?'stale':age<=90*86400000?'recent':'dated';
+ const score=usable?matches.length*5+roleMatches.length+(row.kind==='development'?3:0)+(freshness==='recent'?2:0):0;
+ return {policy:SIGNAL_POLICY,score,usable,freshness,offerTerms:matches,reason:!usable?(future?'Source date is in the future; review required.':stale?'Older source retained as context; recheck before using it as a current event.':'Qualified or uncertain source wording retained as context only.'):[matches.length?'Matches supplied offer terms: '+matches.join(', ')+'.':'No direct offer-term match; commercial relevance remains a hypothesis.',row.kind==='development'?'Contains a company development.':'Company context.',freshness==='unknown'?'Source date unknown; this is not evidence of urgency.':freshness==='recent'?'Source dated within 90 days.':'Source date retained.'].join(' ')};
+}
 function fact(row,target){const url=D.url(row.url||row.sourceUrl),quote=clean(row.quote||row.text);if(!url||D.domain(url)!==target||quote.length<12||quote.length>1800||unsafe(quote)||row.extracted===false||row.evidenceKind==='model_summary'||/failed|error|pending/i.test(row.status||''))return null;return {text:conciseQuote(quote),quote,url,date:/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')?row.date:'',checkedAt:clean(row.checkedAt||row.extractedAt||''),verification:'source_verified',origin:row.origin==='dossier'?'dossier':'extracted',kind:development(quote)?'development':'company'};}
 function safe(prior,target){if(prior?.version!==VERSION||D.domain(prior.domain)!==D.domain(target))return null;return {...prior,facts:(prior.facts||[]).filter(row=>row.verification==='source_verified').map(row=>fact(row,D.domain(target))).filter(Boolean).slice(0,16)};}
 function build(candidate={},profile={},person=null,prior=null){
@@ -25,14 +42,15 @@ function build(candidate={},profile={},person=null,prior=null){
  for(const row of provenFacts){if(replacesDossier(row.sourceUrl))continue;const item=fact({...row,origin:'dossier',checkedAt:dossierReadAt(row.sourceUrl)?new Date(dossierReadAt(row.sourceUrl)).toISOString():''},target);if(item)facts.push(item);}
  for(const row of extracted){if(d&&reads.has(row.url)&&!replacesDossier(row.url)||newer.has(row.url)&&Date.parse(row.checkedAt)!==newer.get(row.url))continue;const {fromResearchBrief,...item}=row;facts.push(item);}
  if(!d&&!facts.length)facts.push(...(previous?.facts||[]));
- const unique=[...new Map(facts.map(row=>[row.url+'|'+row.quote,row])).values()],terms=[...new Set(clean([profile.priorityOffers,person?.title].filter(Boolean).join(' ')).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(v=>v.length>4))],rank=row=>terms.filter(t=>row.quote.toLowerCase().includes(t)).length+(row.kind==='development'?10:0);
- unique.sort((a,b)=>rank(b)-rank(a)||a.url.localeCompare(b.url));unique.splice(16);
+ const unique=[...new Map(facts.map(row=>[row.url+'|'+row.quote,row])).values()],priorities=new Map(unique.map(row=>[row,signalPriority(row,profile,person)]));
+ unique.sort((a,b)=>Number(priorities.get(b).usable)-Number(priorities.get(a).usable)||priorities.get(b).score-priorities.get(a).score||a.url.localeCompare(b.url));unique.splice(16);
  const sourcePerson=provenPeople.find(row=>clean(row.name).toLowerCase()===clean(person?.publicName||person?.name).toLowerCase()&&clean(row.title).toLowerCase()===clean(person?.title).toLowerCase()),hold=person&&d?D.holdReason(person,d):'',verified=Boolean(sourcePerson&&sourcePerson.status==='current'&&!sourcePerson.roleConflict&&!hold&&reads.has(sourcePerson.sourceUrl)),gaps=[...(d?.gaps||[])];
  if(!unique.length)gaps.push('No extracted official company fact available for personalization.');if(person&&!verified)gaps.push(hold||'Selected buyer role requires source verification.');if(d?.conflicts.length)gaps.push('Research conflicts need review.');if(d?.lastAttempt)gaps.push('Latest company research attempt needs attention.');
  const offer=clean(profile.priorityOffers),hypotheses=offer&&unique.length?[{text:offer+' may be relevant to this company context; confirm the need in conversation.',status:'hypothesis'}]:[];
  const buyer=person?{id:clean(person.id),name:clean(person.publicName||person.name),title:clean(person.title),verified,url:verified?sourcePerson.sourceUrl:'',quote:verified?sourcePerson.quote:''}:null;
- const body={version:VERSION,domain:target,company:clean(candidate.company),facts:unique,authoritativeUrls:[...new Set([...reads,...newer.keys()])].slice(0,40),developments:unique.filter(row=>row.kind==='development').slice(0,4),companyContext:unique.find(row=>row.kind==='company')||null,buyer,hypotheses,gaps:[...new Set(gaps)].slice(0,10),checkedAt:clean(d?.checkedAt||previous?.checkedAt||''),researchStatus:d?.status||'unavailable'};
- return {...body,key:VERSION+':'+fingerprint([target,[profile.companyName,profile.priorityOffers,profile.valueProposition,profile.differentiation,profile.commercialObjective],unique,buyer,body.gaps])};
+ const first=unique.find(row=>priorities.get(row).usable),signalSelection=first?{url:first.url,quote:first.quote,...priorities.get(first)}:null;
+ const body={version:VERSION,domain:target,company:clean(candidate.company),facts:unique,signalSelection,authoritativeUrls:[...new Set([...reads,...newer.keys()])].slice(0,40),developments:unique.filter(row=>row.kind==='development').slice(0,4),companyContext:unique.find(row=>row.kind==='company')||null,buyer,hypotheses,gaps:[...new Set(gaps)].slice(0,10),checkedAt:clean(d?.checkedAt||previous?.checkedAt||''),researchStatus:d?.status||'unavailable'};
+ return {...body,key:VERSION+':'+fingerprint([SIGNAL_POLICY,target,[profile.companyName,profile.priorityOffers,profile.valueProposition,profile.differentiation,profile.commercialObjective],unique,signalSelection,buyer,body.gaps])};
 }
 function evidenceRows(brief){return (safe(brief,brief?.domain)?.facts||[]).map(row=>({url:row.url,text:row.quote,title:brief.company,date:row.date,verification:'source_verified',sourceRead:true,sourceType:'Official',extractedAt:row.checkedAt,fromResearchBrief:true}));}
 function supports(brief,trigger){const excerpt=clean(trigger?.excerpt||trigger?.summary);return Boolean(excerpt)&&(safe(brief,brief?.domain)?.facts||[]).some(row=>{
@@ -53,5 +71,5 @@ function opening(context={}){
  if(!/^(?:your|you)\b/.test(statement))statement='that '+statement;
  return {text:'I noticed '+statement+'.',quote:sentence,url:trigger.url,verification:trigger.verification};
 }
-return Object.freeze({VERSION,build,safe,evidenceRows,supports,opening});
+return Object.freeze({VERSION,SIGNAL_POLICY,signalPriority,build,safe,evidenceRows,supports,opening});
 });

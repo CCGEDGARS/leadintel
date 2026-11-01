@@ -189,6 +189,7 @@ async function loadTriggerAlerts(){
 function rankedBuyingTriggers(item=currentItem()){
  const rows=messageFactCandidates(item).filter(r=>r.kind==='event');
  const essentials=studioState().essentials;
+ const priorityPolicy=typeof LeadIntelResearchBrief!=='undefined'?LeadIntelResearchBrief:null;
  const terms=String([essentials.offer,selectedContact(item)?.title,essentials.target].filter(Boolean).join(' ')).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(t=>t.length>=5&&!['their','company','business','services','project','manager'].includes(t));
  const domain=String(item?.domain||'').replace(/^www\./,'');
  const score=row=>{
@@ -199,14 +200,23 @@ function rankedBuyingTriggers(item=currentItem()){
   const briefFact=base.researchBrief?.developments.find(fact=>fact.url===row.url),shared=briefFact?100:0;
   return Number(row.score||0)+fit+shared+Math.min(30,relevance*10)+(host===domain?25:0);
  };
- return rows.slice().sort((a,b)=>score(b)-score(a)||a.url.localeCompare(b.url)).slice(0,3);
+ const ranked=rows.map(row=>({row,trigger:priorityPolicy?sourceBackedTrigger(item,row):null,priority:priorityPolicy?.signalPriority({quote:row.summary,date:row.date,kind:'development',verification:'source_verified'},{priorityOffers:essentials.offer},selectedContact(item)),score:score(row)}));
+ // Offer evidence leads; existing template usability breaks ties. No policy
+ // score authorizes a recipient, edits a saved draft or approves outreach.
+ return ranked.filter(r=>!r.priority||r.priority.usable&&r.trigger).sort((a,b)=>(b.priority?.offerTerms.length||0)-(a.priority?.offerTerms.length||0)||(b.priority?.score||0)-(a.priority?.score||0)||b.score-a.score||a.row.url.localeCompare(b.row.url)).slice(0,3).map(r=>r.row);
 }
 function sourceBackedTrigger(item,source){
  if(!item?.dossier||!source||source.kind!=='event')return null;
  try{const host=new URL(source.url).hostname.replace(/^www\./,'');if(host!==item.domain.replace(/^www\./,''))return null;}catch{return null;}
  const summary=LeadIntelMessageFacts.event(source.text||source.description);
  if(!summary)return null;
- return LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:summary,verification:'source_verified'},item.dossier);
+ const trigger=LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:summary,verification:'source_verified'},item.dossier);
+ const policy=typeof LeadIntelResearchBrief!=='undefined'?LeadIntelResearchBrief:null;
+ if(trigger&&policy){
+  const brief=LeadIntelOutreach.buildResearchBrief({domain:item.domain,company:item.company,evidence:item.dossier.evidence});
+  if(!policy.supports(brief,trigger)||!policy.signalPriority({quote:summary,date:trigger.sourceDate,kind:'development',verification:trigger.verification}).usable)return null;
+ }
+ return trigger;
 }
 function automaticallySelectBuyingTrigger({refresh=false}={}){
  const item=currentItem();if(!item?.dossier||item.channel!=='email'||item.approved||item.dossier.selectedTrigger&&(!refresh||item.dossier.selectedTrigger.verification==='user_reviewed'))return false;

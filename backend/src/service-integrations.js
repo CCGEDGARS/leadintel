@@ -1,4 +1,5 @@
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
+import {exposePublishedEmailHtml} from './published-email-html.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
@@ -111,7 +112,7 @@ function decodeHtmlEntities(value){
   return String(value||'').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Math.min(1114111,Number(n)||32))).replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(Math.min(1114111,parseInt(n,16)||32)));
 }
 function htmlText(html,baseUrl){
-  const withoutNoise=String(html||'').replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|template)\b[^>]*>[\s\S]*?<\/\1>/gi,' ');
+  const withoutNoise=exposePublishedEmailHtml(String(html||'').replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|template)\b[^>]*>[\s\S]*?<\/\1>/gi,' '));
   const semantic=withoutNoise.replace(/<h([1-6])\b[^>]*>/gi,(_,level)=>'\n'+'#'.repeat(Number(level))+' ').replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi,(_,tag,text)=>'**'+clean(text.replace(/<[^>]*>/g,' '))+'** ').replace(/<\/t[dh]>/gi,' | ').replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,(_,href,label)=>{let target;try{target=new URL(decodeHtmlEntities(href),baseUrl);}catch{return label;}return ['http:','https:','mailto:','tel:'].includes(target.protocol)?'['+label+']('+target.href+')':label;});
   return decodeHtmlEntities(semantic.replace(/<(br|hr)\b[^>]*>/gi,'\n').replace(/<\/(p|div|section|article|main|header|footer|nav|li|h[1-6]|tr)>/gi,'\n').replace(/<[^>]+>/g,' ')).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,MAX_DIRECT_PAGE_CHARS);
 }
