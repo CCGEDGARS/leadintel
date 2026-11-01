@@ -163,7 +163,7 @@ test('the real worker saves and reopens a large research workspace without page-
  root.LeadIntelServerBridge.workspaceCompressionCodec='workspace-lzw-v2';
  root.Worker=class{
   constructor(url){
-   assert.match(String(url),/\/customer\/workspace-codec-worker\.js\?v=20261020-v1$/);
+   assert.match(String(url),/\/customer\/workspace-codec-worker\.js\?v=20261020-v1&research-storage=20261101-v1$/);
    this.thread=new Worker(`const {parentPort,workerData}=require('node:worker_threads');global.self=global;global.importScripts=()=>{self.LeadIntelStateBudget=require(workerData.codec);};self.postMessage=data=>parentPort.postMessage(data);require(workerData.worker);parentPort.on('message',data=>self.onmessage({data}));`,{eval:true,workerData:{codec:require.resolve('../state-budget.js'),worker:require.resolve('../workspace-codec-worker.js')}});
    workers.push(this.thread);this.thread.on('message',data=>this.onmessage?.({data}));this.thread.on('error',error=>this.onerror?.(error));
   }

@@ -61,10 +61,51 @@
       "companies_integrity_version": "20261031-v1",
       "messages_integrity_version": "20261031-messages-v1",
       "delivery_integrity_version": "20261031-delivery-v1",
-      "operational_diagnostics_version": "20261031-operations-v1"
+      "operational_diagnostics_version": "20261031-operations-v1",
+      "research_storage_version": "20261101-v1",
+      "research_expanded_limit_bytes": 33554432
     }
   },
   "smokeChecks": [
+    {
+      "id": "research-storage-codec",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "lzw16-jsonrefs-base64-v2",
+        "MAX_RESTORED_DISCOVERY_BYTES=32*1024*1024",
+        "localCodecVersion!==2"
+      ]
+    },
+    {
+      "id": "research-storage-account-fence",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "LOCAL_CODEC_EPOCH='li2:'",
+        "localCodecVersion:2"
+      ]
+    },
+    {
+      "id": "research-storage-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "research-storage=20261101-v1"
+      ]
+    },
+    {
+      "id": "research-storage-worker",
+      "type": "text",
+      "url": "/customer/workspace-codec-worker.js",
+      "status": 200,
+      "contains": [
+        "research-storage=20261101-v1"
+      ]
+    },
     {
       "id": "strategy-company-handoff-entry",
       "type": "text",
@@ -3224,7 +3265,7 @@
       "id": "local-workspace-storage-fence",
       "contains": [
         "prepareLocalStorageCodec",
-        "li1:",
+        "li2:",
         "set(storage,CONTEXT_KEY,nextTicket);context=next;ticket=nextTicket;"
       ],
       "url": "/customer/account-cache.js",
@@ -3832,7 +3873,7 @@
       "url": "/customer/workspace-codec-worker.js",
       "status": 200,
       "contains": [
-        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1')",
+        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1')",
         "'prepareForSync','packWorkspaceSnapshot','packRecoveryRecord'",
         "self.postMessage({id,result})"
       ]

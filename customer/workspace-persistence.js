@@ -38,7 +38,7 @@
   function runCodec(operation,value,options){
     if(typeof root.Worker!=='function')return root.LeadIntelStateBudget?.[operation]?.(value,options)||value;
     if(!codecWorker){
-      codecWorker=new root.Worker(new URL('workspace-codec-worker.js?v=20261020-v1',root.location.href));
+      codecWorker=new root.Worker(new URL('workspace-codec-worker.js?v=20261020-v1&research-storage=20261101-v1',root.location.href));
       codecWorker.onmessage=event=>{const job=codecJobs.get(event.data?.id);if(!job)return;codecJobs.delete(event.data.id);root.clearTimeout(job.timer);if(event.data.error)job.reject(new Error(event.data.error));else job.resolve(event.data.result);};
       codecWorker.onerror=()=>failCodec(new Error('Workspace encoding failed; your local data was preserved'));
       codecWorker.onmessageerror=()=>failCodec(new Error('Workspace encoding response could not be read'));

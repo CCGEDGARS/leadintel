@@ -10,6 +10,8 @@
   function syncLimit(options={}){return Math.max(MAX_SYNC_BYTES,Math.min(MAX_RECORD_SYNC_BYTES,Number(options.maxSyncBytes)||MAX_SYNC_BYTES));}
   const TARGET_SYNC_BYTES=450*1024;
   const MAX_RESTORED_SECTION_BYTES=8*1024*1024;
+  const MAX_RESTORED_DISCOVERY_BYTES=32*1024*1024;
+  const sectionRestoreLimit=key=>key==='discovery'?MAX_RESTORED_DISCOVERY_BYTES:MAX_RESTORED_SECTION_BYTES;
   const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
   const encoder=typeof TextEncoder!=="undefined"?new TextEncoder():null;
 
@@ -42,12 +44,13 @@
   const SECTION_FORMAT='leadintel-workspace-section-refs-v1';
   const BUNDLE_FORMAT='leadintel-workspace-bundle-refs-v1';
   const TEXT_ENCODING='lzw16-refs-base64-v2',LEGACY_TEXT_ENCODING='lzw16-base64-v1';
-  const MAX_RESTORED_BUNDLE_BYTES=MAX_RESTORED_SECTION_BYTES*4;
+  const LOCAL_TEXT_ENCODING='lzw16-jsonrefs-base64-v2';
+  const MAX_RESTORED_BUNDLE_BYTES=64*1024*1024;
   function base64Encode(raw){return typeof btoa==='function'?btoa(raw):Buffer.from(raw,'binary').toString('base64');}
   // Fixed-width byte codes avoid dependencies and remain synchronous at every save boundary.
   // The dictionary freezes at 65536 entries; both encoding and decoding use the same bound.
   function compressWorkspace(value){
-    if(bytes(value)>MAX_RESTORED_BUNDLE_BYTES||Object.values(value).some(section=>bytes(section)>MAX_RESTORED_SECTION_BYTES))return null;
+    if(bytes(value)>MAX_RESTORED_BUNDLE_BYTES||Object.entries(value).some(([key,section])=>bytes(section)>sectionRestoreLimit(key)))return null;
     const data=compressText(JSON.stringify(packNestedDiscovery(value)));
     const shared={main:{format:BUNDLE_FORMAT,encoding:TEXT_ENCODING,data}};
     if(value.meta?.persistence)shared.meta={persistence:cloneValue(value.meta.persistence)};
@@ -62,7 +65,7 @@
   }
   function decompressText(value,maxEncodedBytes,maxDecodedBytes){
     const invalid=()=>{throw new Error('Invalid stored compressed workspace');};
-    if(![TEXT_ENCODING,LEGACY_TEXT_ENCODING].includes(value.encoding)||typeof value.data!=='string'||value.data.length>maxEncodedBytes||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
+    if(![TEXT_ENCODING,LEGACY_TEXT_ENCODING,LOCAL_TEXT_ENCODING].includes(value.encoding)||typeof value.data!=='string'||value.data.length>maxEncodedBytes||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
     let raw;try{raw=typeof atob==='function'?atob(value.data):Buffer.from(value.data,'base64').toString('binary');}catch{invalid();}
     if(raw.length%2||base64Encode(raw)!==value.data)invalid();
     const dictionary=Array.from({length:256},(_,i)=>String.fromCharCode(i));let next=256,previous='',size=0;const chunks=[];
@@ -218,12 +221,12 @@
       if(Object.keys(value).some(k=>!['main','meta'].includes(k))||(value.meta!=null&&(typeof value.meta!=='object'||Array.isArray(value.meta)))||Object.keys(value.meta||{}).some(k=>k!=='persistence'))invalid();
       const restored=value.main.encoding!==undefined?restoreCompressedWorkspace(value.main):restoreNestedDiscovery(value.main,MAX_RESTORED_BUNDLE_BYTES);
       if(Object.keys(restored).some(k=>!['main','discovery','outreach','delivery','meta'].includes(k))||restored.main?.format===BUNDLE_FORMAT)invalid();
-      for(const section of Object.values(restored))if(!section||typeof section!=='object'||Array.isArray(section)||bytes(section)>MAX_RESTORED_SECTION_BYTES)invalid();
+      for(const [name,section] of Object.entries(restored))if(!section||typeof section!=='object'||Array.isArray(section)||bytes(section)>sectionRestoreLimit(name))invalid();
       if(value.meta?.persistence)restored.meta={...restored.meta,persistence:cloneValue(value.meta.persistence)};
       return restoreFromSync(restored);
     }
     if(['main','outreach','delivery'].includes(key)&&value?.format===SECTION_FORMAT)return restoreFromSync(restoreNestedDiscovery(value),key);
-    if(key==='discovery'&&value?.format===NESTED_FORMAT)return restoreFromSync(restoreNestedDiscovery(value),key);
+    if(key==='discovery'&&value?.format===NESTED_FORMAT)return restoreFromSync(restoreNestedDiscovery(value,MAX_RESTORED_DISCOVERY_BYTES),key);
     if(key==='discovery'&&value?.format===REFERENCE_FORMAT){
       if(!Array.isArray(value.values)||value.values.length>5000||!value.value||typeof value.value!=='object')throw new Error('Invalid stored discovery research references');
       let expandedBytes=0;const sizes=new Map();
@@ -304,19 +307,32 @@
     const originalSet=root.Storage.prototype.setItem,originalGet=root.Storage.prototype.getItem;
     const sectionKeys=new Set(['state','discovery','outreach','delivery','discovery_meta'].map(name=>'leadintel_customer_v2_'+name));
     const prefix='leadintel-local-section-lzw-v1:',cache=new Map();
-    function encodeLocal(value){
+    function encodeLocal(value,key){
       if(typeof value!=='string'||value.length<65536)return value;
       // Compress the original string, not parsed JSON: whitespace, approved
       // wording, Unicode and every evidence field must round-trip byte-for-byte.
-      if(new TextEncoder().encode(value).byteLength>MAX_RESTORED_SECTION_BYTES)return value;
+      const limit=sectionRestoreLimit(key===MAIN_STORAGE_KEY?'main':key.slice('leadintel_customer_v2_'.length));
+      if(new TextEncoder().encode(value).byteLength>limit)return value;
+      // Canonical JSON can share identical source bodies before compression.
+      // Noncanonical strings retain their original whitespace and escaping.
+      try{
+        const parsed=JSON.parse(value);
+        if(JSON.stringify(parsed)===value){
+          const packed=packNestedDiscovery(parsed);
+          if(packed?.format===NESTED_FORMAT){
+            const data=compressText(JSON.stringify(packed)),encoded=prefix+JSON.stringify({encoding:LOCAL_TEXT_ENCODING,data});
+            if(data.length<=limit&&encoded.length<value.length)return encoded;
+          }
+        }
+      }catch{}
       const data=compressText(value);
-      if(data.length>MAX_RESTORED_SECTION_BYTES)return value;
+      if(data.length>limit)return value;
       const encoded=prefix+JSON.stringify({encoding:LEGACY_TEXT_ENCODING,data});
       return encoded.length<value.length?encoded:value;
     }
     function prepareWrite(encoded){
       if(encoded.startsWith(prefix)&&root.LeadIntelAccountCache){
-        if(!root.LeadIntelAccountCache.prepareLocalStorageCodec)throw new Error('Refresh to upgrade workspace storage safely.');
+        if(!root.LeadIntelAccountCache.prepareLocalStorageCodec||root.LeadIntelAccountCache.localCodecVersion!==2)throw new Error('Refresh to upgrade workspace storage safely.');
         root.LeadIntelAccountCache.prepareLocalStorageCodec();
       }
     }
@@ -327,14 +343,16 @@
       if(raw===null){cache.delete(key);return null;}
       const previous=cache.get(key);if(previous?.raw===raw)return previous.value;
       if(!raw.startsWith(prefix)){cache.delete(key);return raw;}
-      const value=decompressText(JSON.parse(raw.slice(prefix.length)),MAX_RESTORED_SECTION_BYTES,MAX_RESTORED_SECTION_BYTES);
+      const frame=JSON.parse(raw.slice(prefix.length)),limit=sectionRestoreLimit(key.slice('leadintel_customer_v2_'.length));
+      const decoded=decompressText(frame,limit,limit);
+      const value=frame.encoding===LOCAL_TEXT_ENCODING?JSON.stringify(restoreNestedDiscovery(JSON.parse(decoded),limit)):decoded;
       cache.set(key,{raw,value});return value;
     };
     root.Storage.prototype.setItem=function(key,value){
       const next=this===root.localStorage&&key===MAIN_STORAGE_KEY?compactMainStorageValue(value):value;
       if(this!==root.localStorage||!sectionKeys.has(key))return originalSet.call(this,key,next);
       const text=String(next),previous=cache.get(key);
-      const encoded=previous?.value===text&&originalGet.call(this,key)===previous.raw?previous.raw:encodeLocal(text);
+      const encoded=previous?.value===text&&originalGet.call(this,key)===previous.raw?previous.raw:encodeLocal(text,key);
       prepareWrite(encoded);
       const result=originalSet.call(this,key,encoded);
       // Only a successful durable write may replace the cached working value.
@@ -343,11 +361,11 @@
     root.Storage.prototype.__leadintelStateBudgetPatched=true;
     // Free space occupied by older expanded records before server hydration.
     // A failed migration leaves that exact record intact for recovery.
-    for(const key of sectionKeys){try{const raw=originalGet.call(root.localStorage,key);if(raw&&!raw.startsWith(prefix)){const encoded=encodeLocal(raw);if(encoded!==raw){prepareWrite(encoded);originalSet.call(root.localStorage,key,encoded);}}}catch{}}
+    for(const key of sectionKeys){try{const raw=originalGet.call(root.localStorage,key);if(raw&&!raw.startsWith(prefix)){const encoded=encodeLocal(raw,key);if(encoded!==raw){prepareWrite(encoded);originalSet.call(root.localStorage,key,encoded);}}}catch{}}
   }
 
   root?.LeadIntelStartupTrace?.('storage codec:start');
   installStorageGuard();
   root?.LeadIntelStartupTrace?.('storage codec:complete');
-  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,MAX_RECORD_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,MAX_RECORD_SYNC_BYTES,MAX_RESTORED_DISCOVERY_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
