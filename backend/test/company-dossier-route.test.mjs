@@ -3,3 +3,8 @@ function env(role='owner'){const saved={};return {saved,DB:{prepare(sql){let arg
 const req=(method,body)=>new Request('https://example.com/api/integrations/ai/research-settings?workspace_id=w',{method,headers:{Cookie:'leadintel_session=test','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
 test('research preferences persist per workspace and require owner writes',async()=>{const e=env();let r=await handleAiRoute(req('PUT',{primary:'anthropic',secondary:'gemini'}),e);assert.equal(r.status,200);r=await handleAiRoute(req('GET'),e);assert.equal((await r.json()).primary_provider,'anthropic');assert.equal((await handleAiRoute(req('PUT',{primary:'openai'}),env('sales'))).status,403);});
 test('same provider cannot be its own independent researcher',async()=>{assert.equal((await handleAiRoute(req('PUT',{primary:'openai',secondary:'openai'}),env())).status,400);});
+test('dossier progress is a read-only workspace-scoped authenticated checkpoint',async()=>{
+ const e=env(),request=new Request('https://example.com/api/ai/company-dossier?workspace_id=w&domain=example.com',{headers:{Cookie:'leadintel_session=test'}});
+ const response=await handleAiRoute(request,e);assert.equal(response.status,200);assert.deepEqual(await response.json(),{dossier:null,updatedAt:''});assert.equal(response.headers.get('cache-control'),'no-store');
+ const denied=await handleAiRoute(request,env('viewer'));assert.equal(denied.status,403);
+});

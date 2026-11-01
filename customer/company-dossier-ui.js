@@ -3,12 +3,29 @@
 const label=p=>({openai:'OpenAI',anthropic:'Claude',gemini:'Gemini',scrapling:'Scrapling',firecrawl:'Firecrawl',direct:'Direct website reading'}[p]||p);
 function evidenceRows(d){const rows=new Map();for(const r of [...(d.facts||[]),...(d.people||[]),...(d.channels||[])]){if(!D.url(r.sourceUrl))continue;const old=rows.get(r.sourceUrl)||{url:r.sourceUrl,markdown:'',sourceRead:false,evidenceKind:'dossier_excerpt',buyerSource:D.domain(r.sourceUrl)===D.domain(d.domain)?'official':'public'};old.markdown+='\n'+r.quote;rows.set(r.sourceUrl,old);}return [...rows.values()];}
 function attemptSnapshot(d){return {...d,lastAttempt:null,people:[],facts:[],channels:[],assignments:[],passes:d.passes.map(p=>({...p,people:[],facts:[],channels:[]}))};}
-async function research(candidate,context,{request,isCurrent=()=>true,signal,persist=()=>{},force=false}={}){
+async function observeRequest(operation,{signal,isCurrent,onProgress,readProgress,key,timeoutMs,pollMs}){
+ const controller=new AbortController(),started=Date.now();let deadline,pulse,stop,settled=false;
+ const canceled=new Promise((_,reject)=>{stop=()=>{controller.abort();reject(Object.assign(Error(signal?.aborted?'Company research canceled':'Company research timed out. Saved searches can be resumed.'),{name:'AbortError'}));};});
+ signal?.addEventListener('abort',stop,{once:true});if(signal?.aborted)stop();deadline=setTimeout(stop,timeoutMs);
+ const update=async()=>{
+  if(settled||controller.signal.aborted||!isCurrent())return;
+  let checkpoint=null,unavailable=false;
+  try{const raw=readProgress?await readProgress(controller.signal):null;const value=raw?.dossier||raw,safe=value?D.safe(value,value.domain):null,updatedAt=raw?.updatedAt||safe?.checkedAt;if(safe?.contextKey===key&&Date.parse(updatedAt)>=started-1000)checkpoint={...safe,checkedAt:updatedAt};}catch{unavailable=true;}
+  if(settled||controller.signal.aborted||!isCurrent())return;
+  const providers=(checkpoint?.coverage?.providers||[]).map(p=>({provider:p.provider,completed:p.completed,planned:p.planned,failed:p.failed,pending:p.pending}));
+  onProgress?.({elapsedSeconds:Math.floor((Date.now()-started)/1000),providers,checkpointAt:checkpoint?.checkedAt||'',unavailable});
+  pulse=setTimeout(update,pollMs);
+ };
+ onProgress?.({elapsedSeconds:0,providers:[],checkpointAt:''});pulse=setTimeout(update,pollMs);
+ try{return await Promise.race([Promise.resolve().then(()=>{if(controller.signal.aborted||!isCurrent())throw Error('Company research canceled');return operation(controller.signal);}),canceled]);}
+ finally{settled=true;clearTimeout(deadline);clearTimeout(pulse);signal?.removeEventListener('abort',stop);controller.abort();}
+}
+async function research(candidate,context,{request,isCurrent=()=>true,signal,persist=()=>{},force=false,onProgress,readProgress,timeoutMs=285000,pollMs=3000}={}){
  const body={company:candidate.company,domain:candidate.domain,seller:context.seller||{},roles:context.roles||[],opportunity:context.opportunity||'',formulas:context.formulas||[]},key=D.contextKey(body),prior=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain);
  if(!force&&prior?.status==='complete'&&D.coverageComplete(prior,body)&&!prior.lastAttempt&&prior.contextKey===key&&Date.now()-Date.parse(prior.checkedAt)>=0&&Date.now()-Date.parse(prior.checkedAt)<86400000)return prior;
  const pending=prior?.lastAttempt?.research||prior,resume=pending?.status==='partial'&&pending.contextKey===key&&pending.plan?.signature===D.researchPlan(body).signature&&(pending.passes||[]).some(p=>p.status!=='complete'&&(!D.passCoverageComplete(p,pending.plan)||D.selectedSourceUrls(p.searchFamilies).some(url=>!(p.extractedSources||[]).includes(url))));
  let latest;
- try{const raw=await request({...body,force:force&&!resume},signal);if(signal?.aborted||!isCurrent())throw Error('Research context changed');const result=D.safe(raw,candidate.domain);if(!result||result.contextKey!==key)throw Error('Company dossier context mismatch');latest=result;if(result.status!=='complete'||!D.coverageComplete(result,body)){const previous=D.safe(raw.previousSuccessful,candidate.domain),retained=prior?.status==='complete'&&prior.contextKey===key?prior:previous?.contextKey===key?previous:null;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:retained||result};throw Error('Two-provider company research is incomplete. Completed searches are saved; retry to resume the remaining checks.');}candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};persist();return result;}
+ try{const raw=await observeRequest(s=>request({...body,force:force&&!resume},s),{signal,isCurrent,onProgress,readProgress,key,timeoutMs,pollMs});if(signal?.aborted||!isCurrent())throw Error('Research context changed');const result=D.safe(raw,candidate.domain);if(!result||result.contextKey!==key)throw Error('Company dossier context mismatch');latest=result;if(result.status!=='complete'||!D.coverageComplete(result,body)){const previous=D.safe(raw.previousSuccessful,candidate.domain),retained=prior?.status==='complete'&&prior.contextKey===key?prior:previous?.contextKey===key?previous:null;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:retained||result};throw Error('Two-provider company research is incomplete. Completed searches are saved; retry to resume the remaining checks.');}candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};persist();return result;}
  catch(error){if(!signal?.aborted&&isCurrent()){const retained=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain)||prior;if(retained)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:{...retained,lastAttempt:{status:'failed',reason:String(error.message).slice(0,200),checkedAt:new Date().toISOString(),research:latest?attemptSnapshot(latest):retained.lastAttempt?.research||null}}};persist();}throw error;}
 }
 function coverageHtml(d){const latest=d.lastAttempt?.research||d,coverage=latest.coverage;if(!coverage)return '<h5>Search plan and progress</h5><p>Search coverage was not recorded. Refresh company research.</p>';

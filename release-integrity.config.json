@@ -6895,6 +6895,29 @@
         "keep the search at 5 companies",
         "return to 5 companies"
       ]
+    },
+    {
+      "id": "buyer-live-dossier-request",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "async function observeRequest(",
+        "Company research timed out. Saved searches can be resumed.",
+        "checkpointAt:checkpoint?.checkedAt"
+      ]
+    },
+    {
+      "id": "buyer-live-progress-panel",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "data-cancel-buyer-research",
+        "Last saved research update:",
+        "readProgress:signal=>withDiscoveryDeadline",
+        "clearTimeout(buyerPulse)"
+      ]
     }
   ],
   "retry": {

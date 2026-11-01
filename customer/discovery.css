@@ -757,3 +757,9 @@
 .buyer-requirement-highlight{outline:3px solid #79a590;outline-offset:4px;scroll-margin-block:32px}
 .additional-contact-paused{display:block;margin-top:8px;color:#6b4a00}
 @media(max-width:720px){.workflow-next-action.buyer-guided-footer{grid-template-columns:minmax(0,1fr)!important}.workflow-next-action.buyer-guided-footer .guided-primary-action{width:100%!important}}
+
+/* Keep active buyer research prominent above the company dossier. */
+.selected-prospect-row>.buyer-research-progress{border:2px solid #117363;border-left-width:6px;background:#eaf6f1;box-shadow:0 8px 24px rgba(13,93,79,.1);padding:22px}
+.buyer-research-progress-head strong{font-size:18px}.buyer-research-progress li.active{background:#0d5d4f;color:#fff;padding:8px;border-radius:8px}
+.buyer-research-live{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #badace;font-size:13px}.buyer-research-live>span{flex:1;min-width:180px}.buyer-research-live ul{display:block;width:100%;margin:0;padding-left:18px}.buyer-research-live li{display:list-item;font-size:13px;color:#244e40;margin:5px 0}
+@media(prefers-reduced-motion:reduce){.buyer-research-spinner{animation:none}}
