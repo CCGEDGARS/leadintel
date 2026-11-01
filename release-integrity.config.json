@@ -6660,6 +6660,50 @@
       ],
       "id": "profile-adviser-responsive",
       "type": "text"
+    },
+    {
+      "id": "offer-evidence-priority-policy",
+      "type": "text",
+      "url": "/customer/research-brief.js",
+      "status": 200,
+      "contains": [
+        "offer-evidence-priority-20261101-v1",
+        "function signalPriority",
+        "signalSelection",
+        "Source date unknown; this is not evidence of urgency."
+      ]
+    },
+    {
+      "id": "offer-evidence-priority-summary",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "Why this observation comes first",
+        "Evidence priority is not buying intent or confirmed purchasing authority."
+      ]
+    },
+    {
+      "id": "offer-evidence-priority-selection",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "priorityPolicy?.signalPriority",
+        "policy.supports(brief,trigger)",
+        "priority?.offerTerms.length"
+      ]
+    },
+    {
+      "id": "offer-evidence-priority-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "research-brief.js?v=20261022-v4&evidence-priority=20261101-v1",
+        "company-dossier-ui.js?v=20261021-v5&evidence-priority=20261101-v1",
+        "discovery-ui.js?v=20260930-contact-suppression-v1&evidence-priority=20261101-v1"
+      ]
     }
   ],
   "retry": {
