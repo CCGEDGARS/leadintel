@@ -400,10 +400,10 @@ test("zero-result guidance tells the user what to change before retrying",()=>{
   assert.equal(limited.primaryLabel,"Review Strategy");
   assert.match(limited.summary,/20 evidence results were checked/);
   assert.match(limited.steps.join(" "),/activate at least 3 buying signals/i);
-  assert.match(limited.steps.join(" "),/keep the search at 10 companies/i);
+  assert.match(limited.steps.join(" "),/return to 5 companies/i);
   assert.doesNotMatch(limited.steps.join(" "),/increase.*25|increase.*50/i);
 
   const broader=discovery.zeroResultGuidance({evidenceCount:20,activeSignalCount:4,targetCount:25});
   assert.match(broader.steps.join(" "),/broaden narrow ICP or signal keywords/i);
-  assert.match(broader.steps.join(" "),/return to 10 companies/i);
+  assert.match(broader.steps.join(" "),/return to 5 companies/i);
 });

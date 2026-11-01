@@ -146,7 +146,7 @@ function discoveryOperationContext(){return JSON.stringify([discoveryAccountCont
 function sameStrategyFingerprint(previous,current){try{const a=JSON.parse(previous),b=JSON.parse(current);a.website=canonicalDomain(a.website);b.website=canonicalDomain(b.website);delete a.approved;delete b.approved;return JSON.stringify(a)===JSON.stringify(b);}catch{return false;}}
 function loadMeta(){try{return JSON.parse(localStorage.getItem(`${DISCOVERY_STORAGE_KEY}_meta`)||"{}" );}catch{return {};}}
 function saveMeta(meta){localStorage.setItem(`${DISCOVERY_STORAGE_KEY}_meta`,JSON.stringify(meta));}
-const DEFAULT_DISCOVERY_TARGET=10;
+const DEFAULT_DISCOVERY_TARGET=5;
 const MAX_DISCOVERY_TARGET=50;
 function normalizedDiscoveryTarget(value,fallback=DEFAULT_DISCOVERY_TARGET){const raw=String(value??"").trim();if(!raw)return fallback;const target=Math.round(Number(raw));return Number.isFinite(target)?Math.max(1,Math.min(MAX_DISCOVERY_TARGET,target)):fallback;}
 function selectedDiscoveryTarget(){const control=$("discovery-target-count");const custom=$("discovery-target-custom");const meta=loadMeta();if(control?.value==="custom")return normalizedDiscoveryTarget(custom?.value,normalizedDiscoveryTarget(meta.targetCount,DEFAULT_DISCOVERY_TARGET));return normalizedDiscoveryTarget(control?.value||meta.targetCount,DEFAULT_DISCOVERY_TARGET);}
@@ -452,7 +452,7 @@ function injectDiscoveryUI(){
   </section>`);
   restoreDiscoveryTarget();renderDiscoveryEstimate();
 }
-function restoreDiscoveryTarget(){const meta=loadMeta(),count=normalizedDiscoveryTarget(meta.targetCount),control=$("discovery-target-count"),custom=$("discovery-target-custom");if(control)control.value=meta.targetMode==='custom'||![5,10,20,25,50].includes(count)?'custom':String(count);if(custom){custom.value=String(count);custom.hidden=control?.value!=='custom';}}
+function restoreDiscoveryTarget(){let meta=loadMeta();if(!meta.smallStartVersion){meta={...meta,smallStartVersion:1,...(meta.targetMode!=='custom'&&(!meta.targetCount||Number(meta.targetCount)===10)?{targetCount:5,targetMode:'preset'}:{})};saveMeta(meta);}const count=normalizedDiscoveryTarget(meta.targetCount),control=$("discovery-target-count"),custom=$("discovery-target-custom");if(control)control.value=meta.targetMode==='custom'||![5,10,20,25,50].includes(count)?'custom':String(count);if(custom){custom.value=String(count);custom.hidden=control?.value!=='custom';}}
 // The amount selector shows the Firecrawl budget this search may use before anything is paid for.
 function renderDiscoveryEstimate(){const node=$("discovery-cost-estimate");if(!node)return;try{const estimate=LeadIntelDiscovery.estimateDiscoveryCalls({targetCount:selectedDiscoveryTarget(),targetPoolCount:selectedTargets().length});const planApi=globalThis.LeadIntelFirecrawlPlan;const status=planApi?planApi.planFromStatus(globalThis.LeadIntelAttention?.providerStatus?.()||null):{plan:null,remainingCredits:null};const cost=planApi?planApi.describe({searches:estimate.searches,resultsPerSearch:8,pages:estimate.pages},status.plan,{remainingCredits:status.remainingCredits}):null;node.textContent=`Research budget: up to ${estimate.cap} Firecrawl calls${cost?` (${cost.text})`:''}, billed on your plan. Automatic broadening stays within this limit.`;}catch{node.textContent="";}}
 // The plan arrives with the first services status check, usually after the stage rendered: redraw the estimate then.
@@ -609,7 +609,7 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
 }
 async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(items.length).fill(null),{retryOnly=false}={}){
   throwIfDiscoveryRunAborted(runSignal);
-  discoveryProgress={phase,completed:0,total:items.length};window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{stage:phase==="resolving"?"Resolving official company domains":phase==="verifying"?"Verifying company websites":"Searching market evidence",completed:0,total:Math.max(items.length,1),resultCount:discovery.latestRunCandidateCount});renderDiscoverySafely();
+  discoveryProgress={phase,completed:0,total:items.length,startedAt:Date.now()};window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{stage:phase==="resolving"?"Resolving official company domains":phase==="verifying"?"Verifying company websites":"Searching market evidence",completed:0,total:Math.max(items.length,1),resultCount:discovery.latestRunCandidateCount});renderDiscoverySafely();
   let nextIndex=0;
   const workers=Array.from({length:Math.min(phase==="verifying"?DISCOVERY_SEARCH_CONCURRENCY/2:DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
     while(nextIndex<items.length){
@@ -632,7 +632,8 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
       }}
     }
   });
-  await Promise.all(workers);
+  let heartbeat;const refreshWaiting=()=>{if(!runSignal?.aborted&&(!runSignal?.leadIntelScopeValid||runSignal.leadIntelScopeValid())){renderDiscoverySafely();heartbeat=setTimeout(refreshWaiting,2000);}};heartbeat=setTimeout(refreshWaiting,2000);
+  try{await Promise.all(workers);}finally{clearTimeout(heartbeat);}
   throwIfDiscoveryRunAborted(runSignal);
   return searches;
 }
@@ -3751,7 +3752,9 @@ function companySearchProgressText(){
   const {phase,completed,total}=discoveryProgress;
   if(phase==="extracting")return "Identifying companies named in market evidence…";
   const label={"buyer-fit":"Checking purchasing fit",resolving:"Resolving official company domains",verifying:"Verifying company websites",following:"Broadening the search"}[phase]||"Finding market evidence";
-  return total>0?`${label} · ${completed}/${total} ${phase==="buyer-fit"?"batches ":""}checked…`:`${label}…`;
+  const elapsed=discoveryProgress.startedAt?Math.max(0,Math.floor((Date.now()-discoveryProgress.startedAt)/1000)):0;
+  const waiting=elapsed>=10&&completed<total?` · ${elapsed}s elapsed · Waiting for search providers`:"";
+  return total>0?`${label} · ${completed}/${total} ${phase==="buyer-fit"?"batches ":""}checked${waiting}…`:`${label}…`;
 }
 async function cancelCompanyDiscovery(){
   if(discovery?.status!=="running"||!activeDiscoveryTaskId)return false;

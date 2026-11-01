@@ -6872,6 +6872,18 @@
       "contains": [
         ".market-toggle input:checked:disabled+span{background:#0d5d4f;cursor:default;box-shadow:none}"
       ]
+    },
+    {
+      "id": "five-company-start-and-progress",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const DEFAULT_DISCOVERY_TARGET=5;",
+        "smallStartVersion:1",
+        "Waiting for search providers",
+        "heartbeat=setTimeout(refreshWaiting,2000)"
+      ]
     }
   ],
   "retry": {
