@@ -6884,6 +6884,17 @@
         "Waiting for search providers",
         "heartbeat=setTimeout(refreshWaiting,2000)"
       ]
+    },
+    {
+      "id": "five-company-retry-guidance",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "const amountStep=target===5",
+        "keep the search at 5 companies",
+        "return to 5 companies"
+      ]
     }
   ],
   "retry": {
