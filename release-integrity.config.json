@@ -6704,6 +6704,37 @@
         "company-dossier-ui.js?v=20261021-v5&evidence-priority=20261101-v1",
         "discovery-ui.js?v=20260930-contact-suppression-v1&evidence-priority=20261101-v1"
       ]
+    },
+    {
+      "id": "optional-event-website-ui",
+      "type": "text",
+      "url": "/customer/event-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "Analyze event website",
+        "Business partners across the country",
+        "snapshot!==JSON.stringify(read())"
+      ]
+    },
+    {
+      "id": "optional-event-website-model",
+      "type": "text",
+      "url": "/customer/event-campaigns.js",
+      "status": 200,
+      "contains": [
+        "function websiteSuggestions(",
+        "websiteEvidence:12000",
+        "attendance unverified"
+      ]
+    },
+    {
+      "id": "optional-event-website-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "event-website=20261101-v1"
+      ]
     }
   ],
   "retry": {

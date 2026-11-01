@@ -29,3 +29,9 @@ Review subjects, recipients and messages; explicitly approve drafts. Queue or ma
 ## Verification
 
 Regression coverage includes Profile placement, unfinished drafts, conditional exhibitor/visitor fields, source/depth/count save/reload, mixed quota completion, quick batch counts, edition/negation evidence, event-linked approval invalidation and account-switch cancellation. Full customer and backend suites, build and production release-integrity proof are required for release. No real customer email is sent in verification.
+
+## Optional website-first preparation (1 November 2026)
+
+The existing optional Prepare event card now starts with an event website and Analyze event website. It uses the existing public Firecrawl scrape route, suggests a page title and participant-directory links, and retains a bounded source receipt in the saved event. Only one unambiguous future ISO date is suggested; city, country, date ranges and other date formats require manual confirmation. Existing field values are preserved. Late results are discarded after form edits, event selection changes or workspace changes. Failed/empty extraction leaves manual preparation available.
+
+New UI events default to attending and system discovery. Saved exhibitor events retain their role. Audience choices are relevant event participants, business partners across the country, or both. The official website enters participant research; countrywide research retains the active seller's industries without a manufacturing default. Historical extracted text does not establish current-edition or personal attendance. Existing recipient, buyer, approval and delivery controls remain responsible for the rest of the flow.
