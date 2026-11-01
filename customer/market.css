@@ -428,3 +428,5 @@
 #market-research-workbench .research-mode-source-detail{margin-top:auto}
 #market-research-workbench .required-action-notice{margin:12px 0 18px}
 @media(max-width:760px){#market-research-workbench .research-actions{grid-template-columns:1fr!important}#market-research-workbench .research-mode-choice{grid-template-rows:100px 1fr}#market-research-workbench .research-mode-choice>button{height:100px!important;min-height:100px!important}}
+
+#market-research-workbench .research-mode-choice.research-mode-selected .research-mode-badge{color:#e8d494!important}

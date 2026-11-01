@@ -6841,6 +6841,17 @@
         "target.closest?.('.research-actions')",
         "(researchChoices?.parentNode||target.parentNode)?.insertBefore(notice,researchChoices||target)"
       ]
+    },
+    {
+      "id": "research-choice-runtime-sizing",
+      "type": "text",
+      "url": "/customer/market-research-guard.js",
+      "status": 200,
+      "contains": [
+        "grid-template-rows:112px 1fr!important",
+        "grid-template-rows:100px 1fr!important",
+        "@media(max-width:760px)"
+      ]
     }
   ],
   "retry": {

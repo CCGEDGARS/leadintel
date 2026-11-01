@@ -22,14 +22,14 @@
     const style=document.createElement("style");style.id="market-research-guard-css";
     style.textContent=`
       .research-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important;align-items:start!important}
-      .research-mode-choice{display:grid!important;grid-template-rows:96px minmax(86px,auto)!important;gap:10px!important;width:100%!important;min-width:0!important}
-      .research-mode-choice>button{box-sizing:border-box!important;width:100%!important;height:96px!important;min-height:96px!important;max-height:96px!important;margin:0!important;padding:16px 18px!important;align-self:start!important}
+      .research-mode-choice{display:grid!important;grid-template-rows:112px 1fr!important;gap:16px!important;width:100%!important;min-width:0!important}
+      .research-mode-choice>button{box-sizing:border-box!important;width:100%!important;height:112px!important;min-height:112px!important;max-height:112px!important;margin:0!important;padding:16px 18px!important;align-self:start!important}
       .research-mode-description{box-sizing:border-box!important;margin:0!important;padding:0 6px!important;min-height:86px!important;max-width:none!important}
       .research-actions.research-mode-idle .research-mode-choice>button{background:#fff!important;color:#17241f!important;border:1px solid #d7dfda!important;box-shadow:none!important}
       .research-actions.research-mode-activated .research-mode-choice>button{background:#fff!important;color:#17241f!important;border:1px solid #d7dfda!important;box-shadow:none!important}
       .research-actions.research-mode-activated .research-mode-choice.research-mode-selected>button{background:#10231c!important;color:#fff!important;border-color:#10231c!important;box-shadow:0 10px 24px rgba(16,35,28,.10)!important}
       .profile-context-note{margin:10px 0 0;font:600 11px/1.35 'IBM Plex Mono',monospace;letter-spacing:.035em;color:#6b7773;text-transform:uppercase}
-      @media(max-width:900px){.research-actions{grid-template-columns:1fr!important}.research-mode-choice{grid-template-rows:76px auto!important}.research-mode-choice>button{height:76px!important;min-height:76px!important;max-height:76px!important}.research-mode-description{min-height:0!important}}
+      @media(max-width:760px){.research-actions{grid-template-columns:1fr!important}.research-mode-choice{grid-template-rows:100px 1fr!important}.research-mode-choice>button{height:100px!important;min-height:100px!important;max-height:100px!important}.research-mode-description{min-height:0!important}}
     `;
     document.head.appendChild(style);
   }
