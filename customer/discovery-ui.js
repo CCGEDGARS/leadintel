@@ -1581,7 +1581,6 @@ async function findDecisionMakers(index){
   if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
   return searchDecisionMakers(candidate,{pipeline:Boolean(candidate.saved),retry:()=>findDecisionMakers(index)});
 }
-function armBuyerResearchDeadline(controller,previous,ms){clearTimeout(previous);return setTimeout(()=>controller.abort(Object.assign(new Error('Buyer research stage deadline reached; saved checks can be resumed'),{name:'TimeoutError',code:'BUYER_STAGE_TIMEOUT'})),ms);}
 async function findPotentialDecisionMakers(domain,{refreshDossier=false}={}){
   const canonical=canonicalDomain(domain);
   const selected=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonical);
@@ -1678,6 +1677,7 @@ function findPipelineDecisionMakers(index,{refreshDossier=false}={}){
 }
 function retryPipelineDecisionMakers(domain){const index=pipelineRows().findIndex(item=>canonicalDomain(item.domain||item.website)===domain);return index<0?false:findPipelineDecisionMakers(index);}
 async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync=true,refreshDossier=false}={}){
+  function armBuyerResearchDeadline(controller,previous,ms){clearTimeout(previous);return setTimeout(()=>controller.abort(Object.assign(new Error('Buyer research stage deadline reached; saved checks can be resumed'),{name:'TimeoutError',code:'BUYER_STAGE_TIMEOUT'})),ms);}
   if(window.LeadIntelPageQuality&&!window.LeadIntelPageQuality.require('buyers','research')){showToast(window.LeadIntelPageQuality.getReport('buyers').message);return false;}
   const main=mainState();
   const roleSelectionContext=LeadIntelDiscovery.buyerRoleSelectionContext(main);
