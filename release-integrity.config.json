@@ -6788,6 +6788,38 @@
         "referenceCount(model)>0",
         "const requestedActive=available;const active=available;"
       ]
+    },
+    {
+      "id": "analyzed-reference-auto-repair",
+      "type": "text",
+      "url": "/customer/reference-customer-library.js",
+      "status": 200,
+      "contains": [
+        "function automaticallyActivateAnalyzedReference(",
+        "function hasSupportedCompanyEvidence(",
+        "20261101-reference-auto-v1",
+        "if(supportedRows.length)"
+      ]
+    },
+    {
+      "id": "reference-analysis-portfolio-handoff",
+      "type": "text",
+      "url": "/customer/reference-customer-portfolio.js",
+      "status": 200,
+      "contains": [
+        "analysisAutoActivated",
+        "value.analysisAutoActivated!==true"
+      ]
+    },
+    {
+      "id": "reference-resolver-startup",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "import './reference-customer-library.js?v=20260924-reference-consensus-v1",
+        "reference-auto=20261101-v1"
+      ]
     }
   ],
   "retry": {

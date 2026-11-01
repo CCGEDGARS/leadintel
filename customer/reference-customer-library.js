@@ -2,7 +2,7 @@
   'use strict';
   const Ref=root?.LeadIntelReferenceCustomers||(typeof module!=='undefined'&&module.exports?require('./reference-customers.js'):null);
   if(!Ref)return;
-  if(Ref.libraryRuntimeVersion==='20260930-reference-activation-v6')return;
+  if(Ref.libraryRuntimeVersion==='20261101-reference-auto-v1')return;
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const baseNormalize=Ref.normalizeReferenceState.bind(Ref);
@@ -80,12 +80,39 @@
     });
   }
 
+  function hasSupportedCompanyEvidence(row,analysis){
+    if(row.status!=='ready'||row.reviewed===false)return false;
+    return (analysis?.sourceEvidence||[]).some(item=>{
+      if(!['broadIndustry','productionModel','capabilities'].includes(item.field)||clean(item.quote).length<12)return false;
+      try{const source=new URL(item.url),website=new URL(row.website),host=website.hostname.replace(/^www\./,'');return ['http:','https:'].includes(source.protocol)&&!source.username&&!source.password&&(source.hostname.replace(/^www\./,'')===host||source.hostname.endsWith('.'+host));}catch{return false;}
+    });
+  }
+
+  function automaticallyActivateAnalyzedReference(normalized){
+    const ids=normalized.rows.filter(row=>hasSupportedCompanyEvidence(row,normalized.analyses?.[row.id])).map(row=>row.id);
+    if(!ids.length)return null;
+    const candidate=baseActivateCustomers(normalized,ids);
+    const signature=JSON.stringify(ids.map(id=>[id,normalized.analyses[id]]));let hash=2166136261;
+    for(const ch of signature){hash^=ch.charCodeAt(0);hash=Math.imul(hash,16777619);}
+    candidate.fingerprint+=`:analysis-auto-v1:${(hash>>>0).toString(36)}`;
+    candidate.dna=Ref.buildReferenceDna(candidate,candidate.analyses);
+    if(!Ref.hasUsableReferenceDna(candidate.dna))return null;
+    // Reopening an existing analysis must not invent a fresh activation or evidence date.
+    const timestamp=clean(normalized.analyzedAt);candidate.activatedAt=timestamp;candidate.dna.builtAt=timestamp;
+    const draft=baseGetActive(candidate);if(!draft)return null;
+    const model=normalizePublishedModel({...draft,active:true,activeCount:candidate.dna.activeCount,confidence:candidate.dna.confidence,sourceRows:clone(normalized.rows),activatedAt:timestamp,updatedAt:timestamp});
+    return model?{reference:candidate,model}:null;
+  }
+
   function normalizeReferenceState(value={}){
     const raw=value&&typeof value==='object'?value:{};
-    const normalized=baseNormalize(raw);
+    let normalized=baseNormalize(raw);
     let publishedModel=normalizePublishedModel(raw.publishedModel)||legacyPublishedModel(raw,normalized);
     if(publishedModel&&publishedModel.dna.calibrationVersion!==2)publishedModel=recalibratePublishedModel(publishedModel,normalized);
-    const explicitDirty=raw.draftDirty===true;
+    let analysisRecovered=false;
+    const completedAnalysisPending=raw.draftDirty===true&&clean(normalized.analyzedAt)&&(!clean(publishedModel?.updatedAt)||Date.parse(normalized.analyzedAt)>Date.parse(publishedModel.updatedAt));
+    if(!publishedModel||completedAnalysisPending){const automatic=automaticallyActivateAnalyzedReference(normalized);if(automatic){normalized=automatic.reference;publishedModel=automatic.model;analysisRecovered=true;}}
+    const explicitDirty=raw.draftDirty===true&&!analysisRecovered;
     const implicitDirty=Boolean(publishedModel&&(!normalized.activated||!normalized.dna||normalized.fingerprint!==publishedModel.fingerprint));
     return {
       ...normalized,
@@ -141,11 +168,11 @@
   }
 
   function applyRefreshedAnalysis(state={},analyses={},analyzedAt=new Date().toISOString()){
-    const previous=normalizeReferenceState(state),wasActive=Boolean(previous.publishedModel?.active&&previous.publishedModel.sourceRows?.length===previous.rows.length&&previous.rows.every(row=>previous.publishedModel.sourceRows.some(old=>old.id===row.id&&old.website===row.website)));
-    const supportedRows=previous.rows.filter(row=>analyses[row.id]?.sourceEvidence?.some(item=>['broadIndustry','productionModel','capabilities'].includes(item.field)));
+    const previous=normalizeReferenceState(state);
+    const supportedRows=previous.rows.filter(row=>hasSupportedCompanyEvidence(row,analyses[row.id]));
     const segmentation=Ref.buildReferenceSegments(previous.rows,analyses);
     let next=markReferenceDraftChanged({...previous,analyses,segments:segmentation.segments,segmentationMeaningful:segmentation.meaningful,analyzedAt});
-    if(wasActive&&supportedRows.length){
+    if(supportedRows.length){
       next=activateReferenceCustomers(next,supportedRows.map(row=>row.id));const supportedIds=new Set(supportedRows.map(row=>row.id));next.activeSegmentIds=next.segments.filter(segment=>segment.canActivate!==false&&segment.rowIds?.length&&segment.rowIds.every(id=>supportedIds.has(id))).map(segment=>segment.id);next.fingerprint=`${next.fingerprint}:analysis:${analyzedAt}`;next.dna=Ref.buildReferenceDna(next,next.analyses);
       next=publishReferenceModel(next);next.publishedModel.sourceRows=clone(previous.rows);
     }
@@ -169,7 +196,7 @@
     return baseGetActive(normalized);
   }
 
-  Ref.libraryRuntimeVersion='20260930-reference-activation-v6';
+  Ref.libraryRuntimeVersion='20261101-reference-auto-v1';
   Ref.normalizeReferenceState=normalizeReferenceState;
   Ref.activateReferenceCustomers=activateReferenceCustomers;
   Ref.activateReferenceSegments=activateReferenceSegments;

@@ -360,11 +360,12 @@ test('updated workflow research persists every AI review signature input for a s
 test('automatic context respects explicit inactive or empty reference portfolios while retaining legacy migration',()=>{
  const rows=globalThis.LeadIntelReferenceCustomers.normalizeImportedRows([{companyName:'Reference',website:'https://reference.example'}]),dna={active:true,calibrationVersion:2,dimensions:[{key:'industry',values:['manufacturing']}]};
  const reference={rows,activeIds:rows.map(row=>row.id),activated:true,fingerprint:'published-ref',dna,publishedModel:{active:true,activeRows:rows,fingerprint:'published-ref',dna}};
- for(const lists of [[],[{id:'inactive',name:'Inactive',active:false,reference}]]){
+ for(const lists of [[],[{id:'inactive',name:'Inactive',active:false,analysisAutoActivated:true,reference}]]){
   const context=approvedContext({...main,referenceCustomers:reference,referenceCustomerPortfolio:{lists}});
   assert.equal(context.profile.referenceSimilarityModel,null,'inactive saved portfolio cannot revive its editor model');
  }
  assert.ok(approvedContext({...main,referenceCustomers:reference}).profile.referenceSimilarityModel,'legacy-only active models remain available');
+ assert.ok(approvedContext({...main,referenceCustomerPortfolio:{lists:[{id:'legacy-off',active:false,reference}]}}).profile.referenceSimilarityModel,'legacy Off defaults migrate to the automatically usable model');
  const draft={...reference,activated:false,activeIds:[],dna:null,draftDirty:true};
  const published=approvedContext({...main,referenceCustomers:draft,referenceCustomerPortfolio:{lists:[{id:'published',name:'Published',active:true,reference:draft}]}}).profile.referenceSimilarityModel;
  assert.equal(published?.models[0]?.fingerprint,'published-ref','saved publication survives an unactivated working draft in the backend runtime');
