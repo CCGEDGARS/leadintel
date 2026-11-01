@@ -42,5 +42,5 @@ test('a specific selected offer narrows priorities instead of expanding to every
 });
 
 test('the research engine keeps twelve fields even before the optional schema has loaded',()=>{
- const vm=require('node:vm'),fs=require('node:fs'),scope={};vm.runInNewContext(fs.readFileSync(require.resolve('../company-research-engine.js'),'utf8'),scope);const engine=scope.LeadIntelCompanyResearch;assert.equal(engine.QUESTION_IDS.length,12);const prompt=engine.buildAiPrompt({uiLanguage:'en'});assert.match(prompt.prompt,/delivery_approach/);assert.match(prompt.prompt,/meeting_value/);
+ const vm=require('node:vm'),fs=require('node:fs'),scope={};vm.runInNewContext(fs.readFileSync(require.resolve('../company-research-engine.js'),'utf8'),scope);const engine=scope.LeadIntelCompanyResearch;assert.equal(engine.QUESTION_IDS.length,12);const prompt=engine.buildAiPrompt({uiLanguage:'en'});assert.match(prompt.prompt,/delivery_approach/);assert.match(prompt.prompt,/meeting_value/);assert.match(prompt.prompt,/Tenders are excluded by default/);
 });
