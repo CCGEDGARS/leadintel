@@ -37,3 +37,8 @@ test('reference activation requires at least one company, never an empty active 
   const lens=L.syncReferenceLookalikeIcp([{id:'icp-reference-lookalike',active:false,requestedActive:false}],{},model)[0];assert.equal(lens.active,true);assert.equal(lens.referenceCount,1);
  }
 });
+test('Undo cannot re-enable a deleted active signal while earlier steps are incomplete',()=>{
+ const state={...ready(),approved:false,market:{signals:[],lastRemovedSignal:{signal:{id:'s',name:'Expansion',active:true}}}};let pointed,reads=0;
+ const scope={state,LeadIntelMarket:M,LeadIntelTargeting:{isConfirmed:()=>true},pointToStrategyRequirement:r=>pointed=r,readMarketEdits:()=>reads++};vm.createContext(scope);vm.runInContext(part('function undoRemoveSignal(){','async function waitForMarketServerBridge('),scope);scope.undoRemoveSignal();
+ assert.equal(reads,0);assert.equal(pointed.id,'approve-profile');assert.equal(state.market.signals.length,0);assert.equal(state.market.lastRemovedSignal.signal.id,'s');
+});
