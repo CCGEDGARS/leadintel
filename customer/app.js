@@ -165,6 +165,9 @@ function addCustomTargetMarket(){
 function syncInputsFromState(){
   $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
   document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();renderTargetingConfirmation();brandIdentityUI?.sync?.(state.brandIdentity);
+  // Activation may render before authenticated hydration restores the URL field.
+  // Refresh its display after restoring inputs without scraping or saving again.
+  window.LeadIntelWebsiteActivation?.render?.();
 }
 
 function brandIdentityPublicEvidence(){
@@ -1658,7 +1661,9 @@ function bind(){
     readSources();
   });
   $("company-website").addEventListener("change",readSources);
-  $("additional-links").addEventListener("input",readSources);
+  // The optional Setup simplifier can remove this retired control before the
+  // verified app starts. Keep binding activation and the remaining journey.
+  $("additional-links")?.addEventListener("input",readSources);
   $("target-market-selector").addEventListener("click",e=>{
     const chip=e.target.closest("[data-target-market]");if(chip){toggleTargetMarket(chip.dataset.targetMarket);return;}
     const remove=e.target.closest("[data-remove-target-market]");if(remove){toggleTargetMarket(remove.dataset.removeTargetMarket);}
