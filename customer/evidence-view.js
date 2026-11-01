@@ -1,6 +1,6 @@
 if(typeof window!=="undefined"){
   void import('./company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1')
-    .then(()=>import('./canonical-intelligence.js?v=20260909-canonical-profile-v5&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1'))
+    .then(()=>import('./canonical-intelligence.js?v=20260909-canonical-profile-v5&accepted-context=20261101-v1&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1'))
     .then(()=>import('./reference-customers.js?v=20260927-opportunity-map-durable-v1&target-segments=1&target-status=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&profile-audit=20261030-v1'))
     .then(()=>import('./canonical-profile-runtime.js?v=20260909-canonical-profile-v5&profile-review=20261001-v2&profile-repair=20261002-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1'))
     .then(()=>import('./intelligence-profile-ui.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1'))

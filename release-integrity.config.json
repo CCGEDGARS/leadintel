@@ -6735,6 +6735,17 @@
       "contains": [
         "event-website=20261101-v1"
       ]
+    },
+    {
+      "id": "accepted-profile-context",
+      "type": "text",
+      "url": "/customer/canonical-intelligence.js",
+      "status": 200,
+      "contains": [
+        "if(reviewed&&provenance==='ai_inference'",
+        "originalProvenance:provenance",
+        "approvedAs:'targeting_context'"
+      ]
     }
   ],
   "retry": {

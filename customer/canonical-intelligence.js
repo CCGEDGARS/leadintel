@@ -61,9 +61,9 @@
   function reconcileField(fieldKey,candidates=[]){
     const usable=(candidates||[]).map((item,index)=>({...item,value:clean(item?.value),provenance:PRECEDENCE[item?.provenance]!==undefined?item.provenance:'unknown',_index:index})).filter(item=>item.value);
     if(!usable.length)return fieldRecord('',{status:'unknown',provenance:'unknown',confidence:'low'});
-    usable.sort((a,b)=>(PRECEDENCE[b.provenance]-PRECEDENCE[a.provenance])||(confidenceRank(b.confidence)-confidenceRank(a.confidence))||(a._index-b._index));
+    usable.sort((a,b)=>((b.approvedAs==='targeting_context'?PRECEDENCE.user:PRECEDENCE[b.provenance])-(a.approvedAs==='targeting_context'?PRECEDENCE.user:PRECEDENCE[a.provenance]))||(confidenceRank(b.confidence)-confidenceRank(a.confidence))||(a._index-b._index));
     const winner=usable[0];
-    return fieldRecord(winner.value,{status:winner.status||defaultStatus(winner.provenance),provenance:winner.provenance,sourceIds:winner.sourceIds||winner.evidenceIds||[],confidence:winner.confidence||defaultConfidence(winner.provenance),updatedAt:winner.updatedAt});
+    return {...fieldRecord(winner.value,{status:winner.status||defaultStatus(winner.provenance),provenance:winner.provenance,sourceIds:winner.sourceIds||winner.evidenceIds||[],confidence:winner.confidence||defaultConfidence(winner.provenance),updatedAt:winner.updatedAt}),...(winner.approvedAs?{approvedAs:winner.approvedAs,originalProvenance:winner.originalProvenance}:{})};
   }
   function confidenceRank(value){return ({high:3,medium:2,low:1})[String(value||'').toLowerCase()]||0;}
   function defaultStatus(provenance){return provenance==='user'?'user_confirmed':provenance==='document'||provenance==='website'?'first_party_evidence':provenance==='ai_inference'?'ai_inferred_first_party':'unknown';}
@@ -83,6 +83,7 @@
     if(marker==='user')return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
     if(['accepted','draft','evidence_draft','hypothesis_draft','research','ai','inferred'].includes(marker)||clean(meta.origin).toLowerCase()==='research'){
       const provenance=researchProvenance(meta,input);const reviewed=Boolean(meta.reviewed||marker==='accepted');const sourceIds=uniq(meta.sourceIds||meta.source_ids||[]);
+      if(reviewed&&provenance==='ai_inference'&&!['evidence_draft','research'].includes(clean(meta.origin).toLowerCase()))return {value,provenance,status:'user_confirmed',approvedAs:'targeting_context',originalProvenance:provenance,confidence:confidence(meta.confidence,'medium'),sourceIds:uniq([...sourceIds,`U:${answerKey}:accepted`])};
       return {value,provenance,status:reviewed&&provenance!=='ai_inference'?'first_party_evidence':'needs_confirmation',confidence:confidence(meta.confidence,provenance==='document'?'high':'medium'),sourceIds:sourceIds.length?sourceIds:[`AI:${answerKey}`]};
     }
     return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};

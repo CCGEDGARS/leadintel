@@ -98,3 +98,20 @@ test('buildCanonicalProfile keeps compatibility values generated from canonical 
   assert.equal(profile.canonical.fields.customerPainPoints.status,'ai_inferred_first_party');
   assert.equal(profile.canonical.version,1);
 });
+
+test('accepted inferred answers become reviewed targeting context without claiming website verification',()=>{
+ for(const industry of ['industrial manufacturing','legal services','software consulting']){
+  const answers={ideal_customer:industry+' businesses',buying_outcomes:'Reduce project delays',buying_triggers:'New projects',buyer_roles:'Operations Director'};
+  const answerStatus=Object.fromEntries(Object.keys(answers).map(k=>[k,'accepted']));
+  const researchMeta={fields:Object.fromEntries(Object.keys(answers).map(k=>[k,{origin:'hypothesis_draft',reviewed:true,sourceIds:['AI:'+k]}]))};
+  const p=Canonical.buildCanonicalProfile({answers,answerStatus,researchMeta},{});
+  for(const field of ['idealCustomer','customerPainPoints','buyingTriggers','decisionMakers']){
+   assert.equal(p.canonical.fields[field].status,'user_confirmed',field);
+   assert.equal(p.canonical.fields[field].approvedAs,'targeting_context');
+   assert.equal(p.canonical.fields[field].originalProvenance,'ai_inference');
+   assert.equal(p.canonical.diagnostics.find(d=>d.field===field).state,'known');
+  }
+  const draft=Canonical.buildCanonicalProfile({answers,answerStatus:Object.fromEntries(Object.keys(answers).map(k=>[k,'hypothesis_draft'])),researchMeta:{fields:{}}},{});
+  assert.equal(draft.canonical.fields.idealCustomer.status,'needs_confirmation');
+ }
+});
