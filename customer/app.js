@@ -620,12 +620,10 @@ function renderIcps(){
     const requested=typeof icp.requestedActive==="boolean"?icp.requestedActive:icp.active!==false;
     const status=!requirement.available?"blocked":icp.active?"active":"off";
     const statusTitle=!requirement.available?(requested?"Temporarily unavailable":"Setup required"):icp.active?"Active":"Off";
-    const statusMessage=!requirement.available?(requested?"Your On choice is saved. This profile will activate automatically when qualifying evidence is available. ":"")+requirement.reason:icp.active?"This profile is used to find and qualify companies.":"This profile won’t be used to find or qualify companies. Turn it on to use it.";
-    const profileMeaning=({core:"Find companies that match your approved ideal customer profile.","trigger-led":"Find companies that match your ideal customer profile and show relevant buying signals.","opportunity-led":"Find companies with a verified commercial opportunity, even outside your core customer profile.",lookalike:"Find companies similar to your reference customers, then check their fit and buying signals."})[icp.type]||"Use this customer profile to guide company discovery and qualification.";
+    const statusMessage=!requirement.available?(requested?"Your On choice is saved. This profile will activate automatically when qualifying evidence is available. ":"")+requirement.reason:icp.active?LeadIntelMarket.profilePurposeHeadline(icp,state.profile,state.market):"This profile won’t be used to find or qualify companies. Turn it on to use it.";
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
     <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" aria-label="Use ${esc(icp.name)}" ${requested?"checked":""} ><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}" ${icp.active?"":"disabled"}></div></div>
-    <div class="strategy-setting-status icp-state-notice ${status==="blocked"?"icp-unlock-hint":""}" data-state="${status}" role="status"><strong>${statusTitle}</strong><span>${esc(statusMessage)}</span>${requirement.available?"":`<button type="button" data-icp-id="${esc(icp.id)}" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button>`}</div>
-    <p class="icp-purpose"><strong>${esc(profileMeaning)}</strong></p>
+    <div class="strategy-setting-status icp-state-notice ${status==="blocked"?"icp-unlock-hint":""}" data-state="${status}" role="status"><strong>${statusTitle}</strong><span class="icp-purpose">${icp.active&&requirement.available?`<strong>${esc(statusMessage)}</strong>`:esc(statusMessage)}</span>${requirement.available?"":`<button type="button" data-icp-id="${esc(icp.id)}" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button>`}</div>
     <fieldset class="icp-edit-fields" ${icp.active?"":"disabled"}><legend class="sr-only">${esc(icp.name)} settings</legend><label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
@@ -1706,7 +1704,7 @@ function bind(){
     const button=event.target.closest("[data-icp-unlock]");if(!button)return;
     requestIcpActivation(button.dataset.icpId);
   });
-  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
+  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderIcps();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",openResetCenter);
   document.querySelectorAll("[data-close-reset-center]").forEach(node=>node.addEventListener("click",closeResetCenter));
   $("reset-new-company").addEventListener("click",resetCompanyWorkspace);
