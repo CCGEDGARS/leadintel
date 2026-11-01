@@ -164,6 +164,11 @@ export async function handleAiRoute(request,env,cors={}){
       return json({saved:true,primary_provider:primary,secondary_provider:secondary},200,cors);
     }catch{return error('Research settings storage unavailable',503,cors);}
   }
+  if(path==='/api/ai/company-dossier'&&request.method==='GET'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const domain=globalThis.LeadIntelCompanyDossier.domain(url.searchParams.get('domain'));if(!domain)return error('Company domain required',400,cors);
+    try{await assertResearchCurrent(request,env,workspaceId,access.user.id);const saved=await env.DB.prepare('SELECT payload_json,updated_at FROM workspace_company_dossiers WHERE workspace_id=? AND domain=?').bind(workspaceId,domain).first();const dossier=globalThis.LeadIntelCompanyDossier.safe(JSON.parse(saved?.payload_json||'null'),domain);await assertResearchCurrent(request,env,workspaceId,access.user.id);return json({dossier,updatedAt:saved?.updated_at?String(saved.updated_at).replace(' ','T')+'Z':''},200,{...cors,'Cache-Control':'no-store'});}catch{return error('Research progress unavailable',503,cors);}
+  }
   if(path==='/api/ai/company-dossier'&&request.method==='POST'){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);if(!body?.company||JSON.stringify(body).length>140000)return error('Bounded company research context required',400,cors);

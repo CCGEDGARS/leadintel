@@ -43,3 +43,7 @@ test('a complete cached dossier is revalidated before reuse without repeating su
  const result=await runDossierResearch({...common,prior,search:async()=>{calls++;throw Error('Must reuse settled research');}});
  assert.equal(calls,0);assert.equal(result.people[0].name,'Alex Smith');assert.equal(result.status,'complete');
 });
+test('stalled researchers stop at their deadlines and return resumable incomplete coverage',async()=>{
+ const started=Date.now();const result=await runDossierResearch({connections:connections.slice(0,2),company:{company:'Example',domain:'example.com'},timeoutMs:15,search:()=>new Promise(()=>{}),read:()=>{throw Error('must not read');},extract:()=>{throw Error('must not extract');}});
+ assert.ok(Date.now()-started<1000);assert.equal(result.status,'partial');assert.equal(result.receipts.filter(r=>r.status==='failed').length,2);assert.equal(result.coverage.providers.some(r=>r.completed>0),false);
+});

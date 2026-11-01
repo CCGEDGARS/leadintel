@@ -44,3 +44,6 @@ test('Show confirmed contact opens the enclosing other-contacts disclosure',()=>
  const ctx={$:()=>row,document:doc};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerControlTargetCurrent('),source.indexOf('async function withBuyerControlFocus(')),ctx);vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),ctx);
  row.querySelector('[data-show-confirmed-buyers]').click();assert.equal(target.open,true);assert.equal(other.open,true);dom.window.close();
 });
+test('active decision-maker research appears once above the dossier',()=>{
+ const {doc}=render({loading:true,empty:true}),header=doc.querySelector('.selected-prospect-company');assert.match(header.nextElementSibling.textContent,/Researching decision-makers/);assert.ok(header.nextElementSibling.nextElementSibling.classList.contains('company-dossier'));assert.equal([...doc.querySelectorAll('[role="status"]')].filter(el=>el.textContent==='Researching decision-makers…').length,1);
+});
