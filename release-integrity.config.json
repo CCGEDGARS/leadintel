@@ -6820,6 +6820,27 @@
         "import './reference-customer-library.js?v=20260924-reference-consensus-v1",
         "reference-auto=20261101-v1"
       ]
+    },
+    {
+      "id": "research-choice-aligned-row",
+      "type": "text",
+      "url": "/customer/market.css",
+      "status": 200,
+      "contains": [
+        "#market-research-workbench .research-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important",
+        "grid-template-rows:112px 1fr",
+        "@media(max-width:760px)"
+      ]
+    },
+    {
+      "id": "research-notice-outside-choice",
+      "type": "text",
+      "url": "/customer/targeting-policy.js",
+      "status": 200,
+      "contains": [
+        "target.closest?.('.research-actions')",
+        "(researchChoices?.parentNode||target.parentNode)?.insertBefore(notice,researchChoices||target)"
+      ]
     }
   ],
   "retry": {

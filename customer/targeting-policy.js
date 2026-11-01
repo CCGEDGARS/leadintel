@@ -14,7 +14,7 @@
       const target=options.id?doc.getElementById(options.id):doc.querySelector(options.selector);
       if(!target)return;
       doc.getElementById('required-action-notice')?.remove();
-      const notice=doc.createElement('div');notice.id='required-action-notice';notice.className='required-action-notice';notice.setAttribute('role','alert');notice.textContent=options.message||'Complete this required step before continuing.';target.parentNode?.insertBefore(notice,target);
+      const notice=doc.createElement('div');notice.id='required-action-notice';notice.className='required-action-notice';notice.setAttribute('role','alert');notice.textContent=options.message||'Complete this required step before continuing.';const researchChoices=target.closest?.('.research-actions');(researchChoices?.parentNode||target.parentNode)?.insertBefore(notice,researchChoices||target);
       target.classList?.add('required-action-focus');target.scrollIntoView?.({behavior:'smooth',block:'center'});target.focus?.({preventScroll:true});
     };
     if(root.requestAnimationFrame)root.requestAnimationFrame(focus);else focus();
