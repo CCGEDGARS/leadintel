@@ -24,7 +24,8 @@
       name:clean(value.name)||'Untitled reference list',
       markets:[...new Set((Array.isArray(value.markets)?value.markets:String(value.markets||'').split(/\n|;|,/)).map(clean).filter(Boolean))].slice(0,12),
       purpose:clean(value.purpose),
-      active:Boolean(value.active&&reference.publishedModel?.active),
+      active:Boolean(reference.publishedModel?.active&&(value.active||value.analysisAutoActivated!==true)),
+      analysisAutoActivated:Boolean(value.analysisAutoActivated||reference.publishedModel?.active),
       reference,
       createdAt:clean(value.createdAt)||new Date().toISOString(),
       updatedAt:clean(value.updatedAt)||new Date().toISOString()

@@ -1,6 +1,6 @@
 import './first-party-research.js?v=20260930-research-pipeline-v2';
-import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&list-lifecycle=20261002-v1&qualification-context=20261020-v1';
+import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&reference-auto=20261101-v1';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&list-lifecycle=20261002-v1&qualification-context=20261020-v1&reference-auto=20261101-v1';
 import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&profile-market=20261001-v1&list-lifecycle=20261002-v1';
 import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5&list-lifecycle=20261002-v1&profile-audit=20261030-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=5';
@@ -101,7 +101,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     const synced=await root.LeadIntelServerBridge.saveNow?.({saveIntent:true});
     if(synced?.saved!==true)throw new Error('Analysis finished, but the result has not synced to your workspace. Check workspace sync before continuing.');
     const usableCount=Object.values(result.analyses).filter(analysis=>analysis.sourceEvidence?.some(item=>['broadIndustry','productionModel','capabilities'].includes(item.field))).length;
-    status(`AI analysis complete · ${usableCount}/${ready.length} references have quoted commercial evidence · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the reference profiles. ${state.referenceCustomers.draftDirty?'Previous model retained; review and activate the new analysis.':state.referenceCustomers.publishedModel?.active?'Refreshed evidence is active in company discovery.':'Select and activate the profile to use it in discovery.'}`);
+    status(`AI analysis complete · ${usableCount}/${ready.length} references have quoted commercial evidence · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the reference profiles. ${state.referenceCustomers.draftDirty?'Previous usable model retained; review the incomplete analysis.':state.referenceCustomers.publishedModel?.active?'Refreshed evidence is active in company discovery.':'No usable reference model yet; review the missing company evidence.'}`);
   }
   document.addEventListener('click',async event=>{
     const button=(event.target?.closest?.('#reference-analyze')||event.target?.closest?.('[data-refresh-reference-analysis]'));if(!button)return;

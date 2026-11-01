@@ -19,7 +19,8 @@ test('reading active models never traverses unrelated workspace research or the 
   model.models[0].dna.dimensions[0].values.push('Changed by consumer');
   assert.deepEqual(Portfolio.getCombinedActiveModel(state).dna.dimensions[0].values,['B2B services']);
   state.referenceCustomerPortfolio.lists[0].active=false;
-  assert.equal(Portfolio.getCombinedActiveModel(state),null,'activation changes take effect immediately');
+  assert.ok(Portfolio.getCombinedActiveModel(state),'a legacy Off flag cannot hide usable analyzed references');
+  const selected={referenceCustomerPortfolio:{...state.referenceCustomerPortfolio,selectedListId:'saved'}};const deactivated=Portfolio.setListActive(selected,'saved',false);assert.equal(Portfolio.getCombinedActiveModel(deactivated),null,'explicit source-list exclusion remains available after automatic migration');
 });
 
 test('a current reference customer draft can be saved as a named list without activating it',()=>{

@@ -197,3 +197,12 @@ for(const stateKind of ['deactivated','empty','deleted','active','legacy'])test(
 test('an explicit portfolio cannot bypass deactivation while its runtime is unavailable',()=>{
   const state=publishedWorkspace();assert.equal(strategyAvailability(state,false),false);assert.equal(Boolean(discoveryProfile(state,false).referenceSimilarityModel),false);
 });
+test('completed supported AI analysis activates the saved model used by both Strategy and Discovery',async()=>{
+ const r=analysisRuntime();r.root.LeadIntelReferenceCustomerAI.requestReferenceCustomerAnalysis=async()=>({analyses:{[r.row.id]:{analysisVersion:4,broadIndustry:'Specialist equipment',confidence:'medium',sourceEvidence:[{field:'broadIndustry',quote:'We provide specialist equipment and services.',url:r.row.website}]}},segmentationMeaningful:false});
+ await r.run();const saved=r.read();assert.equal(saved.referenceCustomerPortfolio.lists[0].active,true);assert.equal(saved.referenceCustomers.draftDirty,false);assert.equal(strategyAvailability(saved),true);assert.equal(discoveryProfile(saved).referenceSimilarityModel.activeCount,1);
+});
+test('already saved supported analysis repairs the Strategy and Discovery handoff without another research run',()=>{
+ const r=analysisRuntime(),state=r.read();state.referenceCustomers.analyses={[r.row.id]:{analysisVersion:4,broadIndustry:'Equipment manufacturing',confidence:'medium',sourceEvidence:[{field:'broadIndustry',quote:'We manufacture specialist industrial equipment.',url:r.row.website}]}};
+ const list=state.referenceCustomerPortfolio.lists[0];list.reference=state.referenceCustomers;list.active=false;
+ assert.equal(strategyAvailability(state),true);assert.equal(discoveryProfile(state).referenceSimilarityModel.activeCount,1);
+});
