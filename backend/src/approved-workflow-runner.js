@@ -85,7 +85,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   const priorPeople=priorRecords.flatMap(item=>[...(item.buyerDiscovery?.pool||[]),...(item.people||[])]);
   const accountability=discovery.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability};
   const dossierPlan=discovery.buyerResearchPlan(candidate,{...seller,decisionMakers:config.buyers.roles.join('; ')});
-  const companyDossier=await researchDossier(env,workspaceId,{company:candidate.company,domain:candidate.domain,seller:JSON.parse(discovery.buyerFitContext(seller)),roles:dossierPlan.roles,formulas:dossierPlan.queries,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||''},{guard});
+  const companyDossier=await researchDossier(env,workspaceId,{company:candidate.company,domain:candidate.domain,seller:JSON.parse(discovery.buyerFitContext(seller)),roles:dossierPlan.roles,formulas:dossierPlan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||''},{guard});
   await guard();candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier};
   if(companyDossier.status!=='complete'){candidate.buyerDiscovery.researchIncomplete=true;return null;}
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard,accountability);
