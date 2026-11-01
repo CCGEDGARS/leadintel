@@ -6852,6 +6852,17 @@
         "grid-template-rows:100px 1fr!important",
         "@media(max-width:760px)"
       ]
+    },
+    {
+      "id": "research-choice-title-alignment",
+      "type": "text",
+      "url": "/customer/market.css",
+      "status": 200,
+      "contains": [
+        "#market-research-workbench .research-mode-title{position:absolute;top:calc(50% - 10px)",
+        "#market-research-workbench .research-mode-badge{position:absolute!important;top:calc(50% + 14px)",
+        "width:100%;transform:none;margin:0;padding:0;background:transparent;text-align:center"
+      ]
     }
   ],
   "retry": {
