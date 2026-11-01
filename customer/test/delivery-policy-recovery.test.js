@@ -26,3 +26,29 @@ test('intentless bridge save delegates to persistence owner instead of rejected 
  vm.createContext(context);vm.runInContext(text.slice(text.indexOf('async function saveNow('),text.indexOf('async function saveWorkspaceState(')),context);const result=await context.saveNow();assert.equal(result.saved,true);assert.equal(result.version,9);assert.equal(context.saved,true);
  context.bridge.session.authenticated=false;context.saved=false;assert.equal((await context.saveNow()).saved,false);assert.equal(context.saved,false);
 });
+
+for(const timing of ['during load','after load'])test(`mailbox status arriving ${timing} restores selectable preferences without changing permissions`,async()=>{
+ const {JSDOM}=require('jsdom');
+ const dom=new JSDOM('<section class="source-panel"><input id="pdf-input"></section>',{url:'https://fixture.test',runScripts:'outside-only'}),w=dom.window;
+ await new Promise(resolve=>w.document.readyState==='complete'?resolve():w.addEventListener('load',resolve,{once:true}));
+ let finish,started,reads=0,writes=0;
+ const first=new Promise(resolve=>{finish=resolve;}),requestStarted=new Promise(resolve=>{started=resolve;});
+ const payload={ok:true,role:'owner',policy:{mode:'manual',preferredMode:'manual',enabled:false,workspaceDailyLimit:5}};
+ const b={ready:true,workspace:{id:'w',role:'owner'},session:{authenticated:true,user:{id:'owner'}},gmail:{connected:false},getOutreachAutomationPolicy:()=>{reads++;started();return timing==='during load'&&reads===1?first:Promise.resolve(payload);},getOutreachAutomationStatus:async()=>({ok:true,role:'owner'}),listSuppressedContacts:async()=>({ok:true,contacts:[]}),saveOutreachAutomationPolicy:async()=>{writes++;return {ok:true};}};
+ w.LeadIntelServerBridge=b;
+ try{
+  w.eval(source);await requestStarted;
+  if(timing==='after load')await new Promise(resolve=>setImmediate(resolve));
+  b.gmail={connected:true,email:'owner@fixture.test',role:'owner'};
+  w.dispatchEvent(new w.CustomEvent('leadintel:gmail-status'));
+  finish(payload);
+  for(let i=0;i<5;i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(reads>=2,'mailbox changes must reload policy after invalidating the original request');
+  const radio=w.document.querySelector('[name="delivery-setup-mode"][value="automatic"]');
+  assert.ok(radio);assert.equal(radio.closest('fieldset').disabled,false);
+  assert.doesNotMatch(w.document.getElementById('delivery-setup').textContent,/Loading delivery settings/);
+  assert.equal(w.document.querySelector('[name="delivery-setup-mode"]:checked').value,'manual');
+  assert.equal(w.LeadIntelOutreachAutomationUI.getPolicy().enabled,false);
+  assert.equal(writes,0,'recovery must not save a plan, enable sending or grant paid permission');
+ }finally{w.close();}
+});
