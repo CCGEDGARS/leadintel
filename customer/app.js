@@ -19,7 +19,9 @@ const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
 const RESET_CONFIRM_WINDOW_MS=30000;
 const ANALYSIS_SOURCE_TIMEOUT_MS=25000;
-const STRATEGY_SAVE_TIMEOUT_MS=10000;
+// Cover the existing lock (15s), codec (30s), request (30s) and durable
+// snapshot (30s) stages. Await their acknowledgement before opening Companies.
+const STRATEGY_SAVE_TIMEOUT_MS=120000;
 const STRATEGY_RECOVERY_KEY='leadintel_customer_v2_strategy_recovery_v1';
 const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[

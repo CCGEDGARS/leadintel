@@ -17,3 +17,9 @@ Behavioral regressions reproduce a 108-page checkpoint above 8 MB failing the na
 The first acceptance tab was kept open during implementation. New production acceptance must verify research completion, saved results and a reload without automatically repeating provider work. Retained earlier evidence must remain distinct from newly acquired/qualified companies. No contact-credit purchase or outreach is authorized by this fix.
 
 Rollback requires a codec-aware reader: retain the new reader/account fence until any new local frames have been migrated. Do not restore an older browser decoder over active new-format sections. Existing legacy frames remain readable.
+
+## Acceptance follow-up: Strategy save deadline
+
+Release `94abf18f76c81450efca093aabf294723ae82e2b` passed exact production proof (577/577 smoke checks). Authenticated research completed with 8 checked companies, showing the requested top 5; the run used 98/200 Firecrawl calls and retained 259 evidence results. A full reload restored identical company headings and the entire Boliden evidence card without starting another search.
+
+Repeating Continue then exposed a separate 10-second Strategy wrapper deadline. The existing save pipeline may legitimately spend up to 15 seconds acquiring the save lock, 30 seconds packing, 30 seconds on the request and 30 seconds storing the acknowledged recovery snapshot. The wrapper could report failure and revoke approval while the underlying save was still succeeding. Its bounded envelope now allows 120 seconds; all component deadlines and the requirement for a positive save acknowledgement remain. A controlled-clock regression proves an acknowledgement after eleven seconds opens once, while a hung save still fails closed and a late acknowledgement cannot navigate or start research. The follow-up must verify the actual repeat-button action against the retained large workspace.
