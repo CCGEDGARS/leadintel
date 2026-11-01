@@ -2642,11 +2642,11 @@
     return count?"complete":"no_results";
   }
 
-  function zeroResultGuidance({evidenceCount=0,evidencePages=0,companiesIdentified=null,extractionStatus="idle",activeSignalCount=0,targetCount=10,researchMode="deep",adaptiveFollowUpSearches=0,savingMode=false,companySitesChecked=0}={}){
+  function zeroResultGuidance({evidenceCount=0,evidencePages=0,companiesIdentified=null,extractionStatus="idle",activeSignalCount=0,targetCount=5,researchMode="deep",adaptiveFollowUpSearches=0,savingMode=false,companySitesChecked=0}={}){
     const evidence=Math.max(0,Number(evidenceCount)||0);
     const identified=Number(companiesIdentified);
     const signals=Math.max(0,Number(activeSignalCount)||0);
-    const target=Math.max(1,Number(targetCount)||10);
+    const target=Math.max(1,Number(targetCount)||5);
     if(evidence>0&&companiesIdentified!==null&&companiesIdentified!==undefined&&Number.isFinite(identified)&&identified===0){
       const extractionUnavailable=extractionStatus==="fallback";
       return {
@@ -2665,9 +2665,9 @@
     const signalStep=signals<3
       ? "Open Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
       : "Open Strategy and broaden narrow ICP or signal keywords so they describe observable buyer events, not only one exact phrase.";
-    const amountStep=target===10
-      ? "Return to Companies, keep the search at 10 companies, and run it again. Increase the amount only after qualified results appear."
-      : "Return to Companies, return to 10 companies, and run it again. Increase the amount only after qualified results appear.";
+    const amountStep=target===5
+      ? "Return to Companies, keep the search at 5 companies, and run it again. Increase the amount only after qualified results appear."
+      : "Return to Companies, return to 5 companies, and run it again. Increase the amount only after qualified results appear.";
     const quickMode=clean(researchMode)==="quick";
     const steps=[signalStep,"Confirm that at least one active ICP describes the intended buyers, rather than companies that merely resemble your own supplier profile."];
     if(quickMode)steps.unshift("Quick Overview uses a smaller market evidence set. Run Market Research in Profile, then run the Companies search again.");

@@ -39,7 +39,7 @@ test('discovery controls restore a saved preset or custom count on mount',()=>{
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
  const restore=source.match(/function restoreDiscoveryTarget\(\)\{([^\n]*)\}/)[0];
  const control={value:'5'},custom={};let meta={targetCount:20,targetMode:'preset'};
- const context={loadMeta:()=>meta,normalizedDiscoveryTarget:n=>Number(n)||10,$:id=>id==='discovery-target-count'?control:custom};
+ const context={loadMeta:()=>meta,saveMeta:value=>{meta=value;},normalizedDiscoveryTarget:n=>Number(n)||10,$:id=>id==='discovery-target-count'?control:custom};
  vm.runInNewContext(restore+';restoreDiscoveryTarget();',context);assert.equal(control.value,'20');assert.equal(custom.hidden,true);
  meta={targetCount:17,targetMode:'custom'};vm.runInNewContext('restoreDiscoveryTarget();',context);assert.equal(control.value,'custom');assert.equal(custom.value,'17');assert.equal(custom.hidden,false);
 });
