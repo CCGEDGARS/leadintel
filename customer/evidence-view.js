@@ -10,7 +10,7 @@ if(typeof window!=="undefined"){
     .catch(error=>console.error('LeadIntel intelligence runtime failed to load',error));
   void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1&rescue=20261013-v1&icp-intent=20261015-v1');
   void import('./market-research-ux.js?v=20260915-research-source-text-v1&observer-stability=20261016-v1');
-  void import('./market-research-guard.js?v=20260908-render-loop-v1');
+  void import('./market-research-guard.js?v=20260908-render-loop-v1&research-row=20261101-v1');
   void import('./market-research-review-ux.js?v=20261001-actual-plan-themes-v1&observer-stability=20261016-v1');
   void import('./market-research-provider-resilience.js?v=20260916-latency-fix-v2');
   void import('./market-query-safety.js?v=20260908-firecrawl-query-v1');

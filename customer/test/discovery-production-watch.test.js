@@ -28,6 +28,8 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
     const parsed = new URL(String(url));
     if(['/customer/evidence-policy.js','/customer/strategy-integrity.js','/customer/market-conditions-engine.js','/customer/market.css','/customer/intelligence-profile-runtime.js','/customer/canonical-profile-runtime.js','/customer/reference-customers.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/customer/commercial-profile-adviser.js','/customer/profile-adviser.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(parsed.pathname==='/customer/market-research-guard.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(parsed.pathname==='/customer/targeting-policy.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/reference-customer-library.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/canonical-intelligence.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/setup-operation-trace.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});

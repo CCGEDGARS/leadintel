@@ -416,3 +416,17 @@
 
 /* Pre-flight: research tools that are not connected, shown on the plan screen before a paid run. */
 .research-preview-providers{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:#fff4df;color:#7a4b00;font-size:13px;line-height:1.45}
+
+/* Keep the three research choices aligned, including prerequisite handoffs. */
+#market-research-workbench .market-research-head{display:block}
+#market-research-workbench .research-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;align-items:stretch!important}
+#market-research-workbench .research-mode-choice{display:grid;grid-template-rows:112px 1fr;gap:16px;padding:18px;border:1px solid #d5e1db;border-radius:16px;background:#fbfcfa;min-width:0}
+#market-research-workbench .research-mode-choice>button{position:relative;height:112px!important;min-height:112px!important;padding:16px 12px 30px!important;margin:0!important;flex:none}
+#market-research-workbench .research-mode-title{font-size:18px;line-height:1.25}
+#market-research-workbench .research-mode-badge{top:auto;bottom:10px;left:50%;right:auto;transform:translateX(-50%);padding:0;background:transparent;white-space:nowrap}
+#market-research-workbench .research-mode-description{display:flex;flex-direction:column;gap:16px;max-width:none;padding:0;margin:0;font-size:13px;line-height:1.55}
+#market-research-workbench .research-mode-source-detail{margin-top:auto}
+#market-research-workbench .required-action-notice{margin:12px 0 18px}
+@media(max-width:760px){#market-research-workbench .research-actions{grid-template-columns:1fr!important}#market-research-workbench .research-mode-choice{grid-template-rows:100px 1fr}#market-research-workbench .research-mode-choice>button{height:100px!important;min-height:100px!important}}
+
+#market-research-workbench .research-mode-choice.research-mode-selected .research-mode-badge{color:#e8d494!important}
