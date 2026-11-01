@@ -6951,6 +6951,15 @@
         "formulas:plan.dossierFormulas",
         "formulas:dossierPlan.dossierFormulas"
       ]
+    },
+    {
+      "id": "dossier-client-budget-aligned",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "timeoutMs=405000,pollMs=3000"
+      ]
     }
   ],
   "retry": {

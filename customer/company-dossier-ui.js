@@ -20,7 +20,7 @@ async function observeRequest(operation,{signal,isCurrent,onProgress,readProgres
  try{return await Promise.race([Promise.resolve().then(()=>{if(controller.signal.aborted||!isCurrent())throw Error('Company research canceled');return operation(controller.signal);}),canceled]);}
  finally{settled=true;clearTimeout(deadline);clearTimeout(pulse);signal?.removeEventListener('abort',stop);controller.abort();}
 }
-async function research(candidate,context,{request,isCurrent=()=>true,signal,persist=()=>{},force=false,onProgress,readProgress,timeoutMs=285000,pollMs=3000}={}){
+async function research(candidate,context,{request,isCurrent=()=>true,signal,persist=()=>{},force=false,onProgress,readProgress,timeoutMs=405000,pollMs=3000}={}){
  const body={company:candidate.company,domain:candidate.domain,seller:context.seller||{},roles:context.roles||[],opportunity:context.opportunity||'',formulas:context.formulas||[]},key=D.contextKey(body),prior=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain);
  if(!force&&prior?.status==='complete'&&D.coverageComplete(prior,body)&&!prior.lastAttempt&&prior.contextKey===key&&Date.now()-Date.parse(prior.checkedAt)>=0&&Date.now()-Date.parse(prior.checkedAt)<86400000)return prior;
  const pending=prior?.lastAttempt?.research||prior,resume=pending?.status==='partial'&&pending.contextKey===key&&pending.plan?.signature===D.researchPlan(body).signature&&(pending.passes||[]).some(p=>p.status!=='complete'&&(!D.passCoverageComplete(p,pending.plan)||D.selectedSourceUrls(p.searchFamilies).some(url=>!(p.extractedSources||[]).includes(url))));
