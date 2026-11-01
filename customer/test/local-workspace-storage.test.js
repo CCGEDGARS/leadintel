@@ -13,6 +13,28 @@ function runtime(values=new Map(),quota=5*1024*1024){
  vm.runInNewContext(source,root);return {root,localStorage,sessionStorage,values};
 }
 function largeOutreach(){return JSON.stringify({messages:Array.from({length:50},(_,i)=>({id:'message-'+i,body:'Keep the approved script exactly. ÄÖå € 😀\n'.repeat(1700),approved:i%2===0,source:{url:'https://source.example/'+i}}))});}
+function expandedResearch(){const sources=Array.from({length:108},(_,i)=>({url:`https://company${i}.example/operations`,text:('Source '+i+' describes production, equipment installation and engineering. Ä €\n').repeat(420),sourceRead:true}));return {status:'running',rawResults:sources,candidates:sources.map((source,i)=>({company:'Company '+i,domain:'company'+i+'.example',evidence:[source],research:{sources:[source]}})),selectedProspects:[{company:'Saved',domain:'saved.example',notes:'Preserve manual choice'}]};}
+test('a 108-page research checkpoint above 8 MB persists losslessly inside native local quota and reopens',()=>{
+ const value=JSON.stringify(expandedResearch());assert.ok(Buffer.byteLength(value)>8*1024*1024);
+ const r=runtime();assert.doesNotThrow(()=>r.localStorage.setItem(keys[1],value));assert.equal(r.localStorage.getItem(keys[1]),value);
+ assert.ok(2*r.values.get(keys[1]).length<5*1024*1024);assert.equal(runtime(r.values).localStorage.getItem(keys[1]),value);
+});
+test('large discovery cloud packing keeps every source and selected company without increasing the transfer ceiling',()=>{
+ const input={main:{website:'https://seller.example'},discovery:expandedResearch(),outreach:{draft:'Manual draft'},delivery:{},meta:{}};
+ const b=runtime().root.LeadIntelStateBudget,result=b.prepareForSync(input,{allowCompressionPacking:true,allowBundlePacking:true,maxSyncBytes:8*1024*1024});
+ assert.equal(b.MAX_SYNC_BYTES,500*1024);assert.equal(b.MAX_RECORD_SYNC_BYTES,8*1024*1024);assert.ok(result.bytes<=500*1024);assert.equal(JSON.stringify(b.restoreFromSync(result.payload))===JSON.stringify(input),true,'Every original source and manual record must round-trip exactly');
+});
+test('noncanonical large JSON preserves whitespace and escaped user wording through local reload',()=>{
+ const value='  '+JSON.stringify({notes:'Exact \\"quoted\\" wording\n'.repeat(10000)},null,2)+'\n';const r=runtime();r.localStorage.setItem(keys[1],value);assert.equal(runtime(r.values).localStorage.getItem(keys[1]),value);
+});
+test('unsupported older account codec cannot publish a new-format section',()=>{
+ const r=runtime();r.root.LeadIntelAccountCache={prepareLocalStorageCodec(){},localCodecVersion:1};r.localStorage.setItem(keys[1],'{"notes":"Existing"}');
+ assert.throws(()=>r.localStorage.setItem(keys[1],JSON.stringify({rows:Array.from({length:20},()=>({body:'Quoted evidence. '.repeat(3000)}))})),/Refresh to upgrade/);assert.equal(r.localStorage.getItem(keys[1]),'{"notes":"Existing"}');
+});
+test('new discovery references still reject expansion above their bounded research allowance',()=>{
+ const b=runtime().root.LeadIntelStateBudget,large='x'.repeat(600000);
+ assert.throws(()=>b.restoreFromSync({discovery:{format:'leadintel-discovery-refs-v2',keys:['sources'],values:[large],value:[1,0,[2,...Array.from({length:60},()=>[0,0])]]}}),/safe restore limit/);
+});
 test('outreach exceeding browser quota remains exactly readable after save and reload',()=>{
  const value=largeOutreach(),r=runtime();
  assert.ok(2*value.length>5*1024*1024);

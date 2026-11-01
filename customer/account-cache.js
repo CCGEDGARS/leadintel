@@ -110,8 +110,8 @@
   }
   function hasLegacyArchives(){for(let index=0;index<storage.length;index++)if(String(storage.key(index)).startsWith(ARCHIVE_PREFIX))return true;return false;}
   function clearActive(){for(const store of [storage,session])for(const key of Object.keys(entries(store)))remove(store,key);}
-  const LOCAL_CODEC_EPOCH='li1:';
-  function updateContext(workspaceId='',userId='',codec=String(context.epoch||'').startsWith(LOCAL_CODEC_EPOCH)){
+  const LOCAL_CODEC_EPOCH='li2:';
+  function updateContext(workspaceId='',userId='',codec=/^li[12]:/.test(String(context.epoch||''))){
     const random=root.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);
     const epoch=codec?LOCAL_CODEC_EPOCH+random.replace(/-/g,'').padEnd(32,'0').slice(0,32):random;
     const next={workspaceId,userId,epoch},nextTicket=JSON.stringify(next);
@@ -126,11 +126,11 @@
   function activate({workspaceId,userId}){
     assertAccessible();if(!workspaceId||!userId)throw new Error('Verified account and workspace are required.');
     if(context.workspaceId===workspaceId&&(!context.userId||context.userId===userId)){
-      const finish=()=>{assertCurrent();if(!context.userId)updateContext(workspaceId,userId);set(storage,WORKSPACE_KEY,workspaceId);verified=true;return {changed:false};};
+      const finish=()=>{assertCurrent();if(!context.userId||!String(context.epoch||'').startsWith(LOCAL_CODEC_EPOCH))updateContext(workspaceId,userId,true);set(storage,WORKSPACE_KEY,workspaceId);verified=true;return {changed:false};};
       return root.indexedDB&&hasLegacyArchives()?transition(()=>after(checkpoint(),()=>({...finish(),changed:true}))):finish();
     }
     return transition(()=>after(checkpoint(),()=>after(storedArchive(ARCHIVE_PREFIX+encodeURIComponent(workspaceId)),archived=>{
-      assertCurrent();clearActive();updateContext(workspaceId,userId);
+      assertCurrent();clearActive();updateContext(workspaceId,userId,true);
       if(archived?.schemaVersion===1&&archived.workspaceId===workspaceId){
         for(const [key,value] of Object.entries(archived.data||{}))if(scopedKey(key)&&typeof value==='string')set(storage,key,value);
         for(const [key,value] of Object.entries(archived.sessionData||{}))if(scopedKey(key)&&key!=='leadintel_customer_v2_server_hydration'&&typeof value==='string')set(session,key,value);
@@ -148,7 +148,7 @@
   }
   function complete(){root.document?.documentElement?.removeAttribute('data-account-check');}
   function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');const message=root.document?.getElementById?.('account-recovery-message');if(!message)return;if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){message.textContent='Your browser could not safely preserve the workspace. Keep your browser data and try again.';return;}const failure=root.LeadIntelServerBridge?.startupFailure;const code=String(failure?.code||cause?.code||'startup_failed').slice(0,80);const phase=String(failure?.phase||cause?.phase||'verification').slice(0,80);const path=String(failure?.requestPath||cause?.requestPath||'').slice(0,120);message.textContent='Startup check failed ('+code+' / '+phase+(path?' / '+path:'')+'). Your local data is preserved. Retry without clearing browser storage.';}
-  const api={afterVerification,prepareLocalStorageCodec,saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
+  const api={localCodecVersion:2,afterVerification,prepareLocalStorageCodec,saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
   root.LeadIntelAccountCache=api;
   // Protect delayed work in old tabs, even before a storage event is delivered.
   if(proto){

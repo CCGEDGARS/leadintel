@@ -1,7 +1,7 @@
 'use strict';
 // The worker receives only the value to encode. It has no workspace storage,
 // authentication, or network operations beyond loading the shared codec.
-importScripts('./state-budget.js?v=20261020-workspace-worker-v1');
+importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1');
 self.onmessage=function(event){
   const {id,operation,value,options}=event.data||{};
   try{

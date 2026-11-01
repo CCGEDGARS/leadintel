@@ -10,7 +10,7 @@ test('compressed state rejects malformed encoding, codes and decompression bombs
  const wire=B.prepareForSync(uniqueWorkspace(),{allowCompressionPacking:true}).payload;
  for(const data of ['!','AAAA','//8='])assert.throws(()=>B.restoreFromSync({...wire,main:{...wire.main,data}}),/Invalid|safe restore limit/);
  assert.throws(()=>B.restoreFromSync({...wire,main:{...wire.main,encoding:'unknown'}}),/Invalid/);
- const codes=[123,...Array.from({length:9000},(_,i)=>256+i)],raw=Buffer.from(codes.flatMap(code=>[code>>>8,code&255]));
+ const codes=[123,...Array.from({length:12000},(_,i)=>256+i)],raw=Buffer.from(codes.flatMap(code=>[code>>>8,code&255]));
  assert.throws(()=>B.restoreFromSync({...wire,main:{...wire.main,data:raw.toString('base64')}}),/safe restore limit/);
 });
 

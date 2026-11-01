@@ -37,6 +37,14 @@ test('customer state enforces the 500 KB cap',()=>{
   assert.ok(customerStateSize(payload)>MAX_CUSTOMER_STATE_BYTES);
   assert.throws(()=>validateCustomerStateWrite(emptyCustomerState('ws'),{expectedVersion:0,schemaVersion:1,payload}),/500 KB/);
 });
+test('record-backed state accepts bounded large Discovery losslessly while keeping the wire ceiling',()=>{
+ const text='Verified manufacturing operations and installation evidence. '.repeat(30000);
+ const payload={main:{website:'https://seller.example'},discovery:{rawResults:Array.from({length:6},(_,i)=>({url:`https://source${i}.example/operations`,text,sourceRead:true}))},outreach:{draft:'Preserve this exact draft'},delivery:{},meta:{}};
+ assert.ok(customerStateSize(payload)>8*1024*1024);
+ const wire=budget.prepareForSync(payload,{allowCompressionPacking:true,allowBundlePacking:true,maxSyncBytes:8*1024*1024}).payload;
+ const saved=validateCustomerStateWrite(emptyCustomerState('w1'),{expectedVersion:0,payload:wire,maxBytes:8*1024*1024});
+ assert.equal(saved.conflict,false);assert.ok(customerStateSize(saved.next.payload)<=500*1024);assert.equal(JSON.stringify(budget.restoreFromSync(saved.next.payload))===JSON.stringify(payload),true);
+});
 test('a save acknowledges its own committed revision even if another session writes before the response',async()=>{
  const {putCustomerState}=await import('../src/customer-state.js');let reads=0;
  const env={DB:{prepare(sql){return {bind(...args){return {async first(){reads++;return reads===1?{workspace_id:'w1',schema_version:1,version:3,payload_json:'{"main":{"offer":"Base"}}'}:{workspace_id:'w1',schema_version:1,version:5,payload_json:'{"main":{"offer":"Later other session"}}'};},async run(){assert.match(sql,/WHERE workspace_id=\? AND version=\?/);assert.equal(args.at(-1),3);return {meta:{changes:1}};}};}};}}};
