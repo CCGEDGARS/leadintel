@@ -162,7 +162,7 @@
       .research-mode-choice>button:focus-visible{outline:3px solid rgba(13,93,79,.28);outline-offset:3px}
       .research-mode-title{font-size:20px;font-weight:800;line-height:1.2;text-align:center}
       .research-mode-action{display:none!important}
-      .research-mode-badge{position:static;padding:0;background:transparent;color:#b9cbc5;font:600 12px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
+      .research-mode-badge{padding:0;background:transparent;color:#b9cbc5;font:600 12px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
       .research-mode-choice[data-research-mode="deep"]>button{background:#10261f!important;color:#fff!important;border-color:#10261f!important;box-shadow:0 10px 24px rgba(12,37,29,.2)}
             .research-mode-choice[data-research-mode="deep"]>button:hover{background:#16362c!important;border-color:#16362c!important}
       .research-mode-choice[data-research-mode="intelligence"]>button{border-color:#385047!important;box-shadow:0 4px 12px rgba(15,35,29,.05)}

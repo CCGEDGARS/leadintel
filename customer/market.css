@@ -45,7 +45,7 @@
 
 /* Simplified research choices: no gold, no duplicate action copy. */
 .research-mode-action{display:none!important}
-.research-mode-badge{position:static!important;padding:0!important;border-radius:0!important;background:transparent!important;color:#b9cbc5!important;font:600 12px "IBM Plex Mono",monospace!important;text-transform:uppercase;letter-spacing:.08em}
+.research-mode-badge{padding:0!important;border-radius:0!important;background:transparent!important;color:#b9cbc5!important;font:600 12px "IBM Plex Mono",monospace!important;text-transform:uppercase;letter-spacing:.08em}
 #run-market-research,#run-market-intelligence{border-color:#385047!important;box-shadow:0 4px 12px rgba(15,35,29,.05)!important}
 .verification-note{margin-top:7px!important;padding-top:7px;border-top:1px solid var(--line);color:#2f7250!important;font-family:"IBM Plex Mono",monospace;text-transform:capitalize}
 #run-detailed-research{border-color:#10261f!important;background:#10261f!important;color:#fff!important;box-shadow:0 7px 18px rgba(12,37,29,.14)!important}
@@ -422,8 +422,8 @@
 #market-research-workbench .research-actions{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;align-items:stretch!important}
 #market-research-workbench .research-mode-choice{display:grid;grid-template-rows:112px 1fr;gap:16px;padding:18px;border:1px solid #d5e1db;border-radius:16px;background:#fbfcfa;min-width:0}
 #market-research-workbench .research-mode-choice>button{position:relative;height:112px!important;min-height:112px!important;padding:16px 12px 30px!important;margin:0!important;flex:none}
-#market-research-workbench .research-mode-title{font-size:18px;line-height:1.25}
-#market-research-workbench .research-mode-badge{top:auto;bottom:10px;left:50%;right:auto;transform:translateX(-50%);padding:0;background:transparent;white-space:nowrap}
+#market-research-workbench .research-mode-title{position:absolute;top:calc(50% - 10px);left:12px;right:12px;transform:translateY(-50%);margin:0;font-size:18px;line-height:1.25;text-align:center;white-space:nowrap}
+#market-research-workbench .research-mode-badge{position:absolute!important;top:calc(50% + 14px);bottom:auto;left:0;right:0;width:100%;transform:none;margin:0;padding:0;background:transparent;text-align:center;white-space:nowrap}
 #market-research-workbench .research-mode-description{display:flex;flex-direction:column;gap:16px;max-width:none;padding:0;margin:0;font-size:13px;line-height:1.55}
 #market-research-workbench .research-mode-source-detail{margin-top:auto}
 #market-research-workbench .required-action-notice{margin:12px 0 18px}
