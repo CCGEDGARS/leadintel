@@ -5,6 +5,7 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
+  const Adviser=typeof module==='object'&&module.exports?require('./commercial-profile-adviser.js'):globalThis.LeadIntelCommercialProfileAdviser;
   const clean=value=>String(value??"").replace(/\s+/g," ").trim();
   const unique=list=>[...new Set((list||[]).map(clean).filter(Boolean))];
   const OFFER_LABELS={
@@ -79,7 +80,7 @@
       const base=original.call(engine,args)||{};
       const inferredDraft=buildFirstPartyDraft(args,root?.LeadIntelCompanyBrain||root?.brain||null);
       const choose=(existing,suggestion)=>clean(existing?.value)?existing:(clean(suggestion?.value)?suggestion:(existing||blank()));
-      return {
+      const result={
         ...base,
         priority_offers:choose(base.priority_offers,inferredDraft.priority_offers),
         ideal_customer:choose(base.ideal_customer,inferredDraft.ideal_customer),
@@ -90,6 +91,9 @@
         opportunity_value:base.opportunity_value||blank(),
         success_outcome:base.success_outcome||blank()
       };
+      const advice=(Adviser||globalThis.LeadIntelCommercialProfileAdviser)?.buildAdvice(args,root?.LeadIntelCompanyBrain||root?.brain||null);
+      for(const [id,row] of Object.entries(advice?.fields||{}))if(clean(row.value))result[id]=row;
+      return result;
     };
     engine.__step2FirstPartyIntelligencePatched=true;
     return engine;

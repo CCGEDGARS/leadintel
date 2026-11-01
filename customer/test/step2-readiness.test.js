@@ -141,16 +141,17 @@ test('first-party website intelligence creates reviewable Step 2 drafts instead 
   assert.match(draft.priority_offers.value,/sales training/i);
   assert.match(draft.ideal_customer.value,/B2B|sales team/i);
   assert.match(draft.buying_outcomes.value,/sales|conversion|performance|coaching/i);
-  assert.equal(draft.buying_outcomes.sourceIds.includes('S1'),true);
-  assert.match(draft.buying_outcomes.rationale,/first-party|inferred|website/i);
+  assert.equal(draft.buying_outcomes.draftType,'hypothesis');
+  assert.deepEqual(draft.buying_outcomes.sourceIds,[]);
+  assert.match(draft.buying_outcomes.rationale,/recommendation|review/i);
 });
 
-test('first-party inference does not invent exclusions, proof or objections',()=>{
+test('commercial exclusions and objections are reviewable hypotheses while unsupported proof stays blank',()=>{
   const source={id:'S1',type:'website',url:'https://ccgroup.lv/',title:'Sales training',text:'Sales training and leadership coaching for B2B sales teams.'};
   const draft=research.buildEvidenceDraft({sources:[source],targetMarkets:['Latvia'],uiLanguage:'en'});
-  assert.equal(draft.exclusions.value,'');
+  assert.ok(draft.exclusions.value);assert.equal(draft.exclusions.draftType,'hypothesis');assert.deepEqual(draft.exclusions.sourceIds,[]);
   assert.equal(draft.proof_points.value,'');
-  assert.equal(draft.objections.value,'');
+  assert.ok(draft.objections.value);assert.equal(draft.objections.draftType,'hypothesis');assert.deepEqual(draft.objections.sourceIds,[]);
 });
 
 test('first-party inference layer is loaded before company research UI',()=>{

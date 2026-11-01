@@ -19,7 +19,7 @@
   }
 
   const OFFER_CATEGORIES=[
-    ["industrial-projects",/\b(engineering drawings?|drawing development|serial production|custom metal|industrial project|industrial engineering|project delivery|industrial installation|metal fabrication|metālapstrād|rūpniecisk\w* projekt|iekārtu uzstādīšan)/i],
+    ["industrial-projects",/\b(engineering drawings?|drawing development|serial production|custom metal|metal manufactur\w*|steel fabricat\w*|metal fabricat\w*|steelwork|industrial project|industrial engineering|project delivery|industrial installation|metal fabrication|metālapstrād|rūpniecisk\w* projekt|iekārtu uzstādīšan)/i],
     ["sales-training",/\b(sales training|sales coach|sales coaching|sales methodology|pārdošanas apmāc|pārdošanas trener|pārdošanas kouč)/i],
     ["coaching",/\b(coaching|business coach|business coaching|koučing|koučs|mentor(?:ing)?|mentoring|mentorings)\b/i],
     ["leadership-development",/\b(leadership|vadīb(?:a|as)|manager training|vadītāju apmāc)/i],
@@ -41,7 +41,7 @@
     const offerCategories=detectOfferCategories(text);
     let businessType="other";
     const professionalCount=["sales-training","coaching","leadership-development","ai-consulting","marketing"].filter(id=>offerCategories.includes(id)).length;
-    if(professionalCount>=1&&/\b(training|coaching|consult|mentor|apmāc|kouč|konsult|mārketing|marketing)\b/i.test(text))businessType="professional-services";
+    if((!offerCategories.includes("industrial-projects")||/\b(?:sales training|sales coach|business coaching)\b/i.test(approvedOffer))&&professionalCount>=1&&/\b(training|coaching|consult|mentor|apmāc|kouč|konsult|mārketing|marketing)\b/i.test(text))businessType="professional-services";
     else if(offerCategories.includes("industrial-projects"))businessType="industrial-services";
     else if(offerCategories.includes("software"))businessType="software";
     else if(offerCategories.includes("manufacturing"))businessType="manufacturer";
