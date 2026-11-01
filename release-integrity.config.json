@@ -6960,6 +6960,27 @@
       "contains": [
         "timeoutMs=405000,pollMs=3000"
       ]
+    },
+    {
+      "id": "buyer-stage-and-public-confirmation",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function armBuyerResearchDeadline(",
+        "readMissing:false",
+        "armDeadline(420000+DISCOVERY_REQUEST_TIMEOUT_MS)"
+      ]
+    },
+    {
+      "id": "buyer-confirmation-preservation",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "status:['verified','public_confirmed','not_verified','error']",
+        "isNonPersonBuyerHeading(person.publicName||person.name)"
+      ]
     }
   ],
   "retry": {

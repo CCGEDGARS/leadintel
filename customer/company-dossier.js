@@ -34,7 +34,7 @@ function supportedDate(value,quote){if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))re
 function validatePass(raw={},pages=[],company={}){
  const sources=new Map(pages.filter(p=>url(p.url)&&clean(p.text||p.markdown||p.content,60000)).map(p=>[url(p.url),clean(p.text||p.markdown||p.content,60000)]));
  const cited=row=>{const u=url(row?.sourceUrl),quote=clean(row?.quote,1200);return u&&quote.length>=12&&sources.get(u)?.includes(quote)?{sourceUrl:u,quote,date:supportedDate(row.date,quote)}:null;};
- const facts=(raw.facts||[]).slice(0,30).flatMap(r=>{const s=cited(r);return s&&clean(r.text)&&targetEvidence(s.sourceUrl,s.quote,company)?[{...s,kind:['project','change','risk','procurement','fit'].includes(r.kind)?r.kind:'project',text:sourceFact(r.text,s.quote)}]:[];});
+ const facts=(raw.facts||[]).slice(0,30).flatMap(r=>{const s=cited(r);return s&&clean(r.text)&&! /^(?:read more|learn more|click here|find out more)\b/i.test(s.quote)&&targetEvidence(s.sourceUrl,s.quote,company)?[{...s,kind:['project','change','risk','procurement','fit'].includes(r.kind)?r.kind:'project',text:sourceFact(r.text,s.quote)}]:[];});
  const roleSupported=(title,quote,name)=>{
   const words=v=>(clean(v).toLowerCase().match(/\p{L}+/gu)||[]).filter(w=>!['the','and','for','with','of','is','as','a','an'].includes(w)).map(w=>w.replace(/s$/,'')),wanted=words(title),allowed=new Set([...wanted,...words('senior chief executive officer area director head manager president board project delivery leader team')]);
   const names=text=>[...text.matchAll(/[\p{Lu}][\p{L}’'.-]+(?:\s+[\p{Lu}][\p{L}’'.-]+){1,6}/gu)].filter(m=>!words(m[0]).every(w=>allowed.has(w)));

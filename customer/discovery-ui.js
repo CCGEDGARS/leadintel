@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261029-v2&buyers-guided=20261030-v1&adaptive-agent=20261030-v1&contact-resume=20261030-v1&live-parity=20261030-v1&buyer-buttons=20261031-v2&buyer-live-progress=20261101-v2&focused-dossier=20261101-v1&dossier-phase-budget=20261101-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261029-v2&buyers-guided=20261030-v1&adaptive-agent=20261030-v1&contact-resume=20261030-v1&live-parity=20261030-v1&buyer-buttons=20261031-v2&buyer-live-progress=20261101-v2&focused-dossier=20261101-v1&dossier-phase-budget=20261101-v1&buyer-outcome-recovery=20261101-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2&buyer-company-actions=20261021-v2&writing-workspace=20261023-v1&rich-text=20261025-v1&skills-writing=20261028-v1&buyer-actions=20261029-v2&calendar-connect=20261029-v1&delivery-toolbar=20261029-v2&step6-layout=20261029-v1&main-action=20261030-v1&step5-audit=20261030-v1&creator-library=20261101-v1&evidence-priority=20261101-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1581,6 +1581,7 @@ async function findDecisionMakers(index){
   if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
   return searchDecisionMakers(candidate,{pipeline:Boolean(candidate.saved),retry:()=>findDecisionMakers(index)});
 }
+function armBuyerResearchDeadline(controller,previous,ms){clearTimeout(previous);return setTimeout(()=>controller.abort(Object.assign(new Error('Buyer research stage deadline reached; saved checks can be resumed'),{name:'TimeoutError',code:'BUYER_STAGE_TIMEOUT'})),ms);}
 async function findPotentialDecisionMakers(domain,{refreshDossier=false}={}){
   const canonical=canonicalDomain(domain);
   const selected=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonical);
@@ -1738,7 +1739,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Verifying company before buyer search',total:5,completed:0,canCancel:true,canRetry:true,metadata:{domain:canonicalDomain(candidate.domain),workspaceId:bridge()?.workspace?.id||''}});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
   const buyerStartedAt=Date.now();let buyerPulse;const refreshBuyerPulse=()=>{if(!controller.signal.aborted&&scopeIsCurrent()){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,elapsedSeconds:Math.floor((Date.now()-buyerStartedAt)/1000)};refreshBuyerProgress(candidate);buyerPulse=setTimeout(refreshBuyerPulse,2000);}};buyerPulse=setTimeout(refreshBuyerPulse,2000);
-  let timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*18,450000));
+  const identityStageBudget=Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*18,450000);let timeout=armBuyerResearchDeadline(controller,null,identityStageBudget);
   const researchAccountability=LeadIntelDiscovery.createBuyerResearchAccountability();
   const retainedAudit=LeadIntelDiscovery.safeBuyerResearchAccountability(candidate.publicResearch?.accountability);
   if(retainedAudit){researchAccountability.tools=retainedAudit.tools;researchAccountability.officialPageReads=retainedAudit.officialPageReads;}
@@ -1752,6 +1753,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     researchProfile={...buyerProfile,decisionMakers:plan.roles.join('; '),companyDomain:candidate.domain};
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:'dossier',label:'Building company dossier · two independent researchers'};persist();
     const companyDossier=await waitForRun(()=>window.LeadIntelCompanyDossierUi.research(candidate,{seller:JSON.parse(LeadIntelDiscovery.buyerFitContext(buyerProfile)),roles:plan.roles,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',formulas:plan.dossierFormulas},{signal:controller.signal,isCurrent:()=>scopeIsCurrent()&&selectionKey(candidate.buyerRoles)===initialRoleSelection&&LeadIntelDiscovery.buyerRoleSelectionContext(mainState())===roleSelectionContext&&LeadIntelDiscovery.buyerFitContext(companyQualificationProfile(mainState()))===LeadIntelDiscovery.buyerFitContext(buyerProfile),persist,force:refreshDossier,onProgress:execution=>{if(!scopeIsCurrent()||controller.signal.aborted)return;candidate.buyerResearchProgress={...candidate.buyerResearchProgress,execution,taskId};refreshBuyerProgress(candidate);},readProgress:signal=>withDiscoveryDeadline(async pollSignal=>{const response=await fetch(`${LEADINTEL_API}/api/ai/company-dossier?workspace_id=${encodeURIComponent(workspaceAtStart)}&domain=${encodeURIComponent(candidate.domain)}`,{credentials:'include',headers:{Accept:'application/json'},signal:pollSignal});if(!response.ok)throw Error('Progress update unavailable');return await response.json();},signal,8000),request:async(body,signal)=>{const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/company-dossier?workspace_id=${encodeURIComponent(workspaceAtStart)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body),signal,timeoutMs:420000});const data=await response.json();if(!response.ok)throw Error(data.error||'Company dossier unavailable');return data;}}));
+    timeout=armBuyerResearchDeadline(controller,timeout,LeadIntelDiscovery.OFFICIAL_CONTACT_RESEARCH_POLICY.maxDurationMs+DISCOVERY_REQUEST_TIMEOUT_MS);
     rows.push(...window.LeadIntelCompanyDossierUi.evidenceRows(companyDossier));
     Object.defineProperty(candidate,'__leadIntelBuyerSources' ,{value:rows,writable:true,configurable:true});
     const publishCompanyContacts=()=>{
@@ -1802,6 +1804,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     await waitForRun(()=>LeadIntelDiscovery.runOfficialContactResearch(candidate,{rows,signal:controller.signal,onSignal:signal=>{if(typeof fetchBuyerResearch==='function')(fetchBuyerResearch.reports||(fetchBuyerResearch.reports=new WeakMap())).set(signal,researchAccountability);},search:(query,signal)=>searchBuyerPublicPages(query,5,signal),readPage:async(url,signal)=>{const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown','links'],onlyMainContent:false,publicFirst:true},{signal});if(!response.ok)throw new Error('Official contact source unavailable');const payload=await response.json();return payload.data||payload;},guard:()=>{if(!scopeIsCurrent())throw new Error('Research context changed');},onCheckpoint:()=>{if(scopeIsCurrent()&&!controller.signal.aborted)persist();},onProgress:detail=>{if(scopeIsCurrent()&&!controller.signal.aborted){candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:detail.label};persist();}}}));
     publishCompanyContacts();
 
+    timeout=armBuyerResearchDeadline(controller,timeout,identityStageBudget);
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
     taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     let apolloDiscoveryCount=0;const earlyIdentityPeople=window.LeadIntelCompanyDossier.buyers(companyDossier,candidate.company);
@@ -1941,7 +1944,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     return true;
   }catch(error){
     if(!scopeIsCurrent()){if(discovery===discoveryAtStart&&bridge()===bridgeAtStart&&discoveryAccountContext()===accountAtStart&&ownerIsRetained()){candidate.peopleStatus='error';candidate.buyerResearchProgress={phase:'error',label:'Company, buyer or Strategy changed. Refresh buyers using the current context.'};saveDiscovery();renderAll();}taskCentre?.fail(taskId,new Error('Workspace, company, buyer or Strategy changed. Buyer results were not applied.'),{canRetry:false});return false;}
-    researchAccountability.status='partial';researchAccountability.stopReason=controller.signal.aborted?'canceled':'provider_unavailable';researchAccountability.completedAt=new Date().toISOString();researchAccountability.gaps=[String(error.message||'Buyer research stopped').slice(0,220)];
+    researchAccountability.status='partial';researchAccountability.stopReason=controller.signal.aborted?(controller.signal.reason?.name==='TimeoutError'?'time_budget':'canceled'):'provider_unavailable';researchAccountability.completedAt=new Date().toISOString();researchAccountability.gaps=[String(error.message||'Buyer research stopped').slice(0,220)];
     candidate.peopleStatus="error";
     if(candidate.publicContactStatus==='loading')candidate.publicContactStatus='error';
     const previousDiscovery=candidate.buyerDiscovery||{};
@@ -3054,7 +3057,7 @@ async function reviewBuyerPublicEvidence(candidate,rows,signal,{signatureCandida
     return {...review,aiReview:LeadIntelDiscovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'gemini',checkedAt:new Date().toISOString(),inputSignature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts})};
   }catch(error){if(signal?.aborted)throw error;return {status:'unavailable',conflicts:[]};}
 }
-async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge()?.workspace?.id,isCurrent=()=>true,researchOwner){
+async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge()?.workspace?.id,isCurrent=()=>true,researchOwner,{readMissing=true}={}){
   const state=discovery,researchBridge=bridge(),userId=researchBridge?.session?.user?.id;
   const current=()=>isCurrent()&&discovery===state&&bridge()===researchBridge&&researchBridge?.session?.user?.id===userId&&crmAuthenticated()&&workspaceId&&bridge()?.workspace?.id===workspaceId&&!bridge()?.conflict&&!signal?.aborted;
   if(!current())return;
@@ -3063,6 +3066,7 @@ async function confirmResearchedPublicEmails(candidate,signal,workspaceId=bridge
     if(!current())return;
     const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title};
     if(!LeadIntelDiscovery.qualifyBuyer(person,profile,candidate).eligible)continue;
+    if(!readMissing&&!publicBuyerSource(candidate,person))continue;
     // Old identity snapshots may predate address decoding. Read the known official
     // source, once per shared page, before accepting a no-email outcome.
     if(!publicBuyerSource(candidate,person)&&person.publicNameUrl&&canonicalDomain(person.publicNameUrl)===canonicalDomain(candidate.domain)){
@@ -3148,7 +3152,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     const complete=candidate.people.filter(person=>person.emailResearch?.status==='complete').length;
     onProgress?.({label:`Verifying public contact evidence · ${complete}/${candidate.people.length} people checked`});
   };
-  armDeadline(300000+DISCOVERY_REQUEST_TIMEOUT_MS);
+  armDeadline(420000+DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const research={accountability,evidenceVersion:2,firecrawl:'complete',openai:'unavailable',gemini:resumingChecks?priorResearch.gemini||'unavailable':'unavailable',geminiSearch:'unavailable',officialPages:0,profileResults:0,openaiResults:0,geminiResults:0,checkedAt:'',issues:[],conflicts:(priorResearch.conflicts||[]).filter(row=>chosenIds.has(String(row.person_id))),sources:[]};
     candidate.publicResearch=research;
@@ -3182,6 +3186,9 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
       mandatoryResult={searches:candidate.people.reduce((n,p)=>n+(p.emailResearch?.searches||0),0),failed:candidate.people.filter(p=>p.emailResearch?.status!=='complete').length,evidence};return mandatoryResult;
     };
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people,existingRows,domain,candidate.company);
+    // Confirm existing exact-person public listings before longer optional channel searches.
+    if(canContinue())await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner,{readMissing:false});
+    if(!canContinue())return false;commit();saveDiscovery();
     let patternResearch=null;
     // Known identities get person-first contact evidence before broad company
     // scraping can consume the request budget. Pending names still resolve first.
