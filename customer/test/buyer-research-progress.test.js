@@ -8,7 +8,7 @@ const css=fs.readFileSync(path.join(__dirname,'../discovery.css'),'utf8');
 test('buyer research exposes five meaningful live phases',()=>{
  for(const label of ['Verifying company','buyer-role categories','Identifying and ranking relevant people','Verifying identities and current roles','Finalizing public contact evidence']) assert.ok(ui.includes(label),label);
  assert.match(ui,/buyerResearchProgressHtml/);
- assert.match(ui,/Still working — verified results will appear here automatically/);
+ assert.match(ui,/Completed checks are saved. Provider failures or time limits will show an action to retry./);
 });
 
 test('search button communicates active research rather than looking disabled',()=>{
