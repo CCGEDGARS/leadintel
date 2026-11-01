@@ -35,18 +35,22 @@
       const qualification=D.qualifyBuyer(person,{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate,{now:stamp});
       const qualified=qualification.eligible&&!candidate.buyerRolesChanged&&!conflict(person)&&person.opportunityScope?.status!=='review_required';
       const check=person.publicEmailSourceCheck,email=text(person.publicEmail).toLowerCase();
-      const sourceConfirmed=qualified&&check?.status==='confirmed'&&fresh(check.checkedAt)&&identity(check.email)===email&&text(check.url)===text(person.publicEmailUrl)&&Policy.publicSource(email,person.publicName||person.name,check.url,domain);
+      const official=qualified?D.acceptedOfficialBuyerEmail(candidate,person,{now}):'';
+      const sourceConfirmed=Boolean(official)||qualified&&check?.status==='confirmed'&&fresh(check.checkedAt)&&identity(check.email)===email&&text(check.url)===text(person.publicEmailUrl)&&Policy.publicSource(email,person.publicName||person.name,check.url,domain);
       const contact=options.contactForPerson?.(person,candidate)||{};
       // An email policy validates a contact record, not its association with the
       // selected person. Bind both before reporting a usable recipient.
       const matchingContact=identity(contact.name)===identity(person.publicName||person.name)&&(!text(contact.external_person_id)||String(contact.external_person_id)===String(person.id));
-      const usable=qualified&&matchingContact&&Policy.accepted(contact,domain,minimum,now);
+      const recordAccepted=qualified&&matchingContact&&Policy.accepted(contact,domain,minimum,now);
+      const addresses=[contact.normalized_email,contact.work_email,contact.email].map(text).filter(Boolean);
+      const officialAccepted=Boolean(official)&&!contact.archived_at&&(!text(contact.name)||matchingContact)&&(!contact.external_person_id||String(contact.external_person_id)===String(person.id))&&(!contact.id||matchingContact)&&addresses.every(value=>identity(value)===official);
+      const usable=recordAccepted||officialAccepted,usableEmail=recordAccepted?text(contact.normalized_email||contact.work_email||contact.email).toLowerCase():officialAccepted?official:'';
       const checks=D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.map(name=>{
         const row=person.contactResearch?.checks?.[name];
         return {name,status:row?.status||'not_searched',fresh:fresh(row?.checkedAt),complete:D.buyerResearchCheckPassed(candidate,person,name,{now:stamp}),reason:text(row?.reason)};
       });
       const saved=person.contactData,profile=person.publicLinkedinUrl||person.linkedin_url,paid=saved?.version===1&&D.companyIdentityDomain(saved.domain)===domain&&String(saved.personId)===String(person.id)&&(!saved.identityName||identity(saved.identityName)===identity(person.publicName||person.name))&&(!saved.identityLinkedinUrl||!profile||D.normalizeLinkedInUrl(saved.identityLinkedinUrl)===D.normalizeLinkedInUrl(profile))?saved:null;
-      return {personId:text(person.id),name:text(person.publicName||person.name),priority:priorityIds.has(key(person)),identityConfirmed:D.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending',qualified,qualificationGaps:qualification.gaps||[],researchStatus:D.buyerResearchAssessment(person,{now:stamp}).status,checks,sourceConfirmedEmail:sourceConfirmed?email:'',usableEmail:usable?text(contact.normalized_email||contact.work_email||contact.email).toLowerCase():'',confirmation:usable?(contact.email_status==='verified'?'provider_verified':'public_confirmed'):'unconfirmed',paid:paid?{status:text(paid.status),checkedAt:text(paid.checkedAt),callIds:[...new Set((paid.callIds||[]).map(text).filter(Boolean))],costMicro:number(paid.costMicro),phoneStatus:text(paid.phone?.status)}:null};
+      return {personId:text(person.id),name:text(person.publicName||person.name),priority:priorityIds.has(key(person)),identityConfirmed:D.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending',qualified,qualificationGaps:qualification.gaps||[],researchStatus:D.buyerResearchAssessment(person,{now:stamp}).status,checks,sourceConfirmedEmail:sourceConfirmed?email:'',usableEmail,confirmation:usable?(recordAccepted&&contact.email_status==='verified'?'provider_verified':'public_confirmed'):'unconfirmed',paid:paid?{status:text(paid.status),checkedAt:text(paid.checkedAt),callIds:[...new Set((paid.callIds||[]).map(text).filter(Boolean))],costMicro:number(paid.costMicro),phoneStatus:text(paid.phone?.status)}:null};
     });
     const byId=new Map(people.map((person,index)=>[key(person),result[index]]));
     const quality=D.buyerQualityAssessment(candidate,{now:stamp,ranked,confirmedEmail:person=>byId.get(key(person))?.usableEmail||''});

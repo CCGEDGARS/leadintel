@@ -9,7 +9,7 @@ test('official management pages yield real names rather than adjacent title head
  const rows=fixture.pages.map(p=>({...p,sourceRead:true})),profile={companyDomain:'viscaria.com',decisionMakers:'CEO; COO; Head of Procurement'};
  const people=D.tracePublicBuyers(rows,'Viscaria',profile).people;
  assert.ok(people.some(p=>p.name==='Jörgen Olsson'));assert.ok(people.some(p=>p.name==='Charlotte Odenberger'));assert.ok(people.every(p=>!/^Chief /i.test(p.name)));
- const contacts=D.discoverCompanyContacts(rows,{company:'Viscaria',domain:'viscaria.com'}),robert=contacts.find(p=>p.name==='Robert Åkerlind');assert.equal(robert.publicEmail,'robert.akerlind@viscaria.com');assert.match(robert.publicPhone,/76/);
+ const contacts=D.discoverCompanyContacts(rows,{company:'Viscaria',domain:'viscaria.com'}),robert=contacts.find(p=>p.name==='Robert Åkerlind');assert.equal(robert.publicEmail,'robert.akerlind@viscaria.com');assert.match(robert.publicPhone,/76/);assert.equal(D.acceptedOfficialBuyerEmail({company:'Viscaria',domain:'viscaria.com'},robert),robert.publicEmail);
 });
 test('navigation fragments cannot become verified commercial facts',()=>{
  const url='https://example.com/news',quote='Read more about the project’s development, key milestones and the road ahead.';

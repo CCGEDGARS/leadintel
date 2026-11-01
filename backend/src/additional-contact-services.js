@@ -114,8 +114,8 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   if(person.publicEmail&&person.publicEmailUrl&&C.publicSource(person.publicEmail,person.publicName||person.name,person.publicEmailUrl,candidate.domain)){
     try{
       const contact=await (deps.confirmPublic||confirmPublicWorkEmail)(env,context,companyId,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:person.publicEmail,source_url:person.publicEmailUrl});
-      if(confirmationLevel==='public_confirmed')existing=contact;
-      if(confirmationLevel==='public_confirmed'&&!dataLookup)return {contact,cached:true,request:{status:'public_confirmed',credits_used:0}};
+      if(C.accepted(contact,candidate.domain,confirmationLevel))existing=contact;
+      if(existing&&!dataLookup)return {contact,cached:true,request:{status:'public_confirmed',credits_used:0}};
     }catch(error){if(error.code!=='PUBLIC_EMAIL_NOT_ATTRIBUTED')throw error;}
   }
   const provider=await env.DB.prepare('SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id=? AND provider=?').bind(context.workspaceId,providerName).first();
