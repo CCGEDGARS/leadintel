@@ -111,7 +111,7 @@ test('actual CRM refresh resolves only captured transport incidents after valida
 test('Discovery initialization rebinds a retained CRM retry when server-ready occurred before its listeners mounted',()=>{
  const tasks=createTaskCentre();tasks.start({id:'crm-refresh:w1',type:'crm-refresh',metadata:{workspaceId:'w1'}});tasks.fail('crm-refresh:w1','CRM refresh timed out');
  const r=runtime({tasks});r.ctx.discoveryMounted=false;
- for(const name of ['injectDiscoveryUI','bindDiscovery','openDiscoveryFromHandoff','pipelineRows','openCampaignResearch','researchCampaign','continueBuyerMessages','readyBuyerCount','renderSelectedEmailBuyer'])r.ctx[name]=()=>{};
+ for(const name of ['injectDiscoveryUI','bindDiscovery','openDiscoveryFromHandoff','pipelineRows','openCampaignResearch','researchCampaign','continueBuyerMessages','readyBuyerCount','renderSelectedEmailBuyer','startCompanyResearchFromStrategy','companySearchPlan'])r.ctx[name]=()=>{};
  r.ctx.mainState=()=>({step:1});r.ctx.loadMeta=()=>({});r.ctx.refreshCrmState=()=>assert.fail('Setup initialization must only register recovery actions, never invoke a CRM refresh');
  vm.runInContext(source.slice(source.indexOf('function initDiscovery(){'),source.indexOf('function initDiscoveryWhenReady(')),r.ctx);r.ctx.initDiscovery();
  assert.equal(tasks.hasAction('crm-refresh:w1','retry'),true);assert.equal(tasks.get('crm-refresh:w1').status,'error');assert.equal(r.ctx.discoveryMounted,false);

@@ -20,7 +20,7 @@
   const list=value=>Array.isArray(value)?value:[];
   const activeItems=value=>list(value).filter(item=>item&&item.active!==false);
   const everyField=(source,fields)=>fields.every(field=>filled(source?.[field]));
-  const checkedCompanies=discovery=>list(discovery.candidates).filter(item=>item?.company&&item?.domain&&!item.needsRecheck&&item.qualification?.eligible===true&&Number.isFinite(item.qualification.score)&&item.qualification.score>0);
+  const checkedCompanies=discovery=>(discovery.needsRefresh?[]:list(discovery.candidates)).filter(item=>item?.company&&item?.domain&&!item.needsRecheck&&item.qualification?.eligible===true&&Number.isFinite(item.qualification.score)&&item.qualification.score>0);
   const step=(id,label,complete,{optional=false,action=label}={})=>({id,label,complete:Boolean(complete),optional,action});
   const STATUS_LABELS=Object.freeze({'in-progress':'In progress','not-started':'Not started',complete:'Complete',locked:'Locked'});
 
