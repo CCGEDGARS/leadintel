@@ -23,14 +23,14 @@ ON CONFLICT(key) DO UPDATE SET
                    WHEN (CASE WHEN login_attempts.window_started_at>=? THEN login_attempts.failures+1 ELSE 1 END)>? THEN ? ELSE NULL END
 RETURNING failures,locked_until`;
 // Counts this attempt atomically and says whether it may proceed. Returns {allowed,retryAfterSeconds,failures}.
-export async function reserveLoginAttempt(env,key,{now=Date.now()}={}){
+export async function reserveLoginAttempt(env,key,{now=Date.now(),failClosed=false}={}){
   try{
     const windowStart=iso(now-LOGIN_WINDOW_MS);
     const row=await env.DB.prepare(RESERVE_SQL).bind(key,iso(now),windowStart,windowStart,windowStart,LOGIN_MAX_FAILURES,iso(now+LOGIN_LOCK_MS)).first();
     const lockedUntil=row?.locked_until?Date.parse(row.locked_until):NaN;
     if(Number.isFinite(lockedUntil)&&lockedUntil>now)return {allowed:false,retryAfterSeconds:Math.max(1,Math.ceil((lockedUntil-now)/1000)),failures:Number(row?.failures)||0};
     return {allowed:true,retryAfterSeconds:0,failures:Number(row?.failures)||0};
-  }catch{return {allowed:true,retryAfterSeconds:0,failures:0};}
+  }catch{return {allowed:!failClosed,retryAfterSeconds:failClosed?60:0,failures:0};}
 }
 export async function clearLoginThrottle(env,key,{now=Date.now()}={}){
   try{

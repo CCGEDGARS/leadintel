@@ -21,6 +21,7 @@
       "email_campaign_setup_version": "campaign-setup-v2",
       "system_audit_version": "20261015-delivery-monitoring-v1",
       "script_library_version": "channel-scripts-v1",
+      "creator_library_version": "creator-library-v1",
       "test_email_version": "gmail-test-v1",
       "inmail_version": "linkedin-inmail-v1",
       "email_masters_version": "20261015-v4",
@@ -6508,6 +6509,38 @@
       "status": 200,
       "contains": [
         "sourceRead:false,evidenceKind:'dossier_excerpt'"
+      ]
+    },
+    {
+      "id": "creator-library-private-panel",
+      "type": "text",
+      "url": "/customer/creator-library.js",
+      "status": 200,
+      "contains": [
+        "Creator Library",
+        "Activate version",
+        "Save draft",
+        "/creator/unlock",
+        "Removed source drafts"
+      ]
+    },
+    {
+      "id": "creator-library-runtime-mount",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelCreatorLibrary?.mount",
+        "creator?.render(catalogue?.canManage)"
+      ]
+    },
+    {
+      "id": "creator-library-auth-required",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/script-library/creator?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Authentication required"
       ]
     }
   ],

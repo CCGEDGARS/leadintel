@@ -1,3 +1,4 @@
+import {handleCreatorLibrary,creatorUnlocked} from './creator-library.js';
 import {validSkillAttribution} from './workspace-skill-attribution.js';
 import StorysellingNative from '../../customer/storyselling-native.js';
 import {validCompanyMaterialAttribution} from './company-materials-context.js';
@@ -90,10 +91,11 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  const workspace=url.searchParams.get('workspace_id')||'',member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).first();if(!member)return json({error:'Workspace access denied'},403,cors);
  try{
  const canManage=platformScriptOwner(env,user),write=request.method!=='GET';if(write&&!['owner','researcher','sales'].includes(member.role))fail('Write access required',403);
+ if(path==='/api/script-library/creator'||path.startsWith('/api/script-library/creator/'))return await handleCreatorLibrary(request,env,cors,{user,session:token,canManage});
  if(path==='/api/script-library'&&request.method==='GET'){
   const personal=await env.DB.prepare('SELECT id,payload_json,revision FROM personal_script_library WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
-  return json({canManage,core:await coreScripts(env.DB),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
+  return json({canManage,core:(await coreScripts(env.DB)).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
  const maximumPayload=path==='/api/script-library/draft'?500000:path==='/api/script-library/inmail-draft'?250000:40000;
  if(Number(request.headers.get('Content-Length'))>maximumPayload)fail('Script payload too large',413);
@@ -102,6 +104,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  const match=path.match(/^\/api\/script-library\/(core|personal|primary|draft|inmail-draft|inmail-primary)(?:\/([^/]+))?$/);if(!match)fail('Not found',404);const [,kind,encoded]=match,id=decodeURIComponent(encoded||'');
  if(kind==='core'){
   if(!canManage)fail('Only the platform owner can manage core scripts',403);
+  if(!await creatorUnlocked(request,env,token))fail('Unlock Creator Library before changing a master',423);
   if(!['PUT','DELETE'].includes(request.method))fail('Method not allowed',405);
   if(!/^(email|linkedin|phone|linkedin-inmail):(professional|curiosity|friendly|brutal|storyselling)$/.test(id))fail('Invalid core script');
   const existing=(await coreScripts(env.DB)).find(r=>r.id===id);
