@@ -1704,7 +1704,7 @@ function bind(){
     const button=event.target.closest("[data-icp-unlock]");if(!button)return;
     requestIcpActivation(button.dataset.icpId);
   });
-  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
+  $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderIcps();renderSignalDesigner();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",openResetCenter);
   document.querySelectorAll("[data-close-reset-center]").forEach(node=>node.addEventListener("click",closeResetCenter));
   $("reset-new-company").addEventListener("click",resetCompanyWorkspace);
