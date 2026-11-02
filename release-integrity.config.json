@@ -3836,7 +3836,7 @@
       "contains": [
         "buyer-contacts-v23-company-record",
         "async function confirmResearchedPublicEmails",
-        "await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner)",
+        "await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner,{readMissing:false})",
         "contextGuard,researchOwner"
       ]
     },
