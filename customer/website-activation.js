@@ -13,7 +13,9 @@
   const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
   const RELEASE="20260914-workspace-isolation-v1";
   const MAX_SOURCE_CHARS=30000;
-  const ACTIVATION_REQUEST_TIMEOUT_MS=25000;
+  // Public extraction has its own bounded direct / provider / fallback chain.
+  // Leave enough time for that chain; the old 25s client timer cut it off early.
+  const ACTIVATION_REQUEST_TIMEOUT_MS=60000;
   const PERSISTENCE_TIMEOUT_MS=10000;
   let running=false;
   let activationError="";
@@ -135,13 +137,20 @@
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),ACTIVATION_REQUEST_TIMEOUT_MS);
     try{
-      const response=await root.fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal:controller.signal});
+      const workspace=root.LeadIntelServerBridge?.workspace?.id;
+      // Do not depend on a deferred optional module to rewrite a legacy URL.
+      const endpoint=workspace?`/api/integrations/services/firecrawl/scrape?workspace_id=${encodeURIComponent(workspace)}`:`${FIRECRAWL_PROXY}/firecrawl-scrape`;
+      const response=await root.fetch(endpoint,{method:"POST",credentials:'include',headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],publicFirst:true,onlyMainContent:true,timeout:30000}),signal:controller.signal});
       const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Website returned ${response.status}`);
       const data=payload.data||payload;const text=String(data.markdown||data.content||"").replace(/\u0000/g,"").trim().slice(0,MAX_SOURCE_CHARS);
+      const resolved=data.metadata?.sourceURL||data.metadata?.url||data.url||url;
+      if(!sameCompanyWebsite(resolved,url))throw new Error('Website redirected outside the requested company domain. Review the website URL.');
+      const status=Number(data.metadata?.statusCode)||200;
+      if(payload.success===false||status<200||status>=400||(/just a moment|access denied|verify you are human|cloudflare ray id/i.test(text)&&text.length<1600))throw new Error('The website returned an error or access check instead of company evidence. Retry or check the URL.');
       if(!text)throw new Error("No readable website content was returned");
       return {url,title:data.metadata?.title||data.title||new URL(url).hostname,description:data.metadata?.description||"",text};
     }catch(error){
-      if(error?.name==="AbortError")throw new Error("Website activation timed out after 25 seconds");
+      if(error?.name==="AbortError")throw new Error("Website activation timed out after 60 seconds. Your saved work is preserved; retry activation.");
       throw error;
     }finally{
       clearTimeout(timeout);

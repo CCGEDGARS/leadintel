@@ -125,3 +125,14 @@ test('a bridge becoming unavailable during scraping preserves the saved company 
   assert.equal(await pending,false);assert.equal(r.w.localStorage.getItem(MAIN),before);assert.equal(r.button.disabled,false);
  }finally{r.close();}
 });
+
+test('activation uses authenticated first-party public extraction before optional router startup',async()=>{
+ const r=runtime();try{let call;r.w.fetch=async(url,options)=>{call={url,options};return {ok:true,json:async()=>({data:{markdown:'Public company capabilities and products',metadata:{sourceURL:'https://www.seller.example/'}}})};};
+ assert.equal(await r.api.activateWebsite(),true);
+ assert.match(call.url,/^\/api\/integrations\/services\/firecrawl\/scrape\?workspace_id=workspace-a$/);
+ assert.equal(call.options.credentials,'include');assert.equal(JSON.parse(call.options.body).publicFirst,true);
+ }finally{r.close();}
+});
+test('activation refuses HTTP error pages and cross-company redirects before changing saved context',async()=>{
+ for(const metadata of [{sourceURL:'https://attacker.example/'},{statusCode:404}]){const r=runtime();try{const before=r.w.localStorage.getItem(MAIN);r.w.fetch=async()=>({ok:true,json:async()=>({data:{markdown:'Wrong source returned with a successful wrapper',metadata}})});assert.equal(await r.api.activateWebsite(),false);assert.equal(r.w.localStorage.getItem(MAIN),before);}finally{r.close();}}
+});

@@ -94,3 +94,22 @@ for(const [label,documents,wantId] of [
 test('accepted arbitrary web source IDs retain their exact extracts through refresh and canonical reload',async()=>{
  const r=runtime({prior:true});const state=r.state();state.scrapedSources[0].id='official-proof';state.scrapedSources[0].extracted=true;state.answers.differentiation=state.answers.proof_points;r.saved.set(STATE,JSON.stringify(state));const meta=r.meta();meta.fields.proof_points.sourceIds=['official-proof'];meta.fields.differentiation={...meta.fields.proof_points};r.saved.set(META,JSON.stringify(meta));await r.hooks.runCompanyResearch({rerun:true});const result=r.state(),latestMeta=r.meta();const retainedId=latestMeta.fields.proof_points.sourceIds[0];const source=result.scrapedSources.find(source=>source.id===retainedId);assert.ok(source,'accepted citation must resolve after replacement source IDs are assigned');assert.equal(source.url,'https://sample.example/old-proof');assert.equal(source.text,'Original named project proof');result.researchMeta=latestMeta;const canonical=canonicalRuntime();result.profile=canonical.LeadIntelProfile.buildCompanyIntelligenceProfile(result);const restored=canonical.LeadIntelProfile.normalizeSavedState(JSON.parse(JSON.stringify(result)));assert.equal(restored.profile.canonical.fields.differentiation.provenance,'website');assert.equal(restored.profile.canonical.fields.differentiation.status,'first_party_evidence');assert.ok(restored.profile.evidenceSources.some(source=>source.id===retainedId&&source.url==='https://sample.example/old-proof'));r.close();
 });
+
+test('Ready uploaded material enters AI profile preparation with source IDs and source text',async()=>{
+ const r=runtime();r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>[{id:'material:one',name:'brochure.pdf',materialId:'one',materialRevision:2,managedMaterial:true,status:'ready',text:'page:1\nConfirmed precision assembly and documented installation.'}]};
+ await r.hooks.runCompanyResearch();
+ const request=r.calls.find(c=>c.url.includes('/api/ai/generate'));assert.ok(request);const body=JSON.parse(request.options.body);
+ assert.match(body.prompt,/Confirmed precision assembly/);assert.match(body.prompt,/material:one/);
+ assert.equal(r.state().documents[0].materialRevision,2);r.close();
+});
+test('material changed during AI preparation cannot publish an outdated draft',async()=>{
+ const r=runtime();let reads=0;r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>++reads===1?[{id:'material:one',name:'brochure.pdf',materialId:'one',materialRevision:2,managedMaterial:true,status:'ready',text:'Confirmed precision assembly.'}]:[]};
+ await r.hooks.runCompanyResearch();assert.notEqual(r.meta().mode,'ai');assert.match(r.meta().error||r.meta().lastFailure,/material.*changed/i);r.close();
+});
+
+
+test('all fifteen uploaded materials preserve five older document sources during profile preparation',async()=>{
+ const r=runtime();const state=r.state();state.documents=Array.from({length:5},(_,i)=>({id:'D'+(i+1),name:'legacy'+i+'.pdf',text:'Preserved historical document '+i,status:'ready'}));r.saved.set(STATE,JSON.stringify(state));
+ const materials=Array.from({length:15},(_,i)=>({id:'material:'+i,name:'new'+i+'.png',materialId:String(i),materialRevision:1,status:'ready',text:'Source image '+i}));r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>materials};
+ await r.hooks.runCompanyResearch();assert.equal(r.state().documents.length,20);assert.equal(r.state().documents[0].id,'D1');assert.equal(r.state().documents[19].id,'material:14');r.close();
+});

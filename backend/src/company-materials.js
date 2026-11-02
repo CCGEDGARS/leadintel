@@ -5,6 +5,22 @@ const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});}
 const maxBytes=15*1024*1024;
 export function materialCard(row){return {id:row.id,filename:row.filename,mime:row.mime,kind:row.kind,size:row.byte_size,status:row.status,revision:row.revision,analysis:JSON.parse(row.analysis_json),error:row.error};}
 export async function listCompanyMaterials(env,workspace){return (await env.DB.prepare('SELECT * FROM company_materials WHERE workspace_id=? ORDER BY created_at,id').bind(workspace).all()).results.map(materialCard);}
+export async function companyProfileDocuments(env,workspace){
+ const rows=(await env.DB.prepare("SELECT * FROM company_materials WHERE workspace_id=? AND status='Ready' ORDER BY created_at,id").bind(workspace).all()).results;
+ const documents=[];
+ for(const row of rows){
+  const object=await env.WRITING_REFERENCES_BUCKET.get(row.text_key);if(!object)fail('Saved material text is unavailable. Retry before preparing your profile.',503);
+  const extracted=JSON.parse(await object.text()),sections=(extracted.sections||[]).filter(s=>typeof s.text==='string'&&s.text.trim());
+  // Give every readable page/image a share of the context budget, retaining physical locations.
+  const perDocument=Math.min(20000,Math.floor(60000/Math.max(1,rows.length)));
+  const perSection=Math.max(1,Math.floor(perDocument/Math.max(1,sections.length)));
+  const text=sections.map(s=>`${s.location}\n${s.text.slice(0,perSection)}`).join('\n\n');
+  if(text)documents.push({id:'material:'+row.id,name:row.filename,status:'ready',text,materialId:row.id,materialRevision:row.revision,managedMaterial:true,coverage:extracted.coverage||null,partial:sections.some(s=>s.text.length>perSection)||Boolean(extracted.coverage?.unreadable)});
+ }
+ // Deletion or retry during the read must not hand stale evidence to profile synthesis.
+ for(const doc of documents)if(!await env.DB.prepare("SELECT id FROM company_materials WHERE workspace_id=? AND id=? AND revision=? AND status='Ready'").bind(workspace,doc.materialId,doc.materialRevision).first())fail('Company material changed. Retry profile preparation.',409);
+ return documents;
+}
 export async function validateCompanyFile(file){
  if(!file||typeof file.arrayBuffer!=='function')fail('Choose a PDF, JPG or PNG file');
  if(file.size>maxBytes)fail('Maximum file size is 15 MB',413);
@@ -52,6 +68,7 @@ export async function handleCompanyMaterialsRoute(request,env,cors={}){
    await env.DB.prepare('DELETE FROM company_material_upload_tickets WHERE expires_at<?').bind(Date.now()).run();
    const ticket=randomToken();await env.DB.prepare('INSERT INTO company_material_upload_tickets VALUES(?,?,?,?)').bind(await sha256(ticket),workspace,user.id,Date.now()+120000).run();return json({ticket,uploadUrl:new URL('/company-material-upload',request.url).href},201,cors);
   }
+  if(url.pathname==='/api/company-materials/profile-context'&&request.method==='GET')return json({documents:await companyProfileDocuments(env,workspace)},200,cors);
   const match=url.pathname.match(/^\/api\/company-materials(?:\/([a-f0-9-]+)(?:\/(original|extracted|retry))?)?\/?$/);if(!match)fail('Not found',404);const [,id,action]=match;
   if(!id&&request.method==='GET')return json({cards:await listCompanyMaterials(env,workspace)},200,cors);
   if(!id&&request.method==='POST'){if(Number(request.headers.get('Content-Length'))>maxBytes+16384)fail('Maximum file size is 15 MB',413);return await upload(await request.formData(),env,workspace,cors);}

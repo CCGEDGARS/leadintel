@@ -27,7 +27,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
   return async url => {
     const parsed = new URL(String(url));
     if(['/customer/evidence-policy.js','/customer/strategy-integrity.js','/customer/market-conditions-engine.js','/customer/market.css','/customer/intelligence-profile-runtime.js','/customer/canonical-profile-runtime.js','/customer/reference-customers.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
-    if(['/customer/commercial-profile-adviser.js','/customer/profile-adviser.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(['/customer/commercial-profile-adviser.js','/customer/profile-adviser.css','/customer/company-research-security.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/market-research-guard.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/targeting-policy.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/reference-customer-library.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
@@ -39,7 +39,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
     if(parsed.pathname==='/customer/conversation-workflow-ui.js')return response({text:fs.readFileSync(path.join(root,'customer/conversation-workflow-ui.js'),'utf8')});
     if(parsed.pathname==='/api/conversation-workflows')return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/app-shell.css','/customer/language-pack-catalogue.js','/customer/message-translation-ui.js','/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
-    if(['/api/language-packs','/api/integrations/translation/google','/api/company-materials','/api/story-bank','/api/workspace-skills'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
+    if(['/api/language-packs','/api/integrations/translation/google','/api/company-materials','/api/company-materials/profile-context','/api/story-bank','/api/workspace-skills'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/rich-text.js','/customer/rich-text-editor.js','/customer/rich-text.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/api/integrations/google-calendar/status','/api/integrations/microsoft-calendar/status'].includes(parsed.pathname))return response({status:401,json:{error:'Sign in to connect your calendar'}});
     if(parsed.pathname==='/customer/message-draft-history.js')return response({text:fs.readFileSync(path.join(root,'customer/message-draft-history.js'),'utf8')});

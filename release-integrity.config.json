@@ -41,6 +41,7 @@
       "conversation_poll_interval_minutes": 60,
       "writing_assistant_outcome_version": "outcome-first-v1",
       "company_materials_version": "company-materials-v1",
+      "source_ingestion_version": "20261102-v1",
       "copilot_mentor_version": "20261027-mentor-v1",
       "workspace_skills_version": "20261027-book-skills-v1",
       "workspace_skills_limit": 30,
@@ -7072,6 +7073,61 @@
       "contains": [
         "function validPublishedPhone(value)",
         "instagram\\.com|facebook\\.com"
+      ]
+    },
+    {
+      "id": "source-ingestion-website",
+      "type": "text",
+      "url": "/customer/website-activation.js",
+      "status": 200,
+      "contains": [
+        "/api/integrations/services/firecrawl/scrape?workspace_id=",
+        "publicFirst:true",
+        "ACTIVATION_REQUEST_TIMEOUT_MS=60000",
+        "Website redirected outside the requested company domain"
+      ]
+    },
+    {
+      "id": "source-ingestion-upload-controls",
+      "type": "text",
+      "url": "/customer/company-materials.js",
+      "status": 200,
+      "contains": [
+        "input?.addEventListener('change',selected,true)",
+        "zone?.addEventListener('drop',dropped,true)",
+        "profile-context",
+        "Source text is ready for Profile"
+      ]
+    },
+    {
+      "id": "source-ingestion-profile",
+      "type": "text",
+      "url": "/customer/company-research-ui.js",
+      "status": 200,
+      "contains": [
+        "async function hydrateMaterialEvidence",
+        "await assertMaterialEvidenceCurrent({documents})",
+        "materialSignature"
+      ]
+    },
+    {
+      "id": "source-ingestion-profile-auth",
+      "type": "text",
+      "url": "/api/company-materials/profile-context?workspace_id=release-smoke",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "source-ingestion-prompt-coverage",
+      "type": "text",
+      "url": "/customer/company-research-security.js",
+      "status": 200,
+      "contains": [
+        ".slice(0,20).map(document",
+        "const documentBudget=",
+        "text:d.text.slice(0,docChars)"
       ]
     }
   ],
