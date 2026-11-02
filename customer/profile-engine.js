@@ -12,6 +12,7 @@
   ];
   const COUNTRIES=["Latvia","Estonia","Lithuania","Finland","Sweden","Norway","Denmark","Iceland","Poland","Germany","France","Netherlands","Belgium","Luxembourg","Spain","Italy","United Kingdom","Ireland","United States","Canada","Austria","Switzerland","Czech Republic","Slovakia","Hungary","Kazakhstan"];
   const TARGET_COUNTRIES=Object.freeze(["Afghanistan", "Albania", "Algeria", "American Samoa", "Andorra", "Angola", "Anguilla", "Antarctica", "Antigua & Barbuda", "Argentina", "Armenia", "Aruba", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bermuda", "Bhutan", "Bolivia", "Bosnia & Herzegovina", "Botswana", "Bouvet Island", "Brazil", "British Indian Ocean Territory", "British Virgin Islands", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Cape Verde", "Caribbean Netherlands", "Cayman Islands", "Central African Republic", "Chad", "Chile", "China", "Christmas Island", "Cocos (Keeling) Islands", "Colombia", "Comoros", "Congo - Brazzaville", "Congo - Kinshasa", "Cook Islands", "Costa Rica", "Croatia", "Cuba", "Curaçao", "Cyprus", "Czech Republic", "Côte d’Ivoire", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Falkland Islands", "Faroe Islands", "Fiji", "Finland", "France", "French Guiana", "French Polynesia", "French Southern Territories", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Gibraltar", "Greece", "Greenland", "Grenada", "Guadeloupe", "Guam", "Guatemala", "Guernsey", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Heard & McDonald Islands", "Honduras", "Hong Kong SAR China", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Isle of Man", "Israel", "Italy", "Jamaica", "Japan", "Jersey", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Macao SAR China", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Martinique", "Mauritania", "Mauritius", "Mayotte", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Montserrat", "Morocco", "Mozambique", "Myanmar (Burma)", "Namibia", "Nauru", "Nepal", "Netherlands", "New Caledonia", "New Zealand", "Nicaragua", "Niger", "Nigeria", "Niue", "Norfolk Island", "North Korea", "North Macedonia", "Northern Mariana Islands", "Norway", "Oman", "Pakistan", "Palau", "Palestinian Territories", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Pitcairn Islands", "Poland", "Portugal", "Puerto Rico", "Qatar", "Romania", "Russia", "Rwanda", "Réunion", "Samoa", "San Marino", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Sint Maarten", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Georgia & South Sandwich Islands", "South Korea", "South Sudan", "Spain", "Sri Lanka", "St. Barthélemy", "St. Helena", "St. Kitts & Nevis", "St. Lucia", "St. Martin", "St. Pierre & Miquelon", "St. Vincent & Grenadines", "Sudan", "Suriname", "Svalbard & Jan Mayen", "Sweden", "Switzerland", "Syria", "São Tomé & Príncipe", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tokelau", "Tonga", "Trinidad & Tobago", "Tunisia", "Turkmenistan", "Turks & Caicos Islands", "Tuvalu", "Türkiye", "U.S. Outlying Islands", "U.S. Virgin Islands", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Wallis & Futuna", "Western Sahara", "Yemen", "Zambia", "Zimbabwe", "Åland Islands"]);
+  const COUNTRY_ALIASES=Object.freeze({"turkey": "Türkiye", "hong kong": "Hong Kong SAR China", "macao": "Macao SAR China", "macau": "Macao SAR China", "czechia": "Czech Republic", "uk": "United Kingdom", "great britain": "United Kingdom", "usa": "United States", "united states of america": "United States", "uae": "United Arab Emirates", "ivory coast": "Côte d’Ivoire", "cote d’ivoire": "Côte d’Ivoire", "cote d'ivoire": "Côte d’Ivoire", "russian federation": "Russia", "republic of korea": "South Korea"});
   const MARKET_REGIONS=Object.freeze({
     Baltics:["Latvia","Lithuania","Estonia"],
     Nordics:["Sweden","Finland","Norway","Denmark","Iceland"],
@@ -65,6 +66,7 @@
   function canonicalMarket(value){
     const item=clean(value).slice(0,100);if(!item)return "";
     if(/^(?:kz|kazakhstan|kazakstan|kazahstan|kazahstāna|казахстан|қазақстан)$/i.test(item))return "Kazakhstan";
+    if(COUNTRY_ALIASES[item.toLowerCase()])return COUNTRY_ALIASES[item.toLowerCase()];
     const country=COUNTRIES.find(name=>name.toLowerCase()===item.toLowerCase());if(country)return country;
     const region=Object.keys(MARKET_REGIONS).find(name=>name.toLowerCase()===item.toLowerCase());if(region)return region;
     return item;
@@ -75,12 +77,12 @@
       const item=canonicalMarket(raw);const key=item.toLowerCase();
       if(!item||seen.has(key))continue;
       seen.add(key);result.push(item);
-      if(result.length>=12)break;
+      if(result.length>=12&&!result.every(item=>TARGET_COUNTRIES.includes(item)))break;
     }
     return result;
   }
   function normalizeTargetCountries(value){
-    const countries=[];for(const item of expandTargetMarkets(value)){const country=TARGET_COUNTRIES.find(name=>name.toLowerCase()===item.toLowerCase());if(country&&!countries.includes(country))countries.push(country);}return countries.slice(0,12);
+    const countries=[];for(const item of expandTargetMarkets(value)){const country=TARGET_COUNTRIES.find(name=>name.toLowerCase()===item.toLowerCase());if(country&&!countries.includes(country))countries.push(country);}return countries;
   }
   function expandTargetMarkets(value){
     const result=[];const seen=new Set();
