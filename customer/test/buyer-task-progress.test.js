@@ -267,7 +267,7 @@ for(const shadowList of ['', 'selectedProspects', 'candidates'])test(`pipeline c
  assert.equal(saved.people[0].emailResearch.status,'complete');assert.equal(saved.people[0].emailResearch.searches,13);
  assert.equal(saved.buyerDiscovery.pool[0].emailResearch.status,'complete');
  assert.equal(saved.publicContactVersion,'test');assert.notEqual(saved.publicContactStatus,'loading');
- assert.equal(centre.list()[0].status,'complete');
+ assert.equal(centre.list()[0].status,'partial','the incomplete inherited dossier must remain visible despite completed person checks');
  const restored=D.normalizeDiscoveryState({pipeline:[saved]}).pipeline[0];
  assert.equal(restored.people[0].emailResearch.status,'complete');assert.equal(restored.buyerDiscovery.pool[0].emailResearch.searches,13);
  if(shadowList)assert.equal(context.discovery[shadowList][0].people.length,0);
@@ -370,4 +370,11 @@ test('an explicitly automatic public research caller retains its approved paid c
 test('default completed free research never starts paid lookup even when a paid handler is available',async()=>{
  const {context,owner}=publicCrmRuntime(),automatic=[];context.window.LeadIntelAdditionalContacts={auto:async(...args)=>automatic.push(args)};
  assert.equal(await context.run(owner.domain),true);assert.equal(automatic.length,0);
+});
+
+test('standalone public research exposes a working task cancellation during an ignored await',async()=>{
+ const {context,owner}=publicCrmRuntime(),centre=createTaskCentre();context.window.LeadIntelTaskCentre=centre;context.publicContactPromises=new Map();let entered;const began=new Promise(resolve=>entered=resolve);
+ context.runPublicProspectContacts=async(_domain,options)=>{owner.buyerResearchProgress={taskId:options.researchTaskId};entered();return new Promise(()=>{});};
+ vm.runInContext(source.slice(source.indexOf('async function findPublicProspectContacts('),source.indexOf('function publicSearchRows('))+'\nthis.find=findPublicProspectContacts;',context);
+ const pending=context.find(owner.domain);await began;const task=centre.list()[0];assert.equal(task.canCancel,true);assert.equal(owner.buyerResearchProgress.taskId,task.id);await centre.cancel(task.id);assert.equal(await pending,false);assert.equal(centre.get(task.id).status,'canceled');assert.equal(context.publicContactPromises.size,0);
 });

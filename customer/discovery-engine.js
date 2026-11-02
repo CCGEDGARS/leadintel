@@ -1595,6 +1595,14 @@
       else if(!next.linkedinIdentityEvidence&&old.linkedinIdentityEvidence&&normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))next.linkedinIdentityEvidence=old.linkedinIdentityEvidence;
       if(person.identityStatus==='pending'&&old.identityStatus!=='pending'&&clean(old.publicName||old.name).split(/\s+/).length>=2&&old.publicNameUrl){next.name=old.publicName||old.name;next.identityStatus='confirmed';next.nameVerification=old.nameVerification||'confirmed';}
       for(const field of ['publicName','publicNameUrl','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicLinkedinUrl','linkedin_url'])if(!next[field]&&old[field])next[field]=old[field];
+      // Sparse identity results must not strip an already-read source from the
+      // same exact address. A different address/source or explicit rejection
+      // remains a new binding and cannot inherit the old confirmation.
+      if(clean(next.publicEmail).toLowerCase()===clean(old.publicEmail).toLowerCase()&&normalizeUrl(next.publicEmailUrl)===normalizeUrl(old.publicEmailUrl)){
+        const prior=old.publicEmailEvidence,current=next.publicEmailEvidence,age=Date.now()-Date.parse(prior?.checkedAt||'');
+        if(prior?.version===2&&prior.sourceRead===true&&normalizeUrl(prior.url)===normalizeUrl(old.publicEmailUrl)&&age>=0&&age<30*86400000&&(!current||current.sourceRead!==true||Date.parse(current.checkedAt)<Date.parse(prior.checkedAt)))next.publicEmailEvidence=prior;
+        if(!next.publicEmailSourceCheck&&old.publicEmailSourceCheck)next.publicEmailSourceCheck=old.publicEmailSourceCheck;
+      }
       const phoneRecord=[old,person].filter(item=>item.publicPhoneSourceCheck?.version===2).sort((a,b)=>(Date.parse(a.publicPhoneSourceCheck.checkedAt)||0)-(Date.parse(b.publicPhoneSourceCheck.checkedAt)||0)||Number(a.publicPhoneSourceCheck.status==='not_attributed')-Number(b.publicPhoneSourceCheck.status==='not_attributed')).at(-1);
       if(phoneRecord){
         next.publicPhoneSourceCheck=phoneRecord.publicPhoneSourceCheck;
@@ -1906,6 +1914,8 @@
     const officialReads=new Map((options.force?[]:[...(previousReport?.officialPageReads||[]),...(report.officialPageReads||[])]).filter(row=>row?.sourceRead===true&&normalizeUrl(row.url)&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&Date.now()-Date.parse(row.checkedAt)>=0&&Date.now()-Date.parse(row.checkedAt)<30*86400000).map(row=>[normalizeUrl(row.url),{url:normalizeUrl(row.url),sourceRead:true,checkedAt:row.checkedAt}]));
     candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report};report.version=policy.version;report.status='running';report.totalPeople=people.length;
     Object.assign(report,{startedAt:new Date().toISOString(),completedAt:'',stopReason:'',gaps:[],reusedChecks:0,officialPages:0,officialPageReads:[...officialReads.values()],checkedPeople:0,deepPeople:0});
+    const checkpointReads=rows=>{for(const row of rows){const url=normalizeUrl(row.url||row.metadata?.sourceURL),stamp=Number.isFinite(Date.parse(row.extractedAt||row.verifiedAt))?(row.extractedAt||row.verifiedAt):officialReads.get(url)?.checkedAt||report.startedAt,age=Date.now()-Date.parse(stamp);if(url&&row.sourceRead===true&&row.evidenceKind!=='model_summary'&&String(row.markdown||row.content||'').trim()&&companyIdentityDomain(url)===companyIdentityDomain(candidate.domain)&&age>=0&&age<30*86400000)officialReads.set(url,{url,sourceRead:true,checkedAt:stamp});}report.officialPageReads=[...officialReads.values()].slice(-policy.maxSourcePages);report.officialPages=report.officialPageReads.length;};
+    checkpointReads(sourceRows);if(report.officialPages)onProgress?.({label:`Using ${report.officialPages} read official source${report.officialPages===1?'':'s'}`,sourceRead:true});
     // Reset coverage before a deadline can stop the first person from starting.
     if(options.force&&!signal?.aborted)for(const person of people){
       if(person.contactResearch)person.contactResearch={...person.contactResearch,policyVersion:'',checks:Object.fromEntries(Object.entries(person.contactResearch.checks||{}).map(([key,row])=>[key,{...row,status:'not_searched',checkedAt:'',reason:'Explicit refresh pending',queryLog:(row.queryLog||[]).map(entry=>({...entry,status:'not_searched',checkedAt:'',resultCount:0,reason:''}))}])),channels:Object.fromEntries(Object.keys(person.contactResearch.channels||{}).map(key=>[key,{status:'not_searched'}]))};
@@ -1930,7 +1940,7 @@
       if(gmail.length)person.gmailMatches=[...new Map([...(person.gmailMatches||[]),...gmail].map(row=>[row.email,row])).values()].slice(0,8);
       const official=rows.filter(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&!staffPages.has(row.url));
       if(official.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:discoverCompanyContacts(official,candidate,candidate.buyerDiscovery?.companyContacts||[])};for(const row of official)staffPages.add(row.url);}
-      sourceRows.push(...rows.filter(row=>!sourceRows.includes(row)));
+      sourceRows.push(...rows.filter(row=>!sourceRows.includes(row)));checkpointReads(rows);
     };
     const extract=async(person,rows)=>{
       if(!readPage)return;
@@ -2406,7 +2416,7 @@
       try{const page=await bounded(()=>readPage(entry.url,controller.signal)),actual=contactResearchUrl(page.url||page.metadata?.sourceURL||page.metadata?.url||entry.url),body=String(page.markdown||page.content||page.text||'');
         if(!actual||(!official(actual)&&actual!==entry.url)||!body.trim()||/^(?:access denied|just a moment|verify you are human)/i.test(body.trim()))throw new Error('Source unavailable or redirected outside its attribution');
         const row={...page,url:actual,markdown:body,sourceRead:true,extractedAt:new Date().toISOString(),...(entry.source?{sourceEvidence:entry.source}:{})},source=companyContactSource(row,candidate);if(!source)throw new Error('Company attribution could not be established');
-        read.set(actual,row);completed.add(actual);completed.add(entry.url);rows.push(row);freshRows.push(row);queue.delete(entry.url);queue.delete(actual);reads.push({url:actual,status:'complete',reason:''});links(row);finish(true,true);onProgress({label:`Reading company contact sources · ${read.size}/${policy.maxPages}`});
+        read.set(actual,row);completed.add(actual);completed.add(entry.url);rows.push(row);freshRows.push(row);queue.delete(entry.url);queue.delete(actual);reads.push({url:actual,status:'complete',reason:''});links(row);finish(true,true);onProgress({label:`Reading company contact sources · ${attempted.size}/${policy.maxPages} new page requests · ${read.size} source bodies available`,pageRequests:attempted.size,pageRequestLimit:policy.maxPages,sourceBodies:read.size});
       }catch(error){if(controller.signal.aborted)throw error;failures.push('Could not read '+entry.url+': '+error.message);reads.push({url:entry.url,status:'failed',reason:String(error.message).slice(0,220)});}
     };
     const finish=(stopped,checkpoint=false)=>{
