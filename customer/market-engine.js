@@ -75,7 +75,7 @@
   function strategyActivationRequirement(state={},targetingConfirmed=false){
     const task=(step,id,reason)=>({available:false,target:'prerequisite',step,id,reason,action:'Complete previous step'});
     if(!clean(state.website))return task(1,'company-website','Add your company website before enabling this profile or signal.');
-    if(!splitList(state.targetMarkets).length)return task(1,'custom-target-market','Choose a target market before enabling this profile or signal.');
+    if(!splitList(state.targetMarkets).length)return task(1,'target-country','Choose a target country before enabling this profile or signal.');
     if(!state.profile)return task(2,'analyze-company','Analyze your company before enabling this profile or signal.');
     if(!targetingConfirmed)return task(2,'confirm-targeting','Complete and confirm your targeting answers before enabling this profile or signal.');
     if(!state.approved)return task(3,'approve-profile','Review and approve your profile before enabling this profile or signal.');

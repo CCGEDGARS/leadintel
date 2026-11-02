@@ -141,29 +141,30 @@ function updateCompleteness(){
   caption.textContent=!state.website?"Add your website to begin.":!state.targetMarkets.length?"Choose at least one target market.":score<70?"Core context ready. Optional enrichment improves precision.":score<95?"Strong context. Add more only where useful.":"Ready for intelligence analysis.";
 }
 function renderTargetMarkets(){
-  const selected=LeadIntelProfile.normalizeTargetMarkets(state.targetMarkets);state.targetMarkets=selected;
+  const selected=LeadIntelProfile.normalizeTargetCountries(state.targetMarkets);state.targetMarkets=selected;
+  const countrySelect=$("target-country");if(countrySelect&&countrySelect.options.length<2){for(const country of LeadIntelProfile.TARGET_COUNTRIES){const option=document.createElement('option');option.value=country;option.textContent=country;countrySelect.appendChild(option);}}
   const keys=new Set(selected.map(item=>item.toLowerCase()));
   document.querySelectorAll("[data-target-market]").forEach(button=>{const active=keys.has(String(button.dataset.targetMarket||"").toLowerCase());button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active?"true":"false");});
   const target=$("selected-target-markets");
-  if(target)target.innerHTML=selected.length?selected.map(item=>`<button class="selected-market-chip" type="button" data-remove-target-market="${esc(item)}" aria-label="Remove ${esc(item)}"><span>${esc(item)}</span><b aria-hidden="true">×</b></button>`).join(""):`<span class="market-empty-selection">Choose at least one market to continue.</span>`;
+  if(target)target.innerHTML=selected.length?selected.map(item=>`<button class="selected-market-chip" type="button" data-remove-target-market="${esc(item)}" aria-label="Remove ${esc(item)}"><span>${esc(item)}</span><b aria-hidden="true">×</b></button>`).join(""):`<span class="market-empty-selection">Choose at least one country to continue.</span>`;
   if($("selected-market-count"))$("selected-market-count").textContent=`${selected.length} selected`;
   if($("clear-target-markets"))$("clear-target-markets").disabled=!selected.length;
 }
 function setTargetMarkets(markets){
-  const next=LeadIntelProfile.normalizeTargetMarkets(markets);
+  const next=LeadIntelProfile.normalizeTargetCountries(markets);
   if(JSON.stringify(next)===JSON.stringify(state.targetMarkets)){renderTargetMarkets();return;}
   state.targetMarkets=next;invalidateStrategicOutputs(false);saveState();renderTargetMarkets();
   window.dispatchEvent(new CustomEvent("leadintel:target-markets-changed",{detail:{markets:[...next]}}));
 }
 function toggleTargetMarket(value){
-  const market=LeadIntelProfile.normalizeTargetMarkets([value])[0];if(!market)return;
+  const market=LeadIntelProfile.normalizeTargetCountries([value])[0];if(!market)return;
   const exists=state.targetMarkets.some(item=>item.toLowerCase()===market.toLowerCase());
   setTargetMarkets(exists?state.targetMarkets.filter(item=>item.toLowerCase()!==market.toLowerCase()):[...state.targetMarkets,market]);
 }
 function addCustomTargetMarket(){
-  const input=$("custom-target-market");const additions=LeadIntelProfile.normalizeTargetMarkets(input?.value||"");
-  if(!additions.length){showToast("Type a country, region, industry or market");return;}
-  setTargetMarkets([...state.targetMarkets,...additions]);input.value="";showToast(`${additions.length===1?additions[0]:`${additions.length} markets`} added`);
+  const input=$("target-country");const additions=LeadIntelProfile.normalizeTargetCountries(input?.value||"");
+  if(!additions.length){showToast("Choose a country");return;}
+  setTargetMarkets([...state.targetMarkets,...additions]);input.value="";showToast(`${additions.length===1?additions[0]:`${additions.length} countries`} added`);
 }
 function syncInputsFromState(){
   $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
@@ -536,7 +537,7 @@ async function openModule(step){
   const target=Number(step)||1;readSources();
   if(campaignModuleAllowed(target)){try{if(typeof window.LeadIntelCampaignModuleLoader!=='function')throw Error('Messages are still loading. Your campaign is saved; retry in a moment.');await window.LeadIntelCampaignModuleLoader(target);if(!campaignModuleAllowed(target))return false;setStep(target);return true;}catch(error){showToast(error.message||'Campaign workspace could not load. Retry.');return false;}}
   if(target>=4&&!requireConfirmedTargeting())return false;
-  if(!LeadIntelProfile.canAccessModule(state,target)){LeadIntelTargeting.focusControl(window,{step:1,id:state.website?"custom-target-market":"company-website",message:state.website?"Choose a target market before continuing.":"Add your company website before continuing."});return false;}
+  if(!LeadIntelProfile.canAccessModule(state,target)){LeadIntelTargeting.focusControl(window,{step:1,id:state.website?"target-country":"company-website",message:state.website?"Choose a target country before continuing.":"Add your company website before continuing."});return false;}
   if(target<=2){setStep(target);return true;}
   if(!state.profile)return analyzeCompany(Math.min(target,3));
   if(target>=4&&!state.approved){setStep(3);showToast("Approve the profile before continuing");return false;}
@@ -1693,7 +1694,7 @@ function bind(){
     const remove=e.target.closest("[data-remove-target-market]");if(remove){toggleTargetMarket(remove.dataset.removeTargetMarket);}
   });
   $("add-target-market").addEventListener("click",addCustomTargetMarket);
-  $("custom-target-market").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
+  $("target-country").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
   $("clear-target-markets").addEventListener("click",()=>setTargetMarkets([]));
   document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
   $("confirm-targeting")?.addEventListener("click",confirmTargeting);

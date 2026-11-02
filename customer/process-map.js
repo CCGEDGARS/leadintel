@@ -300,7 +300,7 @@ function reviewMiniStep(stageId,itemId){
   }
   openProcessStep(stageId);
   const targets={
-    1:{website:'#activate-website, #company-website',markets:'#custom-target-market',evidence:'#pdf-input'},
+    1:{website:'#activate-website, #company-website',markets:'#target-country',evidence:'#pdf-input'},
     3:{icps:'#icp-list',signals:'#signal-designer',opportunities:'#strategy-market-summary',strategy:'#activate-market-strategy'},
     4:{scope:'#discovery-target-count',companies:'#run-company-discovery',review:'#company-candidates',pipeline:'#company-candidates'},
     5:{'buyer-quality':'.buyer-quality-supervisor',people:'.selected-prospect-row'},

@@ -7129,6 +7129,27 @@
         "const documentBudget=",
         "text:d.text.slice(0,docChars)"
       ]
+    },
+    {
+      "id": "setup-country-only-selector",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "id=\"target-country\"",
+        "Add another country",
+        "+ Add country"
+      ]
+    },
+    {
+      "id": "setup-country-normalization",
+      "type": "text",
+      "url": "/customer/profile-engine.js",
+      "status": 200,
+      "contains": [
+        "TARGET_COUNTRIES=Object.freeze",
+        "function normalizeTargetCountries(value)"
+      ]
     }
   ],
   "retry": {
