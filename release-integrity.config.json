@@ -7159,7 +7159,9 @@
       "contains": [
         "incremental:true",
         "raw?.continuation!==true",
-        "Previous research attempt:"
+        "Previous research attempt:",
+        "const retained=successful?",
+        "companyDossier:successful||result"
       ]
     },
     {

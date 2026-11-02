@@ -24,8 +24,37 @@ async function research(candidate,context,{request,isCurrent=()=>true,signal,per
  const body={company:candidate.company,domain:candidate.domain,seller:context.seller||{},roles:context.roles||[],opportunity:context.opportunity||'',formulas:context.formulas||[]},key=D.contextKey(body),prior=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain);
  if(!force&&prior?.status==='complete'&&D.coverageComplete(prior,body)&&!prior.lastAttempt&&prior.contextKey===key&&Date.now()-Date.parse(prior.checkedAt)>=0&&Date.now()-Date.parse(prior.checkedAt)<86400000)return prior;
  const pending=prior?.lastAttempt?.research||prior,resume=pending?.status==='partial'&&pending.contextKey===key&&pending.plan?.signature===D.researchPlan(body).signature&&(pending.passes||[]).some(p=>p.status!=='complete'&&(!D.passCoverageComplete(p,pending.plan)||D.selectedSourceUrls(p.searchFamilies).some(url=>!(p.extractedSources||[]).includes(url))));
- let latest;
- try{const raw=await observeRequest(async s=>{let raw;for(let pass=0;pass<3;pass++){if(s.aborted||!isCurrent())throw Error('Research context changed');raw=await request({...body,incremental:true,force:force&&!resume&&pass===0},s);if(s.aborted||!isCurrent())throw Error('Research context changed');const checkpoint=D.safe(raw,candidate.domain);if(raw?.continuation!==true||!checkpoint||checkpoint.contextKey!==key)return raw;latest=checkpoint;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:checkpoint};persist();onProgress?.({phase:'provider_checkpoint',checkpointAt:new Date().toISOString()});}return raw;},{signal,isCurrent,onProgress,readProgress,key,timeoutMs,pollMs});if(signal?.aborted||!isCurrent())throw Error('Research context changed');const result=D.safe(raw,candidate.domain);if(!result||result.contextKey!==key)throw Error('Company dossier context mismatch');latest=result;if(result.status!=='complete'||!D.coverageComplete(result,body)){const previous=D.safe(raw.previousSuccessful,candidate.domain),retained=prior?.status==='complete'&&prior.contextKey===key?prior:previous?.contextKey===key?previous:null;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:retained||result};throw Error('Two-provider company research is incomplete. Completed searches are saved; retry to resume the remaining checks.');}candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};persist();return result;}
+ let latest,successful=prior?.status==='complete'&&prior.contextKey===key?prior:null;
+ try{
+  const raw=await observeRequest(async s=>{
+   let raw;
+   for(let pass=0;pass<3;pass++){
+    if(s.aborted||!isCurrent())throw Error('Research context changed');
+    raw=await request({...body,incremental:true,force:force&&!resume&&pass===0},s);
+    if(s.aborted||!isCurrent())throw Error('Research context changed');
+    const checkpoint=D.safe(raw,candidate.domain);
+    if(!checkpoint||checkpoint.contextKey!==key)return raw;
+    const previous=D.safe(raw.previousSuccessful,candidate.domain);
+    if(!successful&&previous?.status==='complete'&&previous.contextKey===key)successful=previous;
+    if(raw?.continuation!==true)return raw;
+    latest=checkpoint;
+    // Save progress beside the completed dossier so reloads and failed continuations retain it.
+    const retained=successful?{...successful,lastAttempt:{status:'failed',reason:'Research refresh is incomplete. Saved searches can be resumed.',checkedAt:new Date().toISOString(),research:attemptSnapshot(checkpoint)}}:checkpoint;
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:retained};persist();
+    onProgress?.({phase:'provider_checkpoint',checkpointAt:new Date().toISOString()});
+   }
+   return raw;
+  },{signal,isCurrent,onProgress,readProgress,key,timeoutMs,pollMs});
+  if(signal?.aborted||!isCurrent())throw Error('Research context changed');
+  const result=D.safe(raw,candidate.domain);
+  if(!result||result.contextKey!==key)throw Error('Company dossier context mismatch');
+  latest=result;
+  if(result.status!=='complete'||!D.coverageComplete(result,body)){
+   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:successful||result};
+   throw Error('Two-provider company research is incomplete. Completed searches are saved; retry to resume the remaining checks.');
+  }
+  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};persist();return result;
+ }
  catch(error){if(!signal?.aborted&&isCurrent()){const retained=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain)||prior;if(retained)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:{...retained,lastAttempt:{status:'failed',reason:D.errorMessage(error).slice(0,200),checkedAt:new Date().toISOString(),research:latest?attemptSnapshot(latest):retained.lastAttempt?.research||null}}};persist();}throw error;}
 }
 function coverageHtml(d){const latest=d.lastAttempt?.research||d,coverage=latest.coverage;if(!coverage)return '<h5>Search plan and progress</h5><p>Search coverage was not recorded. Refresh company research.</p>';
