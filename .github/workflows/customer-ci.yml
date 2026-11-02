@@ -82,8 +82,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install pinned customer dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install pinned customer and integration dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
       - name: Run customer tests
         shell: bash
         run: |
