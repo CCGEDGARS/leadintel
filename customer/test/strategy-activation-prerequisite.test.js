@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const M=require('../market-engine.js');
 const ready=()=>({website:'https://seller.example',targetMarkets:['Sweden'],profile:{},approved:true});
 test('switch prerequisites identify the exact earlier task without changing state',()=>{
- const cases=[[{...ready(),website:''},true,'company-website',1],[{...ready(),targetMarkets:[]},true,'custom-target-market',1],[{...ready(),profile:null},true,'analyze-company',2],[ready(),false,'confirm-targeting',2],[{...ready(),approved:false},true,'approve-profile',3]];
+ const cases=[[{...ready(),website:''},true,'company-website',1],[{...ready(),targetMarkets:[]},true,'target-country',1],[{...ready(),profile:null},true,'analyze-company',2],[ready(),false,'confirm-targeting',2],[{...ready(),approved:false},true,'approve-profile',3]];
  for(const [s,confirmed,id,step] of cases){const before=JSON.stringify(s),r=M.strategyActivationRequirement(s,confirmed);assert.equal(r.id,id);assert.equal(r.step,step);assert.equal(r.available,false);assert.equal(JSON.stringify(s),before);}
  assert.equal(M.strategyActivationRequirement(ready(),true),null);
 });

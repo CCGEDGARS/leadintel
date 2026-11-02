@@ -4,15 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 function read(name){return fs.readFileSync(path.join(__dirname,'..',name),'utf8');}
 
-test('customer onboarding exposes mandatory website and hybrid target market selector plus optional sources',()=>{
+test('customer onboarding exposes mandatory website and country-only target selector plus optional sources',()=>{
   const html=read('index.html');
   assert.match(html,/id="company-website"/);
   assert.match(html,/id="target-market-selector"/);
   assert.match(html,/data-target-market="Sweden"/);
   assert.match(html,/data-target-market="Germany"/);
-  assert.match(html,/data-target-market="Nordics"/);
-  assert.match(html,/data-target-market="DACH"/);
-  assert.match(html,/id="custom-target-market"/);
+  assert.doesNotMatch(html,/data-target-market="Nordics"/);
+  assert.doesNotMatch(html,/data-target-market="DACH"/);
+  assert.match(html,/id="target-country"/);
   assert.match(html,/id="add-target-market"/);
   assert.match(html,/id="clear-target-markets"/);
   assert.match(html,/id="selected-target-markets"/);

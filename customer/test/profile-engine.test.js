@@ -131,7 +131,7 @@ test('reports material information gaps instead of inventing answers', () => {
 test('saved state normalization removes unknown fields and unsafe URLs', () => {
   const state = engine.normalizeSavedState({website:'javascript:evil()', targetMarkets:[' Sweden ','SWEDEN','Nordics'], additionalLinks:['example.com','javascript:x'], answers:{priority_offers:'A'}, rogue:'x'});
   assert.equal(state.website, '');
-  assert.deepEqual(state.targetMarkets,['Sweden','Nordics']);
+  assert.deepEqual(state.targetMarkets,['Sweden','Finland','Norway','Denmark','Iceland']);
   assert.deepEqual(state.additionalLinks, ['https://example.com/']);
   assert.equal(state.answers.priority_offers, 'A');
   assert.equal(state.rogue, undefined);
