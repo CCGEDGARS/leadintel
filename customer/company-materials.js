@@ -69,7 +69,7 @@
   const bridge=root.LeadIntelServerBridge,workspace=bridge?.session?.authenticated?bridge.workspace?.id:'',user=bridge?.session?.user?.id;
   if(!workspace)throw Error('Sign in and wait for the workspace to load before reading company materials.');
   const account=root.localStorage?.getItem('leadintel_account_context_v1');
-  return createApi(workspace,root.fetch.bind(root),()=>root.LeadIntelServerBridge?.workspace?.id===workspace&&root.LeadIntelServerBridge?.session?.user?.id===user&&root.localStorage?.getItem('leadintel_account_context_v1')===account).profileDocuments();
+  return createApi(workspace,root.fetch.bind(root),()=>Boolean(root.LeadIntelServerBridge?.session?.authenticated)&&(!root.LeadIntelAccountCache||root.LeadIntelAccountCache.current())&&root.LeadIntelServerBridge?.workspace?.id===workspace&&root.LeadIntelServerBridge?.session?.user?.id===user&&root.localStorage?.getItem('leadintel_account_context_v1')===account).profileDocuments();
  }
  const api={createApi,mount,profileDocuments};if(typeof module==='object'&&module.exports){module.exports=api;return;}root.LeadIntelCompanyMaterials=api;
  if(root.document){const currentWorkspace=()=>root.LeadIntelServerBridge?.session?.authenticated?root.LeadIntelServerBridge.workspace?.id||'':'';const boot=()=>{const ui=mount({document:root.document,currentWorkspace});if(!ui)return;root.LeadIntelCompanyMaterials.upload=files=>ui.upload(files);ui.sync();root.setInterval(()=>ui.sync(),5000);root.addEventListener('focus',()=>ui.sync({refresh:true}));};if(root.document.readyState==='loading')root.document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();}

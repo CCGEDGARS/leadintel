@@ -268,7 +268,7 @@ function settleBeforeAbort(operation,signal){
 async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage,answers={}},parentSignal=null){
   const context=captureResearchContext(readState());
   const bridge=await waitForServerBridge();assertResearchContext(context,readState());if(parentSignal?.aborted)throw new Error('Research was stopped.');const workspace=bridge?.workspace;if(!bridge?.session?.authenticated||!workspace?.id)return {draft:null,mode:'evidence',reason:'Sign in to use workspace AI enrichment.',receipt:{operation:'synthesis',provider:'',status:'not_run',resultCount:0}};
-  sources=(Array.isArray(sources)?sources:[]).slice(0,12);documents=engine().normalizeDocumentIds(documents).filter(doc=>String(doc?.text||'').trim()).slice(0,15);
+  sources=(Array.isArray(sources)?sources:[]).slice(0,12);documents=engine().normalizeDocumentIds(documents).filter(doc=>String(doc?.text||'').trim()).slice(0,20);
   const prompt=engine().buildAiPrompt({website,targetMarkets,sources,documents,uiLanguage,answers});const receipt={operation:'synthesis',provider:'',status:'failed',resultCount:0};const operation=window.LeadIntelReliabilityTrace?.begin('profile_synthesis');operation?.checkpoint('request','pending');
   try{
     const response=await settleBeforeAbort(fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json',...(operation?.id?{'X-LeadIntel-Operation-Id':operation.id}:{})},body:JSON.stringify({task:'profile-synthesis',system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200}),signal:parentSignal}),parentSignal);
@@ -296,7 +296,7 @@ async function hydrateMaterialEvidence(){
  const documents=await materials.profileDocuments();assertResearchContext(context,readState());
  if(!Array.isArray(documents))throw Error('Company material evidence could not be loaded. Retry before preparing your profile.');
  const legacy=(state.documents||[]).filter(d=>!String(d.id||'').startsWith('material:'));
- const next={...state,documents:[...documents,...legacy].slice(0,15)};
+ const next={...state,documents:[...legacy,...documents].slice(0,20)};
  if(JSON.stringify(next.documents)!==JSON.stringify(state.documents||[])){writeState(next);window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website:next.website,materialsUpdated:true}}));}
  return readState();
 }

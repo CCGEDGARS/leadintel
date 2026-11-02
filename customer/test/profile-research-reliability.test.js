@@ -106,3 +106,10 @@ test('material changed during AI preparation cannot publish an outdated draft',a
  const r=runtime();let reads=0;r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>++reads===1?[{id:'material:one',name:'brochure.pdf',materialId:'one',materialRevision:2,managedMaterial:true,status:'ready',text:'Confirmed precision assembly.'}]:[]};
  await r.hooks.runCompanyResearch();assert.notEqual(r.meta().mode,'ai');assert.match(r.meta().error||r.meta().lastFailure,/material.*changed/i);r.close();
 });
+
+
+test('all fifteen uploaded materials preserve five older document sources during profile preparation',async()=>{
+ const r=runtime();const state=r.state();state.documents=Array.from({length:5},(_,i)=>({id:'D'+(i+1),name:'legacy'+i+'.pdf',text:'Preserved historical document '+i,status:'ready'}));r.saved.set(STATE,JSON.stringify(state));
+ const materials=Array.from({length:15},(_,i)=>({id:'material:'+i,name:'new'+i+'.png',materialId:String(i),materialRevision:1,status:'ready',text:'Source image '+i}));r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>materials};
+ await r.hooks.runCompanyResearch();assert.equal(r.state().documents.length,20);assert.equal(r.state().documents[0].id,'D1');assert.equal(r.state().documents[19].id,'material:14');r.close();
+});

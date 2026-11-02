@@ -361,7 +361,7 @@
   }
 
   function buildAiPrompt(input={}){
-    const sources=(input.sources||[]).slice(0,MAX_SOURCES);const docs=normalizeDocumentIds(input.documents).filter(doc=>clean(doc?.text)).slice(0,15);
+    const sources=(input.sources||[]).slice(0,MAX_SOURCES);const docs=normalizeDocumentIds(input.documents).filter(doc=>clean(doc?.text)).slice(0,20);
     const requestedLanguage=clean(input.uiLanguage).toLowerCase();
     const outputLanguage=requestedLanguage==="en"||requestedLanguage.startsWith("en")?"English":"Latvian";
     const sourceLines=sources.map(source=>`[${source.id}] ${source.title||source.url}\nURL: ${source.url}\n${String(source.text||"").slice(0,5000)}`).join("\n\n");
