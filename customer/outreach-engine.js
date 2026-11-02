@@ -486,6 +486,42 @@
   function buyerDraftKey(domain,personId,channel){return 'buyer-draft:'+encodeURIComponent(clean(domain).toLowerCase().replace(/^www\./,''))+':'+encodeURIComponent(clean(personId))+':'+(channel==='linkedin'?'linkedin':'email');}
   function rememberBuyerDraft(state={},item={}){if(!item.domain||!item.selectedPersonId)return state;return {...state,buyerDrafts:{...(state.buyerDrafts||{}),[buyerDraftKey(item.domain,item.selectedPersonId,item.channel)]:normalizeItem(item)}};}
   function savedBuyerDraft(state,domain,personId,channel){const key=buyerDraftKey(domain,personId,channel);const item=state?.buyerDrafts?.[key]||(Array.isArray(state?.items)?state.items:[]).find(row=>row&&buyerDraftKey(row.domain,row.selectedPersonId,row.channel)===key);return item&&item.domain===domain&&item.selectedPersonId===personId&&item.channel===channel?normalizeItem(item):null;}
+  function buyerDraftCopy(item){const linked=item?.channel==='linkedin',drafts=item?.drafts||{};return {subject:linked?'':String(drafts.emailSubject??''),message:String((linked?drafts.linkedinMessage:drafts.emailBody)??''),messageHtml:linked?'':String(drafts.emailBodyHtml??'')};}
+  function emptyBuyerDraft(item){return Object.values(buyerDraftCopy(item)).every(value=>!value.trim());}
+  function savedBuyerDraftTime(item){
+    const info=item?.messageStudioDraft||{},saved=info.savedDraft,current=buyerDraftCopy(item);
+    if(info.savePending||typeof info.scriptSavedAt!=='string'||!saved||typeof saved.subject!=='string'||typeof saved.message!=='string'||saved.messageHtml!==undefined&&typeof saved.messageHtml!=='string')return null;
+    const time=Date.parse(info.scriptSavedAt);
+    if(!Number.isFinite(time)||saved.subject!==current.subject||saved.message!==current.message||(saved.messageHtml||'')!==current.messageHtml)return null;
+    if(current.messageHtml&&!Rich()?.matchingHtml(current.message,current.messageHtml))return null;
+    return time;
+  }
+  // Reconcile only acknowledged, unchanged copies. A generated/manual draft with
+  // no save receipt remains local work, including a deliberate deletion.
+  function canReconcileSavedBuyerDraft(item){
+    const info=item?.messageStudioDraft||{},book=info.languageVersions;
+    if(item?.approved||item?.reapprovalRequired||item?.approvedAt||item?.contactedAt||item?.linkedinSentAt||info.savePending||info.flowMembership||Array.isArray(info.flowPlans)&&info.flowPlans.length||book?.activeLanguage&&book.activeLanguage!==book.originalLanguage)return false;
+    if(savedBuyerDraftTime(item)!==null)return true;
+    return emptyBuyerDraft(item)&&!info.savedDraft&&!info.scriptSavedAt&&!['manual','rewrite'].includes(info.editorOrigin);
+  }
+  function buyerDraftLanguage(item){const info=item?.messageStudioDraft||{};return clean(info.languageVersions?.activeLanguage||item?.localizationProvenance?.language||item?.campaignScenario?.resolvedLanguage||item?.campaignScenario?.language||info.essentials?.language||'en').toLowerCase();}
+  function preferNewerSavedBuyerDraft(local,remote){
+    if(!remote||!canReconcileSavedBuyerDraft(local)||!['email','linkedin'].includes(remote.channel)||!clean(remote.domain)||!clean(remote.selectedPersonId)||!buyerDraftCopy(remote).message.trim())return false;
+    const remoteTime=savedBuyerDraftTime(remote);if(remoteTime===null)return false;
+    const domain=value=>clean(value).toLowerCase().replace(/^www\./,''),knownLocal=!emptyBuyerDraft(local);
+    for(const [key,normalize] of [['domain',domain],['selectedPersonId',clean],['channel',clean]]){
+      const value=normalize(local?.[key]);if((knownLocal&&!value)||value&&value!==normalize(remote[key]))return false;
+    }
+    if(local&&buyerDraftLanguage(local)!==buyerDraftLanguage(remote))return false;
+    const localIdentity=local?.messageStudioDraft?.recipientIdentity,remoteIdentity=remote.messageStudioDraft?.recipientIdentity;
+    const validIdentity=(identity,item)=>identity&&identity.version===1&&clean(identity.personId)===clean(item.selectedPersonId)&&domain(identity.companyDomain)===domain(item.domain);
+    if(remoteIdentity&&!validIdentity(remoteIdentity,remote)||localIdentity&&!validIdentity(localIdentity,local))return false;
+    if(localIdentity&&(!remoteIdentity||JSON.stringify(stable(localIdentity))!==JSON.stringify(stable(remoteIdentity)))||knownLocal&&Boolean(localIdentity)!==Boolean(remoteIdentity))return false;
+    const workspaces=[local,remote].flatMap(item=>[item?.workspaceId,item?.workspace_id,item?.messageStudioDraft?.workspaceId,item?.messageStudioDraft?.workspace_id,item?.messageStudioDraft?.recipientIdentity?.workspaceId,item?.messageStudioDraft?.recipientIdentity?.workspace_id]).map(clean).filter(Boolean);
+    if(new Set(workspaces).size>1)return false;
+    const localTime=savedBuyerDraftTime(local);
+    return localTime===null||remoteTime>localTime;
+  }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};const items=(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain);
     // The active message of each company lives in items and savedBuyerDraft falls back to it, so a
     // byte-identical cache copy only doubled the outreach section (live 2026-10-22: 452 KB stored twice).
@@ -494,5 +530,5 @@
     const buyerDrafts=Object.fromEntries(Object.entries(input.buyerDrafts||{}).filter(([key,item])=>item&&key===buyerDraftKey(item.domain,item.selectedPersonId,item.channel)).slice(-100).map(([key,item])=>[key,normalizeItem(item)]).filter(([key,item])=>active.get(key)!==JSON.stringify(item)));
     return {buyerDrafts,...(input.messageStudio&&typeof input.messageStudio==='object'?{messageStudio:JSON.parse(JSON.stringify(input.messageStudio))}:{}),selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items};}
 
-  return {messageSourceAuthority,sourceAuthorityCurrent,approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
+  return {messageSourceAuthority,sourceAuthorityCurrent,approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,canReconcileSavedBuyerDraft,preferNewerSavedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
 });

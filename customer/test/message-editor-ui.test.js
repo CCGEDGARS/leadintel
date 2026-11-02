@@ -18,7 +18,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
 test('top actions mount once; Edit unlocks fields, Save persists exact text, Cancel restores baseline',async()=>{
  const {w,document,item,saved}=mounted(),q=id=>document.getElementById(id);
  for(const id of ['mw-save-message','mw-edit-message','mw-rewrite-message','mw-restore-original'])assert.equal(document.querySelectorAll('#'+id).length,1);
- assert.ok(q('mw-tools-drawer').contains(q('mw-save-message')));assert.ok(q('outreach-email-body').compareDocumentPosition(q('mw-save-message'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.ok(document.querySelector('.mw-editor-head').contains(q('mw-save-message')));assert.equal(q('mw-save-message').closest('details'),null);assert.ok(q('mw-save-message').compareDocumentPosition(q('outreach-email-body'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
  assert.equal(q('outreach-email-body').readOnly,true);q('mw-edit-message').click();assert.equal(q('outreach-email-body').readOnly,false);assert.equal(q('approve-outreach').disabled,true);
  q('outreach-email-subject').value='  Subject spacing  ';q('outreach-email-body').value='  Exact message\n\nTrailing spaces  ';q('outreach-email-body').dispatchEvent(new w.Event('input'));
  assert.equal(saved.length,0);assert.equal(item().drafts.emailBody,'Existing working message');q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.equal(saved[0].drafts.emailBody,'  Exact message\n\nTrailing spaces  ');assert.equal(saved[0].drafts.emailSubject,'  Subject spacing  ');assert.equal(q('outreach-email-body').readOnly,true);assert.equal(q('approve-outreach').disabled,false);
@@ -63,9 +63,9 @@ test('shared email toolbar saves formatting-only changes and Cancel restores the
  q('mw-edit-message').click();await settle();rich.setHtml('<em>Existing working message</em>');q('mw-cancel-edit').click();assert.match(rich.getHtml(),/<strong>/);assert.equal(item().drafts.emailBody,'Existing working message');rich.destroy();w.close();
 });
 
-test('Save draft never opens a template dialog; Save as template is separate and visible beside it',async()=>{
+test('Save draft never opens a template dialog; Save as template stays separate in Tools',async()=>{
  const {w,document,saved}=mounted(),q=id=>document.getElementById(id);let templateCalls=0;
  w.LeadIntelChannelWorkspace={saveEditedTemplate:async()=>{templateCalls++;return {ok:true}}};
  q('mw-edit-message').click();q('outreach-email-body').value='A separate exact draft';q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.equal(templateCalls,0);
- assert.equal(q('mw-save-message').textContent,'Save draft');assert.equal(q('message-save-as-template').textContent,'Save as template');assert.equal(q('message-save-as-template').closest('#mw-header-actions')?.id,'mw-header-actions');assert.ok(q('mw-version-history'));w.close();
+ assert.equal(q('mw-save-message').textContent,'Save draft');assert.equal(q('message-save-as-template').textContent,'Save as template');assert.equal(q('message-save-as-template').closest('#mw-tools-actions')?.id,'mw-tools-actions');assert.ok(q('mw-tools-drawer').contains(q('message-save-as-template')));assert.ok(q('mw-version-history'));w.close();
 });
