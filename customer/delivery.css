@@ -15,6 +15,7 @@
 @media(max-width:680px){#step-7 .delivery-control-grid{grid-template-columns:minmax(0,1fr)}.delivery-workflow-next{align-items:flex-start;flex-direction:column;gap:12px}.delivery-workflow-next button{width:100%}#step-7 .learning-scorecard{grid-template-columns:repeat(2,minmax(0,1fr))}#step-7 .learning-scorecard article:nth-child(3n){border-right:1px solid #e2ebe5}#step-7 .learning-scorecard article:nth-child(2n){border-right:0}#step-7 .learning-scorecard article:nth-child(n+4){border-bottom:1px solid #e2ebe5}#step-7 .learning-scorecard article:nth-child(n+5){border-bottom:0}#step-7 .delivery-state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#step-7 .delivery-state-grid article{min-width:0;overflow-wrap:anywhere}#step-7 .delivery-buttons button{flex:1 1 180px}}
 
 /* Delivery field rhythm: keep instructions, inputs and actions distinct. */
+.delivery-preview{margin-top:24px;padding:20px;border:1px solid #d8e5dc;border-radius:12px;background:#fafcfb;min-width:0;overflow-wrap:anywhere}.delivery-preview h4{margin:0 0 12px;font-size:14px}.delivery-preview p{margin:0 0 8px;font-size:14px;color:#526159}.delivery-preview>strong{display:block;font-size:16px;line-height:1.5}.delivery-preview>div{margin-top:16px;font-size:15px;line-height:1.7;white-space:pre-wrap}.delivery-preview>div.has-rich-text{white-space:normal}.delivery-preview img{max-width:100%;height:auto}.delivery-sync{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}.delivery-sync p{flex:1 1 260px;margin:0;font-size:14px;line-height:1.6;overflow-wrap:anywhere}.delivery-sync button{min-height:44px}.delivery-sync [hidden]{display:none}
 #step-7 .panel{padding:28px}
 #step-7>.panel{margin-bottom:24px}
 #step-7 .section-title{margin-bottom:24px}
@@ -62,3 +63,5 @@
  .delivery-reply-footer{align-items:stretch;flex-direction:column;gap:14px}
  .delivery-reply-footer button{width:100%}
 }
+
+#delivery-preview-frame{width:100%;height:680px;border:0;margin-top:16px;background:#fff}#delivery-preview-frame[hidden],#delivery-preview-body[hidden]{display:none}

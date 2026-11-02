@@ -15,6 +15,7 @@ on:
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-step5-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
+      - 'scripts/verify-step7-journey.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/verify-discovery-deploy.mjs'
@@ -47,6 +48,7 @@ on:
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-step5-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
+      - 'scripts/verify-step7-journey.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/verify-discovery-deploy.mjs'
@@ -177,10 +179,10 @@ jobs:
           import {appendFileSync} from 'node:fs';
           appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
           JS
-      - name: Verify Buyers and Messages through authenticated persistence and browser reloads
+      - name: Verify Buyers, Messages and Delivery through authenticated persistence and browser reloads
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/step5-journey.test.mjs backend/test/step6-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/step5-journey.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
       - name: Upload controlled journey evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -191,5 +193,7 @@ jobs:
             /tmp/leadintel-step5-test-*/*.png
             /tmp/leadintel-step6-test-*/evidence.json
             /tmp/leadintel-step6-test-*/*.png
+            /tmp/leadintel-step7-test-*/evidence.json
+            /tmp/leadintel-step7-test-*/*.png
           if-no-files-found: warn
           retention-days: 14

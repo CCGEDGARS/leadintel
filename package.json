@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "check:step7": "node --test customer/test/step7-*.test.js customer/test/*delivery*.test.js customer/test/mailbox-settings-controls.test.js customer/test/brand-asset-bridge.test.js customer/test/page-quality-delivery.test.js",
     "build": "bash scripts/build-vercel-static.sh",
     "check:step6": "node --test customer/test/step6-*.test.js customer/test/message*.test.js customer/test/*core-template.test.js customer/test/approved-template-fields.test.js customer/test/verbatim-template-contract.test.js customer/test/core-template-rules.test.js customer/test/subject-editor*.test.js customer/test/trigger-crm-workflow.test.js customer/test/linkedin-studio.test.js customer/test/linkedin-message-handoff.test.js customer/test/outreach-generation-race.test.js customer/test/account-workspace-isolation.test.js"
   },

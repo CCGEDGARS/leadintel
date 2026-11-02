@@ -7,6 +7,7 @@ import {apolloCapabilities} from './service-integrations.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import {sha256,cookieValue} from './security.js';
 import {contactRequestGuard} from './contact-operation-authority.js';
+import {manualCrmDeliveryAssertions} from './manual-delivery-reconciliation.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail,normalizeDomain} from './enrichment.js';
 import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
@@ -233,7 +234,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
       }
       if(company.action==='activities'){
         if(request.method==='GET')return json(await listCrmActivities(env.DB,access.context,company.id,{limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
-        if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');access.context.guard=await contactRequestGuard(request,env,access.context);access.context.writeAuthority=access.context.guard.writeAuthority;await access.context.guard();access.context.messageAssertions=await validateCrmScriptPackage(env,access.context,company.id,body);const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});await access.context.guard();return json(result,200,cors);}
+        if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');access.context.guard=await contactRequestGuard(request,env,access.context);access.context.writeAuthority=access.context.guard.writeAuthority;await access.context.guard();access.context.messageAssertions=[...await validateCrmScriptPackage(env,access.context,company.id,body),...await manualCrmDeliveryAssertions(env,access.context,company.id,body)];const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});await access.context.guard();return json(result,200,cors);}
         return error('Method not allowed',405,cors);
       }
       return error('Not found',404,cors);

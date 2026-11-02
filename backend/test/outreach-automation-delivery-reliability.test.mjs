@@ -37,6 +37,65 @@ test('revocation at the actual CRM transaction preserves acceptance and cannot a
   assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,0);assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='delivery-co'").get().pipeline_stage,'Ready for Outreach');assert.equal(f.DB.raw.prepare('SELECT status FROM gmail_messages').get().status,'sent');assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='outreach_automation.crm_sync_failed_after_send'").get().n,1);
  }finally{f.DB.raw.close();}
 });
+for(const failure of ['activity','pipeline','confirmation'])test(`accepted automatic delivery repairs a temporary ${failure} outage on the next run without replaying transport`,async()=>{
+  const f=await fixture();try{
+   const trigger=failure==='activity'?"CREATE TRIGGER temporary_sync_outage BEFORE INSERT ON crm_activities WHEN NEW.activity_type='email.sent' BEGIN SELECT RAISE(ABORT,'temporary CRM outage'); END":failure==='pipeline'?"CREATE TRIGGER temporary_sync_outage BEFORE UPDATE ON crm_companies WHEN NEW.pipeline_stage='Contacted' BEGIN SELECT RAISE(ABORT,'temporary pipeline outage'); END":"CREATE TRIGGER temporary_sync_outage BEFORE UPDATE ON gmail_messages WHEN NEW.status='sent' BEGIN SELECT RAISE(ABORT,'temporary confirmation outage'); END";
+   f.DB.raw.exec(trigger);let sends=0;const sendMessage=async()=>{sends++;return {id:'accepted-id',threadId:'accepted-thread'};};
+   await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(sends,1,failure);
+   assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='delivery-co'").get().pipeline_stage,'Ready for Outreach',failure);
+   f.DB.raw.exec('DROP TRIGGER temporary_sync_outage');
+   await runOutreachAutomation(f.env,{now,sendMessage});
+   assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,1,failure);
+   assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='delivery-co'").get().pipeline_stage,'Contacted',failure);
+   assert.equal(f.DB.raw.prepare('SELECT status FROM gmail_messages').get().status,'sent',failure);
+   assert.equal(f.DB.raw.prepare('SELECT status FROM outreach_automation_queue WHERE id=?').get(f.queue.id).status,'sent',failure);
+   await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(sends,1,failure);
+   assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,1,failure);
+  }finally{f.DB.raw.close();}
+});
+test('accepted automatic CRM recovery keeps changed recipient, source, mailbox, owner and unknown submissions held',async()=>{
+ for(const mutation of ["UPDATE crm_contacts SET name='Replacement buyer'","UPDATE customer_workspace_state SET payload_json=json_set(payload_json,'$.main.profile.priorityOffers','Unreviewed changed offer')","UPDATE gmail_connections SET google_email='replacement@example.test'","UPDATE workspace_members SET role='viewer' WHERE workspace_id='storage-w1'","UPDATE outreach_automation_queue SET body='Replacement message'","UPDATE gmail_messages SET status='sending'; DELETE FROM audit_events WHERE event_type='email.delivery_accepted'"]){
+  const f=await fixture();try{
+   f.DB.raw.exec("CREATE TRIGGER temporary_sync_outage BEFORE INSERT ON crm_activities WHEN NEW.activity_type='email.sent' BEGIN SELECT RAISE(ABORT,'temporary CRM outage'); END");let sends=0;const sendMessage=async()=>{sends++;return {id:'accepted-id',threadId:'accepted-thread'};};
+   await runOutreachAutomation(f.env,{now,sendMessage});f.DB.raw.exec('DROP TRIGGER temporary_sync_outage');f.DB.raw.exec(mutation);
+   await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(sends,1,mutation);
+   assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,0,mutation);
+   assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='delivery-co'").get().pipeline_stage,'Ready for Outreach',mutation);
+  }finally{f.DB.raw.close();}
+ }
+});
+test('accepted automatic CRM recovery rejects source or mailbox replacement at the CRM transaction',async()=>{
+ for(const mutation of ["UPDATE customer_workspace_state SET payload_json=json_set(payload_json,'$.main.profile.priorityOffers','Changed at CRM commit')","UPDATE gmail_connections SET google_email='replaced-at-commit@example.test'"]){
+  const f=await fixture();try{
+   f.DB.raw.exec("CREATE TRIGGER temporary_sync_outage BEFORE INSERT ON crm_activities WHEN NEW.activity_type='email.sent' BEGIN SELECT RAISE(ABORT,'temporary CRM outage'); END");let sends=0;const sendMessage=async()=>{sends++;return {id:'accepted-id',threadId:'accepted-thread'};};
+   await runOutreachAutomation(f.env,{now,sendMessage});f.DB.raw.exec('DROP TRIGGER temporary_sync_outage');
+   const batch=f.DB.batch.bind(f.DB);let fired=false;f.DB.batch=async rows=>{if(!fired&&rows.some(row=>row.deliverySql?.includes('INSERT OR IGNORE INTO crm_activities'))){fired=true;f.DB.raw.exec(mutation);}return batch(rows);};
+   await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(fired,true,mutation);assert.equal(sends,1,mutation);
+   assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,0,mutation);
+   assert.equal(f.DB.raw.prepare('SELECT status FROM gmail_messages').get().status,'sent',mutation);
+  }finally{f.DB.raw.close();}
+ }
+});
+test('completed automatic CRM recovery preserves later pipeline progress and workspace separation',async()=>{
+ const f=await fixture({bodyChanges:{followup_body:''}});try{
+  f.DB.raw.exec("CREATE TRIGGER temporary_sync_outage BEFORE INSERT ON crm_activities WHEN NEW.activity_type='email.sent' BEGIN SELECT RAISE(ABORT,'temporary CRM outage'); END");let sends=0;const sendMessage=async()=>{sends++;return {id:'accepted-id',threadId:'accepted-thread'};};
+  await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(f.DB.raw.prepare('SELECT status FROM outreach_automation_sequences').get().status,'completed');f.DB.raw.exec('DROP TRIGGER temporary_sync_outage');
+  f.DB.raw.exec("UPDATE crm_companies SET pipeline_stage='Replied'; INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,pipeline_stage,first_seen_at,last_seen_at,created_at,updated_at) VALUES('other-workspace-company','storage-w2','buyer.example','Other Workspace Company','prospect','Ready for Outreach','now','now','now','now')");
+  await runOutreachAutomation(f.env,{now,sendMessage});await runOutreachAutomation(f.env,{now,sendMessage});assert.equal(sends,1);
+  const activity=f.DB.raw.prepare("SELECT workspace_id,company_id,subject,metadata_json FROM crm_activities WHERE activity_type='email.sent'").get();assert.equal(activity.workspace_id,'storage-w1');assert.equal(activity.company_id,'delivery-co');assert.equal(activity.subject,f.body.subject);assert.equal(JSON.parse(activity.metadata_json).gmail_message_id,'accepted-id');
+  assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='delivery-co'").get().pipeline_stage,'Replied');assert.equal(f.DB.raw.prepare("SELECT pipeline_stage FROM crm_companies WHERE id='other-workspace-company'").get().pipeline_stage,'Ready for Outreach');
+ }finally{f.DB.raw.close();}
+});
+test('bounded automatic CRM recovery rotates beyond older held rows without changing delivery intent',async()=>{
+ const f=await fixture({bodyChanges:{followup_body:''}});try{
+  f.DB.raw.exec("CREATE TRIGGER temporary_sync_outage BEFORE INSERT ON crm_activities WHEN NEW.activity_type='email.sent' BEGIN SELECT RAISE(ABORT,'temporary CRM outage'); END");let sends=0;const sendMessage=async()=>{sends++;return {id:'accepted-id',threadId:'accepted-thread'};};await runOutreachAutomation(f.env,{now,sendMessage});f.DB.raw.exec('DROP TRIGGER temporary_sync_outage');
+  for(let index=0;index<25;index++){const id='held-recovery-'+index;f.DB.raw.prepare("INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key,updated_at) VALUES(?,'storage-w1',?,'storage-w1',?,'buyer@buyer.example','Held history','Held body','sent','2000-01-01','2000-01-01',?,'2000-01-01')").run(id,f.sequence.id,index+100,id);f.DB.raw.prepare("INSERT INTO audit_events(id,workspace_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,'storage-w1','outreach_automation.crm_sync_failed_after_send','outreach_automation_queue',?,'{}')").run(id,id);}
+  await runOutreachAutomation(f.env,{now,sendMessage,limit:25});await runOutreachAutomation(f.env,{now,sendMessage,limit:25});await runOutreachAutomation(f.env,{now,sendMessage,limit:25});
+  assert.equal(sends,1);assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='email.sent'").get().n,1);
+  assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM outreach_automation_queue WHERE id LIKE 'held-recovery-%' AND status='sent' AND attempt_count=0").get().n,25);
+  assert.ok(f.DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='outreach_automation.crm_recovery_checked'").get().n<=26);
+ }finally{f.DB.raw.close();}
+});
 test('external campaign prefixes cannot bypass original canonical source or invent persisted campaign approval',async()=>{
  for(const source_authority of [null,undefined,'current']){const f=await fixture({bodyChanges:{contact_identity:'campaign:nonexistent:delivery-buyer',...(source_authority==='current'?{}:{source_authority})},expectedStatus:409});try{assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM outreach_automation_sequences').get().n,0);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM outreach_automation_queue').get().n,0);}finally{f.DB.raw.close();}}
 });

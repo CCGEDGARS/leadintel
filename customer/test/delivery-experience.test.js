@@ -5,6 +5,7 @@ const read=name=>fs.readFileSync(require.resolve('../'+name),'utf8');
 function fixture(){
  const dom=new JSDOM('<main class="content"><section id="step-6"><div class="outreach-drafts"></div></section></main>',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window;
  Object.assign(w,{LeadIntelServerBridge:{ready:true,workspace:{id:'w1',role:'owner'},session:{authenticated:true,user:{id:'fixture-user'}},listCrmCompanies:async()=>({ok:false,error:'Controlled CRM offline'})},LeadIntelDelivery:require('../delivery-engine.js'),LeadIntelOutreach:require('../outreach-engine.js'),LeadIntelDiscovery:require('../discovery-engine.js'),LeadIntelContentLanguage:{workspaceContentLanguage:()=> 'en'},LeadIntelCustomerNavigation:{setStep:step=>{w.navigated=step;return true;}}});
+ w.LeadIntelDialogs={confirm:async()=>true};
  w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(canonicalMain));w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){w.scrolled=this.id;};
  w.eval('(function(){'+read('delivery-ui.js').replace(/^import .*;\s*$/gm,'')+'\n})();');
  return {w,q:id=>w.document.getElementById(id),close:()=>w.close()};
@@ -47,6 +48,7 @@ test('confirming a saved buyer send marks that buyer contacted without changing 
  const a=pkg('alice'),b=pkg('bob'),O=f.w.LeadIntelOutreach,key=O.buyerDraftKey(b.domain,b.selectedPersonId,b.channel);
  f.w.localStorage.setItem('leadintel_customer_v2_outreach',JSON.stringify({items:[a],buyerDrafts:{[key]:b}}));
  f.w.localStorage.setItem('leadintel_customer_v2_delivery',JSON.stringify({selectedDomain:b.domain,selectedPackageKey:f.w.LeadIntelDelivery.packageKey(b)}));f.w.dispatchEvent(new f.w.CustomEvent('leadintel:outreach-sent'));
+ const bridge=f.w.LeadIntelServerBridge,company={id:'crm-buyer',workspace_id:'w1',normalized_domain:'buyer.test'};bridge.checkDeliveryStatus=async({domain,recipient})=>({ok:true,workspace_id:'w1',domain,recipient,manual_record_allowed:true});bridge.listCrmCompanies=async()=>({ok:true,companies:[company]});bridge.recordCrmActivity=async()=>({ok:true});bridge.addCrmToPipeline=async()=>({ok:true,company});
  await f.w.LeadIntelDeliveryUI.confirmSent();
  const state=JSON.parse(f.w.localStorage.getItem('leadintel_customer_v2_outreach'));assert.ok(state.buyerDrafts[key].contactedAt);assert.equal(state.items[0].contactedAt,'');
 }finally{f.close();}});

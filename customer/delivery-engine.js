@@ -131,7 +131,26 @@
     const source=value&&typeof value==="object"?value:{};
     const opportunities=Array.isArray(source.opportunities)?source.opportunities.map(normalizeOpportunity).filter(item=>item.domain):[];
     const activity=Array.isArray(source.activity)?source.activity.map(normalizeActivity).filter(item=>item.type):[];
-    return {selectedDomain:normalizeDomain(source.selectedDomain),selectedPackageKey:clean(source.selectedPackageKey),selectedRecordId:clean(source.selectedRecordId),opportunities,activity,connector:{...CONNECTOR}};
+    const pendingSync=Array.isArray(source.pendingSync)?source.pendingSync.filter(row=>row&&row.id&&row.workspaceId&&row.userId&&row.domain&&row.activity?.id===row.id).map(row=>({...row,domain:normalizeDomain(row.domain)})):[];
+    return {selectedDomain:normalizeDomain(source.selectedDomain),selectedPackageKey:clean(source.selectedPackageKey),selectedRecordId:clean(source.selectedRecordId),opportunities,activity,pendingSync,connector:{...CONNECTOR}};
+  }
+
+  // CRM is an acknowledged history projection, never a source of send approval.
+  function crmRecordSnapshot(record,workspaceId){return {version:1,workspaceId:clean(workspaceId),record:normalizeOpportunity(record)};}
+  function restoreCrmHistory(state,detail,workspaceId){
+    let next=normalizeDeliveryState(state);const company=detail?.company,domain=normalizeDomain(company?.normalized_domain||company?.website);
+    if(!workspaceId||company?.workspace_id!==workspaceId||!company.id||!domain)return next;
+    const snapshots=(detail.activities||[]).filter(activity=>activity.workspace_id===workspaceId&&activity.company_id===company.id&&['email.sent','email.reply_received','meeting.recorded','proposal.recorded','deal.won','deal.lost'].includes(activity.activity_type||activity.type)).map(activity=>activity.metadata?.delivery_record).filter(snapshot=>snapshot?.version===1&&snapshot.workspaceId===workspaceId&&snapshot.record?.domain===domain&&snapshot.record.sentAt&&Number.isFinite(Date.parse(snapshot.record.sentAt))&&normalizeEmail(snapshot.record.recipientEmail));
+    // Merge observations rather than replace a newer local working projection.
+    for(const snapshot of snapshots){
+      const remote=normalizeOpportunity(snapshot.record),local=next.opportunities.find(row=>row.id===remote.id);
+      if(local&&(local.domain!==remote.domain||local.recipientEmail!==remote.recipientEmail||local.personId!==remote.personId||local.approvedAt!==remote.approvedAt||local.sentAt!==remote.sentAt||local.subject!==remote.subject||local.bodyText!==remote.bodyText))continue;
+      const replies=[...new Map([...(local?.replies||[]),...remote.replies].map(reply=>[reply.id,reply])).values()].sort((a,b)=>b.at.localeCompare(a.at));
+      const rank={"":0,Meeting:1,Proposal:2,Won:3,Lost:3},outcome=local&&rank[local.outcomeStage]>=rank[remote.outcomeStage]?local:remote;
+      const merged=normalizeOpportunity({...remote,...local,replies,latestReplyCategory:replies[0]?.category||local?.latestReplyCategory||remote.latestReplyCategory,outcomeStage:outcome.outcomeStage,outcomeAt:outcome.outcomeAt});
+      const index=next.opportunities.findIndex(row=>row.id===merged.id);if(index<0)next.opportunities.push(merged);else next.opportunities[index]=merged;
+    }
+    return next;
   }
   function upsertOpportunity(state,record){
     const next=normalizeDeliveryState(state);const normalized=normalizeOpportunity(record);const index=next.opportunities.findIndex(item=>item.id===normalized.id);
@@ -249,5 +268,5 @@
     return {metrics:{sent:records.length,replied,replyRate:percent(replied,records.length),meetings,meetingRate:percent(meetings,records.length),proposals,won,lost,winRate:percent(won,won+lost)},byTone,byMarket,byOffer,bySignal,recommendations:recommendations.slice(0,6),minimumSample:sample};
   }
 
-  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,submissionStorageKey,readSubmissionReceipt,saveSubmissionReceipt,packageKey,approvedDeliveryPackages,approvedRecipient,findDeliveryRecord,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState};
+  return {CONNECTOR,OUTCOME_STAGES,CRM_ORDER,submissionStorageKey,readSubmissionReceipt,saveSubmissionReceipt,packageKey,approvedDeliveryPackages,approvedRecipient,findDeliveryRecord,normalizeEmail,buildGmailComposeUrl,buildSentCrmActivity,confirmSend,classifyReply,recordReply,recordOutcome,recommendedPipelineStage,buildLearningSummary,normalizeDeliveryState,crmRecordSnapshot,restoreCrmHistory};
 });

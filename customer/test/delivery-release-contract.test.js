@@ -8,7 +8,7 @@ test('Delivery static entry and recursive browser loader references all invalida
  let references=0;for(const name of fs.readdirSync(path.join(root,'customer')).filter(name=>/\.(js|html|css)$/.test(name))){const source=fs.readFileSync(path.join(root,'customer',name),'utf8');
   for(const match of source.matchAll(/(['"`])([^'"`\s<>]*?\.js(?:\?[^'"`\s<>]*)?)\1/g)){const url=match[2],base=url.split('?')[0].split('/').at(-1),before=source.slice(Math.max(0,match.index-35),match.index);if(!targets.has(base)||/(?:require|asset)\s*\(\s*$/.test(before)||!url.includes('?'))continue;references++;assert.ok(url.includes('delivery-reliability=20261031-v1'),`${name} -> ${base}`);}
  }
- assert.ok(references>=18);const lazy=fs.readFileSync(path.join(root,'customer/delivery-ui.js'),'utf8');assert.ok(lazy.includes('`${path}?v=${ASSET_VERSION}&messages-reliability=20261031-v1&delivery-reliability=20261031-v1`'));
+ assert.ok(references>=18);const lazy=fs.readFileSync(path.join(root,'customer/delivery-ui.js'),'utf8');assert.ok(lazy.includes('`${path}?v=${ASSET_VERSION}&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&step7-delivery=20261102-v1`'));
 });
 test('browser cache invalidation never appends query tokens to CommonJS module resolution',()=>{for(const name of fs.readdirSync(path.join(root,'customer')).filter(name=>name.endsWith('.js'))){const source=fs.readFileSync(path.join(root,'customer',name),'utf8');for(const match of source.matchAll(/\brequire\(\s*(['"])([^'"]+)\1\s*\)/g))assert.ok(!match[2].includes('delivery-reliability='),name);}});
 test('Delivery release artifact checks match actual local files and require source, receipt, activation, diagnostics and cache controls',()=>{
