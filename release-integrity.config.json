@@ -7150,6 +7150,27 @@
         "TARGET_COUNTRIES=Object.freeze",
         "function normalizeTargetCountries(value)"
       ]
+    },
+    {
+      "id": "dossier-incremental-provider-client",
+      "type": "text",
+      "url": "/customer/company-dossier-ui.js",
+      "status": 200,
+      "contains": [
+        "incremental:true",
+        "raw?.continuation!==true",
+        "Previous research attempt:"
+      ]
+    },
+    {
+      "id": "saved-buyer-role-reassessment",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function canReassessSavedBuyerRoles",
+        "acceptedOfficialBuyerEmail(candidate,person)"
+      ]
     }
   ],
   "retry": {

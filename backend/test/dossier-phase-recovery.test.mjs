@@ -6,5 +6,5 @@ test('read evidence is extracted and saved before a later source batch stalls',a
 });
 test('the client request budget covers two full provider passes',async()=>{
  const fs=await import('node:fs'),backend=fs.readFileSync(new URL('../src/company-dossier.js',import.meta.url),'utf8'),client=fs.readFileSync(new URL('../../customer/company-dossier-ui.js',import.meta.url),'utf8'),ui=fs.readFileSync(new URL('../../customer/discovery-ui.js',import.meta.url),'utf8');
- const pass=Number(backend.match(/timeoutMs=(\d+),pageTimeoutMs/)[1]),total=Number(client.match(/timeoutMs=(\d+),pollMs/)[1]);assert.ok(total>pass*2);assert.ok(ui.includes('timeoutMs:420000'));assert.ok(total<420000);
+ const pass=Number(backend.match(/timeoutMs=(\d+),pageTimeoutMs/)[1]),total=Number(client.match(/timeoutMs=(\d+),pollMs/)[1]);assert.ok(total>pass*2);assert.ok(ui.includes('timeoutMs:225000'));assert.ok(client.includes('incremental:true'));assert.ok(225000>pass&&225000<300000);assert.ok(total<420000);
 });
