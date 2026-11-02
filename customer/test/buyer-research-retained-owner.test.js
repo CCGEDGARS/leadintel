@@ -16,6 +16,11 @@ test('independent retained-person checks continue when the dossier provider fail
  const h=runner();h.c.window.LeadIntelCompanyDossierUi.research=async()=>{throw Error('Company researcher rate limit');};
  assert.equal(await h.c.runPublicProspectContacts(h.owner.domain),true);assert.equal(h.mandatory,1);assert.ok(h.owner.people.every(p=>p.emailResearch?.status==='complete'));assert.equal(h.owner.publicResearch.accountability.status,'partial');assert.ok(h.owner.publicResearch.accountability.gaps.some(gap=>gap.includes('rate limit')));
 });
+test('one discovery run hands its existing dossier and pages directly to person checks',async()=>{
+ const h=runner();h.owner.__leadIntelBuyerDiscoveryRun={};Object.defineProperty(h.owner,'__leadIntelBuyerSources',{value:[{url:'https://example.com/team',sourceRead:true,markdown:'Teemu Myllykangas is Procurement Director at Example.'}]});h.owner.buyerResearchProgress={phase:'identity',taskId:'parent-task',startedAt:new Date().toISOString()};let dossiers=0,official=0;const order=[];
+ h.c.window.LeadIntelCompanyDossierUi.research=async()=>{dossiers++;throw Error('Repeated dossier');};h.c.LeadIntelDiscovery.runOfficialContactResearch=async()=>{official++;return {};};const mandatory=h.c.LeadIntelDiscovery.runMandatoryBuyerResearch;h.c.LeadIntelDiscovery.runMandatoryBuyerResearch=async(...args)=>{order.push('person checks');return mandatory(...args);};h.c.confirmResearchedPublicEmails=async()=>order.push('CRM email association');
+ assert.equal(await h.c.runPublicProspectContacts(h.owner.domain),true);assert.equal(dossiers,0);assert.equal(official,0);assert.equal(h.mandatory,1);assert.equal(order[0],'person checks');assert.equal(h.owner.buyerResearchProgress.taskId,'parent-task');
+});
 for(const changed of ['discovery','bridge','company'])test(`a replaced ${changed} cancels the old retained buyer research`,async()=>{
  const h=runner(),pending=h.c.runPublicProspectContacts(h.owner.domain),saved=h.saves;
  if(changed==='discovery')h.c.discovery={selectedProspects:[h.owner]};
@@ -100,4 +105,9 @@ test('identity discovery stops before another provider when retained buyer evide
 test('identity discovery stops before another provider when company buying roles change during dossier await',async()=>{
  const h=identityRunner();let websiteReads=0;h.c.window.LeadIntelCompanyDossierUi.evidenceRows=()=>[];h.c.window.LeadIntelFirstPartyResearch={collectWebsiteEvidence:async()=>{websiteReads++;return {pages:[]};}};
  const pending=h.c.searchDecisionMakers(h.owner);h.owner.buyerRoles='Finance Director';h.gate.resolve({});assert.equal(await pending,false);assert.equal(websiteReads,0);assert.equal(h.owner.buyerRoles,'Finance Director');
+});
+
+test('replacing the parent discovery generation invalidates inherited person checks',async()=>{
+ const h=runner(),blocked=deferred();h.owner.__leadIntelBuyerDiscoveryRun={};Object.defineProperty(h.owner,'__leadIntelBuyerSources',{value:[]});h.c.LeadIntelDiscovery.runMandatoryBuyerResearch=async()=>blocked.promise;
+ const pending=h.c.runPublicProspectContacts(h.owner.domain);h.owner.__leadIntelBuyerDiscoveryRun={};const saved=JSON.stringify(h.owner);blocked.resolve({status:'partial',gaps:[]});assert.equal(await pending,false);assert.equal(JSON.stringify(h.owner),saved);
 });

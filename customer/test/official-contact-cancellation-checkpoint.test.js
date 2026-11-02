@@ -4,7 +4,7 @@ test('canceling a later official-page read retains the completed source checkpoi
  let candidate={company:'North Works',domain:'north.example',buyerSearchMode:'user_selected_target',people:[]};
  const controller=new AbortController(),root='https://north.example/',contact=root+'contact',later=root+'supplier';
  let waiting,release,finished;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{waiting=r;}),completed=new Promise(r=>{finished=r;});
- const task=D.runOfficialContactResearch(candidate,{signal:controller.signal,search:async()=>[],onProgress:({label})=>{if(label.includes('2/'))finished();},readPage:async url=>{
+ const task=D.runOfficialContactResearch(candidate,{signal:controller.signal,search:async()=>[],onProgress:({sourceBodies})=>{if(sourceBodies>=2)finished();},readPage:async url=>{
   if(url===later){waiting();return blocked;}return {url,markdown:url===root?'# North Works\n[Contact]('+contact+')\n[Supplier]('+later+')':'# North Works contact\nPublished business contact: info@north.example'};
  }});
  await Promise.all([started,completed]);controller.abort();const result=await task;

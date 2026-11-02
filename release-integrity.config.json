@@ -3836,7 +3836,7 @@
       "contains": [
         "buyer-contacts-v23-company-record",
         "async function confirmResearchedPublicEmails",
-        "await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner)",
+        "await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner,{readMissing:false})",
         "contextGuard,researchOwner"
       ]
     },
@@ -7005,7 +7005,7 @@
       "status": 200,
       "contains": [
         "Official company email · Accepted",
-        "progress(detail?.profilesReady===true)"
+        "progress(detail?.profilesReady===true||detail?.sourceRead===true)"
       ]
     },
     {
@@ -7029,6 +7029,29 @@
         "function errorMessage(",
         "function roleKey(",
         "obsoleteRoleConflict"
+      ]
+    },
+    {
+      "id": "single-pass-buyer-contact-handoff",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "inheritedDiscoveryRun",
+        "inheritedRows?{rows:existingRows",
+        "researchTaskId",
+        "Checking retained buyer contacts"
+      ]
+    },
+    {
+      "id": "buyer-official-proof-and-page-counts",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "Sparse identity results must not strip",
+        "new page requests",
+        "checkpointReads(sourceRows)"
       ]
     }
   ],
