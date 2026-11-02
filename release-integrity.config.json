@@ -7118,6 +7118,17 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "source-ingestion-prompt-coverage",
+      "type": "text",
+      "url": "/customer/company-research-security.js",
+      "status": 200,
+      "contains": [
+        ".slice(0,20).map(document",
+        "const documentBudget=",
+        "text:d.text.slice(0,docChars)"
+      ]
     }
   ],
   "retry": {

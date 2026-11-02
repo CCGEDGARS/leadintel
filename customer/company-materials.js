@@ -62,8 +62,11 @@
   const selected=event=>{event.stopImmediatePropagation();void upload(event.target.files||[]);};
   const dropped=event=>{event.preventDefault();event.stopImmediatePropagation();zone?.classList.remove('dragging');void upload(event.dataTransfer?.files||[]);};
   const zone=document.getElementById('upload-zone');
+  const drag=event=>{event.preventDefault();zone?.classList.add('dragging');};
+  const leave=()=>zone?.classList.remove('dragging');
+  zone?.addEventListener('dragenter',drag);zone?.addEventListener('dragover',drag);zone?.addEventListener('dragleave',leave);
   input?.addEventListener('change',selected,true);zone?.addEventListener('drop',dropped,true);
-  return {sync,upload,destroy(){alive=false;generation++;input?.removeEventListener('change',selected,true);zone?.removeEventListener('drop',dropped,true);}};
+  return {sync,upload,destroy(){alive=false;generation++;input?.removeEventListener('change',selected,true);zone?.removeEventListener('drop',dropped,true);zone?.removeEventListener('dragenter',drag);zone?.removeEventListener('dragover',drag);zone?.removeEventListener('dragleave',leave);}};
  }
  async function profileDocuments(){
   const bridge=root.LeadIntelServerBridge,workspace=bridge?.session?.authenticated?bridge.workspace?.id:'',user=bridge?.session?.user?.id;

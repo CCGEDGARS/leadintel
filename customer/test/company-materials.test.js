@@ -27,6 +27,7 @@ test('file selection and drop are wired independently of main app startup and ca
  const dom=new JSDOM(markup,{url:'https://app.test'}),d=dom.window.document;let uploads=0,legacy=0;
  const fetchImpl=async(url,options={})=>{if(url.includes('upload-ticket'))return Response.json({ticket:'once',uploadUrl:'https://leadintel-api.edgars-7e7.workers.dev/company-material-upload'});if(url.includes('/company-material-upload'))uploads++;return Response.json({cards:[]});};
  const ui=api.mount({document:d,currentWorkspace:()=> 'w1',fetchImpl});await ui.sync();
+ const drag=new dom.window.Event('dragover',{bubbles:true,cancelable:true});d.getElementById('upload-zone').dispatchEvent(drag);assert.equal(drag.defaultPrevented,true);
  const input=d.getElementById('pdf-input');input.addEventListener('change',()=>legacy++);
  Object.defineProperty(input,'files',{value:[new File(['%PDF-sample'],'brochure.pdf',{type:'application/pdf'})]});input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await settle();
  assert.equal(uploads,1);assert.equal(legacy,0);
