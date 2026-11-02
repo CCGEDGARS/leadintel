@@ -2,7 +2,7 @@
 'use strict';
 const contextFields=['workspaceId','userId','domain','personId','channel','language'];
 function key(scope){return scope&&contextFields.every(k=>typeof scope[k]==='string'&&scope[k])?'leadintel:message-history:v1:'+JSON.stringify(contextFields.map(k=>scope[k])):'';}
-function snapshot(input={}){if(typeof input.subject!=='string'||typeof input.message!=='string'||input.subject.length>500||input.message.length>12000||!input.message.trim())return null;return {subject:input.subject,message:input.message,...Rich?.fields(input.message,input.messageHtml),sender:String(input.sender||'').slice(0,160),style:String(input.style||'').slice(0,40)};}
+function snapshot(input={}){if(!input||typeof input!=='object')return null;if(typeof input.subject!=='string'||typeof input.message!=='string'||input.subject.length>500||input.message.length>12000||!input.message.trim())return null;return {subject:input.subject,message:input.message,...Rich?.fields(input.message,input.messageHtml),sender:String(input.sender||'').slice(0,160),style:String(input.style||'').slice(0,40)};}
 function fingerprint(input){const row=snapshot(input);return row?JSON.stringify(row):'';}
 function createJournal(storage){
  const list=scope=>{try{const rows=JSON.parse(storage.getItem(key(scope))||'[]');return key(scope)&&Array.isArray(rows)?rows.filter(r=>snapshot(r)).slice(0,20):[];}catch{return [];}};
@@ -16,7 +16,7 @@ function mount(document,adapter){
  let journal;try{journal=createJournal(win.localStorage);}catch{journal=createJournal({getItem:()=>null,setItem(){throw Error('unavailable')}});}
  let failure='',dialog=null,request=0;const session='edit:'+Date.now()+':'+Math.random().toString(36).slice(2);
  const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
- const recovery=el('p');recovery.id='mw-draft-recovery';recovery.setAttribute('role','status');button.closest('#mw-header-actions')?.after(recovery);
+ const recovery=el('p');recovery.id='mw-draft-recovery';recovery.setAttribute('role','status');(document.getElementById('mw-header-actions')||button.closest('#mw-tools-actions')||button)?.after(recovery);
  const scope=()=>adapter.scope(),sameScope=(a,b)=>key(a)===key(b),read=()=>snapshot(adapter.read()),canUse=()=>Boolean(key(scope())&&adapter.usable());
  function capture(options={}){const value=read();if(!key(scope())||!value)return true;const ok=journal.record(scope(),value,{recoverable:true,label:'Browser recovery',slot:session,...options});failure=ok?'':'Browser recovery could not save. Keep this page open and use Save draft to save to CRM.';render();return ok;}
  function beforeChange(previous,next){if(adapter.ready&& !adapter.ready())return true;const old=itemSnapshot(previous),fresh=itemSnapshot(next);if(!old||fingerprint(old)===fingerprint(fresh))return true;const previousScope={...scope(),domain:previous.domain,personId:previous.selectedPersonId,channel:previous.channel,language:previous.messageStudioDraft?.languageVersions?.activeLanguage||previous.localizationProvenance?.language||previous.messageStudioDraft?.essentials?.language||'en'};if(!key(previousScope))return true;const ok=journal.record(previousScope,old,{label:'Before message change'});if(!ok){failure='Recovery could not save the previous version. Save draft before replacing it.';render();}return ok;}

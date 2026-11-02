@@ -2,12 +2,12 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const E=require('../message-editor.js'),O=require('../outreach-engine.js');
 const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
-test('original editor retains Update, Edit and Save; the integrated assistant offers Shorten, Rewrite and Reset',()=>{
+test('original editor keeps Edit, Save and Reset while writing adjustments stay in the assistant',()=>{
  const h=mounted({selected:'professional'});try{
  const panel=h.q('mw-writing-assistant');assert.ok(h.q('mw-writing-assistant-launcher').closest('.mw-rail'));assert.equal(panel.hidden,true);assert.equal(panel.querySelector('h3').textContent,'Writing Assistant');
- assert.deepEqual([...panel.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent),['Shorten','Rewrite','Reset']);
+ assert.deepEqual([...panel.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent),['Shorten','Rewrite']);
  assert.ok(h.q('message-generate').closest('#mw-tools-drawer'));assert.equal(h.q('message-generate').textContent,'Restore selected template');
- for(const id of ['mw-edit-message','mw-save-message'])assert.ok(h.q(id).closest('.mw-editor-actions'));
+ for(const id of ['mw-edit-message','mw-save-message','mw-restore-original']){assert.ok(h.q(id).closest('.mw-editor-actions'));assert.ok(h.q(id).closest('.mw-editor-head'));assert.equal(h.q(id).closest('details'),null);}
  assert.equal(h.q('mw-message-length'),null);
  }finally{h.w.close();}
 });

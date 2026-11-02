@@ -5,12 +5,14 @@ const {mounted}=require('./helpers/message-runtime.js');
 const settle=()=>new Promise(r=>setImmediate(r));
 const click=(h,style)=>{if(style==='original'){h.q('message-mode').value=style;h.q('message-mode').dispatchEvent(new h.w.Event('change',{bubbles:true}));}else h.w.document.querySelector(`[data-writing-style="${style}"]`).click();};
 const visibleButtons=host=>[...host.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent);
-test('header groups Edit, Update and Save with delivery and retains the update explanation',()=>{
+test('header groups editing and recovery while optional message tools remain collapsed',()=>{
  const h=mounted({selected:'professional'});try{
- assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save draft','Version history','Save as template','Copy email']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Edit','Save draft','Reset']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
+ assert.equal(h.q('mw-header-actions').closest('details'),null);assert.equal(h.q('mw-tools-drawer').open,false);
+ assert.deepEqual(visibleButtons(h.q('mw-tools-actions')),['Version history','Save as template','Copy email']);assert.ok(h.q('mw-tools-drawer').contains(h.q('mw-tools-actions')));
  assert.equal(h.q('mw-update-help').textContent,'Choose a style to apply it automatically.');
  assert.ok(h.q('mw-update-help').closest('.mw-editor-head'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
- assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save draft','Version history','Save as template']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save draft','Reset']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
  }finally{h.w.close();}
 });
 test('opening a new message leaves subject and body empty; only a deliberate style click fills them',()=>{
@@ -70,11 +72,11 @@ test('a saved draft reopens exactly; a newly confirmed recipient starts with an 
  }finally{h.w.close();}
 });
 
-test('Adjust message has three one-word actions and Reset is outside the editor toolbar',()=>{
+test('writing adjustments keep Shorten and Rewrite while Reset stays in the editor toolbar',()=>{
  const h=mounted();try{
- assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-assistant-actions')),['Shorten','Rewrite','Reset']);
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-assistant-actions')),['Shorten','Rewrite']);
  for(const id of ['mw-shorten-message','mw-rewrite-message','mw-restore-original'])assert.ok(h.q(id).title);
- assert.equal(h.w.document.querySelector('.mw-editor-actions').contains(h.q('mw-restore-original')),false);
+ assert.equal(h.w.document.querySelector('.mw-editor-actions').contains(h.q('mw-restore-original')),true);assert.equal(h.q('mw-restore-original').closest('details'),null);assert.equal(h.q('mw-restore-original').hidden,false);
  }finally{h.w.close();}
 });
 for(const [id,action,label] of [['mw-shorten-message','shorten','Shortening…'],['mw-rewrite-message','improve','Rewriting…']])test(`${action} only shows progress on its own adjustment action`,async()=>{

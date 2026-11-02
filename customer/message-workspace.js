@@ -73,7 +73,7 @@
   q('message-evidence').hidden=true;
   const oldBar=q('message-generation-status').parentElement===notice?studio.querySelector(':scope > .draft-controls'):null;if(oldBar)oldBar.remove();
   const evidence=step.querySelector('.message-advanced');evidence.querySelector('summary').textContent='Advanced research & campaign settings';evidence.open=false;
-  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.classList.add('mw-disclosure');libraryTools.open=false;libraryTools.innerHTML='<summary>Tools <span>Message actions, templates & settings</span></summary>';
+  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.classList.add('mw-disclosure');libraryTools.open=false;libraryTools.innerHTML='<summary>Tools <span>Templates, history & settings</span></summary>';
   const libraryContent=node('div','mw-tools-content');libraryTools.append(libraryContent);
   const styleManager=node('details','mw-style-manager');styleManager.id='mw-style-manager';styleManager.innerHTML='<summary>Custom style settings</summary><p>Save your own subject and message for each of the four styles. Approved originals stay protected.</p><label>Style <select id="mw-style-edit-choice"><option value="professional">Professional</option><option value="curiosity">NLP</option><option value="friendly">Friendly</option><option value="brutal">Brutal Honesty</option></select></label><label>Reusable subject <input id="mw-style-edit-subject" maxlength="500"></label><label>Reusable message <textarea id="mw-style-edit-body" rows="13" maxlength="12000"></textarea></label><label class="mw-style-reviewed"><input type="checkbox" id="mw-style-review-confirm"> I checked this version for recipient-specific names, dates, projects, unsupported claims, and links.</label><div class="mw-draft-toolbar"><button id="mw-style-load-draft" type="button" class="secondary-btn small">Copy current email to editor</button><button id="mw-style-save" type="button" class="secondary-btn">Save & activate my version</button><button id="mw-style-restore" type="button" class="secondary-btn small">Restore previous revision</button></div><p id="mw-style-save-status" role="status"></p>';
 
@@ -87,7 +87,7 @@
   const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Writing Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div id="mw-adjust-actions" class="mw-assistant-actions"></div>';
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
-  assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
+  assistant.querySelector('.mw-assistant-actions').append(improve);
   // The sidebar exposes only a launcher; the writing session lives in its dialog.
   const followUpHost=node('div','mw-follow-up-host');followUpHost.id='mw-follow-up-host';
   const launcher=node('section','mw-section wa-launcher');launcher.id='mw-writing-assistant-launcher';launcher.innerHTML='<h3>Writing Assistant</h3><p>Create a new message or improve this one.</p><button type="button" class="primary-btn" data-wa-open data-wa-expand aria-haspopup="dialog" disabled>Open assistant →</button>';styleSection.after(launcher);assistant.hidden=true;studio.append(assistant);libraryContent.append(followUpHost);
@@ -116,8 +116,11 @@
   for(const id of ['message-meetingDateOne','message-meetingDateTwo']){const label=q(id)?.closest('label');if(label){label.hidden=true;meeting.append(label);}}
   for(const id of ['message-nextAction','message-calendly']){const label=q(id)?.closest('label');if(label){label.firstChild.textContent=id==='message-nextAction'?'Invitation text':'Booking link';invitation.append(label);}}
   invitation.append(q('message-save-core'));meeting.append(invitation);nextStep.before(meeting,libraryTools);
-  // One final continuation action; optional editing, copy and test tools share the existing handlers.
-  libraryContent.prepend(q('mw-header-actions'));q('mw-save-message').className='secondary-btn';
+  // Keep the canonical editing and recovery controls beside the working draft.
+  // Only reusable-template, history and copy actions belong in collapsed Tools.
+  const optionalActions=node('div','mw-tools-actions');optionalActions.id='mw-tools-actions';optionalActions.setAttribute('role','group');optionalActions.setAttribute('aria-label','Message tools');optionalActions.append(history,q('message-save-as-template'),copyEmail);libraryContent.prepend(optionalActions);
+  editorActions.append(q('mw-cancel-edit'),q('mw-restore-original'),undoButton,retry);
+  editorActions.setAttribute('role','group');editorActions.setAttribute('aria-label','Edit your working message');
   const oldHelp=settings.querySelector('.message-essentials + p');if(oldHelp)oldHelp.hidden=true;
   installEditorSizing(document);
 

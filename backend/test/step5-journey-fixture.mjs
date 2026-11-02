@@ -23,7 +23,7 @@ export const workspaceId='storage-w1',sessionToken='step5-controlled-session';
 export const sourceUrl='https://forge.example/team';
 export const sourceText='### Robert Lund\nHead of Procurement\nPhone: +46 70 123 45 67\n[robert@forge.example](mailto:robert@forge.example)\nForge Industries\n\n### Alice Berg\nChief Operating Officer\nForge Industries\n[alice@forge.example](mailto:alice@forge.example)';
 
-export async function journeyFixture({durableJobs=false}={}){
+export async function journeyFixture({durableJobs=false,externalFetch}={}){
  const DB=storageDb();
  DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'storage-owner',datetime('now','+1 day'))").run(await sha256(sessionToken));
  const now=new Date().toISOString(),source={url:sourceUrl,markdown:sourceText,sourceRead:true,extractedAt:now,checkedAt:now};
@@ -69,6 +69,7 @@ export async function journeyFixture({durableJobs=false}={}){
   const url=new URL(typeof input==='string'?input:input.url);
   if(url.origin===origin)return originalFetch(input,options);
   externalCalls.push({url:url.href,method:options?.method||'GET'});
+  if(externalFetch){const response=await externalFetch(input,options);if(response)return response;}
   if(url.hostname==='forge.example'){if(sourceGate){sourceGate.started();await sourceGate.wait;}return new Response('<html><body><h3>Robert Lund</h3><div>Head of Procurement</div><div>Phone: +46 70 123 45 67</div><div><a href="mailto:robert@forge.example">robert@forge.example</a></div><div>Forge Industries</div><h3>Alice Berg</h3><div>Chief Operating Officer</div><div>Forge Industries</div><a href="mailto:alice@forge.example">alice@forge.example</a></body></html>',{headers:{'Content-Type':'text/html'}});}
   throw Error('Acceptance harness blocked unplanned external request: '+url.origin+url.pathname);
  };

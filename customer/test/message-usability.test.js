@@ -13,7 +13,7 @@ test('Messages has one footer next step; sending and legacy navigation stay outs
  assert.equal(h.q('mw-retry-message').hidden,true);
  assert.equal(h.q('mw-updating-notice').hidden,true);
  const legacy=h.w.document.createElement('div');legacy.className='delivery-entry';legacy.innerHTML='<button id="continue-to-delivery">Continue</button>';h.q('step-6').append(legacy);show(h,{approved:true});assert.equal(legacy.hidden,true);
- assert.equal(h.q('mw-header-actions').contains(h.q('mw-copy-email')),true);
+ assert.equal(h.q('mw-header-actions').contains(h.q('mw-copy-email')),false);assert.ok(h.q('mw-tools-drawer').contains(h.q('mw-copy-email')));assert.equal(h.q('mw-tools-drawer').open,false);
  assert.equal(h.requests.some(r=>/send|enqueue/.test(r.url)),false);
  }finally{h.w.close();}
 });

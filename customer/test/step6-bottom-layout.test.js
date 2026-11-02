@@ -3,9 +3,10 @@ test('Step 6 ends with meeting options, Tools, then its single main continuation
  const h=mounted({selected:'brutal'});try{
   const d=h.w.document,meeting=h.q('mw-meeting-options'),tools=h.q('mw-tools-drawer'),footer=d.querySelector('.mw-message-footer');
   assert.equal(meeting.nextElementSibling,tools);assert.equal(tools.nextElementSibling,footer);assert.equal(footer.parentElement.lastElementChild,footer);
-  assert.equal(footer.querySelectorAll('#mw-add-flow').length,1);assert.equal(d.querySelector('.mw-editor-head button'),null);
-  for(const id of ['mw-edit-message','mw-save-message','mw-version-history','message-save-as-template','mw-copy-email'])assert.ok(tools.contains(h.q(id)),id);
-  assert.equal(h.q('mw-save-message').classList.contains('primary-btn'),false);
+  assert.equal(footer.querySelectorAll('#mw-add-flow').length,1);
+  for(const id of ['mw-edit-message','mw-save-message','mw-cancel-edit','mw-restore-original','mw-undo-rewrite','mw-retry-message']){assert.ok(d.querySelector('.mw-editor-head').contains(h.q(id)),id);assert.equal(h.q(id).closest('details'),null,id+' stays outside disclosures');}
+  for(const id of ['mw-version-history','message-save-as-template','mw-copy-email'])assert.ok(tools.contains(h.q(id)),id);
+  assert.equal(h.q('mw-save-message').classList.contains('primary-btn'),true);
   const before=h.item(),text=h.q('outreach-email-body').value;tools.open=true;tools.open=false;
   assert.deepEqual(h.item(),before);assert.equal(h.q('outreach-email-body').value,text);assert.equal(h.requests.length,0,'opening Tools cannot generate, save or send');
  }finally{h.w.close();}

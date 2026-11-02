@@ -96,6 +96,16 @@
   for(const match of text.matchAll(/\[Add (?:verified )?([^\]]+)\]|{{([^}]+)}}|\[(link)\]/gi))out.push((match[1]||match[2]||match[3]).trim());
   return [...new Set(out)];
  }
+ function sellerCompanyDescription(discipline,origin){
+  if(!discipline)return '[Add verified company description]';
+  const parts=line(discipline).split(/\s*[,;]\s*/).filter(Boolean),last=parts.pop()||'';
+  const list=parts.length?parts.join(', ')+(/^(?:and|or)\s+/i.test(last)?' ':/\b(?:and|or)\b/i.test(last)?', ':' and ')+last:last;
+  const description=[origin,list,'company'].filter(Boolean).join(' ');
+  // Common vowel-letter words with a consonant sound retain "a".
+  const consonant=/^(?:euro|one\b|uni(?:form|on|que|t|vers)|u(?:biq|se|su|til))/i.test(description);
+  const vowel=/^[aeiou]/i.test(description)&&!consonant||/^(?:honest|honou?r|hour|heir)\b/i.test(description);
+  return (vowel?'an ':'a ')+description;
+ }
  // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
  function sourceVoiceValues(style,e,raw,context,values){
   const approved=Object.entries(context.sellerAnswers||{}).filter(([k])=>['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(([,v])=>String(v));
@@ -110,8 +120,8 @@
   const discipline=facts.steel?['steel',manufacturing?'fabrication':'',facts.installation?(manufacturing?'and installation':'installation'):''].filter(Boolean).join(' '):line(e.offer);
   const experienceIndustry=statements.find(v=>/\byears\b/i.test(v)&&/\bsteel\b/i.test(v))?'steel':/\bmetalwork\w*\b/i.test(seller)?'metalworking':'';
   const experience=duration&&experienceIndustry?' with '+duration+' in '+experienceIndustry:'';
-  values.sellerDescription=['a',origin,style==='friendly'&&facts.steel?'steel':discipline,'company'].filter(Boolean).join(' ')+(style==='friendly'?'':(style==='professional'?'':experience)+(specialization?(style==='professional'?'':',')+specialization:''));
-  if(!discipline)values.sellerDescription='[Add verified company description]';
+  values.sellerDescription=sellerCompanyDescription(style==='friendly'&&facts.steel?'steel':discipline,origin);
+  if(discipline&&style!=='friendly'&&style!=='professional')values.sellerDescription+=experience+(specialization?','+specialization:'');
   const missing=label=>'[Add verified '+label+']';
   const reviewed=['source_verified','user_reviewed'].includes(context.trigger?.verification)&&context.trigger?.url;
   // Only affirmative source clauses establish factual atoms. AI triggerSummary
@@ -125,7 +135,6 @@
   const foundation=clauses.some(v=>/\bfoundation(?:s| work)?\b[^.!?]{0,70}\b(?:is under way|is underway|has (?:already )?(?:started|begun)|started|begun)\b|\bgetting the foundation work started\b|\b(?:is(?: now)? laying|has begun laying|has started laying) the foundations?\b(?=[^.!?]{0,100}\b(?:plant|factory|building|warehouse|facility)\b)/i.test(v));
   const year=positiveEvent.match(/\b(?:due to (?:run|open|start)(?: in)?|scheduled to (?:open|start|run)(?: in)?|ready (?:in|by)|operational (?:in|by))\s+(20\d{2})\b/i)?.[1]||'';
   Object.assign(values,{subjectProject:project||missing('project'),milestoneWork:foundation?'Foundation work':missing('milestone'),friendlyMilestoneWork:foundation?'the foundation work':missing('milestone'),projectType:kind?kind[0].toLowerCase():missing('project-type'),projectNoun:kind?kind[2].split(' ').at(-1).toLowerCase():missing('project-type'),openingYear:year||missing('opening-year'),deliveryItem:facts.steel?'steel structure':missing('deliverable'),deliveryMaterial:facts.steel?'steel':missing('delivery-material'),experienceDuration:duration||missing('experience-duration'),experienceOutcome:facts.steel&&manufacturing&&duration&&/\bdrawings?\b/i.test(seller)?'turning drawings into steel that arrives on time and fits':missing('experience-outcome'),friendlyScale:''});
-  if(style==='professional')values.sellerDescription=['a',origin,discipline,'company'].filter(Boolean).join(' ');
   if(project&&kind)values.projectDescription='the '+project+' '+kind[2].toLowerCase();
   const contractor=positiveEvent.match(/\bthrough\s+([A-Z][A-Za-z&-]*(?:\s+[A-Z][A-Za-z&-]*){0,2})(?=[.,;]|$)/)?.[1];
   if(contractor&&context.buyerCompany&&positiveEvent.includes(context.buyerCompany+' directly'))values.deliveryRoute=', either with '+context.buyerCompany+' directly or through '+contractor;

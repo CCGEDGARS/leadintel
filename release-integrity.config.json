@@ -470,7 +470,7 @@
         "mw-meeting-options",
         "Business context",
         "nextStep.before(meeting,libraryTools)",
-        "libraryContent.prepend(q('mw-header-actions'))"
+        "mw-tools-actions"
       ]
     },
     {
@@ -1632,7 +1632,7 @@
         "Rewrite",
         "Shorten",
         "styleSection.after(launcher)",
-        "append(improve,q('mw-restore-original'))",
+        "editorActions.append(q('mw-cancel-edit'),q('mw-restore-original')",
         "editor.busyAction==='shorten'",
         "Shortening…",
         "editorActions.prepend"
@@ -7195,6 +7195,47 @@
       "url": "/api/buyers/research?workspace_id=release-check&domain=example.com",
       "status": 401,
       "contains": ["Authentication required"]
+    },
+    {
+      "id": "step6-visible-edit-save-controls",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-tools-actions",
+        "mw-header-actions"
+      ]
+    },
+    {
+      "id": "step6-acknowledged-crm-save-recovery",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function canReconcileSavedBuyerDraft(item)",
+        "function preferNewerSavedBuyerDraft(local,remote)",
+        "remoteTime>localTime"
+      ]
+    },
+    {
+      "id": "step6-recipient-recovery-cache-chain",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelOutreach.canReconcileSavedBuyerDraft(local)",
+        "LeadIntelOutreach.preferNewerSavedBuyerDraft(local,remote)",
+        "step6-journey=20261102-v1"
+      ]
+    },
+    {
+      "id": "step6-primary-control-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "step6-journey=20261102-v1"
+      ]
     }
   ],
   "retry": {
