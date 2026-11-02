@@ -100,7 +100,7 @@ export async function runDossierResearch({connections,settings={},company,search
 }
 export function dossierFailureReason(error,phase){const http=String(error?.message||'').match(/(?:failed|unavailable) \((\d{3})\)/i)?.[1];const reason=error?.name==='AbortError'?'deadline reached':http?'provider HTTP '+http:error instanceof SyntaxError?'invalid extraction JSON':/No grounded source/.test(error?.message)?'no grounded sources':/No readable underlying/.test(error?.message)?'no readable sources':'operation failed';return phase+': '+reason;}
 export async function dossierSettings(env,workspaceId){return await env.DB.prepare('SELECT primary_provider,secondary_provider FROM workspace_research_settings WHERE workspace_id=?').bind(workspaceId).first()||{};}
-export async function researchWorkspaceDossier(env,workspaceId,company,{signal,guard=()=>{},authorization}={}){
+export async function researchWorkspaceDossier(env,workspaceId,company,{signal,guard=()=>{},authorization,providerTimeoutMs,writeAuthority}={}){
  await guard();if(signal?.aborted)throw Object.assign(Error('Dossier canceled'),{status:499});
  const settings=await dossierSettings(env,workspaceId),connections=(await Promise.all(names.map(p=>workspaceCredential(env,workspaceId,p)))).filter(Boolean);
  const active=await env.DB.prepare('SELECT provider FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1').bind(workspaceId).first();
@@ -112,13 +112,15 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  const onCheckpoint=async result=>{
   await guard();if(signal?.aborted)throw Object.assign(Error('Dossier canceled'),{status:499});
   const payload=JSON.stringify({...result,providerSignature}),successful=result.status==='complete'?payload:null;
-  const authorized=authorization?"EXISTS(SELECT 1 FROM sessions s JOIN workspace_members wm ON wm.user_id=s.user_id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND wm.workspace_id=? AND wm.role IN ('owner','researcher','sales'))":'1';
-  const authArgs=authorization?[authorization.sessionTokenHash,authorization.userId,workspaceId]:[];
+  const jobAuthority=writeAuthority?.();
+  const sessionSql=authorization?"EXISTS(SELECT 1 FROM sessions s JOIN workspace_members wm ON wm.user_id=s.user_id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND wm.workspace_id=? AND wm.role IN ('owner','researcher','sales'))":'1';
+  const authorized=jobAuthority?`(${sessionSql}) AND (${jobAuthority.sql})`:sessionSql;
+  const authArgs=[...(authorization?[authorization.sessionTokenHash,authorization.userId,workspaceId]:[]),...(jobAuthority?.args||[])];
   const committed=await env.DB.prepare(`INSERT INTO workspace_company_dossiers(workspace_id,domain,context_key,payload_json,successful_json) SELECT ?,?,?,?,? WHERE ${authorized} ON CONFLICT(workspace_id,domain) DO UPDATE SET context_key=excluded.context_key,payload_json=excluded.payload_json,successful_json=COALESCE(excluded.successful_json,workspace_company_dossiers.successful_json),updated_at=CURRENT_TIMESTAMP WHERE workspace_company_dossiers.payload_json IS ? AND ${authorized}`).bind(workspaceId,D.domain(company.domain),contextKey,payload,successful,...authArgs,expectedPayload,...authArgs).run();
   if(Number(committed?.meta?.changes||0)!==1){await guard();throw Object.assign(Error('Company dossier changed during research. Refresh to continue from the retained evidence.'),{status:409});}
   expectedPayload=payload;
  };
- const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,
+ const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,...(providerTimeoutMs?{timeoutMs:Math.max(1000,Math.min(180000,providerTimeoutMs))}:{}),
   search:(c,q,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
   read:(u,s)=>readPublicBuyerPage(env,workspaceId,u,{signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000}),
   extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text)

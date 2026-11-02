@@ -33,6 +33,7 @@
       "workspace_records_version": "workspace-records-v1",
       "research_recovery_version": "company-recovery-v2",
       "company_dossier_version": "20261021-dossier-first-v1",
+      "buyer_jobs_version": "20261102-durable-v1",
       "confirm_contact_data_version": "20261021-v1",
       "paid_contact_permissions_version": "email-phone-v1",
       "messages_audit_version": "20261021-v1",
@@ -4282,7 +4283,7 @@
         "Read this source first",
         "Company contact sources",
         "data-official-contact-url",
-        "incomplete saved work requires explicit Refresh.",
+        "Opening retained work only reads their progress",
         "company-published-routes",
         "Official linking page",
         "Resume company contacts"
@@ -6048,7 +6049,7 @@
       "status": 200,
       "contains": [
         "function scheduleSavedBuyerPublicChecks(){",
-        "incomplete saved work requires explicit Refresh."
+        "Opening retained work only reads their progress"
       ]
     },
     {
@@ -7173,6 +7174,27 @@
         "function canReassessSavedBuyerRoles",
         "acceptedOfficialBuyerEmail(candidate,person)"
       ]
+    },
+    {
+      "id": "durable-buyer-job-client",
+      "type": "text",
+      "url": "/customer/buyer-research-jobs.js",
+      "status": 200,
+      "contains": ["/api/buyers/research", "createClient", "restore", "expectedRevision"]
+    },
+    {
+      "id": "durable-buyer-handoff-recovery",
+      "type": "text",
+      "url": "/customer/buyer-handoff-recovery.js",
+      "status": 200,
+      "contains": ["pendingMessageHandoff", "resumeSavedMessageHandoff", "consumeFulfilled"]
+    },
+    {
+      "id": "durable-buyer-job-authentication",
+      "type": "text",
+      "url": "/api/buyers/research?workspace_id=release-check&domain=example.com",
+      "status": 401,
+      "contains": ["Authentication required"]
     }
   ],
   "retry": {

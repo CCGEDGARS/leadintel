@@ -1,0 +1,152 @@
+import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob} from './buyer-research-store.js';
+import {storageFailure} from './workspace-storage.js';
+import {sha256} from './security.js';
+import {researchWorkspaceDossier} from './company-dossier.js';
+import {createBuyerSourceSearch} from './buyer-source-search.js';
+import {readPublicBuyerPage} from './service-integrations.js';
+import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
+import '../../customer/discovery-engine.js';
+import '../../customer/company-dossier.js';
+const D=globalThis.LeadIntelDiscovery,C=globalThis.LeadIntelCompanyDossier;
+const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:180000,review:45000};
+const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'done'};
+const errorReason=(error,phase)=>`${phase}: ${error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
+const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
+const resultRows=result=>Array.isArray(result)?result:result?.results||[];
+function restoreSearch(value){const rows=value.rows||[];Object.defineProperty(rows,'searchProviders',{value:value.providers||[]});if(value.researchTrace)Object.defineProperty(rows,'researchTrace',{value:value.researchTrace});return rows;}
+export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowMs=50000,services={},clock=Date.now,jobId}={}){
+ const results=[];
+ for(let n=0;n<maxJobs;n++){
+  const start=clock(),lease=crypto.randomUUID(),until=start+Math.max(90000,windowMs+45000);
+  const row=await stmt(env,`UPDATE buyer_research_jobs SET status='running',lease_token=?,lease_until=?,updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM buyer_research_jobs WHERE status IN ('queued','running') AND lease_until<? AND next_at<=? ${jobId?'AND id=?':''} ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,until,now,now,...(jobId?[jobId]:[]),now).first();
+  if(!row)break;
+  const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate),controller=new AbortController();let accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
+  const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
+  const guard=async({checkpoint=false}={})=>{
+   if(!checkpoint&&(!accepting||controller.signal.aborted))throw Object.assign(Error('Processing slice stopped'),{code:'TIME_BUDGET'});
+   const live=await stmt(env,`SELECT status,lease_token,lease_until,CASE WHEN ${authoritySql} THEN 1 ELSE 0 END authorized FROM buyer_research_jobs WHERE id=?`,row.id).first();
+   if(!live||live.status!=='running'||live.lease_token!==lease||!live.authorized)throw lost();
+   if(live.lease_until<=clock())throw Object.assign(Error('Processing lease expired'),{code:'LEASE_EXPIRED'});
+   const version=Number((await stmt(env,'SELECT version FROM customer_workspace_state WHERE workspace_id=?',row.workspace_id).first())?.version)||0;
+   if(contextVersion!==version){const context=await workspaceBuyerContext(env,row.workspace_id);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});contextVersion=context.version;}
+  };
+  const writeGuard=`EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`;
+  const current=async(checkpoint=false)=>{await guard({checkpoint});return [row.id,lease,clock(),contextVersion];};
+  let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
+  const observe=entry=>D.recordBuyerResearchTool(report,entry);
+  const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal});
+  const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
+  const inflightTasks=new Map();
+  const executeTask=async(kind,value,operation)=>{
+   await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
+   if(prior?.status==='complete')return parse(prior.result_json);
+   if(Number(prior?.attempts||0)>=2)throw Object.assign(Error('Source task attempt limit reached'),{code:'TASK_LIMIT'});
+   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=?',row.id).first();if(!prior&&Number(count?.n)>=256)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
+   const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET status='running',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP WHERE attempts<2 AND ${writeGuard}`,row.id,key,kind,phase,String(value).slice(0,4000),...args,...args));
+   if(!reserved.meta.changes)throw lost();
+   try{
+    const result=await operation();await guard();if(jsonSize(result)>160000)throw Error('Source task response exceeds bounded storage');
+    const saved=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_tasks SET status='complete',result_json=?,error='',updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,JSON.stringify(result),row.id,key,...args));
+    if(!saved.meta.changes)throw lost();changed++;return result;
+   }catch(error){
+    // Do not let an expired, canceled or revoked worker record a late receipt.
+    if(accepting&&!controller.signal.aborted)await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
+    throw error;
+   }
+  };
+  const task=(kind,value,operation)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
+  const search=async query=>restoreSearch(await task('search',query,async()=>{
+   let rows;try{rows=await nativeSearch(query,{signal:controller.signal});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
+   if(!Array.isArray(rows))throw Error('Search response is invalid');
+   if(services.search){const trace=rows.researchTrace||[];if(trace.length)trace.forEach(observe);else for(const provider of new Set([...(rows.searchProviders||[]),...rows.map(r=>r.searchProvider||r.buyerSource)].filter(Boolean)))observe({provider,operation:'search',status:'succeeded',results:rows.length});}
+   const normalized=rows.slice(0,8).map(r=>({url:C.url(r.url),title:String(r.title||'').slice(0,400),description:String(r.description||r.text||'').slice(0,1800),markdown:String(r.markdown||r.content||'').slice(0,6000),evidenceKind:r.evidenceKind||'search_excerpt',buyerSource:r.buyerSource,searchProvider:r.searchProvider,...(r.sourceRead===true?{sourceRead:true,extractedAt:r.extractedAt||new Date().toISOString()}:{}),...(r.metadata?{metadata:{sourceURL:r.metadata.sourceURL,url:r.metadata.url,statusCode:r.metadata.statusCode}}:{})})).filter(r=>r.url);
+   return {rows:normalized,providers:rows.searchProviders||[],researchTrace:rows.researchTrace||[]};
+  }));
+  const read=async url=>task('read',C.url(url),async()=>{
+   let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
+   const page=raw?.data||raw||{};
+   if(raw?.success===false||page.error||Number(page.metadata?.statusCode)>=400)throw Error('Source read unavailable');
+   const supplied=[page.url,page.metadata?.sourceURL,page.metadata?.url].filter(v=>v!==undefined&&v!==null).map(C.url),actual=supplied[0]||C.url(url),text=String(page.markdown||page.content||page.text||'').slice(0,60000);
+   if(!actual||supplied.some(location=>!location||location!==actual)||!text.trim())throw Error('Source read empty or attribution metadata conflicts');
+   const trace=page.researchTrace||raw.researchTrace||[];if(trace.length)trace.forEach(observe);else{const provider=({'direct-fallback':'direct','scrapling-fallback':'scrapling',firecrawl:'firecrawl'})[page.metadata?.source];if(provider)observe({provider,operation:'extract',status:'succeeded',results:1});}
+   return {url:actual,markdown:text,links:Array.isArray(page.links)?page.links.slice(0,100):[],metadata:{sourceURL:actual,statusCode:200,source:page.metadata?.source||'unknown'},researchTrace:page.researchTrace||raw.researchTrace||[],sourceRead:true,extractedAt:new Date().toISOString()};
+  });
+  const allRows=async()=>{
+   const tasks=await stmt(env,"SELECT kind,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete'",row.id).all();
+   return tasks.results.flatMap(r=>r.kind==='read'?[parse(r.result_json)]:r.kind==='search'?parse(r.result_json).rows||[]:[]).slice(-160);
+  };
+  const confirmNamed=()=>{
+   for(const person of candidate.people||[]){const email=D.acceptedOfficialBuyerEmail(candidate,person);if(email)person.publicEmailSourceCheck={version:2,status:'confirmed',email,url:person.publicEmailUrl,checkedAt:person.publicEmailEvidence.checkedAt};}
+  };
+  let acquiredRows=[];
+  const acquirePeople=()=>{
+   if(acquiredRows.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:D.discoverCompanyContacts(acquiredRows,candidate,candidate.buyerDiscovery?.companyContacts||[])};candidate.people=D.matchPublicBuyerDetails(candidate.people||[],acquiredRows,candidate.domain,candidate.company);}
+   const sources=candidate.buyerDiscovery?.companyContacts||[],dossier=C.buyers(candidate.buyerDiscovery?.companyDossier,candidate.company);
+   const merged=D.mergeBuyerPool(candidate.people||[],[...sources,...dossier],input.profile);
+   candidate.people=D.retainBuyerIdentities(merged,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
+   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:merged.slice(0,30),opportunityRoles:input.roles};confirmNamed();
+  };
+  const diagnostics=parse(row.diagnostic_json,[]);
+  let status='queued';
+  try{
+   await guard();const context=await workspaceBuyerContext(env,row.workspace_id);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
+   const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
+   if(phase==='official'){
+    await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
+    if(D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
+   }else if(phase==='dossier'){
+    try{
+     const plan=D.buyerResearchPlan(candidate,input.profile);
+     const result=await (services.dossier||researchWorkspaceDossier)(env,row.workspace_id,{company:candidate.company,domain:row.domain,seller:parse(D.buyerFitContext(input.profile)),roles:input.roles,formulas:plan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',incremental:true},{signal:controller.signal,guard,authorization:{userId:row.requested_by,sessionTokenHash:row.session_hash},writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]}),providerTimeoutMs:Math.min(remaining,180000)});
+     candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};acquirePeople();
+     if(result.status==='complete')phase=nextPhase[phase];
+    }catch(error){if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED'||controller.signal.aborted)throw error;diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});phase=nextPhase[phase];}
+   }else if(phase==='identities'){
+    if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
+    const plan=D.buyerResearchPlan(candidate,input.profile);
+    for(const query of plan.queries.slice(0,6)){await guard();try{await search(query);}catch(error){if(error.code==='CANCELED'||controller.signal.aborted)throw error;}}
+    const trace=D.tracePublicBuyers(await allRows(),candidate.company,input.profile);candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
+   }else if(phase==='contacts'){
+    if(candidate.people?.length){
+     report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,maxDurationMs:Math.min(remaining,180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
+     confirmNamed();if(report.status==='complete'||!changed)phase=nextPhase[phase];
+    }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
+   }else if(phase==='review'){
+    const supplied=D.safeBuyerReviewEvidence(D.buyerSupervisorEvidence(candidate.people,rows));candidate.publicResearch.reviewEvidence=supplied;
+    candidate.publicResearch.buyerAgent=D.assessBuyerAgent(candidate,rows,D.buyerAgentContext(candidate,input.profile));
+    const signature=D.buyerReviewSignature(candidate),body={company:candidate.company,buyerAgent:candidate.publicResearch.buyerAgent,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,employer:p.organization,email:p.publicEmail,email_source:p.publicEmailUrl,linkedin:p.publicLinkedinUrl||p.linkedin_url,checks:p.contactResearch?.checks})),evidence:supplied,quality:{depth:D.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:report.status,checked_people:report.checkedPeople,official_pages:report.officialPages}};
+    const review=await (services.review||reviewWorkspaceBuyerEvidence)(env,row.workspace_id,body,{signal:controller.signal,userId:row.requested_by,maxDurationMs:Math.min(45000,remaining)});await guard();
+    candidate.publicResearch.aiReview=D.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'none',checkedAt:new Date().toISOString(),inputSignature:signature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts});
+    candidate.publicResearch.conflicts=review.conflicts||[];phase='done';
+   }
+   await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns++;
+   if(phase===row.phase&&(phaseMs>=phaseBudget[phase]||phaseRuns>=18)){
+    diagnostics.push({phase,reason:'Phase work budget reached; completed evidence retained',at:new Date().toISOString()});phase=nextPhase[phase];
+   }
+   if(phase!==row.phase){phaseMs=0;phaseRuns=0;}
+   if(phase==='done'){const quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;status=quality.passed||scopedComplete?'complete':'needs_review';if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});}
+  }catch(error){
+   if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
+   else if(error.code==='LEASE_EXPIRED')status='queued';
+   else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';phaseMs+=Math.max(1,clock()-start);phaseRuns++;if(phaseMs>=phaseBudget[phase]||phaseRuns>=18){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}
+   else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}
+  }finally{
+   accepting=false;clearTimeout(timer);controller.abort();
+   candidate.peopleStatus=candidate.people?.length?'complete':status==='queued'?'loading':'empty';
+   candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
+   candidate.publicContactVersion='20261021-adaptive-depth-v3';
+   if(status==='queued'&&phase==='done')status='needs_review';
+   let updated;
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   catch(error){
+    updated={meta:{changes:0}};
+    if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}
+    else if(['CANCELED','CONTEXT_CHANGED'].includes(error.code))status='canceled';
+   }
+   // Revocation cannot authorize a result write; only settle the stale job metadata.
+   if(!updated.meta.changes)await stmt(env,"UPDATE buyer_research_jobs SET status=?,lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'",status==='canceled'?'canceled':'queued',row.id,lease).run();
+   results.push({id:row.id,status:updated.meta.changes?status:'discarded',phase,completedTasks:changed});
+  }
+ }
+ return results;
+}

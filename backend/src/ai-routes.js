@@ -419,9 +419,9 @@ export async function searchWorkspaceBuyerContact(env,workspaceId,{company,domai
   return result;
 }
 
-export async function searchWorkspaceWeb(env,workspaceId,query){
+export async function searchWorkspaceWeb(env,workspaceId,query,{signal}={}){
   if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
-  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',signal:AbortSignal.timeout(25000)});
+  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
   return {...result,status:'complete'};
 }
 

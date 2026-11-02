@@ -3,7 +3,7 @@ import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
 import './translation-preview.js?v=20261027-v1&messages-reliability=20261031-v1';
 import './storyselling-native.js?v=20261026-native-v3';
-import './message-draft-history.js?v=20261025-saving-v1';
+import './message-draft-history.js?v=20261102-first-recipient-v1';
 import './message-meeting-options.js?v=20261029-calendar-connections-v1';
 import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';

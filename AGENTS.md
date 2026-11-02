@@ -30,6 +30,18 @@ Mandatory user rule (20 October 2026): finish delegated tasks completely and pro
 
 The user agreements recorded in `docs/project-state/2026-09-30-leadintel-checkpoint.md` govern continuing work. Own the connected Profile → Companies → Buyers → Triggers → Scripts → CRM workflow. For recurring bugs, record the root cause, inspect related paths, add meaningful regression coverage, and verify save/reload/downstream behavior. Report separately what tests prove, what the exact production release proves, and what authenticated customer evidence proves. Do not substitute a build passing for customer acceptance, ask the customer to repeatedly diagnose basic controls, or claim background work is continuing after the turn. Script generation and approval do not authorize sending outreach.
 
+## Recurring-failure reset and product acceptance
+
+Owner instruction, 2 November 2026: learning from the repeated Buyers failures must change execution, not only produce another explanation. Use `docs/project-state/2026-11-02-buyers-recovery-contract.md` for the recorded evidence and recovery acceptance criteria. Apply this proportionally to recurring defects and multi-stage product workflows.
+
+- Start with an observable user outcome, the authoritative data owner, and the acceptance evidence needed. Inspect relevant upstream inputs and downstream save/reload/handoff behavior before choosing the implementation boundary.
+- When the same journey fails again after a fix, stop the sequence of isolated releases. Reproduce the failure across the real boundaries, inspect state ownership and execution lifecycle, and revisit the hypothesis before another runtime patch.
+- Keep observations, controlled reproductions, hypotheses and unavailable evidence distinct. A screenshot's error caption does not establish the complete cause. Record a correction when later evidence disproves an earlier explanation.
+- Identify missing authenticated access, traces or production-equivalent test conditions early. Build the integration harness and diagnostics needed to verify the journey; do not transfer basic acceptance testing to the customer through repeated refresh instructions.
+- Use failure cases relevant to the change: slow/failed providers, partial progress, refresh/reopen, competing revisions and exact downstream recipient identity. Preserve existing valuable tests; passing test counts and source-marker smoke checks do not establish a real customer outcome.
+- Prefer changes that reduce conflicting ownership and duplicated orchestration. Before a structural migration, record data preservation, bounded cost/retries, authorization, compatibility, rollback and measurable acceptance. Reuse working infrastructure; avoid a wholesale rewrite without evidence.
+- Report implementation, exact-release deployment, and authenticated product acceptance separately. An outstanding acceptance gate stays open even when the source revision is PROVEN PRODUCTION. Scope any completion claim to the evidence actually obtained.
+
 ## Mandatory Buyers research depth and accountability
 
 For Step 5 contact research, follow `docs/policies/buyer-research-depth.md`. For the four visible buyer controls, follow the owner-approved `docs/policies/buyer-contact-button-contract.md`: initial/free research and Recheck do not spend paid contact credits; E-mail and Phone independently request their paid channel, with confirmed data reused. Manual and automatic flows must use the shared adaptive-depth policy in `customer/discovery-engine.js`. Preserve evidence, per-tool execution outcomes and incomplete checks through workspace/CRM save and reload. A configured provider is never evidence that it ran. Paid Apollo and Hunter contact actions retain separate approval gates.

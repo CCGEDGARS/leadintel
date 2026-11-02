@@ -13,6 +13,9 @@ on:
       - 'backend/**'
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/verify-step5-journey.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
@@ -41,6 +44,9 @@ on:
       - 'backend/**'
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/verify-step5-journey.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
@@ -76,8 +82,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install pinned customer dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install pinned customer and integration dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
       - name: Run customer tests
         shell: bash
         run: |
@@ -144,3 +152,40 @@ jobs:
           node --check scripts/release-integrity-core.mjs
           node --check scripts/verify-discovery-deploy.mjs
           node --check scripts/verify-release-integrity.mjs
+
+  buyers-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser and backend dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium for authenticated journey acceptance
+        run: |
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify Step 5 through real authenticated persistence and browser reloads
+        env:
+          LEADINTEL_REQUIRE_BROWSER: 'true'
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/step5-journey.test.mjs
+      - name: Upload controlled journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step5-browser-acceptance-${{ github.sha }}
+          path: |
+            /tmp/leadintel-step5-test-*/evidence.json
+            /tmp/leadintel-step5-test-*/*.png
+          if-no-files-found: warn
+          retention-days: 14
