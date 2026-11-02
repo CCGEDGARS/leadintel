@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js'),C=require('../company-dossier.js');
 test('saved official staff repair an empty shortlist and a completed-selection hold without new provider work',()=>{
  const fs=require('node:fs'),vm=require('node:vm'),page=require('./fixtures/viscaria-public-buyer-pages.json').pages[0],main={profile:{decisionMakers:'Head of Procurement'}},candidate={company:'Viscaria',domain:'viscaria.com',buyerSearchMode:'user_selected_target',buyerRoles:'Head of Procurement',buyerRolesChanged:true,people:[]};
- candidate.buyerDiscovery={opportunityRoles:['Head of Procurement'],roleSelectionContext:D.buyerRoleSelectionContext(main),checkedAt:new Date().toISOString(),companyContacts:D.discoverCompanyContacts([{...page,sourceRead:true}],candidate)};
+ candidate.buyerDiscovery={opportunityRoles:['Head of Procurement'],roleSelectionContext:'prior-role-context',checkedAt:new Date().toISOString(),companyContacts:D.discoverCompanyContacts([{...page,sourceRead:true}],candidate)};
  const ctx={LeadIntelDiscovery:D,mainState:()=>main,localStorage:{getItem:()=>JSON.stringify({selectedProspects:[candidate]})},DISCOVERY_STORAGE_KEY:'d',recoveredInterruptedRun:false},source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function loadDiscovery('),source.indexOf('function saveDiscovery(')),ctx);
  const restored=ctx.loadDiscovery().selectedProspects[0];assert.ok(restored.people.some(p=>p.name==='Robert Åkerlind'));assert.equal(restored.buyerRolesChanged,false);assert.equal(D.acceptedOfficialBuyerEmail(restored,restored.people.find(p=>p.name==='Robert Åkerlind')),'robert.akerlind@viscaria.com');
 });
@@ -25,4 +25,8 @@ test('equivalent role wording is not an employment conflict, but distinct duties
  const previous=C.reconcile([pass('openai','CEO'),pass('gemini','Chief Executive Officer')],{company:'Example',domain:'example.com'});previous.conflicts=[{name:'Alex Lind',reason:'Different role or employment status in source-backed research',titles:['CEO','Chief Executive Officer'],sources:['https://example.com/team']}];assert.equal(C.safe(previous,'example.com').conflicts.length,0,'a persisted wording-only conflict is repaired from the retained validated passes');
  assert.equal(C.reconcile([pass('openai','Chief Executive Officer'),pass('gemini','Chief Operating Officer')],{company:'Example',domain:'example.com'}).conflicts.length,1);
  assert.equal(C.reconcile([pass('openai','CEO'),pass('gemini','Chief Executive Officer','departed')],{company:'Example',domain:'example.com'}).conflicts.length,1);
+});
+test('a changed role context can reassess a saved current official procurement contact without new research',()=>{
+ const person=D.discoverCompanyContacts([{...require('./fixtures/viscaria-public-buyer-pages.json').pages[0],sourceRead:true}],{company:'Viscaria',domain:'viscaria.com'}).find(p=>p.name==='Robert Åkerlind'),candidate={company:'Viscaria',domain:'viscaria.com',buyerRolesChanged:true};
+ assert.equal(D.canReassessSavedBuyerRoles(candidate,[person],{decisionMakers:'Procurement Director; Engineering Director'}),true);assert.equal(D.canReassessSavedBuyerRoles(candidate,[{...person,opportunityScope:{status:'review_required',reason:'Employer conflict'}}],{decisionMakers:'Procurement Director'}),false);person.publicEmailEvidence.checkedAt='2020-01-01';assert.equal(D.canReassessSavedBuyerRoles(candidate,[person],{decisionMakers:'Procurement Director'}),false);
 });

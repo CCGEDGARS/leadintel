@@ -7,3 +7,4 @@ test('first-party API forwards the safe Setup operation ID through request and r
   return Response.json({configured:true},{headers:{'X-LeadIntel-Operation-Id':'setup-safe-operation'}});
  });assert.equal(response.headers.get('X-LeadIntel-Operation-Id'),'setup-safe-operation');
 });
+test('root and customer API entries explicitly preserve the platform duration contract',async()=>{const root=await import('../../api/backend.mjs');assert.equal(root.config.maxDuration,300);assert.equal(root.config.supportsResponseStreaming,true);});

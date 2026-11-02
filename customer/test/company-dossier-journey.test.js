@@ -17,3 +17,10 @@ test('formula receipts and failed latest coverage survive workspace normalizatio
  const crm=JSON.parse(JSON.stringify(CRM.mapDiscoveryCandidateToCrm(normalized))),saved=crm.intelligence.research_snapshot.buyerResearch.discovery.companyDossier,last=saved.lastAttempt.research;
  assert.equal(saved.people[0].name,'Alex Smith');assert.equal(last.status,'partial');assert.equal(last.plan.formulas.length,2);assert.equal(last.coverage.providers[0].completed,3);assert.equal(last.coverage.providers[0].failed,1);assert.equal(last.passes[0].searchFamilies[3].attempts,2);assert.deepEqual(last.passes[0].searchFamilies[3].results,[{url:'https://example.com/suppliers'}]);assert.equal(last.passes[0].extractedSources[0],'https://example.com/team');
 });
+test('browser continues checkpointed provider requests automatically without forcing a repeated pass',async()=>{
+ const candidate={company:'Example',domain:'example.com'},company={company:'Example',domain:'example.com',seller:{},roles:[],opportunity:'',formulas:[]};let calls=0;const requests=[];
+ const D=require('../company-dossier.js'),UI=require('../company-dossier-ui.js');
+ const partial=D.reconcile([] ,company);partial.contextKey=D.contextKey(company);
+ await assert.rejects(UI.research(candidate,{}, {request:async body=>{requests.push(body);calls++;return {...partial,continuation:calls===1};}}),/incomplete/);
+ assert.equal(calls,2);assert.equal(requests[0].incremental,true);assert.equal(requests[1].force,false);assert.ok(candidate.buyerDiscovery.companyDossier.lastAttempt);
+});

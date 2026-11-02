@@ -42,11 +42,11 @@ test('company research summary shows incomplete checks and a usable existing res
 test('saved research summary preserves actual progress and the recorded cancellation gap',()=>{
  const {ctx,candidate}=runtime();candidate.publicResearch.accountability={...D.createBuyerResearchAccountability(),status:'partial',checkedPeople:5,totalPeople:10,officialPages:17,reusedChecks:23,stopReason:'canceled',gaps:['Research canceled','5 retained identities have unfinished checks']};
  const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');
- assert.match(summary.textContent,/5\/10 buyers checked/);assert.match(summary.textContent,/17 official pages read/);assert.match(summary.textContent,/Research canceled/);assert.equal(summary.querySelector('button').textContent,'Resume incomplete checks');
+ assert.match(summary.textContent,/5\/10 buyers fully researched/);assert.match(summary.textContent,/17 official pages read/);assert.match(summary.textContent,/Research canceled/);assert.equal(summary.querySelector('button').textContent,'Resume incomplete checks');
 });
 test('a selected-buyer batch is labelled so one checked person cannot look like full company coverage',()=>{
  const {ctx,candidate}=runtime();candidate.people.push({...candidate.people[0],id:'bob',name:'Bob Buyer'});candidate.publicResearch.researchScope='selected_buyers';candidate.publicResearch.accountability={...D.createBuyerResearchAccountability(),status:'partial',checkedPeople:1,totalPeople:1};
- const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/Latest batch: 1\/1 buyers checked/);
+ const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/Latest batch: 0 accepted emails · 1\/1 buyers fully researched/);
 });
 test('Resume uses the same current research-coverage decision as its label, retaining completed email checks',()=>{
  for(const coveragePassed of [false,true]){
