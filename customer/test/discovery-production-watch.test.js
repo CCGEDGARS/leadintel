@@ -26,6 +26,8 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, sessionStatus=401, privateSettingsStatus=401,storageStatus=401, premiumCss }) {
   return async url => {
     const parsed = new URL(String(url));
+    if(['/customer/buyer-research-jobs.js','/customer/buyer-handoff-recovery.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(parsed.pathname==='/api/buyers/research')return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/profile-engine.js','/customer/evidence-policy.js','/customer/strategy-integrity.js','/customer/market-conditions-engine.js','/customer/market.css','/customer/intelligence-profile-runtime.js','/customer/canonical-profile-runtime.js','/customer/reference-customers.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/customer/commercial-profile-adviser.js','/customer/profile-adviser.css','/customer/company-research-security.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/market-research-guard.js')return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
@@ -119,7 +121,7 @@ const boundedDiscoveryRuntime = [
  "function companyActionCandidate( function claimCompanySelection( data-company-key= function validateCompanySave(",
  "async function awaitDiscoveryRun( activeDiscoveryTaskId===taskId persistence:'failed'",
  "function companyStrategyCurrent( function retainDiscoveryEvidence( candidate.evidence=retainDiscoveryEvidence(candidate.evidence||[]",
- "function scheduleSavedBuyerPublicChecks(){ incomplete saved work requires explicit Refresh.",
+ "function scheduleSavedBuyerPublicChecks(){ Opening retained work only reads their progress",
  "strategySignature:window.LeadIntelStrategyIntegrity?.signature(main) strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current",
  "Array.isArray(main.referenceCustomerPortfolio?.lists)?null",
  "selectedInputKey()===expectedPeopleKey pending.owners",
