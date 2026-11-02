@@ -24,3 +24,32 @@ test('browser continues checkpointed provider requests automatically without for
  await assert.rejects(UI.research(candidate,{}, {request:async body=>{requests.push(body);calls++;return {...partial,continuation:calls===1};}}),/incomplete/);
  assert.equal(calls,2);assert.equal(requests[0].incremental,true);assert.equal(requests[1].force,false);assert.ok(candidate.buyerDiscovery.companyDossier.lastAttempt);
 });
+test('incremental refresh preserves a completed dossier at every save when the next provider request fails',async()=>{
+ const UI=require('../company-dossier-ui.js'),partial=D.reconcile([pass],{company:'Example',domain:'example.com'});
+ for(const fromServer of [false,true]){
+  const candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerDiscovery:{companyDossier:fromServer?partial:dossier}},saved=[];let calls=0;
+  await assert.rejects(UI.research(candidate,{}, {force:true,persist:()=>saved.push(JSON.parse(JSON.stringify(candidate))),request:async()=>{if(++calls===2)throw Error('Second provider unavailable');return {...partial,continuation:true,...(fromServer?{previousSuccessful:dossier}:{})};}}),/Second provider unavailable/);
+  assert.equal(calls,2);assert.ok(saved.length>=2);
+  for(const snapshot of [...saved,candidate]){
+   const restored=Discovery.normalizeDiscoveryState({selectedProspects:[snapshot]}).selectedProspects[0];
+   assert.equal(restored.buyerDiscovery.companyDossier.status,'complete');
+   assert.equal(restored.buyerDiscovery.companyDossier.passes.length,2);
+   assert.equal(restored.buyerDiscovery.companyDossier.people[0].name,'Alex Smith');
+   assert.equal(restored.buyerDiscovery.companyDossier.lastAttempt.research.passes[0].provider,'openai');
+   const crm=CRM.mapDiscoveryCandidateToCrm(restored).intelligence.research_snapshot.buyerResearch.discovery.companyDossier;
+   assert.equal(crm.passes.length,2);assert.equal(crm.lastAttempt.research.passes[0].provider,'openai');
+  }
+ }
+});
+test('a completed continuation replaces retained evidence and clears the incomplete attempt',async()=>{
+ const UI=require('../company-dossier-ui.js'),company={company:'Example',domain:'example.com'},candidate={...company,buyerDiscovery:{companyDossier:dossier}};
+ const revised={...pass,people:[{...pass.people[0],name:'Jamie Buyer',quote:'Jamie Buyer is Procurement Director'}]},partial=D.reconcile([revised],company),complete=D.reconcile([revised,{...revised,provider:'gemini'}],company),saved=[];let calls=0;
+ const result=await UI.research(candidate,{}, {force:true,persist:()=>saved.push(JSON.parse(JSON.stringify(candidate.buyerDiscovery.companyDossier))),request:async()=>++calls===1?{...partial,continuation:true}:complete});
+ assert.equal(saved[0].people[0].name,'Alex Smith');assert.ok(saved[0].lastAttempt);
+ assert.equal(calls,2);assert.equal(result.status,'complete');assert.equal(candidate.buyerDiscovery.companyDossier.people[0].name,'Jamie Buyer');assert.equal(candidate.buyerDiscovery.companyDossier.lastAttempt,null);
+});
+test('a continuation cannot restore a previous successful dossier from another seller context',async()=>{
+ const UI=require('../company-dossier-ui.js'),context={seller:{offer:'Different offer'}},partial=D.reconcile([pass],{company:'Example',domain:'example.com',...context}),candidate={company:'Example',domain:'example.com'};let calls=0;
+ await assert.rejects(UI.research(candidate,context,{request:async()=>{if(++calls===2)throw Error('Second provider unavailable');return {...partial,previousSuccessful:dossier,continuation:true};}}),/Second provider unavailable/);
+ assert.equal(candidate.buyerDiscovery.companyDossier.contextKey,partial.contextKey);assert.equal(candidate.buyerDiscovery.companyDossier.status,'partial');assert.equal(candidate.buyerDiscovery.companyDossier.passes.length,1);
+});
