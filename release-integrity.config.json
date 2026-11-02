@@ -7053,6 +7053,26 @@
         "new page requests",
         "checkpointReads(sourceRows)"
       ]
+    },
+    {
+      "id": "buyer-independent-channel-evidence",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "channelOnly:true",
+        "aria-pressed=\"${emailConfirmed}\""
+      ]
+    },
+    {
+      "id": "buyer-contact-social-and-number-filter",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function validPublishedPhone(value)",
+        "instagram\\.com|facebook\\.com"
+      ]
     }
   ],
   "retry": {
