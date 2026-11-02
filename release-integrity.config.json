@@ -7236,6 +7236,57 @@
       "contains": [
         "step6-journey=20261102-v1"
       ]
+    },
+    {
+      "type": "text",
+      "status": 200,
+      "id": "step7-approved-delivery-preview",
+      "url": "/customer/delivery-ui.js",
+      "contains": [
+        "delivery-preview-subject",
+        "delivery-preview-frame",
+        "Record external send?",
+        "step7-delivery=20261102-v1"
+      ]
+    },
+    {
+      "type": "text",
+      "status": 200,
+      "id": "step7-crm-history-recovery",
+      "url": "/customer/delivery-engine.js",
+      "contains": [
+        "crmRecordSnapshot",
+        "restoreCrmHistory",
+        "pendingSync",
+        "workspace_id!==workspaceId"
+      ]
+    },
+    {
+      "type": "text",
+      "status": 200,
+      "id": "step7-mailbox-status-recovery",
+      "url": "/customer/production-gmail-ui.js",
+      "contains": [
+        "retry-gmail-status",
+        "retry-microsoft-mail-status",
+        "retry-gmail-reply-save",
+        "crmActivityId:result.crm_activity_id"
+      ]
+    },
+    {
+      "type": "text",
+      "status": 200,
+      "id": "step7-delivery-entry-version",
+      "url": "/customer/",
+      "contains": [
+        "step7-delivery=20261102-v1"
+      ]
+    },
+    {
+      "id": "step7-delivery-status-auth",
+      "type": "text",
+      "status": 401,
+      "url": "/api/integrations/mail/delivery-status?workspace_id=audit-unauth&domain=buyer.example&recipient=buyer%40buyer.example"
     }
   ],
   "retry": {

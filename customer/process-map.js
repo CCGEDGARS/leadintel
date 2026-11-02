@@ -11,7 +11,7 @@
  * import './website-activation.js?v=20260916-ercon-context-v1';
  * import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2';
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
- * import './server-bridge.js?v=20260925-apollo-buyer-search-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1';
+ * import './server-bridge.js?v=20260925-apollo-buyer-search-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&step7-delivery=20261102-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260928-crm-buyer-recovery-v1&app-dialogs=20261017-v1';
  * import './ai-settings.js?v=20260915-model-choice-v1&app-dialogs=20261017-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1';
