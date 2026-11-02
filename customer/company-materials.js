@@ -4,7 +4,7 @@
  function createApi(workspace,fetchImpl=root.fetch.bind(root),isCurrent=()=>true){
   const check=()=>{if(!isCurrent())throw Error('Account or workspace changed. Retry company materials in the current context.');};
   async function request(path='',method='GET',body){check();const response=await fetchImpl('/api/company-materials'+path+'?workspace_id='+encodeURIComponent(workspace),{method,credentials:'include',headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)}),data=await response.json();check();if(!response.ok)throw Error(data.error||'Could not load company materials. Retry.');return data;}
-  return {list:()=>request(),extracted:id=>request('/'+encodeURIComponent(id)+'/extracted'),originalUrl:id=>'/api/company-materials/'+encodeURIComponent(id)+'/original?workspace_id='+encodeURIComponent(workspace),remove:card=>request('/'+encodeURIComponent(card.id),'DELETE',{expectedRevision:card.revision}),retry:card=>request('/'+encodeURIComponent(card.id)+'/retry','POST',{expectedRevision:card.revision}),upload:async file=>{
+  return {list:()=>request(),profileDocuments:async()=>(await request('/profile-context')).documents,extracted:id=>request('/'+encodeURIComponent(id)+'/extracted'),originalUrl:id=>'/api/company-materials/'+encodeURIComponent(id)+'/original?workspace_id='+encodeURIComponent(workspace),remove:card=>request('/'+encodeURIComponent(card.id),'DELETE',{expectedRevision:card.revision}),retry:card=>request('/'+encodeURIComponent(card.id)+'/retry','POST',{expectedRevision:card.revision}),upload:async file=>{
    const operation=root.LeadIntelSetupTrace?.begin('material_upload');try{
    if(file.size>maxBytes)throw Error(file.name+': maximum file size is 15 MB');
    operation?.checkpoint('request','pending');
@@ -31,9 +31,10 @@
    for(const card of cards){
     const article=node('article',null,'company-material-card'),heading=node('div',null,'company-material-heading');heading.append(node('strong',card.filename),node('span',card.status,'doc-status'));article.append(heading);
     if(card.analysis?.summary)article.append(node('p',card.analysis.summary));
+    if(card.analysis?.analysisMode==='source-excerpts')article.append(node('p','Source text is ready for Profile and relevant messages. AI summary is unavailable; only extracted passages will be used.','field-help'));
     if(card.status==='Processing'||card.status==='Uploading')article.append(node('p','Reading and analyzing automatically. This can take a few minutes.','field-help'));
     if(card.error)article.append(node('p',card.error,'inline-error'));
-    if(card.analysis?.analysisPartial||card.analysis?.coverage?.unreadable)article.append(node('p','Some source content could not be fully analyzed. Review before use.','field-help'));
+    if(card.analysis?.analysisPartial||card.analysis?.coverage?.unreadable)article.append(node('p','Partial analysis: only the readable source passages are available. Review extracted text before use.','field-help'));
     const controls=node('div',null,'company-material-controls'),download=node('a','Download original','secondary-btn small');download.href=api.originalUrl(card.id);download.download=card.filename;controls.append(download);
     const button=(label,attribute,handler)=>{const b=node('button',label,'secondary-btn small');b.type='button';b.setAttribute(attribute,'');b.disabled=busy;b.onclick=handler;controls.append(b);};
     if(card.status==='Ready')button('Review text','data-material-review',async()=>{const owner=workspace,token=generation;try{const data=await api.extracted(card.id);if(!valid(owner,token)||!article.isConnected)return;article.querySelector('details')?.remove();const details=node('details'),summary=node('summary','Extracted source text');details.open=true;details.append(summary);for(const section of data.sections||[]){details.append(node('small',section.location.replace(':',' ')),node('pre',section.text));}article.append(details);}catch(e){if(valid(owner,token))say(e.message);}});
@@ -56,8 +57,20 @@
      say('Uploading '+file.name+'…');try{const data=await api.upload(file);if(!valid(owner,token))break;cards=data.cards;succeeded++;loaded=true;paint();}catch(e){errors.push(file.name+': '+e.message);rejected++;}
     }}finally{if(valid(owner,token)){busy=false;paint();say((succeeded?succeeded+' file(s) saved. Analysis starts automatically. ':'')+(rejected?errors.join(' · '):''));if(input)input.value='';}}
   }
-  return {sync,upload,destroy(){alive=false;generation++;}};
+  // Own the upload controls even while the large app module is still starting.
+  // Capture prevents the legacy app listeners from submitting the same files twice.
+  const selected=event=>{event.stopImmediatePropagation();void upload(event.target.files||[]);};
+  const dropped=event=>{event.preventDefault();event.stopImmediatePropagation();zone?.classList.remove('dragging');void upload(event.dataTransfer?.files||[]);};
+  const zone=document.getElementById('upload-zone');
+  input?.addEventListener('change',selected,true);zone?.addEventListener('drop',dropped,true);
+  return {sync,upload,destroy(){alive=false;generation++;input?.removeEventListener('change',selected,true);zone?.removeEventListener('drop',dropped,true);}};
  }
- const api={createApi,mount};if(typeof module==='object'&&module.exports){module.exports=api;return;}root.LeadIntelCompanyMaterials=api;
+ async function profileDocuments(){
+  const bridge=root.LeadIntelServerBridge,workspace=bridge?.session?.authenticated?bridge.workspace?.id:'',user=bridge?.session?.user?.id;
+  if(!workspace)throw Error('Sign in and wait for the workspace to load before reading company materials.');
+  const account=root.localStorage?.getItem('leadintel_account_context_v1');
+  return createApi(workspace,root.fetch.bind(root),()=>root.LeadIntelServerBridge?.workspace?.id===workspace&&root.LeadIntelServerBridge?.session?.user?.id===user&&root.localStorage?.getItem('leadintel_account_context_v1')===account).profileDocuments();
+ }
+ const api={createApi,mount,profileDocuments};if(typeof module==='object'&&module.exports){module.exports=api;return;}root.LeadIntelCompanyMaterials=api;
  if(root.document){const currentWorkspace=()=>root.LeadIntelServerBridge?.session?.authenticated?root.LeadIntelServerBridge.workspace?.id||'':'';const boot=()=>{const ui=mount({document:root.document,currentWorkspace});if(!ui)return;root.LeadIntelCompanyMaterials.upload=files=>ui.upload(files);ui.sync();root.setInterval(()=>ui.sync(),5000);root.addEventListener('focus',()=>ui.sync({refresh:true}));};if(root.document.readyState==='loading')root.document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();}
 })(typeof window==='object'?window:globalThis);

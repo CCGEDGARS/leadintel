@@ -22,3 +22,14 @@ test('stale workspace responses never appear in the new workspace and cancel lea
  const ui=api.mount({document:d,currentWorkspace:()=>workspace,fetchImpl,confirm:async()=>false});const pending=ui.sync();workspace='w2';await ui.sync();resolve(Response.json({cards:[card]}));await pending;assert.ok(!d.getElementById('company-material-list').textContent.includes(card.filename));assert.equal(deleted,0);ui.destroy();dom.window.close();
 });
 test('heading, separate limits, image formats and processing help are shipped together',()=>{const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');assert.match(html,/<h3>Company materials, references and success stories<\/h3>/);assert.match(html,/image\/jpeg,image\/png/);assert.match(html,/5 PDFs.*10 images/);assert.match(html,/company-materials\.js/);});
+
+test('file selection and drop are wired independently of main app startup and cannot double-upload',async()=>{
+ const dom=new JSDOM(markup,{url:'https://app.test'}),d=dom.window.document;let uploads=0,legacy=0;
+ const fetchImpl=async(url,options={})=>{if(url.includes('upload-ticket'))return Response.json({ticket:'once',uploadUrl:'https://leadintel-api.edgars-7e7.workers.dev/company-material-upload'});if(url.includes('/company-material-upload'))uploads++;return Response.json({cards:[]});};
+ const ui=api.mount({document:d,currentWorkspace:()=> 'w1',fetchImpl});await ui.sync();
+ const input=d.getElementById('pdf-input');input.addEventListener('change',()=>legacy++);
+ Object.defineProperty(input,'files',{value:[new File(['%PDF-sample'],'brochure.pdf',{type:'application/pdf'})]});input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await settle();
+ assert.equal(uploads,1);assert.equal(legacy,0);
+ const drop=new dom.window.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:{files:input.files}});d.getElementById('upload-zone').dispatchEvent(drop);await settle();assert.equal(uploads,2);
+ ui.destroy();dom.window.close();
+});
