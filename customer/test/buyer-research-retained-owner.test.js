@@ -12,6 +12,10 @@ test('Teemu and Klas retain their own research after the live shortlist reorders
  const h=runner(),pending=h.c.runPublicProspectContacts(h.owner.domain);h.owner.people.reverse();h.gate.resolve({});
  assert.equal(await pending,true);assert.equal(h.mandatory,1);assert.deepEqual(h.owner.people.map(p=>p.id),['klas','teemu']);assert.ok(h.owner.people.every(p=>p.emailResearch?.searches===11));
 });
+test('independent retained-person checks continue when the dossier provider fails',async()=>{
+ const h=runner();h.c.window.LeadIntelCompanyDossierUi.research=async()=>{throw Error('Company researcher rate limit');};
+ assert.equal(await h.c.runPublicProspectContacts(h.owner.domain),true);assert.equal(h.mandatory,1);assert.ok(h.owner.people.every(p=>p.emailResearch?.status==='complete'));assert.equal(h.owner.publicResearch.accountability.status,'partial');assert.ok(h.owner.publicResearch.accountability.gaps.some(gap=>gap.includes('rate limit')));
+});
 for(const changed of ['discovery','bridge','company'])test(`a replaced ${changed} cancels the old retained buyer research`,async()=>{
  const h=runner(),pending=h.c.runPublicProspectContacts(h.owner.domain),saved=h.saves;
  if(changed==='discovery')h.c.discovery={selectedProspects:[h.owner]};

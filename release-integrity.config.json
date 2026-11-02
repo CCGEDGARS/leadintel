@@ -2206,19 +2206,22 @@
       "id": "workspace-storage-private-status",
       "type": "text",
       "url": "/api/storage/status?workspace_id=release-check",
-      "status": 401
+      "status": 401,
+      "contains": []
     },
     {
       "id": "workspace-storage-checkout-method",
       "type": "text",
       "url": "/api/storage/checkout?workspace_id=release-check",
-      "status": 405
+      "status": 405,
+      "contains": []
     },
     {
       "id": "workspace-storage-webhook-registration",
       "type": "text",
       "url": "/api/webhooks/stripe/storage",
-      "status": 405
+      "status": 405,
+      "contains": []
     },
     {
       "id": "workspace-storage-alert-boundary",
@@ -2717,13 +2720,15 @@
       "id": "step6-followup-private-context",
       "type": "text",
       "url": "/api/follow-up-assistant/context?workspace_id=release-check",
-      "status": 401
+      "status": 401,
+      "contains": []
     },
     {
       "id": "step6-followup-private-save",
       "type": "text",
       "url": "/api/follow-up-assistant/save?workspace_id=release-check",
-      "status": 401
+      "status": 401,
+      "contains": []
     },
     {
       "id": "step6-new-cache-entry",
@@ -3544,7 +3549,7 @@
       "contains": [
         "const rolesRefreshBlocked=",
         "Saved people remain visible for review.",
-        "candidate.people=rolesRefreshBlocked?candidate.people||[]:shortlist.people;"
+        "candidate.people=retainedPeople;"
       ],
       "notContains": [
         "let people=candidate.buyerRolesChanged?[]",
@@ -7001,6 +7006,29 @@
       "contains": [
         "Official company email · Accepted",
         "progress(detail?.profilesReady===true)"
+      ]
+    },
+    {
+      "id": "buyer-contact-recovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "rolesEvidenceChecked",
+        "candidate.people=retainedPeople;",
+        "dossierFailure",
+        "LeadIntelDiscovery.retainBuyerIdentities(saved,profile,candidate)"
+      ]
+    },
+    {
+      "id": "dossier-error-and-role-equivalence",
+      "type": "text",
+      "url": "/customer/company-dossier.js",
+      "status": 200,
+      "contains": [
+        "function errorMessage(",
+        "function roleKey(",
+        "obsoleteRoleConflict"
       ]
     }
   ],
