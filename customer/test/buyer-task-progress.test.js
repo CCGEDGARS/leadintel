@@ -35,6 +35,17 @@ test('completed public query batches and grounded cross-check report real task p
  assert.equal(grounded.task.completed,1);
  assert.equal(centre.list()[0].status,'partial');assert.equal(candidate.publicResearch.accountability.status,'partial');
 });
+test('a failed dossier and unavailable directories cannot erase an official named buyer during role refresh',async()=>{
+ const {context,candidate}=runtime(),page=require('./fixtures/viscaria-public-buyer-pages.json').pages[0];
+ Object.assign(candidate,{company:'Viscaria',domain:'viscaria.com',website:'https://viscaria.com',buyerRoles:'Head of Procurement',buyerRolesChanged:true,buyerRolesSource:'manual'});
+ context.window.LeadIntelCompanyDossierUi.research=async()=>{throw Object.assign(Error('Research provider rate limit'),{status:429});};
+ context.window.LeadIntelFirstPartyResearch.collectWebsiteEvidence=async()=>({pages:[{url:page.url,text:page.markdown}]});
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>{throw Error('Directory unavailable');}});
+ context.searchBuyerPublicPages=async()=>{throw Error('Public search unavailable');};context.fetchBuyerResearch=async()=>{throw Error('Grounded search unavailable');};
+ context.findPublicProspectContacts=async()=>{candidate.publicContactStatus='error';};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ const robert=candidate.people.find(p=>p.name==='Robert Åkerlind');assert.ok(robert,'the actual official procurement contact remains a buyer');assert.equal(candidate.buyerRolesChanged,false);assert.equal(D.acceptedOfficialBuyerEmail(candidate,robert),'robert.akerlind@viscaria.com');assert.equal(candidate.buyerDiscovery.researchIncomplete,true);assert.ok(candidate.buyerDiscovery.issues.some(issue=>issue.includes('rate limit')));
+});
 
 test('the buyer run deadline remains active during contact evidence and preserves researched identities on cancellation',async()=>{
  const {context,candidate,centre,timers}=runtime();let contactDeadline;
