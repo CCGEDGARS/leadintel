@@ -77,6 +77,7 @@ test('two providers retain dated and undated incoming duplicates as history afte
 const unresolved=[
  ['no literal effective date',{effective:{...officialEffective(),date:'',quote:`${name} is ${title} at Acme Labs.`}}],
  ['claimed date absent from the literal source',{effective:{...officialEffective(),quote:`${name} is ${title} at Acme Labs.`}}],
+ ['official article provides only a publication date',{effective:{...officialEffective(),quote:`Published on ${iso(-30)}. ${name} is ${title} at Acme Labs.`}}],
  ['dated appointment is third party',{effective:{...officialEffective(),sourceUrl:'https://industry.example/current-role'}}],
  ['current roster is third party',{roster:{...officialRoster(),sourceUrl:'https://industry.example/roster'}}],
  ['both official claims come from the same article',{roster:{...officialRoster(),sourceUrl:officialEffective().sourceUrl}}],
@@ -86,7 +87,7 @@ const unresolved=[
 ];
 for(const [reason,options] of unresolved)test(`an incoming/current review hold stays when ${reason}`,()=>{
  const dossier=timeline(options);
- for(const value of [dossier,restored(dossier)])assert.equal(C.resolveBuyerRoleHold(heldPerson(),value).opportunityScope.status,'review_required');
+ for(const value of [dossier,restored(dossier)])assert.equal(C.resolveBuyerRoleHold(heldPerson(),value).opportunityScope?.status,'review_required');
 });
 
 test('a claimed effective date without a matching literal source date gains no authority on reload',()=>{
@@ -100,6 +101,31 @@ test('future-only appointments cannot create a current buyer or clear an employm
  for(const value of [dossier,restored(dossier)]){
   assert.equal(C.buyers(value,company.company).length,0);assert.match(C.holdReason({name,title},value),/employment status/i);
   assert.equal(C.resolveBuyerRoleHold(heldPerson(),value).opportunityScope.status,'review_required');
+ }
+});
+
+for(const [label,sourceQuote] of [
+ ['publication',(past,future)=>`Published on ${past}. ${name} will become ${title} at Acme Labs on ${future}.`],
+ ['another person’s appointment',(past,future)=>`Jamie Carter will become ${title} at Acme Labs on ${past}. ${name} will become ${title} at Acme Labs on ${future}.`],
+ ['another similarly named person’s appointment',(past,future)=>`Alex Morganson will become ${title} at Acme Labs on ${past}. ${name} will become ${title} at Acme Labs on ${future}.`]
+])test(`a literal past ${label} date cannot promote this person’s explicitly future appointment`,()=>{
+ const published=iso(-30),effective=iso(30),quote=sourceQuote(published,effective);
+ const dossier=dossierFor([[incoming({date:published,sourceUrl:'https://acme.example/news/announced-role',quote})],[incoming({date:published,quote})]]);
+ for(const value of [dossier,restored(dossier)]){
+  assert.equal(C.buyers(value,company.company).length,0,'A different date in the source is not proof this person’s appointment has taken effect');
+  assert.match(C.holdReason({name,title},value),/employment status/i);
+  assert.equal(C.resolveBuyerRoleHold(heldPerson(),value).opportunityScope.status,'review_required');
+ }
+});
+
+test('an explicitly negated or canceled appointment cannot supply an effective incoming date',()=>{
+ const date=iso(-30),quotes=[`${name} will not become ${title} at Acme Labs on ${date}.`,`${name} will never become ${title} at Acme Labs on ${date}.`,`${name} cancelled the appointment as ${title} at Acme Labs effective ${date}.`];
+ for(const quote of quotes){
+  const dossier=dossierFor([[incoming({date,sourceUrl:'https://acme.example/news/appointment',quote})],[incoming({date,quote})]]);
+  for(const value of [dossier,restored(dossier)]){
+   assert.equal(C.buyers(value,company.company).length,0,quote);assert.match(C.holdReason({name,title},value),/employment status/i);
+   assert.equal(C.resolveBuyerRoleHold(heldPerson(),value).opportunityScope?.status,'review_required');
+  }
  }
 });
 
