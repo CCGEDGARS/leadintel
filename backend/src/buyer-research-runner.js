@@ -12,7 +12,7 @@ const D=globalThis.LeadIntelDiscovery,C=globalThis.LeadIntelCompanyDossier;
 const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:180000,review:45000,paid:360000};
 // The public engine's 180s deadline bounds one pass. Scheduler slices resume
 // that same finite task plan; their accumulated wall time is not completion.
-const phaseExhausted=(phase,ms,runs)=>runs>=18||(phase!=='contacts'&&ms>=phaseBudget[phase]);
+const phaseExhausted=(phase,ms,runs)=>runs>=18||(!['official','dossier','contacts'].includes(phase)&&ms>=phaseBudget[phase]);
 const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
 const errorReason=(error,phase)=>`${phase}: ${error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -50,9 +50,19 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const executeTaskBody=async(kind,value,operation)=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
    if(prior?.status==='complete')return parse(prior.result_json);
-   if(Number(prior?.attempts||0)>=2)throw Object.assign(Error('Source task attempt limit reached'),{code:'TASK_LIMIT'});
-   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=?',row.id).first();if(!prior&&Number(count?.n)>=256)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
-   const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET status='running',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP WHERE attempts<2 AND ${writeGuard}`,row.id,key,kind,phase,String(value).slice(0,4000),...args,...args));
+   // A running row belongs to the previous expired/canceled slice. It is not
+   // a provider-failure receipt. Keep earlier real failures, but restore the
+   // interrupted dispatch; the eighteen-slice phase ceiling still bounds work.
+   const attempts=prior?.status==='running'?(prior.error&&!/time budget reached/i.test(prior.error)?Math.max(0,Number(prior.attempts||0)-1):0):Number(prior?.attempts||0);
+   if(attempts>=2)throw Object.assign(Error('Source task attempt limit reached'),{code:'TASK_LIMIT'});
+   // Grounded contact search owns a 25s deadline. Do not dispatch it into the
+   // final seconds of a slice where it cannot return and save a receipt.
+   const independentWindow=services.independent?Number(services.independentMinimumMs)||0:30000;
+   if(kind==='independent'&&windowMs-(clock()-start)<independentWindow)throw Object.assign(Error('Independent check deferred to the next processing slice'),{code:'TIME_BUDGET'});
+   // Fit the finite ten-person query plan, official graph and per-person source
+   // reads in one job. The earlier256 ceiling was smaller than that plan.
+   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=?',row.id).first();if(!prior&&Number(count?.n)>=384)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
+   const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET attempts=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE (buyer_research_tasks.status='running' OR attempts<2) AND ${writeGuard}`,row.id,key,kind,phase,String(value).slice(0,4000),...args,attempts+1,...args));
    if(!reserved.meta.changes)throw lost();
    try{
     const result=await operation();await guard();if(jsonSize(result)>160000)throw Error('Source task response exceeds bounded storage');
@@ -60,7 +70,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(!saved.meta.changes)throw lost();changed++;return result;
    }catch(error){
     // Do not let an expired, canceled or revoked worker record a late receipt.
-    if(accepting&&!controller.signal.aborted)await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
+    if(accepting&&!controller.signal.aborted&&!['TIME_BUDGET','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code))await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
     throw error;
    }
   };
@@ -90,8 +100,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    return {url:actual,markdown:text,links:Array.isArray(page.links)?page.links.slice(0,100):[],metadata:{sourceURL:actual,statusCode:200,source:page.metadata?.source||'unknown'},researchTrace:page.researchTrace||raw.researchTrace||[],sourceRead:true,extractedAt:new Date().toISOString()};
   });
   const allRows=async()=>{
-   const tasks=await stmt(env,"SELECT kind,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete'",row.id).all();
-   return tasks.results.flatMap(r=>r.kind==='read'?[parse(r.result_json)]:r.kind==='search'?parse(r.result_json).rows||[]:[]).slice(-160);
+   // Read bodies own factual attribution. A large search index must not evict
+   // the completed company/staff pages merely because task hashes sort first.
+   const tasks=await stmt(env,"SELECT kind,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' AND kind IN ('read','search') ORDER BY CASE kind WHEN 'read' THEN 0 ELSE 1 END,updated_at DESC LIMIT 160",row.id).all();
+   return tasks.results.flatMap(r=>r.kind==='read'?[parse(r.result_json)]:r.kind==='search'?parse(r.result_json).rows||[]:[]).slice(0,160);
   };
   const reassessRoles=(people=candidate.people||[])=>{if(candidate.buyerRolesChanged&&D.canReassessSavedBuyerRoles(candidate,people,input.profile))candidate.buyerRolesChanged=false;};
   const confirmNamed=()=>{
@@ -136,7 +148,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }else if(phase==='contacts'){
     if(candidate.people?.length){
      report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,maxDurationMs:Math.min(remaining,180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
-     confirmNamed();if(report.status==='complete'||!changed&&report.stopReason!=='time_budget')phase=nextPhase[phase];
+     confirmNamed();
+     const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?Number((await stmt(env,"SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).first())?.n)||0:0;
+     if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
     }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='review'){
     const supplied=D.safeBuyerReviewEvidence(D.buyerSupervisorEvidence(candidate.people,rows));candidate.publicResearch.reviewEvidence=supplied;

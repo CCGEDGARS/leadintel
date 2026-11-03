@@ -1359,7 +1359,7 @@
 
   function isNonPersonBuyerHeading(value){if(/^(?:chief of [\p{L} &,-]+|(?:executive|group) management team|board of directors|verkställande direktör|chief (?:executive|operating|financial|technology|technical|information|commercial|marketing|people|strategy|human resources)(?: [\p{L}&,-]+)? officer|(?:head|director) of [\p{L} &,-]+|(?:senior |executive )?vice president|(?:managing|executive|procurement|operations|engineering|technical|financial|production|project|sales|marketing|human resources) (?:director|manager)|board member)$/iu.test(clean(value)))return true;return /^(?:(?:cookie|privacy|consent|preference) (?:consent|policy|notice|settings|preferences|manager|center|centre)|(?:district|regional|territory|area|global|national|group|inside|outside) (?:sales|marketing|operations|support|service)(?: (?:team|department|office|manager|director))?)$/i.test(clean(value));}
   function hasFullBuyerName(value){
-    const name=clean(value);if(/^Meet\s/i.test(name)||isNonPersonBuyerHeading(name)||/^(?:job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
+    const name=clean(value);if(/^Meet\s/i.test(name)||isNonPersonBuyerHeading(name)||/^(?:new on site|read more|latest news|contact us|investor relations|job (?:description|title|summary|details)|(?:key|main|your) responsibilities|(?:warehouse|production|retail|sales) associate|product owner)$/i.test(name))return false;
     const parts=name.split(/\s+/);
     // Initials can be middle names, but cannot stand in for either the first
     // name or surname. Keep partial identities out of contact generation.
