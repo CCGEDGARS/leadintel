@@ -65,7 +65,7 @@ for(const originalStatus of ['needs_review','complete','queued_paid','queued_pai
  if(queuedPaid)await scheduledSlice(f,job.id,services);
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),result=JSON.parse(saved.result_json);
  assert.equal(reviewCalls,1,'Once-only semantic recovery must execute the now-stale review: '+JSON.stringify({phase:saved.phase,status:saved.status,lastError:saved.last_error,diagnostics:JSON.parse(saved.diagnostic_json)}));assert.equal(sourceCalls,0);
- assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,2);
+ assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,3);
  assert.equal(result.publicResearch.aiReview.provider,'fresh-review');assert.equal(result.publicResearch.aiReview.inputSignature,D.buyerReviewSignature(result));
  assert.equal(D.buyerQualityAssessment(result).aiReviewStatus,'complete');
  assert.equal(JSON.stringify(result.people[0].contactResearch),originalChecks,'Completed per-person checks survive the repair');

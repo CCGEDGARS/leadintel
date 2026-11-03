@@ -33,7 +33,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   // A stale legacy paid slice first settles through the existing paid evidence
   // gate. Keep it eligible for terminal recovery, which captures its original
   // own-CRM scope before a fresh review changes that scope.
-  const deferSemanticStamp=Number(input.executionContinuationVersion||0)<2&&row.phase==='paid'&&originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate);
+  const deferSemanticStamp=Number(input.executionContinuationVersion||0)<3&&row.phase==='paid'&&originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate);
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const officialPlan=candidate.buyerDiscovery?.officialContactInventory?.research,rescopeOfficial=phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
@@ -59,16 +59,16 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(prior?.status==='complete'){const result=parse(prior.result_json);return kind==='read'?{...result,reused:true}:result;}
    // A running row belongs to the previous expired/canceled slice. It is not
    // a provider-failure receipt. Keep earlier real failures, but restore the
-   // interrupted dispatch; the eighteen-slice phase ceiling still bounds work.
+   // interrupted dispatch; bounded tasks and consecutive idle slices still bound work.
    const attempts=prior?.status==='running'?(prior.error&&!/time budget reached/i.test(prior.error)?Math.max(0,Number(prior.attempts||0)-1):0):Number(prior?.attempts||0);
    if(attempts>=2)throw Object.assign(Error('Source task attempt limit reached'+(prior?.error?' ('+prior.error+')':'')),{code:'TASK_LIMIT'});
    // Grounded contact search owns a 25s deadline. Do not dispatch it into the
    // final seconds of a slice where it cannot return and save a receipt.
    const independentWindow=services.independent?Number(services.independentMinimumMs)||0:30000;
    if(kind==='independent'&&windowMs-(clock()-start)<independentWindow)throw Object.assign(Error('Independent check deferred to the next processing slice'),{code:'TIME_BUDGET'});
-   // Fit the finite ten-person query plan, official graph and per-person source
-   // reads in one job. The earlier256 ceiling was smaller than that plan.
-   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=?',row.id).first();if(!prior&&Number(count?.n)>=384)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
+   // Each finite phase owns its task allowance. Retained official/dossier
+   // receipts are reusable evidence, not admissions against the contact plan.
+   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase=?',row.id,phase).first();if(!prior&&Number(count?.n)>=384)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
    const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET attempts=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE (buyer_research_tasks.status='running' OR attempts<2) AND ${writeGuard}`,row.id,key,kind,phase,String(value).slice(0,4000),...args,attempts+1,...args));
    if(!reserved.meta.changes)throw lost();
    try{
@@ -175,7 +175,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(finished)phase='done';
    }
    if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
-   await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns++;
+   await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;
    if(phase===row.phase&&phaseExhausted(phase,phaseMs,phaseRuns)){
     diagnostics.push({phase,reason:'Phase work budget reached; completed evidence retained',at:new Date().toISOString()});phase=nextPhase[phase];
    }
@@ -186,7 +186,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(phaseAdvanced){phaseMs=0;phaseRuns=0;}
    if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
    else if(error.code==='LEASE_EXPIRED')status='queued';
-   else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns++;if(phaseExhausted(phase,phaseMs,phaseRuns)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
+   else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if(phaseExhausted(phase,phaseMs,phaseRuns)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
    else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}
   }finally{
    accepting=false;clearTimeout(timer);controller.abort();
@@ -201,7 +201,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):2,status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):3,status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}
