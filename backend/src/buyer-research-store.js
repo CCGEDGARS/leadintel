@@ -50,12 +50,23 @@ export async function readBuyerJob(env,workspaceId,{id,domain}={}){
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }
 function resumePhase(candidate){return !D.officialContactCoveragePassed(candidate)?'official':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!D.buyerResearchCoveragePassed(candidate)?'contacts':candidate.publicResearch?.aiReview?.status!=='complete'?'review':'done';}
-export async function publicBuyerJob(env,row){
- if(!row)return null;const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate||{});
+async function retainedJobCandidate(env,row,input,current){
+ // Only server-owned results in this workspace and seller context can restore
+ // source facts. Current roster, rejections and execution receipts remain authoritative.
+ const history=await stmt(env,"SELECT input_json,result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND rowid<(SELECT rowid FROM buyer_research_jobs WHERE id=?) AND updated_at>datetime('now','-30 days') ORDER BY rowid DESC LIMIT 3",row.workspace_id,row.domain,row.id).all();
+ let candidate=current;
+ for(const old of history.results||[]){const prior=parse(old.input_json);if(!input.workspaceContext||prior.workspaceContext!==input.workspaceContext)continue;
+  candidate=D.mergeRetainedBuyerResearch(parse(old.result_json,{}),candidate);
+ }
+ return candidate;
+}
+export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
+ if(!row)return null;const input=parse(row.input_json);let candidate=parse(row.result_json,input.candidate||{});
+ if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
  const totals=await stmt(env,"SELECT status,count(*) n FROM buyer_research_tasks WHERE job_id=? GROUP BY status",row.id).all();
  const quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
  const completed=(totals.results||[]).find(r=>r.status==='complete')?.n||0,total=(totals.results||[]).reduce((n,r)=>n+Number(r.n),0);
- return {id:row.id,domain:row.domain,contextKey:row.context_key,input:{company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate),revision:row.revision,updatedAt:row.updated_at.replace(' ','T')+'Z',candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{completed:Number(completed),total,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):row.phase.replaceAll('_',' ')}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,input:{company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate),revision:row.revision,updatedAt:row.updated_at.replace(' ','T')+'Z',candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{completed:Number(completed),total,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):row.phase.replaceAll('_',' ')}};
 }
 export async function startBuyerJob(env,workspaceId,user,body){
  const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload),key=await buyerInputKey(input);

@@ -43,3 +43,8 @@ test('authenticated Chromium preserves four mixed confirmed channels with the ot
  const {verifyConfirmedFourJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-large-snapshot-'));
  const e=await verifyConfirmedFourJourney({artifactDir,largeSavedResearch:true,mixedChannels:true});assert.ok(e.retainedSnapshotBytes>1000000);assert.ok(e.researchCommandBytes.every(bytes=>bytes>0&&bytes<64000));assert.equal(e.mainContacts,4);assert.equal(e.hiddenOtherContacts,6);assert.equal(e.freshBrowserReopen,true);assert.equal(e.readOnlyProviderReplays,0);assert.equal(e.paidContactRequests,0);assert.equal(e.outboundMessages,0);t.diagnostic('Large-snapshot browser evidence: '+artifactDir+'/evidence.json');
 });
+
+test('authenticated Chromium restores four recorded Viscaria contacts and preserves Refresh, email and LinkedIn handoffs through reopen',{timeout:90000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; required in CI');return;}
+ const {verifyRetainedViscariaJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-viscaria-retention-'));const e=await verifyRetainedViscariaJourney({artifactDir});assert.equal(e.mainContacts,4);assert.equal(e.historyRecoveryReadOnly,true);assert.equal(e.refreshRetainsFour,true);assert.equal(e.freshBrowserReopen,true);assert.equal(e.outboundMessages,0);assert.equal(e.paidContactRequests,0);t.diagnostic('Recorded Viscaria evidence: '+artifactDir+'/evidence.json');
+});

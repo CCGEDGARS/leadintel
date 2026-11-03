@@ -5506,7 +5506,7 @@
         "async function recheckBuyerContact(",
         "Researching available free sources",
         "personIds:[String(person.id)],force:true",
-        "A confirmed company or personal email for this person"
+        "Confirm an email or LinkedIn profile for this person"
       ]
     },
     {
@@ -7180,21 +7180,32 @@
       "type": "text",
       "url": "/customer/buyer-research-jobs.js",
       "status": 200,
-      "contains": ["/api/buyers/research", "createClient", "restore", "expectedRevision"]
+      "contains": [
+        "/api/buyers/research",
+        "createClient",
+        "restore",
+        "expectedRevision"
+      ]
     },
     {
       "id": "durable-buyer-handoff-recovery",
       "type": "text",
       "url": "/customer/buyer-handoff-recovery.js",
       "status": 200,
-      "contains": ["pendingMessageHandoff", "resumeSavedMessageHandoff", "consumeFulfilled"]
+      "contains": [
+        "pendingMessageHandoff",
+        "resumeSavedMessageHandoff",
+        "consumeFulfilled"
+      ]
     },
     {
       "id": "durable-buyer-job-authentication",
       "type": "text",
       "url": "/api/buyers/research?workspace_id=release-check&domain=example.com",
       "status": 401,
-      "contains": ["Authentication required"]
+      "contains": [
+        "Authentication required"
+      ]
     },
     {
       "id": "step6-visible-edit-save-controls",
@@ -7376,8 +7387,7 @@
       "contains": [
         "buyer-refresh-recovery=20261103-v1"
       ]
-    }
-,
+    },
     {
       "id": "buyer-confirmed-four-entry-version",
       "type": "text",
@@ -7409,8 +7419,7 @@
         "usablePriorityContacts:",
         "scopeMatched"
       ]
-    }
-,
+    },
     {
       "id": "buyer-compact-refresh-request",
       "type": "text",
@@ -7429,6 +7438,47 @@
       "status": 200,
       "contains": [
         "buyer-request-size=20261103-v1"
+      ]
+    },
+    {
+      "id": "buyer-retained-source-merge",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function mergeRetainedBuyerResearch",
+        "function mergeOfficialContactInventory",
+        "const resolved=new Set(currentReview?review.reviewedPersonIds:[])"
+      ]
+    },
+    {
+      "id": "buyer-retained-job-application",
+      "type": "text",
+      "url": "/customer/buyer-research-jobs.js",
+      "status": 200,
+      "contains": [
+        "!job.retainedEvidenceRecovered",
+        "mergeRetainedBuyerResearch"
+      ]
+    },
+    {
+      "id": "buyer-retained-email-and-profile-handoff",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "const emailConfirmed=verified,linkedinConfirmed=",
+        "Proceed to LinkedIn content",
+        "official pages read in this run"
+      ]
+    },
+    {
+      "id": "buyer-retained-dossier-identity-holds",
+      "type": "text",
+      "url": "/customer/company-dossier.js",
+      "status": 200,
+      "contains": [
+        "const latest=dossier?.lastAttempt?.research"
       ]
     }
   ],

@@ -20,7 +20,7 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
  try{
   if(request.method==='GET'){
    const job=await readBuyerJob(env,workspaceId,{id:url.searchParams.get('job_id')||undefined,domain:url.searchParams.get('domain')});
-   return json({job:await publicBuyerJob(env,job)},200,cors);
+   return json({job:await publicBuyerJob(env,job,{recoverRetained:!url.searchParams.get('job_id')})},200,cors);
   }
   if(Number(request.headers.get('Content-Length')||0)>262144)return json({error:'Buyer context exceeds the request limit'},413,cors);
   const body=await request.json().catch(()=>null);
@@ -28,7 +28,7 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
   if(!['start','resume','cancel'].includes(body.action||'start'))return json({error:'Unknown buyer research command'},400,cors);
   const current=await access(request,env,workspaceId,true);if(current.error)return json({error:current.error},current.status,cors);
   const row=(body.action||'start')==='start'?await startBuyerJob(env,workspaceId,current.user,body):await commandBuyerJob(env,workspaceId,current.user,body);
-  const job=await publicBuyerJob(env,row);
+  const job=await publicBuyerJob(env,row,{recoverRetained:true});
   // The HTTP response is the durable acknowledgement. A short wake is optional;
   // the minute scheduler remains responsible after the browser goes away.
   if(ctx?.waitUntil&&['queued','running'].includes(row.status))ctx.waitUntil(runBuyerResearchJobs(env,{maxJobs:1,jobId:row.id,windowMs:18000}).catch(()=>{}));
