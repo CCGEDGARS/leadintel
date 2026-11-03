@@ -39,3 +39,9 @@ test('same-revision domain recovery applies recovered source facts to an already
  const {c}=fixture(),next=structuredClone(c);for(const p of c.people)p.publicEmailEvidence=null;c.buyerResearchJob={id:'job',revision:1,status:'needs_review'};
  const bridge={workspace:{id:'workspace'},session:{authenticated:true,user:{id:'owner'}}},client=createClient({getBridge:()=>bridge,fetchImpl:async()=>Response.json({job:{id:'job',domain:c.domain,status:'needs_review',revision:1,retainedEvidenceRecovered:true,candidate:next}})});await client.restore(c,{profile:{decisionMakers:c.buyerRoles}});assert.equal(c.people.filter(p=>D.acceptedOfficialBuyerEmail(c,p)).length,4);
 });
+test('official executive cards remain role evidence when image captions precede names and titles use separate paragraphs',()=>{
+ const {c,pages}=require('./fixtures/viscaria-contact-replay.cjs')();for(const name of ['Charlotte Odenberger','Jörgen Olsson']){const p=c.people.find(p=>p.name===name),checked=D.matchBuyerRoleEvidence(p,pages,c,{complete:true});assert.equal(checked.roleReview?.status,'supported',name);assert.ok(checked.roleReview.sources.some(r=>r.url.includes('executive-management-team')));}
+});
+for(const body of ['### Chief Financial Officer\nAnna Buyer\n\n### Head of Procurement\nBob Smith','### Anna Buyer\n\n![Bob Smith](bob.jpg)\n\n### Head of Procurement\nBob Smith','### Anna Buyer\n\n![Bob Smith](bob.jpg)\n\nHead of Procurement\nBob Smith'])test('role evidence cannot cross a following staff-card boundary: '+body.slice(0,40),()=>{
+ const p={id:'anna',name:'Anna Buyer',publicName:'Anna Buyer',title:'Head of Procurement',organization:'Example'};const result=D.matchBuyerRoleEvidence(p,[{url:'https://example.com/team',markdown:body,sourceRead:true}],{company:'Example',domain:'example.com'},{complete:true});assert.notEqual(result.roleReview?.status,'supported');
+});

@@ -335,7 +335,11 @@
   function namedBuyerRoleQuote(text,at,name,aliases){
     const allowed=new Set(aliases.join(' ').toLowerCase().split(/[^\p{L}]+/u));
     const others=value=>[...value.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})[ \t]+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)].filter(match=>![match[1],match[2]].every(word=>allowed.has(word.toLowerCase())));
-    let before=text.slice(Math.max(0,at-100),at).split(/\n\s*\n|[.!?;]/).at(-1),after=text.slice(at+name.length,at+name.length+180).split(/\n\s*\n|[.!?;]/)[0];
+    let before=text.slice(Math.max(0,at-100),at).split(/\n\s*\n|[.!?;]/).at(-1),after=text.slice(at+name.length,at+name.length+180);
+    const heading=/^\s*(?:#{1,6}\s*|\*\*)$/.test(text.slice(text.lastIndexOf('\n',at-1)+1,at));
+    if(heading)after=after.replace(/^\*\*/,'').replace(/^\s+/,' ');
+    after=after.split(/\n\s*\n|\n\s*#{1,6}\s|[.!?;]/)[0];
+    if(/^\s*#{1,6}\s/.test(after))after='';
     if(others(before).length)before='';
     const next=others(after)[0];if(next)after=after.slice(0,next.index);
     return clean(before+name+after);
@@ -355,7 +359,7 @@
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);if(!url||row.evidenceKind==='model_summary')continue;
       const official=companyIdentityDomain(url)===domain,body=String(row.markdown||row.content||''),company=clean(candidate.company||person.organization);
       if(!official&&(!body||!company||!body.toLowerCase().includes(company.toLowerCase())||!sourcedBuyerEmails(person,domain,[{url,markdown:body}],company).some(item=>item.email.endsWith('@'+domain))))continue;
-      const text=String(row.markdown||row.content||row.description||''),at=text.toLowerCase().indexOf(name.toLowerCase());if(at<0)continue;
+      const text=String(row.markdown||row.content||row.description||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'\n\n[portrait]\n\n'),at=text.toLowerCase().indexOf(name.toLowerCase());if(at<0)continue;
       const quote=namedBuyerRoleQuote(text,at,name,aliases),lower=quote.toLowerCase();
       if(/\b(?:former|previous|retired|no longer|tidigare)\b/i.test(quote))continue;
       const before=text.slice(Math.max(0,at-80),at),after=text.slice(at+name.length,at+name.length+80);

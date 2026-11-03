@@ -5506,7 +5506,7 @@
         "async function recheckBuyerContact(",
         "Researching available free sources",
         "personIds:[String(person.id)],force:true",
-        "A confirmed company or personal email for this person"
+        "Confirm an email or LinkedIn profile for this person"
       ]
     },
     {

@@ -21,7 +21,7 @@ test('manual buyer card presents four actions and no per-card next action',()=>{
  assert.ok(!html.includes('data-save-buyer-only'));assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic workflow still allows explicit manual data confirmation without claiming verification',()=>{
- const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="false"[^>]*>E-mail/);assert.match(html,/confirmed company or personal email/);
+ const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="false"[^>]*>E-mail/);assert.match(html,/Confirm an email or LinkedIn profile/);
 });
 test('LinkedIn confirmation applies only to the reviewed exact profile',()=>{
  const {context,person}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;assert.equal(context.buyerLinkedInStatus(person),'Manually reviewed');person.publicLinkedinUrl='https://linkedin.com/in/another';assert.equal(context.buyerLinkedInStatus(person),'Public match');
@@ -75,14 +75,14 @@ test('ranked display copies keep actions attached to the original buyer index',(
  assert.doesNotMatch(html,/data-person-index="-1"/);
 });
 
-test('confirmed LinkedIn never unlocks the email proceed button or email/phone confirmation',async()=>{
+test('confirmed LinkedIn enables its own content handoff without claiming email or phone confirmation',async()=>{
  const {context,person,candidate}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;
  const html=context.prospectContactControls(candidate,person);
- assert.match(html,/data-keep-buyer[^>]*disabled>Proceed/);
+ assert.match(html,/data-keep-buyer[^>]*title="Proceed to LinkedIn content"/);assert.doesNotMatch(html,/data-keep-buyer[^>]*disabled/);
  assert.match(html,/class="secondary-btn small buyer-confirm-needed"[^>]*data-prospect-enrich-email/);
  assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
- Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},saveBuyerLinkedInReview:async()=>{throw Error('LinkedIn must stay separate');},startLinkedInBuyerMessage:async()=>{throw Error('LinkedIn must stay separate');}});
- assert.equal(await context.saveBuyerAndProceed('example.com',0),false);
+ Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},saveBuyerLinkedInReview:async()=>{throw Error('LinkedIn must stay separate');},startLinkedInBuyerMessage:async()=>true});
+ assert.equal(await context.saveBuyerAndProceed('example.com',0),true);
 });
 test('only an eligible email makes proceed green; pending and phone do not',()=>{
  const {context,person,candidate}=runtime();

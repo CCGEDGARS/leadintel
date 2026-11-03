@@ -34,3 +34,14 @@ test('history from a changed seller context or another workspace cannot restore 
  const view=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.equal(D.confirmedBuyerShortlist(view.candidate.people,{decisionMakers:f.c.buyerRoles},view.candidate).priorityIds.length,0);
  f.DB.raw.prepare('UPDATE buyer_research_jobs SET workspace_id=?,input_json=? WHERE id=?').run('storage-w2',f.old.input_json,f.old.id);const foreign=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.equal(D.confirmedBuyerShortlist(foreign.candidate.people,{decisionMakers:f.c.buyerRoles},foreign.candidate).priorityIds.length,0);
 });
+test('a fresh durable job acquires four Viscaria contacts from recorded public sources without seeded confirmations',async t=>{
+ const {default:replay}=await import('../../customer/test/fixtures/viscaria-contact-replay.cjs'),{c,pages,searches}=replay(),f=await buyerJobsFixture(t);
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,{candidate:{...c,people:[],buyerDiscovery:{}}}),services={
+  search:async()=>[...pages.map(p=>({url:p.url,title:'Viscaria official sources',description:'Current leadership and procurement contacts'})),...searches.filter(r=>/linkedin\.com\/in\/(charlotte-odenberger|andreas-ridderstr|simon-krekula)/i.test(r.url))],
+  read:async url=>{const page=pages.find(p=>p.url===url);if(page)return page;throw Error('Controlled source unavailable');},
+  dossier:async()=>({status:'partial',continuation:false,passes:[{provider:'openai',status:'partial'},{provider:'gemini',status:'partial'}],gaps:['Controlled incomplete dossier']}),
+  independent:async()=>({status:'not_configured',reason:'Controlled replay; no paid or independent provider dispatch',results:[]}),
+ };
+ let candidate;for(let n=0;n<7;n++){await runBuyerResearchJobs(f.env,{jobId:job.id,maxJobs:1,windowMs:5000,services});candidate=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);if(D.confirmedBuyerShortlist(candidate.people,{decisionMakers:c.buyerRoles},candidate).priorityIds.length===4)break;}
+ const shortlist=D.confirmedBuyerShortlist(candidate.people,{decisionMakers:c.buyerRoles},candidate),names=shortlist.priorityIds.map(id=>candidate.people.find(p=>p.id===id).name);assert.deepEqual(new Set(names),new Set(['Robert Åkerlind','Charlotte Odenberger','Andreas Ridderström','Simon Krekula']));assert.equal(candidate.publicResearch.accountability.officialPages,2);assert.equal(candidate.buyerDiscovery.companyDossier.status,'partial');assert.equal(D.acceptedOfficialBuyerEmail(candidate,candidate.people.find(p=>p.name==='Robert Åkerlind')),'robert.akerlind@viscaria.com');assert.equal(D.buyerQualityAssessment(candidate).passed,false,'four public contacts do not imply completed depth or AI supervision');
+});
