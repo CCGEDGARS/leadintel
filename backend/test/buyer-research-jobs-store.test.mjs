@@ -72,7 +72,7 @@ test('hashed session authority SQL stops authorizing work after session deletion
 test('public job reads expose saved progress without session hashes or private task bodies and perform no writes',async t=>{
  const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,status,result_json) VALUES(?,'read-body','read','complete','{\"markdown\":\"private task-only body\"}')").run(job.id);
  const before=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get(),tasks=f.DB.raw.prepare('SELECT * FROM buyer_research_tasks').all();
- for(let i=0;i<3;i++){const view=await publicBuyerJob(f.env,await readBuyerJob(f.env,workspaceId,{domain:'forge.example'}));assert.equal(view.id,job.id);assert.deepEqual(view.progress,{completed:1,total:1,label:'official'});assert.ok(!JSON.stringify(view).includes(f.users.owner.sessionTokenHash));assert.ok(!JSON.stringify(view).includes('private task-only body'));}
+ for(let i=0;i<3;i++){const view=await publicBuyerJob(f.env,await readBuyerJob(f.env,workspaceId,{domain:'forge.example'}));assert.equal(view.id,job.id);assert.equal(view.progress.completed,1);assert.equal(view.progress.total,1);assert.equal(view.progress.executionStatus,'queued');assert.equal(view.progress.label,'Reading official company sources');assert.ok(!JSON.stringify(view).includes(f.users.owner.sessionTokenHash));assert.ok(!JSON.stringify(view).includes('private task-only body'));}
  assert.deepEqual(f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get(),before);assert.deepEqual(f.DB.raw.prepare('SELECT * FROM buyer_research_tasks').all(),tasks);
 });
 
@@ -106,4 +106,8 @@ test('a stale force-start job ID or revision cannot replace the newest generatio
  await assert.rejects(()=>startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true,jobId:first.id,expectedRevision:first.revision}),{status:409});
  await assert.rejects(()=>startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true,jobId:latest.id,expectedRevision:latest.revision-1}),{status:409});
  assert.deepEqual(await readBuyerJob(f.env,workspaceId,{id:latest.id}),before);assert.equal((await readBuyerJob(f.env,workspaceId,{id:first.id})).status,'canceled');assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,2);
+});
+
+test('public job progress distinguishes queued execution from actual task checkpoints without exposing source bodies',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,status,updated_at,result_json) VALUES(?,'saved-read','read','complete','2026-11-03 15:00:00','{\"markdown\":\"private source\"}')").run(job.id);const view=await publicBuyerJob(f.env,job);assert.equal(view.createdAt,new Date(job.created_at.replace(' ','T')+'Z').toISOString());assert.equal(view.progress.executionStatus,'queued');assert.equal(view.progress.completed,1);assert.equal(view.progress.inProgress,0);assert.ok(Date.parse(view.progress.lastActivityAt)>=Date.parse(job.updated_at.replace(' ','T')+'Z'));assert.match(view.progress.label,/official company sources/i);assert.ok(!JSON.stringify(view).includes('private source'));
 });

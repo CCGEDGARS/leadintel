@@ -40,6 +40,7 @@ Owner instruction, 2 November 2026: learning from the repeated Buyers failures m
 - Identify missing authenticated access, traces or production-equivalent test conditions early. Build the integration harness and diagnostics needed to verify the journey; do not transfer basic acceptance testing to the customer through repeated refresh instructions.
 - Use failure cases relevant to the change: slow/failed providers, partial progress, refresh/reopen, competing revisions and exact downstream recipient identity. Preserve existing valuable tests; passing test counts and source-marker smoke checks do not establish a real customer outcome.
 - Prefer changes that reduce conflicting ownership and duplicated orchestration. Before a structural migration, record data preservation, bounded cost/retries, authorization, compatibility, rollback and measurable acceptance. Reuse working infrastructure; avoid a wholesale rewrite without evidence.
+- For background research, acceptance must enter through the actual HTTP wake and `app.scheduled` scheduler wrapper, including task registration, shared invocation limits and saved checkpoints. A test that calls the worker directly cannot prove scheduled continuation or browser-independent execution.
 - Report implementation, exact-release deployment, and authenticated product acceptance separately. An outstanding acceptance gate stays open even when the source revision is PROVEN PRODUCTION. Scope any completion claim to the evidence actually obtained.
 
 ## Mandatory Buyers research depth and accountability

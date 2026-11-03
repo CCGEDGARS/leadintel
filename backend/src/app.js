@@ -53,6 +53,7 @@ export default {
   async fetch(request,env,ctx){
     const url=new URL(request.url);
     if(url.pathname==='/api/webhooks/stripe/storage')return handleStorageWebhook(request,env);
+    if(url.pathname==='/api/buyers/research'&&request.method==='POST')env=withBookInvocationBudget(env);
     env=withWorkspaceStorage(env);
     if(url.pathname.startsWith('/api/webhooks/calendly/')){
       try{return await handleCalendlyWebhook(request,env);}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}

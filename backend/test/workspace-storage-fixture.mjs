@@ -10,6 +10,13 @@ export function storageDb({beforeMigration,skipStorageMigration=false}={}){
  beforeMigration?.(raw);
  if(!skipStorageMigration)raw.exec(fs.readFileSync(new URL('0031_workspace_storage.sql',migrationDir),'utf8'));
  for(const file of files.filter(name=>name>'0031_workspace_storage.sql'&&(!skipStorageMigration||name<'0036_')))raw.exec(fs.readFileSync(new URL(file,migrationDir),'utf8'));
- const DB={raw,prepare(sql){let args=[];return {bind(...values){args=values;return this;},async first(){return raw.prepare(sql).get(...args)||null;},async all(){return {results:raw.prepare(sql).all(...args)};},async run(){const r=raw.prepare(sql).run(...args);return {meta:{changes:Number(r.changes)}};}};},async batch(statements){raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());raw.exec('COMMIT');return results;}catch(e){raw.exec('ROLLBACK');throw e;}}};
+ // D1 batches are independent atomic transactions. Queue them per database so
+ // parallel cron tasks cannot open nested transactions on this SQLite handle.
+ let batchTail=Promise.resolve();
+ const DB={raw,prepare(sql){let args=[];return {bind(...values){args=values;return this;},async first(){return raw.prepare(sql).get(...args)||null;},async all(){return {results:raw.prepare(sql).all(...args)};},async run(){const r=raw.prepare(sql).run(...args);return {meta:{changes:Number(r.changes)}};}};},batch(statements){
+  const operation=batchTail.then(async()=>{raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());raw.exec('COMMIT');return results;}catch(e){raw.exec('ROLLBACK');throw e;}});
+  batchTail=operation.then(()=>undefined,()=>undefined);
+  return operation;
+ }};
  return DB;
 }

@@ -230,7 +230,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     result.research={provider:'apollo',status,checkedAt:new Date().toISOString()};
     await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
   }catch(error){
-    const retryable=error.code==='TREG_RETRY_SAME_LOOKUP'||!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
+    const retryable=error.code==='TREG_RETRY_SAME_LOOKUP'||providerName==='treg'&&['TIME_BUDGET','LEASE_EXPIRED'].includes(error.code)||!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
     if(providerName==='treg'){await retainTregAttempt({error,status:retryable?'retryable':'needs_review'});throw error;}
     await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=json_set(?,'$.provider_started',json(CASE WHEN COALESCE(json_extract(result_json,'$.provider_started'),1)=1 OR ?=1 THEN 'true' ELSE 'false' END)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,lookup_identity:lookupIdentity}),Number(providerStarted||Boolean(resuming)),...args).run();throw error;
   }
