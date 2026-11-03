@@ -5,7 +5,15 @@ test('a later same-address identity result cannot erase read official-email evid
  assert.equal(D.acceptedOfficialBuyerEmail(candidate,merged),person.publicEmail);const saved=D.normalizeDiscoveryState({selectedProspects:[{...candidate,people:[merged]}]}).selectedProspects[0];assert.equal(D.acceptedOfficialBuyerEmail(saved,saved.people[0]),person.publicEmail);const snapshot=CRM.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch;assert.equal(D.acceptedOfficialBuyerEmail(saved,snapshot.buyers[0]),person.publicEmail);
 });
 test('changed-address and rejected-source results cannot inherit an earlier confirmation',()=>{
- const {candidate,person}=fixture();for(const change of [{publicEmail:'different@viscaria.com',publicEmailEvidence:null},{publicEmailUrl:'https://viscaria.com/changed',publicEmailEvidence:null},{publicEmailSourceCheck:{status:'failed',email:person.publicEmail,url:person.publicEmailUrl,checkedAt:new Date().toISOString()}}]){const merged=D.mergeBuyerPool([person],[{...person,...change}],{decisionMakers:'Procurement Director'})[0];assert.equal(D.acceptedOfficialBuyerEmail(candidate,merged),'');}
+ const {candidate,person}=fixture();for(const change of [{publicEmail:'different@viscaria.com',publicEmailEvidence:null},{publicEmailSourceCheck:{status:'failed',email:person.publicEmail,url:person.publicEmailUrl,checkedAt:new Date().toISOString()}}]){const merged=D.mergeBuyerPool([person],[{...person,...change}],{decisionMakers:'Procurement Director'})[0];assert.equal(D.acceptedOfficialBuyerEmail(candidate,merged),'');}
+});
+test('an unread changed URL retains the confirmed primary binding through normalization and CRM handoff',()=>{
+ const {candidate,person}=fixture(),unread='https://viscaria.com/changed',merged=D.mergeBuyerPool([person],[{...person,publicEmailUrl:unread,publicEmailEvidence:null}],{decisionMakers:'Procurement Director'})[0];
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...candidate,people:[merged]}]}).selectedProspects[0],snapshot=CRM.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch;
+ for(const value of [merged,saved.people[0],snapshot.buyers[0]]){
+  assert.equal(value.publicEmailUrl,person.publicEmailUrl);assert.equal(value.publicEmailEvidence.url,person.publicEmailUrl);assert.equal(value.publicEmailEvidence.sourceRead,true);
+  assert.notEqual(value.publicEmailSourceCheck?.url,unread);assert.equal(D.acceptedOfficialBuyerEmail(candidate,value),person.publicEmail);
+ }
 });
 test('page progress separates new requests from already available source bodies',async()=>{
  const candidate={company:'Example',domain:'example.com'},rows=Array.from({length:30},(_,i)=>({url:`https://example.com/known/${i}`,sourceRead:true,markdown:'Example official company contact source.'})),events=[];let reads=0;

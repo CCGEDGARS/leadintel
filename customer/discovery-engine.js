@@ -403,6 +403,13 @@
     const phone=(after.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>validPublishedPhone(value.trim())&&value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value)&&! /\b(?:19|20)\d{2}[-./ ]\d{1,2}[-./ ]\d{1,2}\b/.test(value))||'';
     return {phone:phone.trim().replace(/[.,;]+$/,''),quote:clean(name+after)};
   }
+  function preserveConfirmedPublicEmail(previous,next,candidate={}){
+    const email=clean(previous.publicEmail).toLowerCase(),name=p=>clean(p.publicName||p.name).toLowerCase();
+    if(!email||email!==clean(next.publicEmail).toLowerCase()||name(previous)!==name(next)||previous.organization&&next.organization&&!companyNameMatches(previous.organization,next.organization))return next;
+    const context={domain:candidate.domain||email.split('@')[1],company:candidate.company||next.organization||previous.organization},check=next.publicEmailSourceCheck;
+    if(!acceptedOfficialBuyerEmail(context,previous)||acceptedOfficialBuyerEmail(context,next)||check?.status==='failed'&&clean(check.email).toLowerCase()===email&&normalizeUrl(check.url)===normalizeUrl(previous.publicEmailUrl))return next;
+    return {...next,publicEmail:previous.publicEmail,publicEmailUrl:previous.publicEmailUrl,publicEmailEvidence:{...previous.publicEmailEvidence},publicEmailSourceCheck:previous.publicEmailSourceCheck?{...previous.publicEmailSourceCheck}:null};
+  }
   function matchPublicBuyerDetails(people=[],results=[],companyDomain="",companyName=""){
     const domain=companyIdentityDomain(companyDomain);
     const generic=new Set(["contact","contacts","team","group","company","leadership","management","director","manager","president","chief","owner","email","phone","about","welcome","privacy","policy","sales"]);
@@ -412,7 +419,8 @@
       if(!first||!Array.isArray(results))return person;
       const fullName=clean(person.name).split(/\s+/).length>1;
       const matches=[];
-      const prioritized=authoritativeBuyerSourceRows(results).sort((a,b)=>Number(canonicalDomain(b.url||b.metadata?.sourceURL)===domain)-Number(canonicalDomain(a.url||a.metadata?.sourceURL)===domain)||Number(Boolean(b.markdown||b.content))-Number(Boolean(a.markdown||a.content)));
+      const knownSources=new Set([person.publicEmailSourceCheck?.url,person.publicEmailUrl,person.publicNameUrl,person.publicPhoneUrl].map(normalizeUrl).filter(Boolean));
+      const prioritized=authoritativeBuyerSourceRows(results).sort((a,b)=>Number(b.sourceRead===true)-Number(a.sourceRead===true)||Number(knownSources.has(normalizeUrl(b.url||b.metadata?.sourceURL)))-Number(knownSources.has(normalizeUrl(a.url||a.metadata?.sourceURL)))||Number(canonicalDomain(b.url||b.metadata?.sourceURL)===domain)-Number(canonicalDomain(a.url||a.metadata?.sourceURL)===domain)||Number(Boolean(b.markdown||b.content))-Number(Boolean(a.markdown||a.content)));
       for(const row of prioritized.slice(0,20)){
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url)continue;
@@ -459,7 +467,7 @@
       const attribution=(item,kind)=>item?{version:2,url:item.url,quote:kind==='email'?item.emailQuote:item.quote,sourceKind:item.sourceKind,checkedAt:item.checkedAt,...(typeof item.sourceRead==='boolean'?{sourceRead:item.sourceRead}:{})}:null;
       const updated={...person,organization:person.organization||clean(companyName),identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:identityMatch?.url||person.publicNameUrl||match.url,identityEvidenceDate:identityMatch?(identityMatch.date||(identityMatch.url===person.publicNameUrl?person.identityEvidenceDate||'':'')):person.identityEvidenceDate||'',publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicEmailEvidence:match.email?attribution(match,'email'):person.publicEmailEvidence||null,publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||''),publicPhoneEvidence:phoneMatch?attribution(phoneMatch):previousPhoneRechecked?null:person.publicPhoneEvidence||null};
       if(phoneMatch||previousPhoneRechecked)updated.publicPhoneSourceCheck={version:2,status:phoneMatch?'attributed':'not_attributed',url:phoneMatch?.url||person.publicPhoneUrl,checkedAt:phoneMatch?.checkedAt||new Date().toISOString()};
-      return matchBuyerRoleEvidence(updated,results,{domain,company:companyName});
+      return matchBuyerRoleEvidence(preserveConfirmedPublicEmail(person,updated,{domain,company:companyName}),results,{domain,company:companyName});
     });
   }
   function matchBuyerScopeEvidence(person={},rows=[],candidate={}){
@@ -1628,7 +1636,7 @@
       next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
       next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
       for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
-      merged.set(key,next);
+      merged.set(key,preserveConfirmedPublicEmail(old,next));
     }
     const values=[...merged.values()].filter(person=>!malformedBuyerRole(person.title));
     const kept=values.filter(person=>person.kept).slice(0,10);
@@ -2091,7 +2099,8 @@
         onProgress?.({label:`LinkedIn profiles · ${people.filter(p=>p.publicLinkedinUrl||p.linkedin_url).length}/${people.length} found`,profilesReady:true});
       }
       if(profilesOnly){person.emailResearch={...(person.emailResearch||{}),status:'partial',searches:(person.emailResearch?.searches||0)+searches,failed,checkedAt:''};return;}
-      const savedSource=person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
+      const confirmedSource=person.publicEmailSourceCheck?.status==='confirmed'&&clean(person.publicEmailSourceCheck.email).toLowerCase()===clean(person.publicEmail).toLowerCase()?person.publicEmailSourceCheck.url:'';
+      const savedSource=(acceptedOfficialBuyerEmail(candidate,person)?person.publicEmailUrl:confirmedSource)||person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
       if(savedSource&&readPage)for(const receipt of await extract(person,[{url:savedSource}]))if(receipt.status==='partial')failedPages.add(receipt.url);
       const company=clean(candidate.company);
       for(const key of policy.requiredChecks.filter(key=>key!=='linkedin'))await run(key,queries[key]);
