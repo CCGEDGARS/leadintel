@@ -44,7 +44,7 @@ console.log("website activation company-context isolation: PASS");
     signalSeen=Boolean(options?.signal);
     const error=new Error("simulated abort");error.name="AbortError";throw error;
   };
-  await assert.rejects(()=>activation.scrapeWebsite("https://example.com"),/Website activation timed out after 25 seconds/);
+  await assert.rejects(()=>activation.scrapeWebsite("https://example.com"),/Website activation timed out after 60 seconds/);
   assert.equal(signalSeen,true,"website activation must pass an abort signal to the scraper");
   global.fetch=originalFetch;
   global.AbortController=originalAbortController;

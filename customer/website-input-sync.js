@@ -70,7 +70,7 @@
     const input=root?.document?.getElementById(INPUT_ID);
     if(!input)return false;
     if(root.document.activeElement===input)return false;
-    const saved=normalizeUrl(readState().website);
+    const state=readState(),saved=normalizeUrl(state.setupWebsiteDraft??state.website);
     const display=toVisibleWebsite(saved);
     const changed=input.value!==display;
     if(changed)input.value=display;

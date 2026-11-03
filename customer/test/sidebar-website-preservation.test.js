@@ -27,15 +27,21 @@ test('sidebar reads Ercon URL variants without erasing profile, strategy or disc
   assert.equal(calls.save,1);
 });
 
-test('a deliberate change to a different business website still clears prior business intelligence',()=>{
+test('a proposed different business website is retained without clearing prior intelligence before activation',()=>{
   const {state,calls}=readSite('https://www.ercon.lv/','other-company.se');
-  assert.equal(state.website,'https://other-company.se/');
-  assert.equal(calls.clear,1);
-  assert.equal(calls.invalidate,1);
+  assert.equal(state.website,'https://www.ercon.lv/');
+  assert.equal(state.setupWebsiteDraft,'https://other-company.se/');
+  assert.equal(state.approved,true);
+  assert.equal(calls.clear,0);
+  assert.equal(calls.invalidate,0);
+  assert.equal(calls.save,1);
 });
 
-test('editing an approved company website waits for a committed change before updating the workspace',()=>{
-  assert.match(app,/if\(state\.profile&&window\.LeadIntelWorkspaceIsolation\?\.canonicalDomain\(state\.website\)!==window\.LeadIntelWorkspaceIsolation\?\.canonicalDomain\(\$\("company-website"\)\.value\)\)return;/);
+test('editing an approved website preserves a normalized proposal rather than replacing its active source',()=>{
+  const {state}=readSite('https://www.ercon.lv/','https://other-company.se/#contact');
+  assert.equal(state.website,'https://www.ercon.lv/');
+  assert.equal(state.setupWebsiteDraft,'https://other-company.se/');
+  assert.equal(state.profile.companyName,'Ercon');
   assert.match(app,/\$\("company-website"\)\.addEventListener\("change",readSources\)/);
 });
 

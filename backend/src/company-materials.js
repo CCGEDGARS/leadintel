@@ -3,7 +3,7 @@ import {storageErrorResponse} from './workspace-storage.js';
 const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});};
 const maxBytes=15*1024*1024;
-export function materialCard(row){return {id:row.id,filename:row.filename,mime:row.mime,kind:row.kind,size:row.byte_size,status:row.status,revision:row.revision,analysis:JSON.parse(row.analysis_json),error:row.error};}
+export function materialCard(row){return {id:row.id,filename:row.filename,mime:row.mime,kind:row.kind,size:row.byte_size,status:row.status,revision:row.revision,analysis:JSON.parse(row.analysis_json),error:row.error||(row.status==='Needs attention'?'Material analysis could not complete. Your original is saved. Check Settings → Storage and your AI connection, then Retry analysis.':'')};}
 export async function listCompanyMaterials(env,workspace){return (await env.DB.prepare('SELECT * FROM company_materials WHERE workspace_id=? ORDER BY created_at,id').bind(workspace).all()).results.map(materialCard);}
 export async function companyProfileDocuments(env,workspace){
  const rows=(await env.DB.prepare("SELECT * FROM company_materials WHERE workspace_id=? AND status='Ready' ORDER BY created_at,id").bind(workspace).all()).results;

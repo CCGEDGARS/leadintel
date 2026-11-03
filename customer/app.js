@@ -167,7 +167,7 @@ function addCustomTargetMarket(){
   setTargetMarkets([...state.targetMarkets,...additions]);input.value="";showToast(`${additions.length===1?additions[0]:`${additions.length} countries`} added`);
 }
 function syncInputsFromState(){
-  $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
+  $("company-website").value=(state.setupWebsiteDraft??state.website).replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
   document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();renderTargetingConfirmation();brandIdentityUI?.sync?.(state.brandIdentity);
   // Activation may render before authenticated hydration restores the URL field.
   // Refresh its display after restoring inputs without scraping or saving again.
@@ -248,13 +248,11 @@ function readSources(){
   const previousWebsite=state.website;const enteredWebsite=LeadIntelProfile.normalizeUrl($("company-website").value);
   const isolation=window.LeadIntelWorkspaceIsolation;
   const sameCompany=Boolean(previousWebsite&&enteredWebsite&&isolation?.canonicalDomain(previousWebsite)===isolation?.canonicalDomain(enteredWebsite));
-  state.website=sameCompany?previousWebsite:enteredWebsite;
+  const existingContext=Boolean(state.profile||state.websiteActivation?.status==='active'||state.scrapedSources?.some(source=>source.type==='website'&&source.text));
+  if(previousWebsite&&existingContext&&enteredWebsite!==previousWebsite)state.setupWebsiteDraft=enteredWebsite;
+  else {delete state.setupWebsiteDraft;state.website=sameCompany?previousWebsite:enteredWebsite;}
   const additionalLinks=$("additional-links");if(additionalLinks)state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
-  if(previousWebsite&&state.website!==previousWebsite){
-    if(!isolation||isolation.canonicalDomain(previousWebsite)!==isolation.canonicalDomain(state.website))isolation?.clearDerivedWorkspaceData?.(localStorage);
-    invalidateStrategicOutputs(true);
-  }
-  saveState();
+  saveState();window.LeadIntelWebsiteActivation?.render?.();
 }
 function renderTargetingConfirmation(){
   const confirmed=LeadIntelTargeting.isConfirmed(state),button=$("confirm-targeting"),status=$("targeting-confirmation-status");
@@ -1680,9 +1678,8 @@ function bind(){
   $("download-strategy-recovery")?.addEventListener("click",downloadStrategyRecovery);
   window.addEventListener("leadintel:workspace-changed",acceptCanonicalProfileEdits);
   $("company-website").addEventListener("input",()=>{
-    // Editing an existing website is tentative until the field is committed. A partial
-    // domain typed mid-edit must never erase approved strategy or discovery results.
-    if(state.profile&&window.LeadIntelWorkspaceIsolation?.canonicalDomain(state.website)!==window.LeadIntelWorkspaceIsolation?.canonicalDomain($("company-website").value))return;
+    // Website edits are proposals until verified activation commits the new company.
+    // Keep the current profile, evidence and downstream work while the URL is edited.
     readSources();
   });
   $("company-website").addEventListener("change",readSources);
@@ -1747,6 +1744,7 @@ function bind(){
     showToast("Research linked to your profile · review before approval");
   });
   window.addEventListener("leadintel:open-market-strategy",()=>{if(!state.profile){showToast("Review your company profile first");return;}window.LeadIntelReferenceCustomerUI?.close?.();openMarketStrategy();});
+  window.addEventListener("leadintel:website-draft-discarded",()=>{state=loadState();syncInputsFromState();});
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;

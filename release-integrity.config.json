@@ -7287,6 +7287,61 @@
       "type": "text",
       "status": 401,
       "url": "/api/integrations/mail/delivery-status?workspace_id=audit-unauth&domain=buyer.example&recipient=buyer%40buyer.example"
+    },
+    {
+      "id": "step1-proposed-company-ownership",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/app.js",
+      "contains": [
+        "setupWebsiteDraft",
+        "existingContext",
+        "website-draft-discarded"
+      ]
+    },
+    {
+      "id": "step1-save-only-activation-recovery",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/website-activation.js",
+      "contains": [
+        "retryWebsiteSave",
+        "discardWebsiteChange",
+        "activeOperation===owner",
+        "prior.pathname===next.pathname"
+      ]
+    },
+    {
+      "id": "step1-materials-lifecycle-validation",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/company-materials.js",
+      "contains": [
+        "checkedCards",
+        "checkedExtracted",
+        "pendingList",
+        "confirmMaterial"
+      ]
+    },
+    {
+      "id": "step1-setup-loader-version",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/",
+      "contains": [
+        "step1-setup=20261102-v1"
+      ]
+    },
+    {
+      "id": "step1-delivery-preference-ownership",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/outreach-automation-ui.js",
+      "contains": [
+        "setupDraft",
+        "setupSaving",
+        "lockSetupControls"
+      ]
     }
   ],
   "retry": {
