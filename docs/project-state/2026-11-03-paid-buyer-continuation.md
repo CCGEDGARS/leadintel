@@ -21,3 +21,7 @@ Controlled adapter tests exercise the real Treg phase/charge ledger, CRM confirm
 Required release gates remain same-SHA Customer CI, Backend CI/deploy, mandatory browser journeys and `release-proof.json` verdict PROVEN. Authenticated customer acceptance remains OPEN: no private production workspace settings, provider balance or live contact yield were available in this session. Never turn controlled four-email evidence into a claim that Viscaria now has four live verified contacts.
 
 Rollback: the widened database constraint preserves old values and remains readable by the prior application. Reverting application code reduces available targeting; it does not require deleting lookup ledgers or downgrading owner-selected values.
+
+## CI execution follow-up
+
+The first PR's browser run failed at the second Delivery fixture's approval wait; the next PR run passed all thirteen journeys. The main run then failed at a different Setup activation wait. The same runtime passed all thirteen locally both sequentially and in parallel. These observations suggest scheduling contention or timing-sensitive initialization; they do not establish a private customer failure. Execute the four Chromium journey files sequentially on CI, preserving every assertion, existing timeout, mandatory-browser flag and eight-minute job limit. Do not retry until green or skip the failing journeys. Browser-workflow edits now trigger Backend CI on both push and PR, so exact-SHA production gates still receive all required evidence for the follow-up commit.
