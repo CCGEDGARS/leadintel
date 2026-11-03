@@ -64,12 +64,12 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
  try{
   await fs.mkdir(artifactDir,{recursive:true});
   ({page}=await open());
+  await settleInitialSave(page);
   assert.equal((await channels(page)).email,'');
   assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),2,'held saved contacts are visible before research');
   assert.match(await page.locator('.selected-prospect-buyers').textContent(),/saved contacts/);
-  for(const width of [1440,390,320]){await page.setViewportSize({width,height:1100});const control=page.locator('.buyer-public-summary [data-find-prospect-buyers]');await control.evaluate(element=>element.scrollIntoView({block:'center'}));assert.equal(await control.isEnabled(),true);const box=await control.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width);assert.equal(await control.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true,'role recovery remains reachable at '+width);const file=path.join(artifactDir,'00-saved-contacts-'+width+'.png');await page.screenshot({path:file,fullPage:false});screenshots.push(file);}
+  for(const width of [1440,390,320]){await page.setViewportSize({width,height:1100});const control=page.locator('.buyer-public-summary [data-find-prospect-buyers]');await control.evaluate(element=>element.scrollIntoView({block:'center',behavior:'instant'}));await control.click({trial:true});assert.equal(await control.isEnabled(),true);const box=await control.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width);assert.equal(await control.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true,'role recovery remains reachable at '+width);const file=path.join(artifactDir,'00-saved-contacts-'+width+'.png');await page.screenshot({path:file,fullPage:false});screenshots.push(file);}
   await page.setViewportSize({width:1440,height:1100});
-  await settleInitialSave(page);
   await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
   await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id,null,{timeout:10000});
   const job=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get();assert.equal(job.status,'queued');
