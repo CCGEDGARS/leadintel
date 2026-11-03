@@ -506,6 +506,8 @@
       // A stored public URL is a candidate, not an identity-verification receipt.
       // Only provider-owned paid identities bypass public profile reconciliation.
       if(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url))return person;
+      const approvedProfile=normalizeLinkedInUrl(person.linkedinConfirmedUrl);
+      if(approvedProfile&&person.linkedinConfirmationMethod!=='automatic'&&approvedProfile===normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))return person;
       const originalFullName=clean(person.name).split(/\s+/).length>1;
       const name=clean(originalFullName?person.name:person.publicName||person.name);
       const sourcedName=name.split(/\s+/).length>1&&Boolean(person.publicNameUrl);

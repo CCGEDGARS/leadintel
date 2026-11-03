@@ -32,3 +32,8 @@ test('a uniquely verified replacement updates both saved URL aliases for contact
  assert.equal(matched.publicLinkedinUrl,current);assert.equal(matched.linkedin_url,current);
  assert.equal(D.confirmedBuyerContactData({company,domain},matched).linkedin,current);
 });
+test('new public matches cannot replace a manually approved profile recipient',()=>{
+ const p={...person(),linkedinConfirmedUrl:url,linkedinConfirmationMethod:'manual',linkedinConfirmedAt:new Date().toISOString()},other='https://linkedin.com/in/alex-morgan-other';
+ const matched=D.matchPublicLinkedInProfiles([p],[{...row(),url:other}],company)[0];
+ assert.equal(D.linkedInVerification(matched,{company,domain}).status,'manual');assert.equal(D.confirmedBuyerContactData({company,domain},matched).linkedin,url);assert.equal(matched.linkedin_url,url);
+});
