@@ -23,3 +23,9 @@ These observations do not prove the configured model rejected requests. In parti
 Regressions enter the real HTTP/scheduler boundaries and cover interrupted versus genuine failures, short wakes, upstream resumption, provider fairness, source-body retention under a large search index, preserved completed tasks, cancellation, context/revision/CRM races and paid limits. Existing authenticated browser acceptance must still prove four mixed channels, collapsed others, refresh/reopen and exact Messages/CRM recipient behavior. No live paid lookup or outreach is used as a development test.
 
 Source tests, exact-release proof and the actual saved customer outcome are separate gates. Release and private acceptance must be recorded after publication; this source document does not declare the new revision deployed or full research complete.
+
+## Slow dossier batch follow-up
+
+A separate controlled slow-source experiment after the first execution patch reproduced a second execution defect: with eight selected URLs, two read waves plus extraction did not fit a processing slice. Eight resumed passes reused all four provider search receipts but repeatedly reread sources, canceled every extraction, and saved zero extracted sources. This is a proven runtime edge; it is not proof it caused the earlier private production dossier gap.
+
+Incremental execution now reads, extracts and checkpoints three sources at a time while preserving the original selected-source plan. The same eight-URL regression completes both independent providers in six bounded passes, retains validated evidence for every original URL, reuses all completed searches and cancels zero extractions. Nonincremental research keeps its existing eight-source batches. No source or quality requirement is removed.

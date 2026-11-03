@@ -70,8 +70,11 @@ export async function runDossierResearch({connections,settings={},company,search
    // coverage and the bounded subset of sources actually read are separate receipts.
    phase='source_read';const selectedUrls=D.selectedSourceUrls(families.map(f=>familyState.get(f.name))),urls=selectedUrls.filter(u=>!evidenceState.extractedSources.includes(u));sourceCount=selectedUrls.length;
    // Extract and checkpoint each readable batch before later slow pages can consume the budget.
-   for(let sourceOffset=0;sourceOffset<urls.length;sourceOffset+=8){
-   phase='source_read';const pendingUrls=urls.slice(sourceOffset,sourceOffset+8),pages=[];let readCursor=0;
+   // Incremental work must save an extraction inside a short scheduler slice.
+   // Eight slow pages need two read waves before extraction can even start.
+   const sourceBatchSize=Number.isFinite(maxProvidersPerRequest)?3:8;
+   for(let sourceOffset=0;sourceOffset<urls.length;sourceOffset+=sourceBatchSize){
+   phase='source_read';const pendingUrls=urls.slice(sourceOffset,sourceOffset+sourceBatchSize),pages=[];let readCursor=0;
    await Promise.all(Array.from({length:Math.min(6,pendingUrls.length)},async()=>{while(readCursor<pendingUrls.length){
     const url=pendingUrls[readCursor++];if(attemptSignal.aborted)throw Error('Source read canceled');let entry;
     try{
