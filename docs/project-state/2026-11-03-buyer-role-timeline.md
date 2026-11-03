@@ -1,0 +1,7 @@
+# Buyer role timeline follow-up
+
+The authenticated saved-run check completed both company researchers and exposed two remaining interpretation errors: the Swedish CEO title `vd` was compared as a different role, and a supported appointment date already in the past was still compared as incoming employment. A second undated copy of that appointment could also keep a previously saved derived conflict alive.
+
+Role comparison now recognizes `vd` and `verkställande direktör` as CEO aliases while preserving literal source titles. Reconciliation projects an incoming assignment with a supported effective date on or before today as current; the original extracted status and date remain in the source assignments and provider passes. An undated incoming duplicate can clear an old derived hold only when the same role has a dated official current assignment and corroboration from a distinct official current roster. Different roles, explicit future appointments, unsupported dates and conflicting departure dates retain their holds. Manual or unrelated employment holds are untouched.
+
+The existing guarded continuation revision advances once so a changed qualification can obtain a current AI review. Unchanged review signatures remain current and do not require another AI call. Session, workspace context, latest-job, revision and original paid-scope protections stay enforced. Deployment proof and the actual resulting contact count must be recorded separately from these source regressions.

@@ -37,11 +37,11 @@ for(const mode of ['authorized','revoked','changed_context','replaced','canceled
  if(mode==='revoked')f.DB.raw.prepare("UPDATE workspace_members SET role='viewer' WHERE workspace_id=? AND user_id=?").run(workspaceId,f.users.owner.id);
  if(mode==='changed_context')f.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=json_set(payload_json,'$.main.website','https://changed.example/'),version=version+1 WHERE workspace_id=?").run(workspaceId);
  if(mode==='replaced')await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true});
- if(mode==='already_repaired')f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',2) WHERE id=?").run(job.id);
+ if(mode==='already_repaired')f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',3) WHERE id=?").run(job.id);
  await tick(f,job.id,{search:async()=>{calls++;return [];},read:async url=>({url,markdown:'Robert Lund is Head of Procurement at Forge Industries.',metadata:{sourceURL:url}})});
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id});
  assert.equal(f.DB.raw.prepare("SELECT attempts FROM buyer_research_tasks WHERE job_id=? AND task_key='interrupted'").get(job.id).attempts,2,'Recovery does not erase an actual earlier failure');
- if(mode==='authorized'){assert.equal(saved.status,'queued');assert.equal(saved.phase,'dossier','Recovery starts at the earliest incomplete owner');assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,2);assert.ok(calls>0);assert.equal(saved.id,job.id);}
+ if(mode==='authorized'){assert.equal(saved.status,'queued');assert.equal(saved.phase,'dossier','Recovery starts at the earliest incomplete owner');assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,3);assert.ok(calls>0);assert.equal(saved.id,job.id);}
  else{assert.equal(calls,0);assert.equal(saved.status,mode==='canceled'?'canceled':'needs_review');}
 });
 
