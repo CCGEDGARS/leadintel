@@ -42,6 +42,11 @@ for(const originalStatus of ['needs_review','complete','queued_paid'])test(`actu
  }
  f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,status,attempts,result_json) VALUES(?,'saved-current-role','read','contacts','complete',1,?)").run(job.id,JSON.stringify({url,markdown:quote,sourceRead:true,extractedAt:stamp}));
  let reviewCalls=0,sourceCalls=0,paidCalls=0;const services={search:async()=>{sourceCalls++;return [];},read:async()=>{sourceCalls++;throw Error('Completed source reads must be reused');},review:async(_env,_workspace,body)=>{reviewCalls++;assert.equal(body.people[0].id,person.id);return {provider:'fresh-review',supervisor:{status:'complete',reviewedPersonIds:[person.id],findings:[]},conflicts:[]};},paidLookup:async()=>{paidCalls++;throw Error('Disabled paid channels cannot dispatch');}};
+ if(originalStatus==='queued_paid'){
+  await scheduledSlice(f,job.id,services);const held=await readBuyerJob(f.env,workspaceId,{id:job.id});
+  assert.equal(held.status,'needs_review');assert.equal(held.phase,'done');assert.equal(reviewCalls,0);assert.equal(paidCalls,0);
+  assert.equal(JSON.parse(held.input_json).executionContinuationVersion,1,'The unprocessed stale review must remain eligible for guarded own-CRM recovery');
+ }
  for(let i=0;i<2&&!reviewCalls;i++)await scheduledSlice(f,job.id,services);
  if(originalStatus==='queued_paid')await scheduledSlice(f,job.id,services);
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),result=JSON.parse(saved.result_json);
