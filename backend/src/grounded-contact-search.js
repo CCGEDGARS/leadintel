@@ -1,4 +1,5 @@
 const clean=(value,limit=300)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,limit);
+export function groundedGenerationConfig(model,maxOutputTokens){return {maxOutputTokens,...(/^gemini-[34](?:[.-])/.test(model)?{thinkingConfig:{thinkingLevel:'low'}}:/^gemini-2\.5(?:[.-])/.test(model)?{thinkingConfig:{thinkingBudget:1024}}:{})};}
 function domainOf(value){try{return new URL(value).hostname.toLowerCase().replace(/^www\./,'');}catch{return '';}}
 function allowedSource(value,domain,external=false){
   try{const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password)return '';
@@ -36,7 +37,7 @@ async function runGroundedContactSearch({apiKey,model,company,domain,person,sign
   const prompt=`Find the current public LinkedIn profile and official company page for ${name}, ${role} at ${organization} (${host}). Search the web. Prefer a direct linkedin.com/in/ profile with matching full name and employer. Also find official business contact pages and relevant industry associations, conferences, supplier publications and professional interviews. Third-party evidence must name this exact person and employer. Public business contacts only. Do not invent a URL, email, phone or identity. Give a concise answer with cited sources.`;
   const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
     method:'POST',signal,headers:{'Content-Type':'application/json',Accept:'application/json','x-goog-api-key':apiKey},
-    body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{maxOutputTokens:2000}})
+    body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:groundedGenerationConfig(model,2000)})
   });
   if(!response.ok)throw new Error(`Grounded Gemini search unavailable (${response.status})`);
   const payload=await response.json(),candidate=payload.candidates?.[0],metadata=candidate?.groundingMetadata||{};

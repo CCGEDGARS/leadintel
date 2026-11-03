@@ -14,7 +14,7 @@ const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:1800
 // that same finite task plan; their accumulated wall time is not completion.
 const phaseExhausted=(phase,ms,runs)=>runs>=18||(!['official','dossier','contacts'].includes(phase)&&ms>=phaseBudget[phase]);
 const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
-const errorReason=(error,phase)=>`${phase}: ${error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
+const errorReason=(error,phase)=>`${phase}: ${error?.name==='TimeoutError'?'provider deadline reached':/\((?:4|5)\d{2}\)/.test(error?.message||'')?'provider HTTP '+error.message.match(/\((\d{3})\)/)[1]:error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const resultRows=result=>Array.isArray(result)?result:result?.results||[];
 function restoreSearch(value){const rows=value.rows||[];Object.defineProperty(rows,'searchProviders',{value:value.providers||[]});if(value.researchTrace)Object.defineProperty(rows,'researchTrace',{value:value.researchTrace});return rows;}
@@ -29,7 +29,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   let row=await claim();
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
-  const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate),controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
+  const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
+  // A stale legacy paid slice first settles through the existing paid evidence
+  // gate. Keep it eligible for terminal recovery, which captures its original
+  // own-CRM scope before a fresh review changes that scope.
+  const deferSemanticStamp=Number(input.executionContinuationVersion||0)<2&&row.phase==='paid'&&originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate);
+  const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const officialPlan=candidate.buyerDiscovery?.officialContactInventory?.research,rescopeOfficial=phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
@@ -56,7 +61,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    // a provider-failure receipt. Keep earlier real failures, but restore the
    // interrupted dispatch; the eighteen-slice phase ceiling still bounds work.
    const attempts=prior?.status==='running'?(prior.error&&!/time budget reached/i.test(prior.error)?Math.max(0,Number(prior.attempts||0)-1):0):Number(prior?.attempts||0);
-   if(attempts>=2)throw Object.assign(Error('Source task attempt limit reached'),{code:'TASK_LIMIT'});
+   if(attempts>=2)throw Object.assign(Error('Source task attempt limit reached'+(prior?.error?' ('+prior.error+')':'')),{code:'TASK_LIMIT'});
    // Grounded contact search owns a 25s deadline. Do not dispatch it into the
    // final seconds of a slice where it cannot return and save a receipt.
    const independentWindow=services.independent?Number(services.independentMinimumMs)||0:30000;
@@ -116,10 +121,11 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const acquirePeople=()=>{
    if(acquiredRows.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:D.discoverCompanyContacts(acquiredRows,candidate,candidate.buyerDiscovery?.companyContacts||[])};candidate.people=D.matchPublicBuyerDetails(candidate.people||[],acquiredRows,candidate.domain,candidate.company);}
    const sources=candidate.buyerDiscovery?.companyContacts||[],dossier=C.buyers(candidate.buyerDiscovery?.companyDossier,candidate.company);
-   const merged=D.mergeBuyerPool(candidate.people||[],[...sources,...dossier],input.profile);
+   const merged=D.mergeBuyerPool([...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])],[...sources,...dossier],input.profile);
+   const reconciled=D.reconcileBuyerEvidence({...candidate,people:merged},{trustedAgentSources:true});candidate.buyerDiscovery=reconciled.buyerDiscovery;candidate.publicResearch=reconciled.publicResearch;
    reassessRoles(merged);
-   candidate.people=D.retainBuyerIdentities(merged,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
-   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:merged.slice(0,30),opportunityRoles:input.roles};confirmNamed();
+   candidate.people=D.retainBuyerIdentities(reconciled.people,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
+   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:reconciled.people.slice(0,30),opportunityRoles:input.roles};confirmNamed();
   };
   const diagnostics=parse(row.diagnostic_json,[]);
   if(rescopeOfficial)diagnostics.push({phase:'official',reason:'Resuming the contact-source objective after a legacy financial-archive limit; completed source tasks retained',at:new Date().toISOString()});
@@ -150,7 +156,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const trace=D.tracePublicBuyers(await allRows(),candidate.company,input.profile);candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
-     report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,maxDurationMs:Math.min(remaining,180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
+     report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,maxDurationMs:Math.min(remaining,180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
      const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?Number((await stmt(env,"SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).first())?.n)||0:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
@@ -195,7 +201,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):2,status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}
