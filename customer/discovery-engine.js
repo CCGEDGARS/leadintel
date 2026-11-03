@@ -503,7 +503,9 @@
     const company=clean(companyName).toLowerCase();
     if(!company||!Array.isArray(results))return people;
     return people.map(person=>{
-      if(normalizeLinkedInUrl(person.linkedin_url))return person;
+      // A stored public URL is a candidate, not an identity-verification receipt.
+      // Only provider-owned paid identities bypass public profile reconciliation.
+      if(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url))return person;
       const originalFullName=clean(person.name).split(/\s+/).length>1;
       const name=clean(originalFullName?person.name:person.publicName||person.name);
       const sourcedName=name.split(/\s+/).length>1&&Boolean(person.publicNameUrl);
@@ -1935,7 +1937,7 @@
   }
   function buyerResearchCheckPassed(candidate={},person={},key,options={}){
     const now=Date.parse(options.now||new Date().toISOString()),fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;},check=person.contactResearch?.checks?.[key],rows=check?.queryLog,queries=buyerResearchQueryPlan(candidate,person)[key];
-    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===1||!rows.some(row=>row.resultCount>0)));
+    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===2||!rows.some(row=>row.resultCount>0)));
   }
   function buyerResearchCoveragePassed(candidate={},options={}){
     const people=(options.researchPeople||candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -2068,13 +2070,13 @@
       collect(person,sourceRows.slice());let failed=profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0,searches=0,successfulSearches=0;const failedPages=new Set();
       const run=async(key,queries,execute=search)=>{
         const previous=research.checks[key],date=Date.parse(previous?.checkedAt||'');
-        if(!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===1)&&previous?.status==='complete'&&Number.isFinite(date)&&Date.now()-date>=0&&Date.now()-date<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000)){report.reusedChecks++;return;}
+        if(!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(date)&&Date.now()-date>=0&&Date.now()-date<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000)){report.reusedChecks++;return;}
         research.checks[key]={status:'running',attempts:(previous?.attempts||0)+1,reason:'',checkedAt:'',queryLog:queries.map(query=>({query,status:'not_searched',searchStatus:'not_searched',sourceReads:[],resultCount:0,checkedAt:'',reason:''}))};
         const errors=[];
         for(const [index,query] of queries.entries()){
           await guard();
           const entry=research.checks[key].queryLog[index],saved=previous?.queryLog?.find(row=>row.query===query&&buyerResearchQueryReceiptPassed(row)&&Number.isFinite(Date.parse(row.checkedAt))&&Date.now()-Date.parse(row.checkedAt)>=0&&Date.now()-Date.parse(row.checkedAt)<30*86400000);
-          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===1)){Object.assign(entry,saved,{searchStatus:saved.searchStatus||'complete'});report.reusedChecks++;continue;}
+          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===2)){Object.assign(entry,saved,{searchStatus:saved.searchStatus||'complete'});report.reusedChecks++;continue;}
           searches++;entry.status='running';entry.searchStatus='running';
           try{
             const rows=await bounded(()=>execute(query));await guard();if(!Array.isArray(rows))throw new Error('Search returned no valid result list');
@@ -2089,7 +2091,7 @@
             if(error.sourceReads)entry.sourceReads=error.sourceReads;entry.status='partial';entry.reason=clean(error.message).slice(0,180);if(error.code==='CANCELED'||error.code==='TIME_BUDGET'||signal?.aborted)throw error;failed++;errors.push(entry.reason);
           }finally{entry.checkedAt=new Date().toISOString();}
         }
-        research.checks[key]={...research.checks[key],...(key==='linkedin'?{profileMatchVersion:1}:{}),status:errors.length?'partial':research.checks[key].queryLog.every(entry=>entry.status==='not_needed')?'not_needed':'complete',reason:errors.join(' · ').slice(0,220),checkedAt:new Date().toISOString()};onProgress?.({label:`Checking ${name} · ${key==='deep'?'deeper public sources':key}`});
+        research.checks[key]={...research.checks[key],...(key==='linkedin'?{profileMatchVersion:2}:{}),status:errors.length?'partial':research.checks[key].queryLog.every(entry=>entry.status==='not_needed')?'not_needed':'complete',reason:errors.join(' · ').slice(0,220),checkedAt:new Date().toISOString()};onProgress?.({label:`Checking ${name} · ${key==='deep'?'deeper public sources':key}`});
       };
       const queries=buyerResearchQueryPlan(candidate,person);
       if(!profileWaveDone.has(person)){
@@ -2162,7 +2164,7 @@
     if(!value||value.version!==1)return null;
     const status=v=>['complete','not_needed','running','partial','unavailable','not_searched'].includes(v)?v:'not_searched';
     const sourceReceipts=rows=>(Array.isArray(rows)?rows:[]).slice(0,12).map(row=>({url:buyerContactSourceUrl(row.url),status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,180),...(row.reused===true?{reused:true}:{})})).filter(row=>row.url);
-    const checks=Object.fromEntries(Object.entries(value.checks||{}).slice(0,12).map(([key,row])=>[clean(key).slice(0,50),{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220),attempts:clamp(Number(row.attempts)||0,0,30,0),...(key==='linkedin'&&row.profileMatchVersion===1?{profileMatchVersion:1}:{}),queryLog:(Array.isArray(row.queryLog)?row.queryLog:[]).slice(0,4).map(entry=>({query:clean(entry.query).slice(0,600),...(Array.isArray(entry.providers)&&entry.providers.length?{providers:entry.providers.filter(provider=>BUYER_RESEARCH_TOOLS.includes(provider)).slice(0,4)}:{}),status:status(entry.status),...(entry.searchStatus?{searchStatus:status(entry.searchStatus)}:{}),...(Array.isArray(entry.sourceReads)?{sourceReads:sourceReceipts(entry.sourceReads)}:{}),resultCount:clamp(Number(entry.resultCount)||0,0,100,0),checkedAt:clean(entry.checkedAt).slice(0,40),reason:clean(entry.reason).slice(0,180)}))}]));
+    const checks=Object.fromEntries(Object.entries(value.checks||{}).slice(0,12).map(([key,row])=>[clean(key).slice(0,50),{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220),attempts:clamp(Number(row.attempts)||0,0,30,0),...(key==='linkedin'&&[1,2].includes(row.profileMatchVersion)?{profileMatchVersion:row.profileMatchVersion}:{}),queryLog:(Array.isArray(row.queryLog)?row.queryLog:[]).slice(0,4).map(entry=>({query:clean(entry.query).slice(0,600),...(Array.isArray(entry.providers)&&entry.providers.length?{providers:entry.providers.filter(provider=>BUYER_RESEARCH_TOOLS.includes(provider)).slice(0,4)}:{}),status:status(entry.status),...(entry.searchStatus?{searchStatus:status(entry.searchStatus)}:{}),...(Array.isArray(entry.sourceReads)?{sourceReads:sourceReceipts(entry.sourceReads)}:{}),resultCount:clamp(Number(entry.resultCount)||0,0,100,0),checkedAt:clean(entry.checkedAt).slice(0,40),reason:clean(entry.reason).slice(0,180)}))}]));
     const channels=Object.fromEntries(['company','gmail','phone','linkedin'].map(key=>{const row=value.channels?.[key]||{};return [key,{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220)}];}));
     return {version:1,evidenceVersion:value.evidenceVersion===2?2:1,policyVersion:value.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version?value.policyVersion:'',identityKey:clean(value.identityKey).slice(0,350),checks,channels};
   }
