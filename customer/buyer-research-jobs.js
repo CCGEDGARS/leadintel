@@ -94,6 +94,9 @@
           owner[field]={...(owner[field]||{}),...next};
         }
       }
+      // Old job snapshots can retain a role hold after reading the named official
+      // contact. Reassess the merged current evidence, never the terminal label.
+      if(owner.buyerRolesChanged&&root.LeadIntelDiscovery?.canReassessSavedBuyerRoles?.(owner,owner.people||[],scope.profile))owner.buyerRolesChanged=false;
       const running=ACTIVE.has(job.status);owner.peopleStatus=running?'loading':owner.people?.length?'complete':job.status==='complete'?'empty':'error';
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
@@ -125,9 +128,13 @@
         if(job&&!matching(scope,job))job=null;
         if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
-          const jobIds=job?.input?.personIds||job?.progress?.personIds,covered=!scope.personIds?.length||!jobIds?.length||scope.personIds.every(id=>jobIds.map(String).includes(id));
+          const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
+          const jobSelected=job?.input?.scope==='selected_buyers'||Boolean(jobIds?.length),scopeCovered=selected?jobSelected&&scope.personIds.every(id=>jobIds?.map(String).includes(id)):!jobSelected;
+          const selectedRoster=value=>roster({people:(value?.people||[]).filter(person=>!selected||selected.has(String(person.id)))});
+          const covered=scopeCovered&&selectedRoster(owner)===selectedRoster(job?.candidate);
+          if(job&&!covered)job=null;
           if(!job||!ACTIVE.has(job.status)&&(options.force||job.status!=='complete'||!covered)){
-            const resume=job&&covered&&!options.force&&TERMINAL.has(job.status)&&job.status!=='complete';
+            const resume=job&&covered&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
             job=await request(scope,'POST',{action:resume?'resume':'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }

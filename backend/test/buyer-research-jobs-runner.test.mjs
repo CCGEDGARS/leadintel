@@ -11,6 +11,14 @@ async function run(env,options){const {runBuyerResearchJobs}=await import('../sr
 const emptySearch=()=>Object.assign([],{searchProviders:['grounded'],researchTrace:[{provider:'grounded',status:'succeeded',operation:'search',results:0}]});
 function services(overrides={}){return {search:async()=>emptySearch(),read:async url=>page(url),dossier:async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]}),independent:async()=>({status:'not_configured',reason:'No independent test connection',results:[]}),review:async()=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:['robert'],findings:[]},conflicts:[],summary:'Reviewed supplied evidence'}),...overrides};}
 function deferred(){let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};}
+test('fresh official role evidence clears a saved role hold before an incomplete dossier can hide the retained buyers',async t=>{
+ const f=await buyerJobsFixture(t);f.body.candidate.buyerRolesChanged=true;
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ await run(f.env,{jobId:job.id,services:services({read:async url=>page(url,namedContact)})});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ assert.equal(saved.buyerRolesChanged,false);assert.equal(saved.people.find(person=>person.id==='robert').publicEmail,'robert.lund@forge.example');
+ assert.ok(globalThis.LeadIntelDiscovery.rankedBuyerShortlist(saved.people,f.payload.main.profile,saved).priorityIds.length>0);
+});
 
 test('completed search and page receipts survive a processing slice and are reused on the next contacts pass',async t=>{
  const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),started=deferred(),held=deferred(),queries=[],reads=[];let interrupted=false;

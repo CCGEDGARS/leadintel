@@ -21,6 +21,7 @@ test('authenticated Chromium preserves official channels across delayed provider
  const {verifyStep5Journey}=await import('../../scripts/verify-step5-journey.mjs');
  const evidence=await verifyStep5Journey({artifactDir:await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-'))});
  assert.equal(evidence.unrelatedRevisionMerged,true);assert.equal(evidence.crmReopen,true);assert.equal(evidence.sourceReads,1);assert.equal(evidence.outboundMessages,0);assert.equal(evidence.paidContactRequests,0);assert.ok(evidence.sameBuyerConflictPaths.some(p=>p.includes('people[robert]')));
+ assert.equal(evidence.durableJob.roleReviewRecovered,true);assert.equal(evidence.durableJob.actualRefreshResumed,true);assert.equal(evidence.durableJob.completedReceiptsPreserved,true);assert.equal(evidence.durableJob.incompleteDossierContactsVisible,true);
  assert.equal(evidence.durableJob.status,'needs_review');assert.equal(evidence.durableJob.phase,'done');assert.equal(evidence.durableJob.restoreProviderReplays,0);assert.equal(evidence.durableJob.broaderQualityComplete,false);assert.ok(evidence.durableJob.queries.length>=9);assert.equal(new Set(evidence.durableJob.queries).size,evidence.durableJob.queries.length);
  t.diagnostic('Actual local browser/SQL evidence: '+path.dirname(evidence.screenshots[0])+'/evidence.json');
 });

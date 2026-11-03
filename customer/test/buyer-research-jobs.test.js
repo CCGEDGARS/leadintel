@@ -22,6 +22,31 @@ test('GET restoration observes running jobs after reload without starting or res
  const result=await h.client.restore(owner,{profile:{decisionMakers:'COO'}});
  assert.equal(result.status,'needs_review');assert.equal(owner.publicContactStatus,'error');assert.equal(owner.buyerDiscovery.researchIncomplete,true);assert.ok(h.calls.length>=2);assert.ok(h.calls.every(c=>c.method==='GET'));
 });
+test('a same-context official role read repairs an old held job on restore without new provider work',async()=>{
+ const D=require('../discovery-engine.js'),owner=candidate();owner.buyerRolesChanged=true;
+ const page={url:'https://example.com/team',markdown:'### Anna Buyer\nChief Operating Officer\n[anna@example.com](mailto:anna@example.com)\nExample',sourceRead:true,extractedAt:new Date().toISOString()};
+ owner.people[0].title='Chief Operating Officer';owner.people[0].publicNameUrl=page.url;
+ const job=snapshot(owner,'needs_review',7);job.candidate.people=D.discoverCompanyContacts([page],owner).map(person=>({...person,id:owner.people[0].id}));
+ assert.equal(D.canReassessSavedBuyerRoles(job.candidate,job.candidate.people,{decisionMakers:'COO'}),true);
+ const h=harness(()=>job);await h.client.restore(owner,{profile:{decisionMakers:'COO'}});
+ assert.equal(owner.buyerRolesChanged,false);assert.equal(owner.people[0].publicEmail,'anna@example.com');assert.deepEqual(h.calls.map(call=>call.method),['GET']);
+});
+test('a Refresh intent resumes incomplete matching work instead of restarting its completed source tasks',async()=>{
+ const owner=candidate(),job={...snapshot(owner,'needs_review',7),resumePhase:'contacts'},h=harness(call=>call.method==='GET'?job:{...job,revision:8});
+ await h.client.research(owner,{profile:{decisionMakers:'COO'},force:true,resumeIncomplete:true});
+ const post=h.calls.find(call=>call.method==='POST');assert.equal(post.body.action,'resume');assert.equal(post.body.expectedRevision,7);assert.equal(post.body.jobId,'job-1');
+});
+test('Refresh replaces removed identities, narrower old scopes and finished quality-only attempts',async()=>{
+ for(const kind of ['identity','scope','finished']){
+  const owner=candidate(),job={...snapshot(owner,'needs_review',7),resumePhase:'contacts'};
+  if(kind==='identity')job.candidate.people=[person('bob')];
+  if(kind==='scope'){owner.people.push(person('bob'));job.input={scope:'selected_buyers',personIds:['anna']};}
+  if(kind==='finished')job.resumePhase='done';
+  const h=harness(call=>call.method==='GET'?job:{...snapshot(owner,'needs_review',8),id:'new-job'});
+  await h.client.research(owner,{profile:{decisionMakers:'COO'},force:true,resumeIncomplete:true});
+  const post=h.calls.find(call=>call.method==='POST');assert.equal(post.body.action,'start',kind);assert.equal(post.body.jobId,'job-1');assert.equal(post.body.expectedRevision,7);assert.deepEqual(owner.people.map(person=>person.id),kind==='scope'?['anna','bob']:['anna']);
+ }
+});
 test('unknown GET and terminal incomplete GET never create new work',async()=>{
  for(const job of [null,snapshot(candidate(),'failed'),snapshot(candidate(),'canceled'),snapshot(candidate(),'needs_review')]){
   const owner=candidate(),h=harness(()=>job);await h.client.restore(owner,{profile:{decisionMakers:'COO'}});assert.equal(h.calls.length,1);assert.equal(h.calls[0].method,'GET');

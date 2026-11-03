@@ -7342,6 +7342,39 @@
         "setupSaving",
         "lockSetupControls"
       ]
+    },
+    {
+      "id": "buyer-refresh-current-evidence-and-scope",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/buyer-research-jobs.js",
+      "contains": [
+        "selectedRoster",
+        "resumeIncomplete",
+        "canReassessSavedBuyerRoles",
+        "job.resumePhase"
+      ]
+    },
+    {
+      "id": "buyer-retained-contacts-visible",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/discovery-ui.js",
+      "contains": [
+        "retainedContactsHtml",
+        "'saved contacts'",
+        "Recheck saved contacts",
+        "resumeIncomplete:refreshDossier"
+      ]
+    },
+    {
+      "id": "buyer-refresh-entry-version",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/",
+      "contains": [
+        "buyer-refresh-recovery=20261103-v1"
+      ]
     }
   ],
   "retry": {

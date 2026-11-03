@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {journeyFixture,loadPlaywright,workspaceId,sessionToken,sourceUrl} from '../backend/test/step5-journey-fixture.mjs';
+
+const sourceFiles=['customer/index.html','customer/discovery-ui.js','customer/discovery-engine.js','customer/buyer-research-jobs.js','customer/company-dossier.js','customer/company-dossier-ui.js','customer/server-bridge.js','customer/profile-engine.js','customer/market-engine.js','backend/src/buyer-research-store.js','backend/src/buyer-research-runner.js','backend/src/buyer-research-routes.js','backend/src/customer-state.js','backend/src/workspace-record-store.js','backend/test/step5-journey-fixture.mjs','backend/test/step5-journey.test.mjs','scripts/verify-step5-journey.mjs'];
+async function sourceHashes(){return Object.fromEntries(await Promise.all(sourceFiles.map(async name=>[name,createHash('sha256').update(await fs.readFile(new URL('../'+name,import.meta.url))).digest('hex')])));}
 
 const stateKey='leadintel_customer_v2_state',discoveryKey='leadintel_customer_v2_discovery',metaKey='leadintel_customer_v2_discovery_meta',outreachKey='leadintel_customer_v2_outreach';
 const statePath='/api/customer/state?workspace_id='+workspaceId;
@@ -52,7 +56,7 @@ async function holdWorkspacePut(page){
 async function channels(page){return page.evaluate(()=>{const c=discovery.selectedProspects.find(c=>c.domain==='forge.example'),p=c.people.find(p=>p.id==='robert');return {email:LeadIntelDiscovery.acceptedOfficialBuyerEmail(c,p),phone:LeadIntelDiscovery.confirmedBuyerPhone(c,p),sourceRead:p.publicEmailEvidence?.sourceRead,phoneRead:p.publicPhoneEvidence?.sourceRead};});}
 
 export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-journey',competingEdit=true}={}){
- const f=await journeyFixture({durableJobs:true}),{chromium}=await loadPlaywright();
+ const sourceSha256=await sourceHashes(),f=await journeyFixture({durableJobs:true,roleReviewPending:true,incompleteDossier:true}),{chromium}=await loadPlaywright();
  const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const contexts=[],errors=[],blocked=[],screenshots=[];let page,gate,putGate,jobEvidence;
  async function open(){const context=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(context);await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():(blocked.push(route.request().url()),route.abort()));await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);return {context,page};}
@@ -61,7 +65,12 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   await fs.mkdir(artifactDir,{recursive:true});
   ({page}=await open());
   assert.equal((await channels(page)).email,'');
-  await page.evaluate(()=>{window.__research=runDurableBuyerResearch(discovery.selectedProspects[0]);});
+  assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),2,'held saved contacts are visible before research');
+  assert.match(await page.locator('.selected-prospect-buyers').textContent(),/saved contacts/);
+  for(const width of [1440,390,320]){await page.setViewportSize({width,height:1100});const control=page.locator('.buyer-public-summary [data-find-prospect-buyers]');await control.evaluate(element=>element.scrollIntoView({block:'center'}));assert.equal(await control.isEnabled(),true);const box=await control.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width);assert.equal(await control.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true,'role recovery remains reachable at '+width);const file=path.join(artifactDir,'00-saved-contacts-'+width+'.png');await page.screenshot({path:file,fullPage:false});screenshots.push(file);}
+  await page.setViewportSize({width:1440,height:1100});
+  await settleInitialSave(page);
+  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
   await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id,null,{timeout:10000});
   const job=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get();assert.equal(job.status,'queued');
   const phaseRuns=[...await f.runJobs(job.id)];
@@ -82,7 +91,21 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   assert.equal(f.calls.filter(c=>c.path==='/api/buyers/research'&&c.method==='POST').length,postCount,'reopen reads progress without starting or resuming provider work');
   assert.equal(f.providerCalls.length,providerCount,'read-only restore cannot replay provider requests');
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);
-  jobEvidence={id:job.id,status:terminal.status,phase:terminal.phase,revision:terminal.revision,phaseRuns,tasks:tasks.map(r=>({kind:r.kind,status:r.status,attempts:r.attempts})),queries:f.providerCalls.filter(c=>c.kind==='search').map(c=>c.query),sourceReads:readCount,restoreProviderReplays:f.providerCalls.length-providerCount,broaderQualityComplete:false};
+  assert.equal(await page.evaluate(()=>discovery.selectedProspects[0].buyerRolesChanged),false,'official named role evidence clears the stale hold');
+  assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),2);
+  const restoreProviderReplays=f.providerCalls.length-providerCount;
+  const completedTasks=f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id);
+  await settleInitialSave(page);
+  const resumeAck=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/buyers/research'&&response.request().method()==='POST');
+  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
+  const resumed=await resumeAck;assert.equal(resumed.ok(),true);assert.equal(resumed.request().postDataJSON().action,'resume');assert.equal((await resumed.json()).job.id,job.id);
+  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1,'Refresh resumes the same incomplete job');
+  for(let attempt=0;attempt<12;attempt++){const saved=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs WHERE id=?').get(job.id);if(!['queued','running'].includes(saved.status))break;phaseRuns.push(...await f.runJobs(job.id));}
+  await page.waitForFunction(revision=>discovery.selectedProspects[0].buyerResearchJob?.status==='needs_review'&&discovery.selectedProspects[0].buyerResearchJob.revision>revision,terminal.revision,{timeout:15000});
+  assert.deepEqual(f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id),completedTasks,'explicit resume preserves completed receipts');
+  assert.equal(f.providerCalls.filter(call=>call.kind==='read').length,readCount,'completed official source reads are not replayed');
+  await shot('00-refresh-retains-contacts.png');
+  jobEvidence={roleReviewRecovered:true,actualRefreshResumed:true,completedReceiptsPreserved:true,incompleteDossierContactsVisible:true,id:job.id,status:terminal.status,phase:terminal.phase,revision:terminal.revision,phaseRuns,tasks:tasks.map(r=>({kind:r.kind,status:r.status,attempts:r.attempts})),queries:f.providerCalls.filter(c=>c.kind==='search').map(c=>c.query),sourceReads:readCount,restoreProviderReplays,explicitRefreshProviderOperations:f.providerCalls.length-providerCount,broaderQualityComplete:false};
   const sourceReadsBeforeHandoff=f.externalCalls.filter(c=>c.url===sourceUrl).length;
   await settleInitialSave(page);
   assert.equal(await page.evaluate(()=>LeadIntelServerBridge.workspace.id),workspaceId);
@@ -137,7 +160,8 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   for(const table of ['gmail_messages','microsoft_mail_messages','gmail_test_messages','outreach_automation_queue'])assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM '+table).get().n,0,'no outbound or queued contact in '+table);
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);
   assert.deepEqual(errors,[]);
-  const evidence={verdict:'LOCAL_CONTROLLED_ACCEPTANCE',workspace:workspaceId,browser:'Chromium',authenticatedBrowserContexts:contexts.length,durableJob:jobEvidence,delayedOfficialRead:true,unrelatedRevisionMerged:competingEdit,sameBuyerConflictPaths:conflict.details.paths,exactRecipient:{personId:'robert',name:'Robert Lund',email:'robert@forge.example',phone:'+46 70 123 45 67',contactId:contact.id},crmReopen:true,outboundMessages:0,paidContactRequests:0,sourceReads:f.externalCalls.filter(c=>c.url===sourceUrl).length-sourceReadsBeforeHandoff,blockedBackendRequests:f.externalCalls.filter(c=>new URL(c.url).hostname!=='forge.example').map(c=>new URL(c.url).origin),requests:requestTrace(f.calls),screenshots};
+  assert.deepEqual(await sourceHashes(),sourceSha256,'browser acceptance must use one frozen source revision');
+  const evidence={sourceSha256,verdict:'LOCAL_CONTROLLED_ACCEPTANCE',workspace:workspaceId,browser:'Chromium',authenticatedBrowserContexts:contexts.length,durableJob:jobEvidence,delayedOfficialRead:true,unrelatedRevisionMerged:competingEdit,sameBuyerConflictPaths:conflict.details.paths,exactRecipient:{personId:'robert',name:'Robert Lund',email:'robert@forge.example',phone:'+46 70 123 45 67',contactId:contact.id},crmReopen:true,outboundMessages:0,paidContactRequests:0,sourceReads:f.externalCalls.filter(c=>c.url===sourceUrl).length-sourceReadsBeforeHandoff,blockedBackendRequests:f.externalCalls.filter(c=>new URL(c.url).hostname!=='forge.example').map(c=>new URL(c.url).origin),requests:requestTrace(f.calls),screenshots};
   await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
  }catch(error){await fs.mkdir(artifactDir,{recursive:true});if(page)await shot('journey-failure.png').catch(()=>{});console.error('Step 5 browser diagnostics',JSON.stringify({errors,requests:requestTrace(f.calls),page:await page?.evaluate(()=>({ready:window.LeadIntelServerBridge?.ready,conflict:window.LeadIntelServerBridge?.conflict,details:window.LeadIntelServerBridge?.conflictDetails,meta:JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}'),toast:document.getElementById('toast')?.textContent})).catch(()=>null)}));throw error;
  }finally{gate?.release();await putGate?.close();await Promise.allSettled(contexts.map(context=>context.close()));await browser.close();await f.close();}
