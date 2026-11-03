@@ -34,7 +34,7 @@ test('website activation keeps a real failure visible after the request finishes
   assert.match(activation,/let\s+activationError\s*=\s*['"]['"]/);
   assert.match(activation,/activationError\s*=\s*`Activation failed/);
   assert.match(activation,/if\(activationError\)\{setStatus\(['"]error['"],activationError\);return;\}/);
-  assert.match(activation,/finally\{running=false;render\(\);\}/,'request cleanup may render only because render preserves activationError');
+  assert.match(activation,/finally\{if\(activeOperation===owner\)\{activeOperation=null;running=false;render\(\);\}\}/,'only the current operation may release controls; render preserves its activationError');
   assert.match(activation,/function\s+clearErrorAndRender\(\)\{activationError=['"]['"];render\(\);\}/,'a new website edit explicitly clears the previous failure');
 });
 

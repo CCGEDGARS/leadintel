@@ -1,12 +1,13 @@
 (function(root){
 'use strict';
 const ID='outreach-automation-panel';
-let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=null;
-let policyLoadError='',policyWorkspace='',refreshRequest=0,suppressionLoadError='',stateOwner='',policyOwner='',operationOwner=0,queueOperationOwner=0;
+let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=null,setupDraft=null,setupSaving=false,setupSaveOwner=null;
+let policyLoadError='',policyWorkspace='',refreshRequest=0,refreshCompletion=null,suppressionLoadError='',stateOwner='',setupDraftOwner='',policyOwner='',operationOwner=0,queueOperationOwner=0;
 const identities=new WeakMap();let identitySequence=0;
 function objectId(value){if(!value||typeof value!=='object')return '';if(!identities.has(value))identities.set(value,++identitySequence);return identities.get(value);}
 function accountKey(){const b=bridge(),cache=root.LeadIntelAccountCache;return JSON.stringify([objectId(b),b?.workspace?.id,b?.workspace?.role,b?.session?.user?.id,b?.session?.user?.role,b?.session?.authenticated,b?.gmail,b?.ready,b?.conflict,b?.resolvingSync,objectId(cache),cache?.current?cache.current():true,typeof localStorage==='undefined'?null:localStorage.getItem('leadintel_account_context_v1')]);}
-function syncOwner(){const key=accountKey();if(stateOwner!==key){stateOwner=key;policy=null;status=null;approvedPackage=null;suppressedContacts=null;policyWorkspace='';policyOwner='';busy=false;queueOperationOwner=0;operationOwner++;}return key;}
+function setupAccountKey(){const b=bridge();return JSON.stringify([objectId(b),b?.workspace?.id,b?.workspace?.role,b?.session?.user?.id,b?.session?.user?.role,b?.session?.authenticated,objectId(root.LeadIntelAccountCache),typeof localStorage==='undefined'?null:localStorage.getItem('leadintel_account_context_v1')]);}
+function syncOwner(){const draftKey=setupAccountKey();if(setupDraftOwner!==draftKey){setupDraftOwner=draftKey;setupDraft=null;setupSaving=false;setupSaveOwner=null;}const key=accountKey();if(stateOwner!==key){stateOwner=key;policy=null;status=null;approvedPackage=null;suppressedContacts=null;policyWorkspace='';policyOwner='';busy=setupSaving;queueOperationOwner=0;operationOwner++;}return key;}
 function authority({withPolicy=false}={}){const key=syncOwner(),b=bridge(),policyKey=withPolicy?JSON.stringify(serverPolicy()):'',accountCurrent=()=>accountKey()===key&&Boolean(b?.session?.authenticated&&b?.workspace?.id&&b.ready!==false&&!b.conflict&&!b.resolvingSync);return {bridge:b,key,accountCurrent,current:()=>accountCurrent()&&(!root.LeadIntelAccountCache?.current||root.LeadIntelAccountCache.current())&&(!withPolicy||JSON.stringify(serverPolicy())===policyKey)};}
 function canonicalItems(){try{const saved=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}');const seen=new Set();return [...(Array.isArray(saved.items)?saved.items:[]),...Object.values(saved.buyerDrafts||{})].filter(item=>{const key=JSON.stringify([item?.domain,item?.selectedPersonId,item?.channel||'email']);if(seen.has(key))return false;seen.add(key);return true;});}catch{return [];}}
 function canonicalItem(item){return canonicalItems().find(row=>row.domain===item?.domain&&String(row.selectedPersonId)===String(item?.selectedPersonId)&&JSON.stringify(row)===JSON.stringify(item))||null;}
@@ -61,38 +62,50 @@ function updateSetupBadge(card,active,dirty=false){
   const badge=card.querySelector('#delivery-setup-badge');if(!badge)return;
   const value=setupBadge(mode,active,dirty);badge.querySelector('strong').textContent=value.title;badge.querySelector('small').textContent=value.detail;
 }
+function setupControlsDisabled(){return setupSaving||busy||!bridge()?.session?.authenticated||!policy||policyWorkspace!==bridge()?.workspace?.id||!isOwner();}
+function lockSetupControls(card){if(!card)return;const disabled=setupControlsDisabled();card.querySelectorAll('.delivery-mode-options,#delivery-setup-limit,#delivery-setup-custom,#delivery-setup-save').forEach(node=>{node.disabled=disabled;});card.ariaBusy=String(setupSaving);}
+function matchesSavedPreference(p,expected){return Boolean(p&&expected&&(p.preferredMode||p.mode)===expected.mode&&Number(p.workspaceDailyLimit)===expected.workspaceDailyLimit&&Number(p.mailboxDailyLimit)===expected.mailboxDailyLimit);}
+async function refreshSetupSave(){let pending=refresh();for(let attempt=0;attempt<3;attempt++){const result=await pending;if(pending===refreshCompletion)return result;pending=refreshCompletion;}return null;}
 function renderSetup(){
   const brand=document.getElementById('pdf-input')?.closest('.source-panel')||document.getElementById('target-market-selector')||document.getElementById('brand-identity');if(!brand)return;
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
   const authenticated=Boolean(bridge()?.session?.authenticated&&bridge()?.workspace?.id);
-  const p=serverPolicy(),ready=authenticated&&Boolean(policy)&&policyWorkspace===bridge()?.workspace?.id,owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
+  const p=serverPolicy(),ready=authenticated&&Boolean(policy)&&policyWorkspace===bridge()?.workspace?.id,owner=isOwner(),preferred=setupDraft?.mode||p.preferredMode||p.mode||'manual';
   if(p.approvedWorkflow){card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Approved workflow</span><h3>Delivery is controlled by your workflow</h3><p>Status: ${esc(p.approvedWorkflow.status)}. Review approved limits, pause or take over in Workflow automation.</p></div></div><button data-open-approved-workflow>Open workflow controls</button>`;card.querySelector('[data-open-approved-workflow]')?.addEventListener('click',()=>root.LeadIntelApprovedWorkflow?.open());root.LeadIntelQualificationSettings?.mount(card);const footer=document.createElement('div');footer.className='delivery-settings-footer';card.appendChild(footer);root.LeadIntelAdditionalContacts?.mountPaidSearch?.(card);return;}
-  const limit=Number(p.workspaceDailyLimit||5),preset=[5,10,20].includes(limit)?String(limit):'custom';
+  const limit=Number(p.workspaceDailyLimit||5),preset=setupDraft?.choice||([5,10,20].includes(limit)?String(limit):'custom');
   const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
-  const initialBadge=setupBadge(preferred,active);
+  const initialBadge=setupBadge(preferred,active,Boolean(setupDraft));
   card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Workflow settings</span><h3>Choose how LeadIntel works</h3><p>Set your delivery mode and company qualification rules.</p></div><span class="brand-identity-status delivery-setup-badge" id="delivery-setup-badge" role="status" aria-live="polite"><strong>${initialBadge.title}</strong><small>${initialBadge.detail}</small></span></div>
     <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
     <div id="delivery-setup-auto-limits" class="delivery-setup-controls" ${preferred==='automatic'?'':'hidden'}><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save settings</button></div>
     <p class="delivery-setup-note">${!authenticated?'Sign in to save this preference to your workspace.':!ready?esc(policyLoadError||'Loading delivery settings…'):!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving settings will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite">${esc(policyLoadError)}</p>${authenticated&&(!ready||policyLoadError)?'<button id="delivery-setup-retry" class="secondary-btn" type="button">Retry delivery settings</button>':''}`;
   root.LeadIntelQualificationSettings?.mount(card);
   const footer=document.createElement('div');footer.className='delivery-settings-footer';footer.appendChild(card.querySelector('#delivery-setup-save'));card.appendChild(footer);root.LeadIntelAdditionalContacts?.mountPaidSearch?.(card);
+  lockSetupControls(card);
   card.querySelector('#delivery-setup-retry')?.addEventListener('click',()=>refresh());
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
-  choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';updateSetupBadge(card,active,true);});
-  custom.addEventListener('input',()=>updateSetupBadge(card,active,true));
-  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.querySelector('#delivery-setup-auto-limits').hidden=card.querySelector('[name="delivery-setup-mode"]:checked')?.value!=='automatic';updateSetupBadge(card,active,true);}));
+  if(setupDraft)custom.value=setupDraft.custom;
+  const captureDraft=()=>{setupDraft={mode:card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual',choice:choice.value,custom:custom.value};updateSetupBadge(card,active,true);};
+  choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';captureDraft();});
+  custom.addEventListener('input',captureDraft);
+  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.querySelector('#delivery-setup-auto-limits').hidden=card.querySelector('[name="delivery-setup-mode"]:checked')?.value!=='automatic';captureDraft();}));
   card.querySelector('#delivery-setup-save').addEventListener('click',async()=>{
     const mode=card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual';
     const value=mode==='automatic'?Number(choice.value==='custom'?custom.value:choice.value):limit,notice=card.querySelector('#delivery-setup-message');
     if(mode==='automatic'&&(!Number.isInteger(value)||value<1||value>500)){notice.textContent='Choose a whole number from 1 to 500.';return;}
     const owned=authority({withPolicy:true}),b=owned.bridge;if(busy||!owned.current()||!isOwner()||!b?.saveOutreachAutomationPolicy){notice.textContent='Sign in to save this setting.';return;}
-    const token=++operationOwner;busy=true;const button=card.querySelector('#delivery-setup-save');button.disabled=true;
+    const owner={key:setupAccountKey()},policyStamp=JSON.stringify(serverPolicy());setupSaveOwner=owner;
+    const current=()=>setupSaveOwner===owner&&setupAccountKey()===owner.key&&bridge()===b&&b.session?.authenticated&&b.ready!==false&&!b.conflict&&!b.resolvingSync&&(!root.LeadIntelAccountCache?.current||root.LeadIntelAccountCache.current());
+    busy=true;setupSaving=true;captureDraft();lockSetupControls(card);notice.textContent='Saving settings…';
     try{
-      await root.LeadIntelQualificationSettings?.saveFromCard(card);if(token!==operationOwner||!owned.current())return;
+      await root.LeadIntelQualificationSettings?.saveFromCard(card);if(!current()||JSON.stringify(serverPolicy())!==policyStamp)return;
       const result=await b.saveOutreachAutomationPolicy({...p,mode,enabled:active&&mode==='automatic',workspaceDailyLimit:value,mailboxDailyLimit:mode==='automatic'?value:Number(p.mailboxDailyLimit||limit)});
-      if(token!==operationOwner||!owned.current())return;if(!result?.ok)throw new Error(result?.error||'Delivery settings could not be saved. Qualification rules may have saved; retry.');
-      await refresh();if(!owned.accountCurrent()||token!==operationOwner)return;document.getElementById('delivery-setup-message').textContent='Settings saved. Review and approve the workflow separately before activation.';
-    }catch(error){if(owned.current())(document.getElementById('delivery-setup-message')||notice).textContent=error.message||'Settings could not be saved. Retry.';}finally{if(token===operationOwner){busy=false;button.disabled=false;}syncOwner();}
+      if(!current())return;if(!result?.ok)throw new Error(result?.error||'Delivery settings could not be saved. Qualification rules may have saved; retry.');
+      const expected={mode,workspaceDailyLimit:value,mailboxDailyLimit:mode==='automatic'?value:Number(p.mailboxDailyLimit||limit)};setupDraft.savedPolicy=expected;
+      const refreshed=await refreshSetupSave();if(!current())return;
+      if(!refreshed?.ok||!matchesSavedPreference(refreshed.policy,expected)){policyLoadError='Your preference was saved, but could not be reloaded. Retry delivery settings to confirm it.';renderSetup();document.getElementById('delivery-setup-message').textContent=policyLoadError;return;}
+      setupDraft=null;renderSetup();document.getElementById('delivery-setup-message').textContent='Settings saved. Review and approve the workflow separately before activation.';
+    }catch(error){if(current())(document.getElementById('delivery-setup-message')||notice).textContent=error.message||'Settings could not be saved. Retry.';}finally{if(setupSaveOwner===owner){setupSaveOwner=null;busy=false;setupSaving=false;lockSetupControls(document.getElementById('delivery-setup'));}syncOwner();}
   });
 }
 function selectedDays(p){const set=new Set((p.workingDays||[1,2,3,4,5]).map(String));return days.map(([n,label])=>`<label class="oa-day"><input type="checkbox" data-oa-day="${n}" ${set.has(n)?'checked':''}>${label}</label>`).join('');}
@@ -174,7 +187,8 @@ function render(){
 }
 function message(text,error=false){const el=document.getElementById('oa-message');if(el){el.textContent=text||'';el.dataset.error=error?'1':'0';}}
 function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-enabled').checked,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
-async function refresh(){
+function refresh(){const pending=refreshOperation();refreshCompletion=pending;return pending;}
+async function refreshOperation(){
   const owned=authority(),b=owned.bridge,workspace=b?.workspace?.id,request=++refreshRequest;
   if(!b?.session?.authenticated||!workspace){policy=null;status=null;policyWorkspace='';policyLoadError='';suppressedContacts=null;suppressionLoadError='';render();return;}
   if(policyWorkspace!==workspace){policy=null;status=null;suppressedContacts=null;suppressionLoadError='';policyWorkspace='';}
@@ -185,7 +199,7 @@ async function refresh(){
   const [p,s,blocked]=results.map(result=>result.status==='fulfilled'?result.value:{ok:false,error:String(result.reason?.message||'Delivery settings request failed')});
   if(blocked?.ok){suppressedContacts=blocked.contacts||[];suppressionLoadError='';}else {suppressionLoadError=blocked?.error||'Blocked contacts could not load. Retry to verify the list.';}
   if(!p?.ok||!p.policy||typeof p.policy!=='object'||Array.isArray(p.policy)){policy=null;status=null;policyOwner='';policyLoadError=p?.error||'Delivery settings could not load. Retry to reconnect.';render();message(policyLoadError,true);return;}
-  policy=p;policyOwner=owned.key;policyWorkspace=workspace;status=s?.ok?s:null;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();if(!s?.ok)message(s?.error||'Live delivery status unavailable; saved preferences loaded.',true);
+  policy=p;policyOwner=owned.key;policyWorkspace=workspace;status=s?.ok?s:null;if(blocked?.ok)suppressedContacts=blocked.contacts||[];if(matchesSavedPreference(p.policy,setupDraft?.savedPolicy))setupDraft=null;render();if(!s?.ok)message(s?.error||'Live delivery status unavailable; saved preferences loaded.',true);return {ok:true,policy:p.policy};
 }
 async function mutate(next,success,owned=authority({withPolicy:true})){
  const b=owned.bridge;if(busy||!owned.current()||!isOwner()||!b?.saveOutreachAutomationPolicy)return false;
