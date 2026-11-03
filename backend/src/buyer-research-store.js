@@ -1,6 +1,6 @@
 import {sha256} from './security.js';
 import {getCrmCompany} from './crm.js';
-import {buyerPaidIntent} from './buyer-paid-research.js';
+import {buyerPaidIntent,paidBuyerScope,paidSnapshotCandidate,paidContinuationScopeHash} from './buyer-paid-research.js';
 import {readOwnedPayload} from './workspace-record-store.js';
 import '../../customer/discovery-engine.js';
 import '../../customer/targeting-policy.js';
@@ -51,6 +51,32 @@ export async function buyerInputKey(input){return sha256(JSON.stringify([input.p
 export async function readBuyerJob(env,workspaceId,{id,domain}={}){
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }
+export async function recoverInterruptedContactJob(env,{jobId}={}){
+ // One-time repair of the old cumulative-timeout behavior. GET remains read-only;
+ // only the scheduler may resume the latest still-authorized saved request.
+ const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status='needs_review' AND phase='done' AND updated_at>datetime('now','-30 days') AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1 AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,...(jobId?[jobId]:[])).all();
+ for(const row of rows.results||[]){
+  const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]);
+  let paidScope=null,continuationScopeHash='';
+  if(matches&&input.paidResearch?.companyId){
+   const value=await stmt(env,'SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?',row.workspace_id,input.paidResearch.companyId).first(),snapshot=parse(value?.research_snapshot_json),candidate=parse(row.result_json,input.candidate);
+   const detail={intelligence:{research_snapshot:snapshot,evidence:parse(value?.evidence_json,[])}};
+   if(snapshot.buyerResearch?.jobId===row.id&&paidBuyerScope(paidSnapshotCandidate(candidate,detail))===paidBuyerScope(candidate)){paidScope=value;continuationScopeHash=await paidContinuationScopeHash(value);}
+  }
+  diagnostics.push({phase:'contacts',reason:matches?'Resuming the interrupted contact plan; completed tasks retained':'Saved seller context changed; start research with the current context',at:new Date().toISOString(),code:'contact_continuation_v1'});
+  const update=stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.contactContinuationVersion',1${paidScope?",'$.paidResearch.continuationScopeHash',?":''}),status=?,phase=?,phase_ms=0,phase_runs=0,diagnostic_json=?,lease_token=NULL,lease_until=0,next_at=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND status='needs_review' AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=? ${paidScope?'AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,...(paidScope?[continuationScopeHash]:[]),matches?'queued':'needs_review',matches?'contacts':row.phase,JSON.stringify(diagnostics.slice(-20)),row.id,row.revision,context.version,...(paidScope?[row.workspace_id,input.paidResearch.companyId,paidScope.research_snapshot_json,paidScope.evidence_json]:[]));
+  // Requeue and retry reset are atomic: no worker may claim the repaired job
+  // before the interrupted-task attempts have been restored.
+  const reset=matches?stmt(env,`UPDATE buyer_research_tasks SET attempts=0,status='failed' WHERE job_id=? AND kind IN ('search','read','independent') AND (status='running' OR status='failed' AND error LIKE '%time budget reached%') AND EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND status='queued' AND revision=? AND json_extract(input_json,'$.contactContinuationVersion')=1 AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`,row.id,row.id,row.revision+1,context.version):null;
+  const [updated]=await env.DB.batch([update,...(reset?[reset]:[])]);
+  if(updated.meta.changes&&matches){
+   // Provider failures keep their attempt limits. Only interrupted public tasks
+   // regain their bounded retry; completed source bodies and receipts survive.
+   return row.id;
+  }
+ }
+ return null;
+}
 function resumePhase(candidate,input={}){return !D.officialContactCoveragePassed(candidate)?'official':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!D.buyerResearchCoveragePassed(candidate)?'contacts':candidate.publicResearch?.aiReview?.status!=='complete'?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
 async function retainedJobCandidate(env,row,input,current){
  // Only server-owned results in this workspace and seller context can restore
@@ -77,6 +103,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
 }
 export async function startBuyerJob(env,workspaceId,user,body){
  const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload);
+ input.contactContinuationVersion=1;
  input.paidResearch=await buyerPaidIntent(env,workspaceId,body.paidResearch===true&&input.scope==='all_buyers',input.candidate);
  const key=await buyerInputKey(input);
  input.workspaceContext=stored.hash;

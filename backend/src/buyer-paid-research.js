@@ -13,6 +13,7 @@ export const paidBuyerScope=candidate=>JSON.stringify([
  (candidate.people||[]).map(person=>{const q=D.qualifyBuyer(person,{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate);return [String(person.id),person.country||'',person.opportunityScope||null,q.eligible,q.gaps];}).sort((a,b)=>a[0].localeCompare(b[0]))
 ]);
 export function paidSnapshotCandidate(candidate,detail){const s=detail.intelligence?.research_snapshot||{},r=s.buyerResearch||{};return {...candidate,market:s.market,evidence:detail.intelligence?.evidence||[],qualification:s.qualification,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,fitDescription:s.fitDescription,buyerFit:s.buyerFit,buyerDiscovery:r.discovery,publicResearch:r.publicResearch,people:r.buyers||[]};}
+export const paidContinuationScopeHash=row=>sha256(JSON.stringify([row?.research_snapshot_json||'{}',row?.evidence_json||'[]']));
 export async function buyerPaidIntent(env,workspaceId,requested,candidate){
  if(!requested)return null;
  const policy=await readAdditionalContactPolicy(env,workspaceId),company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
@@ -34,10 +35,11 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
  if(!company||company.id!==intent.companyId||!same(company.company_name,candidate.company)||company.lifecycle_status!=='prospect')return stop('blocked','Save and qualify this company before automatic contact research.');
  let detail=await getCrmCompany(env.DB,context,company.id);await guard();
- const row=await env.DB.prepare('SELECT research_snapshot_json FROM crm_intelligence WHERE company_id=? AND workspace_id=?').bind(company.id,context.workspaceId).first();
+ const row=await env.DB.prepare('SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE company_id=? AND workspace_id=?').bind(company.id,context.workspaceId).first();
  const snapshot=detail.intelligence?.research_snapshot||{};
- if(snapshot.buyerResearch?.jobId!==jobId){
-  if(await sha256(row?.research_snapshot_json||'{}')!==intent.snapshotHash)return stop('blocked','Saved company research changed during this run. Review it before paid lookup.','PAID_SCOPE_CHANGED');
+ const recoveredOwnScope=snapshot.buyerResearch?.jobId===jobId&&intent.continuationScopeHash&&await paidContinuationScopeHash(row)===intent.continuationScopeHash;
+ if(snapshot.buyerResearch?.jobId!==jobId||recoveredOwnScope&&paidBuyerScope(paidSnapshotCandidate(candidate,detail))!==paidBuyerScope(candidate)){
+  if(!recoveredOwnScope&&await sha256(row?.research_snapshot_json||'{}')!==intent.snapshotHash)return stop('blocked','Saved company research changed during this run. Review it before paid lookup.','PAID_SCOPE_CHANGED');
   const qualification=snapshot.qualification;
   if(!qualification)return stop('blocked','The saved company qualification is unavailable.');
   candidate.qualification=qualification;
@@ -46,7 +48,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
   const research={...mapped.buyerResearch,jobId};
   for(const p of research.buyers){const old=snapshot.buyerResearch?.buyers?.find(v=>same(v.id,p.id)&&same(v.publicName||v.name,p.publicName||p.name)&&same(v.title,p.title));const data=old&&D.safeContactData(old.contactData,p,candidate.domain);if(data)p.contactData=data;}
   const authority=guard.writeAuthority||(()=>({sql:'1',args:[]}));
-  const scope={...context,guard,writeAuthority:()=>{const base=authority();return {sql:'('+base.sql+') AND EXISTS(SELECT 1 FROM crm_intelligence WHERE company_id=? AND workspace_id=? AND research_snapshot_json=?)',args:[...base.args,company.id,context.workspaceId,row.research_snapshot_json]};}};
+  const scope={...context,guard,writeAuthority:()=>{const base=authority();return {sql:'('+base.sql+') AND EXISTS(SELECT 1 FROM crm_intelligence WHERE company_id=? AND workspace_id=? AND research_snapshot_json=? AND evidence_json=?)',args:[...base.args,company.id,context.workspaceId,row.research_snapshot_json,row.evidence_json]};}};
   await upsertCrmIntelligence(env.DB,scope,company.id,{...(detail.intelligence||{}),research_snapshot:{...snapshot,market:mapped.market,fitDescription:mapped.fitDescription,buyerRoles:mapped.buyerRoles,buyerRolesChanged:mapped.buyerRolesChanged,buyerFit:mapped.buyerFit,buyerResearch:research}});
   await guard();detail=await getCrmCompany(env.DB,context,company.id);
   if(detail.intelligence?.research_snapshot?.buyerResearch?.jobId!==jobId)return stop('blocked','Saved research changed before paid lookup; no provider was started.');
