@@ -29,14 +29,25 @@ export async function verifyPaidBuyerJourney({artifactDir='/tmp/leadintel-paid-b
   await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='queued');
   const job=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();assert.equal(job.phase,'paid');assert.equal(JSON.parse(job.input_json).paidResearch.email,true);assert.equal(JSON.parse(job.input_json).paidResearch.phone,true);
   await contexts[0].close();
-  for(let pass=0;pass<7;pass++){const row=f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id);if(!['queued','running'].includes(row.status))break;await f.runJobs(job.id);}
+  // A buyer's enabled channels can span multiple query-budgeted invocations.
+  // Drive the actual scheduler to its terminal checkpoint within the bounded
+  // paid-phase allowance; a fixed number of ticks is not completion evidence.
+  const slices=[];
+  for(let pass=0;pass<18;pass++){
+   const row=f.DB.raw.prepare('SELECT status,phase,revision FROM buyer_research_jobs WHERE id=?').get(job.id);
+   if(!['queued','running'].includes(row.status))break;
+   slices.push(...await f.runJobs(job.id));
+  }
+  const final=f.DB.raw.prepare('SELECT status,phase,result_json FROM buyer_research_jobs WHERE id=?').get(job.id),paid=JSON.parse(final.result_json).publicResearch?.paidResearch;
+  assert.equal(final.phase,'done',JSON.stringify({status:final.status,phase:final.phase,paid}));assert.equal(paid?.status,'complete',JSON.stringify(paid));
   const detail=await getCrmCompany(f.env.DB,context,c.crmId);assert.equal(detail.contacts.filter(row=>row.email_status==='verified').length,4);assert.equal(calls.filter(c=>c.url.includes('email.find')).length,4);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,4);
+  assert.equal(new Set(calls.map(c=>c.key)).size,calls.length,'Settled provider phases are reused across saved slices');
   const charged=calls.length;await open();
   await page.waitForFunction(()=>document.querySelectorAll('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').length===4);
   for(const p of c.people)assert.equal(await page.locator('[data-prospect-enrich-email][data-person-id="'+p.id+'"]').getAttribute('aria-pressed'),'true');
   assert.equal(calls.length,charged,'Read-only reopen must not run paid providers');
   await page.screenshot({path:path.join(artifactDir,'paid-four-reopened.png'),fullPage:true});
   const outbound=f.calls.filter(c=>/send|enqueue|sequence/.test(c.path));assert.equal(outbound.length,0);assert.deepEqual(errors,[]);assert.deepEqual(await hashes(),before,'Source must remain frozen during browser acceptance');
-  const evidence={controlledProviders:true,sourceSha256:before,confirmedEmails:4,emailLookups:4,phoneLookups:4,browserClosedDuringWork:true,freshReopen:true,readOnlyPaidReplays:calls.length-charged,outboundMessages:0,privateCustomerAcceptance:false};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
+  const evidence={controlledProviders:true,sourceSha256:before,confirmedEmails:4,emailLookups:4,phoneLookups:4,scheduledSlices:slices.length,browserClosedDuringWork:true,freshReopen:true,readOnlyPaidReplays:calls.length-charged,outboundMessages:0,privateCustomerAcceptance:false};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
  }finally{await Promise.allSettled(contexts.map(ctx=>ctx.close()));await browser.close();await f.close();}
 }
