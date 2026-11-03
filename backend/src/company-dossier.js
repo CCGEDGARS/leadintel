@@ -79,9 +79,9 @@ export async function runDossierResearch({connections,settings={},company,search
     const url=pendingUrls[readCursor++];if(attemptSignal.aborted)throw Error('Source read canceled');let entry;
     try{
      let page=allPages.get(url);const reused=!!page;
-     if(!page){const raw=await bounded(pageSignal=>read(url,pageSignal),attemptSignal,pageTimeoutMs),data=raw?.data||raw||{},metadata=data.metadata||{},identities=[metadata.sourceURL,metadata.url,data.url].filter(Boolean).map(D.url),actual=identities[0]||D.url(url),status=Number(metadata.statusCode||data.statusCode)||200,valid=raw?.success!==false&&!data.error&&!metadata.error&&status>=200&&status<400&&identities.every(u=>u&&u===actual);page={url:actual||url,text:valid&&actual?String(data.markdown||data.text||data.content||'').slice(0,10000):'',researchTrace:raw.researchTrace||data.researchTrace||[]};if(page.text.trim())allPages.set(url,page);}
+     if(!page){const raw=await bounded(pageSignal=>read(url,pageSignal),attemptSignal,pageTimeoutMs),data=raw?.data||raw||{},metadata=data.metadata||{},identities=[metadata.sourceURL,metadata.url,data.url].filter(Boolean).map(D.url),actual=identities[0]||D.url(url),status=Number(metadata.statusCode||data.statusCode)||200,valid=raw?.success!==false&&!data.error&&!metadata.error&&status>=200&&status<400&&identities.every(u=>u&&u===actual);page={url:actual||url,text:valid&&actual?String(data.markdown||data.text||data.content||'').slice(0,10000):'',researchTrace:raw.researchTrace||data.researchTrace||[],reused:data.reused===true};if(page.text.trim())allPages.set(url,page);}
      if(page?.text.trim()){pages.push({...page,requestedUrl:url});readCount++;}
-     entry={url,checkedAt:new Date().toISOString(),status:page?.text.trim()?'succeeded':'failed',reused,researchTrace:page.researchTrace||[]};
+     entry={url,checkedAt:new Date().toISOString(),status:page?.text.trim()?'succeeded':'failed',reused:reused||page.reused===true,researchTrace:page.researchTrace||[]};
     }catch(error){if(attemptSignal.aborted)throw Error('Source read canceled');entry={url,checkedAt:new Date().toISOString(),status:'failed',reused:false,researchTrace:error.researchTrace||[]};}
     if(attemptSignal.aborted)throw Error('Source read canceled');sourceReadState.delete(url);sourceReadState.set(url,entry);remember(partial());await checkpoint();
    }}));
@@ -106,7 +106,7 @@ export async function runDossierResearch({connections,settings={},company,search
 }
 export function dossierFailureReason(error,phase){const http=String(error?.message||'').match(/(?:failed|unavailable) \((\d{3})\)/i)?.[1];const reason=error?.name==='AbortError'?'deadline reached':http?'provider HTTP '+http:error instanceof SyntaxError?'invalid extraction JSON':/No grounded source/.test(error?.message)?'no grounded sources':/No readable underlying/.test(error?.message)?'no readable sources':'operation failed';return phase+': '+reason;}
 export async function dossierSettings(env,workspaceId){return await env.DB.prepare('SELECT primary_provider,secondary_provider FROM workspace_research_settings WHERE workspace_id=?').bind(workspaceId).first()||{};}
-export async function researchWorkspaceDossier(env,workspaceId,company,{signal,guard=()=>{},authorization,providerTimeoutMs,writeAuthority}={}){
+export async function researchWorkspaceDossier(env,workspaceId,company,{signal,guard=()=>{},authorization,providerTimeoutMs,writeAuthority,readSource}={}){
  await guard();if(signal?.aborted)throw Object.assign(Error('Dossier canceled'),{status:499});
  const settings=await dossierSettings(env,workspaceId),connections=(await Promise.all(names.map(p=>workspaceCredential(env,workspaceId,p)))).filter(Boolean);
  const active=await env.DB.prepare('SELECT provider FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1').bind(workspaceId).first();
@@ -128,7 +128,7 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  };
  const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,...(providerTimeoutMs?{timeoutMs:Math.max(1000,Math.min(180000,providerTimeoutMs))}:{}),
   search:(c,q,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
-  read:(u,s)=>readPublicBuyerPage(env,workspaceId,u,{signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000}),
+  read:readSource||((u,s)=>readPublicBuyerPage(env,workspaceId,u,{signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000})),
   extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text)
  });
  if(result.status!=='complete'){try{const previous=D.safe(JSON.parse(saved?.successful_json||'null'),company.domain);if(previous?.contextKey===contextKey)result.previousSuccessful=previous;}catch{}}
