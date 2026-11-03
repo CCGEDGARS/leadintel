@@ -30,6 +30,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
   const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate),controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
+  const officialPlan=candidate.buyerDiscovery?.officialContactInventory?.research,rescopeOfficial=phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
+  if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
   const guard=async({checkpoint=false}={})=>{
    if(!checkpoint&&!activeTaskReservations&&invocationBudget&&!invocationBudget.hasRoom(32)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
@@ -49,7 +51,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const inflightTasks=new Map();
   const executeTaskBody=async(kind,value,operation)=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
-   if(prior?.status==='complete')return parse(prior.result_json);
+   if(prior?.status==='complete'){const result=parse(prior.result_json);return kind==='read'?{...result,reused:true}:result;}
    // A running row belongs to the previous expired/canceled slice. It is not
    // a provider-failure receipt. Keep earlier real failures, but restore the
    // interrupted dispatch; the eighteen-slice phase ceiling still bounds work.
@@ -120,6 +122,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:merged.slice(0,30),opportunityRoles:input.roles};confirmNamed();
   };
   const diagnostics=parse(row.diagnostic_json,[]);
+  if(rescopeOfficial)diagnostics.push({phase:'official',reason:'Resuming the contact-source objective after a legacy financial-archive limit; completed source tasks retained',at:new Date().toISOString()});
   const settleQuality=async()=>{
    const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
    const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;
@@ -136,7 +139,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    }else if(phase==='dossier'){
     try{
      const plan=D.buyerResearchPlan(candidate,input.profile);
-     const result=await (services.dossier||researchWorkspaceDossier)(env,row.workspace_id,{company:candidate.company,domain:row.domain,seller:parse(D.buyerFitContext(input.profile)),roles:input.roles,formulas:plan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',incremental:true},{signal:controller.signal,guard,authorization:{userId:row.requested_by,sessionTokenHash:row.session_hash},writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]}),providerTimeoutMs:Math.min(remaining,180000)});
+     const result=await (services.dossier||researchWorkspaceDossier)(env,row.workspace_id,{company:candidate.company,domain:row.domain,seller:parse(D.buyerFitContext(input.profile)),roles:input.roles,formulas:plan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',incremental:true},{signal:controller.signal,guard,readSource:read,authorization:{userId:row.requested_by,sessionTokenHash:row.session_hash},writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]}),providerTimeoutMs:Math.min(remaining,180000)});
      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};acquirePeople();
      if(result.status==='complete'||result.continuation===false){if(result.status!=='complete')diagnostics.push({phase,reason:'Bounded dossier attempt incomplete; continuing contact research with its evidence gaps retained',at:new Date().toISOString()});phase=nextPhase[phase];}
     }catch(error){if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED'||controller.signal.aborted)throw error;diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});phase=nextPhase[phase];}
