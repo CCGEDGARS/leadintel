@@ -36,7 +36,7 @@ export async function runDossierResearch({connections,settings={},company,search
  const checkpoint=()=>{const work=checkpointQueue.then(async()=>{await guard();if(signal?.aborted)throw Error('Dossier canceled');await onCheckpoint(snapshot());});checkpointQueue=work.catch(()=>{});return work;};
  const remember=pass=>{const at=passes.findIndex(p=>p.provider===pass.provider);if(at<0)passes.push(pass);else passes[at]=pass;};
  let providersRun=0;
- const attempted=new Set(passes.map(p=>p.provider)),requestOrder=Number.isFinite(maxProvidersPerRequest)?[...order].sort((a,b)=>Number(attempted.has(a.provider))-Number(attempted.has(b.provider))):order;
+ const lastAttempt=provider=>receipts.findLastIndex(receipt=>receipt.provider===provider),requestOrder=Number.isFinite(maxProvidersPerRequest)?[...order].sort((a,b)=>lastAttempt(a.provider)-lastAttempt(b.provider)):order;
  for(const connection of requestOrder){
   if(passes.filter(p=>p.status==='complete'&&D.passCoverageComplete(p,plan)).length>=2)break;
   if(passes.some(p=>p.provider===connection.provider&&p.status==='complete'&&D.passCoverageComplete(p,plan)))continue;
@@ -50,6 +50,9 @@ export async function runDossierResearch({connections,settings={},company,search
   const generatedSearchGaps=new Set(families.map(f=>`${f.name} source search did not complete`));
   let evidenceState={people:previous?.people||[],facts:previous?.facts||[],channels:previous?.channels||[],sources:previous?.sources||[],extractedSources:previous?.extractedSources||[],gaps:(previous?.gaps||[]).filter(gap=>!generatedSearchGaps.has(gap))};
   const partial=()=>({...previous,provider:connection.provider,status:'partial',planSignature:plan.signature,webSearch:[...familyState.values()].some(f=>['complete','partial'].includes(f.status)),searchFamilies:[...familyState.values()].map(f=>({...f})),...evidenceState,sourceReads:D.safeSourceReads([...sourceReadState.values()].slice(-20))});
+  // Save dispatch before the provider starts, so a parent cancellation still
+  // leaves a durable rotation receipt instead of starving the second provider.
+  const receipt={provider:connection.provider,status:'partial',phase:'web_search',sourceCount:0,readCount:0,elapsedMs:0,startedAt,completedAt:'',reason:'Provider attempt in progress'};receipts.push(receipt);
   remember(partial());await checkpoint();
   try{const pass=await bounded(async attemptSignal=>{
    let cursor=0;const missing=families.filter(f=>familyState.get(f.name)?.status!=='complete');
@@ -92,11 +95,11 @@ export async function runDossierResearch({connections,settings={},company,search
    phase='validation';const merged={...partial(),gaps:[...new Set([...evidenceState.gaps,...searchGaps])].slice(0,20)};
    merged.status=!searchGaps.length&&merged.facts.length+merged.people.length+merged.channels.length>0?'complete':'partial';return merged;
   },signal,timeoutMs);
-  await guard();remember(pass);receipts.push({provider:connection.provider,status:pass.status,phase:'complete',sourceCount,readCount,elapsedMs:Date.now()-Date.parse(startedAt),startedAt,completedAt:new Date().toISOString(),reason:pass.status==='complete'?'':pass.searchFamilies.some(f=>f.status!=='complete')?'Required dossier searches incomplete':'No supported dossier facts extracted'});
-  }catch(error){if(signal?.aborted)throw error;await guard();for(const state of familyState.values())if(state.status==='attempted'){state.status='pending';state.reason='Provider deadline reached before query completed';}remember(partial());receipts.push({provider:connection.provider,status:'failed',phase,sourceCount,readCount,elapsedMs:Date.now()-Date.parse(startedAt),startedAt,completedAt:new Date().toISOString(),reason:dossierFailureReason(error,phase)});}
+  await guard();remember(pass);Object.assign(receipt,{status:pass.status,phase:'complete',sourceCount,readCount,elapsedMs:Date.now()-Date.parse(startedAt),completedAt:new Date().toISOString(),reason:pass.status==='complete'?'':pass.searchFamilies.some(f=>f.status!=='complete')?'Required dossier searches incomplete':'No supported dossier facts extracted'});
+  }catch(error){if(signal?.aborted)throw error;await guard();for(const state of familyState.values())if(state.status==='attempted'){state.status='pending';state.reason='Provider deadline reached before query completed';}remember(partial());Object.assign(receipt,{status:'failed',phase,sourceCount,readCount,elapsedMs:Date.now()-Date.parse(startedAt),completedAt:new Date().toISOString(),reason:dossierFailureReason(error,phase)});}
   await checkpoint();
  }
- await guard();const result=snapshot();if(result.status!=='complete')result.gaps=[...result.gaps,'Independent research by two different providers has not completed.'];await guard();if(signal?.aborted)throw Error('Dossier canceled');await onCheckpoint(result);if(Number.isFinite(maxProvidersPerRequest))result.continuation=result.status!=='complete'&&order.some(c=>!passes.some(p=>p.provider===c.provider));return result;
+ await guard();const result=snapshot();if(result.status!=='complete')result.gaps=[...result.gaps,'Independent research by two different providers has not completed.'];await guard();if(signal?.aborted)throw Error('Dossier canceled');await onCheckpoint(result);if(Number.isFinite(maxProvidersPerRequest))result.continuation=result.status!=='complete'&&order.some(c=>!passes.some(p=>p.provider===c.provider&&p.status==='complete'&&D.passCoverageComplete(p,plan)));return result;
 }
 export function dossierFailureReason(error,phase){const http=String(error?.message||'').match(/(?:failed|unavailable) \((\d{3})\)/i)?.[1];const reason=error?.name==='AbortError'?'deadline reached':http?'provider HTTP '+http:error instanceof SyntaxError?'invalid extraction JSON':/No grounded source/.test(error?.message)?'no grounded sources':/No readable underlying/.test(error?.message)?'no readable sources':'operation failed';return phase+': '+reason;}
 export async function dossierSettings(env,workspaceId){return await env.DB.prepare('SELECT primary_provider,secondary_provider FROM workspace_research_settings WHERE workspace_id=?').bind(workspaceId).first()||{};}

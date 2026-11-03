@@ -21,7 +21,7 @@ for(const change of ['none','before_repair','during_repair','after_repair','evid
  c.people.forEach(p=>p.contactResearch.checks.gmail.status='partial');
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='paid',input_json=json_remove(input_json,'$.contactContinuationVersion'),result_json=? WHERE id=?").run(JSON.stringify(c),job.id);
  let calls=0;
- const services={search:async()=>[],read:async url=>({url,markdown:c.people.map(p=>`### ${p.name}\n${p.title}\nForge Industries`).join('\n\n'),metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]}),review:async()=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:c.people.map(p=>p.id),findings:[]},conflicts:[]}),paidLookup:async()=>{calls++;return {request:{status:'not_found'},research:{status:'not_found'}};}};
+ const services={search:async()=>[],read:async url=>({url,markdown:c.people.map(p=>`### ${p.name}\n${p.title}\nForge Industries`).join('\n\n'),metadata:{sourceURL:url}}),dossier:async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]}),independent:async()=>({status:'not_configured',results:[]}),review:async()=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:c.people.map(p=>p.id),findings:[]},conflicts:[]}),paidLookup:async()=>{calls++;return {request:{status:'not_found'},research:{status:'not_found'}};}};
  const tick=async()=>{const waits=[],noop=async()=>({completed:0});await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{runBuyerResearchJobs:(env,options)=>runBuyerResearchJobs(env,{...options,maxJobs:1,jobId:job.id,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);};
  const edit=()=>f.DB.raw.prepare("UPDATE crm_intelligence SET research_snapshot_json=json_set(research_snapshot_json,'$.buyerResearch.buyers[0].title','Manual title') WHERE company_id=?").run(c.crmId);
  await tick(); // Old paid phase publishes its own partial CRM snapshot, then correctly blocks spending.
@@ -35,6 +35,9 @@ for(const change of ['none','before_repair','during_repair','after_repair','evid
  if(change==='during_repair'){assert.equal((await readBuyerJob(f.env,workspaceId,{id:job.id})).status,'needs_review','A CRM edit during repair must defeat its captured-scope CAS');await tick();}
  if(change==='after_repair')edit();
  if(change==='evidence_after_repair')f.DB.raw.prepare("UPDATE crm_intelligence SET evidence_json=? WHERE company_id=?").run(JSON.stringify([{url:'https://forge.example/new-evidence',text:'Manual source evidence'}]),c.crmId);
+ // Missing upstream stages now resume before contacts. Keep every original
+ // CRM race/paid-consent assertion while allowing that authorized sequence.
+ for(let i=0;i<6&&(await readBuyerJob(f.env,workspaceId,{id:job.id})).phase!=='review';i++)await tick();
  const recovered=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
  assert.equal(recovered.publicResearch.accountability.status,'complete');assert.equal(recovered.publicResearch.accountability.checkedPeople,4);
  await tick(); // Current AI review.

@@ -30,12 +30,15 @@ for(const mode of ['eligible','queued_review','revoked','changed_context','repla
  if(mode==='revoked')f.DB.raw.prepare("UPDATE workspace_members SET role='viewer' WHERE workspace_id=? AND user_id=?").run(workspaceId,f.users.owner.id);
  if(mode==='changed_context')f.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=json_set(payload_json,'$.main.website','https://changed.example/'),version=version+1 WHERE workspace_id=?").run(workspaceId);
  if(mode==='replaced')await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true});
- let calls=0;const services={search:async()=>{calls++;return [];},read:async url=>({url,markdown:'Robert Lund — Head of Procurement — Forge Industries',metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]}),review:async()=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:['robert'],findings:[]},conflicts:[]})};
+ let calls=0;const services={search:async()=>{calls++;return [];},read:async url=>({url,markdown:'Robert Lund — Head of Procurement — Forge Industries',metadata:{sourceURL:url}}),dossier:async()=>({status:'complete',people:[],facts:[],channels:[],sources:[],passes:[]}),independent:async()=>({status:'not_configured',results:[]}),review:async()=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:['robert'],findings:[]},conflicts:[]})};
  const before=await readBuyerJob(f.env,workspaceId,{id:job.id});
  if(mode==='eligible'){
   const response=await app.fetch(new Request(f.env.APP_ORIGIN+'/api/buyers/research?workspace_id='+workspaceId+'&job_id='+job.id,{headers:{Cookie:'leadintel_session='+f.users.owner.token}}),f.env,{});assert.equal(response.status,200);assert.equal((await readBuyerJob(f.env,workspaceId,{id:job.id})).revision,before.revision,'Read-only restore does not launch the repair');
  }
- await scheduledSlice(f,job.id,services);if(mode==='queued_review')await scheduledSlice(f,job.id,services);const saved=await readBuyerJob(f.env,workspaceId,{id:job.id});
+ await scheduledSlice(f,job.id,services);if(mode==='queued_review')await scheduledSlice(f,job.id,services);
+ // Repair now revisits missing upstream owners as well as contact checks.
+ if(['eligible','queued_review'].includes(mode))for(let i=0;i<5&&(await readBuyerJob(f.env,workspaceId,{id:job.id})).phase!=='review';i++)await scheduledSlice(f,job.id,services);
+ const saved=await readBuyerJob(f.env,workspaceId,{id:job.id});
  if(['eligible','queued_review'].includes(mode)){
   assert.equal(saved.status,'queued','An interrupted pre-fix job must resume without asking the user to restart it');assert.equal(saved.phase,'review');assert.ok(calls>0);assert.equal(JSON.parse(saved.result_json).publicResearch.accountability.checkedPeople,1);assert.equal(JSON.parse(saved.input_json).contactContinuationVersion,1);assert.equal(saved.id,job.id);
  }else{assert.equal(saved.status,before.status);assert.equal(saved.result_json,before.result_json);assert.equal(calls,0,'Canceled, replaced, revoked, changed-context and already recovered work cannot restart');}
