@@ -49,12 +49,13 @@ export async function buyerInputKey(input){return sha256(JSON.stringify([input.c
 export async function readBuyerJob(env,workspaceId,{id,domain}={}){
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }
+function resumePhase(candidate){return !D.officialContactCoveragePassed(candidate)?'official':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!D.buyerResearchCoveragePassed(candidate)?'contacts':candidate.publicResearch?.aiReview?.status!=='complete'?'review':'done';}
 export async function publicBuyerJob(env,row){
  if(!row)return null;const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate||{});
  const totals=await stmt(env,"SELECT status,count(*) n FROM buyer_research_tasks WHERE job_id=? GROUP BY status",row.id).all();
  const quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
  const completed=(totals.results||[]).find(r=>r.status==='complete')?.n||0,total=(totals.results||[]).reduce((n,r)=>n+Number(r.n),0);
- return {id:row.id,domain:row.domain,contextKey:row.context_key,input:{company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,revision:row.revision,updatedAt:row.updated_at.replace(' ','T')+'Z',candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{completed:Number(completed),total,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):row.phase.replaceAll('_',' ')}};
+ return {id:row.id,domain:row.domain,contextKey:row.context_key,input:{company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate),revision:row.revision,updatedAt:row.updated_at.replace(' ','T')+'Z',candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{completed:Number(completed),total,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):row.phase.replaceAll('_',' ')}};
 }
 export async function startBuyerJob(env,workspaceId,user,body){
  const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload),key=await buyerInputKey(input);
@@ -80,8 +81,7 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   if(activeBuyerJob(row.status)||row.status==='complete')return row;
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
-  const candidate=parse(row.result_json,input.candidate),dossier=candidate.buyerDiscovery?.companyDossier;
-  const phase=!D.officialContactCoveragePassed(candidate)?'official':dossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!D.buyerResearchCoveragePassed(candidate)?'contacts':candidate.publicResearch?.aiReview?.status!=='complete'?'review':'done';
+  const candidate=parse(row.result_json,input.candidate),phase=resumePhase(candidate);
   if(phase==='done')return row;
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
   if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});

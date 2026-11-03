@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom');
 const D=require('../discovery-engine.js'),Dossier=require('../company-dossier.js'),UI=require('../company-dossier-ui.js');
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
-function render({empty=false,loading=false}={}){
+function render({empty=false,loading=false,rolesChanged=false}={}){
  const people=Array.from({length:6},(_,i)=>({id:String(i),name:`Anna Buyer${i}`,title:i===0?'CEO':i===1?'COO':i===2?'Procurement Director':'Operations Director',organization:'Example',publicNameUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}));
  const facts=Array.from({length:5},(_,i)=>({text:`Company finding ${i}`,quote:`Company finding ${i}`,sourceUrl:'https://example.com/news'}));
  const dossier=Dossier.reconcile(['openai','gemini'].map(provider=>({provider,webSearch:true,status:'complete',facts,people:[],channels:[],sources:['https://example.com/news'],extractedSources:['https://example.com/news'],gaps:[]})),{company:'Example',domain:'example.com'});
- const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_qualified',people:empty?[]:people,peopleStatus:loading?'loading':'complete',buyerRoles:['Executive leadership','Procurement Director','Operations Director'],buyerDiscovery:{companyDossier:dossier,checkedAt:new Date().toISOString(),found:6}};
+ const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_qualified',people:empty?[]:people,peopleStatus:loading?'loading':'complete',buyerRolesChanged:rolesChanged,buyerRoles:['Executive leadership','Procurement Director','Operations Director'],buyerDiscovery:{companyDossier:dossier,checkedAt:new Date().toISOString(),found:6}};
  const ctx={verifiedBuyerEmail:()=>'',window:{LeadIntelCompanyDossierUi:UI},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:v=>String(v??''),mainState:()=>({}),loadMeta:()=>({}),enrichmentResults:new Map(),selectedBuyerEnrichment:new Set(),buyerCompanyRemovalPending:new Set(),buyerCompanySavePending:new Set(),buyerCompanySaved:()=>false,crmAuthenticated:()=>true,candidateBuyerRoles:()=>candidate.buyerRoles,personKey:(c,p)=>p.id,selectedBuyerKey:(c,p)=>p.id,linkedInSearchUrl:()=>'',buyerQualificationHtml:()=>'<p>Current role supported</p>',buyerContactRows:()=>'<div>Company email: not confirmed</div>',enrichmentResultHtml:()=>'',prospectContactControls:()=>'<button>Find email</button>',buyerResearchProgressHtml:()=>'<p role="status">Researching decision-makers…</p>',buyerQualitySupervisorHtml:()=>'<section class="buyer-quality-supervisor">Buyer quality · Needs attention</section>',companyContactDossierHtml:()=>'<details class="company-contact-dossier"><summary>All company contacts</summary></details>',buyerProviderStatusHtml:()=>'<p>Research incomplete</p>',buyerResearchAccountabilityHtml:()=>'<details><summary>Research accountability</summary></details>'};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerActionIdentity('),source.indexOf('function captureBuyerAction(')),ctx);vm.runInContext(source.slice(source.indexOf('function renderSelectedProspects('),source.indexOf('function renderPipeline(')),ctx);
  const dom=new JSDOM(ctx.renderSelectedProspects([candidate]));return {dom,doc:dom.window.document,candidate};
@@ -19,6 +19,13 @@ test('company actions are in the header beneath qualification, followed by dossi
  assert.equal(header.nextElementSibling.nextElementSibling.nextElementSibling.classList.contains('selected-prospect-buyers'),true);
  assert.equal(doc.querySelector('.selected-prospect-buyers > .buyer-shortlist-group > ol').children.length,4);
  assert.equal(doc.querySelector('.selected-prospect-buyers').querySelector('.buyer-quality-supervisor'),null);dom.window.close();
+});
+test('a role-review hold keeps every saved contact card visible with an actionable research recovery',()=>{
+ const {dom,doc}=render({rolesChanged:true}),buyers=doc.querySelector('.selected-prospect-buyers');
+ assert.equal(buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li').length,6,'a role hold must not collapse every saved person');
+ assert.match(buyers.textContent,/saved contacts/i);assert.doesNotMatch(buyers.textContent,/\d priority buyers/);
+ const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
+ dom.window.close();
 });
 test('other contacts and research controls start collapsed below priority contacts without losing evidence',()=>{
  const {dom,doc}=render(),other=doc.querySelector('details.buyer-other-contacts'),research=doc.querySelector('details.buyer-research-details');

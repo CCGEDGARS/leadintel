@@ -1,0 +1,17 @@
+# Buyers Refresh: retained contacts and incomplete work
+
+Starting production SHA: `3afa80a914979777382bc24469c365e7737324f8`.
+
+The customer screenshot shows ten retained people behind a collapsed disclosure, no priority cards, a changed-role hold, an earlier incomplete dossier and unfinished contact research. The exact private workspace/job trace was unavailable. Production Vercel log counts did not expose the direct Worker research requests; they do not establish whether that particular click started, resumed or failed a job.
+
+Shipping-code reproductions established three connected defects. Durable workers acquired named official contact evidence without reassessing the saved role hold. Restored job snapshots likewise did not reassess that hold from current merged evidence. Ranking excluded held people and the layout collapsed all remaining contacts, so retained names and fields disappeared from the main view. Finally, company Refresh always forced a new attempt rather than resuming compatible incomplete work.
+
+The durable worker and client now use the existing evidence-based role reassessment predicate. A job status or provider opinion alone cannot clear a hold. Expired, foreign, conflicting or unsupported evidence retains the existing qualification/contact restrictions. When nobody is ranked, retained full contact cards remain visible as saved contacts, with their actual hold/readiness explanation; they are not relabelled as qualified priority buyers. The role-recovery button remains actionable.
+
+Explicit company Refresh resumes matching unfinished work with its current revision. The server exposes the same next unfinished phase that its resume command executes. Completed quality-only attempts remain refreshable as new research. Changed identities, a narrower selected-person scope, different roles/company/seller or a competing revision cannot be silently resumed. Ordinary reopening remains read-only. Individual forced Recheck remains separate, and no paid permission or sending activation changes.
+
+Meaningful regressions were first observed failing for hidden retained cards, stale role holds after a real official read, restore reconciliation and forced restart. Independent review reproduced a changed-roster/scoped-job resume error against the real authenticated routes and migrated SQLite; that was fixed before release. The reviewer then confirmed identity replacement, full-company versus selected-person scope, compatible resume and quality-only restart with revision checks.
+
+Mandatory Chromium acceptance now starts with held saved contacts and a deliberately unavailable company dossier. It clicks the actual Refresh control, reads official named channels through the real job/routes/storage, verifies role recovery, refreshes the same incomplete job, and proves completed task bodies/attempts and official reads are not replayed. It then checks exact-recipient Messages/CRM handoff, competing workspace edits, same-person conflict preservation and fresh-browser reopen. Desktop, 390px and 320px role-recovery controls are reachable; recorded source hashes must remain unchanged. Dossier/research quality remains needs review. No fake whole-step completion, real paid lookup or outbound send is permitted.
+
+Full customer/backend CI, build, mandatory browser acceptance and exact-SHA PROVEN production verification remain release gates. Controlled source/model responses prove lifecycle and ownership; they do not prove this customer's private recovery, current live research yield or external provider/model quality.

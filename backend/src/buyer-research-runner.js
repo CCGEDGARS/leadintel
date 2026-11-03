@@ -75,7 +75,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    const tasks=await stmt(env,"SELECT kind,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete'",row.id).all();
    return tasks.results.flatMap(r=>r.kind==='read'?[parse(r.result_json)]:r.kind==='search'?parse(r.result_json).rows||[]:[]).slice(-160);
   };
+  const reassessRoles=(people=candidate.people||[])=>{if(candidate.buyerRolesChanged&&D.canReassessSavedBuyerRoles(candidate,people,input.profile))candidate.buyerRolesChanged=false;};
   const confirmNamed=()=>{
+   reassessRoles();
    for(const person of candidate.people||[]){const email=D.acceptedOfficialBuyerEmail(candidate,person);if(email)person.publicEmailSourceCheck={version:2,status:'confirmed',email,url:person.publicEmailUrl,checkedAt:person.publicEmailEvidence.checkedAt};}
   };
   let acquiredRows=[];
@@ -83,6 +85,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(acquiredRows.length){candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyContacts:D.discoverCompanyContacts(acquiredRows,candidate,candidate.buyerDiscovery?.companyContacts||[])};candidate.people=D.matchPublicBuyerDetails(candidate.people||[],acquiredRows,candidate.domain,candidate.company);}
    const sources=candidate.buyerDiscovery?.companyContacts||[],dossier=C.buyers(candidate.buyerDiscovery?.companyDossier,candidate.company);
    const merged=D.mergeBuyerPool(candidate.people||[],[...sources,...dossier],input.profile);
+   reassessRoles(merged);
    candidate.people=D.retainBuyerIdentities(merged,input.profile,candidate).filter(person=>input.scope!=='selected_buyers'||input.personIds.includes(String(person.id))).slice(0,10);
    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:merged.slice(0,30),opportunityRoles:input.roles};confirmNamed();
   };
