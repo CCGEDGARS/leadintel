@@ -1,9 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 
-test('a saved contact timeout has no live searching markers and resumes only unfinished queries',async()=>{
+test('a saved contact timeout has no live searching markers and resumes only unfinished queries',async t=>{
  const candidate={domain:'forge.example',company:'Forge Industries',buyerRoles:['Head of Procurement'],people:[{id:'alex',name:'Alex Smith',publicName:'Alex Smith',title:'Head of Procurement',organization:'Forge Industries',publicNameUrl:'https://forge.example/team'}]},queries=[];
  const rows=[{url:'https://forge.example/team',markdown:'Alex Smith — Head of Procurement — Forge Industries',sourceRead:true,extractedAt:new Date().toISOString()}];
- await D.runMandatoryBuyerResearch(candidate,{rows,maxDurationMs:30,search:async query=>{queries.push(query);if(query.includes('"alex.smith@gmail.com"'))return new Promise(()=>{});return [];}});
+ let now=Date.now();t.mock.method(Date,'now',()=>now);
+ await D.runMandatoryBuyerResearch(candidate,{rows,maxDurationMs:1000,search:async query=>{queries.push(query);if(query.includes('"alex.smith@gmail.com"'))now+=1001;return [];}});
  assert.equal(candidate.publicResearch.accountability.stopReason,'time_budget');const partial=candidate.people[0];
  assert.equal(partial.emailResearch.status,'partial');
  for(const check of Object.values(partial.contactResearch.checks)){
