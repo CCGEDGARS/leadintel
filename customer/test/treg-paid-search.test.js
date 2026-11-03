@@ -67,3 +67,9 @@ test('paid permissions do not claim remaining budget and historical holds respec
  assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
  }finally{f.dom.window.close();}
 });
+test('Settings and Step 1 expose the saved buyer limit without resetting it on channel activation',async()=>{
+ const f=await controlsFixture();try{
+  const root=f.w.document.querySelector('#delivery-setup'),limit=root.querySelector('[data-paid-limit="maxPerCompany"]');assert.ok(limit,'a saved per-company limit must be editable');assert.equal(limit.max,'10');limit.value='4';root.querySelector('[data-save-paid-limits]').click();await new Promise(r=>setTimeout(r,20));assert.equal(f.w.LeadIntelAdditionalContacts.policy().maxPerCompany,4);
+  await f.click('[data-paid-search-toggle]');assert.equal(f.w.LeadIntelAdditionalContacts.policy().maxPerCompany,4);assert.match(root.querySelector('[data-paid-search-status]').textContent,/up to 4 eligible buyers/);assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
+ }finally{f.dom.window.close();}
+});

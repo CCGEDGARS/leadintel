@@ -57,7 +57,7 @@ async function saveBuyerData(env,context,candidate,person,companyId,attemptKey,d
 }
 
 // One backend boundary owns attribution, request ceilings and idempotency.
-export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,guard=async()=>{},onDispatch=()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null}={},deps={}){
+export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,signal,guard=async()=>{},onDispatch=()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null}={},deps={}){
  const parentGuard=guard,resolveCredential=deps.credential||resolveWorkspaceServiceCredential;
  await parentGuard();
  const credential=await resolveCredential(env,context.workspaceId,'treg');
@@ -85,7 +85,7 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   let response;
   await guard({phase});
   await onDispatch({phase});await guard({phase});
-  try{newCalls++;response=await (deps.fetch||fetch)(`https://treg.to/call/${endpoint}${poll?'?'+new URLSearchParams(body):''}`,{method:poll?'GET':'POST',headers,...(!poll?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(110000)});}
+  try{newCalls++;response=await (deps.fetch||fetch)(`https://treg.to/call/${endpoint}${poll?'?'+new URLSearchParams(body):''}`,{method:poll?'GET':'POST',headers,...(!poll?{body:JSON.stringify(body)}:{}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(110000)]):AbortSignal.timeout(110000)});}
   catch{throw fail('Treg request is still pending or interrupted. Retry this saved lookup to recover it without buying it again.',503,'TREG_RETRY_SAME_LOOKUP');}
   const payload=await response.json().catch(()=>null),readable=payload&&typeof payload==='object'&&!Array.isArray(payload);
   const cost=response.headers.get('X-Treg-Cost-Micro'),original=response.headers.get('X-Treg-Original-Cost-Micro');

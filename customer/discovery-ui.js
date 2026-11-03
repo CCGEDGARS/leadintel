@@ -363,7 +363,10 @@ function buyerHydrationContact(candidate,person,detail){
     if(text(contact.name)!==name||String(contact.company_id||'')!==String(detail.company.id)||contact.workspace_id&&contact.workspace_id!==workspaceId||contact.external_person_id&&String(contact.external_person_id)!==String(person.id)||contact.title&&text(contact.title)!==text(person.title)||contact.organization&&text(contact.organization)!==text(person.organization))return false;
     const profiles=[...buyerHydrationProfiles(person),...buyerHydrationProfiles(contact)];return profiles.every(Boolean)&&new Set(profiles).size<=1;
   });
-  return matches.length===1?matches[0]:null;
+  if(matches.length===1)return matches[0];
+  const accepted=matches.filter(contact=>window.LeadIntelContactPolicy?.accepted(contact,candidate.domain,'public_confirmed'));
+  const addresses=new Set(accepted.map(contact=>String(contact.normalized_email||contact.work_email||contact.email).trim().toLowerCase()));
+  return accepted.length&&addresses.size===1?accepted[0]:null;
 }
 
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
@@ -1693,6 +1696,8 @@ async function runDurableBuyerResearch(candidate,options={}){
   const current=()=>discovery===state&&bridge()===b&&b?.workspace?.id===workspaceId&&b?.session?.user?.id===userId&&crmAuthenticated()&&discoveryOperationContext()===scope&&collections.length>0&&collections.every(key=>(discovery[key]||[]).includes(candidate))&&(!options.isCurrent||options.isCurrent()===true);
   if(!current()||options.signal?.aborted)return false;
   if(!options.restore&&b.conflict){showToast('Resolve the workspace synchronization conflict before starting or resuming buyer research.');return false;}
+  if(!options.restore&&options.paidResearch!==false&&!options.personIds?.length){await window.LeadIntelAdditionalContacts?.load();if(!current()||options.signal?.aborted)return false;}
+  const paidPolicy=window.LeadIntelAdditionalContacts?.policy?.(),paidResearch=options.paidResearch!==false&&!options.personIds?.length&&Boolean(paidPolicy?.enabled||paidPolicy?.phoneEnabled);
   const taskCentre=window.LeadIntelTaskCentre;let taskId='',lastRevision='',observedJob=null;
   const persist=(_owner,job)=>{
     if(!current())return;
@@ -1701,7 +1706,12 @@ async function runDurableBuyerResearch(candidate,options={}){
     if(lastRevision!==revision){lastRevision=revision;saveDiscovery();renderAll();}
     options.persist?.(candidate,job);
   };
-  const settings={profile,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,onProgress:detail=>{
+  const settings={profile,paidResearch,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
+    if(!current()||!buyerHydrationScope(owner,detail))return;
+    for(const person of owner.people||[]){const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
+      const raw=(detail.contactData||[]).find(data=>String(data.personId)===String(person.id)),data=raw&&LeadIntelDiscovery.safeContactData(raw,person,owner.domain);if(data&&(!person.contactData||Date.parse(data.checkedAt)>=Date.parse(person.contactData.checkedAt||'')))person.contactData=data;
+    }
+  },onProgress:detail=>{
     if(!current())return;observedJob=detail.job;
     if(['queued','running'].includes(detail.status)){
       const id=`buyer-research-job:${detail.job.id}`;
@@ -3792,7 +3802,7 @@ function renderSelectedProspects(prospects){
     const researchReport=LeadIntelDiscovery.safeBuyerResearchAccountability(candidate.publicResearch?.accountability);
     const researchGap=researchReport?.gaps?.[0]||(!researchPassed&&researchReport?.stopReason?`Stopped: ${researchReport.stopReason.replaceAll('_',' ')}`:'');
     const acceptedEmailCount=people.filter(person=>verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{})).length;
-    const researchSummary=people.length?`<div class="buyer-public-summary" role="status"><div><strong>Public research · ${researchPending?'In progress':researchPassed?'Depth checked':'Checks incomplete'}</strong><p>${candidate.publicResearch?.researchScope==='selected_buyers'&&researchReport?.totalPeople<people.length?'Latest batch: ':''}${acceptedEmailCount} accepted emails · ${researchReport?.checkedPeople??checkedPeople}/${researchReport?.totalPeople||people.length} buyers fully researched${candidate.publicResearch?.checkedAt||researchReport?` · ${Number(researchReport?.officialPages??candidate.publicResearch?.officialPages)||0} official pages read in this run`:''}${Number(candidate.buyerDiscovery?.officialContactInventory?.sourcePages?.length)?` · ${candidate.buyerDiscovery.officialContactInventory.sourcePages.length} saved official sources retained`:''}. Each contact shows its own confirmation status.</p>${researchGap?`<small>Last saved run: ${esc(researchGap.slice(0,180))}</small>`:''}</div><button class="secondary-btn small" type="button" ${candidate.buyerRolesChanged?'data-find-prospect-buyers':'data-find-public-contacts'}="${esc(domain)}" ${researchPending||!crmAuthenticated()?'disabled':''}>${researchPending?'Researching…':candidate.buyerRolesChanged?'Recheck saved contacts':ranked.shortfall?'Find 4 confirmed contacts':researchPassed?'Refresh public evidence':'Resume incomplete checks'}</button></div>`:'';
+    const researchSummary=people.length?`<div class="buyer-public-summary" role="status"><div><strong>Public research · ${researchPending?'In progress':researchPassed?'Depth checked':'Checks incomplete'}</strong><p>${candidate.publicResearch?.researchScope==='selected_buyers'&&researchReport?.totalPeople<people.length?'Latest batch: ':''}${acceptedEmailCount} accepted emails · ${researchReport?.checkedPeople??checkedPeople}/${researchReport?.totalPeople||people.length} buyers fully researched${candidate.publicResearch?.checkedAt||researchReport?` · ${Number(researchReport?.officialPages??candidate.publicResearch?.officialPages)||0} official pages read in this run`:''}${Number(candidate.buyerDiscovery?.officialContactInventory?.sourcePages?.length)?` · ${candidate.buyerDiscovery.officialContactInventory.sourcePages.length} saved official sources retained`:''}. Each contact shows its own confirmation status.</p>${candidate.publicResearch?.paidResearch?`<p>Paid research · ${esc(candidate.publicResearch.paidResearch.status)} · ${(candidate.publicResearch.paidResearch.outcomes||[]).filter(r=>r.status==='checked').length} buyers checked${candidate.publicResearch.paidResearch.reason?' · '+esc(candidate.publicResearch.paidResearch.reason):''}</p>`:''}${researchGap?`<small>Last saved run: ${esc(researchGap.slice(0,180))}</small>`:''}</div><button class="secondary-btn small" type="button" ${candidate.buyerRolesChanged?'data-find-prospect-buyers':'data-find-public-contacts'}="${esc(domain)}" ${researchPending||!crmAuthenticated()?'disabled':''}>${researchPending?'Researching…':candidate.buyerRolesChanged?'Recheck saved contacts':ranked.shortfall?'Find 4 confirmed contacts':researchPassed?'Refresh public evidence':'Resume incomplete checks'}</button></div>`:'';
     const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}">${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning" role="status">Buyer roles changed. Refresh to assess the saved contacts.</p>':""}${researchSummary}${buyerGroupHtml(recommendedPeople,'confirmed priority contacts','Most relevant buyers with confirmed contact data')}${shortlistGapHtml}${compactBuyersHtml}</section>`:
       candidate.peopleStatus==="loading"?"":
       candidate.peopleStatus==="error"?`<div class="selected-prospect-people-state warning" role="status"><strong>Buyer search needs attention.</strong><span>${esc(candidate.buyerDiscovery?.lastError?.message||"A research provider failed before completion.")}</span><small>Phase: ${esc(candidate.buyerDiscovery?.lastError?.phase||"unknown")} · Retry will preserve completed research.</small></div>`:

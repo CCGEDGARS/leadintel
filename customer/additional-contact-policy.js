@@ -24,11 +24,9 @@
     return {eligible:true,reason:'Qualified company and buyer; public contact research completed.',profile};
   }
   function targets(candidate={},options={}){
-    const confirmedEmail=options.confirmedEmail||(()=>''),max=Math.max(1,Math.min(2,Number(options.maxPerCompany)||2));
-    const ready=(candidate.people||[]).filter(person=>Boolean(confirmedEmail(person))).length;
-    if(ready>=max)return [];
+    const confirmedEmail=options.confirmedEmail||(()=>''),max=Math.max(1,Math.min(10,Number(options.maxPerCompany)||2));
     return (candidate.people||[]).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:confirmedEmail(person)}).eligible)
-      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total).slice(0,max-ready);
+      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total).slice(0,max);
   }
   return {readiness,targets};
 });

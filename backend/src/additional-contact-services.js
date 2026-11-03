@@ -24,7 +24,7 @@ export async function readAdditionalContactPolicy(env,workspaceId){
 export async function saveAdditionalContactPolicy(env,context,input){
   if(context.role!=='owner')throw fail('Only the workspace owner can approve additional services',403);
   if(input?.phoneEnabled!==undefined&&typeof input.phoneEnabled!=='boolean')throw fail('Choose a valid phone permission',400);
-  if(typeof input?.enabled!=='boolean'||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>50||!Number.isInteger(input.monthlyLimit)||input.monthlyLimit<input.dailyLimit||input.monthlyLimit>1000||![1,2].includes(input.maxPerCompany))throw fail('Choose valid daily/monthly limits and one or two buyers per company',400);
+  if(typeof input?.enabled!=='boolean'||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>50||!Number.isInteger(input.monthlyLimit)||input.monthlyLimit<input.dailyLimit||input.monthlyLimit>1000||(!Number.isInteger(input.maxPerCompany)||input.maxPerCompany<1||input.maxPerCompany>10))throw fail('Choose valid daily/monthly limits and one to ten buyers per company',400);
   const provider=input.provider||'apollo';if(!['apollo','treg'].includes(provider))throw fail('Unsupported paid research provider',400);
   const previous=await readAdditionalContactPolicy(env,context.workspaceId),phoneEnabled=input.phoneEnabled??(previous.provider===provider&&previous.phoneEnabled);
   if(provider==='treg'&&(input.enabled||phoneEnabled)&&!(await resolveWorkspaceServiceCredential(env,context.workspaceId,'treg')).configured)throw fail('Connect your Treg team token in Settings before activation.',409,'ADDITIONAL_CONTACT_PROVIDER_REQUIRED');
@@ -106,7 +106,11 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     if(providerName==='treg'){
       requireAutomaticReview(candidate,person);
     }
-    const targets=P.targets(candidate,{maxPerCompany:providerName==='treg'?1:policy.maxPerCompany,provider:providerName,confirmedEmail:p=>includePhone?false:detail.contacts?.some(c=>String(c.external_person_id)===String(p.id)&&String(c.name).trim().toLowerCase()===String(p.publicName||p.name).trim().toLowerCase()&&C.accepted(c,candidate.domain,confirmationLevel))});
+    const targetEmail=providerName==='treg'?policy.enabled&&input.automatic_email!==false:true,targetPhone=providerName==='treg'&&policy.phoneEnabled&&input.automatic_phone!==false;
+    const targets=P.targets(candidate,{maxPerCompany:policy.maxPerCompany,provider:providerName,confirmedEmail:p=>{
+      const contacts=(detail.contacts||[]).filter(c=>String(c.external_person_id)===String(p.id)&&String(c.name).trim().toLowerCase()===String(p.publicName||p.name).trim().toLowerCase());
+      return (!targetEmail||D.acceptedOfficialBuyerEmail(candidate,p)||contacts.some(c=>C.accepted(c,candidate.domain,confirmationLevel)))&&(!targetPhone||D.confirmedBuyerPhone(candidate,p,contacts[0]||{},{workspaceId:context.workspaceId,companyId}));
+    }});
     if(!targets.some(p=>String(p.id)===String(person.id)))throw fail('Only the strongest missing-email buyers are approved for automatic lookup');
   }
   checkCancelled();
@@ -203,7 +207,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   try{
     if(providerName==='treg'){
       await guard();
-      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,dataLookup,includePhone,includeEmail,existingContact:existing||null});
+      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,signal:deps.signal,dataLookup,includePhone,includeEmail,existingContact:existing||null});
       const retained=await retainTregAttempt({result,status:result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found'});
       return {...result,...(retained.contact?{contact:retained.contact}:{}),...(retained.contactData?{contactData:retained.contactData}:{}),research:retained.research};
     }

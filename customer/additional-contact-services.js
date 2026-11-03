@@ -40,10 +40,20 @@
       const active=isTreg&&(phone?policy.phoneEnabled:policy.enabled);
       button.disabled=!valid||busyPolicy||policyRole!=='owner';button.textContent=busyPolicy?'Saving preferences…':active?'Paid '+channel+' search: ON ✓':'Activate paid '+channel+' search';button.setAttribute('aria-pressed',String(Boolean(active)));button.classList.toggle('paid-search-active',Boolean(active));
     }
+    let limits=card.querySelector('[data-paid-limits]');
+    if(!limits){
+      limits=document.createElement('div');limits.dataset.paidLimits='1';limits.className='paid-research-limits';
+      for(const [field,label,min,max] of [['maxPerCompany','Buyers per company',1,10],['dailyLimit','Lookups per day',1,50],['monthlyLimit','Lookups per month',1,1000]]){
+        const wrap=document.createElement('label'),input=document.createElement('input');wrap.textContent=label+' ';input.type='number';input.min=String(min);input.max=String(max);input.step='1';input.dataset.paidLimit=field;wrap.append(input);limits.append(wrap);
+      }
+      const save=document.createElement('button');save.type='button';save.className='secondary-btn small';save.dataset.savePaidLimits='1';save.textContent='Save research limits';save.addEventListener('click',()=>savePaidLimits(card));limits.append(save);footer.after(limits);
+    }
+    for(const input of limits.querySelectorAll('[data-paid-limit]')){if(valid&&document.activeElement!==input)input.value=String(policy[input.dataset.paidLimit]);input.disabled=!valid||busyPolicy||policyRole!=='owner';}
+    limits.querySelector('[data-save-paid-limits]').disabled=!valid||busyPolicy||policyRole!=='owner';
     let estimate=card.querySelector('[data-paid-search-estimate]');if(!estimate){estimate=document.createElement('p');estimate.className='field-help paid-search-estimate';estimate.dataset.paidSearchEstimate='1';footer.after(estimate);}
     estimate.textContent='Email research: approx. €0.30/contact. Phone lookup: approx. €0.20 extra per number found.'+(isTreg&&policy.enabled&&policy.phoneEnabled?' Estimated combined cost: €0.50/contact.':'')+' Planning estimates for research and AI, not fixed prices; provider, AI and scraping usage vary. Existing subscription charges are separate. Numbers may be unavailable or unconfirmed.';
     let note=card.querySelector('[data-paid-search-status]');if(!note){note=document.createElement('p');note.className='field-help';note.dataset.paidSearchStatus='1';note.setAttribute('role','status');estimate.after(note);}
-    note.textContent=!valid?'Sign in or reload paid-search settings.':isTreg&&(policy.enabled||policy.phoneEnabled)?'Treg · Email '+(policy.enabled?'ON':'OFF')+' · Phone '+(policy.phoneEnabled?'ON':'OFF')+' · Automatic: 1 strongest eligible buyer per company · manual: selected buyer · '+policy.dailyLimit+' lookups/day · '+policy.monthlyLimit+'/month. Preferences are saved. ON records permission, not remaining budget or successful research. Lookup limits and provider readiness are checked on each request. Automatic paid research runs after eligible buyer research, including in manual delivery mode. Sending requires separate activation.':treg?.configured?'Treg connected. Paid email and phone research are off. Saving settings does not start paid searches or send messages.':'Connect your Treg team token in Settings before activation.';
+    note.textContent=!valid?'Sign in or reload paid-search settings.':isTreg&&(policy.enabled||policy.phoneEnabled)?'Treg · Email '+(policy.enabled?'ON':'OFF')+' · Phone '+(policy.phoneEnabled?'ON':'OFF')+' · Automatic: up to '+policy.maxPerCompany+' eligible buyers per company · manual: selected buyer · '+policy.dailyLimit+' lookups/day · '+policy.monthlyLimit+'/month. Preferences are saved. ON records permission, not remaining budget or successful research. Lookup limits and provider readiness are checked on each request. Automatic paid research fills missing enabled channels after free checks and evidence review, including in manual delivery mode. Sending requires separate activation.':treg?.configured?'Treg connected. Paid email and phone research are off. Saving settings does not start paid searches or send messages.':'Connect your Treg team token in Settings before activation.';
   }
   function mountSettings(){const card=document.querySelector('[data-paid-contact-settings]');if(card)mountPaidSearch(card);}
   function renderPaidControls(){mountPaidSearch();mountSettings();}
@@ -51,15 +61,28 @@
     if(busyPolicy||!loadedCurrent()||policyRole!=='owner')return;
     const originContext=policyContext(),phone=channel==='phone',enabled=!(policy.provider==='treg'&&(phone?policy.phoneEnabled:policy.enabled));
     if(enabled&&!treg?.configured){openSettings('treg');status('Connect your Treg team token in Settings, then activate paid search.');return;}
-    const daily=settings?policy.dailyLimit:Math.max(1,Math.min(50,Number(document.getElementById('delivery-setup-custom')?.hidden===false?document.getElementById('delivery-setup-custom').value:document.getElementById('delivery-setup-limit')?.value)||policy.dailyLimit||5));
-    const input={enabled:phone?Boolean(policy.provider==='treg'&&policy.enabled):enabled,phoneEnabled:phone?enabled:Boolean(policy.provider==='treg'&&policy.phoneEnabled),provider:'treg',maxPerCompany:1,dailyLimit:daily,monthlyLimit:settings?policy.monthlyLimit:Math.max(daily,Math.min(1000,Math.max(policy.monthlyLimit||0,daily*30)))};
+    const input={enabled:phone?Boolean(policy.provider==='treg'&&policy.enabled):enabled,phoneEnabled:phone?enabled:Boolean(policy.provider==='treg'&&policy.phoneEnabled),provider:'treg',maxPerCompany:policy.maxPerCompany,dailyLimit:policy.dailyLimit,monthlyLimit:policy.monthlyLimit};
     const operation=beginPolicyOperation();renderPaidControls();
     try{
-      if(enabled){const approved=await (root.LeadIntelDialogs?.confirm((phone?'Activate paid phone lookup. Budget approximately €0.20 per number found. This does not activate paid email search. A number may be missing or provider-listed without confirmed reachability or ownership. Each phone request is capped at $0.25.':'Activate paid work-email finding and verification. Budget approximately €0.30/contact for research and AI. This does not activate paid phone search. Treg finding and verification are capped at $0.075 combined; public/AI research costs vary.')+' These are estimates, not fixed prices. Up to '+input.dailyLimit+' contact lookups/day and '+input.monthlyLimit+'/month; one buyer per company. Saving this choice does not run a paid lookup or send messages. Automatic sending requires separate activation.',{title:'Activate paid '+channel+' search',action:'Activate paid '+channel+' search'})??false);if(!approved)return;}
+      if(enabled){const approved=await (root.LeadIntelDialogs?.confirm((phone?'Activate paid phone lookup. Budget approximately €0.20 per number found. This does not activate paid email search. A number may be missing or provider-listed without confirmed reachability or ownership. Each phone request is capped at $0.25.':'Activate paid work-email finding and verification. Budget approximately €0.30/contact for research and AI. This does not activate paid phone search. Treg finding and verification are capped at $0.075 combined; public/AI research costs vary.')+' These are estimates, not fixed prices. Up to '+input.dailyLimit+' contact lookups/day and '+input.monthlyLimit+'/month; '+input.maxPerCompany+' buyers per company. Saving this choice does not run a paid lookup or send messages. Automatic sending requires separate activation.',{title:'Activate paid '+channel+' search',action:'Activate paid '+channel+' search'})??false);if(!approved)return;}
       if(!policyCurrent(originContext))return;
       const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});if(!policyCurrent(originContext))return;policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
     }catch(error){if(policyCurrent(originContext)){status(error.message);outcomes.set('policy-error',error.message);}}
     finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
+  }
+  async function savePaidLimits(card){
+    if(busyPolicy||!loadedCurrent()||policyRole!=='owner')return;
+    const originContext=policyContext(),input={enabled:policy.enabled,phoneEnabled:policy.phoneEnabled,provider:policy.provider};
+    for(const field of ['dailyLimit','monthlyLimit','maxPerCompany'])input[field]=Number(card.querySelector('[data-paid-limit="'+field+'"]').value);
+    if(!Number.isInteger(input.maxPerCompany)||input.maxPerCompany<1||input.maxPerCompany>10||!Number.isInteger(input.dailyLimit)||input.dailyLimit<1||input.dailyLimit>50||!Number.isInteger(input.monthlyLimit)||input.monthlyLimit<input.dailyLimit||input.monthlyLimit>1000){card.querySelector('[data-paid-search-status]').textContent='Choose 1–10 buyers per company, 1–50 daily lookups and a monthly limit between the daily limit and 1000.';return;}
+    const operation=beginPolicyOperation();renderPaidControls();
+    try{
+      const approved=await (root.LeadIntelDialogs?.confirm('Save paid research limits: '+input.maxPerCompany+' buyers per company, '+input.dailyLimit+' lookups per day and '+input.monthlyLimit+' per month. Existing email and phone permissions stay as selected. Eligible company research may use these limits automatically. This does not send messages.',{title:'Save paid research limits',action:'Save limits'})??false);
+      if(!approved||!policyCurrent(originContext))return;
+      const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});if(!policyCurrent(originContext))return;
+      policy=saved.policy;automaticAttempts.clear();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
+    }catch(error){if(policyCurrent(originContext))outcomes.set('policy-error',error.message);}
+    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=card.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
   }
   function renderPolicy(){
     renderPaidControls();
@@ -238,7 +261,7 @@
       if(!treg?.configured||treg.source!=='customer')return;
       if(trigger!=='research_completed')return;
     }else if(!provider?.configured||provider.source!=='customer'||provider.metadata?.email_enrichment_enabled!==true)return;
-    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.provider==='treg'?1:policy.maxPerCompany,confirmedEmail:p=>policy.provider==='treg'?(!policy.enabled||adapter.email(candidate,p))&&(!policy.phoneEnabled||savedPhone(candidate,p))?'complete':'':adapter.email(candidate,p)});
+    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),maxPerCompany:policy.maxPerCompany,confirmedEmail:p=>policy.provider==='treg'?(!policy.enabled||adapter.email(candidate,p))&&(!policy.phoneEnabled||savedPhone(candidate,p))?'complete':'':adapter.email(candidate,p)});
     for(const person of targets){
       if(!current())return;
       if(manualCompanyBusy(prefix))return;

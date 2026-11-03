@@ -308,6 +308,7 @@ for(const mode of ['email','email_phone','existing_email_phone','fallback_pendin
  if(existingEmail){
   const crm=await import('../src/crm.js');
   const context={workspaceId:'w1',userId:'u1',role:'owner'},saved=await crm.upsertCrmCompany(env.DB,context,{company_name:'Example',domain:'example.com'});
+  await crm.upsertCrmIntelligence(env.DB,context,saved.company.id,{research_snapshot:{qualification:{eligible:true,score:85,researchedAt:new Date().toISOString()}}});
   await crm.upsertCrmContacts(env.DB,context,saved.company.id,[{external_person_id:'anna',name:'Anna Andersson',title:'COO',work_email:'anna.andersson@example.com',email_status:'verified',source:'treg'}]);
   env.DB.raw.exec("UPDATE crm_contacts SET verification_provider='Treg',verified_at=CURRENT_TIMESTAMP");
  }
@@ -574,4 +575,11 @@ test('actual campaign queue preserves reviewed HTML/source authority and rejects
 });
 test('background workflow invalidation cannot overwrite a restored current source at SQL commit',async()=>{
  const env=await fixture();await approve(env);const original=env.DB.raw.prepare("SELECT payload_json FROM customer_workspace_state WHERE workspace_id='w1'").get().payload_json,changed=JSON.parse(original);changed.main.approved=false;env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=?,version=version+1 WHERE workspace_id='w1'").run(JSON.stringify(changed));const prepare=env.DB.prepare.bind(env.DB);let restored=false;env.DB.prepare=sql=>{if(sql.startsWith("UPDATE approved_workflows SET status='needs_review'")){restored=true;env.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=?,version=version+1 WHERE workspace_id='w1'").run(original);}return prepare(sql);};assert.equal(await workflowAuthorized(env,'w1',1),false);assert.equal(restored,true);assert.equal(env.DB.raw.prepare('SELECT status FROM approved_workflows').get().status,'automatic');
+});
+
+test('pending paid buyer work checkpoints at Buyers and is resumed by the next authorized scheduler invocation',async()=>{
+ const env=await fixture();await approve(env);let attempts=0;const stages=[];
+ const execute=async(stage,{result})=>{stages.push(stage);if(stage==='buyers'){attempts++;return {...result,buyerResearchPending:attempts===1,candidates:[{domain:'example.com'}]};}return result;};
+ const first=await runApprovedWorkflows(env,{execute});assert.equal(first.blocked,0);assert.equal(first.completed,0);let row=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get();assert.equal(row.status,'running');assert.equal(row.stage_index,3);assert.equal(row.lease_token,null);assert.equal(JSON.parse(row.result_json).buyerResearchPending,true);assert.equal(stages.includes('messages'),false);
+ const second=await runApprovedWorkflows(env,{execute});assert.equal(second.completed,1);row=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get();assert.equal(row.status,'completed');assert.equal(attempts,2);assert.equal(stages.filter(s=>s==='companies').length,1);
 });

@@ -105,6 +105,7 @@
       owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
       const ref={id:job.id,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||''};references.set(owner,ref);owner.buyerResearchJob=ref;
       owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({dossier:1,company:1,roles:2,people:3,identity:4,contacts:5,review:5})[job.phase]||1,total:5,checkpointAt:job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      if(job.crm)options.hydrateCrm?.(owner,job.crm);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
     }
     async function observe(scope,job,options,controller){
@@ -136,10 +137,12 @@
           const selectedRoster=value=>roster({people:(value?.people||[]).filter(person=>!selected||selected.has(String(person.id)))});
           const covered=scopeCovered&&selectedRoster(owner)===selectedRoster(job?.candidate);
           if(job&&!covered)job=null;
-          if(!job||!ACTIVE.has(job.status)&&(options.force||job.status!=='complete'||!covered)){
-            const resume=job&&covered&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
+          const paidScopeMatches=Boolean(job?.input?.paidResearch)===Boolean(options.paidResearch);
+          if(!paidScopeMatches)job=null;
+          if(!job||!ACTIVE.has(job.status)&&(options.force||options.paidResearch||job.status!=='complete'||!covered)){
+            const resume=job&&covered&&paidScopeMatches&&!options.paidResearch&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
-            const command=resume?{action:'resume'}:{action:'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true};
+            const command=resume?{action:'resume'}:{action:'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,paidResearch:options.paidResearch===true};
             job=await request(scope,'POST',{...command,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }
         }
