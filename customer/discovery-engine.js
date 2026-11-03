@@ -1943,7 +1943,7 @@
     const logged=(person,key)=>buyerResearchCheckPassed(candidate,person,key,options);
     const checked=person=>BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>logged(person,key))&&buyerResearchAssessment(person,options).status==='complete';
     const officialRead=report?.officialPageReads.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&fresh(row.checkedAt));
-    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||logged(p,'deep')));
+    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>acceptedOfficialBuyerEmail(candidate,p,{now})||logged(p,'deep')));
   }
   function buyerQualityAssessment(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -2014,7 +2014,7 @@
       const stopped=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Object.assign(new Error('Contact research time budget reached'),{code:'TIME_BUDGET'})),Math.max(1,duration-(Date.now()-started)));cancel=()=>reject(Object.assign(new Error('Research canceled'),{code:'CANCELED'}));signal?.addEventListener('abort',cancel,{once:true});});
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
-    const attributable=person=>Boolean(validResearchEmail(person.publicEmail,candidate.domain)&&companyIdentityDomain(person.publicEmailUrl)===companyIdentityDomain(candidate.domain));
+    const attributable=person=>Boolean(acceptedOfficialBuyerEmail(candidate,person));
     const priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
@@ -2051,7 +2051,7 @@
           if(!actual||locations.some(value=>!value||companyIdentityDomain(value)!==companyIdentityDomain(actual))||companyIdentityDomain(actual)!==companyIdentityDomain(candidate.domain)&&actual!==contactResearchUrl(url))throw new Error('Contact source URL unavailable, conflicting or redirected outside its attribution');
           const text=page.markdown||page.content||page.text||'';if(!String(text).trim())throw new Error('Contact source text unavailable');
           if(options.observeTools!==false){observePage(page);if(!page.researchTrace?.length){const source=page.metadata?.source,provider=source==='scrapling-fallback'?'scrapling':source==='direct-fallback'?'direct':source==='firecrawl'?'firecrawl':null;if(provider)recordBuyerResearchTool(report,{provider,status:'succeeded',results:1});}}
-          return {url:actual,markdown:text,sourceRead:true,...(page.metadata?{metadata:page.metadata}:{}),title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:new Date().toISOString()};
+          return {url:actual,markdown:text,sourceRead:true,...(page.metadata?{metadata:page.metadata}:{}),title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:Number.isFinite(Date.parse(page.extractedAt))?page.extractedAt:new Date().toISOString()};
           }catch(error){if(options.observeTools!==false)for(const entry of error.researchTrace||[])recordBuyerResearchTool(report,entry);throw error;}
         })());}
         try{const page=await pages.get(url);collect(person,[page]);receipts.push({url,status:'complete',checkedAt:page.extractedAt||stamp(),...(reused?{reused:true}:{})});}
