@@ -16,16 +16,27 @@ function contact(c,p,status='verified'){
  return {name:p.name,external_person_id:p.id,work_email:`${p.id}@${c.domain}`,email_status:status,verification_provider:status==='verified'?'Treg':'Public source',public_email_url:`https://${c.domain}/team`,verified_at:now};
 }
 function evaluate(c,rows={},options={}){return B.evaluate(c,{now,contactForPerson:p=>rows[p.id],...options});}
-test('research, supervision and the two-email commercial target remain separate',()=>{
+test('research, supervision and the four confirmed-contact outcome remain separate',()=>{
  const c=fixture(),report=evaluate(c);
- assert.equal(report.coverage.researchPassed,true);assert.equal(report.coverage.supervisorStatus,'complete');assert.equal(report.outcomes.priorityBuyers,4);assert.equal(report.outcomes.usablePriorityEmails,0);assert.equal(report.status,'needs_attention');assert.ok(report.blockers.some(row=>row.id==='emails'&&row.action));
+ assert.equal(report.coverage.researchPassed,true);assert.equal(report.coverage.supervisorStatus,'complete');assert.equal(report.outcomes.priorityBuyers,0);assert.equal(report.outcomes.usablePriorityEmails,0);assert.equal(report.status,'needs_attention');assert.ok(report.blockers.some(row=>row.id==='contacts'&&row.action));
  const rows=Object.fromEntries(c.people.slice(0,2).map(p=>[p.id,contact(c,p)])),ready=evaluate(c,rows);
- assert.equal(ready.status,'requirements_met');assert.equal(ready.outcomes.usablePriorityEmails,2);assert.equal(ready.execution.totalCostKnown,false);
+ assert.equal(ready.status,'needs_attention');assert.equal(ready.outcomes.priorityBuyers,2);assert.equal(ready.outcomes.usablePriorityEmails,2);assert.equal(ready.outcomes.contactTarget,4);assert.equal(ready.execution.totalCostKnown,false);
+ const complete=evaluate(c,Object.fromEntries(c.people.map(p=>[p.id,contact(c,p)])));assert.equal(complete.status,'requirements_met');assert.equal(complete.outcomes.usablePriorityEmails,4);
 });
 test('report counts policy-accepted contacts without inferring email yield from guesses, Gmail or phones',()=>{
  const c=fixture(),rows={};
  c.people.forEach((p,i)=>{p.gmailCandidates=D.gmailGuessCandidates(p);p.gmailMatches=[{email:'possible@gmail.com',url:'https://association.example/contact'}];p.publicPhone='123456789';rows[p.id]={...contact(c,p),...(i===0?{work_email:'anna@gmail.com'}:i===1?{email_status:'guessed'}:i===2?{work_email:'info@'+c.domain}:{work_email:'p3@sub.'+c.domain})};});
  const report=evaluate(c,rows);assert.equal(report.outcomes.usablePriorityEmails,0);assert.ok(report.people.every(row=>row.confirmation==='unconfirmed'));
+});
+test('mixed confirmed channels share the shortlist and quality result while email counts stay exact',()=>{
+ const c=fixture();for(const p of c.people.slice(0,2))Object.assign(p,{publicLinkedinUrl:'https://linkedin.com/in/'+p.id,linkedinConfirmedUrl:'https://linkedin.com/in/'+p.id,linkedinConfirmationMethod:'manual'});require('./helpers/buyer-research-receipts.cjs')(c,now);reviewed(c);
+ const phone={name:c.people[3].name,external_person_id:'p3',source:'apollo',phone_number:'+46 70 123 45 67',phone_status:'verified',company_id:'crm-company',workspace_id:'workspace'};
+ const report=evaluate(c,{p2:contact(c,c.people[2]),p3:phone},{workspaceId:'workspace',companyId:'crm-company'});
+ assert.equal(report.status,'requirements_met',JSON.stringify(report.quality.gaps));assert.equal(report.outcomes.usablePriorityContacts,4);assert.equal(report.outcomes.usablePriorityEmails,1);assert.equal(report.outcomes.contactTarget,4);assert.equal(report.quality.confirmedPriorityContacts,4);
+});
+test('foreign workspace or company contact records cannot count as confirmed outcomes',()=>{
+ const c=fixture(),p=c.people[0],row=contact(c,p);
+ for(const scope of [{workspace_id:'foreign'},{company_id:'foreign'}]){const report=evaluate(c,{p0:{...row,...scope}},{workspaceId:'current',companyId:'crm-company'});assert.equal(report.outcomes.usablePriorityContacts,0);assert.equal(report.outcomes.usablePriorityEmails,0);}
 });
 test('official company email acceptance also applies to legacy provider-only settings',()=>{
  const c=fixture(),p=c.people[0],row=contact(c,p,'public_confirmed');
@@ -57,7 +68,7 @@ test('partial, stale and missing per-query evidence never become completed resea
 });
 test('industry and company names do not alter qualification or contact metrics',()=>{
  const reports=[['Factory Example','Procurement Director','factory.example'],['Retail Example','Marketing Director','retail.example'],['Legal Example','Finance Director','legal.example']].map(args=>{const c=fixture(...args);return evaluate(c,Object.fromEntries(c.people.slice(0,2).map(p=>[p.id,contact(c,p)])));});
- for(const report of reports){assert.equal(report.outcomes.usablePriorityEmails,2);assert.equal(report.outcomes.priorityBuyers,4);assert.equal(report.coverage.researchPassed,true);}
+ for(const report of reports){assert.equal(report.outcomes.usablePriorityEmails,2);assert.equal(report.outcomes.priorityBuyers,2);assert.equal(report.coverage.researchPassed,true);}
 });
 test('a retained official contact inventory does not promote unrelated staff into priority buyers',()=>{
  const inventory=D.officialCompanyContactInventory([reference.staff],reference.company);
@@ -97,9 +108,9 @@ test('nonpriority identities need their mandatory checks but do not consume the 
  const c=unsortedRoster();for(const p of c.people.filter(p=>p.id.startsWith('extra')))delete p.contactResearch.checks.deep;
  assert.equal(D.buyerResearchCoveragePassed(c),true);
 });
-test('previously returned nonpriority contacts stay visible without replacing relevant priority buyers',()=>{
+test('a confirmed relevant contact can enter the main shortlist while other places remain incomplete',()=>{
  const c=unsortedRoster(),p=c.people[0],saved=contact(c,p),before=JSON.stringify(c),r=evaluate(c,{[p.id]:saved});
- assert.equal(r.outcomes.usableOtherEmails,1);assert.equal(r.outcomes.usablePriorityEmails,0);assert.equal(r.outcomes.priorityBuyers,4);assert.equal(JSON.stringify(c),before);
+ assert.equal(r.outcomes.usableOtherEmails,0);assert.equal(r.outcomes.usablePriorityEmails,1);assert.equal(r.outcomes.priorityBuyers,1);assert.equal(JSON.stringify(c),before);
 });
 test('accepted buyer counts expose distinct addresses separately rather than imply two mailbox addresses',()=>{
  const c=fixture(),rows={p0:contact(c,c.people[0]),p1:{...contact(c,c.people[1]),work_email:'p0@'+c.domain}},r=evaluate(c,rows);

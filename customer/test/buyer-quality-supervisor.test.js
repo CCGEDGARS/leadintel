@@ -10,8 +10,9 @@ function fixture(){
 function reviewed(c){c.publicResearch.aiReview={status:'complete',provider:'gemini',checkedAt:now(),inputSignature:D.buyerReviewSignature(c),reviewedPersonIds:c.people.map(p=>p.id),summary:'',reason:'',findings:[],conflicts:[]};return c;}
 test('quality supervisor separates completed research from the requested usable contact outcome',()=>{
  const c=reviewed(fixture()),q=D.buyerQualityAssessment(c);
- assert.equal(q.researchPassed,true);assert.equal(q.aiReviewStatus,'complete');assert.equal(q.confirmedPriorityEmails,0);assert.equal(q.passed,false);assert.ok(q.gaps.some(g=>/confirmed.*email/i.test(g)));
- const ready=D.buyerQualityAssessment(c,{confirmedEmail:p=>['p0','p2'].includes(p.id)?p.id+'@example.com':''});assert.equal(ready.passed,true);assert.equal(ready.confirmedPriorityEmails,2);
+ assert.equal(q.researchPassed,true);assert.equal(q.aiReviewStatus,'complete');assert.equal(q.confirmedPriorityEmails,0);assert.equal(q.passed,false);assert.ok(q.gaps.some(g=>/confirmed.*(email|phone|LinkedIn)/i.test(g)));
+ const partial=D.buyerQualityAssessment(c,{confirmedEmail:p=>['p0','p2'].includes(p.id)?p.id+'@example.com':''});assert.equal(partial.passed,false);assert.equal(partial.priorityCount,2);assert.equal(partial.confirmedPriorityEmails,2);
+ const ready=D.buyerQualityAssessment(c,{confirmedEmail:p=>p.id+'@example.com'});assert.equal(ready.passed,true);assert.equal(ready.confirmedPriorityEmails,4);
 });
 test('legacy completion labels and invented aggregate success cannot bypass required person checks',()=>{
  const c=fixture();delete c.publicResearch.accountability;assert.equal(D.buyerQualityAssessment(c).researchPassed,false);
@@ -29,6 +30,21 @@ test('AI review and its binding to the researched people survive workspace and C
  assert.deepEqual(snapshot.publicResearch.aiReview,c.publicResearch.aiReview);
 });
 module.exports={fixture,reviewed};
+test('four confirmed contacts satisfy the contact outcome across email, phone and LinkedIn',()=>{
+ const c=fixture();for(const p of c.people.slice(0,2))Object.assign(p,{publicLinkedinUrl:'https://linkedin.com/in/'+p.id,linkedinConfirmedUrl:'https://linkedin.com/in/'+p.id,linkedinConfirmationMethod:'manual'});require('./helpers/buyer-research-receipts.cjs')(c);reviewed(c);
+ const options={confirmedEmail:p=>p.id==='p2'?'cecilia@example.com':'',companyId:'crm-company',workspaceId:'workspace',contactForPerson:p=>p.id==='p3'?{name:p.name,external_person_id:p.id,source:'apollo',phone_number:'+46 70 123 45 67',phone_status:'verified',company_id:'crm-company',workspace_id:'workspace'}:{}};
+ const q=D.buyerQualityAssessment(c,options);assert.equal(q.priorityCount,4);assert.equal(q.confirmedPriorityContacts,4);assert.equal(q.confirmedPriorityEmails,1);assert.equal(q.passed,true,JSON.stringify(q.gaps));assert.equal(D.buyerQualityAssessment(c,{...options,workspaceId:'other'}).passed,false);
+});
+test('main, quality panel and outcomes count an independently confirmed email while strict recipient review stays blocked',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),c=fixture(),p=c.people[2],url='https://example.com/team',stamp=now();
+ Object.assign(p,{publicEmail:'cecilia@example.com',publicEmailUrl:url,publicEmailEvidence:{version:2,url,quote:'Cecilia Berg Procurement Director cecilia@example.com',sourceKind:'official',sourceRead:true,checkedAt:stamp},publicLinkedinUrl:'https://linkedin.com/in/cecilia-berg',linkedinProfileReview:{status:'review_required',urls:['https://linkedin.com/in/cecilia-berg','https://linkedin.com/in/other-cecilia'],reason:'Two profiles match',checkedAt:stamp}});
+ const ctx={window:{LeadIntelContactPolicy:require('../contact-confirmation-policy.js')},LeadIntelDiscovery:D,acceptedBuyerConfirmationLevel:()=> 'provider_verified',bridge:()=>({workspace:{id:'workspace'}}),canonicalDomain:D.canonicalDomain,crmCompanyByDomain:()=>null,enrichmentResults:new Map(),personKey:(_c,p)=>p.id,esc:String,crmAuthenticated:()=>true};vm.createContext(ctx);
+ vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function buyerNextAction(')),ctx);vm.runInContext(source.slice(source.indexOf('function buyerOutcomeEvidenceHtml('),source.indexOf('function buyerResearchAccountabilityHtml(')),ctx);
+ assert.equal(ctx.verifiedBuyerEmail(c,p,{}),'','strict recipient eligibility still requires profile review');
+ const ranked=D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c,{confirmedEmail:person=>ctx.verifiedBuyerEmail(c,person,{},{channelOnly:true})});assert.deepEqual(ranked.priorityIds,['p2']);
+ const dom=new JSDOM(ctx.buyerQualitySupervisorHtml(c,ranked));assert.match(dom.window.document.querySelector('.buyer-quality-supervisor > p').textContent,/1\/4 priority buyers have confirmed contact data/);dom.window.close();
+ const report=require('../buyer-outcome-benchmark.js').evaluate(c);assert.equal(report.outcomes.usablePriorityContacts,1);assert.equal(report.quality.confirmedPriorityContacts,1);
+});
 
 test('a claimed aggregate pass cannot hide a missing mandatory deep wave',()=>{const c=fixture();delete c.people[0].contactResearch.checks.deep;assert.equal(D.buyerQualityAssessment(c).researchPassed,false);});
 test('the visible quality panel reports zero usable priority emails and retains the four-card layout',()=>{
