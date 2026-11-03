@@ -15,7 +15,9 @@
   // Only research inputs cross this boundary. Credentials, workspace snapshots,
   // enrichment approvals and delivery actions never belong to a public job.
   const PROFILE=['companyName','website','priorityOffers','idealCustomer','targetMarkets','currentMarkets','exclusions','decisionMakers','products','services','industry','description','valueProposition','buyerRoles','companyDomain'];
-  const CANDIDATE=['id','crmId','company','companyName','domain','website','market','buyerRoles','buyerRolesSource','buyerRolesChanged','buyerSearchMode','buyerFit','fitDescription','qualification','qualified','needsRecheck','strategyFingerprint','evidence','matchedSignals','people','peopleStatus','buyerDiscovery','publicContacts','publicResearch','publicContactStatus','publicContactVersion'];
+  const CANDIDATE=['id','crmId','company','companyName','domain','website','market','buyerRoles','buyerRolesSource','buyerRolesChanged','buyerSearchMode','fitDescription','qualified','needsRecheck','strategyFingerprint','matchedSignals','peopleStatus','publicContactStatus','publicContactVersion'];
+  const REQUEST_PROFILE=['priorityOffers','idealCustomer','targetMarkets','exclusions','website','decisionMakers'];
+  const PERSON_INPUT=['id','name','publicName','title','organization','identityStatus','nameVerification','identitySource','identityEvidenceDate','publicNameUrl','publicLinkedinUrl','linkedin_url','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','city','country','seniority','corporateRoleEvidence','decisionEvidence','roleReview','opportunityScope','linkedinIdentityEvidence','linkedinProfileReview','linkedinConfirmedUrl','linkedinConfirmedAt','linkedinConfirmationMethod','kept','keptAt','contactPurpose','companyContactSource'];
   const LOCAL_PERSON=['kept','keptAt','flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor','linkedinConfirmedUrl','linkedinConfirmedAt','phoneEnrichment','contactData','hunterChecks','hunterFound'];
   function bounded(value,depth=0){
     if(value==null||typeof value==='boolean')return value;
@@ -28,11 +30,12 @@
   }
   function pick(value,keys){return Object.fromEntries(keys.filter(k=>value?.[k]!==undefined).map(k=>[k,bounded(value[k])]));}
   function requestInput(owner,profile={}){
-    const candidate=pick(owner,CANDIDATE);candidate.domain=domain(owner.domain||owner.website);candidate.people=(candidate.people||[]).slice(0,10);
-    for(const person of candidate.people)for(const key of ['flowConfirmEmail','flowConfirmPhone','autoConfirm','autoConfirmEmail','autoConfirmPhone','paidOnly','phoneLookup','dataLookup','contactResearch','emailResearch','publicEmailEvidence','publicPhoneEvidence','publicEmailSourceCheck','publicPhoneSourceCheck','patternFindings','gmailMatches','contactVerification'])delete person[key];
-    delete candidate.publicResearch;delete candidate.publicContacts;
-    if(candidate.buyerDiscovery)candidate.buyerDiscovery=pick(candidate.buyerDiscovery,['opportunityRoles','pool','companyContacts','resultDiagnostics']);
-    const result={candidate,profile:pick(profile,PROFILE)};
+    // Saved research belongs to workspace/CRM records and durable task receipts.
+    // A new command carries identity/source hints, never duplicate inventories.
+    const candidate=pick(owner,CANDIDATE);candidate.domain=domain(owner.domain||owner.website);candidate.people=(owner.people||[]).slice(0,10).map(person=>pick(person,PERSON_INPUT));
+    candidate.evidence=(owner.evidence||[]).slice(0,12).map(row=>{const hint=pick(row,['url','title','text','description','date','publishedAt','verifiedAt','sourceDomain','type']);for(const key of ['title','text','description'])if(typeof hint[key]==='string')hint[key]=hint[key].slice(0,1000);return hint;});
+    if(owner.buyerDiscovery)candidate.buyerDiscovery={...pick(owner.buyerDiscovery,['opportunityRoles']),resultDiagnostics:(owner.buyerDiscovery.resultDiagnostics||[]).filter(row=>candidate.people.some(person=>fold(row.parsedName)===fold(person.publicName||person.name))).slice(0,20).map(row=>pick(row,['source','url','parsedName','parsedTitle','parsedCompany','parsing','companyVerification','roleMatching','accepted','identityStatus','rejectionReason']))};
+    const result={candidate,profile:pick(profile,REQUEST_PROFILE)};
     if(new TextEncoder().encode(stable(result)).byteLength>240000)throw Error('Buyer research snapshot is too large. Save and review the company research first.');
     return result;
   }
@@ -136,7 +139,8 @@
           if(!job||!ACTIVE.has(job.status)&&(options.force||job.status!=='complete'||!covered)){
             const resume=job&&covered&&(!options.force||options.resumeIncomplete===true&&job.resumePhase&&job.resumePhase!=='done')&&TERMINAL.has(job.status)&&job.status!=='complete';
             const observed=observedJob?.id&&domain(observedJob.domain||observedJob.candidate?.domain)===domain(owner.domain)?observedJob:null;
-            job=await request(scope,'POST',{action:resume?'resume':'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
+            const command=resume?{action:'resume'}:{action:'start',...requestInput(owner,scope.profile),...(scope.personIds?{personIds:scope.personIds}:{}),force:options.force===true};
+            job=await request(scope,'POST',{...command,...(observed?{jobId:observed.id,expectedRevision:observed.revision}:{})},null,controller);
           }
         }
         return observe(scope,job,options,controller);
