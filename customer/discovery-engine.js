@@ -1596,6 +1596,12 @@
       else if(!next.linkedinIdentityEvidence&&old.linkedinIdentityEvidence&&normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))next.linkedinIdentityEvidence=old.linkedinIdentityEvidence;
       if(person.identityStatus==='pending'&&old.identityStatus!=='pending'&&clean(old.publicName||old.name).split(/\s+/).length>=2&&old.publicNameUrl){next.name=old.publicName||old.name;next.identityStatus='confirmed';next.nameVerification=old.nameVerification||'confirmed';}
       for(const field of ['publicName','publicNameUrl','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicLinkedinUrl','linkedin_url'])if(!next[field]&&old[field])next[field]=old[field];
+      // Directory checkpoints have no manual review authority. Keep the exact
+      // person's reviewed profile when a same-profile source row is sparse.
+      const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url),nextProfile=normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url);
+      if(!next.linkedinConfirmedUrl&&oldProfile&&oldProfile===nextProfile&&normalizeLinkedInUrl(old.linkedinConfirmedUrl)===oldProfile&&clean(old.publicName||old.name).toLowerCase()===clean(next.publicName||next.name).toLowerCase()){
+        next.linkedinConfirmedUrl=old.linkedinConfirmedUrl;next.linkedinConfirmedAt=old.linkedinConfirmedAt;next.linkedinConfirmationMethod=old.linkedinConfirmationMethod;
+      }
       // Sparse identity results must not strip an already-read source from the
       // same exact address. A different address/source or explicit rejection
       // remains a new binding and cannot inherit the old confirmation.

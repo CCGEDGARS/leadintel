@@ -4,7 +4,7 @@ Owner outcome: show the four most relevant qualified contacts with confirmed con
 
 ## Root cause and implementation boundary
 
-The prior Refresh repair preserved contacts but expanded all saved people when role review left no priority group. That recovery fallback violated the newly clarified display requirement. The research ranking also reserved role places before considering usable contact data, while quality/outcome reporting still used the older two-email target. The result could disagree across list, summary and readiness.
+The prior Refresh repair preserved contacts but expanded all saved people when role review left no priority group. That recovery fallback violated the newly clarified display requirement. The research ranking also reserved role places before considering usable contact data, while quality/outcome reporting still used the older two-email target. The result could disagree across list, summary and readiness. The mixed-channel browser test also reproduced a real reopen loss: an empty directory checkpoint replaced a saved manual LinkedIn confirmation. The shared person merge now preserves that review only for the same exact name and profile, with changed identities/profiles covered by negative checks.
 
 Use one read-only confirmed shortlist in the shared discovery engine. Keep research ranking and all retained evidence separate. Filter qualified, conflict-free people by actual confirmed channels, then take the four most relevant. Never promote unknown contacts merely to fill places. Report N/4 and keep every other person under the closed Show other contacts disclosure. An incomplete broad research run does not erase independently confirmed channels or fabricate whole-step completion.
 

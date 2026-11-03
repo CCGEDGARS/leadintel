@@ -54,3 +54,9 @@ test('stale automatic profile evidence does not count as a confirmed contact',()
  const c=fixture(),p=c.people[2];Object.assign(p,{publicLinkedinUrl:'https://linkedin.com/in/carl-holm',linkedinIdentityEvidence:{url:'https://linkedin.com/in/carl-holm',name:p.name,organization:c.company,checkedAt:'2020-01-01'}});
  assert.equal(D.confirmedBuyerShortlist([p],{decisionMakers:c.buyerRoles},c).priorityIds.length,0);p.linkedinConfirmedUrl=p.publicLinkedinUrl;p.linkedinConfirmationMethod='automatic';p.linkedinConfirmedAt='2020-01-01';p.linkedinIdentityEvidence.checkedAt=new Date().toISOString();assert.equal(D.confirmedBuyerShortlist([p],{decisionMakers:c.buyerRoles},c).priorityIds.length,1);
 });
+test('reopening merged directory evidence preserves an exact manual profile review without transferring it to another identity',()=>{
+ const c=fixture(),p=c.people[2],url='https://linkedin.com/in/carl-holm';c.publicResearch={evidenceVersion:2};Object.assign(p,{publicName:p.name,publicLinkedinUrl:url,linkedinConfirmedUrl:url,linkedinConfirmedAt:new Date().toISOString(),linkedinConfirmationMethod:'manual'});
+ const sparse={...p,linkedinConfirmedUrl:'',linkedinConfirmedAt:'',linkedinConfirmationMethod:'manual'};
+ const people=D.mergeBuyerPool([p],[sparse],{decisionMakers:c.buyerRoles}),saved=D.normalizeDiscoveryState({selectedProspects:[{...c,people}]}).selectedProspects[0];assert.equal(saved.people[0].linkedinConfirmedUrl,url);assert.equal(D.confirmedBuyerShortlist(saved.people,{decisionMakers:c.buyerRoles},saved).priorityIds.length,1);
+ for(const change of [{name:'Another Person',publicName:'Another Person'},{publicLinkedinUrl:'https://linkedin.com/in/another-person'}]){const merged=D.mergeBuyerPool([p],[{...sparse,...change}],{decisionMakers:c.buyerRoles});const changed=merged.find(row=>row.name==='Another Person'||row.publicLinkedinUrl===change.publicLinkedinUrl);assert.notEqual(changed?.linkedinConfirmedUrl,url);}
+});

@@ -140,7 +140,7 @@ const boundedDiscoveryRuntime = [
   "alternativeAction:'Save to CRM' choice==='alternative' Company saved to CRM · removed from the Buyers list Research changed during saving.",
   'function saveSelectedBuyerCompany( function removeSelectedBuyerCompany( b.deleteCrmCompany(company.id) Saved ✓ data-remove-buyer-company= Remove completely',
  'Possible match · Unconfirmed Name-based Gmail patterns Gmail research ·',
- 'function buyerQualitySupervisorHtml( priority buyers have confirmed company emails AI supervisor: checking research coverage',
+ 'function buyerQualitySupervisorHtml( priority buyers have confirmed contact data AI supervisor: checking research coverage',
   "channel==='gmail'?person.contactResearch?.checks?.gmail||{status:'not_searched'}",
   'function buyerResearchAccountabilityHtml( Mandatory depth: Adaptive deep researchTrace runMandatoryBuyerResearch(candidate,',
   'function prospectContactControls( Confirm data buyer-email-confirmed data-prospect-enrich-email function hydratePublishedCompanyEmails( function confirmPublishedCompanyContacts(',
