@@ -337,7 +337,7 @@
     const others=value=>[...value.matchAll(/(?:^|[^\p{L}])([\p{Lu}][\p{Ll}\p{M}'’-]{1,})[ \t]+([\p{Lu}][\p{Ll}\p{M}'’-]{1,})/gu)].filter(match=>![match[1],match[2]].every(word=>allowed.has(word.toLowerCase())));
     let before=text.slice(Math.max(0,at-100),at).split(/\n\s*\n|[.!?;]/).at(-1),after=text.slice(at+name.length,at+name.length+180);
     const heading=/^\s*(?:#{1,6}\s*|\*\*)$/.test(text.slice(text.lastIndexOf('\n',at-1)+1,at));
-    if(heading){
+    if(heading&&/^(?:\*\*)?[ \t]*\r?\n[ \t]*\r?\n/.test(after)){
       const adjacent=after.replace(/^\*\*/,'').replace(/^\s+/,' ').split(/\n\s*\n|[.!?;]/)[0];
       // Bridge only a single plain role line directly beneath this named
       // heading. Separators, portraits and subsequent formatted cards are boundaries.
