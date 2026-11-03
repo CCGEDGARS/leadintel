@@ -7410,6 +7410,27 @@
         "scopeMatched"
       ]
     }
+,
+    {
+      "id": "buyer-compact-refresh-request",
+      "type": "text",
+      "url": "/customer/buyer-research-jobs.js",
+      "status": 200,
+      "contains": [
+        "const PERSON_INPUT=",
+        "const REQUEST_PROFILE=",
+        "const command=resume?{action:'resume'}"
+      ]
+    },
+    {
+      "id": "buyer-compact-refresh-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-request-size=20261103-v1"
+      ]
+    }
   ],
   "retry": {
     "attempts": 12,

@@ -37,3 +37,9 @@ test('authenticated Chromium preserves four mixed confirmed channels with the ot
  const {verifyConfirmedFourJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-confirmed-four-mixed-'));
  const e=await verifyConfirmedFourJourney({artifactDir,mixedChannels:true});assert.equal(e.mainContacts,4);assert.equal(e.confirmedWorkEmails,2);assert.equal(e.confirmedPhones,1);assert.equal(e.confirmedLinkedin,1);assert.equal(e.hiddenOtherContacts,6);assert.equal(e.freshBrowserReopen,true);assert.equal(e.readOnlyProviderReplays,0);assert.equal(e.paidContactRequests,0);assert.equal(e.outboundMessages,0);t.diagnostic('Mixed-channel evidence: '+artifactDir+'/evidence.json');
 });
+
+ test('authenticated Chromium Refresh starts from a large retained research record and keeps four confirmed contacts after reopen',{timeout:60000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory CI must run this journey.');return;}
+ const {verifyConfirmedFourJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-large-snapshot-'));
+ const e=await verifyConfirmedFourJourney({artifactDir,largeSavedResearch:true,mixedChannels:true});assert.ok(e.retainedSnapshotBytes>1000000);assert.ok(e.researchCommandBytes.every(bytes=>bytes>0&&bytes<64000));assert.equal(e.mainContacts,4);assert.equal(e.hiddenOtherContacts,6);assert.equal(e.freshBrowserReopen,true);assert.equal(e.readOnlyProviderReplays,0);assert.equal(e.paidContactRequests,0);assert.equal(e.outboundMessages,0);t.diagnostic('Large-snapshot browser evidence: '+artifactDir+'/evidence.json');
+});
