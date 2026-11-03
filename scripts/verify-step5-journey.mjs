@@ -13,9 +13,9 @@ async function sourceHashes(){return Object.fromEntries(await Promise.all(source
 const stateKey='leadintel_customer_v2_state',discoveryKey='leadintel_customer_v2_discovery',metaKey='leadintel_customer_v2_discovery_meta',outreachKey='leadintel_customer_v2_outreach';
 const statePath='/api/customer/state?workspace_id='+workspaceId;
 const requestTrace=calls=>calls.filter(c=>c.path==='/api/customer/state'||c.path==='/api/buyers/research'||c.path.includes('/crm/')).map(c=>({method:c.method,path:c.path,status:c.status,action:c.action,baseVersion:c.version,version:c.result?.version,conflictVersion:c.result?.current?.version}));
-async function ready(page){await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge.session?.authenticated&&window.LeadIntelDiscoveryUI&&typeof discovery!=='undefined'&&discovery?.selectedProspects?.length,null,{timeout:20000});await page.waitForLoadState('networkidle');}
+export async function ready(page){await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge.session?.authenticated&&window.LeadIntelDiscoveryUI&&typeof discovery!=='undefined'&&discovery?.selectedProspects?.length,null,{timeout:20000});await page.waitForLoadState('networkidle');}
 const navigationInterrupted=error=>/Execution context was destroyed|Cannot find context with specified id|Frame was detached/i.test(String(error?.message||''));
-async function settleInitialSave(page){
+export async function settleInitialSave(page){
  for(let attempt=0;attempt<3;attempt++){
   await ready(page);
   try{
@@ -100,7 +100,7 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   await settleInitialSave(page);
   const resumeAck=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/buyers/research'&&response.request().method()==='POST');
   await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
-  const resumed=await resumeAck;assert.equal(resumed.ok(),true);assert.equal(resumed.request().postDataJSON().action,'resume');assert.equal((await resumed.json()).job.id,job.id);
+  const resumed=await resumeAck;assert.equal(resumed.ok(),true);assert.ok(['start','resume'].includes(resumed.request().postDataJSON().action),'Refresh recaptures paid consent and the server resumes the same incomplete job');assert.equal((await resumed.json()).job.id,job.id);
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1,'Refresh resumes the same incomplete job');
   for(let attempt=0;attempt<12;attempt++){const saved=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs WHERE id=?').get(job.id);if(!['queued','running'].includes(saved.status))break;phaseRuns.push(...await f.runJobs(job.id));}
   await page.waitForFunction(revision=>discovery.selectedProspects[0].buyerResearchJob?.status==='needs_review'&&discovery.selectedProspects[0].buyerResearchJob.revision>revision,terminal.revision,{timeout:15000});

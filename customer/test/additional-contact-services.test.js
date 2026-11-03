@@ -9,10 +9,10 @@ test('already confirmed emails, stale research, pending source checks and blocke
  const P=require('../additional-contact-policy.js');for(const mutate of [c=>c.lifecycle_status='suppressed',c=>c.lifecycle_status='archived',c=>c.people[0].emailResearch.checkedAt='2001-01-01',c=>c.publicContactStatus='loading']){const c=fixture();mutate(c);assert.equal(P.readiness(c,c.people[0]).eligible,false);}
  const c=fixture();assert.equal(P.readiness(c,c.people[0],{confirmedEmail:'anna@example.com'}).eligible,false);
 });
-test('automatic targets are the best two qualified buyers and stop once two usable emails exist',()=>{
+test('automatic targets reuse confirmed free emails and reserve the configured slots for missing buyers',()=>{
  const P=require('../additional-contact-policy.js'),c=fixture();assert.deepEqual(P.targets(c).map(p=>p.id),['p0','p1']);
- assert.equal(P.targets(c,{confirmedEmail:p=>p.id==='p0'?'anna@example.com':''}).length,1);
- assert.equal(P.targets(c,{confirmedEmail:p=>['p0','p1'].includes(p.id)?'anna@example.com':''}).length,0);
+ assert.equal(P.targets(c,{confirmedEmail:p=>p.id==='p0'?'anna@example.com':''}).length,2);
+ assert.equal(P.targets(c,{confirmedEmail:p=>['p0','p1'].includes(p.id)?'anna@example.com':''}).length,2);
 });
 test('buyer card uses exact approved wording and never promises a found or verified email',()=>{
  const source=fs.readFileSync(require.resolve('../additional-contact-services.js'),'utf8');

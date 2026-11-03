@@ -1,4 +1,5 @@
-import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob} from './buyer-research-store.js';
+import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob} from './buyer-research-store.js';
+import {runBuyerPaidResearch} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
@@ -8,8 +9,8 @@ import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-rou
 import '../../customer/discovery-engine.js';
 import '../../customer/company-dossier.js';
 const D=globalThis.LeadIntelDiscovery,C=globalThis.LeadIntelCompanyDossier;
-const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:180000,review:45000};
-const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'done'};
+const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:180000,review:45000,paid:360000};
+const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
 const errorReason=(error,phase)=>`${phase}: ${error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const resultRows=result=>Array.isArray(result)?result:result?.results||[];
@@ -120,14 +121,19 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const signature=D.buyerReviewSignature(candidate),body={company:candidate.company,buyerAgent:candidate.publicResearch.buyerAgent,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,employer:p.organization,email:p.publicEmail,email_source:p.publicEmailUrl,linkedin:p.publicLinkedinUrl||p.linkedin_url,checks:p.contactResearch?.checks})),evidence:supplied,quality:{depth:D.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:report.status,checked_people:report.checkedPeople,official_pages:report.officialPages}};
     const review=await (services.review||reviewWorkspaceBuyerEvidence)(env,row.workspace_id,body,{signal:controller.signal,userId:row.requested_by,maxDurationMs:Math.min(45000,remaining)});await guard();
     candidate.publicResearch.aiReview=D.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'none',checkedAt:new Date().toISOString(),inputSignature:signature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts});
-    candidate.publicResearch.conflicts=review.conflicts||[];phase='done';
+    candidate.publicResearch.conflicts=review.conflicts||[];phase=input.paidResearch?'paid':'done';
+   }else if(phase==='paid'){
+    const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',row.workspace_id,row.requested_by).first();
+    const paidGuard=async()=>guard();paidGuard.writeAuthority=()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]});
+    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup});
+    if(finished)phase='done';
    }
    await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns++;
    if(phase===row.phase&&(phaseMs>=phaseBudget[phase]||phaseRuns>=18)){
     diagnostics.push({phase,reason:'Phase work budget reached; completed evidence retained',at:new Date().toISOString()});phase=nextPhase[phase];
    }
    if(phase!==row.phase){phaseMs=0;phaseRuns=0;}
-   if(phase==='done'){const quality=D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;status=quality.passed||scopedComplete?'complete':'needs_review';if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});}
+   if(phase==='done'){const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;status=(quality.passed||scopedComplete)&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))?'complete':'needs_review';if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});}
   }catch(error){
    if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
    else if(error.code==='LEASE_EXPIRED')status='queued';

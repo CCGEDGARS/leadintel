@@ -1,0 +1,6 @@
+const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js'),P=require('../additional-contact-policy.js'),receipts=require('./helpers/buyer-research-receipts.cjs');
+test('automatic targeting respects a configured ten-buyer limit and confirmed free emails do not consume paid slots',()=>{
+ const stamp=new Date().toISOString(),c={company:'Example',domain:'example.com',buyerRoles:['Procurement Director'],qualification:{eligible:true,score:85,researchedAt:stamp},people:Array.from({length:10},(_,i)=>({id:'p'+i,name:'Anna '+['Andersson','Berg','Carlsson','Dahl','Ek','Fors','Green','Holm','Ivarsson','Jensen'][i],title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team',emailResearch:{status:'complete',checkedAt:stamp,searches:9,failed:0}})),publicResearch:{accountability:{...D.createBuyerResearchAccountability(),status:'complete',totalPeople:10,checkedPeople:10,completedAt:stamp}}};receipts(c);
+ assert.equal(P.readiness(c,c.people[1],{provider:'apollo',automatic:true}).eligible,true,JSON.stringify(P.readiness(c,c.people[1],{provider:'apollo',automatic:true})));
+ const selected=P.targets(c,{provider:'apollo',maxPerCompany:10,confirmedEmail:p=>p.id==='p0'?'anna@example.com':''});assert.equal(selected.length,9);assert.ok(selected.every(p=>p.id!=='p0'));
+});

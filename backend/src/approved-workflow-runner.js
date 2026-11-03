@@ -1,6 +1,7 @@
 import {recordOperationalStage} from './operational-observability.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
+import {buyerPaidIntent,runWorkflowPaidResearch,paidBuyerScope,paidSnapshotCandidate} from './buyer-paid-research.js';
 import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import '../../customer/company-dossier-ui.js';
@@ -69,6 +70,16 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   await guard();const company=await findCrmCompanyByDomain(env.DB,context.workspaceId,candidate.domain);
   if(!company||company.lifecycle_status!=='prospect')return false;
   const detail=await getCrmCompany(env.DB,context,company.id);await guard();
+  if(candidate.publicResearch?.paidResearch){
+    if(candidate.publicResearch.paidResearch.code==='PAID_SCOPE_CHANGED'||paidBuyerScope(paidSnapshotCandidate(candidate,detail))!==paidBuyerScope(candidate))return false;
+    const row=await env.DB.prepare('SELECT research_snapshot_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(context.workspaceId,company.id).first();
+    const rawSnapshot=JSON.parse(row?.research_snapshot_json||'{}');
+    if(paidBuyerScope(paidSnapshotCandidate(candidate,{...detail,intelligence:{...detail.intelligence,research_snapshot:rawSnapshot}}))!==paidBuyerScope(candidate))return false;
+    const parent=context.writeAuthority||(()=>({sql:'1',args:[]})),scope={...context,writeAuthority:()=>{const authority=parent();return {sql:'('+authority.sql+') AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=?)',args:[...authority.args,context.workspaceId,company.id,row.research_snapshot_json]};}};
+    const snapshot=rawSnapshot,prior=snapshot.buyerResearch;
+    await upsertCrmIntelligence(env.DB,scope,company.id,{...detail.intelligence,research_snapshot:{...snapshot,buyerResearch:{...prior,publicResearch:{...prior.publicResearch,paidResearch:candidate.publicResearch.paidResearch},discovery:{...prior.discovery,...(candidate.buyerDiscovery?.phoneEnrichment?{phoneEnrichment:candidate.buyerDiscovery.phoneEnrichment}:{})}}}});
+    await guard();const latest=await getCrmCompany(env.DB,context,company.id);return paidBuyerScope(paidSnapshotCandidate(candidate,latest))===paidBuyerScope(candidate);
+  }
   const mapped=globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence,signatureContext=mapped.research_snapshot;
   const research=signatureContext.buyerResearch,prior=detail.intelligence?.research_snapshot?.buyerResearch;
   if(Date.parse(prior?.checkedAt||'')>Date.parse(research.checkedAt||''))return false;
@@ -76,27 +87,31 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),evidence:Array.isArray(candidate.evidence)?mapped.evidence:detail.intelligence?.evidence||[],research_snapshot:{...(detail.intelligence?.research_snapshot||{}),fitDescription:signatureContext.fitDescription,buyerRoles:signatureContext.buyerRoles,buyerRolesChanged:signatureContext.buyerRolesChanged,...(candidate.qualification?{qualification:candidate.qualification}:{}),...(candidate.buyerFit?{buyerFit:candidate.buyerFit}:{}),buyerResearch:research}});await guard();return true;
 }
 
-async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier){
+async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier,runId=''){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
   if(company&&company.lifecycle_status!=='prospect')return null;
+  const resumingPaid=Boolean(runId&&candidate.buyerDiscovery?.paidRunId===runId&&candidate.publicResearch?.paidResearch?.status==='running');
+  let paidIntent=resumingPaid?candidate.buyerDiscovery.paidIntent:company?await buyerPaidIntent(env,workspaceId,true,candidate):null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
   const saved=((await readOwnedPayload(env,workspaceId,state)).payload).discovery||{};
   const priorRecords=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].filter(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
   const priorPeople=priorRecords.flatMap(item=>[...(item.buyerDiscovery?.pool||[]),...(item.people||[])]);
-  const accountability=discovery.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability};
+  const accountability=resumingPaid?candidate.publicResearch.accountability:discovery.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability};
+  let profile={decisionMakers:config.buyers.roles.join('; '),companyDomain:candidate.domain},pool=candidate.people||[],directoryPeople=[];
+  if(!resumingPaid){
   const dossierPlan=discovery.buyerResearchPlan(candidate,{...seller,decisionMakers:config.buyers.roles.join('; ')});
   const companyDossier=await researchDossier(env,workspaceId,{company:candidate.company,domain:candidate.domain,seller:JSON.parse(discovery.buyerFitContext(seller)),roles:dossierPlan.roles,formulas:dossierPlan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||''},{guard});
   await guard();candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier};
   if(companyDossier.status!=='complete'){candidate.buyerDiscovery.researchIncomplete=true;return null;}
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard,accountability);
-  const profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
+  profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
   research.rows.push(...globalThis.LeadIntelCompanyDossierUi.evidenceRows(companyDossier));
-  let pool=discovery.mergeBuyerPool(priorPeople,[...research.people,...globalThis.LeadIntelCompanyDossier.buyers(companyDossier,candidate.company)],profile);
+  pool=discovery.mergeBuyerPool(priorPeople,[...research.people,...globalThis.LeadIntelCompanyDossier.buyers(companyDossier,candidate.company)],profile);
   candidate.buyerDiscovery={companyDossier,coverageFollowUp:research.coverageFollowUp,researchVersion:"20261004-research-state-v1",target:20,found:pool.length,pool,providerStatus:research.providerStatus,resultDiagnostics:research.resultDiagnostics,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
   // alongside public research; no email/phone reveal or waterfall flags are requested here.
-  let directoryPeople=[];
+  directoryPeople=[];
   {
     try{
       await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
@@ -130,7 +145,23 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   pool=discovery.mergeBuyerPool(pool,candidate.people,profile);candidate.buyerDiscovery.pool=pool;
   if(candidate.people.some(person=>['partial','unavailable'].includes(person.emailResearch?.status)))candidate.buyerDiscovery.issues.push('Public email evidence searches incomplete');
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
-  const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
+  }
+  const crmContext={workspaceId,userId,role:'owner',guard,writeAuthority:guard.writeAuthority};
+  const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
+  if(resumingPaid||paidPolicy.provider==='treg'&&(paidPolicy.enabled||paidPolicy.phoneEnabled)){
+    if(!company){
+      const created=(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
+      await upsertCrmIntelligence(env.DB,crmContext,created.id,{research_snapshot:{qualification:candidate.qualification}});
+      paidIntent=await buyerPaidIntent(env,workspaceId,true,candidate);
+    }
+    candidate.buyerDiscovery.paidIntent=paidIntent;candidate.buyerDiscovery.paidRunId=runId;
+    const report=await runWorkflowPaidResearch(env,crmContext,candidate,{intent:paidIntent,runId:runId||crypto.randomUUID(),guard});
+    if(report.status==='running')return null;
+    if(report.code==='PAID_SCOPE_CHANGED')return null;
+    if(report.status==='blocked')candidate.buyerDiscovery.issues.push(report.reason);
+  }
+  const paidCompany=company||await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
+  const verified=paidCompany?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL").bind(workspaceId,paidCompany.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
   const buyerName=person=>String(person.publicName||person.name||'').trim().toLowerCase();
   const knownPeople=[...priorPeople.filter(person=>!pool.some(current=>buyerName(current)===buyerName(person))),...pool];
@@ -145,8 +176,6 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   }
   const pinned=new Set([...candidate.people.filter(p=>p.kept),...selectedCompanyContacts].map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
-  const crmContext={workspaceId,userId,role:'owner',guard,writeAuthority:guard.writeAuthority};
-  const paidPolicy=await readAdditionalContactPolicy(env,workspaceId);
   const agentIdentityReady=person=>{const agent=discovery.safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),row=agent?.people.find(row=>row.personId===String(person.id));return Boolean(agent&&agent.inputSignature===discovery.buyerReviewSignature(candidate)&&row?.identity==='supported'&&row.checks==='complete');};
   // The Buyer Agent owns the identity gate; providers may enrich but never waive it.
   // Keep a trace for every selected buyer, including policy skips and provider failures.
@@ -165,25 +194,8 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       record('existing','available','Retained verified or provider-listed number');
     }else if(!identityReady){
       record('buyer_agent','skipped','Current buyer identity evidence is incomplete or ambiguous');
-    }else if(paidPolicy.provider==='treg'&&paidPolicy.phoneEnabled){
-      if(!selected||!contact.company_id){
-        record('treg','skipped','Buyer identity or company reference unavailable');
-      }else{
-        try{
-          await guard();
-          await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
-          const result=await lookupAdditionalEmail(env,crmContext,contact.company_id,{person_id:selected.id,contact_id:contact.id,provider:'treg',automatic:true,data_lookup:true,email_lookup:false,phone_approved:true},{guard});
-          await guard();
-          if(result.contactData)selected.contactData=result.contactData;
-          if(result.contact)contact={...contact,phone_number:result.contact.phone_number||contact.phone_number,phone_status:result.contact.phone_status||contact.phone_status};
-          record('treg',hasUsablePhone()?'available':'not_found',hasUsablePhone()?'Phone evidence returned':'Provider returned no usable number');
-        }catch(error){
-          record('treg','failed',error.code||'provider_error');
-          candidate.buyerDiscovery.issues.push(error.message||'Treg phone lookup needs attention');
-        }
-      }
     }else{
-      record('treg','skipped','Treg phone enrichment not enabled');
+      record('treg',candidate.publicResearch?.paidResearch?.status||'skipped',candidate.publicResearch?.paidResearch?.reason||'Enabled channels were handled by shared automatic research');
     }
     // Apollo fallback is an independent, explicit phone approval, even if Treg is
     // selected for first-pass discovery. CRM enforces capability, credits and webhook.
@@ -229,7 +241,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     // Enrichment request status and later webhook results remain authoritative.
     try{
       await guard();
-      await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
+      if(!await persistWorkflowBuyerResearch(env,crmContext,candidate,guard))return null;
     }catch(error){
       candidate.buyerDiscovery.issues.push('Phone diagnostics could not be saved');
     }
@@ -237,20 +249,6 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
   };
   if(eligible[0])return complete(eligible[0]);
 
-  if((paidPolicy.enabled||paidPolicy.phoneEnabled)&&paidPolicy.provider==='treg'){
-    const targets=globalThis.LeadIntelAdditionalContactPolicy.targets(candidate,{provider:'treg',maxPerCompany:1}).filter(agentIdentityReady);
-    const targetPerson=targets[0],review=candidate.publicResearch.aiReview;
-    const affects=entry=>!entry.person_id||String(entry.person_id)===String(targetPerson?.id);
-    if(targetPerson&&review?.status==='complete'&&review.reviewedPersonIds?.includes(String(targetPerson.id))&&!review.findings?.some(affects)&&!review.conflicts?.some(affects)){
-      await guard();const paidCompany=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;await persistWorkflowBuyerResearch(env,crmContext,candidate,guard);
-      const result=await lookupAdditionalEmail(env,crmContext,paidCompany.id,{person_id:targetPerson.id,provider:'treg',automatic:true,data_lookup:paidPolicy.phoneEnabled,phone_approved:paidPolicy.phoneEnabled,email_lookup:paidPolicy.enabled},{guard});await guard();
-      candidate.buyerDiscovery.paidResearch=result.research;
-      if(result.contactData)targetPerson.contactData=result.contactData;
-      if(result.contact&&globalThis.LeadIntelContactPolicy.accepted(result.contact,candidate.domain,config.buyers.confirmationLevel))return complete(result.contact);
-      candidate.buyerDiscovery.issues.push(result.reason||'Treg did not confirm a usable work email.');
-    }else candidate.buyerDiscovery.issues.push(targetPerson?'AI review for the strongest buyer needs attention.':'Complete the strongest buyer’s required public checks before paid search.');
-    candidate.buyerDiscovery.contactConfirmationRequired=true;return null;
-  }
   if(candidate.publicResearch.aiReview?.status!=='complete'||candidate.publicResearch.aiReview.findings.length){candidate.buyerDiscovery.contactConfirmationRequired=true;candidate.buyerDiscovery.issues.push('AI supervisor review is incomplete or has unresolved evidence gaps; review before choosing a new automatic recipient');return null;}
   if(config.buyers.confirmationLevel==='public_confirmed'){
     const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
@@ -360,8 +358,16 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,profile,researchDossier);if(candidate.buyerDiscovery)await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
-    return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
+    const candidates=[],reviewBuyers=result.buyerResearchPending?[...(result.reviewBuyers||[])]:[];let buyerResearchPending=false;
+    for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){
+      await guard();
+      if(result.buyerResearchPending&&candidate.contact){candidates.push(candidate);continue;}
+      let contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,profile,researchDossier,run?.id);
+      if(candidate.publicResearch?.paidResearch?.status==='running'){buyerResearchPending=true;candidates.push(candidate);continue;}
+      if(candidate.buyerDiscovery&&!await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard))contact=null;
+      if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});
+    }
+    return {...result,candidates,reviewBuyers,buyerResearchPending,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticCompanyQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
   if(stage==='messages'){
@@ -398,7 +404,7 @@ export async function observeWorkflowStage(env,{row,run,stage,config,guard},oper
 export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,execute=executeWorkflowStage,now=new Date()}={}){
   const sql=workspaceId?"SELECT * FROM approved_workflows WHERE workspace_id=? AND status='automatic'":"SELECT w.* FROM approved_workflows w WHERE w.status='automatic' AND NOT EXISTS (SELECT 1 FROM approved_workflow_runs r WHERE r.workspace_id=w.workspace_id AND r.flow_id IS NULL AND r.revision=w.revision AND r.status='blocked') ORDER BY w.next_run_at LIMIT ?";
   const {results:rows=[]}=await env.DB.prepare(sql).bind(workspaceId||maxWorkspaces).all();const summary={completed:0,blocked:0,skipped:0};
-  for(const row of rows){
+  workspaceLoop:for(const row of rows){
     if(!await workflowAuthorized(env,row.workspace_id,row.revision)){summary.skipped++;continue;}
     let run=await env.DB.prepare("SELECT * FROM approved_workflow_runs WHERE workspace_id=? AND flow_id IS NULL AND revision=? AND status IN ('running','blocked') ORDER BY created_at DESC LIMIT 1").bind(row.workspace_id,row.revision).first();
     if(run?.status==='blocked'){summary.skipped++;continue;}
@@ -419,8 +425,14 @@ export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,e
         const stage=WORKFLOW_STAGES[index];
         result=await observeWorkflowStage(env,{row,run,stage,config,guard},async()=>{
         result=await execute(stage,{env,row,run,result,context,config,guard});await guard();
+        if(stage==='buyers'&&result.buyerResearchPending)return result;
         let checkpoint;for(let attempt=0;attempt<3;attempt++){const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);checkpoint=await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND '+authority.sql).bind(index+1,JSON.stringify(result),run.id,...authority.args).run();if(checkpoint.meta?.changes)break;await guard();}if(!checkpoint?.meta?.changes)stop();
         return result;});
+        if(stage==='buyers'&&result.buyerResearchPending){
+          await guard();const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);
+          const yielded=await env.DB.prepare("UPDATE approved_workflow_runs SET result_json=?,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND "+authority.sql).bind(JSON.stringify(result),run.id,...authority.args).run();
+          if(!yielded.meta?.changes)stop();summary.skipped++;continue workspaceLoop;
+        }
       }
       let completed;for(let attempt=0;attempt<3;attempt++){await guard();const authority=workflowRunAuthority(row,run,token,executionTime(),authoritySnapshot);completed=await env.DB.batch([env.DB.prepare("UPDATE approved_workflow_runs SET status='completed',lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND "+authority.sql).bind(run.id,...authority.args),env.DB.prepare("UPDATE approved_workflows SET next_run_at=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND revision=? AND status='automatic' AND approved_by=? AND EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=approved_workflows.workspace_id AND user_id=approved_workflows.approved_by AND role='owner') AND EXISTS(SELECT 1 FROM approved_workflow_runs WHERE id=? AND status='completed')").bind(new Date(now.getTime()+(config.delivery.frequency==='weekly'?7:1)*86400000).toISOString(),row.workspace_id,row.revision,row.approved_by,run.id)]);if(completed[0]?.meta?.changes)break;}if(!completed?.[0]?.meta?.changes)stop();summary.completed++;
     }catch(cause){await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message=?,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(String(cause.message||'Execution failed').slice(0,500),run.id,token).run();summary.blocked++;}
