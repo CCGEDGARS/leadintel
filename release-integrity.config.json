@@ -4501,7 +4501,7 @@
       "id": "buyers-public-profile-reconciliation",
       "url": "/customer/discovery-engine.js",
       "contains": [
-        "profileMatchVersion:1",
+        "profileMatchVersion:2",
         "report.officialPageReads",
         "matchPublicLinkedInProfiles([person],sourceRows,candidate.company)"
       ],
