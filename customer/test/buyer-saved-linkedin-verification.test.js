@@ -22,4 +22,13 @@ test('mandatory refresh verifies a saved public URL from its completed search re
  assert.ok(queries.some(q=>q.startsWith('site:linkedin.com/in/')));assert.equal(D.linkedInVerification(p,candidate).status,'automatic');
  const saved=D.normalizeDiscoveryState({selectedProspects:[candidate]}).selectedProspects[0];
  assert.equal(D.linkedInVerification(saved.people[0],saved).status,'automatic');
+ saved.people[0].linkedinIdentityEvidence=null;saved.people[0].contactResearch.checks.linkedin.profileMatchVersion=1;
+ const replay=[];await D.runMandatoryBuyerResearch(saved,{rows:[{url:p.publicNameUrl,markdown:`${name} — Chief Operating Officer — ${company}`,sourceRead:true}],search:async q=>{replay.push(q);return q.startsWith('site:linkedin.com/in/')?[row()]:[];}});
+ assert.deepEqual(replay,[`site:linkedin.com/in/ "${name}" "${company}"`]);assert.equal(saved.people[0].contactResearch.checks.linkedin.profileMatchVersion,2);assert.equal(D.confirmedBuyerContactData(saved,saved.people[0]).linkedin,url);
+});
+test('a uniquely verified replacement updates both saved URL aliases for contact handoff',()=>{
+ const p=person(),current='https://se.linkedin.com/in/alex-morgan-current';
+ const matched=D.matchPublicLinkedInProfiles([p],[{...row(),url:current}],company)[0];
+ assert.equal(matched.publicLinkedinUrl,current);assert.equal(matched.linkedin_url,current);
+ assert.equal(D.confirmedBuyerContactData({company,domain},matched).linkedin,current);
 });
