@@ -7356,14 +7356,15 @@
       ]
     },
     {
-      "id": "buyer-retained-contacts-visible",
+      "id": "buyer-confirmed-four-shortlist",
       "type": "text",
       "status": 200,
       "url": "/customer/discovery-ui.js",
       "contains": [
-        "retainedContactsHtml",
-        "'saved contacts'",
-        "Recheck saved contacts",
+        "confirmedBuyerShortlist",
+        "shortlistGapHtml",
+        "Show other contacts",
+        "confirmed work email, phone or LinkedIn profile",
         "resumeIncomplete:refreshDossier"
       ]
     },
@@ -7374,6 +7375,39 @@
       "url": "/customer/",
       "contains": [
         "buyer-refresh-recovery=20261103-v1"
+      ]
+    }
+,
+    {
+      "id": "buyer-confirmed-four-entry-version",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/",
+      "contains": [
+        "confirmed-four=20261103-v1"
+      ]
+    },
+    {
+      "id": "buyer-confirmed-channel-shared-policy",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/discovery-engine.js",
+      "contains": [
+        "function confirmedBuyerContactData(",
+        "function confirmedBuyerShortlist(",
+        "confirmedPriorityContacts>=4",
+        "profileCoherent"
+      ]
+    },
+    {
+      "id": "buyer-confirmed-contact-outcomes",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/buyer-outcome-benchmark.js",
+      "contains": [
+        "contactTarget:4",
+        "usablePriorityContacts:",
+        "scopeMatched"
       ]
     }
   ],

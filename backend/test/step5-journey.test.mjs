@@ -25,3 +25,15 @@ test('authenticated Chromium preserves official channels across delayed provider
  assert.equal(evidence.durableJob.status,'needs_review');assert.equal(evidence.durableJob.phase,'done');assert.equal(evidence.durableJob.restoreProviderReplays,0);assert.equal(evidence.durableJob.broaderQualityComplete,false);assert.ok(evidence.durableJob.queries.length>=9);assert.equal(new Set(evidence.durableJob.queries).size,evidence.durableJob.queries.length);
  t.diagnostic('Actual local browser/SQL evidence: '+path.dirname(evidence.screenshots[0])+'/evidence.json');
 });
+
+test('authenticated Chromium shows four confirmed contacts and keeps six others collapsed through reopen',{timeout:60000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory CI must run this journey.');return;}
+ const {verifyConfirmedFourJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-confirmed-four-'));
+ const evidence=await verifyConfirmedFourJourney({artifactDir});assert.equal(evidence.mainContacts,4);assert.equal(evidence.confirmedWorkEmails,4);assert.equal(evidence.hiddenOtherContacts,6);assert.equal(evidence.freshBrowserReopen,true);assert.equal(evidence.readOnlyProviderReplays,0);assert.equal(evidence.paidContactRequests,0);assert.equal(evidence.outboundMessages,0);t.diagnostic('Confirmed-four evidence: '+artifactDir+'/evidence.json');
+});
+
+test('authenticated Chromium preserves four mixed confirmed channels with the other six hidden',{timeout:60000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory CI must run this journey.');return;}
+ const {verifyConfirmedFourJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-confirmed-four-mixed-'));
+ const e=await verifyConfirmedFourJourney({artifactDir,mixedChannels:true});assert.equal(e.mainContacts,4);assert.equal(e.confirmedWorkEmails,2);assert.equal(e.confirmedPhones,1);assert.equal(e.confirmedLinkedin,1);assert.equal(e.hiddenOtherContacts,6);assert.equal(e.freshBrowserReopen,true);assert.equal(e.readOnlyProviderReplays,0);assert.equal(e.paidContactRequests,0);assert.equal(e.outboundMessages,0);t.diagnostic('Mixed-channel evidence: '+artifactDir+'/evidence.json');
+});

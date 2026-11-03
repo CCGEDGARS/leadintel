@@ -4,7 +4,7 @@ Step 5 is the top product priority, as requested by Edgars on 21 October 2026.
 
 ## One quality assessment for both flows
 
-`buyerQualityAssessment` in the shared discovery engine checks current mandatory research, independent AI review, four qualified priority buyers, buying committee coverage and the target of two confirmed priority work emails. It computes status from retained evidence and live contact-policy acceptance, never from an overall model opinion. Passing research does not guarantee addresses exist. The four existing cards and their contact fields remain; the quality panel reports the actual result without adding person cards or promoting unrelated staff.
+`buyerQualityAssessment` in the shared discovery engine checks current mandatory research, independent AI review, four qualified priority buyers, buying committee coverage and four confirmed priority contacts (work email, phone or LinkedIn). It computes status from retained evidence and live contact-policy acceptance, never from an overall model opinion. Passing research does not guarantee addresses exist. The main list contains at most four qualified, relevant people with at least one accepted contact channel. All remaining people stay in the closed Show other contacts disclosure. A shortfall is explicit; unconfirmed people never fill empty places.
 
 Research coverage requires the current policy version, fresh successful official/public/phone/LinkedIn checks for every retained identity, the required priority deep wave, completed accountability and a read official page. Legacy completion labels cannot authorize new paid enrichment. Cached confirmed contacts retain their existing manual/automatic eligibility.
 
@@ -39,3 +39,13 @@ A manually selected qualified buyer can enter paid lookup after that buyer's own
 ## Visible button contract amendment — 31 October 2026
 
 The owner explicitly separated the visible controls: initial all-buyer free research, white missing-data E-mail/Phone buttons that request their own paid channel, green confirmed-data buttons, free-only Recheck, and email-dependent Proceed. Follow [buyer-contact-button-contract.md](buyer-contact-button-contract.md). Earlier public-first wording describes the research prerequisite and legacy/automatic confirmation path; it must not make an explicit paid-only button rerun free research. Preserve all qualification, identity, consent, limits and evidence gates.
+
+## Confirmed shortlist amendment — 3 November 2026
+
+The owner requested the four most relevant contacts with confirmed contact data and all other contacts hidden, then explicitly selected acceptance of **any confirmed work email, phone or LinkedIn**. This replaces both the old two-email outcome target and the temporary expanded-all-saved fallback from the Refresh recovery release. It does not change paid lookup consent or channel-specific message eligibility.
+
+The shared confirmed shortlist filters qualified people by accepted channel evidence, excludes current employment conflicts and ranks the confirmed set by relevance before taking four. An official email requires fresh named source attribution; a phone requires fresh named attribution or an exact-person verified provider record bound to the current workspace/company; LinkedIn uses existing automatic/manual identity review, coherent profile aliases and applicable dated evidence. Guesses and unresolved profile matches do not qualify. Recheck can supply fresh matching evidence without an older automatic confirmation masking it.
+
+The UI, quality supervisor, durable-job default assessment and read-only outcome report use this contract. Email yield remains a separate actual count. Phone/LinkedIn confirmation never turns into email permission. Four visible confirmed contacts do not establish completion of mandatory research, AI review or committee coverage. When fewer than four qualify, show the actual N/4, preserve the other records collapsed, and provide the existing bounded free-research action.
+
+Acceptance covers zero/partial/full confirmed sets, mixed channels, conflicting/stale evidence, workspace/company isolation, existing Refresh resumption, desktop/mobile layouts, save and fresh-browser reopen, and exact downstream recipient behavior. Authenticated controlled browser fixtures establish implementation behavior; actual private customer yield is a separate gate.
