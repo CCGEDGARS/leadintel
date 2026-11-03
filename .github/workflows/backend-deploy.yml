@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -55,3 +55,37 @@ jobs:
         run: node ../scripts/verify-worker-propagation.mjs https://leadintel-api.edgars-7e7.workers.dev/api/health "$EXPECTED_SHA" --backend
         env:
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+
+  inspect-buyer-recovery:
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' && contains(github.event.workflow_run.head_commit.message, '[buyer-recovery-inspection]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    continue-on-error: true
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout verified recovery revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+      - name: Inspect the owner-requested saved run without changing data
+        working-directory: backend
+        run: node scripts/inspect-buyer-job.mjs --workspace-id edgars-latvia --domain viscaria.com --expires 2026-11-04T12:00:00Z --max-wait-ms 600000
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Retain encrypted inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buyer-recovery-inspection-${{ github.event.workflow_run.head_sha }}
+          path: backend/buyer-inspection.encrypted.json
+          retention-days: 3

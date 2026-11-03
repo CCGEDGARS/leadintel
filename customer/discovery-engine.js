@@ -2039,7 +2039,7 @@
         for(const [index,query] of queries.entries()){
           await guard();
           const entry=research.checks[key].queryLog[index],saved=previous?.queryLog?.find(row=>row.query===query&&buyerResearchQueryReceiptPassed(row)&&Number.isFinite(Date.parse(row.checkedAt))&&Date.now()-Date.parse(row.checkedAt)>=0&&Date.now()-Date.parse(row.checkedAt)<30*86400000);
-          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===1)){Object.assign(entry,saved);report.reusedChecks++;continue;}
+          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===1)){Object.assign(entry,saved,{searchStatus:saved.searchStatus||'complete'});report.reusedChecks++;continue;}
           searches++;entry.status='running';entry.searchStatus='running';
           try{
             const rows=await bounded(()=>execute(query));await guard();if(!Array.isArray(rows))throw new Error('Search returned no valid result list');
@@ -2095,6 +2095,12 @@
       }
       for(let i=0;i<people.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(people.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
     catch(error){report.stopReason=signal?.aborted||error.code==='CANCELED'?'canceled':error.code==='TIME_BUDGET'?'time_budget':'provider_unavailable';report.gaps.push(clean(error.message).slice(0,220));}
+    // A returned checkpoint has no active provider. Retain completed receipts
+    // and mark interrupted work partial so a stopped run never says Searching.
+    for(const person of people)for(const check of Object.values(person.contactResearch?.checks||{})){
+      if(check.status==='running'){check.status='partial';check.reason=report.gaps.at(-1)||'Research pass interrupted';check.checkedAt=new Date().toISOString();}
+      for(const entry of check.queryLog||[]){if(entry.status==='running')entry.status='partial';if(entry.searchStatus==='running')entry.searchStatus='partial';}
+    }
     // Resolve profiles against all returned evidence together: attaching the
     // first match early would hide a distinct same-name result found later.
     for(const person of people){const before=buyerResearchIdentityKey(candidate,person),matched=matchPublicLinkedInProfiles([person],sourceRows,candidate.company)[0];if(matched.linkedinProfileReview&&!initialProfiles.get(person)){delete person.publicLinkedinUrl;delete matched.publicLinkedinUrl;}Object.assign(person,matched,matchBuyerScopeEvidence(matched,sourceRows,candidate));if(person.contactResearch?.identityKey===before)person.contactResearch.identityKey=buyerResearchIdentityKey(candidate,person);}
