@@ -43,6 +43,8 @@ The owner's four-contact requirement accepts a qualified buyer with a confirmed 
 
 Proceed uses the existing email handoff when a confirmed email exists, or the existing LinkedIn message handoff for a confirmed profile-only buyer. Phone-only contacts retain their Phone action and cannot create an email recipient. These actions prepare content and never authorize sending or a paid lookup. Green E-mail and email Proceed use the same recipient decision. Preserve the exact person and source facts across input-only, sparse and failed refresh checkpoints; retain explicit rejection/qualification holds until current evidence resolves them.
 
+An unread result repeating the same person and email at another URL is a research candidate, not a replacement for an already accepted source binding. Keep the original accepted address, URL and read proof together until a replacement passes the recipient policy. Never transfer that confirmation to the unread URL. Actual rejection of the original binding, expiry, identity changes and qualification holds remain effective.
+
 
 ## Owner instruction, 3 November 2026 — automatic paid continuation
 

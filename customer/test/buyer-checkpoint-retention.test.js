@@ -19,7 +19,13 @@ test('a same-person directory checkpoint cannot erase the accepted email source 
  await restore(c,input.candidate);assert.equal(c.people.filter(p=>D.acceptedOfficialBuyerEmail(c,p)).length,4);assert.equal(c.people.filter(p=>D.confirmedBuyerPhone(c,p)).length,2);
 });
 test('a changed address or explicit rejected binding cannot inherit the old confirmation',async()=>{
- for(const change of [{publicEmail:'different@example.com',publicEmailEvidence:null},{publicEmailUrl:'https://example.com/changed',publicEmailEvidence:null},{publicEmailSourceCheck:{status:'failed',email:'anna.berg@example.com',url:'https://example.com/team/0',checkedAt:stamp()}}]){const {c}=fixture(),next=structuredClone(c);Object.assign(next.people[0],change);await restore(c,next);assert.equal(D.acceptedOfficialBuyerEmail(c,c.people[0]),'');}
+ for(const change of [{publicEmail:'different@example.com',publicEmailEvidence:null},{publicEmailSourceCheck:{status:'failed',email:'anna.berg@example.com',url:'https://example.com/team/0',checkedAt:stamp()}}]){const {c}=fixture(),next=structuredClone(c);Object.assign(next.people[0],change);await restore(c,next);assert.equal(D.acceptedOfficialBuyerEmail(c,c.people[0]),'');}
+});
+test('an unread changed-source checkpoint preserves the original accepted email binding',async()=>{
+ const {c}=fixture(),previous=structuredClone(c.people[0]),next=structuredClone(c),unread='https://example.com/changed';
+ Object.assign(next.people[0],{publicEmailUrl:unread,publicEmailEvidence:null});await restore(c,next);
+ const value=c.people[0];assert.equal(value.publicEmailUrl,previous.publicEmailUrl);assert.equal(value.publicEmailEvidence.url,previous.publicEmailUrl);assert.equal(value.publicEmailEvidence.sourceRead,true);
+ assert.notEqual(value.publicEmailSourceCheck?.url,unread);assert.equal(D.acceptedOfficialBuyerEmail(c,value),previous.publicEmail);
 });
 test('actual recorded Viscaria sources retain all four confirmed channels through a sparse same-person checkpoint',()=>{
  const {c}=require('./fixtures/viscaria-contact-replay.cjs')(),next=JSON.parse(JSON.stringify(c));assert.equal(D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds.length,4);

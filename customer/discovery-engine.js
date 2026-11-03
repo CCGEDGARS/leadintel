@@ -403,6 +403,13 @@
     const phone=(after.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>validPublishedPhone(value.trim())&&value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value)&&! /\b(?:19|20)\d{2}[-./ ]\d{1,2}[-./ ]\d{1,2}\b/.test(value))||'';
     return {phone:phone.trim().replace(/[.,;]+$/,''),quote:clean(name+after)};
   }
+  function preserveConfirmedPublicEmail(previous,next,candidate={}){
+    const email=clean(previous.publicEmail).toLowerCase(),name=p=>clean(p.publicName||p.name).toLowerCase();
+    if(!email||email!==clean(next.publicEmail).toLowerCase()||name(previous)!==name(next)||previous.organization&&next.organization&&!companyNameMatches(previous.organization,next.organization))return next;
+    const context={domain:candidate.domain||email.split('@')[1],company:candidate.company||next.organization||previous.organization},check=next.publicEmailSourceCheck;
+    if(!acceptedOfficialBuyerEmail(context,previous)||acceptedOfficialBuyerEmail(context,next)||check?.status==='failed'&&clean(check.email).toLowerCase()===email&&normalizeUrl(check.url)===normalizeUrl(previous.publicEmailUrl))return next;
+    return {...next,publicEmail:previous.publicEmail,publicEmailUrl:previous.publicEmailUrl,publicEmailEvidence:{...previous.publicEmailEvidence},publicEmailSourceCheck:previous.publicEmailSourceCheck?{...previous.publicEmailSourceCheck}:null};
+  }
   function matchPublicBuyerDetails(people=[],results=[],companyDomain="",companyName=""){
     const domain=companyIdentityDomain(companyDomain);
     const generic=new Set(["contact","contacts","team","group","company","leadership","management","director","manager","president","chief","owner","email","phone","about","welcome","privacy","policy","sales"]);
@@ -412,7 +419,8 @@
       if(!first||!Array.isArray(results))return person;
       const fullName=clean(person.name).split(/\s+/).length>1;
       const matches=[];
-      const prioritized=authoritativeBuyerSourceRows(results).sort((a,b)=>Number(canonicalDomain(b.url||b.metadata?.sourceURL)===domain)-Number(canonicalDomain(a.url||a.metadata?.sourceURL)===domain)||Number(Boolean(b.markdown||b.content))-Number(Boolean(a.markdown||a.content)));
+      const knownSources=new Set([person.publicEmailSourceCheck?.url,person.publicEmailUrl,person.publicNameUrl,person.publicPhoneUrl].map(normalizeUrl).filter(Boolean));
+      const prioritized=authoritativeBuyerSourceRows(results).sort((a,b)=>Number(b.sourceRead===true)-Number(a.sourceRead===true)||Number(knownSources.has(normalizeUrl(b.url||b.metadata?.sourceURL)))-Number(knownSources.has(normalizeUrl(a.url||a.metadata?.sourceURL)))||Number(canonicalDomain(b.url||b.metadata?.sourceURL)===domain)-Number(canonicalDomain(a.url||a.metadata?.sourceURL)===domain)||Number(Boolean(b.markdown||b.content))-Number(Boolean(a.markdown||a.content)));
       for(const row of prioritized.slice(0,20)){
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url)continue;
@@ -459,7 +467,7 @@
       const attribution=(item,kind)=>item?{version:2,url:item.url,quote:kind==='email'?item.emailQuote:item.quote,sourceKind:item.sourceKind,checkedAt:item.checkedAt,...(typeof item.sourceRead==='boolean'?{sourceRead:item.sourceRead}:{})}:null;
       const updated={...person,organization:person.organization||clean(companyName),identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:identityMatch?.url||person.publicNameUrl||match.url,identityEvidenceDate:identityMatch?(identityMatch.date||(identityMatch.url===person.publicNameUrl?person.identityEvidenceDate||'':'')):person.identityEvidenceDate||'',publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicEmailEvidence:match.email?attribution(match,'email'):person.publicEmailEvidence||null,publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||''),publicPhoneEvidence:phoneMatch?attribution(phoneMatch):previousPhoneRechecked?null:person.publicPhoneEvidence||null};
       if(phoneMatch||previousPhoneRechecked)updated.publicPhoneSourceCheck={version:2,status:phoneMatch?'attributed':'not_attributed',url:phoneMatch?.url||person.publicPhoneUrl,checkedAt:phoneMatch?.checkedAt||new Date().toISOString()};
-      return matchBuyerRoleEvidence(updated,results,{domain,company:companyName});
+      return matchBuyerRoleEvidence(preserveConfirmedPublicEmail(person,updated,{domain,company:companyName}),results,{domain,company:companyName});
     });
   }
   function matchBuyerScopeEvidence(person={},rows=[],candidate={}){
@@ -495,7 +503,11 @@
     const company=clean(companyName).toLowerCase();
     if(!company||!Array.isArray(results))return people;
     return people.map(person=>{
-      if(normalizeLinkedInUrl(person.linkedin_url))return person;
+      // A stored public URL is a candidate, not an identity-verification receipt.
+      // Only provider-owned paid identities bypass public profile reconciliation.
+      if(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url))return person;
+      const approvedProfile=normalizeLinkedInUrl(person.linkedinConfirmedUrl);
+      if(approvedProfile&&person.linkedinConfirmationMethod!=='automatic'&&approvedProfile===normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))return person;
       const originalFullName=clean(person.name).split(/\s+/).length>1;
       const name=clean(originalFullName?person.name:person.publicName||person.name);
       const sourcedName=name.split(/\s+/).length>1&&Boolean(person.publicNameUrl);
@@ -542,7 +554,7 @@
       if(matches.size>1||conflicts.length)return {...person,...(conflicts.length?{opportunityScope:{status:'review_required',reason:'Public profile employer conflict: '+conflicts[0].reason,url:conflicts[0].url,checkedAt:new Date().toISOString()}}:{}),linkedinIdentityEvidence:null,linkedinProfileReview:{status:'review_required',reason:matches.size>1?'Multiple public profiles match this identity':conflicts[0].reason,urls:[...new Set([...matches.values()].map(row=>row.url).concat(conflicts.map(row=>row.url)))].slice(0,8),checkedAt:new Date().toISOString()}};
       if(matches.size!==1)return person;
       const {url,name:matchedName}=[...matches.values()][0];
-      return {...person,...(person.opportunityScope?.reason?.startsWith('Public profile employer conflict: ')?{opportunityScope:null}:{}),organization:person.organization||(!sourcedName?clean(companyName):''),identityStatus:'confirmed',nameVerification:'confirmed',publicName:matchedName,publicNameUrl:sourcedName&&matchedName.toLowerCase()===name.toLowerCase()?person.publicNameUrl:url,publicLinkedinUrl:url,linkedinProfileReview:null,linkedinIdentityEvidence:{url,name:matchedName,organization:clean(companyName),checkedAt:new Date().toISOString()}};
+      return {...person,...(person.opportunityScope?.reason?.startsWith('Public profile employer conflict: ')?{opportunityScope:null}:{}),organization:person.organization||(!sourcedName?clean(companyName):''),identityStatus:'confirmed',nameVerification:'confirmed',publicName:matchedName,publicNameUrl:sourcedName&&matchedName.toLowerCase()===name.toLowerCase()?person.publicNameUrl:url,publicLinkedinUrl:url,...(person.linkedin_url?{linkedin_url:url}:{}),linkedinProfileReview:null,linkedinIdentityEvidence:{url,name:matchedName,organization:clean(companyName),checkedAt:new Date().toISOString()}};
     });
   }
   function canonicalDomain(value){
@@ -1628,7 +1640,7 @@
       next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
       next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
       for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
-      merged.set(key,next);
+      merged.set(key,preserveConfirmedPublicEmail(old,next));
     }
     const values=[...merged.values()].filter(person=>!malformedBuyerRole(person.title));
     const kept=values.filter(person=>person.kept).slice(0,10);
@@ -1927,7 +1939,7 @@
   }
   function buyerResearchCheckPassed(candidate={},person={},key,options={}){
     const now=Date.parse(options.now||new Date().toISOString()),fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;},check=person.contactResearch?.checks?.[key],rows=check?.queryLog,queries=buyerResearchQueryPlan(candidate,person)[key];
-    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===1||!rows.some(row=>row.resultCount>0)));
+    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===2||!rows.some(row=>row.resultCount>0)));
   }
   function buyerResearchCoveragePassed(candidate={},options={}){
     const people=(options.researchPeople||candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -1935,7 +1947,7 @@
     const logged=(person,key)=>buyerResearchCheckPassed(candidate,person,key,options);
     const checked=person=>BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>logged(person,key))&&buyerResearchAssessment(person,options).status==='complete';
     const officialRead=report?.officialPageReads.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&fresh(row.checkedAt));
-    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>validResearchEmail(p.publicEmail,candidate.domain)&&companyIdentityDomain(p.publicEmailUrl)===companyIdentityDomain(candidate.domain)||logged(p,'deep')));
+    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>acceptedOfficialBuyerEmail(candidate,p,{now})||logged(p,'deep')));
   }
   function buyerQualityAssessment(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -2006,7 +2018,7 @@
       const stopped=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Object.assign(new Error('Contact research time budget reached'),{code:'TIME_BUDGET'})),Math.max(1,duration-(Date.now()-started)));cancel=()=>reject(Object.assign(new Error('Research canceled'),{code:'CANCELED'}));signal?.addEventListener('abort',cancel,{once:true});});
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
-    const attributable=person=>Boolean(validResearchEmail(person.publicEmail,candidate.domain)&&companyIdentityDomain(person.publicEmailUrl)===companyIdentityDomain(candidate.domain));
+    const attributable=person=>Boolean(acceptedOfficialBuyerEmail(candidate,person));
     const priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
@@ -2043,7 +2055,7 @@
           if(!actual||locations.some(value=>!value||companyIdentityDomain(value)!==companyIdentityDomain(actual))||companyIdentityDomain(actual)!==companyIdentityDomain(candidate.domain)&&actual!==contactResearchUrl(url))throw new Error('Contact source URL unavailable, conflicting or redirected outside its attribution');
           const text=page.markdown||page.content||page.text||'';if(!String(text).trim())throw new Error('Contact source text unavailable');
           if(options.observeTools!==false){observePage(page);if(!page.researchTrace?.length){const source=page.metadata?.source,provider=source==='scrapling-fallback'?'scrapling':source==='direct-fallback'?'direct':source==='firecrawl'?'firecrawl':null;if(provider)recordBuyerResearchTool(report,{provider,status:'succeeded',results:1});}}
-          return {url:actual,markdown:text,sourceRead:true,...(page.metadata?{metadata:page.metadata}:{}),title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:new Date().toISOString()};
+          return {url:actual,markdown:text,sourceRead:true,...(page.metadata?{metadata:page.metadata}:{}),title:page.title||page.metadata?.title||'',date:page.date||page.metadata?.publishedTime||'',extractedAt:Number.isFinite(Date.parse(page.extractedAt))?page.extractedAt:new Date().toISOString()};
           }catch(error){if(options.observeTools!==false)for(const entry of error.researchTrace||[])recordBuyerResearchTool(report,entry);throw error;}
         })());}
         try{const page=await pages.get(url);collect(person,[page]);receipts.push({url,status:'complete',checkedAt:page.extractedAt||stamp(),...(reused?{reused:true}:{})});}
@@ -2060,13 +2072,13 @@
       collect(person,sourceRows.slice());let failed=profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0,searches=0,successfulSearches=0;const failedPages=new Set();
       const run=async(key,queries,execute=search)=>{
         const previous=research.checks[key],date=Date.parse(previous?.checkedAt||'');
-        if(!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===1)&&previous?.status==='complete'&&Number.isFinite(date)&&Date.now()-date>=0&&Date.now()-date<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000)){report.reusedChecks++;return;}
+        if(!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(date)&&Date.now()-date>=0&&Date.now()-date<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000)){report.reusedChecks++;return;}
         research.checks[key]={status:'running',attempts:(previous?.attempts||0)+1,reason:'',checkedAt:'',queryLog:queries.map(query=>({query,status:'not_searched',searchStatus:'not_searched',sourceReads:[],resultCount:0,checkedAt:'',reason:''}))};
         const errors=[];
         for(const [index,query] of queries.entries()){
           await guard();
           const entry=research.checks[key].queryLog[index],saved=previous?.queryLog?.find(row=>row.query===query&&buyerResearchQueryReceiptPassed(row)&&Number.isFinite(Date.parse(row.checkedAt))&&Date.now()-Date.parse(row.checkedAt)>=0&&Date.now()-Date.parse(row.checkedAt)<30*86400000);
-          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===1)){Object.assign(entry,saved,{searchStatus:saved.searchStatus||'complete'});report.reusedChecks++;continue;}
+          if(!options.force&&saved&&(key!=='linkedin'||previous?.profileMatchVersion===2)){Object.assign(entry,saved,{searchStatus:saved.searchStatus||'complete'});report.reusedChecks++;continue;}
           searches++;entry.status='running';entry.searchStatus='running';
           try{
             const rows=await bounded(()=>execute(query));await guard();if(!Array.isArray(rows))throw new Error('Search returned no valid result list');
@@ -2081,7 +2093,7 @@
             if(error.sourceReads)entry.sourceReads=error.sourceReads;entry.status='partial';entry.reason=clean(error.message).slice(0,180);if(error.code==='CANCELED'||error.code==='TIME_BUDGET'||signal?.aborted)throw error;failed++;errors.push(entry.reason);
           }finally{entry.checkedAt=new Date().toISOString();}
         }
-        research.checks[key]={...research.checks[key],...(key==='linkedin'?{profileMatchVersion:1}:{}),status:errors.length?'partial':research.checks[key].queryLog.every(entry=>entry.status==='not_needed')?'not_needed':'complete',reason:errors.join(' · ').slice(0,220),checkedAt:new Date().toISOString()};onProgress?.({label:`Checking ${name} · ${key==='deep'?'deeper public sources':key}`});
+        research.checks[key]={...research.checks[key],...(key==='linkedin'?{profileMatchVersion:2}:{}),status:errors.length?'partial':research.checks[key].queryLog.every(entry=>entry.status==='not_needed')?'not_needed':'complete',reason:errors.join(' · ').slice(0,220),checkedAt:new Date().toISOString()};onProgress?.({label:`Checking ${name} · ${key==='deep'?'deeper public sources':key}`});
       };
       const queries=buyerResearchQueryPlan(candidate,person);
       if(!profileWaveDone.has(person)){
@@ -2091,7 +2103,8 @@
         onProgress?.({label:`LinkedIn profiles · ${people.filter(p=>p.publicLinkedinUrl||p.linkedin_url).length}/${people.length} found`,profilesReady:true});
       }
       if(profilesOnly){person.emailResearch={...(person.emailResearch||{}),status:'partial',searches:(person.emailResearch?.searches||0)+searches,failed,checkedAt:''};return;}
-      const savedSource=person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
+      const confirmedSource=person.publicEmailSourceCheck?.status==='confirmed'&&clean(person.publicEmailSourceCheck.email).toLowerCase()===clean(person.publicEmail).toLowerCase()?person.publicEmailSourceCheck.url:'';
+      const savedSource=(acceptedOfficialBuyerEmail(candidate,person)?person.publicEmailUrl:confirmedSource)||person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
       if(savedSource&&readPage)for(const receipt of await extract(person,[{url:savedSource}]))if(receipt.status==='partial')failedPages.add(receipt.url);
       const company=clean(candidate.company);
       for(const key of policy.requiredChecks.filter(key=>key!=='linkedin'))await run(key,queries[key]);
@@ -2153,7 +2166,7 @@
     if(!value||value.version!==1)return null;
     const status=v=>['complete','not_needed','running','partial','unavailable','not_searched'].includes(v)?v:'not_searched';
     const sourceReceipts=rows=>(Array.isArray(rows)?rows:[]).slice(0,12).map(row=>({url:buyerContactSourceUrl(row.url),status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,180),...(row.reused===true?{reused:true}:{})})).filter(row=>row.url);
-    const checks=Object.fromEntries(Object.entries(value.checks||{}).slice(0,12).map(([key,row])=>[clean(key).slice(0,50),{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220),attempts:clamp(Number(row.attempts)||0,0,30,0),...(key==='linkedin'&&row.profileMatchVersion===1?{profileMatchVersion:1}:{}),queryLog:(Array.isArray(row.queryLog)?row.queryLog:[]).slice(0,4).map(entry=>({query:clean(entry.query).slice(0,600),...(Array.isArray(entry.providers)&&entry.providers.length?{providers:entry.providers.filter(provider=>BUYER_RESEARCH_TOOLS.includes(provider)).slice(0,4)}:{}),status:status(entry.status),...(entry.searchStatus?{searchStatus:status(entry.searchStatus)}:{}),...(Array.isArray(entry.sourceReads)?{sourceReads:sourceReceipts(entry.sourceReads)}:{}),resultCount:clamp(Number(entry.resultCount)||0,0,100,0),checkedAt:clean(entry.checkedAt).slice(0,40),reason:clean(entry.reason).slice(0,180)}))}]));
+    const checks=Object.fromEntries(Object.entries(value.checks||{}).slice(0,12).map(([key,row])=>[clean(key).slice(0,50),{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220),attempts:clamp(Number(row.attempts)||0,0,30,0),...(key==='linkedin'&&[1,2].includes(row.profileMatchVersion)?{profileMatchVersion:row.profileMatchVersion}:{}),queryLog:(Array.isArray(row.queryLog)?row.queryLog:[]).slice(0,4).map(entry=>({query:clean(entry.query).slice(0,600),...(Array.isArray(entry.providers)&&entry.providers.length?{providers:entry.providers.filter(provider=>BUYER_RESEARCH_TOOLS.includes(provider)).slice(0,4)}:{}),status:status(entry.status),...(entry.searchStatus?{searchStatus:status(entry.searchStatus)}:{}),...(Array.isArray(entry.sourceReads)?{sourceReads:sourceReceipts(entry.sourceReads)}:{}),resultCount:clamp(Number(entry.resultCount)||0,0,100,0),checkedAt:clean(entry.checkedAt).slice(0,40),reason:clean(entry.reason).slice(0,180)}))}]));
     const channels=Object.fromEntries(['company','gmail','phone','linkedin'].map(key=>{const row=value.channels?.[key]||{};return [key,{status:status(row.status),checkedAt:clean(row.checkedAt).slice(0,40),reason:clean(row.reason).slice(0,220)}];}));
     return {version:1,evidenceVersion:value.evidenceVersion===2?2:1,policyVersion:value.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version?value.policyVersion:'',identityKey:clean(value.identityKey).slice(0,350),checks,channels};
   }

@@ -123,7 +123,7 @@ test('resume replays a legacy completed LinkedIn search whose profile evidence w
  assert.equal(saved.people[0].publicLinkedinUrl,url);
  assert.equal(queries.length,1,'other successful query plans remain cached');
  assert.ok(queries[0].startsWith('site:linkedin.com/in/'));
- assert.equal(saved.people[0].contactResearch.checks.linkedin.profileMatchVersion,1);
+ assert.equal(saved.people[0].contactResearch.checks.linkedin.profileMatchVersion,2);
  assert.equal(D.buyerResearchCoveragePassed(saved),true);
 });
 

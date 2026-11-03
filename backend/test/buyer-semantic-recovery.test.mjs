@@ -17,12 +17,14 @@ async function scheduledSlice(f,id,services){
  await Promise.all(pending);
 }
 
-for(const originalStatus of ['needs_review','complete','queued_paid','queued_paid_enabled','queued_paid_enabled_hold'])test(`actual scheduler refreshes stale semantic review from legacy ${originalStatus} without replaying completed source work`,async t=>{
- const queuedPaid=originalStatus.startsWith('queued_paid'),enabledPaid=originalStatus.includes('_enabled'),derivedHold=originalStatus==='needs_review'||originalStatus.endsWith('_hold');
+for(const originalStatus of ['needs_review','complete','queued_paid','queued_paid_enabled','queued_paid_enabled_hold','queued_paid_enabled_current_ai_unread'])test(`actual scheduler preserves original research and paid authority while repairing legacy ${originalStatus}`,async t=>{
+ const queuedPaid=originalStatus.startsWith('queued_paid'),enabledPaid=originalStatus.includes('_enabled'),derivedHold=originalStatus==='needs_review'||originalStatus.endsWith('_hold'),legacySource=originalStatus.endsWith('_current_ai_unread'),unreadUrl='https://forge.example/unread-email';
  const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),input=JSON.parse(job.input_json),stamp=new Date().toISOString();
  const candidate=structuredClone(f.candidate),person=candidate.people[0],url=person.publicNameUrl,quote=`${person.name} is ${person.title} at ${candidate.company}.`;
  Object.assign(person,{identityStatus:'confirmed',nameVerification:'confirmed',emailResearch:{status:'complete',checkedAt:stamp,searches:9,failed:0}});
+ if(legacySource)Object.assign(person,{publicEmail:'robert.lund@forge.example',publicEmailUrl:unreadUrl,publicEmailEvidence:{version:2,url:unreadUrl,quote:`${person.name} ${person.title} robert.lund@forge.example Forge Industries`,sourceKind:'official',sourceRead:false,checkedAt:stamp}});
  candidate.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'complete',checkedPeople:1,totalPeople:1,completedAt:stamp}};receipts(candidate,stamp);person.contactResearch.channels={};
+ if(legacySource)person.contactResearch.checks.deep={status:'not_needed',attempts:0,checkedAt:stamp,reason:'Published company email already found',queryLog:[]};
  if(enabledPaid)candidate.qualification={eligible:true,companyScore:85,score:85,researchedAt:stamp};
  await D.runOfficialContactResearch(candidate,{search:async()=>[],readPage:async source=>({url:source,markdown:quote,sourceRead:true,extractedAt:stamp})});
  const context={...candidate,formulas:D.buyerResearchPlan(candidate,input.profile).dossierFormulas},plan=C.researchPlan(context);
@@ -33,14 +35,15 @@ for(const originalStatus of ['needs_review','complete','queued_paid','queued_pai
  candidate.buyerDiscovery.companyDossier=C.reconcile(passes,context);
  if(derivedHold)person.opportunityScope={status:'review_required',reason:'Dossier role conflict requires review',checkedAt:stamp};
  candidate.publicResearch.buyerAgent={version:D.BUYER_AGENT_VERSION,status:derivedHold?'needs_review':'checked',checkedAt:stamp,context:D.buyerAgentContext(candidate,input.profile),people:[{personId:person.id,name:person.name,identity:derivedHold?'conflict':'supported',checks:'complete',opportunity:'supported',evidence:derivedHold?[]:[{url,quote}],conflicts:derivedHold?[{url,quote:quote+' Previously, she was a manager at Other Company.'}]:[]}]};
- const legacySignature=D.buyerReviewSignature(candidate,{legacyInterpretation:true});
+ const legacySignature=D.buyerReviewSignature(candidate,legacySource?{}:{legacyInterpretation:true});
  candidate.publicResearch.buyerAgent.inputSignature=legacySignature;
  candidate.publicResearch.aiReview={status:'complete',provider:'original-review',checkedAt:stamp,inputSignature:legacySignature,reviewedPersonIds:[person.id],findings:[],conflicts:[]};
  const originalChecks=JSON.stringify(person.contactResearch),originalDossierCheckedAt=candidate.buyerDiscovery.companyDossier.checkedAt;
- assert.equal(D.officialContactCoveragePassed(candidate),true);assert.equal(candidate.buyerDiscovery.companyDossier.status,'complete');assert.equal(D.buyerResearchCoveragePassed(candidate),true);
+ assert.equal(D.officialContactCoveragePassed(candidate),true);assert.equal(candidate.buyerDiscovery.companyDossier.status,'complete');assert.equal(D.buyerResearchCoveragePassed(candidate),!legacySource);
  const projected=D.reconcileBuyerEvidence(candidate,{trustedAgentSources:true});
- assert.equal(projected.buyerDiscovery.companyDossier.status,'complete');if(derivedHold)assert.equal(projected.people[0].opportunityScope,null);assert.equal(D.buyerQualityAssessment(projected).aiReviewStatus,'stale');
+ assert.equal(projected.buyerDiscovery.companyDossier.status,'complete');if(derivedHold)assert.equal(projected.people[0].opportunityScope,null);assert.equal(D.buyerQualityAssessment(projected).aiReviewStatus,legacySource?'complete':'stale');
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status=?,phase=?,input_json=json_set(input_json,'$.executionContinuationVersion',1),result_json=? WHERE id=?").run(queuedPaid?'queued':originalStatus,queuedPaid?'paid':'done',JSON.stringify(candidate),job.id);
+ if(legacySource)f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',3) WHERE id=?").run(job.id);
  let savedPaidIntent={provider:'treg',email:true,phone:true,companyId:'original-company',snapshotHash:'original-snapshot'};
  if(queuedPaid){
   f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company) VALUES(?,?,0,'treg',3,30,2)").run(workspaceId,Number(enabledPaid));
@@ -55,20 +58,24 @@ for(const originalStatus of ['needs_review','complete','queued_paid','queued_pai
   f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.paidResearch',json(?)) WHERE id=?").run(JSON.stringify(savedPaidIntent),job.id);
  }
  f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,status,attempts,result_json) VALUES(?,'saved-current-role','read','contacts','complete',1,?)").run(job.id,JSON.stringify({url,markdown:quote,sourceRead:true,extractedAt:stamp}));
- let reviewCalls=0,sourceCalls=0,paidCalls=0;const services={search:async()=>{sourceCalls++;return [];},read:async()=>{sourceCalls++;throw Error('Completed source reads must be reused');},review:async(_env,_workspace,body)=>{reviewCalls++;assert.equal(body.people[0].id,person.id);return {provider:'fresh-review',supervisor:{status:'complete',reviewedPersonIds:[person.id],findings:[]},conflicts:[]};},paidLookup:async()=>{paidCalls++;if(!enabledPaid)throw Error('Disabled paid channels cannot dispatch');return {request:{status:'not_found'},research:{status:'not_found'}};}};
+ let reviewCalls=0,sourceCalls=0,paidCalls=0;const freeQueries=[],services={search:async query=>{sourceCalls++;freeQueries.push(query);return [];},read:async source=>{sourceCalls++;if(legacySource&&source===unreadUrl)return {url:source,markdown:quote};throw Error('Completed source reads must be reused');},review:async(_env,_workspace,body)=>{reviewCalls++;assert.equal(body.people[0].id,person.id);return {provider:'fresh-review',supervisor:{status:'complete',reviewedPersonIds:[person.id],findings:[]},conflicts:[]};},paidLookup:async()=>{paidCalls++;if(!enabledPaid)throw Error('Disabled paid channels cannot dispatch');if(legacySource){const current=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);assert.equal(D.buyerResearchCoveragePassed(current),true,'Paid lookup must wait until the missing free depth is durably complete');assert.equal(current.people[0].contactResearch.checks.deep.status,'complete');assert.equal(reviewCalls,1);}return {request:{status:'not_found'},research:{status:'not_found'}};}};
  if(queuedPaid){
   await scheduledSlice(f,job.id,services);const held=await readBuyerJob(f.env,workspaceId,{id:job.id});
   assert.equal(held.status,'needs_review');assert.equal(held.phase,'done');assert.equal(reviewCalls,0);assert.equal(paidCalls,0);
-  assert.equal(JSON.parse(held.input_json).executionContinuationVersion,1,'The unprocessed stale review must remain eligible for guarded own-CRM recovery');
+  assert.equal(JSON.parse(held.input_json).executionContinuationVersion,legacySource?3:1,'The unprocessed stale review or free-source coverage must remain eligible for guarded own-CRM recovery');
  }
  for(let i=0;i<2&&!reviewCalls;i++)await scheduledSlice(f,job.id,services);
  if(queuedPaid)await scheduledSlice(f,job.id,services);
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),result=JSON.parse(saved.result_json);
- assert.equal(reviewCalls,1,'Once-only semantic recovery must execute the now-stale review: '+JSON.stringify({phase:saved.phase,status:saved.status,lastError:saved.last_error,diagnostics:JSON.parse(saved.diagnostic_json)}));assert.equal(sourceCalls,0);
- assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,3);
+ assert.equal(reviewCalls,1,'Once-only semantic recovery must execute the now-stale review: '+JSON.stringify({phase:saved.phase,status:saved.status,lastError:saved.last_error,diagnostics:JSON.parse(saved.diagnostic_json)}));if(legacySource)assert.ok(sourceCalls>0,'The legacy skipped free depth must actually run');else assert.equal(sourceCalls,0);
+ assert.equal(JSON.parse(saved.input_json).executionContinuationVersion,4);
  assert.equal(result.publicResearch.aiReview.provider,'fresh-review');assert.equal(result.publicResearch.aiReview.inputSignature,D.buyerReviewSignature(result));
  assert.equal(D.buyerQualityAssessment(result).aiReviewStatus,'complete');
- assert.equal(JSON.stringify(result.people[0].contactResearch),originalChecks,'Completed per-person checks survive the repair');
+ if(legacySource){
+  for(const key of D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks)assert.deepEqual(result.people[0].contactResearch.checks[key],JSON.parse(originalChecks).checks[key],'Completed base checks are reused');
+  assert.equal(result.people[0].contactResearch.checks.deep.status,'complete');assert.equal(D.acceptedOfficialBuyerEmail(result,result.people[0]),'','Free searches do not confirm the unread raw address');
+  for(const query of D.buyerDeepContactQueries(candidate,person))assert.equal(freeQueries.filter(value=>value===query).length,1);
+ }else assert.equal(JSON.stringify(result.people[0].contactResearch),originalChecks,'Completed per-person checks survive the repair');
  assert.equal(result.buyerDiscovery.companyDossier.checkedAt,originalDossierCheckedAt,'Role reinterpretation cannot claim a fresh dossier execution');
  assert.equal(f.DB.raw.prepare("SELECT attempts FROM buyer_research_tasks WHERE job_id=? AND task_key='saved-current-role'").get(job.id).attempts,1);
  if(queuedPaid){
