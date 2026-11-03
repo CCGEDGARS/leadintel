@@ -18,12 +18,16 @@ function restoreSearch(value){const rows=value.rows||[];Object.defineProperty(ro
 export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowMs=50000,services={},clock=Date.now,jobId}={}){
  const results=[];
  for(let n=0;n<maxJobs;n++){
+  const invocationBudget=env.bookInvocationBudget;
+  if(invocationBudget&&!invocationBudget.admit(160))break;
+  try{
   const start=clock(),lease=crypto.randomUUID(),until=start+Math.max(90000,windowMs+45000);
   const row=await stmt(env,`UPDATE buyer_research_jobs SET status='running',lease_token=?,lease_until=?,updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM buyer_research_jobs WHERE status IN ('queued','running') AND lease_until<? AND next_at<=? ${jobId?'AND id=?':''} ORDER BY next_at,created_at LIMIT 1) AND lease_until<? RETURNING *`,lease,until,now,now,...(jobId?[jobId]:[]),now).first();
   if(!row)break;
-  const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate),controller=new AbortController();let accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
+  const input=parse(row.input_json),candidate=parse(row.result_json,input.candidate),controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
   const guard=async({checkpoint=false}={})=>{
+   if(!checkpoint&&!activeTaskReservations&&invocationBudget&&!invocationBudget.hasRoom(32)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    if(!checkpoint&&(!accepting||controller.signal.aborted))throw Object.assign(Error('Processing slice stopped'),{code:'TIME_BUDGET'});
    const live=await stmt(env,`SELECT status,lease_token,lease_until,CASE WHEN ${authoritySql} THEN 1 ELSE 0 END authorized FROM buyer_research_jobs WHERE id=?`,row.id).first();
    if(!live||live.status!=='running'||live.lease_token!==lease||!live.authorized)throw lost();
@@ -38,7 +42,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
   const inflightTasks=new Map();
-  const executeTask=async(kind,value,operation)=>{
+  const executeTaskBody=async(kind,value,operation)=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
    if(prior?.status==='complete')return parse(prior.result_json);
    if(Number(prior?.attempts||0)>=2)throw Object.assign(Error('Source task attempt limit reached'),{code:'TASK_LIMIT'});
@@ -54,6 +58,14 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(accepting&&!controller.signal.aborted)await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
     throw error;
    }
+  };
+  // Reserve a bounded task before dispatch. Its guards still enforce time,
+  // lease and identity while the reserved query room permits receipt saving.
+  const executeTask=async(kind,value,operation)=>{
+   if(invocationBudget&&!invocationBudget.admit(64)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
+   activeTaskReservations++;
+   try{return await executeTaskBody(kind,value,operation);}
+   finally{activeTaskReservations--;invocationBudget?.release(64);}
   };
   const task=(kind,value,operation)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
   const search=async query=>restoreSearch(await task('search',query,async()=>{
@@ -128,6 +140,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup});
     if(finished)phase='done';
    }
+   if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns++;
    if(phase===row.phase&&(phaseMs>=phaseBudget[phase]||phaseRuns>=18)){
     diagnostics.push({phase,reason:'Phase work budget reached; completed evidence retained',at:new Date().toISOString()});phase=nextPhase[phase];
@@ -162,6 +175,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(!updated.meta.changes)await stmt(env,"UPDATE buyer_research_jobs SET status=?,lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'",status==='canceled'?'canceled':'queued',row.id,lease).run();
    results.push({id:row.id,status:updated.meta.changes?status:'discarded',phase,completedTasks:changed});
   }
+  }finally{invocationBudget?.release(160);}
  }
  return results;
 }

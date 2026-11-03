@@ -103,8 +103,8 @@
       const running=ACTIVE.has(job.status);owner.peopleStatus=running?'loading':owner.people?.length?'complete':job.status==='complete'?'empty':'error';
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
-      const ref={id:job.id,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||''};references.set(owner,ref);owner.buyerResearchJob=ref;
-      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({dossier:1,company:1,roles:2,people:3,identity:4,contacts:5,review:5})[job.phase]||1,total:5,checkpointAt:job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      const ref={id:job.id,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
+      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
     }

@@ -22,3 +22,9 @@ test('buyer progress has accessible live status and bounded progress bar',()=>{
  assert.match(ui,/buyer-research-progress-bar/);
  assert.match(css,/\.buyer-research-progress ol/);
 });
+
+test('actual progress panel identifies queued work, saved activity and request age rather than an idle spinner',()=>{
+ const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const now=Date.now(),html=context.buyerResearchProgressHtml({buyerResearchProgress:{jobId:'saved-job',phase:'official',executionStatus:'queued',step:1,startedAt:new Date(now-300000).toISOString(),elapsedSeconds:300,checkpointAt:new Date(now-180000).toISOString(),completedChecks:2,inProgressChecks:0,label:'Reading official company sources'}}),dom=new JSDOM(html),text=dom.window.document.body.textContent;
+ assert.match(text,/Research queued/);assert.match(text,/300s since request/);assert.match(text,/2 saved checks/);assert.match(text,/No new saved activity/);dom.window.close();
+});
