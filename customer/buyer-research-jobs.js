@@ -74,8 +74,8 @@
     function apply(scope,job,options){
       if(!scope.current()||!matching(scope,job))return false;
       const previous=references.get(scope.owner);if(previous?.id===job.id&&Number(job.revision)<Number(previous.revision))return false;
-      const unchanged=previous?.id===job.id&&Number(job.revision)===Number(previous.revision)&&previous.status===job.status;
-      const source=job.candidate||{},owner=scope.owner,jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
+      const unchanged=!job.retainedEvidenceRecovered&&previous?.id===job.id&&Number(job.revision)===Number(previous.revision)&&previous.status===job.status;
+      const owner=scope.owner,source=root.LeadIntelDiscovery?.mergeRetainedBuyerResearch?.(owner,job.candidate||{},{retainPeople:true})||job.candidate||{},jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
       for(const person of (unchanged?[]:source.people||[]).slice(0,10)){
         const existing=byId.get(String(person.id));if(selected&&!selected.has(String(person.id)))continue;
         if(existing){
@@ -93,7 +93,7 @@
         if(Array.isArray(source[field])){if(source[field].length)owner[field]=bounded(source[field]);}
         else{
           const next=bounded(source[field]);
-          if(field==='buyerDiscovery'&&owner[field]?.companyDossier?.status==='complete'&&next.companyDossier?.status!=='complete')next.companyDossier={...owner[field].companyDossier,lastAttempt:next.companyDossier?.lastAttempt||{status:'failed',reason:'Latest research remains incomplete',research:next.companyDossier}};
+          if(field==='buyerDiscovery'&&owner[field]?.companyDossier?.status==='complete'&&next.companyDossier?.status!=='complete')next.companyDossier=next.companyDossier?.status?{...owner[field].companyDossier,lastAttempt:next.companyDossier.lastAttempt||{status:next.companyDossier.status,reason:next.companyDossier.reason||'Company research remains incomplete',research:next.companyDossier}}:owner[field].companyDossier;
           owner[field]={...(owner[field]||{}),...next};
         }
       }

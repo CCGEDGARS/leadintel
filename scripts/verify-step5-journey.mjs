@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {journeyFixture,loadPlaywright,workspaceId,sessionToken,sourceUrl} from '../backend/test/step5-journey-fixture.mjs';
+import replayViscaria from '../customer/test/fixtures/viscaria-contact-replay.cjs';
 import largeBuyerSnapshot from '../customer/test/fixtures/buyer-large-snapshot.cjs';
 
 const sourceFiles=['customer/index.html','customer/discovery-ui.js','customer/discovery-engine.js','customer/buyer-research-jobs.js','customer/company-dossier.js','customer/company-dossier-ui.js','customer/server-bridge.js','customer/profile-engine.js','customer/market-engine.js','backend/src/buyer-research-store.js','backend/src/buyer-research-runner.js','backend/src/buyer-research-routes.js','backend/src/customer-state.js','backend/src/workspace-record-store.js','backend/test/step5-journey-fixture.mjs','backend/test/step5-journey.test.mjs','scripts/verify-step5-journey.mjs'];
@@ -189,6 +190,43 @@ export async function verifyConfirmedFourJourney({artifactDir='/tmp/leadintel-co
   const evidence={verdict:'LOCAL_CONTROLLED_ACCEPTANCE',mainContacts:4,confirmedWorkEmails:mixedChannels?2:4,confirmedPhones:mixedChannels?1:0,confirmedLinkedin:mixedChannels?1:0,mixedChannels,hiddenOtherContacts:6,unconfirmedPeopleNeverPromoted:true,originalSourceRead:true,freshBrowserReopen:true,readOnlyProviderReplays:f.providerCalls.length-providerCalls,authenticatedBrowserContexts:contexts.length,outboundMessages:0,paidContactRequests:0,wholeResearchComplete:false,largeSavedResearch,retainedSnapshotBytes,researchCommandBytes:f.calls.filter(call=>call.path==='/api/buyers/research'&&call.method==='POST').map(call=>call.payloadBytes),sourceSha256,requests:requestTrace(f.calls),screenshots};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
  }catch(error){await fs.mkdir(artifactDir,{recursive:true});if(page)await page.screenshot({path:path.join(artifactDir,'failure.png'),fullPage:true}).catch(()=>{});console.error('Confirmed-four browser failure',JSON.stringify({error:String(error),errors,requests:requestTrace(f.calls)}));throw error;}
  finally{await Promise.allSettled(contexts.map(context=>context.close()));await browser.close();await f.close();}
+}
+
+export async function verifyRetainedViscariaJourney({artifactDir='/tmp/leadintel-viscaria-retention'}={}){
+ const sourceSha256=await sourceHashes(),{c:full,pages,searches,recordedAt}=replayViscaria(),damaged=structuredClone(full);
+ const robert=full.people.find(p=>p.name==='Robert Åkerlind');robert.linkedinProfileReview={status:'review_required',reason:'Multiple indexed profiles',checkedAt:new Date().toISOString(),urls:['https://linkedin.com/in/robert-akerlind','https://linkedin.com/in/other-robert']};
+ for(const p of damaged.people)if(!['Robert Åkerlind','Simon Krekula'].includes(p.name)){p.publicEmailEvidence=null;p.linkedinIdentityEvidence=null;p.publicLinkedinUrl='';p.linkedin_url='';p.publicNameUrl=pages[1].url;}
+ const f=await journeyFixture({durableJobs:true,initialCandidate:damaged,externalFetch:async input=>{const url=typeof input==='string'?input:input.url,row=pages.find(r=>r.url===url);if(!row)return null;const text=row.markdown.replaceAll('&','&amp;').replaceAll('<','&lt;');return new Response('<html><body><pre>'+text+'</pre></body></html>',{headers:{'Content-Type':'text/html'}});},researchServices:{
+  search:async()=>searches,
+  read:async url=>pages.find(r=>r.url===url)||{url,markdown:'Viscaria company directory. Contact details are listed on the procurement page.',metadata:{sourceURL:url,source:'direct-fallback'}},
+  dossier:async()=>({status:'partial',continuation:false,passes:[{provider:'openai',status:'partial'},{provider:'gemini',status:'partial'}],gaps:['Controlled provider availability gap']}),
+ }});
+ const command=async body=>{const response=await fetch(f.origin+'/api/buyers/research?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify(body)});assert.equal(response.status,200);return (await response.json()).job;};
+ let page;const contexts=[],errors=[],{chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ async function open(){const ctx=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(ctx);await ctx.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);return page;}
+ const cards=()=>page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li');
+ async function four(){await page.waitForFunction(()=>{const c=discovery.selectedProspects[0];return LeadIntelDiscovery.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds.length===4;});assert.equal(await cards().count(),4);for(const name of ['Robert Åkerlind','Charlotte Odenberger','Andreas Ridderström','Simon Krekula'])assert.ok((await cards().allTextContents()).some(t=>t.includes(name)),name);assert.equal(await page.locator('.buyer-other-contacts').evaluate(el=>el.open),false);assert.equal(await page.locator('.buyer-potential-list').isVisible(),false);}
+ try{
+  await fs.mkdir(artifactDir,{recursive:true});full.crmId=f.candidate.crmId;
+  const old=await command({candidate:full}),currentInput={...damaged,crmId:f.candidate.crmId};
+  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',result_json=? WHERE id=?").run(JSON.stringify(full),old.id);
+  const current=await command({candidate:currentInput,force:true,jobId:old.id,expectedRevision:old.revision});f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done' WHERE id=?").run(current.id);
+  await open();await four();assert.equal(f.providerCalls.length,0,'read-only reopen recovers server source facts without provider dispatch');
+  const emailCard=cards().filter({hasText:'Robert Åkerlind'});assert.equal(await emailCard.locator('[data-prospect-enrich-email]').getAttribute('aria-pressed'),'true');assert.equal(await emailCard.locator('[data-keep-buyer]').isEnabled(),true);
+  // Exercise the actual visible Refresh command and a real official-phase checkpoint.
+  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='queued',current.id);await four();
+  const next=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();await f.runJobs(next.id);await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.revision>0);await four();
+  await page.locator('[data-cancel-buyer-research]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='canceled');await settleInitialSave(page);await four();
+  const shot=path.join(artifactDir,'four-recorded-viscaria-contacts.png');await cards().first().evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await page.screenshot({path:shot,fullPage:true});
+  // Confirm that the accepted email and profile-only cards reach their respective
+  // existing persisted handoffs with exact person identity and no outbound action.
+  await page.locator('[data-keep-buyer][data-person-id="'+robert.id+'"]').click();await page.waitForFunction(id=>loadMeta().selectedEmailBuyer?.personId===id,robert.id);assert.equal(await page.evaluate(()=>loadMeta().selectedEmailBuyer.email),robert.publicEmail);
+  await page.evaluate(()=>showDiscoveryStep('buyers'));await ready(page);const charlotte=full.people.find(p=>p.name==='Charlotte Odenberger');await page.locator('[data-keep-buyer][data-person-id="'+charlotte.id+'"]').click();await page.waitForFunction(id=>loadMeta().selectedLinkedInBuyer?.personId===id,charlotte.id);const profile=await page.evaluate(()=>loadMeta().selectedLinkedInBuyer);assert.equal(profile.channel,'linkedin');assert.equal(profile.linkedinUrl,charlotte.publicLinkedinUrl);
+  await settleInitialSave(page);await page.context().close();await open();await page.evaluate(()=>showDiscoveryStep('buyers'));await four();assert.equal(await page.evaluate(()=>loadMeta().selectedLinkedInBuyer?.personId),charlotte.id);
+  for(const table of ['gmail_messages','microsoft_mail_messages','gmail_test_messages','outreach_automation_queue','crm_enrichment_requests'])assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM '+table).get().n,0);assert.deepEqual(errors,[]);assert.deepEqual(await sourceHashes(),sourceSha256);
+  const evidence={verdict:'LOCAL_RECORDED_SOURCE_ACCEPTANCE',recordedAt,mainContacts:4,hiddenOthers:true,historyRecoveryReadOnly:true,refreshRetainsFour:true,freshBrowserReopen:true,emailRecipient:robert.publicEmail,linkedinRecipient:profile.linkedinUrl,outboundMessages:0,paidContactRequests:0,wholeResearchComplete:false,sourceSha256,screenshots:[shot],requests:requestTrace(f.calls)};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
+ }catch(e){await fs.mkdir(artifactDir,{recursive:true});if(page)await page.screenshot({path:path.join(artifactDir,'failure.png'),fullPage:true}).catch(()=>{});console.error('Viscaria retention journey failure',String(e),JSON.stringify(requestTrace(f.calls)));throw e;}
+ finally{await Promise.allSettled(contexts.map(c=>c.close()));await browser.close();await f.close();}
 }
 
 if(process.argv[1]&&fileURLToPath(import.meta.url)===path.resolve(process.argv[1]))verifyStep5Journey({artifactDir:process.env.LEADINTEL_STEP5_ARTIFACT_DIR}).then(result=>console.log(JSON.stringify(result,null,2))).catch(error=>{console.error(error);process.exitCode=1;});

@@ -102,7 +102,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      const plan=D.buyerResearchPlan(candidate,input.profile);
      const result=await (services.dossier||researchWorkspaceDossier)(env,row.workspace_id,{company:candidate.company,domain:row.domain,seller:parse(D.buyerFitContext(input.profile)),roles:input.roles,formulas:plan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',incremental:true},{signal:controller.signal,guard,authorization:{userId:row.requested_by,sessionTokenHash:row.session_hash},writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]}),providerTimeoutMs:Math.min(remaining,180000)});
      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};acquirePeople();
-     if(result.status==='complete')phase=nextPhase[phase];
+     if(result.status==='complete'||result.continuation===false){if(result.status!=='complete')diagnostics.push({phase,reason:'Bounded dossier attempt incomplete; continuing contact research with its evidence gaps retained',at:new Date().toISOString()});phase=nextPhase[phase];}
     }catch(error){if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED'||controller.signal.aborted)throw error;diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='identities'){
     if(input.scope==='selected_buyers'){phase=nextPhase[phase];}else{
@@ -135,6 +135,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}
   }finally{
    accepting=false;clearTimeout(timer);controller.abort();
+   // Count only actual completed read tasks in this job, including the official
+   // phase before person research starts. Retained history is not a new read.
+   const completedReads=(await allRows()).filter(r=>r.sourceRead===true&&D.canonicalDomain(r.url)===row.domain);
+   report.officialPageReads=[...new Map([...(report.officialPageReads||[]),...completedReads.map(r=>({url:r.url,sourceRead:true,checkedAt:r.extractedAt}))].map(r=>[r.url,r])).values()].slice(0,120);
+   report.officialPages=report.officialPageReads.length;
+   candidate.publicResearch.accountability=report;candidate.publicResearch.officialPages=report.officialPages;
    candidate.peopleStatus=candidate.people?.length?'complete':status==='queued'?'loading':'empty';
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
