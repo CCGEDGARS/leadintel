@@ -1,10 +1,10 @@
 # Creator Library
 
-Owner-approved 1 November 2026. Private platform-creator source management in Messages, as a compact collapsed row directly below Writing Assistant. Separate from customer personal templates and Books/Skills.
+Owner-approved 1 November 2026. Private platform-creator source management in Messages, as a compact row directly below Writing Assistant that opens a wide window. Separate from customer personal templates and Books/Skills.
 
 ## Use
 
-1. Sign in with the configured creator account. Expand **Creator Library**.
+1. Sign in with the configured creator account. Click the **Creator Library** row below Writing Assistant to open its wide window.
 2. Enter your four-digit creator PIN. Production verifies it server-side using `CREATOR_LIBRARY_PIN_SHA256`; the sign-in password cannot substitute for a configured PIN. Nothing is stored in browser storage or frontend code.
 3. Choose **New script**, or copy an existing active master into a source draft.
 4. Choose Emails, Messages (LinkedIn direct messages), or Phone Calls, and a style. Optional subfolders group sources within each channel.
@@ -35,3 +35,7 @@ Tests cover owner/password/legacy-write protection, cookie session binding, thro
 No data migration: source scripts, version histories, active masters and working customer drafts retain their records. Existing owner authorization, throttling, explicit activation and session expiry remain in force. Rollback: revert the placement/PIN commit and redeploy both frontend and Worker; no database restoration is needed.
 
 Acceptance: compact row beneath Writing Assistant; click/keyboard disclosure; wrong PIN rejected without private source reads; correct PIN unlocks; lock clears private editor; session/workspace change clears it; saves and channel generation preserve their existing lifecycle. Tests cover these boundaries with DOM interaction and the real SQLite-backed API. Exact release proof and authenticated production checks are reported separately.
+
+## Wide workspace — 4 November 2026
+
+The sidebar entry opens a responsive modal workspace up to 1,120 pixels wide. The dialog sits outside the message rail, with a sticky heading, Close button, scrollable contents, larger source fields and three channel folders across on desktop. Small screens use the available viewport and stack the folders. Close and Escape preserve unsaved editor contents for reopening; Lock, expiry and account/workspace changes close the window and clear private contents. Opening does not read private sources before PIN unlock. The PIN and server protections are unchanged. No data migration is required.

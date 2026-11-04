@@ -2,14 +2,19 @@
 'use strict';
 function mount(document,{host,request,refresh,scope}){
  const el=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
- const panel=el('details');panel.id='creator-library';panel.className='cl-panel';panel.hidden=true;panel.append(el('summary','Creator Library'));
- const content=el('div'),notice=el('p');notice.setAttribute('role','status');panel.append(content,notice);host.after(panel);
+ const panel=el('details');panel.id='creator-library';panel.className='cl-panel';panel.hidden=true;const trigger=el('summary','Creator Library');trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-controls','creator-library-dialog');trigger.setAttribute('aria-expanded','false');panel.append(trigger);
+ const dialog=el('dialog');dialog.id='creator-library-dialog';dialog.className='cl-dialog';dialog.setAttribute('aria-labelledby','creator-library-title');
+ const header=el('header'),title=el('h2','Creator Library'),closeButton=el('button','Close');title.id='creator-library-title';closeButton.type='button';closeButton.className='secondary-btn';closeButton.setAttribute('aria-label','Close Creator Library');header.append(title,closeButton);
+ const content=el('div'),notice=el('p');content.className='cl-content';notice.className='cl-status';notice.setAttribute('role','status');dialog.append(header,content,notice);host.after(panel);document.body.append(dialog);
  let allowed=false,unlocked=false,data=null,editing=null,dirty=false,busy=false,epoch=0,identity='',timer;
  const say=text=>notice.textContent=text;
+ function close(){const wasOpen=dialog.open;if(dialog.open){if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');}trigger.setAttribute('aria-expanded','false');if(wasOpen&&trigger.isConnected&&!panel.hidden)trigger.focus();}
+ function open(){if(!allowed)return;trigger.setAttribute('aria-expanded','true');if(!dialog.open){if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');}(content.querySelector('input')||closeButton).focus();}
+ trigger.onclick=event=>{event.preventDefault();open();};closeButton.onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>trigger.setAttribute('aria-expanded',String(dialog.open)));
  const button=(text,fn)=>{const b=el('button',text);b.type='button';b.className='secondary-btn';b.onclick=async()=>{if(busy)return;busy=true;b.disabled=true;const captured=epoch;try{await fn();}catch(e){if(captured===epoch)say(e.message);}finally{busy=false;if(b.isConnected)b.disabled=false;}};return b;};
  const confirm=text=>root.LeadIntelDialogs?.confirm(text)??Promise.resolve(false);
  async function load(){const captured=epoch,result=await request('/creator');if(captured!==epoch)return;data=result;unlocked=true;draw();}
- function clear(){epoch++;clearTimeout(timer);unlocked=false;data=null;editing=null;dirty=false;content.replaceChildren();panel.open=false;}
+ function clear(){epoch++;clearTimeout(timer);unlocked=false;data=null;editing=null;dirty=false;content.replaceChildren();notice.textContent='';panel.open=false;close();}
  async function lock(){if(dirty&&!await confirm('Discard the unsaved script changes and lock Creator Library?'))return;await request('/creator/lock',{method:'POST'});clear();draw();say('Creator Library locked.');}
  function input(label,value,{multiline=false,maxLength=12000}={}){const l=el('label',label),n=el(multiline?'textarea':'input');n.value=value||'';n.maxLength=maxLength;if(multiline)n.rows=9;n.addEventListener('input',()=>dirty=true);l.append(n);content.append(l);return n;}
  async function edit(row){if(dirty&&!await confirm('Discard the unsaved script changes?'))return;editing={...row};dirty=false;draw();}
@@ -33,6 +38,7 @@ function mount(document,{host,request,refresh,scope}){
    const review=el('label'),check=el('input');check.type='checkbox';review.append(check,document.createTextNode(' I reviewed the original, pattern, reusable fields and claims.'));content.append(review);
    const controls=el('div');controls.className='cl-actions';controls.append(button('Copy original to pattern',async()=>{if(body.value&&!await confirm('Replace the script pattern with the original text?'))return;body.value=original.value;dirty=true;}),button('Save draft',async()=>{if(!check.checked)throw Error('Review the script and tick the confirmation.');const captured=epoch;const result=await request('/creator/'+row.id,{method:'PUT',body:{name:name.value,folder:folder.value,channel:channel.value,style:style.value,original:original.value,subject:channel.value==='email'?subject.value:'',body:body.value,expectedRevision:row.revision}});if(captured!==epoch)return;editing=result.script;dirty=false;await load();say('Draft saved. Activate it below when ready.');}),button('Close editor',async()=>{if(dirty&&!await confirm('Discard unsaved script changes?'))return;editing=null;dirty=false;draw();}));content.append(controls);
   }
+  const folders=el('div');folders.className='cl-folders';content.append(folders);
   for(const [channel,title] of [['email','Emails'],['linkedin','Messages'],['phone','Phone Calls']]){
    const section=el('details');section.open=true;section.append(el('summary',title));
    const scripts=(data?.scripts||[]).filter(r=>r.channel===channel&&!r.deleted),groups=[...new Set(scripts.map(r=>r.folder||'General'))].sort();
@@ -42,12 +48,12 @@ function mount(document,{host,request,refresh,scope}){
     const card=el('details');card.append(el('summary',row.name+' · v'+row.revision+(isActive?' · Active':' · Draft')));const pre=el('pre',row.original);card.append(pre);
     card.append(button('Edit',()=>edit(row)),button('Activate version',async()=>{if(dirty)throw Error('Save or close unsaved edits before activating.');if(!await confirm('Activate “'+row.name+'” v'+row.revision+' as the '+row.style+' master for '+title+'? New preparations will use it across LeadIntel. Existing drafts are preserved.'))return;await request('/creator/'+row.id+'/activate',{method:'POST',body:{expectedRevision:row.revision,expectedCoreRevision:active?.revision||0}});await load();await refresh();say('Version activated. Choose its style or Update message to use it. Existing drafts are unchanged.');}),button('Remove source draft',async()=>{if(!await confirm('Remove this source draft? Its history is retained. An activated master remains active until explicitly replaced.'))return;await request('/creator/'+row.id,{method:'DELETE',body:{expectedRevision:row.revision}});if(editing?.id===row.id){editing=null;dirty=false;}await load();}));
     if(row.history?.length){const history=el('details');history.append(el('summary','Version history'));for(const old of row.history.slice().reverse())history.append(button('Review v'+old.revision,()=>edit({...old,id:row.id,revision:row.revision,history:row.history})));card.append(history);}sub.append(card);
-   }section.append(sub);}content.append(section);
+   }section.append(sub);}folders.append(section);
   }
   const removed=el('details');removed.append(el('summary','Removed source drafts'));for(const row of data?.scripts||[]){if(!row.deleted)continue;removed.append(button('Restore '+row.name,async()=>{await request('/creator/'+row.id,{method:'PUT',body:{...row,expectedRevision:row.revision}});await load();say('Source draft restored. Activation remains separate.');}));}if(removed.childNodes.length>1)content.append(removed);
   const bundled=el('details');bundled.append(el('summary','Existing active masters'));for(const row of data?.active||[]){if(row.deleted||row.mode==='inmail')continue;bundled.append(button('Copy '+row.channel+' · '+row.name+' into source draft',()=>edit({...row,id:root.crypto.randomUUID(),revision:0,history:[],original:row.original||row.body,folder:'Imported masters'})));}content.append(bundled);
  }
- return {render(canManage){const next=scope();if(next!==identity){clear();identity=next;allowed=false;}allowed=Boolean(canManage);panel.hidden=!allowed;if(!allowed){clear();return;}if(!content.childNodes.length)draw();},destroy(){clear();panel.remove();}};
+ return {render(canManage){const next=scope();if(next!==identity){clear();identity=next;allowed=false;}allowed=Boolean(canManage);panel.hidden=!allowed;if(!allowed){clear();return;}if(!content.childNodes.length)draw();},destroy(){clear();panel.remove();dialog.remove();}};
 }
 const api={mount};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelCreatorLibrary=api;
 })(typeof window==='object'?window:globalThis);

@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');const {JSDOM}=require('jsdom');
 const tick=()=>new Promise(r=>setImmediate(r));
 async function fixture(){
- const dom=new JSDOM('<aside><section id="host"></section></aside>',{url:'https://app.test/customer/',runScripts:'outside-only'}),w=dom.window;w.LeadIntelDialogs={confirm:async()=>true};w.eval(fs.readFileSync(require.resolve('../creator-library.js'),'utf8'));
+ const dom=new JSDOM('<aside><section id="host"></section></aside>',{url:'https://app.test/customer/',runScripts:'outside-only'}),w=dom.window;w.LeadIntelDialogs={confirm:async()=>true};w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};w.eval(fs.readFileSync(require.resolve('../creator-library.js'),'utf8'));
  let current='owner|workspace',saved=[],active=[],calls=[],refreshes=0;
  const ui=w.LeadIntelCreatorLibrary.mount(w.document,{host:w.document.getElementById('host'),scope:()=>current,refresh:async()=>{refreshes++;},request:async(path,options={})=>{calls.push({path,...options});if(path==='/creator/unlock'){if(options.body.password!=='2468')throw Error('Incorrect creator PIN');return {expiresAt:Date.now()+900000};}if(path==='/creator/lock')return {ok:true};if(path==='/creator')return {scripts:saved,active};if(path.endsWith('/activate')){active=[{id:'phone:professional',creatorSource:{id:saved[0].id,revision:saved[0].revision},revision:1}];return {ok:true};}const body=options.body;const script={...body,id:path.split('/').at(-1),revision:body.expectedRevision+1};saved=[script];return {script};}});
  const find=text=>[...w.document.querySelectorAll('button')].find(b=>b.textContent===text),field=text=>[...w.document.querySelectorAll('label')].find(l=>l.firstChild?.textContent===text)?.querySelector('input,textarea,select');
@@ -17,15 +17,29 @@ test('manual original and pattern save as draft; activation is separate and refr
 
 test('compact disclosure sits directly after Writing Assistant and opens to a PIN without reading private sources',async()=>{
  const f=await fixture();try{
-  f.ui.render(true);const d=f.w.document,panel=d.getElementById('creator-library'),pin=panel.querySelector('[type=password]');
+  f.ui.render(true);const d=f.w.document,panel=d.getElementById('creator-library'),dialog=d.getElementById('creator-library-dialog'),pin=dialog.querySelector('[type=password]');
   assert.equal(d.getElementById('host').nextElementSibling,panel);assert.equal(panel.parentElement.tagName,'ASIDE');
   assert.equal(panel.open,false);assert.equal(panel.querySelector('summary').textContent,'Creator Library');assert.equal(f.calls.length,0);
-  panel.querySelector('summary').click();assert.equal(panel.open,true);
+  panel.querySelector('summary').click();assert.equal(dialog.open,true);
   assert.equal(pin.inputMode,'numeric');assert.equal(pin.maxLength,4);assert.equal(pin.minLength,4);assert.equal(pin.pattern,'[0-9]{4}');assert.equal(pin.closest('label').textContent,'PIN code');
   pin.value='0000';d.querySelector('form').dispatchEvent(new f.w.Event('submit',{cancelable:true}));await tick();
-  assert.equal(pin.value,'');assert.match(panel.textContent,/Incorrect creator PIN/);assert.equal(f.calls.some(c=>c.path==='/creator'),false);assert.equal(f.find('New script'),undefined);
+  assert.equal(pin.value,'');assert.match(dialog.textContent,/Incorrect creator PIN/);assert.equal(f.calls.some(c=>c.path==='/creator'),false);assert.equal(f.find('New script'),undefined);
   pin.value='2468';d.querySelector('form').dispatchEvent(new f.w.Event('submit',{cancelable:true}));await tick();await tick();assert.ok(f.find('New script'));
-  await f.click('Lock library');assert.equal(panel.open,false);assert.equal(panel.querySelector('textarea'),null);
-  panel.querySelector('summary').click();assert.ok(panel.querySelector('[type=password]'));
+  await f.click('Lock library');assert.equal(panel.open,false);assert.equal(dialog.querySelector('textarea'),null);
+  panel.querySelector('summary').click();assert.ok(dialog.querySelector('[type=password]'));
  }finally{f.ui.destroy();f.w.close();}
+});
+
+test('wide dialog preserves an unsaved original on Close and Escape; workspace changes close and clear it',async()=>{
+ const f=await fixture();try{
+  f.ui.render(true);const d=f.w.document,trigger=d.querySelector('#creator-library>summary'),dialog=d.getElementById('creator-library-dialog');
+  trigger.click();assert.equal(dialog.open,true);assert.equal(dialog.parentElement,d.body);assert.equal(d.activeElement,dialog.querySelector('[type=password]'));
+  dialog.querySelector('[type=password]').value='2468';d.querySelector('form').dispatchEvent(new f.w.Event('submit',{cancelable:true}));await tick();await f.click('New script');
+  const original=f.field('Original script (preserved as supplied)');original.value='An unsaved original to keep';original.dispatchEvent(new f.w.Event('input'));
+  dialog.querySelector('[aria-label="Close Creator Library"]').click();assert.equal(dialog.open,false);assert.equal(d.activeElement,trigger);assert.equal(trigger.getAttribute('aria-expanded'),'false');
+  trigger.click();assert.equal(dialog.open,true);assert.equal(f.field('Original script (preserved as supplied)'),original);assert.equal(original.value,'An unsaved original to keep');
+  dialog.dispatchEvent(new f.w.Event('cancel',{cancelable:true}));assert.equal(dialog.open,false);assert.equal(original.value,'An unsaved original to keep');
+  trigger.click();f.scope('owner|another-workspace');f.ui.render(true);assert.equal(dialog.open,false);assert.equal(dialog.querySelector('textarea'),null);assert.ok(dialog.querySelector('[type=password]'));
+  f.ui.destroy();assert.equal(d.getElementById('creator-library-dialog'),null);assert.equal(d.getElementById('creator-library'),null);
+ }finally{f.w.close();}
 });
