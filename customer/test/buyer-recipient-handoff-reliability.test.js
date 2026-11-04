@@ -43,6 +43,14 @@ test('message chooser resolves the original buyer by stable ID and rejects a cha
   if(changed){assert.equal(selected,undefined);assert.equal(closed,0);}else{assert.equal(selected[2].personId,'teemu');assert.equal(closed,1);}
  }
 });
+test('general Messages continuation excludes LinkedIn-only saved buyers',async()=>{
+ const h=fixture();h.ctx.enrichmentResults.clear();h.ctx.esc=String;let opened=0;h.ctx.buyerContinuationIssue=()=>null;h.ctx.buyerReviewDialog=()=>{opened++;throw new Error('No email recipient should be offered');};
+ assert.equal(await h.ctx.continueBuyerMessages(),false);assert.equal(opened,0);assert.equal(h.events.length,0);assert.equal(h.meta.scriptBuyer,undefined);
+});
+test('message chooser cannot switch to LinkedIn when its reviewed email loses confirmation',async()=>{
+ const h=fixture();let handler,selected=0,closed=0;const button={dataset:{messageChoice:'0'},addEventListener:(_kind,fn)=>handler=fn},status={};h.ctx.esc=String;h.ctx.buyerContinuationIssue=()=>null;h.ctx.buyerReviewDialog=()=>({querySelectorAll:()=>[button],querySelector:()=>status,close(){closed++;}});h.ctx.addBuyerToFlow=async()=>{selected++;return true;};h.ctx.startLinkedInBuyerMessage=async()=>{selected++;return true;};
+ assert.equal(await h.ctx.continueBuyerMessages(),true);h.contact.email_status='unverified';await handler();assert.equal(selected,0);assert.equal(closed,0);assert.match(status.textContent,/email.*confirmation/i);
+});
 test('an obsolete LinkedIn review dialog cannot confirm a same-ID replacement',async()=>{
  const h=fixture();let handler,writes=0;h.ctx.esc=String;h.ctx.buyerReviewDialog=()=>({querySelector:selector=>({addEventListener:(_event,fn)=>{if(selector==='[data-review-confirm]')handler=fn;}}),close(){}});h.ctx.saveBuyerLinkedInReview=async()=>{writes++;return true;};install(h.ctx,'reviewBuyerLinkedIn');
  await h.ctx.reviewBuyerLinkedIn(h.candidate.domain,0,{personId:h.person.id});h.person.name='Replacement Buyer';await handler({target:{disabled:false}});assert.equal(writes,0);
