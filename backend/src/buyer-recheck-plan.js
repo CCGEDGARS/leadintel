@@ -4,7 +4,7 @@ const parse=value=>{try{return JSON.parse(value);}catch{return {};}};
 // Only server-owned, same-context and same-identity receipts can save work.
 export function prepareBuyerRecheck(input,history=[]){
  if(input.scope!=='selected_buyers')return;
- const previous=history.filter(row=>parse(row.input_json).workspaceContext===input.workspaceContext).map(row=>parse(row.result_json));
+ const entries=history.filter(row=>parse(row.input_json).workspaceContext===input.workspaceContext).map(row=>({input:parse(row.input_json),candidate:parse(row.result_json)})),previous=entries.map(row=>row.candidate);
  const plans={};
  for(const person of input.candidate.people){
   const identity=D.buyerResearchIdentityKey(input.candidate,person),matches=previous.flatMap(candidate=>(candidate.people||[]).filter(p=>String(p.id)===String(person.id)&&D.buyerResearchIdentityKey(candidate,p)===identity));
@@ -12,8 +12,9 @@ export function prepareBuyerRecheck(input,history=[]){
    const saved=matches[0];
    for(const field of ['contactResearch','emailResearch','publicEmail','publicEmailUrl','publicEmailEvidence','publicEmailSourceCheck','publicPhone','publicPhoneUrl','publicPhoneEvidence','publicPhoneSourceCheck','linkedinIdentityEvidence','patternFindings','gmailMatches'])if(saved[field]!==undefined)person[field]=saved[field];
   }
-  const receipts=matches.flatMap(p=>p.contactResearch?.checks?.followup?.queryLog||[]);
-  plans[String(person.id)]=D.buyerRecheckPlan(input.candidate,person,receipts);
+  const receipts=[...matches.flatMap(p=>p.contactResearch?.checks?.followup?.queryLog||[]),...entries.flatMap(row=>row.candidate.people?.some(p=>String(p.id)===String(person.id)&&D.buyerResearchIdentityKey(row.candidate,p)===identity)?row.input.recheck?.plans?.[String(person.id)]?.history||[]:[])];
+  const completed=[...new Map(receipts.filter(row=>row.status==='complete'&&(!row.searchStatus||row.searchStatus==='complete')&&(!row.sourceReads||row.sourceReads.every(source=>['complete','not_needed'].includes(source.status)))).sort((a,b)=>Date.parse(a.checkedAt)-Date.parse(b.checkedAt)).map(row=>[row.query,{query:row.query,status:'complete',checkedAt:row.checkedAt}])).values()].slice(-32);
+  plans[String(person.id)]={...D.buyerRecheckPlan(input.candidate,person,completed),history:completed};
  }
  // Company research is retained for context, not rerun for a contact button.
  if(previous[0]){

@@ -44,3 +44,14 @@ test('focused Recheck stops contact processing at its active-time budget and is 
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',result_json=? WHERE id=?").run(JSON.stringify(candidate),job.id);
  assert.equal(await recoverInterruptedContactJob(f.env,{jobId:job.id}),null);
 });
+test('exhausted alternative receipts survive more rechecks than the bounded job-history window',async t=>{
+ const f=await buyerJobsFixture(t);let queries=0;
+ for(let i=0;i<12;i++){
+  const job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true,personIds:['robert']}),input=parse(job.input_json),candidate=parse(job.result_json),plan=input.recheck.plans.robert;
+  queries+=plan.queries.length;
+  if(i>=2)assert.equal(plan.queries.length,0);
+  if(plan.queries.length)candidate.people[0].contactResearch={version:1,identityKey:D.buyerResearchIdentityKey(candidate,candidate.people[0]),checks:{followup:{status:'complete',queryLog:plan.queries.map(query=>({query,status:'complete',checkedAt:new Date().toISOString()}))}}};
+  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',result_json=? WHERE id=?").run(JSON.stringify(candidate),job.id);
+ }
+ assert.equal(queries,7);
+});
