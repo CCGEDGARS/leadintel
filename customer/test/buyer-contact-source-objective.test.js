@@ -32,3 +32,23 @@ test('fresh linked-document attribution survives a full legacy source-evidence c
  const merged=D.mergeOfficialContactInventory(before,after,candidate),restored=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerDiscovery:{officialContactInventory:merged}}]}).selectedProspects[0];
  assert.ok(restored.buyerDiscovery.officialContactInventory.sourceEvidence.some(row=>row.url===pdf));assert.ok(restored.buyerDiscovery.officialContactInventory.channels.some(row=>row.value==='suppliers@acme.example'&&row.url===pdf));assert.equal(D.officialContactCoveragePassed(restored),true);
 });
+
+test('a completed historical archive cannot consume the new contact objective or leave its limit sticky',async()=>{
+ const c=scenario(),stamp=new Date().toISOString(),historical=Array.from({length:125},(_,i)=>({url:root+`investors/reports-and-presentations/?t=16&y=${1900+i}`,markdown:'# Acme Labs financial archive',sourceRead:true,extractedAt:stamp}));
+ const inventory=D.officialCompanyContactInventory(historical,c);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,discoveryScope:'20261103-contact-links-v1',status:'partial',startedAt:stamp,checkedAt:stamp,completedUrls:historical.slice(0,120).map(r=>r.url),pendingUrls:[],queries:D.officialContactResearchQueries(c).map(query=>({query,status:'complete',results:8})),reads:historical.slice(0,120).map(r=>({url:r.url,status:'complete',reason:''})),failures:[],discoveryTruncated:true};c.buyerDiscovery={officialContactInventory:inventory};
+ const reads=[];await D.runOfficialContactResearch(c,{rows:historical,search:async()=>[{url:team}],readPage:async url=>{reads.push(url);return {url,markdown:url===root?`[Team](${team})\n`+historical.map(r=>`[Reports](${r.url})`).join('\n'):'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.ok(reads.includes(team));assert.equal(D.officialContactCoveragePassed(c),true);assert.equal(c.buyerDiscovery.officialContactInventory.research.discoveryTruncated,false);
+ const saved=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(D.officialContactCoveragePassed(saved),true);
+});
+test('a company-linked canonical document keeps its original link and actual URL through reopen',async()=>{
+ const c=scenario(),linked='https://documents.example/contact.pdf',actual=linked+'/';
+ await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>({url:url===linked?actual:url,markdown:url===root?`[Supplier contact](${linked})`:'# Acme Labs\nsuppliers@acme.example'})});
+ assert.equal(D.officialContactCoveragePassed(c),true);const inventory=c.buyerDiscovery.officialContactInventory;
+ assert.ok(inventory.sourceEvidence.some(source=>source.url===actual&&source.linkQuote.includes(linked)));
+ const restored=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(D.officialContactCoveragePassed(restored),true);assert.ok(restored.buyerDiscovery.officialContactInventory.channels.some(channel=>channel.url===actual&&channel.value==='suppliers@acme.example'));
+});
+test('reusing a source in the official owner cannot renew its expired contact proof',async()=>{
+ const c=scenario(),old=new Date(Date.now()-31*86400000).toISOString(),p={id:'alex',name:'Alex Morgan',publicName:'Alex Morgan',title:'Procurement Director',organization:c.company,publicNameUrl:root,identityStatus:'confirmed'};
+ const result=await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>({url,extractedAt:old,markdown:'### Alex Morgan\nProcurement Director\nalex.morgan@acme.example'})});
+ const matched=D.matchPublicBuyerDetails([p],result.freshRows,c.domain,c.company)[0];assert.equal(D.acceptedOfficialBuyerEmail(c,matched),'');assert.equal(matched.publicEmailEvidence.checkedAt,old);
+});

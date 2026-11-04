@@ -53,10 +53,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
   const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
-  const inflightTasks=new Map();
+  const inflightTasks=new Map(),contactTasks=new Set();
+  const readProjection=(value,requested)=>D.buyerSourceReadLocation(candidate,requested,value)?{...value,sourceRead:true}:{url:value.url,metadata:{sourceURL:value.metadata?.sourceURL,url:value.metadata?.url,statusCode:value.metadata?.statusCode},sourceRead:false};
   const executeTaskBody=async(kind,value,operation)=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
-   if(prior?.status==='complete'){const result=parse(prior.result_json);return kind==='read'?{...result,reused:true}:result;}
+   if(phase==='contacts')contactTasks.add(key);
+   if(prior?.status==='complete'){const result=parse(prior.result_json);return kind==='read'?{...readProjection(result,value),reused:true}:result;}
    // A running row belongs to the previous expired/canceled slice. It is not
    // a provider-failure receipt. Keep earlier real failures, but restore the
    // interrupted dispatch; bounded tasks and consecutive idle slices still bound work.
@@ -102,15 +104,15 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    const page=raw?.data||raw||{};
    if(raw?.success===false||page.error||Number(page.metadata?.statusCode)>=400)throw Error('Source read unavailable');
    const supplied=[page.url,page.metadata?.sourceURL,page.metadata?.url].filter(v=>v!==undefined&&v!==null).map(C.url),actual=supplied[0]||C.url(url),text=String(page.markdown||page.content||page.text||'').slice(0,60000);
-   if(!actual||supplied.some(location=>!location||location!==actual)||!text.trim())throw Error('Source read empty or attribution metadata conflicts');
+   if(!actual||!D.buyerSourceReadLocation(candidate,url,page,{move:true})||!text.trim())throw Error('Source read empty or attribution metadata conflicts');
    const trace=page.researchTrace||raw.researchTrace||[];if(trace.length)trace.forEach(observe);else{const provider=({'direct-fallback':'direct','scrapling-fallback':'scrapling',firecrawl:'firecrawl'})[page.metadata?.source];if(provider)observe({provider,operation:'extract',status:'succeeded',results:1});}
-   return {url:actual,markdown:text,links:Array.isArray(page.links)?page.links.slice(0,100):[],metadata:{sourceURL:actual,statusCode:200,source:page.metadata?.source||'unknown'},researchTrace:page.researchTrace||raw.researchTrace||[],sourceRead:true,extractedAt:new Date().toISOString()};
+   return readProjection({url:actual,markdown:text,links:Array.isArray(page.links)?page.links.slice(0,100):[],metadata:{sourceURL:actual,statusCode:200,source:page.metadata?.source||'unknown'},researchTrace:page.researchTrace||raw.researchTrace||[],sourceRead:true,extractedAt:new Date().toISOString()},url);
   });
   const allRows=async()=>{
    // Read bodies own factual attribution. A large search index must not evict
    // the completed company/staff pages merely because task hashes sort first.
-   const tasks=await stmt(env,"SELECT kind,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' AND kind IN ('read','search') ORDER BY CASE kind WHEN 'read' THEN 0 ELSE 1 END,updated_at DESC LIMIT 160",row.id).all();
-   return tasks.results.flatMap(r=>r.kind==='read'?[parse(r.result_json)]:r.kind==='search'?parse(r.result_json).rows||[]:[]).slice(0,160);
+   const tasks=await stmt(env,"SELECT kind,request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' AND kind IN ('read','search') ORDER BY CASE kind WHEN 'read' THEN 0 ELSE 1 END,updated_at DESC LIMIT 160",row.id).all();
+   return tasks.results.flatMap(r=>{const value=parse(r.result_json);return r.kind==='read'?[readProjection(value,r.request_value)]:r.kind==='search'?value.rows||[]:[];}).slice(0,160);
   };
   const reassessRoles=(people=candidate.people||[])=>{if(candidate.buyerRolesChanged&&D.canReassessSavedBuyerRoles(candidate,people,input.profile))candidate.buyerRolesChanged=false;};
   const confirmNamed=()=>{
@@ -158,7 +160,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(candidate.people?.length){
      report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,maxDurationMs:Math.min(remaining,180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
-     const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?Number((await stmt(env,"SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).first())?.n)||0:0;
+     const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)).length:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
     }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='review'){

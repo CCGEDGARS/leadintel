@@ -1,0 +1,13 @@
+# Buyer source-location and plan recovery
+
+The saved owner run had four confirmed priority contacts but remained in review. Read-only encrypted diagnostics identified three distinct source issues: a valid external article added a trailing slash, a third-party person page moved to another host, and a historical company archive left a sticky source-discovery limit after all saved queries/read tasks had completed.
+
+Canonical source matching now allows a trailing slash, a www alias and known tracking parameters while preserving the actual acquired URL. Meaningful query parameters remain binding. A third-party host move with the same path is only a discovery hint: its destination requires a separate guarded read. A second move, a different path, conflicting metadata or an official company source redirected to a foreign host stays unverified. New and restored transport-hop tasks expose no page body to factual consumers until source ownership is established. The independent read tasks remain separately bounded and auditable.
+
+Company contact scope `20261104-contact-plan-v2` records the current planned URL set separately from previously read evidence. Historical completed pages no longer consume the current 120-source allowance. Financial report-index navigation and y/year archive links stay outside contact crawling; explicitly selected reports and contact links remain eligible. Real overflow stays incomplete. Source pages used by the active plan are retained ahead of older context, and source acquisition timestamps survive reuse. Existing contacts and evidence remain preserved through workspace and CRM restoration.
+
+The existing guarded source-scope recovery revisits the latest still-authorized old plan. It does not enable paid channels, increase limits, revive canceled/replaced requests, change the saved seller context or authorize sending. Paid continuation retains the original scope and existing dispatch/commit guards.
+
+Retry accounting considers only unfinished tasks actually used by the current contact pass. Obsolete independent checks from older identities or plans remain in the audit ledger, but cannot hold an exhausted current plan in an idle retry loop. Failed current sources retain their two-attempt bound and explicit research gap; review does not manufacture coverage.
+
+Regression evidence includes failing-before/passing-after canonical/moved-source cases, a two-slice scheduler test preventing a rejected second hop from becoming official email proof, historical-archive recovery, genuine overflow, exact source persistence and expiration. Full customer/backend suites, authenticated persisted journeys, exact release proof and the current saved workspace outcome remain separate completion gates.
