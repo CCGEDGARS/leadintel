@@ -90,6 +90,25 @@ async function retainedJobCandidate(env,row,input,current){
  }
  return candidate;
 }
+export async function savedBuyerResearchReceipts(env,row){
+ if(!row)return [];
+ const input=parse(row.input_json);if(!input.workspaceContext)return [];
+ // Read the latest receipt per research identity, rather than the last few
+ // jobs: repeated one-person rechecks must not hide another person's results.
+ const history=await stmt(env,`SELECT person_json FROM (
+ SELECT p.value person_json,ROW_NUMBER() OVER (
+ PARTITION BY json_extract(p.value,'$.contactResearch.identityKey') ORDER BY j.rowid DESC) rank
+ FROM buyer_research_jobs j,json_each(j.result_json,'$.people') p
+ WHERE j.workspace_id=? AND j.domain=? AND j.updated_at>datetime('now','-30 days')
+ AND json_extract(j.input_json,'$.workspaceContext')=?
+ AND json_extract(p.value,'$.contactResearch.policyVersion')=?
+ AND json_extract(p.value,'$.contactResearch.identityKey') IS NOT NULL
+ ) WHERE rank=1 LIMIT 40`,row.workspace_id,row.domain,input.workspaceContext,D.BUYER_CONTACT_RESEARCH_POLICY.version).all();
+ return (history.results||[]).map(r=>{
+  const p=parse(r.person_json),safe=D.mergeBuyerPool([],[p])[0];if(!safe)return null;
+  return Object.fromEntries(['id','name','publicName','title','organization','publicLinkedinUrl','linkedin_url','contactResearch','emailResearch','gmailMatches','gmailCandidates'].filter(k=>safe[k]!==undefined).map(k=>[k,safe[k]]));
+ }).filter(Boolean);
+}
 export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  if(!row)return null;const input=parse(row.input_json);let candidate=parse(row.result_json,input.candidate||{});
  if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
