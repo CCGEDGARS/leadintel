@@ -2473,7 +2473,7 @@
     return companyContactSource({url:evidence.url,sourceRead:true,sourceEvidence:evidence,markdown:evidence.kind==='company_publication'?evidence.linkQuote:''},candidate);
   }
   function companyContactRouteKey(kind,value){return kind+'|'+(kind==='phone'?value.replace(/\D/g,''):kind==='linkedin'?value.replace(/\/+$/,'').toLowerCase():value);}
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v3',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v4',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),routes=new Map(),sourcePages=[],sourceEvidence=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
@@ -2614,23 +2614,40 @@
     const priority=url=>/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const legacyArchive=previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion;
     const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||u.searchParams.has('year')||u.searchParams.has('y')||/investor|financial|report/i.test(u.pathname)&&/reports?(?:[-/]|$)/i.test(u.pathname))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
+    const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|teams?|people|staff|management|leadership|ledning|suppliers?|procurement|inkop|privacy|invoices?|invoicing|payments?|accounting|e-mails?|emails?|phones?|e-post)\b/i;
+    const normalizeIntent=value=>clean(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const navigationPath=value=>{try{return decodeURI(value);}catch{return value;}};
+    const contactDestination=(url,label='')=>{
+      const path=navigationPath(new URL(url).pathname),text=normalizeIntent(path+' '+label),terminal=path.split('/').filter(Boolean).at(-1)||'';
+      if(contactIntent.test(normalizeIntent(label)))return true;
+      const named=' '+text.replace(/[^\p{L}\p{N}]+/gu,' ')+' ';
+      if((candidate.people||[]).some(person=>{const name=normalizeIntent(person.publicName||person.name).replace(/[^\p{L}\p{N}]+/gu,' ').trim();return hasFullBuyerName(name)&&named.includes(' '+name+' ');}))return true;
+      // A contact container does not make every descendant document a contact.
+      return !financialArchive(url,label)&&contactIntent.test(normalizeIntent(terminal));
+    };
+    const contactContainer=url=>{
+      const u=new URL(buyerContactSourceUrl(url)),parts=navigationPath(u.pathname).split('/').filter(Boolean).map(normalizeIntent);
+      if(parts.length&&/^[a-z]{2}(?:-[a-z]{2})?$/.test(parts[0]))parts.shift();
+      const sections=new Set(['about','about-us','company','corporate','investor','investors','investor-relations','governance','sustainability','media','media-news','news','press','press-releases','om','om-oss','foretag','bolagsstyrning','hallbarhet','media-nyheter','nyheter','pressmeddelanden']);
+      return !u.search&&parts.length>0&&parts.length<=2&&parts.every(part=>sections.has(part));
+    };
+    const contactNavigation=(url,label='')=>contactDestination(url,label)||!financialArchive(url,label)&&contactContainer(url);
     const add=(url,source=null,first=false)=>{url=contactResearchUrl(url);if(!url||!(official(url)||url.startsWith('https:')&&(savedCompanyContactSource(source,candidate)||companyPublicationUrl(url,candidate))))return;const key=canonicalBuyerSource(url);if(!planned.has(key)){if(planned.size>=120){sourceLimit=true;return;}planned.set(key,url);}if(readKeys.has(key)||completedKeys.has(key)||queue.has(key))return;queue.set(key,{url,source,priority:(first?-1:priority(url))+(previous?.research?.reads?.some(row=>row.url===url&&row.status==='failed')?20:0)});};
     const links=row=>{
       if(!official(row.url))return;
       for(const link of companyContactLinks(row)){
-        const u=new URL(link.url);if(/\.(?:jpg|jpeg|png|svg|zip|mp4|woff2?)(?:$|\?)/i.test(u.pathname)||/linkedin\.com|typeform\.com|forms\.monday\.com/.test(u.hostname))continue;
-        // Company contact research must not traverse an entire financial archive.
-        // Direct search hits, explicit contact links and supplied seeds remain
-        // eligible even when the useful named contact is in an annual report.
-        if(financialArchive(link.url,link.label))continue;
-        if(official(link.url)){if(/contact|kontakt|get-in-touch|about-us|management|leadership|ledning|team|investor|sustainability|supplier|procurement|media|privacy|press|invoice|documents|\.pdf/i.test(u.pathname))add(link.url);}
-        else if(/\.pdf(?:$|\?)|contact|supplier|invoice|press|media|document/i.test(link.url+' '+link.label))add(link.url,{url:link.url,kind:'company_linked',linkedFrom:row.url,linkQuote:'['+(link.label||'Company-linked document')+']('+link.url+')'});
+        const u=new URL(link.url);if(/\.(?:jpg|jpeg|png|svg|zip|mp4|woff2?)(?:$|\?)/i.test(u.pathname)||unsupportedBuyerContactSource(link.url)||/typeform\.com|forms\.monday\.com/.test(u.hostname))continue;
+        // Navigation serves the contact objective, not an exhaustive site crawl.
+        // Targeted searches and retained-person seeds enter independently below.
+        if(!contactNavigation(link.url,link.label))continue;
+        if(official(link.url))add(link.url);
+        else if(contactDestination(link.url,link.label))add(link.url,{url:link.url,kind:'company_linked',linkedFrom:row.url,linkQuote:'['+(link.label||'Company-linked document')+']('+link.url+')'});
       }
     };
     if(!force&&(!previous||reusable))for(const row of rows){const source=companyContactSource(row,candidate);if(source){read.set(source.url,{...row,url:source.url});readKeys.add(canonicalBuyerSource(source.url));if(!financialArchive(source.url))links(row);}}
     for(const url of seedUrls)add(url,previous?.research?.pendingSources?.find(source=>source.url===url),true);
     if(legacyArchive)add(candidate.website||'https://'+domain+'/',null,true);
-    for(const url of previous?.research?.pendingUrls||[])if(!legacyArchive||!financialArchive(url))add(url,previous?.research?.pendingSources?.find(source=>source.url===url));
+    for(const url of previous?.research?.pendingUrls||[]){const source=previous?.research?.pendingSources?.find(source=>source.url===url);if(!legacyArchive||contactNavigation(url,cleanEvidenceText(source?.linkQuote||'')))add(url,source);}
     add(candidate.website||'https://'+domain+'/');
     const plan=officialContactResearchQueries(candidate),queries=plan.slice(0,3),followUps=plan.slice(3);
     const discover=async plan=>{await bounded(async()=>{await Promise.all(plan.map(async query=>{try{const prior=reusable&&Boolean(previous?.contacts.length||previous?.channels.length||previous?.routes.length)&&previous?.research?.policyVersion===policy.version&&previous.research.queries.find(row=>row.query===query&&row.status==='complete');if(prior){receipts.push({...prior,reused:true});return;}const result=await search(query,controller.signal);await ensure();receipts.push({query,status:'complete',results:result.length});for(const row of result)add(row.url||row.metadata?.sourceURL);finish(true,true);}catch(error){if(controller.signal.aborted)throw error;receipts.push({query,status:'failed',results:0});failures.push('Contact search failed: '+query);}}));});};

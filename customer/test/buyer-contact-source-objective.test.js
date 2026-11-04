@@ -72,3 +72,33 @@ for(const selection of ['targeted_search','explicit_contact_link'])test(`a year-
  await D.runOfficialContactResearch(c,{search:async()=>selection==='targeted_search'?[{url:selected}]:[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?(selection==='explicit_contact_link'?`[Supplier contact](${selected})`:'# Acme Labs'):'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
  assert.ok(calls.includes(selected));assert.equal(D.officialContactCoveragePassed(c),true);
 });
+for(const section of ['investors/prospectuses-and-issues','media-news/general-stories','management','supplier'])test(`general navigation is not a mandatory contact frontier: ${section}`,async()=>{
+ const c=scenario(),calls=[],irrelevant=Array.from({length:150},(_,i)=>root+`${section}/document-${i}.pdf`),unreadable='https://images.example/press-library';
+ await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);assert.notEqual(url,unreadable,'A generic media-library navigation link is not a contact obligation');return {url,markdown:url===root?irrelevant.map(url=>`[Company publication](${url})`).join('\n')+`\n[Press images](${unreadable})\n[Team](${team})`:'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(c.buyerDiscovery.officialContactInventory.research.plannedUrls.length,2);assert.equal(D.officialContactCoveragePassed(c),true);assert.equal(c.buyerDiscovery.officialContactInventory.research.discoveryTruncated,false);
+});
+test('contact navigation crosses bounded company/governance containers without traversing their unrelated descendants',async()=>{
+ const c=scenario(),calls=[],investors=root+'investors/',governance=investors+'governance/',leaders=governance+'executive-management-team/',prospectus=investors+'prospectuses-and-issues/';
+ const bodies={[root]:`[Investors](${investors})`,[investors]:`[Governance](${governance})\n[Prospectuses and issues](${prospectus})`,[governance]:`[Executive team](${leaders})\n[General meetings](${governance}general-meetings/)`,[leaders]:'### Anna Berg\nChief Operating Officer\nanna.berg@acme.example'};
+ await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);assert.ok(bodies[url],'Only route containers and contact destinations belong to this objective');return {url,markdown:bodies[url]};}});
+ assert.deepEqual(new Set(calls),new Set(Object.keys(bodies)));assert.equal(D.officialContactCoveragePassed(c),true);
+});
+test('pagination cannot turn a generic section container into an unlimited contact plan',async()=>{
+ const c=scenario(),calls=[],media=root+'media-news/';await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?Array.from({length:150},(_,i)=>`[News page ${i}](${media}?page=${i})`).join('\n')+`\n[Team](${team})`:'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(D.officialContactCoveragePassed(c),true);
+});
+test('a malformed unrelated navigation URL cannot prevent the team source from being read',async()=>{
+ const c=scenario(),calls=[];await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?`[Broken archive](${root}media/%ZZ)\n[Team](${team})`:'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(D.officialContactCoveragePassed(c),true);
+});
+for(const selected of ['targeted_search','explicit_contact_link','named_person_link','person_seed'])test(`general documents remain contact evidence when selected by ${selected}`,async()=>{
+ const c=scenario(),calls=[],document=root+'documents/issue-2026.pdf';c.people=[{id:'anna',name:'Anna Berg',title:'Operations Director'}];
+ await D.runOfficialContactResearch(c,{seedUrls:selected==='person_seed'?[document]:[],search:async()=>selected==='targeted_search'?[{url:document}]:[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?(['explicit_contact_link','named_person_link'].includes(selected)?`[${selected==='named_person_link'?'Anna Berg':'Supplier contact'}](${document})`:'# Acme Labs'):'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.ok(calls.includes(document));assert.equal(D.officialContactCoveragePassed(c),true);assert.ok(c.buyerDiscovery.officialContactInventory.channels.some(x=>x.value==='anna.berg@acme.example'));
+});
+for(const name of ['Anne-Marie Berg',"Alex O'Neil"])test('known person punctuation stays consistent between the named label and source plan: '+name,async()=>{
+ const c=scenario(),document=root+'documents/issue-2026.pdf',calls=[];c.people=[{id:'named',name,title:'Operations Director'}];await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?`[${name}](${document})`:`### ${name}\nOperations Director\ncontact@acme.example`};}});assert.ok(calls.includes(document));assert.equal(D.officialContactCoveragePassed(c),true);
+});
+test('a named unsupported social/video link stays provenance rather than a mandatory source read',async()=>{
+ const c=scenario(),calls=[];c.people=[{id:'anna',name:'Anna Berg',title:'Operations Director'}];await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?`[Anna Berg](https://youtube.com/watch?v=example)\n[Team](${team})`:'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(D.officialContactCoveragePassed(c),true);
+});
