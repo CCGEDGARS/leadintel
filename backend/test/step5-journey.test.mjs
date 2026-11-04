@@ -49,8 +49,8 @@ test('authenticated Chromium restores four recorded Viscaria contacts and preser
  const {verifyRetainedViscariaJourney}=await import('../../scripts/verify-step5-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-viscaria-retention-'));const e=await verifyRetainedViscariaJourney({artifactDir});assert.equal(e.mainContacts,4);assert.equal(e.historyRecoveryReadOnly,true);assert.equal(e.refreshRetainsFour,true);assert.equal(e.freshBrowserReopen,true);assert.equal(e.profileOnlyProceedBlocked,true);assert.ok(e.profileLinkRetained);assert.equal(e.outboundMessages,0);assert.equal(e.paidContactRequests,0);t.diagnostic('Recorded Viscaria evidence: '+artifactDir+'/evidence.json');
 });
 
-test('authenticated Chromium Refresh automatically enriches all four approved buyers and restores green emails after closing the browser',{timeout:60000},async t=>{
+test('authenticated Chromium Refresh automatically enriches only the priority buyer and restores its green email after closing the browser',{timeout:60000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory CI must run this journey.');return;}
  const {verifyPaidBuyerJourney}=await import('../../scripts/verify-step5-paid-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-paid-'));
- const e=await verifyPaidBuyerJourney({artifactDir});assert.equal(e.confirmedEmails,4);assert.equal(e.emailLookups,4);assert.equal(e.phoneLookups,4);assert.equal(e.readOnlyPaidReplays,0);assert.equal(e.outboundMessages,0);t.diagnostic('Controlled paid-flow browser evidence: '+artifactDir+'/evidence.json');
+ const e=await verifyPaidBuyerJourney({artifactDir});assert.equal(e.confirmedEmails,1);assert.equal(e.emailLookups,1);assert.equal(e.phoneLookups,1);assert.equal(e.readOnlyPaidReplays,0);assert.equal(e.outboundMessages,0);t.diagnostic('Controlled paid-flow browser evidence: '+artifactDir+'/evidence.json');
 });

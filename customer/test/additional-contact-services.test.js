@@ -9,10 +9,10 @@ test('already confirmed emails, stale research, pending source checks and blocke
  const P=require('../additional-contact-policy.js');for(const mutate of [c=>c.lifecycle_status='suppressed',c=>c.lifecycle_status='archived',c=>c.people[0].emailResearch.checkedAt='2001-01-01',c=>c.publicContactStatus='loading']){const c=fixture();mutate(c);assert.equal(P.readiness(c,c.people[0]).eligible,false);}
  const c=fixture();assert.equal(P.readiness(c,c.people[0],{confirmedEmail:'anna@example.com'}).eligible,false);
 });
-test('automatic targets reuse confirmed free emails and reserve the configured slots for missing buyers',()=>{
- const P=require('../additional-contact-policy.js'),c=fixture();assert.deepEqual(P.targets(c).map(p=>p.id),['p0','p1']);
- assert.equal(P.targets(c,{confirmedEmail:p=>p.id==='p0'?'anna@example.com':''}).length,2);
- assert.equal(P.targets(c,{confirmedEmail:p=>['p0','p1'].includes(p.id)?'anna@example.com':''}).length,2);
+test('automatic targets one primary buyer and never cascades past its confirmed free email',()=>{
+ const P=require('../additional-contact-policy.js'),c=fixture();assert.deepEqual(P.targets(c).map(p=>p.id),['p0']);
+ assert.equal(P.targets(c,{confirmedEmail:p=>p.id==='p0'?'anna@example.com':''}).length,0);
+ assert.equal(P.targets(c,{confirmedEmail:p=>['p0','p1'].includes(p.id)?'anna@example.com':''}).length,0);
 });
 test('buyer card uses exact approved wording and never promises a found or verified email',()=>{
  const source=fs.readFileSync(require.resolve('../additional-contact-services.js'),'utf8');
@@ -37,8 +37,8 @@ test('manual additional-service confirmation makes one lookup and preserves conf
 test('canceling and unconnected services never issue a paid request',async()=>{
  for(const opts of [{approve:false},{connected:false}]){const f=runtime(opts);await f.loaded;assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]),false);assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();}
 });
-test('upfront approval researches only the strongest two without per-person dialogs',async()=>{
- const f=runtime({enabled:true});await f.loaded;await f.w.LeadIntelAdditionalContacts.auto(f.c);await new Promise(r=>setTimeout(r,15));assert.equal(f.calls.includes('confirm'),false);assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,2);f.close();
+test('upfront approval researches only the strongest buyer without per-person dialogs',async()=>{
+ const f=runtime({enabled:true});await f.loaded;await f.w.LeadIntelAdditionalContacts.auto(f.c);await new Promise(r=>setTimeout(r,15));assert.equal(f.calls.includes('confirm'),false);assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,1);f.close();
 });
 test('workspace changes while awaiting confirmation prevent a provider request',async()=>{
  const f=runtime();await f.loaded;f.w.LeadIntelDialogs.confirm=async()=>{f.w.LeadIntelServerBridge.workspace={id:'other',role:'owner'};return true;};await f.w.LeadIntelAdditionalContacts.run(f.c,f.c.people[0]);assert.equal(f.calls.some(c=>Array.isArray(c)&&c[0].includes('/email?')),false);f.close();
@@ -77,7 +77,7 @@ test('paid Hunter evidence is retained when CRM succeeds but workspace sync need
 test('automatic approval resumes after a previously unavailable provider is connected',async()=>{
  const f=runtime({enabled:true,connected:false});await f.loaded;
  f.w.fetch=async(url,opts={})=>{f.calls.push([url,opts]);return {ok:true,json:async()=>url.includes('/policy')?{policy:{enabled:true,dailyLimit:3,monthlyLimit:30,maxPerCompany:2,updatedAt:'now'}}:url.includes('/services/status')?{providers:[{provider:'apollo',configured:true,source:'customer',metadata:{email_enrichment_enabled:true}}]}:{contact:{external_person_id:'p0',work_email:'anna@example.com',name:'Anna Andersson'}}};};
- await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c);await new Promise(r=>setTimeout(r,10));assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,2);f.close();
+ await f.w.LeadIntelAdditionalContacts.load();await f.w.LeadIntelAdditionalContacts.auto(f.c);await new Promise(r=>setTimeout(r,10));assert.equal(f.calls.filter(c=>Array.isArray(c)&&c[0].includes('/email?')).length,1);f.close();
 });
 test('stale company verification cannot authorize additional services despite a saved eligible flag',()=>{const P=require('../additional-contact-policy.js'),c=fixture();c.qualification.researchedAt='2001-01-01';assert.equal(P.readiness(c,c.people[0]).eligible,false);});
 test('newer paid Hunter evidence restores from CRM without repeating equal-timestamp public research',()=>{

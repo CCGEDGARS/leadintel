@@ -24,9 +24,12 @@
     return {eligible:true,reason:'Qualified company and buyer; public contact research completed.',profile};
   }
   function targets(candidate={},options={}){
-    const confirmedEmail=options.confirmedEmail||(()=>''),max=Math.max(1,Math.min(10,Number(options.maxPerCompany)||2));
-    return (candidate.people||[]).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:confirmedEmail(person)}).eligible)
-      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total).slice(0,max);
+    const confirmedEmail=options.confirmedEmail||(()=>'' );
+    // Choose the buyer before checking channels: free/paid success must not
+    // silently move automatic spending to the next person in the roster.
+    return (candidate.people||[]).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible)
+      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,1)
+      .filter(person=>!confirmedEmail(person));
   }
   return {readiness,targets};
 });

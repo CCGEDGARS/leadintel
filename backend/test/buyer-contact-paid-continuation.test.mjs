@@ -45,6 +45,6 @@ for(const change of ['none','before_repair','during_repair','after_repair','evid
  await tick(); // Saved paid intent must continue, guarded by unchanged original CRM scope.
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),result=JSON.parse(saved.result_json);
  t.diagnostic(JSON.stringify({calls,status:saved.status,phase:saved.phase,coverage:result.publicResearch.accountability.status,paidCode:result.publicResearch.paidResearch.code}));
- if(change==='none'){assert.ok(calls>0,'The paid stage must refresh its own unchanged prior CRM scope and continue saved intent');assert.notEqual(result.publicResearch.paidResearch.code,'PAID_SCOPE_CHANGED');await tick();await tick();assert.equal(calls,2,'Recovery retains the saved two-buyer paid limit');}
+ if(change==='none'){assert.ok(calls>0,'The paid stage must refresh its own unchanged prior CRM scope and continue saved intent');assert.notEqual(result.publicResearch.paidResearch.code,'PAID_SCOPE_CHANGED');await tick();await tick();assert.equal(calls,1,'Recovery retains the one automatic buyer limit');}
  else{assert.equal(calls,0,'A genuine CRM edit cannot be overwritten or authorize provider dispatch');assert.equal(result.publicResearch.paidResearch.code,'PAID_SCOPE_CHANGED');const latest=await getCrmCompany(f.env.DB,context,c.crmId);if(change==='evidence_after_repair')assert.equal(latest.intelligence.evidence[0].text,'Manual source evidence');else assert.equal(latest.intelligence.research_snapshot.buyerResearch.buyers[0].title,'Manual title');}
 });
