@@ -45,6 +45,8 @@ Proceed uses the existing email handoff when a confirmed email exists, or the ex
 
 An unread result repeating the same person and email at another URL is a research candidate, not a replacement for an already accepted source binding. Keep the original accepted address, URL and read proof together until a replacement passes the recipient policy. Never transfer that confirmation to the unread URL. Actual rejection of the original binding, expiry, identity changes and qualification holds remain effective.
 
+Canonical slash/www/tracking variants retain the actual acquired source URL. A third-party host move is a discovery hint and requires a separate read of its destination before any body can supply contact evidence. Repeated moves, arbitrary path/query changes and foreign destinations of official company sources remain unverified. Restoring a cached transport response cannot promote its unbound body into facts. Preserve original acquisition dates, and keep the current contact-source plan separate from historical read evidence when applying crawl limits.
+
 
 ## Owner instruction, 3 November 2026 — automatic paid continuation
 
