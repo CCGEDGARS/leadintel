@@ -10,7 +10,7 @@ const {payload,row}=await readOwnedPayload({DB},workspaceId,owner);
 const matches=c=>String(c.domain||'').replace(/^www\./,'')===domain;
 const workspaceCandidates=['selectedProspects','candidates','pipeline'].flatMap(collection=>(payload.discovery?.[collection]||[]).filter(matches).map(candidate=>({collection,candidate})));
 const jobs=await DB.prepare('SELECT id,input_json,result_json,status,phase,revision,updated_at,diagnostic_json,last_error FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 8').bind(workspaceId,domain).all();
-const crm=await DB.prepare('SELECT i.research_snapshot_json,i.updated_at FROM crm_intelligence i JOIN crm_companies c ON c.id=i.company_id AND c.workspace_id=i.workspace_id WHERE c.workspace_id=? AND c.normalized_domain=?').bind(workspaceId,domain).all();
+const crm=await DB.prepare('SELECT i.research_snapshot_json,i.intelligence_updated_at FROM crm_intelligence i JOIN crm_companies c ON c.id=i.company_id AND c.workspace_id=i.workspace_id WHERE c.workspace_id=? AND c.normalized_domain=?').bind(workspaceId,domain).all();
 const value={observedAt:new Date().toISOString(),release:process.env.EXPECTED_SHA,latest,workspace:{version:row.version,updatedAt:row.updated_at,candidates:workspaceCandidates},jobs:jobs.results,crm:crm.results};
 await writeFile('buyer-four-inspection.encrypted.json',JSON.stringify(encryptInspection(value,await readFile(new URL('./four-inspection-public.pem',import.meta.url),'utf8'))));
 console.log('Read-only comparison encrypted successfully. No customer data logged.');

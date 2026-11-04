@@ -14,11 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify bounded read-only diagnostic and unchanged runtime
         run: |
-          test "$(git hash-object backend/scripts/inspect-four-buyers.mjs)" = 5d9daa11dcdcd7835e3dfe4e4b38900b43456724
+          test "$(git hash-object backend/scripts/inspect-four-buyers.mjs)" = 0dfb506b9a0d1d23b7d24aa7196d7d49c56d91cc
           test "$(git hash-object backend/scripts/four-inspection-public.pem)" = 91ebbd6401c50129e93cbfef4c3c059a1c1d9fd7
           git diff --name-only "$EXPECTED_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/diagnostic-files"
           python - <<'PY'
