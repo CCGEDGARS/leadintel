@@ -48,7 +48,7 @@ async function reservationHold(env,context,companyId,personId,month,enforceCompa
 }
 function fromSnapshot(detail){
   const s=detail.intelligence?.research_snapshot||{},r=s.buyerResearch||{};
-  return {company:detail.company.company_name,domain:detail.company.normalized_domain,market:s.market,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,evidence:detail.intelligence?.evidence||[],lifecycle_status:detail.company.lifecycle_status,qualification:s.qualification,buyerFit:s.buyerFit,publicResearch:r.publicResearch,buyerDiscovery:r.discovery,people:r.buyers||[]};
+  return {company:detail.company.company_name,domain:detail.company.normalized_domain,market:s.market,fitDescription:s.fitDescription,buyerRoles:s.buyerRoles,buyerRolesChanged:s.buyerRolesChanged,evidence:detail.intelligence?.evidence||[],lifecycle_status:detail.company.lifecycle_status,qualification:s.qualification,needsRecheck:s.companyResearch?.needsRecheck===true,buyerFit:s.buyerFit,publicResearch:r.publicResearch,buyerDiscovery:r.discovery,people:r.buyers||[]};
 }
 function reuseAttempt(attempt,detail,person,confirmationLevel){
   const result=JSON.parse(attempt.result_json||'{}');

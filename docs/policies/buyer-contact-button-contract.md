@@ -1,5 +1,11 @@
 # Buyer contact buttons — owner-approved contract, 31 October 2026
 
+## Manual lookup amendment — 4 November 2026
+
+The owner requested that an explicitly approved paid E-mail/Phone action for a selected verified buyer work while the company's specific purchasing-application assessment is pending. Manual lookup may proceed when that is the **only** current company verification gap. Keep the actual company assessment unchanged; this exception does not qualify the company, approve automation or sending. The confirmation explains the pending purchasing-fit review. Automatic lookup retains full qualification and score/review requirements.
+
+Company identity, market, exclusions, lifecycle, freshness, buyer identity, mandatory free checks, channel permission, provider readiness and budgets still apply at dispatch and commit. Use the same manual company-readiness decision in the client, CRM preparation and backend. If the channel is off, open Settings without activating it or making a paid request; the owner activates there and returns to the buyer button. This supersedes the blanket company-purchasing-application gate for explicit manual lookups only.
+
 This records the owner's explicit instruction: first perform the maximum supported bounded **free-source contact research for every retained buyer**, then use independent paid E-mail and Phone controls for missing confirmed data. It supersedes earlier descriptions in `buyer-quality-supervisor.md` which made the visible E-mail/Phone buttons combine free research with paid lookup. Research depth, identity, evidence, provider permissions, spending limits, company qualification and automatic-workflow gates remain authoritative.
 
 ## Sequence and controls
