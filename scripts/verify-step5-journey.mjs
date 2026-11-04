@@ -218,7 +218,7 @@ export async function verifyRetainedViscariaJourney({artifactDir='/tmp/leadintel
   const next=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();await f.runJobs(next.id);await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.revision>0);await four();
   if(recheck){
    for(let slice=0;slice<30;slice++){const job=f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(next.id);if(!['queued','running'].includes(job.status))break;await f.runJobs(next.id);}
-   const finished=f.DB.raw.prepare('SELECT status,input_json FROM buyer_research_jobs WHERE id=?').get(next.id);assert.ok(!['queued','running'].includes(finished.status),'selected Recheck must reach a terminal result');
+   const finished=f.DB.raw.prepare('SELECT status,input_json FROM buyer_research_jobs WHERE id=?').get(next.id);assert.ok(['complete','needs_review'].includes(finished.status),'selected Recheck must save a usable result, not fail');assert.ok(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status='complete'").get(next.id).n>0,'selected contact checks must actually execute');
    const input=JSON.parse(finished.input_json);assert.equal(input.scope,'selected_buyers');assert.deepEqual(input.personIds,[full.people.find(p=>p.name==='Charlotte Odenberger').id]);assert.equal(Boolean(input.paidResearch),false);
    await page.waitForFunction(()=>['complete','needs_review','failed'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
   }else{await page.locator('[data-cancel-buyer-research]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='canceled');}
