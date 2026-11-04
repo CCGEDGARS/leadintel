@@ -2446,7 +2446,7 @@
     return [...contacts.values()].slice(0,60);
   }
   function contactResearchUrl(value){
-    try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port&&u.port!=='443'||!u.hostname.includes('.')||/^(?:\d+\.){3}\d+$|[:\[\]]|(?:^|\.)(?:localhost|local|internal|test)$/i.test(u.hostname)||[...u.searchParams.keys()].some(key=>/token|credential|signature|api.?key|authorization/i.test(key)))return '';u.hash='';u.searchParams.delete('nav');u.searchParams.delete('cookie-settings');if(u.searchParams.get('search')==='true')u.searchParams.delete('search');return u.href;}catch{return '';}
+    try{const u=new URL(value);if(/^\/cdn-cgi\/l\/email-protection(?:\/|$)/i.test(u.pathname)||!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port&&u.port!=='443'||!u.hostname.includes('.')||/^(?:\d+\.){3}\d+$|[:\[\]]|(?:^|\.)(?:localhost|local|internal|test)$/i.test(u.hostname)||[...u.searchParams.keys()].some(key=>/token|credential|signature|api.?key|authorization/i.test(key)))return '';u.hash='';u.searchParams.delete('nav');u.searchParams.delete('cookie-settings');if(u.searchParams.get('search')==='true')u.searchParams.delete('search');return u.href;}catch{return '';}
   }
   function companyContactLinks(row){
     const base=row.url||row.metadata?.sourceURL,body=String(row.markdown||row.content||'');
@@ -2473,7 +2473,7 @@
     return companyContactSource({url:evidence.url,sourceRead:true,sourceEvidence:evidence,markdown:evidence.kind==='company_publication'?evidence.linkQuote:''},candidate);
   }
   function companyContactRouteKey(kind,value){return kind+'|'+(kind==='phone'?value.replace(/\D/g,''):kind==='linkedin'?value.replace(/\/+$/,'').toLowerCase():value);}
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v4',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v5',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),routes=new Map(),sourcePages=[],sourceEvidence=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
