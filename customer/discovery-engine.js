@@ -1545,7 +1545,7 @@
   }
   function safeBuyer(person={},domain=""){
     const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url);
-    return {contactData:safeContactData(person.contactData,person,domain),contactPurpose:person.contactPurpose==='company_contact'?'company_contact':'',companyContactSource:validCompanyContactSource(person),corporateRoleEvidence:safeCorporateRoleEvidence(person.corporateRoleEvidence),publicPhoneSourceCheck:person.publicPhoneSourceCheck?.version===2?{version:2,status:person.publicPhoneSourceCheck.status==='attributed'?'attributed':'not_attributed',url:normalizeUrl(person.publicPhoneSourceCheck.url),checkedAt:clean(person.publicPhoneSourceCheck.checkedAt).slice(0,40)}:null,roleReview:safeRoleReview(person.roleReview),publicPhoneEvidence:safeContactAttribution(person.publicPhoneEvidence),publicEmailEvidence:safeContactAttribution(person.publicEmailEvidence),linkedinIdentityEvidence:safeLinkedInIdentityEvidence(person.linkedinIdentityEvidence),linkedinProfileReview:safeLinkedInProfileReview(person.linkedinProfileReview),decisionEvidence:safeDecisionEvidence(person.decisionEvidence),contactResearch:safeContactResearch(person.contactResearch),linkedinConfirmationMethod:person.linkedinConfirmationMethod==='automatic'?'automatic':'manual',publicEmailSourceCheck:person.publicEmailSourceCheck?{status:person.publicEmailSourceCheck.status==='failed'?'failed':'confirmed',email:clean(person.publicEmailSourceCheck.email).slice(0,254),url:normalizeUrl(person.publicEmailSourceCheck.url),checkedAt:clean(person.publicEmailSourceCheck.checkedAt).slice(0,40),reason:clean(person.publicEmailSourceCheck.reason).slice(0,300)}:null,opportunityScope:person.opportunityScope?.status==='review_required'?{status:'review_required',reason:clean(person.opportunityScope.reason).slice(0,300),url:normalizeUrl(person.opportunityScope.url),checkedAt:clean(person.opportunityScope.checkedAt).slice(0,40)}:null,contactVerification:person.contactVerification?{...(person.contactVerification.lookup?{lookup:{provider:['treg','apollo','hunter'].includes(person.contactVerification.lookup.provider)?person.contactVerification.lookup.provider:'unknown',phone:person.contactVerification.lookup.phone===true,email:person.contactVerification.lookup.email===true,code:clean(person.contactVerification.lookup.code).slice(0,100)}}:{}),status:['verified','public_confirmed','not_verified','error'].includes(person.contactVerification.status)?person.contactVerification.status:'error',checkedAt:clean(person.contactVerification.checkedAt).slice(0,40),issues:(person.contactVerification.issues||[]).map(clean).slice(0,12)}:null,buyerQualification:safeBuyerQualification(person.buyerQualification),identityEvidenceDate:clean(person.identityEvidenceDate).slice(0,40),identitySource:person.identitySource==='apollo'?'apollo':'public',emailResearch:safeEmailResearch(person.emailResearch),id:clean(person.id)||`public-${slug(url||person.name)}`,name:clean(person.name),firstName:clean(person.firstName),identityStatus:person.identityStatus==='pending'||!hasFullBuyerName(person.publicName||person.name)?'pending':'confirmed',nameVerification:person.nameVerification==='pending'||!hasFullBuyerName(person.publicName||person.name)?'pending':'confirmed',title:clean(person.title),organization:clean(person.organization),publicName:clean(person.publicName),publicNameUrl:normalizeUrl(person.publicNameUrl),publicLinkedinUrl:url,linkedin_url:normalizeLinkedInUrl(person.linkedin_url),publicEmail:clean(person.publicEmail),publicEmailUrl:normalizeUrl(person.publicEmailUrl),publicPhone:validPublishedPhone(person.publicPhone)?clean(person.publicPhone):'',publicPhoneUrl:normalizeUrl(person.publicPhoneUrl),linkedinConfirmedUrl:normalizeLinkedInUrl(person.linkedinConfirmedUrl),linkedinConfirmedAt:clean(person.linkedinConfirmedAt).slice(0,40),flowSelected:person.flowSelected===true,kept:person.kept===true,keptAt:clean(person.keptAt).slice(0,40),gmailMatches:safeGmailMatches(person,domain),gmailCandidates:gmailGuessCandidates(person).filter(row=>(person.gmailCandidates||[]).some(saved=>saved.email===row.email)),patternFindings:safePatternFindings(person.patternFindings,domain),hunterChecks:safeHunterChecks(person.hunterChecks,domain),seniority:clean(person.seniority),city:clean(person.city),country:clean(person.country),flowConfirmEmail:person.flowConfirmEmail===true,flowConfirmPhone:person.flowConfirmPhone===true,flowEmailCompletedFor:clean(person.flowEmailCompletedFor),flowPhoneCompletedFor:clean(person.flowPhoneCompletedFor),buyerRelevanceScore:clamp(Number(person.buyerRelevanceScore)||0,0,100,0),matchedBuyerRole:clean(person.matchedBuyerRole),hunterFound:clean(person.hunterFound).endsWith(`@${domain}`)?clean(person.hunterFound):""};
+    return {identitySourceIds:[...new Set((Array.isArray(person.identitySourceIds)?person.identitySourceIds:[]).map(value=>clean(value).slice(0,200)).filter(Boolean))].slice(0,12),contactData:safeContactData(person.contactData,person,domain),contactPurpose:person.contactPurpose==='company_contact'?'company_contact':'',companyContactSource:validCompanyContactSource(person),corporateRoleEvidence:safeCorporateRoleEvidence(person.corporateRoleEvidence),publicPhoneSourceCheck:person.publicPhoneSourceCheck?.version===2?{version:2,status:person.publicPhoneSourceCheck.status==='attributed'?'attributed':'not_attributed',url:normalizeUrl(person.publicPhoneSourceCheck.url),checkedAt:clean(person.publicPhoneSourceCheck.checkedAt).slice(0,40)}:null,roleReview:safeRoleReview(person.roleReview),publicPhoneEvidence:safeContactAttribution(person.publicPhoneEvidence),publicEmailEvidence:safeContactAttribution(person.publicEmailEvidence),linkedinIdentityEvidence:safeLinkedInIdentityEvidence(person.linkedinIdentityEvidence),linkedinProfileReview:safeLinkedInProfileReview(person.linkedinProfileReview),decisionEvidence:safeDecisionEvidence(person.decisionEvidence),contactResearch:safeContactResearch(person.contactResearch),linkedinConfirmationMethod:person.linkedinConfirmationMethod==='automatic'?'automatic':'manual',publicEmailSourceCheck:person.publicEmailSourceCheck?{status:person.publicEmailSourceCheck.status==='failed'?'failed':'confirmed',email:clean(person.publicEmailSourceCheck.email).slice(0,254),url:normalizeUrl(person.publicEmailSourceCheck.url),checkedAt:clean(person.publicEmailSourceCheck.checkedAt).slice(0,40),reason:clean(person.publicEmailSourceCheck.reason).slice(0,300)}:null,opportunityScope:person.opportunityScope?.status==='review_required'?{status:'review_required',reason:clean(person.opportunityScope.reason).slice(0,300),url:normalizeUrl(person.opportunityScope.url),checkedAt:clean(person.opportunityScope.checkedAt).slice(0,40)}:null,contactVerification:person.contactVerification?{...(person.contactVerification.lookup?{lookup:{provider:['treg','apollo','hunter'].includes(person.contactVerification.lookup.provider)?person.contactVerification.lookup.provider:'unknown',phone:person.contactVerification.lookup.phone===true,email:person.contactVerification.lookup.email===true,code:clean(person.contactVerification.lookup.code).slice(0,100)}}:{}),status:['verified','public_confirmed','not_verified','error'].includes(person.contactVerification.status)?person.contactVerification.status:'error',checkedAt:clean(person.contactVerification.checkedAt).slice(0,40),issues:(person.contactVerification.issues||[]).map(clean).slice(0,12)}:null,buyerQualification:safeBuyerQualification(person.buyerQualification),identityEvidenceDate:clean(person.identityEvidenceDate).slice(0,40),identitySource:person.identitySource==='apollo'?'apollo':'public',emailResearch:safeEmailResearch(person.emailResearch),id:clean(person.id)||`public-${slug(url||person.name)}`,name:clean(person.name),firstName:clean(person.firstName),identityStatus:person.identityStatus==='pending'||!hasFullBuyerName(person.publicName||person.name)?'pending':'confirmed',nameVerification:person.nameVerification==='pending'||!hasFullBuyerName(person.publicName||person.name)?'pending':'confirmed',title:clean(person.title),organization:clean(person.organization),publicName:clean(person.publicName),publicNameUrl:normalizeUrl(person.publicNameUrl),publicLinkedinUrl:url,linkedin_url:normalizeLinkedInUrl(person.linkedin_url),publicEmail:clean(person.publicEmail),publicEmailUrl:normalizeUrl(person.publicEmailUrl),publicPhone:validPublishedPhone(person.publicPhone)?clean(person.publicPhone):'',publicPhoneUrl:normalizeUrl(person.publicPhoneUrl),linkedinConfirmedUrl:normalizeLinkedInUrl(person.linkedinConfirmedUrl),linkedinConfirmedAt:clean(person.linkedinConfirmedAt).slice(0,40),flowSelected:person.flowSelected===true,kept:person.kept===true,keptAt:clean(person.keptAt).slice(0,40),gmailMatches:safeGmailMatches(person,domain),gmailCandidates:gmailGuessCandidates(person).filter(row=>(person.gmailCandidates||[]).some(saved=>saved.email===row.email)),patternFindings:safePatternFindings(person.patternFindings,domain),hunterChecks:safeHunterChecks(person.hunterChecks,domain),seniority:clean(person.seniority),city:clean(person.city),country:clean(person.country),flowConfirmEmail:person.flowConfirmEmail===true,flowConfirmPhone:person.flowConfirmPhone===true,flowEmailCompletedFor:clean(person.flowEmailCompletedFor),flowPhoneCompletedFor:clean(person.flowPhoneCompletedFor),buyerRelevanceScore:clamp(Number(person.buyerRelevanceScore)||0,0,100,0),matchedBuyerRole:clean(person.matchedBuyerRole),hunterFound:clean(person.hunterFound).endsWith(`@${domain}`)?clean(person.hunterFound):""};
   }
   async function resolvePendingBuyerIdentities(people=[],sourceRows=[],candidate={},profile={},search){
     const pending=people.filter(person=>person.identityStatus==='pending').slice(0,10),decisions=[],issues=[];
@@ -1591,56 +1591,72 @@
     }
     return {people:people.map(person=>resolved.get(person.id)||person),diagnostics,issues};
   }
+  function mergeBuyerPoolRecord(old,person,idConflict=false){
+    const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+    const sourceIds=[old.id,...(old.identitySourceIds||[]),person.id,...(person.identitySourceIds||[])].map(value=>clean(value)).filter(Boolean);
+    const selectedIncoming=person.flowSelected===true&&old.flowSelected!==true||old.flowSelected!==true&&Boolean(person.linkedinConfirmedUrl)&&person.linkedinConfirmationMethod==='manual'&&!(old.linkedinConfirmedUrl&&old.linkedinConfirmationMethod==='manual');
+    const next={...old,...person,identitySourceIds:[...new Set(sourceIds)].slice(0,12),id:selectedIncoming&&old.id&&!idConflict?person.id:old.id||(idConflict?person.id+'|'+url:person.id),kept:old.kept===true||person.kept===true,keptAt:old.keptAt||person.keptAt};
+    if(old.title&&person.title&&Dossier?.roleKey&&Dossier.roleKey(old.title)===Dossier.roleKey(person.title))next.title=old.title;
+    const previousProfileReview=safeLinkedInProfileReview(old.linkedinProfileReview),newProfileEvidence=safeLinkedInIdentityEvidence(person.linkedinIdentityEvidence);
+    if(previousProfileReview&&!safeLinkedInProfileReview(next.linkedinProfileReview)&&!(newProfileEvidence&&Date.parse(newProfileEvidence.checkedAt)>Date.parse(previousProfileReview.checkedAt)&&newProfileEvidence.url===normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)))next.linkedinProfileReview=previousProfileReview;
+    if(safeLinkedInProfileReview(next.linkedinProfileReview)){
+      next.linkedinIdentityEvidence=null;
+      if(!next.opportunityScope&&old.opportunityScope?.reason?.startsWith('Public profile employer conflict: '))next.opportunityScope=old.opportunityScope;
+    }
+    if(person.identityStatus==='pending'&&old.identityStatus!=='pending'&&clean(old.publicName||old.name).split(/\s+/).length>=2&&old.publicNameUrl){next.name=old.publicName||old.name;next.identityStatus='confirmed';next.nameVerification=old.nameVerification||'confirmed';}
+    for(const field of ['publicName','publicNameUrl','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicLinkedinUrl','linkedin_url'])if(!next[field]&&old[field])next[field]=old[field];
+    if(!safeLinkedInProfileReview(next.linkedinProfileReview)&&!next.linkedinIdentityEvidence&&old.linkedinIdentityEvidence&&normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))next.linkedinIdentityEvidence=old.linkedinIdentityEvidence;
+    // Directory checkpoints have no manual review authority. Keep the exact
+    // person's reviewed profile when a same-profile source row is sparse.
+    const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url),nextProfile=normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url);
+    if(!next.linkedinConfirmedUrl&&oldProfile&&oldProfile===nextProfile&&normalizeLinkedInUrl(old.linkedinConfirmedUrl)===oldProfile&&clean(old.publicName||old.name).toLowerCase()===clean(next.publicName||next.name).toLowerCase()){
+      next.linkedinConfirmedUrl=old.linkedinConfirmedUrl;next.linkedinConfirmedAt=old.linkedinConfirmedAt;next.linkedinConfirmationMethod=old.linkedinConfirmationMethod;
+    }
+    // Sparse identity results must not strip an already-read source from the
+    // same exact address. A different address/source or explicit rejection
+    // remains a new binding and cannot inherit the old confirmation.
+    if(clean(next.publicEmail).toLowerCase()===clean(old.publicEmail).toLowerCase()&&normalizeUrl(next.publicEmailUrl)===normalizeUrl(old.publicEmailUrl)){
+      const prior=old.publicEmailEvidence,current=next.publicEmailEvidence,age=Date.now()-Date.parse(prior?.checkedAt||'');
+      if(prior?.version===2&&prior.sourceRead===true&&normalizeUrl(prior.url)===normalizeUrl(old.publicEmailUrl)&&age>=0&&age<30*86400000&&(!current||current.sourceRead!==true||Date.parse(current.checkedAt)<Date.parse(prior.checkedAt)))next.publicEmailEvidence=prior;
+      if(!next.publicEmailSourceCheck&&old.publicEmailSourceCheck)next.publicEmailSourceCheck=old.publicEmailSourceCheck;
+    }
+    const phoneRecord=[old,person].filter(item=>item.publicPhoneSourceCheck?.version===2).sort((a,b)=>(Date.parse(a.publicPhoneSourceCheck.checkedAt)||0)-(Date.parse(b.publicPhoneSourceCheck.checkedAt)||0)||Number(a.publicPhoneSourceCheck.status==='not_attributed')-Number(b.publicPhoneSourceCheck.status==='not_attributed')).at(-1);
+    if(phoneRecord){
+      next.publicPhoneSourceCheck=phoneRecord.publicPhoneSourceCheck;
+      const attributed=phoneRecord.publicPhoneSourceCheck.status==='attributed';
+      next.publicPhone=attributed?phoneRecord.publicPhone||'':'';next.publicPhoneUrl=attributed?phoneRecord.publicPhoneUrl||'':'';next.publicPhoneEvidence=attributed?phoneRecord.publicPhoneEvidence||null:null;
+    }
+    next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
+    next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
+    for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
+    return preserveConfirmedPublicEmail(old,next);
+  }
   function mergeBuyerPool(previous=[],incoming=[],profile={}){
-    const merged=new Map();
+    const merged=new Map(),aliases=new Map();
     for(const person of [...previous,...incoming]){
       if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name))continue;
       let key=buyerIdentity(person);if(!key)continue;
       const full=clean(person.publicName||person.name).toLowerCase(),url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
-      const same=[...merged.entries()].filter(([,old])=>{
-        if(person.id&&old.id===person.id){const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);return (!url||!oldProfile||url===oldProfile)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization));}
+      const same=[...merged.entries()].filter(([oldKey,old])=>{
+        if(person.id&&(old.id===person.id||(aliases.get(oldKey)?.has(person.id)||(old.identitySourceIds||[]).includes(person.id)||(person.identitySourceIds||[]).includes(old.id))&&full===clean(old.publicName||old.name).toLowerCase())){const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);return (!url||!oldProfile||url===oldProfile)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization));}
         const oldUrl=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);
         return full.split(/\s+/).length>=2&&full===clean(old.publicName||old.name).toLowerCase()&&(!url||!oldUrl||url===oldUrl)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization))&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title])));
       });
-      if(same.length===1)key=same[0][0];
+      // A newly discovered exact profile may connect two earlier source rows.
+      // Collapse only a consistent full identity; a namesake/profile disagreement
+      // must remain separate. Keep all IDs during this pass so sparse replays join it.
+      const bridge=same.length>1&&hasFullBuyerName(full)&&same.every(([,old])=>clean(old.publicName||old.name).toLowerCase()===full&&(!url||!normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)||url===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))&&(person.id===old.id||(person.identitySourceIds||[]).includes(old.id)||url&&url===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)));
+      if(bridge)same.sort((a,b)=>Number(b[1].flowSelected===true)-Number(a[1].flowSelected===true)||Number(Boolean(b[1].linkedinConfirmedUrl)&&b[1].linkedinConfirmationMethod==='manual')-Number(Boolean(a[1].linkedinConfirmedUrl)&&a[1].linkedinConfirmationMethod==='manual')||Number(b[1].kept===true)-Number(a[1].kept===true));
+      if(same.length===1||bridge)key=same[0][0];
       else if(merged.has(key))key=key+'|'+clean(person.organization).toLowerCase()+'|'+clean(person.title).toLowerCase()+'|'+clean(person.id);
-      const old=merged.get(key)||{};
+      let old=merged.get(key)||{};
+      const joinedIds=new Set([...(aliases.get(key)||[]),old.id,person.id].filter(Boolean));
+      if(bridge)for(const [otherKey,other] of same.slice(1)){
+        old=mergeBuyerPoolRecord(old,other);for(const id of [...(aliases.get(otherKey)||[]),other.id])if(id)joinedIds.add(id);merged.delete(otherKey);aliases.delete(otherKey);
+      }
+      aliases.set(key,joinedIds);
       const idConflict=[...merged.values()].find(item=>item.id&&item.id===person.id&&normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)&&url&&normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)!==url);
-      const next={...old,...person,id:old.id||(idConflict?person.id+'|'+url:person.id),kept:old.kept===true||person.kept===true,keptAt:old.keptAt||person.keptAt};
-      if(old.title&&person.title&&Dossier?.roleKey&&Dossier.roleKey(old.title)===Dossier.roleKey(person.title))next.title=old.title;
-      const previousProfileReview=safeLinkedInProfileReview(old.linkedinProfileReview),newProfileEvidence=safeLinkedInIdentityEvidence(person.linkedinIdentityEvidence);
-      if(previousProfileReview&&!safeLinkedInProfileReview(next.linkedinProfileReview)&&!(newProfileEvidence&&Date.parse(newProfileEvidence.checkedAt)>Date.parse(previousProfileReview.checkedAt)&&newProfileEvidence.url===normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)))next.linkedinProfileReview=previousProfileReview;
-      if(safeLinkedInProfileReview(next.linkedinProfileReview)){
-        next.linkedinIdentityEvidence=null;
-        if(!next.opportunityScope&&old.opportunityScope?.reason?.startsWith('Public profile employer conflict: '))next.opportunityScope=old.opportunityScope;
-      }
-      if(person.identityStatus==='pending'&&old.identityStatus!=='pending'&&clean(old.publicName||old.name).split(/\s+/).length>=2&&old.publicNameUrl){next.name=old.publicName||old.name;next.identityStatus='confirmed';next.nameVerification=old.nameVerification||'confirmed';}
-      for(const field of ['publicName','publicNameUrl','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicLinkedinUrl','linkedin_url'])if(!next[field]&&old[field])next[field]=old[field];
-      if(!safeLinkedInProfileReview(next.linkedinProfileReview)&&!next.linkedinIdentityEvidence&&old.linkedinIdentityEvidence&&normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url)===normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url))next.linkedinIdentityEvidence=old.linkedinIdentityEvidence;
-      // Directory checkpoints have no manual review authority. Keep the exact
-      // person's reviewed profile when a same-profile source row is sparse.
-      const oldProfile=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url),nextProfile=normalizeLinkedInUrl(next.publicLinkedinUrl||next.linkedin_url);
-      if(!next.linkedinConfirmedUrl&&oldProfile&&oldProfile===nextProfile&&normalizeLinkedInUrl(old.linkedinConfirmedUrl)===oldProfile&&clean(old.publicName||old.name).toLowerCase()===clean(next.publicName||next.name).toLowerCase()){
-        next.linkedinConfirmedUrl=old.linkedinConfirmedUrl;next.linkedinConfirmedAt=old.linkedinConfirmedAt;next.linkedinConfirmationMethod=old.linkedinConfirmationMethod;
-      }
-      // Sparse identity results must not strip an already-read source from the
-      // same exact address. A different address/source or explicit rejection
-      // remains a new binding and cannot inherit the old confirmation.
-      if(clean(next.publicEmail).toLowerCase()===clean(old.publicEmail).toLowerCase()&&normalizeUrl(next.publicEmailUrl)===normalizeUrl(old.publicEmailUrl)){
-        const prior=old.publicEmailEvidence,current=next.publicEmailEvidence,age=Date.now()-Date.parse(prior?.checkedAt||'');
-        if(prior?.version===2&&prior.sourceRead===true&&normalizeUrl(prior.url)===normalizeUrl(old.publicEmailUrl)&&age>=0&&age<30*86400000&&(!current||current.sourceRead!==true||Date.parse(current.checkedAt)<Date.parse(prior.checkedAt)))next.publicEmailEvidence=prior;
-        if(!next.publicEmailSourceCheck&&old.publicEmailSourceCheck)next.publicEmailSourceCheck=old.publicEmailSourceCheck;
-      }
-      const phoneRecord=[old,person].filter(item=>item.publicPhoneSourceCheck?.version===2).sort((a,b)=>(Date.parse(a.publicPhoneSourceCheck.checkedAt)||0)-(Date.parse(b.publicPhoneSourceCheck.checkedAt)||0)||Number(a.publicPhoneSourceCheck.status==='not_attributed')-Number(b.publicPhoneSourceCheck.status==='not_attributed')).at(-1);
-      if(phoneRecord){
-        next.publicPhoneSourceCheck=phoneRecord.publicPhoneSourceCheck;
-        const attributed=phoneRecord.publicPhoneSourceCheck.status==='attributed';
-        next.publicPhone=attributed?phoneRecord.publicPhone||'':'';next.publicPhoneUrl=attributed?phoneRecord.publicPhoneUrl||'':'';next.publicPhoneEvidence=attributed?phoneRecord.publicPhoneEvidence||null:null;
-      }
-      next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
-      next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
-      for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
-      merged.set(key,preserveConfirmedPublicEmail(old,next));
+      merged.set(key,mergeBuyerPoolRecord(old,person,idConflict));
     }
     const values=[...merged.values()].filter(person=>!malformedBuyerRole(person.title));
     const kept=values.filter(person=>person.kept).slice(0,10);
@@ -1833,13 +1849,20 @@
       const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3&&!ROLE_GENERIC_WORDS.has(word));
       for(const row of rows){
         if(row.sourceRead!==true||row.evidenceKind==='model_summary')continue;
-        const url=normalizeUrl(row.url||row.metadata?.sourceURL),body=clean(row.markdown||row.content),match=body.toLowerCase().match(new RegExp('(^|[^\\p{L}\\p{N}])('+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')(?=$|[^\\p{L}\\p{N}])','u')),at=match?match.index+match[1].length:-1;
-        if(!url||!hasFullBuyerName(name)||at<0)continue;
-        if(['historical','future'].includes(EvidencePolicy.recency(row).status))continue;
+        const url=normalizeUrl(row.url||row.metadata?.sourceURL),body=String(row.markdown||row.content||'').replace(/\r\n?/g,'\n');
+        if(!url||!hasFullBuyerName(name)||['historical','future'].includes(EvidencePolicy.recency(row).status))continue;
+        for(const match of body.toLowerCase().matchAll(new RegExp('(^|[^\\p{L}\\p{N}])('+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')(?=$|[^\\p{L}\\p{N}])','gu'))){
+        const at=match.index+match[1].length;
         // A named passage, never a whole page containing unrelated staff or employers.
-        const boundary=Math.max(body.lastIndexOf('. ',at),body.lastIndexOf('; ',at)),start=Math.max(boundary>=0?boundary+2:0,at-80,0),tail=body.indexOf('. ',at+name.length),quote=body.slice(start,tail<0?at+600:Math.min(tail+1+(/^\s*(?:Current employer|Currently|Now |Formerly|Previously)\b/i.test(body.slice(tail+1,tail+90))?220:0),at+600));
+        const boundary=Math.max(body.lastIndexOf('. ',at),body.lastIndexOf('; ',at),body.lastIndexOf('\n\n',at)),start=Math.max(boundary>=0?boundary+2:0,at-80,0),tail=body.indexOf('. ',at+name.length),cardEnd=body.indexOf('\n\n',at+name.length),quote=clean(body.slice(start,Math.min(cardEnd<0?Infinity:cardEnd,tail<0?at+600:Math.min(tail+1+(/^\s*(?:Current employer|Currently|Now |Formerly|Previously)\b/i.test(body.slice(tail+1,tail+90))?220:0),at+600))));
         const official=companyIdentityDomain(url)===companyIdentityDomain(candidate.domain),lower=quote.toLowerCase(),target=clean(candidate.company).toLowerCase();
-        const current=quote.match(/\bcurrent employer\s*:\s*([^.;\n|,]+)|\b(?:currently|now)\s+(?:[^.;|,\n]{0,100}?\s+)?(?:at|with|employed by|working (?:at|for))\s+([^.;\n|,]+)/i),employer=clean(current?.[1]||current?.[2]);
+        const current=[...quote.matchAll(/\bcurrent employer\s*:\s*([^.;\n|,]+)|\b(?:currently|now)\s+(?:[^.;|,\n]{0,100}?\s+)?(?:at|with|employed by|working (?:at|for))\s+([^.;\n|,]+)/gi)].find(claim=>{
+          if(claim[1])return true;
+          const prefix=claim[0].slice(0,claim[0].lastIndexOf(claim[2])).replace(/\s+(?:at|with|employed by|working (?:at|for))\s*$/i,'');
+          // Bare "now at" is an employment statement only when this person is
+          // its subject. An archive title such as "Right now at ..." is not.
+          return !/^(?:currently|now)$/i.test(prefix.trim())||new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:\\s+is)?\\s*$','i').test(quote.slice(0,claim.index));
+        }),employer=clean(current?.[1]||current?.[2]);
         const former=[...quote.matchAll(/\b(former|formerly|previously|retired|no longer|tidigare)\b([^.;|]{0,180})/gi)].some(([,kind,tail])=>{
           const history=tail.split(/\b(?:now|currently|then|before joining|after which)\b/i)[0].replace(/^\s*[,,:]?\s*/i,''),parts=history.split(/\s+(?:at|with|for)\s+/i),historicalRole=parts[0].replace(/^(?:(?:is|was|a|an|the|has been|had been|served|serves|serving|worked|working|works|employed|as)\s+)+/i,'').trim(),pastEmployer=clean(parts[1]).split(',')[0];
           const currentRole=quote.match(/\b(?:now|currently)\s+(?:is\s+)?([^|.;]{2,100})/i)?.[1]?.split(/\s+(?:at|with|for)\s+/i)[0].replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'),'').trim();
@@ -1855,6 +1878,7 @@
         const currentText=quote.replace(/\b(former|formerly|previously|retired|no longer|tidigare)\b([^.;|]*)/gi,(_match,_kind,tail)=>{const at=tail.search(/\b(?:now|currently|then|before joining|after which)\b/i);return at>=0?tail.slice(at):'';}).toLowerCase(),literalRole=clean(person.title).toLowerCase();
         const role=roleWords.length&&roleWords.filter(word=>currentText.includes(word)).length>=Math.min(2,roleWords.length)||literalRole&&currentText.includes(literalRole)||['CEO','COO','CFO','CTO','CIO'].some(alias=>roleAliasMatch(person.title,alias)&&new RegExp('\\b'+alias+'\\b','i').test(currentText));
         if(!former&&!hiring&&role&&(official||target&&lower.includes(target)&&(!normalizeLinkedInUrl(url)||normalizeLinkedInUrl(url)===profile)))evidence.push({url,quote:quote.slice(0,600),date:evidenceDate(row),basis:official?'official_company':'published_professional'});
+        }
       }
       const check=person.contactResearch?.checks?.buyer_agent,checkComplete=check?.status==='complete',identity=conflicts.length?'conflict':evidence.length?'supported':'needs_review';
       const triggerWords=clean(context.trigger?.quote).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(word=>word.length>=5&&!['first','under','northern','their','there','which'].includes(word));
