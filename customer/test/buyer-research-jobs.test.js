@@ -203,3 +203,12 @@ test('unchanged saved checkpoints retain request age and expose actual queued st
  const h=harness(()=>{reads++;clock+=3000;return reads<4?job:{...job,status:'needs_review',revision:8};});await h.client.restore(owner,{profile:{decisionMakers:'COO'},onProgress:()=>seen.push(structuredClone(owner.buyerResearchProgress))});
  assert.equal(seen[0].startedAt,job.createdAt);assert.equal(seen[0].executionStatus,'queued');assert.equal(seen[0].completedChecks,2);assert.equal(seen[0].checkpointAt,job.progress.lastActivityAt);assert.ok(seen[1].elapsedSeconds>seen[0].elapsedSeconds,'A polling response with the same revision must still advance request age');
 });
+
+test('a second buyer Recheck cannot silently reuse another buyer pending command',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));let finish;
+ const h=harness(call=>call.method==='POST'?snapshot(owner):new Promise(resolve=>finish=resolve));
+ const first=h.client.research(owner,{personIds:['anna'],force:true});await tick();
+ await assert.rejects(h.client.research(owner,{personIds:['bob'],force:true}),/another buyer/);
+ const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};finish(job);
+ await first;
+});

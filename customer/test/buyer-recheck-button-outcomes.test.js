@@ -28,3 +28,25 @@ test('Recheck explicitly explains a sync conflict without launching research',as
  assert.equal(await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id}),false);assert.equal(requests,0);assert.match(messages.join(' '),/sync conflict/i);
  }finally{r.close();}
 });
+
+test('durable Recheck acknowledges a delayed command immediately and prevents duplicate clicks',async()=>{
+ const r=runtime();try{
+  let finish,requests=0;r.c.LeadIntelBuyerResearchJobs={};
+  r.c.findPublicProspectContacts=async()=>{requests++;return new Promise(resolve=>finish=resolve);};
+  const work=r.c.recheckBuyerContact('example.com',0,{personId:r.person.id});
+  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
+  assert.equal(node.querySelector('[data-recheck-buyer]').disabled,true);
+  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Rechecking…');
+  assert.equal(await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id}),false);
+  assert.equal(requests,1);finish(true);assert.equal(await work,true);
+  node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
+ }finally{r.close();}
+});
+test('durable Recheck exposes startup failures and releases its pending state',async()=>{
+ const r=runtime();try{
+  r.c.LeadIntelBuyerResearchJobs={};r.c.findPublicProspectContacts=async()=>{throw Error('Research service unavailable');};
+  assert.equal(await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id}),false);
+  assert.ok(r.calls.includes('Research service unavailable'));
+  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
+ }finally{r.close();}
+});

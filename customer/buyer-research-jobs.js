@@ -122,7 +122,11 @@
     }
     async function execute(owner,options,readOnly){
       const scope=capture(owner,options),key=`${scope.workspaceId}|${domain(owner.domain)}`,old=active.get(key);
-      if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly))return old.promise;
+      if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly)){
+        const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
+        if(!readOnly&&!samePeople)throw Error('Research is already starting for another buyer. Wait for it to finish, then recheck this contact.');
+        return old.promise;
+      }
       old?.controller.abort();const controller=new AbortController();let stop;
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
       const entry={scope,controller,promise:null,readOnly};

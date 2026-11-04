@@ -29,7 +29,8 @@ test('unsaved and failed-sync selections cannot open the next step',async()=>{
 });
 test('rendered contact controls have one next action and no enrichment checkboxes',()=>{
  const block=source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts('));
- assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/>Recheck</);
+ assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);const r=require('./helpers/buyer-controls-runtime.cjs').runtime();
+ try{const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelectorAll('[data-recheck-buyer]').length,1);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Recheck');}finally{r.close();}
  const outreach=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');assert.match(outreach,/find\(p=>p.id===choice\?\.personId\)/);assert.match(outreach,/if\(crmAuthenticated\(\)&&\(!handoffContact/);
 });
 test('pending identity and changed buying roles cannot open Messages even with a verified email',async()=>{
