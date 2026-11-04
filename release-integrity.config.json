@@ -5506,7 +5506,7 @@
         "async function recheckBuyerContact(",
         "Researching available free sources",
         "personIds:[String(person.id)],force:true",
-        "Confirm an email or LinkedIn profile for this person"
+        "Confirm an email for this person to enable Proceed"
       ]
     },
     {
@@ -7468,7 +7468,8 @@
       "status": 200,
       "contains": [
         "const emailConfirmed=verified,linkedinConfirmed=",
-        "Proceed to LinkedIn content",
+        "const ready=verified&&crmAuthenticated()",
+        "Confirm this person’s email to continue",
         "official pages read in this run"
       ]
     },
