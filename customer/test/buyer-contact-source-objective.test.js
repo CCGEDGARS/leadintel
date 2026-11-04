@@ -61,3 +61,14 @@ test('tracking variants of one contact source cannot consume the active plan all
  const c=scenario(),calls=[];await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?Array.from({length:150},(_,i)=>`[Supplier contact](${team}?utm_source=${i})`).join('\n'):'# Contact\nsuppliers@acme.example'};}});
  assert.equal(D.officialContactCoveragePassed(c),true);assert.equal(calls.length,2);assert.equal(c.buyerDiscovery.officialContactInventory.research.plannedUrls.length,2);
 });
+for(const section of ['media/press-releases','nyheter/pressmeddelanden'])test(`year-selector archive navigation cannot become the contact objective: ${section}`,async()=>{
+ const c=scenario(),stamp=new Date().toISOString(),years=Array.from({length:150},(_,i)=>`${root}${section}/?y=${1900+i}`),oldRows=years.slice(0,125).map(url=>({url,markdown:'# Acme Labs archive\n'+years.map(value=>`[Press archive](${value})`).join('\n'),sourceRead:true,extractedAt:stamp}));
+ const inventory=D.officialCompanyContactInventory(oldRows,c);inventory.research={policyVersion:D.OFFICIAL_CONTACT_RESEARCH_POLICY.version,discoveryScope:'20261104-contact-plan-v2',startedAt:stamp,checkedAt:stamp,status:'partial',plannedUrls:years.slice(0,120),completedUrls:[],pendingUrls:years.slice(0,120),queries:[],reads:[],failures:['Older press archive unavailable'],discoveryTruncated:true};c.buyerDiscovery={officialContactInventory:inventory};
+ const calls=[];await D.runOfficialContactResearch(c,{rows:oldRows,search:async()=>[],readPage:async url=>{calls.push(url);assert.ok(!years.includes(url),'An archive selector is not a contact-source request');return {url,markdown:url===root?`[Team](${team})\n`+years.map(value=>`[Press archive](${value})`).join('\n'):'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.deepEqual(calls.sort(),[root,team].sort());assert.equal(D.officialContactCoveragePassed(c),true);const restored=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(D.officialContactCoveragePassed(restored),true);
+});
+for(const selection of ['targeted_search','explicit_contact_link'])test(`a year-selected source remains eligible through ${selection}`,async()=>{
+ const c=scenario(),selected=root+'media/press-releases/?y=all',calls=[];
+ await D.runOfficialContactResearch(c,{search:async()=>selection==='targeted_search'?[{url:selected}]:[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?(selection==='explicit_contact_link'?`[Supplier contact](${selected})`:'# Acme Labs'):'### Anna Berg\nOperations Director\nanna.berg@acme.example'};}});
+ assert.ok(calls.includes(selected));assert.equal(D.officialContactCoveragePassed(c),true);
+});
