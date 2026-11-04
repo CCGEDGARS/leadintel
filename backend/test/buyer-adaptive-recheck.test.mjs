@@ -55,3 +55,21 @@ test('exhausted alternative receipts survive more rechecks than the bounded job-
  }
  assert.equal(queries,7);
 });
+
+
+test('explicit Recheck resets only selected Gmail receipts and runs three fresh queries before alternative work',async t=>{
+ const f=await buyerJobsFixture(t),old=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),candidate=parse(old.result_json),person=candidate.people[0],stamp=new Date().toISOString();
+ const queries=D.buyerGmailResearchQueries(candidate,person);person.contactResearch={version:1,identityKey:D.buyerResearchIdentityKey(candidate,person),checks:{gmail:{status:'complete',checkedAt:stamp,queryLog:queries.map(query=>({query,status:'complete',checkedAt:stamp,sourceReads:[]}))}},channels:{gmail:{status:'complete'}}};
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',result_json=? WHERE id=?").run(JSON.stringify(candidate),old.id);
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true,personIds:[person.id]}),input=parse(job.input_json),c=input.candidate,p=c.people[0],seen=[];
+ assert.equal(p.contactResearch.checks.gmail.status,'not_searched');assert.equal(parse(f.DB.raw.prepare('SELECT result_json FROM buyer_research_jobs WHERE id=?').get(old.id).result_json).people[0].contactResearch.checks.gmail.queryLog.length,3);
+ await D.runMandatoryBuyerResearch(c,{recheckPlans:input.recheck.plans,search:async q=>{seen.push(q);return [];},readPage:async url=>({url,markdown:'Company business website',sourceRead:true})});
+ assert.equal(p.contactResearch.checks.gmail.status,'complete');assert.deepEqual(p.contactResearch.checks.gmail.queryLog.map(r=>r.query),queries);assert.ok(queries.every(q=>seen.filter(x=>x===q).length===1));
+ assert.ok(seen.indexOf(queries[2])<seen.indexOf(input.recheck.plans[p.id].queries[0]));
+});
+
+test('selected live progress reports the actual Gmail task without exposing its query',async t=>{
+ const {publicBuyerJob}=await import('../src/buyer-research-store.js'),f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true,personIds:['robert']});
+ f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) VALUES(?,?,'search','contacts',?,'running',1)").run(job.id,'gmail-test','Robert Buyer @gmail.com');
+ const view=await publicBuyerJob(f.env,{...job,status:'running'});assert.equal(view.progress.label,'Searching public Gmail business-contact listings');assert.ok(!view.progress.label.includes('Robert'));
+});

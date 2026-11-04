@@ -132,7 +132,7 @@ test('a completed job for another person cannot satisfy an explicit new selected
 function uiHarness(owner,respond){
  const fs=require('node:fs'),vm=require('node:vm'),D=require('../discovery-engine.js'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
  const h=harness(respond),state={selectedProspects:[owner],candidates:[],potentialMatches:[],pipeline:[]};let saves=0;
- const ctx={window:{LeadIntelBuyerResearchJobs:h.client},discovery:state,bridge:()=>h.bridge,crmAuthenticated:()=>true,discoveryOperationContext:()=>JSON.stringify([h.bridge.workspace.id,h.bridge.session.user.id]),discoveryAccountContext:()=>h.bridge.workspace.id,companyQualificationProfile:()=>({website:'https://seller.test',decisionMakers:'COO'}),mainState:()=>({profile:{decisionMakers:'COO'}}),LeadIntelDiscovery:{...D,buyerRolesForTarget:()=> 'COO'},canonicalDomain:D.canonicalDomain,saveDiscovery:()=>saves++,renderAll(){},refreshBuyerProgress(){},showToast(){},selectedProspects:()=>state.selectedProspects,automaticPublicChecks:new Set(),discoveryStageOpenRevision:1,publicContactPromises:new Map(),runPublicProspectContacts:()=>{throw Error('Legacy public provider chain executed');},AbortController,Date,Map,Set,JSON,Boolean,Error};
+ const ctx={buyerCardLayouts:new WeakMap(),buyerRecheckLayouts:new WeakSet(),window:{LeadIntelBuyerResearchJobs:h.client},discovery:state,bridge:()=>h.bridge,crmAuthenticated:()=>true,discoveryOperationContext:()=>JSON.stringify([h.bridge.workspace.id,h.bridge.session.user.id]),discoveryAccountContext:()=>h.bridge.workspace.id,companyQualificationProfile:()=>({website:'https://seller.test',decisionMakers:'COO'}),mainState:()=>({profile:{decisionMakers:'COO'}}),LeadIntelDiscovery:{...D,buyerRolesForTarget:()=> 'COO'},canonicalDomain:D.canonicalDomain,saveDiscovery:()=>saves++,renderAll(){},refreshBuyerProgress(){},showToast(){},selectedProspects:()=>state.selectedProspects,automaticPublicChecks:new Set(),discoveryStageOpenRevision:1,publicContactPromises:new Map(),runPublicProspectContacts:()=>{throw Error('Legacy public provider chain executed');},AbortController,Date,Map,Set,JSON,Boolean,Error};
  vm.createContext(ctx);
  for(const name of ['runDurableBuyerResearch','searchDecisionMakers','findPublicProspectContacts','scheduleSavedBuyerPublicChecks']){
   const start=source.search(new RegExp(`(?:async )?function ${name}\\(`)),tail=source.slice(start+1),next=tail.search(/\n(?:async )?function /);assert.ok(start>=0&&next>=0,name);vm.runInContext(source.slice(start,start+1+next),ctx);
@@ -204,15 +204,15 @@ test('unchanged saved checkpoints retain request age and expose actual queued st
  assert.equal(seen[0].startedAt,job.createdAt);assert.equal(seen[0].executionStatus,'queued');assert.equal(seen[0].completedChecks,2);assert.equal(seen[0].checkpointAt,job.progress.lastActivityAt);assert.ok(seen[1].elapsedSeconds>seen[0].elapsedSeconds,'A polling response with the same revision must still advance request age');
 });
 
-test('a second buyer Recheck cannot silently reuse another buyer pending command',async()=>{
- const owner=candidate();owner.people.push(person('bob'));let finish;
- const h=harness(call=>call.method==='POST'?snapshot(owner):new Promise(resolve=>finish=resolve));
+test('a second selected Recheck waits then submits only its own person instead of reusing the first result',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));let finish,read=0;
+ const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};
+ const h=harness(call=>call.method==='POST'?{...snapshot(owner),id:'next',input:{scope:'selected_buyers',personIds:call.body.personIds}}:++read===1?new Promise(resolve=>finish=resolve):job);
  const first=h.client.research(owner,{personIds:['anna'],force:true});await tick();
- await assert.rejects(h.client.research(owner,{personIds:['bob'],force:true}),/another buyer/);
- const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};finish(job);
- await first;
+ const second=h.client.research(owner,{personIds:['bob'],force:true});await tick();assert.equal(h.calls.length,1);
+ finish(job);await Promise.all([first,second]);
+ assert.deepEqual(h.calls.filter(c=>c.method==='POST').map(c=>c.body.personIds),[['anna'],['bob']]);
 });
-
 
 test('restored selected job retains its exact buyer scope for card progress',async()=>{
  const owner=candidate();owner.people.push(person('bob'));let reads=0;
@@ -225,4 +225,12 @@ test('one-person Recheck cannot reuse a broader selected-person job',async()=>{
  const owner=candidate();owner.people.push(person('bob'));const old={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna','bob']}};
  const h=harness(call=>call.method==='POST'?{...snapshot(owner),id:'new-selected',input:{scope:'selected_buyers',personIds:['anna']}}:old);
  await h.client.research(owner,{personIds:['anna'],force:true});const post=h.calls.find(c=>c.method==='POST');assert.ok(post);assert.deepEqual(post.body.personIds,['anna']);assert.equal(post.body.paidResearch,false);assert.deepEqual(owner.buyerResearchJob.personIds,['anna']);
+});
+
+
+test('selected checkpoint cannot replace shared role context or other buyers research review',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));owner.buyerDiscovery={opportunityRoles:['COO'],researchIncomplete:false};owner.publicResearch={aiReview:{status:'complete',reviewedPersonIds:['anna','bob']},buyerAgent:{people:[{personId:'bob'}]},conflicts:[]};
+ const before=structuredClone(owner.people[1]),shared=structuredClone(owner.buyerDiscovery),review=structuredClone(owner.publicResearch.aiReview);
+ const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};job.candidate.buyerDiscovery={opportunityRoles:['Other']};job.candidate.publicResearch={aiReview:{reviewedPersonIds:['anna']},buyerAgent:{people:[]},conflicts:['unrelated']};job.candidate.people[1].name='Wrong';
+ const h=harness(()=>job);await h.client.restore(owner);assert.deepEqual(owner.people[1],before);assert.deepEqual(owner.buyerDiscovery,shared);assert.deepEqual(owner.publicResearch.aiReview,review);assert.deepEqual(owner.publicResearch.conflicts,[]);
 });

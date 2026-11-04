@@ -58,9 +58,25 @@ test('durable selected recheck marks only that buyer busy and preserves other re
   r.c.verifiedBuyerEmail=()=> 'confirmed@example.com';
   const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
   assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Rechecking…');assert.match(node.querySelector('[data-buyer-contact-progress]').textContent,/Reading official contact page.*40s elapsed.*1–3 min remaining/);
-  node.innerHTML=r.c.prospectContactControls(r.candidate,other);assert.equal(node.querySelector('[data-buyer-contact-progress]'),null);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Recheck');assert.equal(node.querySelector('[data-prospect-enrich-email]').disabled,false);assert.equal(node.querySelector('[data-keep-buyer]').disabled,false);assert.match(node.textContent,/another buyer/);
+  node.innerHTML=r.c.prospectContactControls(r.candidate,other);assert.equal(node.querySelector('[data-buyer-contact-progress]'),null);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Recheck');assert.equal(node.querySelector('[data-prospect-enrich-email]').disabled,false);assert.equal(node.querySelector('[data-keep-buyer]').disabled,false);assert.doesNotMatch(node.textContent,/another buyer/);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
  }finally{r.close();}
 });
 test('contact progress reports unknown estimates honestly and queue waits explicitly',()=>{
  const r=runtime();try{r.candidate.buyerResearchProgress={startedAt:new Date(Date.now()-10000).toISOString(),executionStatus:'queued',label:'Contact evidence',timing:{estimate:{samples:1,lowerSeconds:30,upperSeconds:60}}};assert.match(r.c.buyerContactProgressText(r.candidate),/Waiting to continue.*10s elapsed.*Time estimate not available yet/);}finally{r.close();}
+});
+
+
+test('one selected Recheck leaves all three other cards byte-for-byte unchanged and reports green progress',async()=>{
+ const r=runtime();try{
+  const others=['two','three','four'].map((id,i)=>({...r.person,id,name:`Buyer Number${i}`}));r.candidate.people=[r.person,...others];r.c.verifiedBuyerEmail=()=> 'ready@example.com';
+  const before=others.map(p=>r.c.prospectContactControls(r.candidate,p));let finish;r.c.LeadIntelBuyerResearchJobs={};r.c.findPublicProspectContacts=async()=>new Promise(resolve=>finish=resolve);
+  const run=r.c.recheckBuyerContact('example.com',0,{personId:r.person.id});
+  assert.deepEqual(others.map(p=>r.c.prospectContactControls(r.candidate,p)),before);
+  r.candidate.peopleStatus='loading';r.candidate.publicContactStatus='loading';r.candidate.buyerResearchJob={status:'running',personIds:[r.person.id]};
+  assert.deepEqual(others.map(p=>r.c.prospectContactControls(r.candidate,p)),before);
+  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[role=status]').style.color,'rgb(11, 107, 87)');
+  r.person.contactResearch={checks:{gmail:{status:'complete'}}};r.candidate.peopleStatus='complete';r.candidate.publicContactStatus='complete';r.candidate.buyerResearchJob.status='complete';finish(true);await run;
+  node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.match(node.textContent,/Recheck finished.*Gmail: no public match found/);assert.equal(node.querySelector('[role=status]').style.color,'rgb(11, 107, 87)');
+  assert.deepEqual(others.map(p=>r.c.prospectContactControls(r.candidate,p)),before);
+ }finally{r.close();}
 });
