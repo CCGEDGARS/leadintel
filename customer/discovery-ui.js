@@ -2849,7 +2849,7 @@ function buyerContactProgressText(candidate){
  const p=candidate.buyerResearchProgress||{},started=Date.parse(p.startedAt||candidate.buyerResearchJob?.startedAt),elapsed=Number.isFinite(started)?Math.max(0,Math.floor((Date.now()-started)/1000)):0;
  const estimate=p.timing?.estimate,hasEstimate=Number(estimate?.samples)>=5&&Number(estimate?.upperSeconds)>0;
  const time=hasEstimate?(elapsed>=estimate.upperSeconds?'Taking longer than estimated':`About ${Math.max(1,Math.ceil((Number(estimate.lowerSeconds)-elapsed)/60))}–${Math.max(1,Math.ceil((Number(estimate.upperSeconds)-elapsed)/60))} min remaining`):'Time estimate not available yet';
- const activity=p.executionStatus==='queued'?'Waiting to continue':p.label||'Checking free public sources';
+ const activity=p.executionStatus==='queued'?'Waiting to continue':p.label||'Researching available free sources';
  return `${activity} · ${elapsed}s elapsed · ${time}`;
 }
 function prospectContactControls(candidate,person){
