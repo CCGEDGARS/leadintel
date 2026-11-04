@@ -130,7 +130,9 @@ for(const [freeEmail,freePhone] of [[true,false],[false,true],[true,true]])test(
 
 for(const limit of [1,2,3,4])test(`saved automatic selection researches exactly ${limit} priority buyers`,async t=>{
  const f=await paidFixture(t,{automaticLimit:limit}),calls=[],lookup=await controlledLookup(f,calls);
- for(let i=0;i<limit+2;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
+ // Continue bounded slices until the persisted job settles; CI load can yield
+ // after a provider receipt but before the final completion checkpoint.
+ for(let i=0;i<4*limit+8;i++){const job=await readBuyerJob(f.env,workspaceId,{id:f.job.id});if(!['queued','running'].includes(job.status))break;await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});}
  assert.equal(calls.filter(c=>c.url.includes('email.find')).length,limit);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,limit);
  assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM additional_contact_attempts WHERE json_extract(result_json,'$.automatic')=1").get().n,limit);
  assert.equal(JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json).publicResearch.paidResearch.status,'complete');
@@ -141,3 +143,12 @@ for(const [started,current] of [[1,4],[4,1]])test(`saved job respects its initia
  for(let i=0;i<6;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
  assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,1);
 });
+
+ test('automatic paid lookup cannot bypass an unchecked fourth priority buyer',async t=>{
+ const f=await paidFixture(t);f.c.people[3].contactResearch.checks.gmail.status='partial';f.c.people[3].emailResearch.status='partial';
+ f.c.publicResearch.aiReview.inputSignature=D.buyerReviewSignature(f.c);
+ await upsertCrmIntelligence(f.env.DB,f.context,f.c.crmId,Crm.mapDiscoveryCandidateToCrm(f.c).intelligence);
+ const {buyerPaidIntent,runWorkflowPaidResearch}=await import('../src/buyer-paid-research.js'),guard=async()=>{};guard.writeAuthority=()=>({sql:'1',args:[]});
+ let calls=0;await runWorkflowPaidResearch(f.env,f.context,f.c,{intent:await buyerPaidIntent(f.env,workspaceId,true,f.c),runId:'four-free-first',guard,lookup:async()=>{calls++;return {request:{status:'not_found'}};}});
+ assert.equal(calls,0,'All four free plans precede automatic spending, including when only one paid buyer was requested');
+ });

@@ -22,6 +22,10 @@
     if(candidate.buyerRolesChanged||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return blocked('Complete the current buyer and public research first.');
     const selected=(candidate.people||[]).find(p=>String(p.id)===String(person.id)&&D.buyerIdentity(p)===D.buyerIdentity(person));
     if(!selected)return blocked('This buyer is no longer in the current research. Refresh the buyer list.');
+    if(options.automatic===true){
+      const priorities=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true});
+      if(priorities.length<4||!D.buyerResearchCoveragePassed(candidate,{...options,researchPeople:priorities,allowPartialRoster:true}))return blocked('Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
+    }
     const scoped=options.automatic!==true||options.provider==='treg';
     if(!D.buyerResearchCoveragePassed(candidate,{...options,...(scoped?{researchPeople:[selected]}:{}),allowPartialRoster:scoped}))return blocked('Complete this buyer’s mandatory public research before using additional services.');
     const profile={decisionMakers:D.effectiveBuyerRoles(candidate)||[...new Set((candidate.people||[]).map(p=>p.matchedBuyerRole||p.title))]};
@@ -41,9 +45,10 @@
     const confirmedEmail=options.confirmedEmail||(()=>'' );
     // Choose the approved priority group before checking channels: free/paid success must not
     // silently move automatic spending to the next person in the roster.
-    return (candidate.people||[]).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible)
+    return D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true})
       .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,limit)
-      .filter(person=>!confirmedEmail(person));
+      .filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible&&!confirmedEmail(person));
   }
   return {readiness,companyReadiness,targets,automaticLimit};
 });
+

@@ -79,9 +79,9 @@ for(const originalStatus of ['needs_review','complete','queued_paid','queued_pai
  assert.equal(result.buyerDiscovery.companyDossier.checkedAt,originalDossierCheckedAt,'Role reinterpretation cannot claim a fresh dossier execution');
  assert.equal(f.DB.raw.prepare("SELECT attempts FROM buyer_research_tasks WHERE job_id=? AND task_key='saved-current-role'").get(job.id).attempts,1);
  if(queuedPaid){
-  assert.equal(paidCalls,enabledPaid?1:0);
+  assert.equal(paidCalls,0,'One legacy buyer cannot bypass the four-priority free-research gate');
   const actualIntent={...JSON.parse(saved.input_json).paidResearch};
-  if(enabledPaid){assert.notEqual(result.publicResearch.paidResearch.code,'PAID_SCOPE_CHANGED');assert.equal(result.publicResearch.paidResearch.outcomes[0].status,'checked');assert.match(actualIntent.continuationScopeHash,/^[a-f0-9]{64}$/);delete actualIntent.continuationScopeHash;}
+  if(enabledPaid){assert.notEqual(result.publicResearch.paidResearch.code,'PAID_SCOPE_CHANGED');assert.equal(result.publicResearch.paidResearch.outcomes.length,0);assert.match(actualIntent.continuationScopeHash,/^[a-f0-9]{64}$/);delete actualIntent.continuationScopeHash;}
   else assert.equal(result.publicResearch.paidResearch.status,'disabled');
   assert.deepEqual(actualIntent,savedPaidIntent,'Review recovery cannot change original paid consent, provider, company or snapshot');
   if(!enabledPaid)assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM additional_contact_attempts WHERE workspace_id=?').get(workspaceId).n,0,'Disabled channels cannot reserve or spend credits');

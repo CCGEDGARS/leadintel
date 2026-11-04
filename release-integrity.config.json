@@ -3603,7 +3603,9 @@
         "Review company qualification in Companies before a paid lookup.",
         "manualFitPending",
         "Complete qualification and public research for four buyers before automatic lookup.",
-        ".slice(0,limit)"
+        ".slice(0,limit)",
+        "ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED",
+        "D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true})"
       ]
     },
     {
