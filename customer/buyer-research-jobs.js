@@ -138,7 +138,15 @@
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
       const entry={scope,controller,promise:null,readOnly};
       entry.promise=(async()=>{
-        const observedJob=await request(scope,'GET',null,null,controller);
+        let observedJob=await request(scope,'GET',null,null,controller);
+        const queueStarted=Date.now();
+        // Another tab/server observer may own active research. Never replace it
+        // merely because this click selected a different person.
+        while(!readOnly&&observedJob&&matching(scope,observedJob)&&ACTIVE.has(observedJob.status)&&stable([...(observedJob.input?.personIds||[])].map(String).sort())!==stable([...(scope.personIds||[])].sort())){
+          if(Date.now()-queueStarted>=observationTimeoutMs)throw Error('This buyer is waiting for the current research to finish. Retry when it completes.');
+          await new Promise(resolve=>setTimeout(resolve,pollMs));
+          observedJob=await request(scope,'GET',null,null,controller);
+        }
         let job=observedJob;
         if(job&&!matching(scope,job))job=null;
         if(!readOnly){

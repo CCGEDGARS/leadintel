@@ -234,3 +234,10 @@ test('selected checkpoint cannot replace shared role context or other buyers res
  const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};job.candidate.buyerDiscovery={opportunityRoles:['Other']};job.candidate.publicResearch={aiReview:{reviewedPersonIds:['anna']},buyerAgent:{people:[]},conflicts:['unrelated']};job.candidate.people[1].name='Wrong';
  const h=harness(()=>job);await h.client.restore(owner);assert.deepEqual(owner.people[1],before);assert.deepEqual(owner.buyerDiscovery,shared);assert.deepEqual(owner.publicResearch.aiReview,review);assert.deepEqual(owner.publicResearch.conflicts,[]);
 });
+
+test('a selected click waits for another server-owned buyer job without replacing or applying it',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));const before=structuredClone(owner.people[0]);let reads=0;
+ const other={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna']}};other.candidate.people[0].name='Must not apply';
+ const h=harness(call=>call.method==='GET'?{...other,status:++reads<3?'running':'complete'}:{...snapshot(owner),input:{scope:'selected_buyers',personIds:['bob']}});
+ await h.client.research(owner,{personIds:['bob'],force:true});assert.equal(reads,3);assert.equal(h.calls.filter(c=>c.method==='POST').length,1);assert.deepEqual(h.calls.at(-1).body.personIds,['bob']);assert.deepEqual(owner.people[0],before);
+});
