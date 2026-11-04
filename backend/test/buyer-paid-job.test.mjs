@@ -130,7 +130,9 @@ for(const [freeEmail,freePhone] of [[true,false],[false,true],[true,true]])test(
 
 for(const limit of [1,2,3,4])test(`saved automatic selection researches exactly ${limit} priority buyers`,async t=>{
  const f=await paidFixture(t,{automaticLimit:limit}),calls=[],lookup=await controlledLookup(f,calls);
- for(let i=0;i<limit+2;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
+ // Continue bounded slices until the persisted job settles; CI load can yield
+ // after a provider receipt but before the final completion checkpoint.
+ for(let i=0;i<4*limit+8;i++){const job=await readBuyerJob(f.env,workspaceId,{id:f.job.id});if(!['queued','running'].includes(job.status))break;await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});}
  assert.equal(calls.filter(c=>c.url.includes('email.find')).length,limit);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,limit);
  assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM additional_contact_attempts WHERE json_extract(result_json,'$.automatic')=1").get().n,limit);
  assert.equal(JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json).publicResearch.paidResearch.status,'complete');
