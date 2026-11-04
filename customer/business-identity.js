@@ -237,7 +237,10 @@
       if(!clean(normalized.profile.positioningConfidence))normalized.profile.positioningConfidence=identity.positioningConfidence;
       const painStatus=clean(normalized.profile.customerPainPointsStatus);
       const generatedPain=!painStatus||painStatus==="AI-inferred · review recommended";
-      if(!clean(normalized.profile.customerPainPoints)||(generatedPain&&clean(normalized.profile.customerPainPointsLanguage)!==identity.identityLanguage)){
+      const confirmedPain=normalized.profile.canonical?.fields?.customerPainPoints;
+      if(generatedPain&&confirmedPain?.status==='user_confirmed'&&clean(confirmedPain.value)){
+        normalized.profile.customerPainPoints=confirmedPain.value;
+      }else if(!clean(normalized.profile.customerPainPoints)||(generatedPain&&clean(normalized.profile.customerPainPointsLanguage)!==identity.identityLanguage)){
         normalized.profile.customerPainPoints=identity.customerPainPoints;
         normalized.profile.customerPainPointsStatus=identity.customerPainPointsStatus;
         normalized.profile.customerPainPointsLanguage=identity.customerPainPointsLanguage;

@@ -9,7 +9,7 @@ const SUPPORT_MODULES=[
   './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1&optional-verification=20261014-v1&app-dialogs=20261017-v1&contact-archive=20261020-v1&paid-settings-removed=20261021-v1&treg-paid-search=20261021-v1&badge-refresh=20261024-v1&paid-controls=20261029-v1&setup-audit=20261030-v1',
   './commercial-profile-adviser.js?v=20261101-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1&profile-adviser=20261101-v1',
-  './company-brain.js?v=20261001-adaptive-business-context-v1&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1',
+  './company-brain.js?v=20261001-adaptive-business-context-v1&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1&confirmed-profile=20261104-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1&profile-adviser=20261101-v1',
   './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1&saving-mode=1&balanced-saving=1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1&customer-only-billing=20261012-v1',
   './linkedin-signals.js?v=20260907-public-index-v1',

@@ -51,6 +51,9 @@ export async function step7Fixture({connected=true}={}){
   main.brandIdentity={senderName:'Robin Lane',senderTitle:'Commercial Director',companyDisplayName:'Fixture Industrial',website:'https://seller.example',email:'robin@seller.example'};
   main.messageStudio={};main.profile=Profile.buildCompanyIntelligenceProfile(main);
   main={...main,...Profile.normalizeSavedState(main),market:Market.normalizeMarketState(main.market),brandIdentity:Brand.normalize(main.brandIdentity),senderIdentityVersion:1};
+  // Approve the canonical projection used by browser restore, including the
+  // customer outcomes already confirmed in answers, before capturing authority.
+  main.profile=Canonical.normalizeCanonicalProfile(main.profile,main);
   Canonical.confirmProfileContext(main);main.approved=true;main.market.strategyApproved=true;main.market.strategyApproval=Strategy.approval(main);main.step=7;
   const contacts=[];
   for(const person of f.candidate.people){

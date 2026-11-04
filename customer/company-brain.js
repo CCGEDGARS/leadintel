@@ -222,7 +222,9 @@
         normalized.profile.recommendedSignals=recommendSignals({...normalized,profile:normalized.profile,companyClassification});
         const language=workspaceLanguage();
         const generated=!normalized.profile.customerPainPointsStatus||normalized.profile.customerPainPointsStatus==="AI-inferred · review recommended";
-        if(generated){normalized.profile.customerPainPoints=derivePainPoints(normalized.profile,{...normalized,companyClassification},language).join("\n\n");normalized.profile.customerPainPointsStatus="AI-inferred · review recommended";normalized.profile.customerPainPointsLanguage=language;}
+        const confirmedPain=normalized.profile.canonical?.fields?.customerPainPoints;
+        if(generated&&confirmedPain?.status==='user_confirmed'&&clean(confirmedPain.value)){normalized.profile.customerPainPoints=confirmedPain.value;}
+        else if(generated){normalized.profile.customerPainPoints=derivePainPoints(normalized.profile,{...normalized,companyClassification},language).join("\n\n");normalized.profile.customerPainPointsStatus="AI-inferred · review recommended";normalized.profile.customerPainPointsLanguage=language;}
       }
       return normalized;
     };
