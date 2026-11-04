@@ -1,4 +1,4 @@
-import './creator-library.js?v=20261101-v1';
+import './creator-library.js?v=20261104-save-primary-v1';
 import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
 import './translation-preview.js?v=20261027-v1&messages-reliability=20261031-v1';

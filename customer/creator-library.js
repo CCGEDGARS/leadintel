@@ -25,7 +25,7 @@ function mount(document,{host,request,refresh,scope}){
    const form=el('form'),label=el('label','PIN code'),password=el('input');password.type='password';password.autocomplete='off';password.inputMode='numeric';password.pattern='[0-9]{4}';password.required=true;password.minLength=4;password.maxLength=4;label.append(password);const submit=el('button','Unlock library');submit.className='primary-btn';submit.type='submit';form.append(label,submit);content.append(form);
    form.onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;const captured=epoch;try{const result=await request('/creator/unlock',{method:'POST',body:{password:password.value}});password.value='';if(captured!==epoch)return;unlocked=true;timer=setTimeout(()=>{clear();draw();say('Unlock expired. Enter your PIN again.');},Math.max(1,result.expiresAt-Date.now()));await load();say('');}catch(e){password.value='';if(captured===epoch)say(e.message);}finally{busy=false;submit.disabled=false;}};return;
   }
-  content.append(el('p','Private source drafts → review → activate a channel/style master. Active patterns are used for new script preparation. Existing customer drafts stay intact. Only {{field}} placeholders change; literal wording is preserved.'));
+  content.append(el('p','Review your original and pattern, then Save to make it the mandatory primary master for its channel and style. New script preparation uses this saved pattern. Existing customer drafts stay intact. Only {{field}} placeholders change; literal wording is preserved.'));
   const actions=el('div');actions.className='cl-actions';actions.append(button('New script',()=>edit({id:root.crypto.randomUUID(),revision:0,channel:'email',style:'professional',name:'',folder:'',subject:'',body:'',original:''})),button('Refresh',async()=>{if(dirty&&!await confirm('Discard unsaved changes and refresh?'))return;editing=null;dirty=false;await load();}),button('Lock library',lock));content.append(actions);
   if(editing){
    const row=editing;content.append(el('h3',row.revision?'Edit source · v'+row.revision:'New source script'));
@@ -35,8 +35,21 @@ function mount(document,{host,request,refresh,scope}){
    const original=input('Original script (preserved as supplied)',row.original,{multiline:true,maxLength:30000}),subject=input('Email subject pattern',row.subject,{maxLength:500}),body=input('Active script pattern',row.body,{multiline:true});
    const upload=el('input');upload.type='file';upload.accept='.txt,.md,text/plain,text/markdown';const uploadLabel=el('label','Import original from .txt or .md');uploadLabel.append(upload);content.append(uploadLabel);upload.onchange=async()=>{try{const file=upload.files[0];if(!file)return;if(file.size>120000)throw Error('Choose a text file up to 120 KB.');const text=await file.text();if(text.length>30000)throw Error('Original exceeds 30,000 characters.');original.value=text;dirty=true;}catch(e){say(e.message);}};
    content.append(el('p','Paste the original above. In the active pattern, replace changing facts with explicit fields such as {{firstName}}, {{buyerCompany}}, {{sender}}, {{company}}, {{offer}} and {{calendly}}. Unknown fields remain visible and prevent final use. No AI rewriting of masters.'));
-   const review=el('label'),check=el('input');check.type='checkbox';review.append(check,document.createTextNode(' I reviewed the original, pattern, reusable fields and claims.'));content.append(review);
-   const controls=el('div');controls.className='cl-actions';controls.append(button('Copy original to pattern',async()=>{if(body.value&&!await confirm('Replace the script pattern with the original text?'))return;body.value=original.value;dirty=true;}),button('Save draft',async()=>{if(!check.checked)throw Error('Review the script and tick the confirmation.');const captured=epoch;const result=await request('/creator/'+row.id,{method:'PUT',body:{name:name.value,folder:folder.value,channel:channel.value,style:style.value,original:original.value,subject:channel.value==='email'?subject.value:'',body:body.value,expectedRevision:row.revision}});if(captured!==epoch)return;editing=result.script;dirty=false;await load();say('Draft saved. Activate it below when ready.');}),button('Close editor',async()=>{if(dirty&&!await confirm('Discard unsaved script changes?'))return;editing=null;dirty=false;draw();}));content.append(controls);
+   const review=el('label'),check=el('input');check.type='checkbox';review.append(check,document.createTextNode(' I reviewed the original, pattern, reusable fields and claims. Save makes this the mandatory primary master for the selected channel and style.'));content.append(review);
+   const controls=el('div');controls.className='cl-actions';controls.append(button('Copy original to pattern',async()=>{if(body.value&&!await confirm('Replace the script pattern with the original text?'))return;body.value=original.value;dirty=true;}),button('Save',async()=>{
+    if(!check.checked)throw Error('Review the script and tick the confirmation.');
+    const captured=epoch,selectedChannel=channel.value,selectedStyle=style.value;
+    const expectedCoreRevision=data.active.find(r=>r.id===selectedChannel+':'+selectedStyle)?.revision||0;
+    const result=await request('/creator/'+row.id,{method:'PUT',body:{name:name.value,folder:folder.value,channel:selectedChannel,style:selectedStyle,original:original.value,subject:selectedChannel==='email'?subject.value:'',body:body.value,expectedRevision:row.revision}});
+    if(captured!==epoch)return;
+    editing=result.script;dirty=false;
+    try{await request('/creator/'+row.id+'/activate',{method:'POST',body:{expectedRevision:result.script.revision,expectedCoreRevision}});}
+    catch(error){if(captured!==epoch)return;await load();if(captured===epoch)say('Source saved, but the primary master was not updated. '+error.message+' Review the saved version and press Save to retry.');return;}
+    if(captured!==epoch)return;
+    await load();if(captured!==epoch)return;
+    try{await refresh();}catch(error){if(captured===epoch)say('Primary master saved. Reload the script catalogue before preparing a new message. '+error.message);return;}
+    if(captured===epoch)say('Saved as the mandatory primary master for '+selectedChannel+' · '+selectedStyle+'. New preparations use this script. Existing drafts are preserved.');
+   }),button('Close editor',async()=>{if(dirty&&!await confirm('Discard unsaved script changes?'))return;editing=null;dirty=false;draw();}));content.append(controls);
   }
   const folders=el('div');folders.className='cl-folders';content.append(folders);
   for(const [channel,title] of [['email','Emails'],['linkedin','Messages'],['phone','Phone Calls']]){
@@ -57,3 +70,4 @@ function mount(document,{host,request,refresh,scope}){
 }
 const api={mount};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelCreatorLibrary=api;
 })(typeof window==='object'?window:globalThis);
+
