@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readOnlyD1,inspectBuyerJob,encryptInspection} from '../scripts/inspect-buyer-job.mjs';
+import {readOnlyD1,inspectBuyerJob,encryptInspection,inspectionLogLines} from '../scripts/inspect-buyer-job.mjs';
 import {generateKeyPairSync,privateDecrypt,createDecipheriv,constants} from 'node:crypto';
 import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
 import {startBuyerJob} from '../src/buyer-research-store.js';
@@ -13,6 +13,33 @@ test('production inspection uses bound read-only D1 queries and never forwards a
  for(const sql of ['UPDATE buyer_research_jobs SET status=\'complete\'','DELETE FROM buyer_research_jobs','WITH x AS (SELECT 1) UPDATE buyer_research_jobs SET phase=\'done\'','SELECT 1; DELETE FROM users'])assert.throws(()=>DB.prepare(sql),/read.only/i);
  assert.equal(requests.length,1,'Rejected writes never leave the process');
  const expired=readOnlyD1({accountId:'a'.repeat(32),databaseId:'79f8c0fb-82f9-4ff8-9ab7-38bf5742fc50',token:'controlled',notAfter:0,fetchImpl:async()=>assert.fail('Expired inspection cannot query production')});await assert.rejects(expired.prepare('SELECT 1').first(),/expired/);
+});
+
+test('detailed inspection explains the retained people and failed tasks without reading provider credentials',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ f.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'gemini','PRIVATE_CREDENTIAL_SENTINEL','PRIVATE_HINT','configured-model',0)").run(workspaceId);
+ f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,error) VALUES(?,'failed-check','independent','contacts','Robert Lund company check','failed',2,'Independent unavailable')").run(job.id);
+ const before=f.DB.raw.prepare('SELECT total_changes() n').get().n,value=await inspectBuyerJob(f.DB,{workspaceId,domain:f.candidate.domain,details:true});
+ assert.equal(value.details.people[0].name,'Robert Lund');assert.equal(value.details.failedTasks[0].attempts,2);assert.equal(value.details.models[0].model,'configured-model');
+ assert.equal(JSON.stringify(value).includes('PRIVATE_CREDENTIAL_SENTINEL'),false);assert.equal(JSON.stringify(value).includes('PRIVATE_HINT'),false);assert.equal(f.DB.raw.prepare('SELECT total_changes() n').get().n,before);
+});
+
+test('large encrypted diagnostics survive bounded CI log lines without exposing the source record',()=>{
+ const {publicKey}=generateKeyPairSync('rsa',{modulusLength:2048}),envelope=encryptInspection({privateAddress:'private@fixture.example',source:'x'.repeat(20000)},publicKey),lines=inspectionLogLines(envelope);
+ assert.ok(lines.length>1);assert.ok(lines.every(line=>line.length<6200));assert.ok(lines.every(line=>!line.includes('private@fixture.example')));
+ const parts=lines.map(line=>line.match(/^\[buyer-inspection-part\] ([a-f0-9]+) (\d+)\/(\d+) (.*)$/));assert.ok(parts.every(Boolean));assert.equal(new Set(parts.map(p=>p[1])).size,1);assert.equal(Number(parts[0][3]),parts.length);
+ assert.deepEqual(JSON.parse(parts.sort((a,b)=>Number(a[2])-Number(b[2])).map(p=>p[4]).join('')),envelope,'Every byte of the encrypted report survives log transport');
+});
+
+test('source-failure inspection binds requested and actual URLs to the selected job without exposing page bodies',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),requested='https://industry.example/staff/alex',actual=requested+'/',body='PRIVATE_PAGE_BODY_SENTINEL';
+ const c=JSON.parse((await f.DB.prepare('SELECT result_json FROM buyer_research_jobs WHERE id=?').bind(job.id).first()).result_json);
+ c.people[0].contactResearch={checks:{independent:{status:'partial',queryLog:[{sourceReads:[{url:requested,status:'partial',reason:'Attribution rejected'}]}]}}};
+ f.DB.raw.prepare('UPDATE buyer_research_jobs SET result_json=? WHERE id=?').run(JSON.stringify(c),job.id);
+ f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,result_json) VALUES(?,'redirected','read','contacts',?,'complete',1,?)").run(job.id,requested,JSON.stringify({url:actual,markdown:body,metadata:{sourceURL:actual,statusCode:200}}));
+ const before=f.DB.raw.prepare('SELECT total_changes() n').get().n,value=await inspectBuyerJob(f.DB,{workspaceId,domain:f.candidate.domain,details:true});
+ assert.equal(value.details.sourceFailures[0].requested,requested);assert.equal(value.details.sourceFailures[0].actual,actual);assert.equal(value.details.sourceFailures[0].metadataSourceURL,actual);
+ assert.equal(JSON.stringify(value.details.sourceFailures).includes(body),false);assert.equal(f.DB.raw.prepare('SELECT total_changes() n').get().n,before);
 });
 
 test('inspection reads one selected workspace/company and encrypts its production evidence for the task owner',async t=>{

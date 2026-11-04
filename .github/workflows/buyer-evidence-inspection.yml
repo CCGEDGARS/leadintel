@@ -1,0 +1,48 @@
+name: Buyer Evidence Inspection
+on:
+  push:
+    branches: [ops/buyer-evidence-20261103]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: ${{ github.repository == 'CCGEDGARS/leadintel' && github.actor == 'CCGEDGARS' && github.triggering_actor == 'CCGEDGARS' && github.event_name == 'push' && github.ref == 'refs/heads/ops/buyer-evidence-20261103' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXPECTED_SHA: aa2b05fbdfaf4902572efad255204f0f917b6a3f
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed inspection code and unchanged production imports
+        run: |
+          test "$(git hash-object backend/scripts/inspect-buyer-job.mjs)" = c8f908493d1e05aadcdd98d36112d6c6c6957d7e
+          test "$(git hash-object backend/scripts/buyer-inspection-public.pem)" = 67a4ee4608b351fb3690c3dc7676726506b59a7a
+          git diff --name-only "$EXPECTED_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/buyer-inspection-files"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          allowed={'backend/scripts/inspect-buyer-job.mjs','backend/test/buyer-job-inspection.test.mjs','docs/project-state/2026-11-03-buyer-contact-continuation.md','.github/workflows/buyer-evidence-inspection.yml'}
+          changed=set(Path(os.environ['RUNNER_TEMP']+'/buyer-inspection-files').read_text().splitlines())
+          if not changed <= allowed: raise SystemExit('Unreviewed runtime or dependency change in inspection checkout')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: backend
+      - name: Read encrypted person and source decisions without changing data
+        working-directory: backend
+        run: node scripts/inspect-buyer-job.mjs --workspace-id edgars-latvia --domain viscaria.com --expires 2026-11-04T12:00:00Z --max-wait-ms 0 --details true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: buyer-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: backend/buyer-inspection.encrypted.json
+          retention-days: 3
