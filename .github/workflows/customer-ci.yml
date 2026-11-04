@@ -186,7 +186,7 @@ jobs:
           LEADINTEL_REQUIRE_BROWSER: 'true'
         # Each journey launches Chromium. Keep the existing timeouts and assertions
         # while avoiding four competing browser processes on the same runner.
-        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/manual-paid-lookup.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
       - name: Upload controlled journey evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -196,6 +196,7 @@ jobs:
             /tmp/leadintel-step1-test-*/evidence.json
             /tmp/leadintel-step1-test-*/*.png
             /tmp/leadintel-step5-test-*/evidence.json
+            /tmp/manual-paid-browser-evidence.json
             /tmp/leadintel-step5-test-*/*.png
             /tmp/leadintel-step6-test-*/evidence.json
             /tmp/leadintel-step6-test-*/*.png

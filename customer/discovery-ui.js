@@ -3953,7 +3953,7 @@ function withQualificationPresentation(operation){
 function qualificationAssessment(candidate,options={}){
   const context=qualificationContext(),{profile,market}=context,rules=window.LeadIntelQualificationSettings?.get?.()||{};
   const saved=crmCompanyByDomain(candidate.domain);
-  const settings={...rules,researchedAt:options.researchedAt??discovery?.lastRunAt??candidate.researchedAt};
+  const settings={...rules,researchedAt:options.researchedAt??(candidate.researchedAt||candidate.qualification?.researchedAt||discovery?.lastRunAt)};
   if(qualificationPresentationDepth&&qualificationDisplay)return qualificationDisplay.read(context,{...candidate,lifecycle_status:saved?.lifecycle_status},settings);
   let key;
   if(qualificationPresentationDepth){
@@ -4154,11 +4154,11 @@ window.LeadIntelAdditionalContacts?.register({
     owners.set(key,{external:token,pending:active,owner});
   },
   render:()=>{if(discoveryMounted)renderAll();},toast:showToast,
-  prepare:async(c,p)=>{
+  prepare:async(c,p,{automatic=false}={})=>{
     const owner=p?captureBuyerAction(c,p,{contact:true}):captureCompanyAction(),b=owner.bridge;
     const companyIdentity=JSON.stringify([c.domain,c.company,c.crmId||'',(c.people||[]).map(person=>buyerActionIdentity(c,person,true)).sort()]);
     const check=()=>{if(p){requireBuyerAction(owner);return;}if(!companyActionCurrent(owner)||!crmAuthenticated()||b.conflict||![...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.pipeline||[])].includes(c)||companyIdentity!==JSON.stringify([c.domain,c.company,c.crmId||'',(c.people||[]).map(person=>buyerActionIdentity(c,person,true)).sort()]))throw Error('Workspace or company context changed.');};
-    check();c.qualification=qualificationAssessment(c);if(!c.qualification.eligible)throw Error('Company qualification needs review.');
+    check();c.qualification=qualificationAssessment(c);const companyReady=window.LeadIntelAdditionalContactPolicy?.companyReadiness(c,{automatic});if(companyReady?!companyReady.eligible:!c.qualification.eligible)throw Error(companyReady?.reason||'Company qualification needs review.');
     const company=await ensureCrmCompany(c);check();
     validateCompanySave(c,{ok:true,company});if(c.crmId&&String(company.id)!==String(c.crmId))throw Error('Saved company identity changed. Review this exact buyer.');
     const saved=await b.saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(c),contacts:[]});check();

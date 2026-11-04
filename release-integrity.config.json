@@ -3599,7 +3599,9 @@
       "url": "/customer/additional-contact-policy.js",
       "status": 200,
       "contains": [
-        "Complete company qualification first.",
+        "function companyReadiness(",
+        "Review company qualification in Companies before a paid lookup.",
+        "manualFitPending",
         "Complete qualification and public research for four buyers before automatic lookup.",
         ".slice(0,limit)"
       ]

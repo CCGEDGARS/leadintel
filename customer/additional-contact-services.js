@@ -139,6 +139,7 @@
         if(!loadedCurrent()||!policy)await load();
         if(!current())return false;
         if(!loadedCurrent()||!policy)throw Error('Paid search preferences could not load. Check Settings and retry.');
+        if(!automatic&&policy.provider==='treg'&&!(phoneOnly?policy.phoneEnabled:policy.enabled)){openSettings('treg');throw Error('Paid '+(phoneOnly?'phone':'email')+' search is off. Activate it in Settings, then return and click this buyer’s '+(phoneOnly?'Phone':'E-mail')+' button. No lookup was started.');}
         dataLookup=policy.provider==='treg';
       }
       if(!phoneOnly&&!dataLookup&&adapter?.email?.(candidate,person))return true;
@@ -176,7 +177,7 @@
     const pendingToken={};const pendingPerson=person;
     const execute=(async()=>{
       const domain=candidate.domain,personId=person.id;
-      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup||phoneOnly?{confirmedEmail:''}:{})});if(!ready.eligible)throw Error(ready.reason+' Use Recheck for free-source research; review company qualification in Companies.');};
+      const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup||phoneOnly?{confirmedEmail:''}:{})});if(!ready.eligible)throw Object.assign(Error(ready.reason+(ready.code==='ADDITIONAL_CONTACT_COMPANY_REQUIRED'?'':/public research|mandatory public/i.test(ready.reason)?' Use Recheck to finish this buyer’s free checks.':'')),{code:ready.code});return ready;};
       const receipts=[];
       try{
         check();
@@ -199,18 +200,18 @@
           const lookupData=automatic?includePhone:dataLookup||includePhone;
           if(dataLookup&&!automatic){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
-            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${includeEmail?'research work email and professional profile':'phone only; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
+            const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${check().manualFitPending?'Purchasing-fit review is still pending. This is a manual contact lookup only. ':''}${includeEmail?'research work email and professional profile':'phone only; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
             if(!choice||!current())return false;
           }
           if(!dataLookup&&!automatic){
             const description=service==='treg'?'Treg work-email finding and delivery verification':service==='apollo'?'Apollo email enrichment':'Hunter email finding and, if needed, one delivery verification';
-            const approved=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: use ${description} with your provider credits. ${service==='treg'?'Estimated €0.30/contact for research and AI; Treg finding and verification are capped at $0.075 combined. Costs vary, and this action does not send messages. ':''}${receipts.length?'Apollo has not confirmed an email. ':''}Limits: ${policy.dailyLimit} provider lookups per day, ${policy.monthlyLimit} per month. A lookup can return no confirmed email.`,{title:'Find email with additional services',action:service==='hunter'?'Find with Hunter':'Find work email'})??false);
+            const approved=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${check().manualFitPending?'Purchasing-fit review is still pending. This is a manual contact lookup only. ':''}use ${description} with your provider credits. ${service==='treg'?'Estimated €0.30/contact for research and AI; Treg finding and verification are capped at $0.075 combined. Costs vary, and this action does not send messages. ':''}${receipts.length?'Apollo has not confirmed an email. ':''}Limits: ${policy.dailyLimit} provider lookups per day, ${policy.monthlyLimit} per month. A lookup can return no confirmed email.`,{title:'Find email with additional services',action:service==='hunter'?'Find with Hunter':'Find work email'})??false);
             if(!current())return false;
             if(!approved){record(candidate,person,[...receipts,`${name} · skipped: not approved`].join(' · '));return false;}
           }
           checkAuthority();adapter.pending(candidate,person,true,pendingToken);adapter.render();
           try{
-            const company=await adapter.prepare(candidate,person);checkAuthority();
+            const company=await adapter.prepare(candidate,person,{automatic});checkAuthority();
             if(!company?.id)throw Error('The selected CRM company could not be prepared.');
             const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,...(automatic?{automatic_buyer_limit:buyerLimit()}:{}),approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
