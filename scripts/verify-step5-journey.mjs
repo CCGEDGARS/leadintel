@@ -192,7 +192,7 @@ export async function verifyConfirmedFourJourney({artifactDir='/tmp/leadintel-co
  finally{await Promise.allSettled(contexts.map(context=>context.close()));await browser.close();await f.close();}
 }
 
-export async function verifyRetainedViscariaJourney({artifactDir='/tmp/leadintel-viscaria-retention'}={}){
+export async function verifyRetainedViscariaJourney({artifactDir='/tmp/leadintel-viscaria-retention',recheck=false}={}){
  const sourceSha256=await sourceHashes(),{c:full,pages,searches,recordedAt}=replayViscaria(),damaged=structuredClone(full);
  const robert=full.people.find(p=>p.name==='Robert Åkerlind');robert.linkedinProfileReview={status:'review_required',reason:'Multiple indexed profiles',checkedAt:new Date().toISOString(),urls:['https://linkedin.com/in/robert-akerlind','https://linkedin.com/in/other-robert']};
  for(const p of damaged.people)if(!['Robert Åkerlind','Simon Krekula'].includes(p.name)){p.publicEmailEvidence=null;p.linkedinIdentityEvidence=null;p.publicLinkedinUrl='';p.linkedin_url='';p.publicNameUrl=pages[1].url;}
@@ -214,9 +214,15 @@ export async function verifyRetainedViscariaJourney({artifactDir='/tmp/leadintel
   await open();await four();assert.equal(f.providerCalls.length,0,'read-only reopen recovers server source facts without provider dispatch');
   const emailCard=cards().filter({hasText:'Robert Åkerlind'});assert.equal(await emailCard.locator('[data-prospect-enrich-email]').getAttribute('aria-pressed'),'true');assert.equal(await emailCard.locator('[data-keep-buyer]').isEnabled(),true);
   // Exercise the actual visible Refresh command and a real official-phase checkpoint.
-  await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='queued',current.id);await four();
+  await page.locator(recheck?'[data-recheck-buyer][data-person-id="'+full.people.find(p=>p.name==='Charlotte Odenberger').id+'"]':'.selected-prospect-company [data-find-prospect-buyers]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='queued',current.id,{timeout:10000});await four();
   const next=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs ORDER BY rowid DESC LIMIT 1').get();await f.runJobs(next.id);await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.revision>0);await four();
-  await page.locator('[data-cancel-buyer-research]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='canceled');await settleInitialSave(page);await four();
+  if(recheck){
+   for(let slice=0;slice<30;slice++){const job=f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(next.id);if(!['queued','running'].includes(job.status))break;await f.runJobs(next.id);}
+   const finished=f.DB.raw.prepare('SELECT status,input_json FROM buyer_research_jobs WHERE id=?').get(next.id);assert.ok(!['queued','running'].includes(finished.status),'selected Recheck must reach a terminal result');
+   const input=JSON.parse(finished.input_json);assert.equal(input.scope,'selected_buyers');assert.deepEqual(input.personIds,[full.people.find(p=>p.name==='Charlotte Odenberger').id]);assert.equal(Boolean(input.paidResearch),false);
+   await page.waitForFunction(()=>['complete','needs_review','failed'].includes(discovery.selectedProspects[0].buyerResearchJob?.status));
+  }else{await page.locator('[data-cancel-buyer-research]').click();await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.status==='canceled');}
+  await settleInitialSave(page);await four();
   const shot=path.join(artifactDir,'four-recorded-viscaria-contacts.png');await cards().first().evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await page.screenshot({path:shot,fullPage:true});
   // General Proceed selects the accepted email. A retained profile alone keeps
   // its link but cannot replace that email recipient or enter Messages.
