@@ -4,18 +4,18 @@ import {searchWorkspaceWeb} from './ai-routes.js';
 export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal}={}){
  let unavailable=false,connection;
  const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
- return async function search(query,{limit=8}={}){
-  await guard();let empty=false;
+ return async function search(query,{limit=8,diversify=false}={}){
+  await guard();let empty=false,primaryRows=[];
   if(!unavailable){
    if(!connection)try{connection=await credential(env,workspaceId,'firecrawl');}catch{unavailable=true;observe({provider:'firecrawl',operation:'search',status:'skipped',reason:'Workspace Firecrawl credential unavailable'});}
    await guard();
    if(connection)try{
-    const response=await fetchImpl('https://api.firecrawl.dev/v2/search',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(connection.apiKey?{Authorization:`Bearer ${connection.apiKey}`}:{})},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown']}}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(25000)]):AbortSignal.timeout(25000)});
+    const response=await fetchImpl('https://api.firecrawl.dev/v2/search',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(connection.apiKey?{Authorization:`Bearer ${connection.apiKey}`}:{})},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown']}}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(diversify?12000:25000)]):AbortSignal.timeout(diversify?12000:25000)});
     if(!response.ok){if([401,402,403,409,429].includes(response.status))unavailable=true;throw Error(`Public search HTTP ${response.status}`);}
     const payload=await response.json(),rows=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web;
     if(payload.success===false||!Array.isArray(rows))throw Error('Public search returned an invalid result list');
     observe({provider:'firecrawl',operation:'search',status:'succeeded',results:rows.length});await guard();
-    if(rows.length)return rowsWithSource(rows,'firecrawl');empty=true;
+    if(rows.length&&!diversify)return rowsWithSource(rows,'firecrawl');primaryRows=rowsWithSource(rows,'firecrawl');empty=rows.length===0;
    }catch(error){await guard();observe({provider:'firecrawl',operation:'search',status:'failed',reason:String(error.message||'Public search unavailable').slice(0,180)});}
   }
   await guard();
@@ -23,7 +23,8 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
    const result=await grounded(env,workspaceId,query,{signal});await guard();
    if(result.status!=='complete'||result.web_search===false||!Array.isArray(result.results))throw Error('Grounded public research unavailable');
    observe({provider:'grounded',operation:'search',status:'succeeded',results:result.results.length});
-   return rowsWithSource(result.results,'grounded');
-  }catch(error){await guard();observe({provider:'grounded',operation:'search',status:'failed',reason:'Grounded public research unavailable'});if(empty)return rowsWithSource([],'firecrawl');throw Error('Public contact research unavailable; resume unfinished checks after restoring a search provider.');}
+   const secondary=rowsWithSource(result.results,'grounded');if(!primaryRows.length)return secondary;
+   const combined=[...new Map([...secondary,...primaryRows].map(row=>[row.url,row])).values()].slice(0,limit);Object.defineProperty(combined,'searchProviders',{value:['firecrawl','grounded']});return combined;
+  }catch(error){await guard();observe({provider:'grounded',operation:'search',status:'failed',reason:'Grounded public research unavailable'});if(primaryRows.length)return primaryRows;if(empty)return rowsWithSource([],'firecrawl');throw Error('Public contact research unavailable; resume unfinished checks after restoring a search provider.');}
  };
 }
