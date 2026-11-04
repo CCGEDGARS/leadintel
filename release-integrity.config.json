@@ -7564,7 +7564,10 @@
       "contains": [
         "function buyerContactResearchScope(",
         "data-buyer-contact-progress",
-        "Time estimate not available yet"
+        "Time estimate not available yet",
+        "buyerRecheckOutcomes",
+        "Recheck finished ·",
+        "aria-live=\"polite\""
       ]
     },
     {

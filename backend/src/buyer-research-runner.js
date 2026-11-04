@@ -95,7 +95,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   const task=(kind,value,operation)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
   const search=async query=>restoreSearch(await task('search',query,async()=>{
-   let rows;try{rows=await nativeSearch(query,{signal:controller.signal,diversify:Boolean(input.recheck&&Object.values(input.recheck.plans).some(plan=>plan.queries.includes(query)))});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
+   let rows;try{rows=await nativeSearch(query,{signal:controller.signal,diversify:Boolean(input.recheck&&Object.values(input.recheck.plans).some(plan=>plan.queries.includes(query))||input.recheck&&candidate.people.some(person=>D.buyerGmailResearchQueries(candidate,person).includes(query)))});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
    if(!Array.isArray(rows))throw Error('Search response is invalid');
    if(services.search){const trace=rows.researchTrace||[];if(trace.length)trace.forEach(observe);else for(const provider of new Set([...(rows.searchProviders||[]),...rows.map(r=>r.searchProvider||r.buyerSource)].filter(Boolean)))observe({provider,operation:'search',status:'succeeded',results:rows.length});}
    const normalized=rows.slice(0,8).map(r=>({url:C.url(r.url),title:String(r.title||'').slice(0,400),description:String(r.description||r.text||'').slice(0,1800),markdown:String(r.markdown||r.content||'').slice(0,6000),evidenceKind:r.evidenceKind||'search_excerpt',buyerSource:r.buyerSource,searchProvider:r.searchProvider,...(r.sourceRead===true?{sourceRead:true,extractedAt:r.extractedAt||new Date().toISOString()}:{}),...(r.metadata?{metadata:{sourceURL:r.metadata.sourceURL,url:r.metadata.url,statusCode:r.metadata.statusCode}}:{})})).filter(r=>r.url);
@@ -223,3 +223,4 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
  }
  return results;
 }
+

@@ -12,6 +12,9 @@ export function prepareBuyerRecheck(input,history=[]){
    const saved=matches[0];
    for(const field of ['contactResearch','emailResearch','publicEmail','publicEmailUrl','publicEmailEvidence','publicEmailSourceCheck','publicPhone','publicPhoneUrl','publicPhoneEvidence','publicPhoneSourceCheck','linkedinIdentityEvidence','patternFindings','gmailMatches'])if(saved[field]!==undefined)person[field]=saved[field];
   }
+  // Explicit Recheck retries Gmail once per new job, even after an empty successful search.
+  // The previous durable job retains its original receipts and any sourced matches.
+  if(person.contactResearch){person.contactResearch={...person.contactResearch,checks:{...person.contactResearch.checks,gmail:{status:'not_searched',queryLog:[]}},channels:{...person.contactResearch.channels,gmail:{status:'not_searched'}}};}
   const receipts=[...matches.flatMap(p=>p.contactResearch?.checks?.followup?.queryLog||[]),...entries.flatMap(row=>row.candidate.people?.some(p=>String(p.id)===String(person.id)&&D.buyerResearchIdentityKey(row.candidate,p)===identity)?row.input.recheck?.plans?.[String(person.id)]?.history||[]:[])];
   const completed=[...new Map(receipts.filter(row=>row.status==='complete'&&(!row.searchStatus||row.searchStatus==='complete')&&(!row.sourceReads||row.sourceReads.every(source=>['complete','not_needed'].includes(source.status)))).sort((a,b)=>Date.parse(a.checkedAt)-Date.parse(b.checkedAt)).map(row=>[row.query,{query:row.query,status:'complete',checkedAt:row.checkedAt}])).values()].slice(-32);
   plans[String(person.id)]={...D.buyerRecheckPlan(input.candidate,person,completed),history:completed};
@@ -26,3 +29,4 @@ export function prepareBuyerRecheck(input,history=[]){
  }
  input.recheck={version:1,plans,maxActiveMs:120000};
 }
+

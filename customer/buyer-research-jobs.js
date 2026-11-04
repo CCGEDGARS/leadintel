@@ -89,20 +89,21 @@
         }
       }
       for(const field of ['publicContacts','publicContactVersion','publicResearch','buyerDiscovery']){
-        if(unchanged||source[field]===undefined)continue;
+        if(unchanged||source[field]===undefined||selected&&field==='buyerDiscovery')continue;
         if(Array.isArray(source[field])){if(source[field].length)owner[field]=bounded(source[field]);}
         else{
           const next=bounded(source[field]);
           if(field==='buyerDiscovery'&&owner[field]?.companyDossier?.status==='complete'&&next.companyDossier?.status!=='complete')next.companyDossier=next.companyDossier?.status?{...owner[field].companyDossier,lastAttempt:next.companyDossier.lastAttempt||{status:next.companyDossier.status,reason:next.companyDossier.reason||'Company research remains incomplete',research:next.companyDossier}}:owner[field].companyDossier;
+          if(selected&&field==='publicResearch')for(const name of ['aiReview','buyerAgent','conflicts']){if(owner[field]?.[name]!==undefined)next[name]=owner[field][name];else delete next[name];}
           owner[field]={...(owner[field]||{}),...next};
         }
       }
       // Old job snapshots can retain a role hold after reading the named official
       // contact. Reassess the merged current evidence, never the terminal label.
-      if(owner.buyerRolesChanged&&root.LeadIntelDiscovery?.canReassessSavedBuyerRoles?.(owner,owner.people||[],scope.profile))owner.buyerRolesChanged=false;
+      if(!selected&&owner.buyerRolesChanged&&root.LeadIntelDiscovery?.canReassessSavedBuyerRoles?.(owner,owner.people||[],scope.profile))owner.buyerRolesChanged=false;
       const running=ACTIVE.has(job.status);owner.peopleStatus=running?'loading':owner.people?.length?'complete':job.status==='complete'?'empty':'error';
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
-      owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
+      if(!selected)owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
       owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
@@ -124,14 +125,28 @@
       const scope=capture(owner,options),key=`${scope.workspaceId}|${domain(owner.domain)}`,old=active.get(key);
       if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly)){
         const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
-        if(!readOnly&&!samePeople)throw Error('Research is already starting for another buyer. Wait for it to finish, then recheck this contact.');
+        if(!readOnly&&!samePeople){
+          const identities=(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n');
+          try{await old.promise;}catch{}
+          if(getBridge()!==scope.bridge||scope.bridge.workspace?.id!==scope.workspaceId||scope.bridge.session?.user?.id!==scope.userId||!scope.bridge.session?.authenticated||inputKey(owner,scope.profile)!==scope.key||options.signal?.aborted||options.isCurrent&&options.isCurrent()!==true||(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n')!==identities)throw abortError();
+          if(active.get(key)===old)active.delete(key);
+          return execute(owner,options,readOnly);
+        }
         return old.promise;
       }
       old?.controller.abort();const controller=new AbortController();let stop;
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
       const entry={scope,controller,promise:null,readOnly};
       entry.promise=(async()=>{
-        const observedJob=await request(scope,'GET',null,null,controller);
+        let observedJob=await request(scope,'GET',null,null,controller);
+        const queueStarted=Date.now();
+        // Another tab/server observer may own active research. Never replace it
+        // merely because this click selected a different person.
+        while(!readOnly&&observedJob&&matching(scope,observedJob)&&ACTIVE.has(observedJob.status)&&stable([...(observedJob.input?.personIds||[])].map(String).sort())!==stable([...(scope.personIds||[])].sort())){
+          if(Date.now()-queueStarted>=observationTimeoutMs)throw Error('This buyer is waiting for the current research to finish. Retry when it completes.');
+          await new Promise(resolve=>setTimeout(resolve,pollMs));
+          observedJob=await request(scope,'GET',null,null,controller);
+        }
         let job=observedJob;
         if(job&&!matching(scope,job))job=null;
         if(!readOnly){

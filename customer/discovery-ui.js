@@ -1690,6 +1690,7 @@ function findPipelineDecisionMakers(index,{refreshDossier=false}={}){
 function retryPipelineDecisionMakers(domain){const index=pipelineRows().findIndex(item=>canonicalDomain(item.domain||item.website)===domain);return index<0?false:findPipelineDecisionMakers(index);}
 async function runDurableBuyerResearch(candidate,options={}){
   const jobs=window.LeadIntelBuyerResearchJobs;if(!jobs||!candidate)return false;
+  if(!options.restore&&!options.personIds?.length)buyerRecheckLayouts.delete(candidate);
   const state=discovery,b=bridge(),scope=discoveryOperationContext(),workspaceId=b?.workspace?.id,userId=b?.session?.user?.id;
   const collections=['selectedProspects','candidates','potentialMatches','pipeline'].filter(key=>(state[key]||[]).includes(candidate));
   const profile={...companyQualificationProfile(mainState()),decisionMakers:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||candidate.buyerRoles||''};
@@ -1708,7 +1709,7 @@ async function runDurableBuyerResearch(candidate,options={}){
   };
   const settings={profile,paidResearch,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
     if(!current()||!buyerHydrationScope(owner,detail))return;
-    for(const person of owner.people||[]){const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
+    for(const person of owner.people||[]){const ids=options.personIds||owner.buyerResearchJob?.personIds;if(ids?.length&&!ids.map(String).includes(String(person.id)))continue;const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
       const raw=(detail.contactData||[]).find(data=>String(data.personId)===String(person.id)),data=raw&&LeadIntelDiscovery.safeContactData(raw,person,owner.domain);if(data&&(!person.contactData||Date.parse(data.checkedAt)>=Date.parse(person.contactData.checkedAt||'')))person.contactData=data;
     }
   },onProgress:detail=>{
@@ -2840,6 +2841,7 @@ async function saveBuyerAndProceed(domain,index,{button,personId}={}){
   finally{trace?.finish(buyerActionCurrent(owner)?outcome:'stale');if(buyerActionSelectionOwners.get(selectionKey)===token){buyerActionSelectionOwners.delete(selectionKey);buyerSelectionPending.delete(selectionKey);}renderAll();renderSelectedEmailBuyer({scroll:false});}
 }
 
+const buyerRecheckOutcomes=new WeakMap(),buyerCardLayouts=new WeakMap(),buyerRecheckLayouts=new WeakSet();
 function buyerContactResearchScope(candidate){
  const legacy=typeof publicContactPromises==='undefined'?null:publicContactPromises.get(`${bridge()?.workspace?.id||''}|${canonicalDomain(candidate.domain)}`);
  const job=candidate.buyerResearchJob;
@@ -2856,7 +2858,7 @@ function prospectContactControls(candidate,person){
   const key=selectedBuyerKey(candidate,person),result=enrichmentResults.get(key),companyResearching=candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading';
   const researchIds=buyerContactResearchScope(candidate),starting=buyerActionPendingOwners.get(key)?.recheck;
   const researching=Boolean(starting||companyResearching&&(!researchIds?.length||researchIds.includes(String(person.id))));
-  const pending=enrichmentPending.has(key)||researching;
+  const pending=enrichmentPending.has(key)||researching,outcome=buyerRecheckOutcomes.get(person);
   const index=candidate.people.findIndex(item=>LeadIntelDiscovery.buyerIdentity(item)===LeadIntelDiscovery.buyerIdentity(person)),verified=Boolean(verifiedBuyerEmail(candidate,person,result?.contact||{}));
   const emailConfirmed=verified,linkedinConfirmed=Boolean(LeadIntelDiscovery.confirmedBuyerContactData(candidate,person).linkedin);
   const phoneConfirmed=Boolean(LeadIntelDiscovery.confirmedBuyerPhone(candidate,person,result?.contact||{},{workspaceId:bridge()?.workspace?.id,companyId:candidate.crmId||(typeof crmCompanyByDomain==='function'?crmCompanyByDomain(candidate.domain)?.id:undefined)}));
@@ -2864,15 +2866,17 @@ function prospectContactControls(candidate,person){
   const selecting=buyerSelectionPending.has(key),syncConflict=bridge()?.conflict===true;
   const active=loadMeta().selectedEmailBuyer,selected=verified&&active?.workspaceId===bridge()?.workspace?.id&&active?.domain===canonicalDomain(candidate.domain)&&String(active?.personId)===String(person.id);
   const ready=verified&&crmAuthenticated()&&!pending&&!buyerSelectionPending.size&&!hold&&!syncConflict,disabled=!crmAuthenticated()||pending||syncConflict;
-  return `<div class="selected-prospect-contact-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)} · Use Recheck.</p>`:''}<p class="people-note" role="status" ${researching?`data-buyer-contact-progress="${esc(person.id)}"`: ''}>${syncConflict?'Resolve the workspace synchronization conflict.':selecting?'Saving selected recipient…':researching?esc(starting&&!companyResearching?'Starting this contact’s free recheck…':buyerContactProgressText(candidate)):hold?esc(hold):companyResearching?'Research is running for another buyer; your saved details are unchanged.':pending?'Checking contact details…':verified?'Confirmed contact email ready · Proceed to content creation.':linkedinConfirmed?'LinkedIn profile confirmed. Confirm an email for this person to enable Proceed.':phoneConfirmed?'Phone confirmed · Use Phone. Confirm an email for this person to enable Proceed.':'Confirm an email for this person to enable Proceed.'}</p>${syncConflict?'<button class="secondary-btn small" type="button" data-review-buyer-sync>Review workspace sync</button>':''}<div class="buyer-four-actions"><button class="secondary-btn small${emailConfirmed?' buyer-email-confirmed':!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${emailConfirmed}" title="${emailConfirmed?'Email confirmed; no paid lookup needed':'Start paid email search for this buyer. Recheck searches free sources.'}" ${disabled||hold?'disabled':''}>E-mail</button><button class="secondary-btn small${phoneConfirmed?' buyer-phone-confirmed':' buyer-confirm-needed'}" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${phoneConfirmed}" title="${phoneConfirmed?'Phone confirmed from exact-person evidence; no paid lookup needed':'Start paid phone search for this buyer only. Recheck searches free sources.'}" ${disabled||hold?'disabled':''}>Phone</button><button class="secondary-btn small" type="button" data-recheck-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" title="${companyResearching&&!researching?'Another contact check is running. Wait before starting this recheck.':'Find missing contact details using alternative public searches. Reuse valid saved checks; no paid contact lookup.'}" ${disabled||companyResearching?'disabled':''}>${researching?'Rechecking…':'Recheck'}</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Proceed to content creation':'Confirm this person’s email to continue'}" ${!ready?'disabled':''}>Proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
+  return `<div class="selected-prospect-contact-actions">${window.LeadIntelAdditionalContacts?.card?.(candidate,person)||''}${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)} · Use Recheck.</p>`:''}<p class="people-note" style="${researching||outcome?.ok?'color:#0b6b57;font-weight:600':''}" role="status" aria-live="polite" ${researching?`data-buyer-contact-progress="${esc(person.id)}"`: ''}>${syncConflict?'Resolve the workspace synchronization conflict.':selecting?'Saving selected recipient…':researching?esc(starting&&(!companyResearching||researchIds?.length&&!researchIds.includes(String(person.id)))?(companyResearching?'Queued · this buyer’s free recheck will start next.':'Starting this buyer’s free recheck, including Gmail searches…'):buyerContactProgressText(candidate)):pending?'Checking contact details…':outcome?esc(outcome.message)+(hold?' '+esc(hold):''):hold?esc(hold):verified?'Confirmed contact email ready · Proceed to content creation.':linkedinConfirmed?'LinkedIn profile confirmed. Confirm an email for this person to enable Proceed.':phoneConfirmed?'Phone confirmed · Use Phone. Confirm an email for this person to enable Proceed.':'Confirm an email for this person to enable Proceed.'}</p>${syncConflict?'<button class="secondary-btn small" type="button" data-review-buyer-sync>Review workspace sync</button>':''}<div class="buyer-four-actions"><button class="secondary-btn small${emailConfirmed?' buyer-email-confirmed':!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${emailConfirmed}" title="${emailConfirmed?'Email confirmed; no paid lookup needed':'Start paid email search for this buyer. Recheck searches free sources.'}" ${disabled||hold?'disabled':''}>E-mail</button><button class="secondary-btn small${phoneConfirmed?' buyer-phone-confirmed':' buyer-confirm-needed'}" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${phoneConfirmed}" title="${phoneConfirmed?'Phone confirmed from exact-person evidence; no paid lookup needed':'Start paid phone search for this buyer only. Recheck searches free sources.'}" ${disabled||hold?'disabled':''}>Phone</button><button class="secondary-btn small" type="button" data-recheck-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" title="Find missing contact details and rerun Gmail searches for this buyer only; no paid contact lookup." ${disabled?'disabled':''}>${researching?'Rechecking…':'Recheck'}</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" data-person-id="${esc(person.id)}" data-person-identity="${esc(buyerActionIdentity(candidate,person,true))}" aria-pressed="${selected}" title="${hold?esc(hold):verified?'Proceed to content creation':'Confirm this person’s email to continue'}" ${!ready?'disabled':''}>Proceed${selected?' <span data-buyer-selection-check aria-hidden="true" style="display:inline;color:inherit;font:inherit;margin:0">✓</span>':''}</button></div></div>`;
 }
 async function recheckBuyerContact(domain,index,{personId}={}){
   const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=personId===undefined?candidate?.people?.[index]:candidate?.people?.find(p=>String(p.id)===String(personId));
   if(bridge()?.conflict){showToast('Recheck is blocked by a workspace sync conflict. Open Review sync to resolve it; both versions are preserved.');return false;}
   if(!person){showToast('This buyer is no longer available. Reopen the company to review its saved contacts.');return false;}
   if(!crmAuthenticated()){showToast('Sign in again to recheck this buyer.');return false;}
-  if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading'||enrichmentPending.has(personKey(candidate,person))){showToast('Research is already running. Its progress is shown above the contacts.');return false;}
+  if(enrichmentPending.has(personKey(candidate,person))){showToast('Research is already running. Its progress is shown above the contacts.');return false;}
   const owner=captureBuyerAction(candidate,person),key=personKey(candidate,person);
+  buyerRecheckLayouts.add(candidate);
+  buyerRecheckOutcomes.delete(person);
   // A durable command may spend time reading the current job before it receives
   // its first checkpoint. Acknowledge the click during that transport gap.
   const token=window.LeadIntelBuyerResearchJobs?beginBuyerPending(owner):null;
@@ -2882,12 +2886,12 @@ async function recheckBuyerContact(domain,index,{personId}={}){
     const completed=await findPublicProspectContacts(candidate.domain,{personIds:[String(person.id)],force:true,manualContact:true,researchOwner:candidate});
     if(completed&&current()){
       const saved=buyerActionPerson(candidate,0,person.id),status=candidate.buyerResearchJob?.status;
-      if(status==='canceled')showToast('Recheck stopped. Saved contact details are retained.');
-      else if(saved){const email=verifiedBuyerEmail(candidate,saved,enrichmentResults.get(key)?.contact||{});showToast(email?'Recheck finished. A confirmed email is available.':candidate.publicContactStatus==='complete'?'Recheck finished. No confirmed email was found.':'Recheck saved its results. Some checks remain incomplete; no confirmed email is available.');}
+      if(saved){const email=verifiedBuyerEmail(candidate,saved,enrichmentResults.get(key)?.contact||{}),gmail=saved.contactResearch?.checks?.gmail,gmailDone=gmail?.status==='complete',matches=saved.gmailMatches?.length||0;const message=status==='canceled'?'Recheck stopped. Saved contact details retained.':`Recheck finished · ${email?'confirmed email available':'no confirmed email found'}. Gmail: ${gmailDone?(matches?`${matches} source-backed possible match${matches===1?'':'es'}; review required`:'no public match found'):'checks incomplete; retry available'}.`;buyerRecheckOutcomes.set(saved,{ok:status!=='canceled'&&gmailDone,message});showToast(message);}
     }
+    if(!completed&&current())buyerRecheckOutcomes.set(person,{ok:false,message:'Recheck could not finish. Saved details retained; retry available.'});
     return completed;
   }
-  catch(error){if(buyerActionCurrent(owner))showToast(error.message||'Recheck could not start. Your saved contact details are retained.');return false;}
+  catch(error){if(buyerActionCurrent(owner)){const message=error.message||'Recheck could not start. Your saved contact details are retained.';buyerRecheckOutcomes.set(person,{ok:false,message});showToast(message);}return false;}
   finally{if(token){endBuyerPending(key,token);if(current())renderAll();}}
 }
 async function findPublicProspectContacts(domain,options={}){
@@ -3733,7 +3737,7 @@ function buyerProviderStatusHtml(candidate){
 }
 function refreshBuyerProgress(candidate){
  const card=[...document.querySelectorAll('[data-buyer-company]')].find(node=>canonicalDomain(node.dataset.buyerCompany)===canonicalDomain(candidate.domain));
- for(const node of card?.querySelectorAll('[data-buyer-contact-progress]')||[])node.textContent=buyerContactProgressText(candidate);
+ for(const node of card?.querySelectorAll('[data-buyer-contact-progress]')||[]){const ids=buyerContactResearchScope(candidate);node.textContent=ids?.length&&!ids.includes(String(node.dataset.buyerContactProgress))?'Queued · this buyer’s free recheck will start next.':buyerContactProgressText(candidate);}
  const panel=card?.querySelector('.buyer-research-progress');if(!panel)return;
  const restoreFocus=panel.contains(document.activeElement)&&document.activeElement?.hasAttribute('data-cancel-buyer-research');
  panel.outerHTML=buyerResearchProgressHtml(candidate);if(restoreFocus)card.querySelector('[data-cancel-buyer-research]')?.focus({preventScroll:true});
@@ -3812,7 +3816,10 @@ function renderSelectedProspects(prospects){
 
     const domain=canonicalDomain(candidate.domain);
     let people=(Array.isArray(candidate.people)?candidate.people:[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending');
-    const ranked=LeadIntelDiscovery.confirmedBuyerShortlist(people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate,{confirmedEmail:person=>verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{},{channelOnly:true}),contactForPerson:person=>enrichmentResults.get(personKey(candidate,person))?.contact||{},workspaceId:bridge()?.workspace?.id,companyId:candidate.crmId||(typeof crmCompanyByDomain==='function'?crmCompanyByDomain(candidate.domain)?.id:undefined)});
+    let ranked=LeadIntelDiscovery.confirmedBuyerShortlist(people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate,{confirmedEmail:person=>verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{},{channelOnly:true}),contactForPerson:person=>enrichmentResults.get(personKey(candidate,person))?.contact||{},workspaceId:bridge()?.workspace?.id,companyId:candidate.crmId||(typeof crmCompanyByDomain==='function'?crmCompanyByDomain(candidate.domain)?.id:undefined)});
+    const layout=buyerCardLayouts.get(candidate);
+    if(buyerRecheckLayouts.has(candidate)&&layout){const byId=new Map(people.map(p=>[String(p.id),p]));ranked={...ranked,people:layout.ids.map(id=>byId.get(id)).filter(Boolean),priorityIds:layout.priorityIds,recommendedIds:layout.recommendedIds};}
+    else buyerCardLayouts.set(candidate,{ids:ranked.people.map(p=>String(p.id)),priorityIds:[...ranked.priorityIds],recommendedIds:[...ranked.recommendedIds]});
     const recommendations=new Set(ranked.recommendedIds);
     const executiveCoverage=ranked.executiveCoverage;
     const coverage=ranked.committeeCoverage;
@@ -4192,4 +4199,5 @@ window.LeadIntelAdditionalContacts?.register({
   }
 });
 initDiscoveryWhenReady();
+
 
