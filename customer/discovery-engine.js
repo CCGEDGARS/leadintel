@@ -2614,7 +2614,7 @@
     const priority=url=>/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const legacyArchive=previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion;
     const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||u.searchParams.has('year')||u.searchParams.has('y')||/investor|financial|report/i.test(u.pathname)&&/reports?(?:[-/]|$)/i.test(u.pathname))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
-    const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|team|people|staff|management|leadership|ledning|supplier|procurement|inkop|privacy|invoice|invoicing|payment|accounting|e-mail|email|phone|e-post)\b/i;
+    const contactIntent=/\b(?:contacts?|kontakt(?:er)?|get[- ]in[- ]touch|teams?|people|staff|management|leadership|ledning|suppliers?|procurement|inkop|privacy|invoices?|invoicing|payments?|accounting|e-mails?|emails?|phones?|e-post)\b/i;
     const normalizeIntent=value=>clean(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
     const navigationPath=value=>{try{return decodeURI(value);}catch{return value;}};
     const contactDestination=(url,label='')=>{
