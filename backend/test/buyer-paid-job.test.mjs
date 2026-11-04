@@ -141,3 +141,12 @@ for(const [started,current] of [[1,4],[4,1]])test(`saved job respects its initia
  for(let i=0;i<6;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
  assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,1);
 });
+
+ test('automatic paid lookup cannot bypass an unchecked fourth priority buyer',async t=>{
+ const f=await paidFixture(t);f.c.people[3].contactResearch.checks.gmail.status='partial';f.c.people[3].emailResearch.status='partial';
+ f.c.publicResearch.aiReview.inputSignature=D.buyerReviewSignature(f.c);
+ await upsertCrmIntelligence(f.env.DB,f.context,f.c.crmId,Crm.mapDiscoveryCandidateToCrm(f.c).intelligence);
+ const {buyerPaidIntent,runWorkflowPaidResearch}=await import('../src/buyer-paid-research.js'),guard=async()=>{};guard.writeAuthority=()=>({sql:'1',args:[]});
+ let calls=0;await runWorkflowPaidResearch(f.env,f.context,f.c,{intent:await buyerPaidIntent(f.env,workspaceId,true,f.c),runId:'four-free-first',guard,lookup:async()=>{calls++;return {request:{status:'not_found'}};}});
+ assert.equal(calls,0,'All four free plans precede automatic spending, including when only one paid buyer was requested');
+ });

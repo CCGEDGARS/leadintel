@@ -1,6 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
-async function researched(){
+async function researched(count=1){
  const c={company:'Example',domain:'example.com',buyerRoles:['Procurement Director'],buyerSearchMode:'user_selected_target',people:[{id:'anna',name:'Anna Andersson',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]};
+ if(count===4)for(const [i,name] of ['Bo Svensson','Cecilia Berg','David Lind'].entries())c.people.push({id:'extra-'+i,name,title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'});
  await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Anna Andersson — Procurement Director at Example.',metadata:{sourceURL:'https://example.com/team'}})});
  assert.equal(D.buyerResearchCoveragePassed(c),true,'executed bounded plan is valid');return c;
 }
@@ -45,8 +46,8 @@ test('mandatory people checked report excludes wrong-plan receipts and another i
   const c=await researched();assert.equal(B.evaluate(c).coverage.mandatoryPeopleChecked,1);mutate(c);assert.equal(B.evaluate(c).coverage.mandatoryPeopleChecked,0);
  }
 });
-test('automatic Treg scope needs current selected-person AI review without a four-buyer gate',async()=>{
- const P=require('../additional-contact-policy.js'),c=await researched(),p=c.people[0];c.qualification={eligible:true,companyScore:85,researchedAt:new Date().toISOString()};
+test('automatic Treg requires selected-person AI review after all four free plans',async()=>{
+ const P=require('../additional-contact-policy.js'),c=await researched(4),p=c.people[0];c.qualification={eligible:true,companyScore:85,researchedAt:new Date().toISOString()};
  assert.equal(P.readiness(c,p,{provider:'treg'}).eligible,true,'explicit manual lookup does not need automatic supervision');
  assert.equal(P.readiness(c,p,{provider:'treg',automatic:true}).eligible,false);
  const reviewed=()=>c.publicResearch.aiReview={status:'complete',checkedAt:new Date().toISOString(),inputSignature:D.buyerReviewSignature(c),reviewedPersonIds:[p.id],conflicts:[],findings:[]};
@@ -112,9 +113,9 @@ test('one reviewed ID cannot claim AI coverage for two retained people or an uni
  }
 });
 test('a current full-context signature authorizes the reviewed automatic Treg scope while aggregate supervision remains partial',async()=>{
- const P=require('../additional-contact-policy.js'),c=await researched(),selected=c.people[0];
- c.people.push({id:'bo',name:'Bo Svensson',title:'Engineering Director',organization:'Example',publicNameUrl:'https://example.com/team',emailResearch:{status:'partial'}});
- c.qualification={eligible:true,companyScore:85,researchedAt:new Date().toISOString()};Object.assign(c.publicResearch.accountability,{status:'partial',totalPeople:2,checkedPeople:1});
+ const P=require('../additional-contact-policy.js'),c=await researched(4),selected=c.people[0];
+ c.people.push({id:'bo',name:'Bo Svensson',title:'Office Manager',organization:'Example',publicNameUrl:'https://example.com/team',emailResearch:{status:'partial'}});
+ c.qualification={eligible:true,companyScore:85,researchedAt:new Date().toISOString()};Object.assign(c.publicResearch.accountability,{status:'partial',totalPeople:5,checkedPeople:4});
  const review={status:'complete',checkedAt:new Date().toISOString(),reviewedPersonIds:[selected.id],findings:[],conflicts:[]};
  c.publicResearch.aiReview={...review,inputSignature:D.buyerReviewSignature({...c,people:[selected]})};assert.equal(P.readiness(c,selected,{automatic:true,provider:'treg'}).eligible,false,'private roster signature cannot represent retained full context');
  c.publicResearch.aiReview={...review,inputSignature:D.buyerReviewSignature(c)};

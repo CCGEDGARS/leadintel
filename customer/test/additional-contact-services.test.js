@@ -353,3 +353,17 @@ test('automatic paid follow-up cannot continue under a newer registered research
  const run=f.w.LeadIntelAdditionalContacts.auto(f.c,{trigger:'research_completed'});await started.promise;revision='strategy-two';response.resolve({ok:true,json:async()=>({contact:null,research:{status:'not_found'}})});await run;
  assert.equal(paidPosts(f).length,1);assert.equal(f.c.people[0].contactVerification,undefined);assert.equal(f.c.people[1].contactVerification,undefined);f.close();
 });
+
+
+test('automatic paid research waits for all four free plans while manual lookup stays scoped',()=>{
+ const P=require('../additional-contact-policy.js'),c=fixture();
+ c.people[3].contactResearch.checks.gmail.status='partial';c.people[3].emailResearch.status='partial';
+ assert.equal(P.readiness(c,c.people[0],{provider:'treg',automatic:true}).code,'ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
+ assert.equal(P.readiness(c,c.people[0],{provider:'treg',automatic:false}).eligible,true);
+ assert.deepEqual(P.targets(c,{provider:'treg',automaticBuyerLimit:4}),[]);
+});
+test('an ineligible primary buyer does not move automatic spending to a lower-ranked buyer',()=>{
+ const P=require('../additional-contact-policy.js'),c=fixture();
+ c.publicResearch.conflicts=[{person_id:'p0',reason:'Current employer conflict'}];
+ assert.deepEqual(P.targets(c,{automaticBuyerLimit:1}),[]);
+});

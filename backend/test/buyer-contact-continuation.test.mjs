@@ -81,5 +81,8 @@ test('the actual scheduler finishes the bounded ten-person contact plan across s
  const completed=f.DB.raw.prepare("SELECT request_value FROM buyer_research_tasks WHERE job_id=? AND kind='search' AND status='complete'").all(job.id);
  for(const task of completed)assert.ok(calls.filter(query=>query===task.request_value).length<=2,'Completed search results are reused; only an interrupted first dispatch may retry');
  const before=calls.length,reopened=await app.fetch(new Request(url+'&job_id='+job.id,{headers}),f.env,{});assert.equal(reopened.status,200);assert.equal((await reopened.json()).job.candidate.publicResearch.accountability.checkedPeople,10);assert.equal(calls.length,before,'Read-only reopen cannot repeat research');
+ const restored=(await (await app.fetch(new Request(url+'&job_id='+job.id,{headers}),f.env,{})).json()).job.candidate;
+ for(const person of globalThis.LeadIntelDiscovery.mandatoryBuyerResearchPriorities(restored.people,restored,{forExecution:true})){for(const key of globalThis.LeadIntelDiscovery.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks)assert.ok(globalThis.LeadIntelDiscovery.buyerResearchCheckPassed(restored,person,key),person.id+' retained '+key);assert.equal(person.contactResearch.checks.gmail.queryLog.length,3);}
+ assert.equal(calls.length,before);
  assert.ok(reads.length>0);
 });
