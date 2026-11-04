@@ -115,7 +115,7 @@ const boundedDiscoveryRuntime = [
   'function armBuyerResearchDeadline( readMissing:false armDeadline(420000+DISCOVERY_REQUEST_TIMEOUT_MS)',
   'formulas:plan.dossierFormulas formulas:dossierPlan.dossierFormulas',
   'function refreshBuyerProgress(candidate) refreshBuyerProgress(candidate);buyerPulse=',
-  'data-cancel-buyer-research Last saved research update: readProgress:signal=>withDiscoveryDeadline clearTimeout(buyerPulse)',
+  'data-cancel-buyer-research Last completed check: readProgress:signal=>withDiscoveryDeadline clearTimeout(buyerPulse)',
   'const DEFAULT_DISCOVERY_TARGET=5; smallStartVersion:1 Waiting for search providers heartbeat=setTimeout(refreshWaiting,2000)',
   'function startCompanyResearchFromStrategy() window.LeadIntelDiscoveryUI.startFromStrategy=startCompanyResearchFromStrategy Needs recheck No checked companies',
   'const reviewedMatches=verified.filter(matchesReviewed) reviewedCurrent() selectOnly:true,personId:String(person.id),reviewedRecipient The confirmed email changed. if(force)existingRows=officialResult?.freshRows||[] currentRows:evidence Retained/dossier quotes stay historical until a source read succeeds.',

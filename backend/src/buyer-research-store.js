@@ -100,8 +100,21 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const completed=(totals.results||[]).find(r=>r.status==='complete')?.n||0,total=(totals.results||[]).reduce((n,r)=>n+Number(r.n),0);
  const iso=value=>{const date=new Date(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(String(value))?value.replace(' ','T')+'Z':value);return Number.isFinite(date.getTime())?date.toISOString():'';};
  const updatedAt=iso(row.updated_at),createdAt=iso(row.created_at),lastActivityAt=[updatedAt,...(totals.results||[]).map(r=>iso(r.last_activity_at))].filter(Boolean).sort().at(-1)||updatedAt;
+ // Forecasts describe finished research passes, not guaranteed contact yield.
+ // Keep the sample private to this workspace and the same scope/paid mode.
+ const history=await stmt(env,`SELECT (unixepoch(updated_at)-unixepoch(created_at)) seconds FROM buyer_research_jobs
+ WHERE workspace_id=? AND id<>? AND phase='done' AND status IN ('complete','needs_review')
+ AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')=?
+ AND (COALESCE(json_extract(input_json,'$.paidResearch'),0)<>0)=?
+ AND created_at>=datetime('now','-30 days')
+ AND unixepoch(updated_at)-unixepoch(created_at) BETWEEN 1 AND 1800
+ ORDER BY updated_at DESC LIMIT 20`,row.workspace_id,row.id,input.scope||'all_buyers',input.paidResearch?1:0).all();
+ const durations=(history.results||[]).map(item=>Number(item.seconds)).filter(Number.isFinite).sort((a,b)=>a-b);
+ const estimate=durations.length>=5?{lowerSeconds:durations[Math.floor((durations.length-1)*.5)],upperSeconds:durations[Math.ceil((durations.length-1)*.9)],samples:durations.length}:null;
+ const lastResultAt=(totals.results||[]).filter(item=>item.status==='complete').map(item=>iso(item.last_activity_at)).filter(Boolean).sort().at(-1)||null;
+ const timing={estimate,lastResultAt,nextAttemptAt:row.status==='queued'&&Number(row.next_at)>0?new Date(Number(row.next_at)).toISOString():null};
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):labels[row.phase]||row.phase.replaceAll('_',' ')}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):labels[row.phase]||row.phase.replaceAll('_',' ')}};
 }
 export async function startBuyerJob(env,workspaceId,user,body){
  const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload);

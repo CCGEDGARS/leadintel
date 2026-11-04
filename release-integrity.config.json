@@ -6921,7 +6921,7 @@
       "status": 200,
       "contains": [
         "data-cancel-buyer-research",
-        "Last saved research update:",
+        "Last completed check:",
         "readProgress:signal=>withDiscoveryDeadline",
         "clearTimeout(buyerPulse)",
         "function refreshBuyerProgress(candidate)",

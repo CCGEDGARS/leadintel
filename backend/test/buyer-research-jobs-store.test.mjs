@@ -111,3 +111,15 @@ test('a stale force-start job ID or revision cannot replace the newest generatio
 test('public job progress distinguishes queued execution from actual task checkpoints without exposing source bodies',async t=>{
  const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,status,updated_at,result_json) VALUES(?,'saved-read','read','complete','2026-11-03 15:00:00','{\"markdown\":\"private source\"}')").run(job.id);const view=await publicBuyerJob(f.env,job);assert.equal(view.createdAt,new Date(job.created_at.replace(' ','T')+'Z').toISOString());assert.equal(view.progress.executionStatus,'queued');assert.equal(view.progress.completed,1);assert.equal(view.progress.inProgress,0);assert.ok(Date.parse(view.progress.lastActivityAt)>=Date.parse(job.updated_at.replace(' ','T')+'Z'));assert.match(view.progress.label,/official company sources/i);assert.ok(!JSON.stringify(view).includes('private source'));
 });
+
+test('timing uses five same-workspace same-scope completed runs and distinguishes scheduling from results',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ assert.equal((await publicBuyerJob(f.env,job)).progress.timing.estimate,null);
+ for(let i=0;i<5;i++)f.DB.raw.prepare("INSERT INTO buyer_research_jobs(id,workspace_id,requested_by,session_hash,domain,context_key,input_json,status,phase,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'complete','done',datetime('now','-1 hour'),datetime('now','-1 hour',?))").run('history-'+i,workspaceId,job.requested_by,job.session_hash,'history-'+i+'.example','history',job.input_json,'+'+(i+1)+' minutes');
+ const view=await publicBuyerJob(f.env,{...job,next_at:Date.now()+60000});
+ assert.equal(view.progress.timing.estimate.samples,5);assert.equal(view.progress.timing.estimate.lowerSeconds,180);assert.equal(view.progress.timing.estimate.upperSeconds,300);assert.ok(Date.parse(view.progress.timing.nextAttemptAt)>Date.now());assert.equal(view.progress.timing.lastResultAt,null);
+ const paid={...job,input_json:JSON.stringify({...JSON.parse(job.input_json),paidResearch:{enabled:true}})};
+ assert.equal((await publicBuyerJob(f.env,paid)).progress.timing.estimate,null);
+ const selected={...job,input_json:JSON.stringify({...JSON.parse(job.input_json),scope:'selected_buyers',personIds:['robert']})};
+ assert.equal((await publicBuyerJob(f.env,selected)).progress.timing.estimate,null);
+});

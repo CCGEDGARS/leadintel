@@ -22,3 +22,9 @@ test('actual Recheck can update a source-confirmed phone while email and Proceed
  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[data-prospect-enrich-phone]').getAttribute('aria-pressed'),'true');assert.equal(node.querySelector('[data-prospect-enrich-email]').getAttribute('aria-pressed'),'false');assert.equal(node.querySelector('[data-keep-buyer]').disabled,true);
  }finally{r.close();}
 });
+
+test('Recheck explicitly explains a sync conflict without launching research',async()=>{
+ const r=runtime();try{r.candidate.people=[r.person];r.b.conflict=true;const messages=[];r.c.showToast=message=>messages.push(message);let requests=0;r.c.findPublicProspectContacts=async()=>{requests++;};
+ assert.equal(await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id}),false);assert.equal(requests,0);assert.match(messages.join(' '),/sync conflict/i);
+ }finally{r.close();}
+});

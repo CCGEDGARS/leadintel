@@ -7,8 +7,8 @@ test('confirmed personal email requires verified provider evidence and a named c
 });
 test('recheck runs only public research for the original person with force enabled',async()=>{
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),calls=[],p={id:'p',name:'Anna Andersson'},c={domain:'example.com',people:[p]};
- const ctx={discovery:{selectedProspects:[c]},canonicalDomain:x=>x,crmAuthenticated:()=>true,bridge:()=>({conflict:false}),enrichmentPending:new Set(),personKey:()=> 'p',findPublicProspectContacts:async(...args)=>{calls.push(args);return true;}};
+ const notices=[];const ctx={showToast:message=>notices.push(message),discovery:{selectedProspects:[c]},canonicalDomain:x=>x,crmAuthenticated:()=>true,bridge:()=>({conflict:false}),enrichmentPending:new Set(),personKey:()=> 'p',findPublicProspectContacts:async(...args)=>{calls.push(args);return true;}};
  vm.createContext(ctx);const start=source.indexOf('async function recheckBuyerContact(');assert.ok(start>=0);vm.runInContext(source.slice(start,source.indexOf('async function findPublicProspectContacts(',start)),ctx);
  assert.equal(await ctx.recheckBuyerContact('example.com',0),true);assert.equal(calls.length,1);assert.equal(calls[0][1].force,true);assert.deepEqual(Array.from(calls[0][1].personIds),['p']);
- ctx.bridge=()=>({conflict:true});assert.equal(await ctx.recheckBuyerContact('example.com',0),false);assert.equal(calls.length,1);
+ ctx.bridge=()=>({conflict:true});assert.equal(await ctx.recheckBuyerContact('example.com',0),false);assert.equal(calls.length,1);assert.match(notices.join(' '),/sync conflict/);
 });

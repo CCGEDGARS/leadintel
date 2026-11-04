@@ -46,7 +46,7 @@ test('saved research summary preserves actual progress and the recorded cancella
 });
 test('a selected-buyer batch is labelled so one checked person cannot look like full company coverage',()=>{
  const {ctx,candidate}=runtime();candidate.people.push({...candidate.people[0],id:'bob',name:'Bob Buyer'});candidate.publicResearch.researchScope='selected_buyers';candidate.publicResearch.accountability={...D.createBuyerResearchAccountability(),status:'partial',checkedPeople:1,totalPeople:1};
- const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/Latest batch: 0 accepted emails · 1\/1 buyers fully researched/);
+ const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');assert.match(summary.textContent,/0 accepted emails across 2 saved buyers · Latest selected-buyer check: 1\/1 buyers fully researched/);
 });
 test('Resume uses the same current research-coverage decision as its label, retaining completed email checks',()=>{
  for(const coveragePassed of [false,true]){
