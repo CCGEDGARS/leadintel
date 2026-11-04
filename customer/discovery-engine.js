@@ -2449,7 +2449,7 @@
     return companyContactSource({url:evidence.url,sourceRead:true,sourceEvidence:evidence,markdown:evidence.kind==='company_publication'?evidence.linkQuote:''},candidate);
   }
   function companyContactRouteKey(kind,value){return kind+'|'+(kind==='phone'?value.replace(/\D/g,''):kind==='linkedin'?value.replace(/\/+$/,'').toLowerCase():value);}
-  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v2',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
+  const OFFICIAL_CONTACT_RESEARCH_POLICY=Object.freeze({version:'20261030-adaptive-company-sources-v6',scopeVersion:'20261104-contact-plan-v3',maxPages:24,maxDurationMs:180000,concurrency:3,queries:6});
   function officialCompanyContactInventory(rows=[],candidate={}){
     const domain=companyIdentityDomain(candidate.domain),contacts=new Map(),channels=new Map(),routes=new Map(),sourcePages=[],sourceEvidence=[];
     const shared=/^(?:ir|media|sustainability|info|sales|support|contact|office|hello|team|press|procurement|purchasing|reception|enquiries|inquiries|accounts|accounting|invoice|invoices|web)(?:[._+-]|$)/i;
@@ -2589,7 +2589,7 @@
     // Reach actionable company channels before spending the bounded pass on policy documents.
     const priority=url=>/invoice|invoicing|payment|accounting|\/finance\//i.test(url)?0:/\.pdf(?:$|\?)/i.test(url)?4:/contact|kontakt|get-in-touch|supplier|procurement|privacy/i.test(url)?1:companyPublicationUrl(url,candidate)?2:/management|leadership|team|investor/i.test(url)?3:5;
     const legacyArchive=previous?.research&&previous.research.status!=='complete'&&previous.research.discoveryScope!==policy.scopeVersion;
-    const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||(/investor|financial|report/i.test(u.pathname)&&(u.searchParams.has('year')||u.searchParams.has('y')||/reports?(?:[-/]|$)/i.test(u.pathname))))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
+    const financialArchive=(url,label='')=>{const u=new URL(url);return (/annual[-_ ]?report|interim[-_ ]?report|quarterly[-_ ]?report|financial[-_ ]?report|year[-_ ]?end[-_ ]?report|årsredovisning|arsredovisning|%c3%a5rsredovisning|del[aå]rsrapport|kvartalsrapport|q[1-4][-_ ]*20\d{2}|20\d{2}[-_ ]*q[1-4]/i.test(u.pathname+' '+label)||u.searchParams.has('year')||u.searchParams.has('y')||/investor|financial|report/i.test(u.pathname)&&/reports?(?:[-/]|$)/i.test(u.pathname))&&!/contact|kontakt|supplier|procurement|invoice|e-mail|email|phone|e-post/i.test(label);};
     const add=(url,source=null,first=false)=>{url=contactResearchUrl(url);if(!url||!(official(url)||url.startsWith('https:')&&(savedCompanyContactSource(source,candidate)||companyPublicationUrl(url,candidate))))return;const key=canonicalBuyerSource(url);if(!planned.has(key)){if(planned.size>=120){sourceLimit=true;return;}planned.set(key,url);}if(readKeys.has(key)||completedKeys.has(key)||queue.has(key))return;queue.set(key,{url,source,priority:(first?-1:priority(url))+(previous?.research?.reads?.some(row=>row.url===url&&row.status==='failed')?20:0)});};
     const links=row=>{
       if(!official(row.url))return;
