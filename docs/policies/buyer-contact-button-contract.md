@@ -54,7 +54,13 @@ Green E-mail means a confirmed email belonging to the exact buyer; green Phone m
 Keep confirmed profile and phone data visible and independently usable; retain four relevant confirmed-channel contacts with all others collapsed. A profile-only person can remain in the four-contact shortlist without becoming an email-ready recipient. Dedicated LinkedIn draft creation remains an explicit separate action. Do not weaken email evidence, purchase paid research or send outreach to satisfy this display rule.
 
 
-## Owner instruction, 3 November 2026 — automatic paid continuation
+## Owner instruction, 4 November 2026 — one automatic buyer, other buyers manual
+
+This supersedes the earlier multi-buyer automatic capacity below. Choose the highest-ranked eligible buyer before deciding which channels are missing. Automatically research only that buyer, using the enabled paid email and/or phone permission after mandatory free checks and current evidence review. A confirmed free email skips paid email; a confirmed free phone skips paid phone; both confirmed mean no purchase. Completion or a no-result outcome must not cascade spending to the other three. They remain available through explicit per-person E-mail and Phone actions. Recheck stays free-only.
+
+The automatic one-buyer allowance is separate from manual attempts; all calls still share existing daily/monthly budgets and provider permissions. Repeated jobs and concurrent requests cannot purchase another automatic buyer within the existing company/month accounting window. Preserve stored legacy capacities for compatibility without exposing them as automatic multi-buyer permission. No activation, limit increase or sending is implied.
+
+## Owner instruction, 3 November 2026 — automatic paid continuation (automatic capacity superseded above)
 
 Settings and Step 1 mirror one authoritative workspace policy. When paid email and/or phone is ON, company-wide Refresh and the approved automatic company workflow continue after public checks/current AI review into the missing enabled channels for retained eligible buyers, highest relevance first, up to the owner-selected per-company/day/month limits. The retained pool is bounded at ten. Explicit per-person Recheck and read-only restore cannot initiate paid work. Saving preferences or limits does not itself launch a lookup or authorize sending.
 

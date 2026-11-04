@@ -36,12 +36,12 @@ async function reservationHold(env,context,companyId,personId,month,enforceCompa
   const counts=await env.DB.prepare(`SELECT
     SUM(CASE WHEN created_at>=date('now') THEN 1 ELSE 0 END) AS daily,
     SUM(CASE WHEN month=? THEN 1 ELSE 0 END) AS monthly,
-    COUNT(DISTINCT CASE WHEN company_id=? AND month=? AND person_id!=? THEN person_id END) AS company
+    COUNT(DISTINCT CASE WHEN company_id=? AND month=? AND person_id!=? AND COALESCE(json_extract(result_json,'$.automatic'),1)!=0 THEN person_id END) AS company
     FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt}`).bind(month,companyId,month,String(personId),context.workspaceId).first();
-  for(const [scope,limit] of [['daily',policy.dailyLimit],['monthly',policy.monthlyLimit],['company',policy.maxPerCompany]]){
+  for(const [scope,limit] of [['daily',policy.dailyLimit],['monthly',policy.monthlyLimit],['company',1]]){
     if(scope==='company'&&!enforceCompany)continue;
     const used=Number(counts?.[scope])||0;
-    if(used>=limit)return fail(`LeadIntel ${scope} lookup limit reached (${used}/${limit}). No provider lookup was started. ${scope==='daily'?'Wait until the next UTC day or ask the owner to review Setup limits.':scope==='monthly'?'Wait until next month or ask the owner to review Setup limits.':'Ask the owner to review the buyers-per-company limit in Setup.'}`,429,'ADDITIONAL_CONTACT_'+scope.toUpperCase()+'_LIMIT');
+    if(used>=limit)return fail(`LeadIntel ${scope} lookup limit reached (${used}/${limit}). No provider lookup was started. ${scope==='daily'?'Wait until the next UTC day or ask the owner to review Setup limits.':scope==='monthly'?'Wait until next month or ask the owner to review Setup limits.':'Automatic research is limited to one buyer. Use a manual contact action for another buyer.'}`,429,'ADDITIONAL_CONTACT_'+scope.toUpperCase()+'_LIMIT');
   }
   return fail('Research permission changed or reservation could not be acquired. No provider lookup was started. Reload Setup before retrying.',409,'ADDITIONAL_CONTACT_RESERVATION_HOLD');
 }
@@ -115,7 +115,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   }
   checkCancelled();
   // An official published address must finish its no-reveal confirmation before buying data.
-  if(person.publicEmail&&person.publicEmailUrl&&C.publicSource(person.publicEmail,person.publicName||person.name,person.publicEmailUrl,candidate.domain)){
+  if(!(providerName==='treg'&&!includeEmail&&D.acceptedOfficialBuyerEmail(candidate,person))&&person.publicEmail&&person.publicEmailUrl&&C.publicSource(person.publicEmail,person.publicName||person.name,person.publicEmailUrl,candidate.domain)){
     try{
       const contact=await (deps.confirmPublic||confirmPublicWorkEmail)(env,context,companyId,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:person.publicEmail,source_url:person.publicEmailUrl});
       if(C.accepted(contact,candidate.domain,confirmationLevel))existing=contact;
@@ -139,12 +139,18 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     }
     else if(!(providerName==='treg'&&(['processing','retryable'].includes(cached.status)||dataLookup)))return reuseAttempt(cached,detail,person,confirmationLevel);
   }
-  const enforceCompany=providerName!=='treg'||input.automatic===true;
+  const enforceCompany=input.automatic===true;
   // A single SQLite statement reserves all three limits and the identity key atomically.
   const resuming=providerName==='treg'&&cached&&(['processing','retryable'].includes(cached.status)||dataLookup);
   await parentGuard();
-  const reserved=resuming?{meta:{changes:1}}:await env.DB.prepare(`INSERT OR IGNORE INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider,result_json) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND created_at>=date('now'))<COALESCE((SELECT daily_limit FROM additional_contact_policies WHERE workspace_id=?),3) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND month=?)<COALESCE((SELECT monthly_limit FROM additional_contact_policies WHERE workspace_id=?),30) AND (?=0 OR (SELECT COUNT(DISTINCT person_id) FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND ${budgetAttempt} AND month=? AND person_id!=?)<COALESCE((SELECT max_per_company FROM additional_contact_policies WHERE workspace_id=?),2)) AND (?=0 OR EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND ((?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))))`).bind(...args,JSON.stringify({lookup_identity:lookupIdentity,provider_started:false}),context.workspaceId,context.workspaceId,context.workspaceId,month,context.workspaceId,Number(enforceCompany),context.workspaceId,companyId,month,String(person.id),context.workspaceId,Number(input.automatic===true),context.workspaceId,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone)).run();
+  const reserved=resuming?{meta:{changes:1}}:await env.DB.prepare(`INSERT OR IGNORE INTO additional_contact_attempts(workspace_id,company_id,person_id,month,provider,result_json) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND created_at>=date('now'))<COALESCE((SELECT daily_limit FROM additional_contact_policies WHERE workspace_id=?),3) AND (SELECT COUNT(*) FROM additional_contact_attempts WHERE workspace_id=? AND ${budgetAttempt} AND month=?)<COALESCE((SELECT monthly_limit FROM additional_contact_policies WHERE workspace_id=?),30) AND (?=0 OR (SELECT COUNT(DISTINCT person_id) FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND ${budgetAttempt} AND month=? AND person_id!=? AND COALESCE(json_extract(result_json,'$.automatic'),1)!=0)<1) AND (?=0 OR EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND ((?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))))`).bind(...args,JSON.stringify({lookup_identity:lookupIdentity,provider_started:false,automatic:input.automatic===true}),context.workspaceId,context.workspaceId,context.workspaceId,month,context.workspaceId,Number(enforceCompany),context.workspaceId,companyId,month,String(person.id),Number(input.automatic===true),context.workspaceId,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone)).run();
   if(!reserved?.meta?.changes){const duplicate=await env.DB.prepare('SELECT status,result_json FROM additional_contact_attempts WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(...args).first();if(duplicate)return reuseAttempt(duplicate,detail,person,confirmationLevel);throw await reservationHold(env,context,companyId,person.id,month,enforceCompany);}
+  // An existing manual reservation may later need an enabled automatic channel.
+  // Claim its automatic allowance atomically; manual records do not consume it.
+  if(input.automatic===true){
+    const claimed=await env.DB.prepare(`UPDATE additional_contact_attempts SET result_json=json_set(result_json,'$.automatic',json('true')) WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=? AND NOT EXISTS(SELECT 1 FROM additional_contact_attempts other WHERE other.workspace_id=? AND other.company_id=? AND other.month=? AND other.person_id!=? AND ${budgetAttempt} AND COALESCE(json_extract(other.result_json,'$.automatic'),1)!=0)`).bind(...args,context.workspaceId,companyId,month,String(person.id)).run();
+    if(!claimed.meta?.changes)throw await reservationHold(env,context,companyId,person.id,month,true);
+  }
   let providerStarted=false;
   const guard=async({phase}={})=>{
     await parentGuard();
@@ -214,7 +220,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     if(providerName==='hunter'){
       await guard();
       const result=await (deps.findHunter||findHunterWorkEmail)(env,context,candidate,person,companyId,{guard,onDispatch});
-      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact?'verified':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
+      await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact?'verified':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming),automatic:input.automatic===true}),...args).run();return result;
     }
     const resolved=await (deps.resolvePerson||((p)=>resolvePerson(env,candidate,p)))(person);
     const request=new Request('https://leadintel.internal/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,allow_personal_email:false,phone_lookup:false}),...(deps.signal?{signal:deps.signal}:{})});
@@ -228,11 +234,11 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     }
     const status=result.contact?'verified':'not_found';
     result.research={provider:'apollo',status,checkedAt:new Date().toISOString()};
-    await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming)}),...args).run();return result;
+    await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(status,JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming),automatic:input.automatic===true}),...args).run();return result;
   }catch(error){
     const retryable=error.code==='TREG_RETRY_SAME_LOOKUP'||providerName==='treg'&&['TIME_BUDGET','LEASE_EXPIRED'].includes(error.code)||!providerStarted||['CRM_APOLLO_CREDIT_LIMIT','CRM_APOLLO_CAPABILITY_DISABLED','CRM_ENRICHMENT_POLICY_MISSING','CRM_APOLLO_NOT_CONFIGURED'].includes(error.code);
     if(providerName==='treg'){await retainTregAttempt({error,status:retryable?'retryable':'needs_review'});throw error;}
-    await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=json_set(?,'$.provider_started',json(CASE WHEN COALESCE(json_extract(result_json,'$.provider_started'),1)=1 OR ?=1 THEN 'true' ELSE 'false' END)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,lookup_identity:lookupIdentity}),Number(providerStarted||Boolean(resuming)),...args).run();throw error;
+    await env.DB.prepare("UPDATE additional_contact_attempts SET status=?,result_json=json_set(?,'$.provider_started',json(CASE WHEN COALESCE(json_extract(result_json,'$.provider_started'),1)=1 OR ?=1 THEN 'true' ELSE 'false' END)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?").bind(retryable?'retryable':'needs_review',JSON.stringify({error:error.message,code:error.code,lookup_identity:lookupIdentity,automatic:input.automatic===true}),Number(providerStarted||Boolean(resuming)),...args).run();throw error;
   }
 }
 export async function handleAdditionalContactRoute(request,env,cors={}){

@@ -161,7 +161,7 @@ test('canonical contact reuse cannot attach a different identity, role or confli
 test('company quota reports the exact application hold without dispatching a provider',async()=>{
  const f=fixture();await saveAdditionalContactPolicy(f.env,f.context,{enabled:true,dailyLimit:5,monthlyLimit:30,maxPerCompany:1});
  f.raw.prepare("INSERT INTO additional_contact_attempts(workspace_id,company_id,person_id,month,status) VALUES('w','c','other',?,'not_found')").run(new Date().toISOString().slice(0,7));
- await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',approved:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_COMPANY_LIMIT'&&/1\/1/.test(e.message)&&/No provider lookup/.test(e.message));assert.equal(f.calls.length,0);
+ await assert.rejects(lookupAdditionalEmail(f.env,f.context,'c',{person_id:'p0',automatic:true},f.deps),e=>e.code==='ADDITIONAL_CONTACT_COMPANY_LIMIT'&&/1\/1/.test(e.message)&&/No provider lookup/.test(e.message));assert.equal(f.calls.length,0);
 });
 test('Treg retry retains its reservation and persists the recovered result',async()=>{
  const f=fixture(),month=new Date().toISOString().slice(0,7);f.raw.exec("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider) VALUES('w',1,1,'treg')");f.deps.credential=async()=>({configured:true});
