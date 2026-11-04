@@ -1,0 +1,45 @@
+name: Buyer Four Saved Coverage Inspection
+on:
+  push:
+    branches: [ops/buyer-four-inspection-20261104]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: ${{ github.repository == 'CCGEDGARS/leadintel' && github.actor == 'CCGEDGARS' && github.triggering_actor == 'CCGEDGARS' && github.ref == 'refs/heads/ops/buyer-four-inspection-20261104' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXPECTED_SHA: a6541782189cd8db92a95b5267be3990c3f5de5d
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify bounded read-only diagnostic and unchanged runtime
+        run: |
+          test "$(git hash-object backend/scripts/inspect-four-buyers.mjs)" = 5d9daa11dcdcd7835e3dfe4e4b38900b43456724
+          test "$(git hash-object backend/scripts/four-inspection-public.pem)" = 91ebbd6401c50129e93cbfef4c3c059a1c1d9fd7
+          git diff --name-only "$EXPECTED_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/diagnostic-files"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          allowed={'backend/scripts/inspect-four-buyers.mjs','backend/scripts/four-inspection-public.pem','.github/workflows/buyer-four-inspection.yml'}
+          if not set(Path(os.environ['RUNNER_TEMP']+'/diagnostic-files').read_text().splitlines()) <= allowed: raise SystemExit('Unexpected runtime change')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: backend
+      - name: Compare saved buyer coverage without writes
+        working-directory: backend
+        run: node scripts/inspect-four-buyers.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: buyer-four-inspection
+          path: backend/buyer-four-inspection.encrypted.json
+          retention-days: 1

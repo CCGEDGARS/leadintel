@@ -1,0 +1,16 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {readOnlyD1,inspectBuyerJob,encryptInspection} from './inspect-buyer-job.mjs';
+import {readOwnedPayload} from '../src/workspace-record-store.js';
+const expires=Date.parse('2026-11-04T21:58:00Z');if(Date.now()>=expires)throw Error('Inspection expired');
+const workspaceId='edgars-latvia',domain='viscaria.com',config=await readFile(new URL('../wrangler.toml',import.meta.url),'utf8');
+const DB=readOnlyD1({accountId:process.env.CLOUDFLARE_ACCOUNT_ID,databaseId:config.match(/database_id\s*=\s*"([^"]+)"/)[1],token:process.env.CLOUDFLARE_API_TOKEN,notAfter:expires});
+const latest=await inspectBuyerJob(DB,{workspaceId,domain,details:true});
+const owner=await DB.prepare('SELECT payload_json,version,updated_at FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
+const {payload,row}=await readOwnedPayload({DB},workspaceId,owner);
+const matches=c=>String(c.domain||'').replace(/^www\./,'')===domain;
+const workspaceCandidates=['selectedProspects','candidates','pipeline'].flatMap(collection=>(payload.discovery?.[collection]||[]).filter(matches).map(candidate=>({collection,candidate})));
+const jobs=await DB.prepare('SELECT id,input_json,result_json,status,phase,revision,updated_at,diagnostic_json,last_error FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 8').bind(workspaceId,domain).all();
+const crm=await DB.prepare('SELECT i.research_snapshot_json,i.updated_at FROM crm_intelligence i JOIN crm_companies c ON c.id=i.company_id AND c.workspace_id=i.workspace_id WHERE c.workspace_id=? AND c.normalized_domain=?').bind(workspaceId,domain).all();
+const value={observedAt:new Date().toISOString(),release:process.env.EXPECTED_SHA,latest,workspace:{version:row.version,updatedAt:row.updated_at,candidates:workspaceCandidates},jobs:jobs.results,crm:crm.results};
+await writeFile('buyer-four-inspection.encrypted.json',JSON.stringify(encryptInspection(value,await readFile(new URL('./four-inspection-public.pem',import.meta.url),'utf8'))));
+console.log('Read-only comparison encrypted successfully. No customer data logged.');
