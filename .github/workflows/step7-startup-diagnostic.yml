@@ -1,0 +1,74 @@
+name: Step 7 startup diagnostic
+on:
+  push:
+    branches: [ops/step7-startup-diagnostic-20261104]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned fixture and browser dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+      - name: Trace controlled startup and approval state
+        run: |
+          node --import ./backend/test/register-wasm-loader.mjs --input-type=module - <<'JS'
+          import fs from 'node:fs/promises';
+          import {createRequire} from 'node:module';
+          import {chromium} from 'playwright-core';
+          const require=createRequire(import.meta.url),O=require('./customer/outreach-engine.js'),Delivery=require('./customer/delivery-engine.js');
+          process.env.LEADINTEL_CHROMIUM_PATH=chromium.executablePath();
+          const originalLaunch=chromium.launch.bind(chromium);
+          chromium.launch=async options=>{
+            const browser=await originalLaunch(options),originalContext=browser.newContext.bind(browser);
+            browser.newContext=async options=>{
+              const context=await originalContext(options);
+              await context.addInitScript(()=>{
+                const original=Storage.prototype.setItem;
+                window.__step7Trace=[];
+                Storage.prototype.setItem=function(key,value){
+                  if(/leadintel_customer_v2_(state|outreach|discovery_meta)$/.test(key)){
+                    try{
+                      const v=JSON.parse(value),before=JSON.parse(this.getItem(key)||'{}');
+                      const snapshot=x=>key.endsWith('_state')?{step:x.step,approved:x.approved,strategyApproved:x.market?.strategyApproved}:key.endsWith('_meta')?{stage:x.activeJourneyStage,visible:x.visibleStep,choice:x.scriptBuyer}:({items:(x.items||[]).map(i=>({person:i.selectedPersonId,approved:i.approved,reapproval:i.reapprovalRequired,source:i.approvalAuthority?.sourceAuthority})),studio:x.messageStudio?.essentials});
+                      window.__step7Trace.push({at:performance.now(),key,before:snapshot(before),after:snapshot(v),stack:new Error().stack?.split('\n').slice(1,8)});
+                      window.__step7Trace=window.__step7Trace.slice(-100);
+                    }catch{}
+                  }
+                  return original.call(this,key,value);
+                };
+              });
+              return context;
+            };
+            return browser;
+          };
+          const file='scripts/verify-step7-journey.mjs',source=await fs.readFile(file,'utf8'),token='state:await page?.evaluate(()=>({step:';
+          if(!source.includes(token))throw Error('Diagnostic injection target changed');
+          await fs.writeFile(file,source.replace(token,'state:await page?.evaluate(()=>({trace:window.__step7Trace,step:'));
+          const {verifyStep7Journey}=await import('./scripts/verify-step7-journey.mjs');
+          for(let attempt=1;attempt<=6;attempt++){
+            const dir='/tmp/step7-startup-diag-'+attempt;
+            try {await verifyStep7Journey({artifactDir:dir});console.log('DIAGNOSTIC_PASS',attempt);}
+            catch(error){
+              const f=JSON.parse(await fs.readFile(dir+'/failure.json','utf8')),s=f.state||{};
+              const items=(s.outreach?.items||[]).map(i=>({person:i.selectedPersonId,approved:i.approved,reapproval:i.reapprovalRequired,approvalCurrent:O.approvalCurrent(i),sourceCurrent:O.sourceAuthorityCurrent(i,s.main,s.outreach?.messageStudio),savedSource:i.approvalAuthority?.sourceAuthority,currentSource:O.messageSourceAuthority(s.main,s.outreach?.messageStudio),error:i.error}));
+              console.log('DIAGNOSTIC_FAILURE',JSON.stringify({attempt,error:String(error),items,packages:Delivery.approvedDeliveryPackages(s.outreach||{},s.main).length,main:{step:s.main?.step,approved:s.main?.approved,profile:s.main?.profile,answers:s.main?.answers},studio:s.outreach?.messageStudio,seed:f.seed?.map(i=>({person:i.selectedPersonId,approved:i.approved,source:i.approvalAuthority?.sourceAuthority})),trace:s.trace}));
+              process.exitCode=1;break;
+            }
+          }
+          JS
+      - name: Upload synthetic diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step7-startup-diagnostic
+          path: /tmp/step7-startup-diag-*
+          retention-days: 3
