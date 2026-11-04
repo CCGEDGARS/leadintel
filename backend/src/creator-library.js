@@ -6,9 +6,11 @@ const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});}
 const json=(value,status,cors)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const cookie=(value,seconds=900)=>`leadintel_creator=${value}; Path=/; Max-Age=${seconds}; HttpOnly; Secure; SameSite=None`;
 const secret=env=>env.CREATOR_LIBRARY_PASSWORD||env.ADMIN_PASSWORD;
+const pinHash=env=>env.CREATOR_LIBRARY_PIN_SHA256;
+const pinConfigured=env=>typeof pinHash(env)==='string'&&/^[a-f0-9]{64}$/.test(pinHash(env));
 async function signature(env,session,expires){
  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret(env)),{name:'HMAC',hash:'SHA-256'},false,['sign']);
- return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(session+'|'+expires)))).map(b=>b.toString(16).padStart(2,'0')).join('');
+ return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(session+'|'+expires+'|'+(pinHash(env)||''))))).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 export async function creatorUnlocked(request,env,session){
  if(!secret(env))return false;
@@ -25,15 +27,16 @@ export function validateCreatorScript(input){
 export async function handleCreatorLibrary(request,env,cors,{user,session,canManage}){
  const url=new URL(request.url),suffix=url.pathname.slice('/api/script-library/creator'.length);
  if(!canManage)fail('Creator access required',403);
- if(suffix==='/status'&&request.method==='GET')return json({unlocked:await creatorUnlocked(request,env,session),passwordConfigured:Boolean(secret(env))},200,cors);
+ if(suffix==='/status'&&request.method==='GET')return json({unlocked:await creatorUnlocked(request,env,session),passwordConfigured:Boolean(secret(env)),pinConfigured:pinConfigured(env)},200,cors);
  if(suffix==='/lock'&&request.method==='POST')return json({ok:true},200,{...cors,'Set-Cookie':cookie('',0)});
  if(suffix==='/unlock'&&request.method==='POST'){
   const input=await request.text();if(input.length>2048)fail('Invalid password request');
   let body;try{body=JSON.parse(input);}catch{fail('Invalid password request');}
-  if(!secret(env))fail('Creator password has not been configured',503);
+  if(!secret(env)||pinHash(env)&&!pinConfigured(env))fail('Creator access has not been configured',503);
   const key=await loginThrottleKey(request,'creator-library:'+user.email),attempt=await reserveLoginAttempt(env,key,{failClosed:true});
   if(!attempt.allowed)return json({error:'Too many unlock attempts. Try again later.'},429,{...cors,'Retry-After':String(attempt.retryAfterSeconds)});
-  if(typeof body.password!=='string'||!constantTimeEqual(body.password,secret(env)))fail('Incorrect creator password',401);
+  const valid=typeof body.password==='string'&&(pinConfigured(env)?/^[0-9]{4}$/.test(body.password)&&constantTimeEqual(await sha256(body.password),pinHash(env)):constantTimeEqual(body.password,secret(env)));
+  if(!valid)fail(pinConfigured(env)?'Incorrect creator PIN':'Incorrect creator password',401);
   await clearLoginThrottle(env,key);const expires=String(Date.now()+TTL);
   return json({ok:true,expiresAt:Number(expires)},200,{...cors,'Set-Cookie':cookie(expires+'.'+await signature(env,session,expires))});
  }
