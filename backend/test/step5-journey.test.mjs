@@ -54,3 +54,9 @@ test('authenticated Chromium Refresh automatically enriches only the priority bu
  const {verifyPaidBuyerJourney}=await import('../../scripts/verify-step5-paid-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-paid-'));
  const e=await verifyPaidBuyerJourney({artifactDir});assert.equal(e.confirmedEmails,1);assert.equal(e.emailLookups,1);assert.equal(e.phoneLookups,1);assert.equal(e.readOnlyPaidReplays,0);assert.equal(e.outboundMessages,0);t.diagnostic('Controlled paid-flow browser evidence: '+artifactDir+'/evidence.json');
 });
+
+test('authenticated Chromium respects an explicitly selected four-contact automatic allowance',{timeout:60000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; required in CI');return;}
+ const {verifyPaidBuyerJourney}=await import('../../scripts/verify-step5-paid-journey.mjs'),artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-selected-four-'));
+ const e=await verifyPaidBuyerJourney({artifactDir,automaticLimit:4});assert.equal(e.confirmedEmails,4);assert.equal(e.emailLookups,4);assert.equal(e.phoneLookups,4);assert.equal(e.readOnlyPaidReplays,0);assert.equal(e.outboundMessages,0);
+});

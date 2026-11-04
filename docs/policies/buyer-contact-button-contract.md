@@ -54,7 +54,11 @@ Green E-mail means a confirmed email belonging to the exact buyer; green Phone m
 Keep confirmed profile and phone data visible and independently usable; retain four relevant confirmed-channel contacts with all others collapsed. A profile-only person can remain in the four-contact shortlist without becoming an email-ready recipient. Dedicated LinkedIn draft creation remains an explicit separate action. Do not weaken email evidence, purchase paid research or send outreach to satisfy this display rule.
 
 
-## Owner instruction, 4 November 2026 — one automatic buyer, other buyers manual
+## Owner instruction, 4 November 2026 — configurable automatic paid contacts
+
+The owner may choose 1, 2, 3 or 4 automatic paid contacts per company in Step 1 or Settings; both mirror one saved policy. Default to 1 through a new independent setting without changing existing email/phone permissions, spending budgets or legacy capacity. Select the top eligible group before skipping free-confirmed channels; the setting is an upper bound, not a guarantee of found contacts. Others remain manual. Save requires explicit owner confirmation and starts no research or sending. Capture this count when a job starts; a later increase applies to new jobs, while a decrease immediately restricts dispatch. The automatic ledger cap follows the selected count; manual attempts remain separate and all attempts share daily/monthly limits.
+
+## Earlier 4 November instruction — one automatic buyer (capacity superseded above)
 
 This supersedes the earlier multi-buyer automatic capacity below. Choose the highest-ranked eligible buyer before deciding which channels are missing. Automatically research only that buyer, using the enabled paid email and/or phone permission after mandatory free checks and current evidence review. A confirmed free email skips paid email; a confirmed free phone skips paid phone; both confirmed mean no purchase. Completion or a no-result outcome must not cascade spending to the other three. They remain available through explicit per-person E-mail and Phone actions. Recheck stays free-only.
 

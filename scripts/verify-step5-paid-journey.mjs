@@ -10,11 +10,11 @@ import {ready,settleInitialSave} from './verify-step5-journey.mjs';
 import '../customer/crm-engine.js';
 const files=['customer/index.html','customer/discovery-ui.js','customer/discovery-engine.js','customer/buyer-research-jobs.js','customer/additional-contact-services.js','customer/additional-contact-policy.js','backend/src/buyer-paid-research.js','backend/src/buyer-research-store.js','backend/src/buyer-research-runner.js','backend/src/additional-contact-services.js','backend/src/treg-contact-research.js','scripts/verify-step5-paid-journey.mjs'];
 async function hashes(){return Object.fromEntries(await Promise.all(files.map(async file=>[file,createHash('sha256').update(await fs.readFile(new URL('../'+file,import.meta.url))).digest('hex')])));}
-export async function verifyPaidBuyerJourney({artifactDir='/tmp/leadintel-paid-browser'}={}){
+export async function verifyPaidBuyerJourney({artifactDir='/tmp/leadintel-paid-browser',automaticLimit=1}={}){
  const before=await hashes(),candidate=paidCandidate(),calls=[],researchServices={},f=await journeyFixture({durableJobs:true,initialCandidate:candidate,researchServices});
  const context={workspaceId,userId:'storage-owner',role:'owner'},c=f.candidate;
  await upsertCrmIntelligence(f.env.DB,context,c.crmId,globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(c).intelligence);
- f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by) VALUES(?,1,1,'treg',10,100,4,'storage-owner')").run(workspaceId);
+ f.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by,automatic_buyer_limit) VALUES(?,1,1,'treg',10,100,4,'storage-owner',?)").run(workspaceId,automaticLimit);
  researchServices.paidLookup=await controlledLookup(f,calls);
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']}),contexts=[],errors=[];let page;
  async function open(){const ctx=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(ctx);await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);return page;}
@@ -40,14 +40,14 @@ export async function verifyPaidBuyerJourney({artifactDir='/tmp/leadintel-paid-b
   }
   const final=f.DB.raw.prepare('SELECT status,phase,result_json FROM buyer_research_jobs WHERE id=?').get(job.id),paid=JSON.parse(final.result_json).publicResearch?.paidResearch;
   assert.equal(final.phase,'done',JSON.stringify({status:final.status,phase:final.phase,paid}));assert.equal(paid?.status,'complete',JSON.stringify(paid));
-  const detail=await getCrmCompany(f.env.DB,context,c.crmId);assert.equal(detail.contacts.filter(row=>row.email_status==='verified').length,1);assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,1);
+  const detail=await getCrmCompany(f.env.DB,context,c.crmId);assert.equal(detail.contacts.filter(row=>row.email_status==='verified').length,automaticLimit);assert.equal(calls.filter(c=>c.url.includes('email.find')).length,automaticLimit);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,automaticLimit);
   assert.equal(new Set(calls.map(c=>c.key)).size,calls.length,'Settled provider phases are reused across saved slices');
   const charged=calls.length;await open();
-  await page.waitForFunction(()=>document.querySelectorAll('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').length===1);
-  for(const [i,p] of c.people.entries())assert.equal(await page.locator('[data-prospect-enrich-email][data-person-id="'+p.id+'"]').getAttribute('aria-pressed'),String(i===0));
+  await page.waitForFunction(limit=>document.querySelectorAll('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').length===limit,automaticLimit);
+  for(const [i,p] of c.people.entries())assert.equal(await page.locator('[data-prospect-enrich-email][data-person-id="'+p.id+'"]').getAttribute('aria-pressed'),String(i<automaticLimit));
   assert.equal(calls.length,charged,'Read-only reopen must not run paid providers');
   await page.screenshot({path:path.join(artifactDir,'paid-primary-reopened.png'),fullPage:true});
   const outbound=f.calls.filter(c=>/send|enqueue|sequence/.test(c.path));assert.equal(outbound.length,0);assert.deepEqual(errors,[]);assert.deepEqual(await hashes(),before,'Source must remain frozen during browser acceptance');
-  const evidence={controlledProviders:true,sourceSha256:before,confirmedEmails:1,emailLookups:1,phoneLookups:1,manualOnlyBuyers:3,scheduledSlices:slices.length,browserClosedDuringWork:true,freshReopen:true,readOnlyPaidReplays:calls.length-charged,outboundMessages:0,privateCustomerAcceptance:false};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
+  const evidence={controlledProviders:true,sourceSha256:before,confirmedEmails:automaticLimit,emailLookups:automaticLimit,phoneLookups:automaticLimit,manualOnlyBuyers:4-automaticLimit,scheduledSlices:slices.length,browserClosedDuringWork:true,freshReopen:true,readOnlyPaidReplays:calls.length-charged,outboundMessages:0,privateCustomerAcceptance:false};await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
  }finally{await Promise.allSettled(contexts.map(ctx=>ctx.close()));await browser.close();await f.close();}
 }

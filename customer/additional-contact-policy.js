@@ -23,13 +23,15 @@
     if(options.confirmedEmail)return blocked('A confirmed company email is already available.');
     return {eligible:true,reason:'Qualified company and buyer; public contact research completed.',profile};
   }
+  const automaticLimit=value=>Number.isInteger(value)&&value>=1&&value<=4?value:1;
   function targets(candidate={},options={}){
+    const limit=automaticLimit(options.automaticBuyerLimit);
     const confirmedEmail=options.confirmedEmail||(()=>'' );
-    // Choose the buyer before checking channels: free/paid success must not
+    // Choose the approved priority group before checking channels: free/paid success must not
     // silently move automatic spending to the next person in the roster.
     return (candidate.people||[]).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible)
-      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,1)
+      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,limit)
       .filter(person=>!confirmedEmail(person));
   }
-  return {readiness,targets};
+  return {readiness,targets,automaticLimit};
 });

@@ -21,7 +21,7 @@ test('Workflow settings mounts the paid toggle beside Save and removes the addit
 });
 
 async function controlsFixture(){
- const dom=new JSDOM('<section id="delivery-setup"><div class="delivery-settings-footer"><button id="delivery-setup-save">Save settings</button></div></section>',{url:'https://leadintel.example',runScripts:'outside-only'}),w=dom.window;
+ const dom=new JSDOM('<section id="delivery-setup"><div class="delivery-settings-footer"><button id="delivery-setup-save">Save settings</button></div></section><section data-paid-contact-settings><div data-paid-settings-controls></div></section>',{url:'https://leadintel.example',runScripts:'outside-only'}),w=dom.window;
  w.AbortSignal=AbortSignal;w.LeadIntelAdditionalContactPolicy=P;w.LeadIntelServerBridge={workspace:{id:'w',role:'owner'},session:{authenticated:true}};
  let policy={enabled:false,phoneEnabled:false,provider:'treg',dailyLimit:5,monthlyLimit:150,maxPerCompany:1};const requests=[];
  w.LeadIntelDialogs={confirm:async()=>true};w.fetch=async(url,options={})=>{requests.push({url,options});if(options.method==='PUT')policy={...policy,...JSON.parse(options.body)};return {ok:true,json:async()=>url.includes('/policy')?{policy,role:'owner'}:{providers:[{provider:'treg',configured:true,source:'customer'}]}};};
@@ -70,6 +70,15 @@ test('paid permissions do not claim remaining budget and historical holds respec
 test('Settings and Step 1 show the fixed automatic scope while preserving legacy capacity on channel activation',async()=>{
  const f=await controlsFixture();try{
   const root=f.w.document.querySelector('#delivery-setup'),limit=root.querySelector('[data-paid-limit="maxPerCompany"]');assert.ok(limit,'a saved per-company limit must be editable');assert.equal(limit.max,'10');limit.value='4';root.querySelector('[data-save-paid-limits]').click();await new Promise(r=>setTimeout(r,20));assert.equal(f.w.LeadIntelAdditionalContacts.policy().maxPerCompany,4);
-  await f.click('[data-paid-search-toggle]');assert.equal(f.w.LeadIntelAdditionalContacts.policy().maxPerCompany,4);assert.match(root.querySelector('[data-paid-search-status]').textContent,/one priority buyer per company/);assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
+  await f.click('[data-paid-search-toggle]');assert.equal(f.w.LeadIntelAdditionalContacts.policy().maxPerCompany,4);assert.match(root.querySelector('[data-paid-search-status]').textContent,/up to 1 priority contacts per company/);assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
+ }finally{f.dom.window.close();}
+});
+
+test('Step 1 and Settings save and reload the 1–4 automatic selector without activation or lookup',async()=>{
+ const f=await controlsFixture();try{
+  const root=f.w.document.querySelector('#delivery-setup'),select=root.querySelector('[data-paid-limit="automaticBuyerLimit"]');
+  assert.equal(select.tagName,'SELECT');assert.deepEqual(Array.from(select.options,o=>o.value),['1','2','3','4']);assert.equal(select.value,'1');
+  for(const count of [2,3,4,1]){select.value=String(count);await f.click('#delivery-setup [data-save-paid-limits]');await f.w.LeadIntelAdditionalContacts.load();assert.equal(f.w.LeadIntelAdditionalContacts.policy().automaticBuyerLimit,count);assert.equal(select.value,String(count));assert.equal(f.w.document.querySelector('[data-paid-contact-settings] [data-paid-limit="automaticBuyerLimit"]').value,String(count));}
+  assert.equal(f.w.LeadIntelAdditionalContacts.policy().enabled,false);assert.equal(f.w.LeadIntelAdditionalContacts.policy().phoneEnabled,false);assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
  }finally{f.dom.window.close();}
 });

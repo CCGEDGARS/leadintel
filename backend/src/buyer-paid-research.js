@@ -19,7 +19,7 @@ export async function buyerPaidIntent(env,workspaceId,requested,candidate){
  const policy=await readAdditionalContactPolicy(env,workspaceId),company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
  if(!policy.enabled&&!policy.phoneEnabled)return null;
  const row=company?await env.DB.prepare('SELECT research_snapshot_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(workspaceId,company.id).first():null;
- return {provider:policy.provider,email:policy.enabled,phone:policy.provider==='treg'&&policy.phoneEnabled,policyUpdatedAt:policy.updatedAt,companyId:company?.id||'',snapshotHash:await sha256(row?.research_snapshot_json||'{}')};
+ return {provider:policy.provider,email:policy.enabled,phone:policy.provider==='treg'&&policy.phoneEnabled,automaticBuyerLimit:policy.automaticBuyerLimit,policyUpdatedAt:policy.updatedAt,companyId:company?.id||'',snapshotHash:await sha256(row?.research_snapshot_json||'{}')};
 }
 export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,guard,signal,lookup=lookupAdditionalEmail}={}){
  const policy=await readAdditionalContactPolicy(env,context.workspaceId),previous=candidate.publicResearch?.paidResearch;
@@ -29,6 +29,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  if(!intent)return stop('disabled','This research request is free-only.');
  if(!intent.email&&!intent.phone)return stop('disabled','Paid email and phone research were off when this run started.');
  if(policy.provider!==intent.provider||policy.provider!=='treg')return stop('blocked','The saved automatic contact provider needs review.');
+ const limit=Math.min(policy.automaticBuyerLimit,P.automaticLimit(intent.automaticBuyerLimit));
  const email=intent.email&&policy.enabled,phone=intent.phone&&policy.phoneEnabled;
  if(!email&&!phone)return stop('disabled','Paid email and phone research are off for this run.');
  await guard();
@@ -64,15 +65,15 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  };
  const complete=p=>{const contact=contactFor(p);return (!email||D.acceptedOfficialBuyerEmail(active,p)||C.accepted(contact,active.domain,'provider_verified'))&&(!phone||D.confirmedBuyerPhone(active,p,contact,{workspaceId:context.workspaceId,companyId:company.id}));};
  const done=new Set(report.outcomes.filter(r=>r.status!=='processing').map(r=>r.personId));
- if(!report.outcomes.some(row=>row.status==='processing')&&report.outcomes.filter(r=>r.status==='checked').length>=1)return stop('complete','Automatic research has checked its one priority buyer. Other buyers can be checked manually.');
- const targets=P.targets(active,{provider:'treg',maxPerCompany:policy.maxPerCompany,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
+ if(!report.outcomes.some(row=>row.status==='processing')&&report.outcomes.filter(r=>r.status==='checked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
+ const targets=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
  const person=targets[0];
- if(!person){const primary=P.targets(active,{provider:'treg',confirmedEmail:()=>''})[0];if(primary&&(complete(primary)||done.has(String(primary.id))))return stop('complete','The priority buyer has been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
- if(!report.outcomes.some(row=>row.personId===String(person.id)&&row.status==='processing')&&report.outcomes.filter(r=>r.status!=='blocked').length>=1)return stop('complete','Automatic research has checked its one priority buyer. Other buyers can be checked manually.');
+ if(!person){const selected=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,confirmedEmail:()=>''});if(selected.length&&selected.every(p=>complete(p)||done.has(String(p.id))))return stop('complete','The selected priority buyers have been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
+ if(!report.outcomes.some(row=>row.personId===String(person.id)&&row.status==='processing')&&report.outcomes.filter(r=>r.status!=='blocked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
  const contact=contactFor(person),includeEmail=Boolean(email&&!D.acceptedOfficialBuyerEmail(active,person)&&!C.accepted(contact,active.domain,'provider_verified')),includePhone=Boolean(phone&&!D.confirmedBuyerPhone(active,person,contact,{workspaceId:context.workspaceId,companyId:company.id}));
  const attempts=(Number(report.outcomes.find(row=>row.personId===String(person.id))?.attempts)||0)+1;
  if(attempts>12)return stop('blocked','The saved lookup is still pending after bounded recovery checks. Its receipt is retained for review.');
- const input={person_id:person.id,provider:'treg',automatic:true,automatic_email:email,automatic_phone:phone,data_lookup:includePhone,phone_approved:includePhone,email_lookup:includeEmail};
+ const input={person_id:person.id,provider:'treg',automatic:true,automatic_buyer_limit:limit,automatic_email:email,automatic_phone:phone,data_lookup:includePhone,phone_approved:includePhone,email_lookup:includeEmail};
  if(includePhone&&!includeEmail&&contact.id&&C.accepted(contact,active.domain,'provider_verified'))input.contact_id=contact.id;
  let outcome;
  try{const result=await lookup(env,{...context,guard,writeAuthority:guard.writeAuthority},company.id,input,{guard,signal});await guard();outcome={personId:String(person.id),email:includeEmail,phone:includePhone,status:result.request?.status==='processing'?'processing':'checked',result:result.research?.status||result.request?.status||'checked',checkedAt:stamp(),costMicro:Number(result.research?.costMicro)||0};}
@@ -90,7 +91,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
 // buyer jobs. A pending lookup is left resumable rather than polled or repurchased.
 export async function runWorkflowPaidResearch(env,context,candidate,{intent,runId,guard,lookup}={}){
  const policy=await readAdditionalContactPolicy(env,context.workspaceId);
- for(let slice=0;slice<=policy.maxPerCompany;slice++){
+ for(let slice=0;slice<=Math.min(policy.automaticBuyerLimit,P.automaticLimit(intent?.automaticBuyerLimit));slice++){
   await guard();
   const finished=await runBuyerPaidResearch(env,context,candidate,{intent,jobId:'workflow:'+runId,guard,lookup});
   if(finished||candidate.publicResearch.paidResearch.outcomes.some(row=>row.status==='processing'))break;
