@@ -52,3 +52,12 @@ test('reusing a source in the official owner cannot renew its expired contact pr
  const result=await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>({url,extractedAt:old,markdown:'### Alex Morgan\nProcurement Director\nalex.morgan@acme.example'})});
  const matched=D.matchPublicBuyerDetails([p],result.freshRows,c.domain,c.company)[0];assert.equal(D.acceptedOfficialBuyerEmail(c,matched),'');assert.equal(matched.publicEmailEvidence.checkedAt,old);
 });
+test('canonical aliases do not replay completed linked documents ahead of the remaining plan',async()=>{
+ const c=scenario(),rows=[],cache=new Map(),calls=[],links=Array.from({length:25},(_,i)=>`https://documents.example/contact-${i}.pdf`),readPage=async url=>{calls.push(url);if(cache.has(url))return {...cache.get(url),reused:true};const value={url:url===root?url:url+'/',markdown:url===root?links.map(url=>`[Supplier contact](${url})`).join('\n'):'# Acme Labs\nsuppliers@acme.example'};cache.set(url,value);return value;};
+ for(let pass=0;pass<3&&!D.officialContactCoveragePassed(c);pass++){await D.runOfficialContactResearch(c,{rows,search:async()=>[],readPage});c.buyerDiscovery.officialContactInventory=D.safeOfficialContactInventory(c.buyerDiscovery.officialContactInventory,c.domain);}
+ assert.equal(D.officialContactCoveragePassed(c),true);for(const url of links)assert.equal(calls.filter(value=>value===url).length,1,'Each original canonical source is requested once across saved passes');
+});
+test('tracking variants of one contact source cannot consume the active plan allowance',async()=>{
+ const c=scenario(),calls=[];await D.runOfficialContactResearch(c,{search:async()=>[],readPage:async url=>{calls.push(url);return {url,markdown:url===root?Array.from({length:150},(_,i)=>`[Supplier contact](${team}?utm_source=${i})`).join('\n'):'# Contact\nsuppliers@acme.example'};}});
+ assert.equal(D.officialContactCoveragePassed(c),true);assert.equal(calls.length,2);assert.equal(c.buyerDiscovery.officialContactInventory.research.plannedUrls.length,2);
+});

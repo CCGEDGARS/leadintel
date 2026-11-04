@@ -33,9 +33,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   // A stale legacy paid slice first settles through the existing paid evidence
   // gate. Keep it eligible for terminal recovery, which captures its original
   // own-CRM scope before a fresh review changes that scope.
-  const deferSemanticStamp=Number(input.executionContinuationVersion||0)<4&&row.phase==='paid'&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate));
+  const officialPlan=reconciledCandidate.buyerDiscovery?.officialContactInventory?.research,sourceScopeChanged=row.phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
+  const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate)));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
-  const officialPlan=candidate.buyerDiscovery?.officialContactInventory?.research,rescopeOfficial=phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
+  const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp;
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
   const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
   const guard=async({checkpoint=false}={})=>{
@@ -171,10 +172,14 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     candidate.publicResearch.aiReview=D.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'none',checkedAt:new Date().toISOString(),inputSignature:signature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,summary:review.summary,reason:review.reason,conflicts:review.conflicts});
     candidate.publicResearch.conflicts=review.conflicts||[];phase=input.paidResearch?'paid':'done';
    }else if(phase==='paid'){
+    if(deferSemanticStamp&&sourceScopeChanged){
+     diagnostics.push({phase,reason:'Holding the original paid scope until guarded recovery completes the current free source plan',at:new Date().toISOString()});phase='done';
+    }else{
     const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',row.workspace_id,row.requested_by).first();
     const paidGuard=async()=>guard();paidGuard.writeAuthority=()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]});
     const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup});
     if(finished)phase='done';
+    }
    }
    if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    await guard();phaseMs+=Math.max(1,clock()-phaseStart);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;
