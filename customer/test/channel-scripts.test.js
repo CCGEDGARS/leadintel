@@ -28,9 +28,9 @@ test('phone assistant attribution survives save and fresh reopen but clears when
 
 test('real channel mount puts owner library below Writing Assistant and preserves placement across channel renders',async()=>{
  const f=await fixture();try{
-  f.setCatalogue({core:[],personal:[],primary:[],canManage:true});await f.ui.refresh();const d=f.w.document,panel=d.getElementById('creator-library'),launcher=d.getElementById('mw-writing-assistant-launcher');
+  f.setCatalogue({core:[],personal:[],primary:[],canManage:true});await f.ui.refresh();const d=f.w.document,panel=d.getElementById('creator-library'),dialog=d.getElementById('creator-library-dialog'),launcher=d.getElementById('mw-writing-assistant-launcher');
   assert.equal(launcher.nextElementSibling,panel);assert.equal(panel.closest('aside'),launcher.closest('aside'));assert.equal(panel.hidden,false);assert.equal(panel.open,false);
-  panel.querySelector('summary').click();assert.equal(panel.open,true);await f.ui.openChannel('phone');assert.equal(launcher.nextElementSibling,panel);assert.equal(panel.open,true);
-  f.setCatalogue({core:[],personal:[],primary:[],canManage:false});await f.ui.refresh();assert.equal(panel.hidden,true);assert.equal(panel.open,false);
+  panel.querySelector('summary').click();assert.equal(dialog.open,true);await f.ui.openChannel('phone');assert.equal(launcher.nextElementSibling,panel);assert.equal(dialog.open,true);
+  f.setCatalogue({core:[],personal:[],primary:[],canManage:false});await f.ui.refresh();assert.equal(panel.hidden,true);assert.equal(panel.open,false);assert.equal(dialog.open,false);
  }finally{f.w.close();}
 });

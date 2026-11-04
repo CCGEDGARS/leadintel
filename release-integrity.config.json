@@ -7537,7 +7537,19 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "creator-library=20261104-v2"
+        "creator-library=20261104-v3"
+      ]
+    },
+    {
+      "id": "creator-library-wide-window",
+      "type": "text",
+      "url": "/customer/channel-scripts.css",
+      "status": 200,
+      "contains": [
+        ".cl-dialog{",
+        "width:min(1120px,calc(100vw - 40px))",
+        ".cl-dialog::backdrop",
+        ".cl-folders{grid-template-columns:minmax(0,1fr)}"
       ]
     }
   ],
