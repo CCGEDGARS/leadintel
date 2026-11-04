@@ -26,7 +26,7 @@ for(const mode of ['eligible','queued_review','revoked','changed_context','repla
  const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),candidate={...f.candidate,publicResearch:{accountability:{...globalThis.LeadIntelDiscovery.createBuyerResearchAccountability(),status:'partial',stopReason:'time_budget'}}};
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status=?,phase='done',input_json=json_remove(input_json,'$.contactContinuationVersion'),result_json=?,diagnostic_json='[]' WHERE id=?").run(mode==='canceled'?'canceled':'needs_review',JSON.stringify(candidate),job.id);
  if(mode==='queued_review')f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='queued',phase='review' WHERE id=?").run(job.id);
- if(mode==='already_recovered')f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.contactContinuationVersion',1) WHERE id=?").run(job.id);
+ if(mode==='already_recovered')f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.contactContinuationVersion',1,'$.contactSchedulingRecoveryVersion',1) WHERE id=?").run(job.id);
  if(mode==='revoked')f.DB.raw.prepare("UPDATE workspace_members SET role='viewer' WHERE workspace_id=? AND user_id=?").run(workspaceId,f.users.owner.id);
  if(mode==='changed_context')f.DB.raw.prepare("UPDATE customer_workspace_state SET payload_json=json_set(payload_json,'$.main.website','https://changed.example/'),version=version+1 WHERE workspace_id=?").run(workspaceId);
  if(mode==='replaced')await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,force:true});
