@@ -2109,7 +2109,17 @@
       }
       return receipts;
     };
+    const reusableQueryCheck=(previous,key,queries)=>!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(Date.parse(previous.checkedAt))&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000);
+    const currentChecks=person=>person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)?person.contactResearch.checks||{}:{};
+    const completedWork=person=>{
+      const checks=currentChecks(person),plan=buyerResearchQueryPlan(candidate,person);
+      return policy.requiredChecks.every(key=>reusableQueryCheck(checks[key],key,plan[key]))&&(!options.buyerAgentContext||reusableQueryCheck(checks.buyer_agent,'buyer_agent',buyerAgentQueries(candidate,person,options.buyerAgentContext)))&&(!checks.independent||checks.independent.status==='not_needed'||reusableQueryCheck(checks.independent,'independent',[`Independent grounded check: ${clean(person.publicName||person.name)} | ${clean(candidate.company)} | ${person.title}`]))&&(!priorities.includes(person)||attributable(person)||reusableQueryCheck(checks.deep,'deep',plan.deep));
+    };
+    // Resume unfinished work before spending a slice reconciling its completed
+    // prefix. These are scheduling choices, never new completion/identity proof.
+    const publicWork=[...people].sort((a,b)=>Number(completedWork(a))-Number(completedWork(b)));
     const profileWaveDone=new Set(),initialProfiles=new Map(people.map(person=>[person,normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)]));
+    const profileWork=people.filter(person=>{if(reusableQueryCheck(currentChecks(person).linkedin,'linkedin',buyerResearchQueryPlan(candidate,person).linkedin)){profileWaveDone.add(person);report.reusedChecks++;return false;}return true;});
     const researchPerson=async(person,{profilesOnly=false}={})=>{
       await guard();const name=clean(person.publicName||person.name),identityKey=buyerResearchIdentityKey(candidate,person);
       if(!hasFullBuyerName(name)||person.identityStatus==='pending'||person.nameVerification==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
@@ -2117,8 +2127,8 @@
       const research=prior?.identityKey===identityKey?prior:{version:1,evidenceVersion:2,identityKey,checks:{},channels:{}};person.contactResearch=research;person.gmailCandidates=gmailGuessCandidates(person);
       collect(person,sourceRows.slice());let failed=profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0,searches=0,successfulSearches=0;const failedPages=new Set();
       const run=async(key,queries,execute=search)=>{
-        const previous=research.checks[key],date=Date.parse(previous?.checkedAt||'');
-        if(!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(date)&&Date.now()-date>=0&&Date.now()-date<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000)){report.reusedChecks++;return;}
+        const previous=research.checks[key];
+        if(reusableQueryCheck(previous,key,queries)){report.reusedChecks++;return;}
         research.checks[key]={status:'running',attempts:(previous?.attempts||0)+1,reason:'',checkedAt:'',queryLog:queries.map(query=>({query,status:'not_searched',searchStatus:'not_searched',sourceReads:[],resultCount:0,checkedAt:'',reason:''}))};
         const errors=[];
         for(const [index,query] of queries.entries()){
@@ -2174,12 +2184,12 @@
     try{
       // Search every retained identity before slow email/source extraction can
       // consume the shared budget. Persist indexed matches as profile evidence.
-      for(let i=0;i<people.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(people.slice(i,i+policy.concurrency).map(person=>researchPerson(person,{profilesOnly:true})));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}
+      for(let i=0;i<profileWork.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(profileWork.slice(i,i+policy.concurrency).map(person=>researchPerson(person,{profilesOnly:true})));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}
       // External profile identities and empty search indexes still have a known company website.
       if(readPage&&people.length&&!sourceRows.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain))&&!people.some(person=>companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain))){
         try{await extract(people[0],[{url:`https://${companyIdentityDomain(candidate.domain)}/`}]);}catch(error){if(error.code||signal?.aborted)throw error;}
       }
-      for(let i=0;i<people.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(people.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
+      for(let i=0;i<publicWork.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(publicWork.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
     catch(error){report.stopReason=signal?.aborted||error.code==='CANCELED'?'canceled':error.code==='TIME_BUDGET'?'time_budget':'provider_unavailable';report.gaps.push(clean(error.message).slice(0,220));}
     // A returned checkpoint has no active provider. Retain completed receipts
     // and mark interrupted work partial so a stopped run never says Searching.
