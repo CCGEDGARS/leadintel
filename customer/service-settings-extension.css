@@ -15,4 +15,6 @@
   #integration-platform-grid>[data-integration="firecrawl"]{grid-row:auto;grid-template-rows:none}
 }
 
-.paid-research-limits{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:14px 0}.paid-research-limits label{display:grid;gap:5px;font-size:13px;max-width:100%}.paid-research-limits input{width:132px;max-width:100%;padding:9px;border:1px solid #dbe5e0;border-radius:8px;font:inherit}@media(max-width:480px){.paid-research-limits label,.paid-research-limits button{width:100%}.paid-research-limits input{width:100%;box-sizing:border-box}}
+.paid-research-limits{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:14px 0}.paid-research-limits label{display:grid;gap:5px;font-size:13px;max-width:100%}.paid-research-limits input,.paid-research-limits select{width:132px;max-width:100%;padding:9px;border:1px solid #dbe5e0;border-radius:8px;font:inherit}@media(max-width:480px){.paid-research-limits label,.paid-research-limits button{width:100%}.paid-research-limits input,.paid-research-limits select{width:100%;box-sizing:border-box}}
+
+.paid-research-limits label[hidden]{display:none}

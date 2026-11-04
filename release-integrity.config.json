@@ -3601,7 +3601,7 @@
       "contains": [
         "Complete company qualification first.",
         "Complete qualification and public research for four buyers before automatic lookup.",
-        ".slice(0,1)"
+        ".slice(0,limit)"
       ]
     },
     {

@@ -9,10 +9,10 @@ import {controlledLookup} from './paid-lookup-fixture.mjs';
 import {saveAdditionalContactPolicy} from '../src/additional-contact-services.js';
 import {upsertCrmCompany,upsertCrmIntelligence,getCrmCompany} from '../src/crm.js';
 const require=createRequire(import.meta.url),D=require('../../customer/discovery-engine.js'),Crm=require('../../customer/crm-engine.js'),receipts=require('../../customer/test/helpers/buyer-research-receipts.cjs');
-export async function paidFixture(t,{email=true,phone=true,limit=2,intent=true}={}){
+export async function paidFixture(t,{email=true,phone=true,limit=2,intent=true,automaticLimit=1}={}){
  const f=await buyerJobsFixture(t),c=paidCandidate();
  const context={workspaceId,userId:f.users.owner.id,role:'owner'},company=(await upsertCrmCompany(f.env.DB,context,{company:c.company,domain:c.domain})).company;c.crmId=company.id;await upsertCrmIntelligence(f.env.DB,context,c.crmId,Crm.mapDiscoveryCandidateToCrm(c).intelligence);
- f.DB.raw.prepare('INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by) VALUES(?,?,?,\'treg\',10,100,?,?)').run(workspaceId,Number(email),Number(phone),limit,f.users.owner.id);
+ f.DB.raw.prepare('INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by,automatic_buyer_limit) VALUES(?,?,?,\'treg\',10,100,?,?,?)').run(workspaceId,Number(email),Number(phone),limit,f.users.owner.id,automaticLimit);
  const job=await startBuyerJob(f.env,workspaceId,f.users.owner,{candidate:c,paidResearch:intent});f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='paid',result_json=? WHERE id=?").run(JSON.stringify(c),job.id);
  return {...f,c,job,context};
 }
@@ -38,7 +38,7 @@ test('a manual CRM research change after job creation blocks overwrite and provi
  const f=await paidFixture(t);f.DB.raw.prepare("UPDATE crm_intelligence SET research_snapshot_json=json_set(research_snapshot_json,'$.buyerResearch.buyers[0].title','Changed role') WHERE company_id=?").run(f.c.crmId);await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:1000,services:{paidLookup:async()=>assert.fail('Changed CRM research cannot dispatch')}});assert.equal(JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json).publicResearch.paidResearch.status,'blocked');assert.equal((await getCrmCompany(f.env.DB,f.context,f.c.crmId)).intelligence.research_snapshot.buyerResearch.buyers[0].title,'Changed role');
 });
 test('daily limit of one permits the primary buyer and does not trigger another automatic lookup',async t=>{
- const f=await paidFixture(t),calls=[],paidLookup=await controlledLookup(f,calls);f.DB.raw.prepare('UPDATE additional_contact_policies SET daily_limit=1 WHERE workspace_id=?').run(workspaceId);for(let i=0;i<4;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);const c=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json);assert.equal(c.publicResearch.paidResearch.status,'complete');assert.match(c.publicResearch.paidResearch.reason,/one priority buyer/i);assert.equal((await getCrmCompany(f.env.DB,f.context,f.c.crmId)).contacts.filter(c=>c.email_status==='verified').length,1);
+ const f=await paidFixture(t),calls=[],paidLookup=await controlledLookup(f,calls);f.DB.raw.prepare('UPDATE additional_contact_policies SET daily_limit=1 WHERE workspace_id=?').run(workspaceId);for(let i=0;i<4;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);const c=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json);assert.equal(c.publicResearch.paidResearch.status,'complete');assert.match(c.publicResearch.paidResearch.reason,/selected priority buyers/i);assert.equal((await getCrmCompany(f.env.DB,f.context,f.c.crmId)).contacts.filter(c=>c.email_status==='verified').length,1);
 });
 test('revoking phone consent after the primary buyer never starts another buyer',async t=>{
  const f=await paidFixture(t),calls=[],paidLookup=await controlledLookup(f,calls);await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});f.DB.raw.prepare('UPDATE additional_contact_policies SET phone_enabled=0 WHERE workspace_id=?').run(workspaceId);for(let i=0;i<3;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,1);
@@ -92,7 +92,7 @@ test('revocation settles an already pending workflow continuation without new pa
 });
 
 test('capacity migration preserves existing owner permissions, limits and timestamps',async t=>{
- const f=await paidFixture(t,{limit:1}),before=f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId),fs=await import('node:fs');f.DB.raw.exec(fs.readFileSync(new URL('../migrations/0068_paid_buyer_capacity.sql',import.meta.url),'utf8'));assert.deepEqual(f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId),before);f.DB.raw.prepare('UPDATE additional_contact_policies SET max_per_company=10 WHERE workspace_id=?').run(workspaceId);assert.equal(f.DB.raw.prepare('SELECT max_per_company n FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId).n,10);
+ const f=await paidFixture(t,{limit:1}),before=f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId),fs=await import('node:fs');delete before.automatic_buyer_limit;f.DB.raw.exec(fs.readFileSync(new URL('../migrations/0068_paid_buyer_capacity.sql',import.meta.url),'utf8'));assert.deepEqual(f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId),before);f.DB.raw.prepare('UPDATE additional_contact_policies SET max_per_company=10 WHERE workspace_id=?').run(workspaceId);assert.equal(f.DB.raw.prepare('SELECT max_per_company n FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId).n,10);const prior=f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId);f.DB.raw.exec(fs.readFileSync(new URL('../migrations/0069_automatic_buyer_limit.sql',import.meta.url),'utf8'));assert.deepEqual({...f.DB.raw.prepare('SELECT * FROM additional_contact_policies WHERE workspace_id=?').get(workspaceId)},{...prior,automatic_buyer_limit:1});
 });
 
 test('saved market changes are included in current eligibility and cannot reuse a prior paid scope',async t=>{
@@ -126,4 +126,18 @@ for(const [freeEmail,freePhone] of [[true,false],[false,true],[true,true]])test(
  assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,freePhone?0:1,JSON.stringify(f.c.publicResearch.paidResearch));
  assert.equal(f.c.publicResearch.paidResearch.status,'complete');
  if(freeEmail&&freePhone){assert.equal(calls.length,0);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);}
+});
+
+for(const limit of [1,2,3,4])test(`saved automatic selection researches exactly ${limit} priority buyers`,async t=>{
+ const f=await paidFixture(t,{automaticLimit:limit}),calls=[],lookup=await controlledLookup(f,calls);
+ for(let i=0;i<limit+2;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
+ assert.equal(calls.filter(c=>c.url.includes('email.find')).length,limit);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,limit);
+ assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM additional_contact_attempts WHERE json_extract(result_json,'$.automatic')=1").get().n,limit);
+ assert.equal(JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json).publicResearch.paidResearch.status,'complete');
+});
+for(const [started,current] of [[1,4],[4,1]])test(`saved job respects its initial count and current reduction (${started} to ${current})`,async t=>{
+ const f=await paidFixture(t,{automaticLimit:started}),calls=[],lookup=await controlledLookup(f,calls);
+ f.DB.raw.prepare('UPDATE additional_contact_policies SET automatic_buyer_limit=? WHERE workspace_id=?').run(current,workspaceId);
+ for(let i=0;i<6;i++)await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup:lookup}});
+ assert.equal(calls.filter(c=>c.url.includes('email.find')).length,1);assert.equal(calls.filter(c=>c.url.includes('phone.find')).length,1);
 });

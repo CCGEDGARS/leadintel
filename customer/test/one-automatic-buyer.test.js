@@ -3,3 +3,7 @@ function fixture(){const stamp=new Date().toISOString(),c={company:'Example',dom
 test('automatic targets one highest-ranked buyer even when saved capacity is ten',()=>{assert.deepEqual(P.targets(fixture(),{provider:'apollo',maxPerCompany:10}).map(p=>p.id),['p0']);});
 test('a confirmed top buyer does not cause automatic spending on the other three',()=>{assert.deepEqual(P.targets(fixture(),{provider:'apollo',maxPerCompany:10,confirmedEmail:p=>p.id==='p0'?'confirmed':''}),[]);});
 test('manual readiness remains available for all four qualified buyers',()=>{const c=fixture();for(const person of c.people)assert.equal(P.readiness(c,person,{provider:'apollo',automatic:false}).eligible,true);});
+
+test('owner-selected automatic capacity permits only the top 1–4 buyers',()=>{
+ for(const limit of [1,2,3,4]){const c=fixture();assert.deepEqual(P.targets(c,{provider:'apollo',automaticBuyerLimit:limit}).map(p=>p.id),c.people.slice(0,limit).map(p=>p.id));}
+});
