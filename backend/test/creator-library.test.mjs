@@ -43,3 +43,16 @@ test('unlock attempts are throttled and absent credentials fail closed',async()=
  const f=await fixture();for(let i=0;i<10;i++)assert.equal((await f.call('/creator/unlock',{method:'POST',body:{password:'wrong'}})).status,401);
  assert.equal((await f.unlock()).status,429);delete f.env.ADMIN_PASSWORD;assert.equal((await f.call('/creator/status')).data.passwordConfigured,false);assert.equal((await f.unlock()).status,503);
 });
+
+test('configured four-digit PIN replaces password unlock, keeps owner/session gates, and rotation invalidates unlocks',async()=>{
+ const f=await fixture();f.env.CREATOR_LIBRARY_PIN_SHA256=await sha256('2468');
+ assert.equal((await f.call('/creator/status')).data.pinConfigured,true);
+ for(const password of ['0000','246','24680',f.env.ADMIN_PASSWORD])assert.equal((await f.call('/creator/unlock',{method:'POST',body:{password}})).status,401);
+ assert.equal((await f.call('/creator/unlock',{method:'POST',body:{password:'2468'},token:'customer'})).status,403);
+ assert.equal((await f.call('/creator/unlock',{method:'POST',body:{password:'2468'}})).status,200);
+ assert.equal((await f.call('/creator')).status,200);assert.equal((await f.call('/creator',{token:'second-session'})).status,423);
+ assert.equal((await f.call('/creator/'+id,{method:'PUT',body:draft})).status,200);
+ assert.equal((await f.call('/creator')).data.scripts[0].original,draft.original,'server-persisted source survives reopening');
+ f.env.CREATOR_LIBRARY_PIN_SHA256=await sha256('1357');assert.equal((await f.call('/creator')).status,423);
+ f.env.CREATOR_LIBRARY_PIN_SHA256='invalid';assert.equal((await f.call('/creator/unlock',{method:'POST',body:{password:f.env.ADMIN_PASSWORD}})).status,503);
+});

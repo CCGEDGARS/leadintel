@@ -7469,7 +7469,7 @@
       "contains": [
         "const emailConfirmed=verified,linkedinConfirmed=",
         "const ready=verified&&crmAuthenticated()",
-        "Confirm this person’s email to continue",
+        "Confirm this person\u2019s email to continue",
         "official pages read in this run"
       ]
     },
@@ -7509,6 +7509,35 @@
       "contains": [
         "paidResearch:options.paidResearch===true",
         "options.hydrateCrm?.(owner,job.crm)"
+      ]
+    },
+    {
+      "id": "creator-library-sidebar-pin",
+      "type": "text",
+      "url": "/customer/creator-library.js",
+      "status": 200,
+      "contains": [
+        "host.after(panel)",
+        "el('label','PIN code')",
+        "password.inputMode='numeric'"
+      ]
+    },
+    {
+      "id": "creator-library-sidebar-host",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "host:q('mw-writing-assistant-launcher')"
+      ]
+    },
+    {
+      "id": "creator-library-compact-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "creator-library=20261104-v2"
       ]
     }
   ],

@@ -33,7 +33,7 @@ function mount(document,adapter){
  field.addEventListener('input',()=>{if(phone.message!==field.value)delete phone.writingAssistant;phone.message=field.value;phoneDirty=true;stash();generation++;phoneStatus.textContent='Unsaved changes';adapter.syncAssistant();});
  const library=el('details',null,'sc-library');library.id='sc-library';library.append(el('summary','Script Library'));const tabs=el('div',null,'sc-tabs'),rows=el('div'),edit=el('section',null,'sc-edit');edit.hidden=true;
  library.append(tabs,button('Refresh library',refresh),rows,edit);q('mw-tools-drawer').querySelector('.mw-tools-content').prepend(library);
- const creator=root.LeadIntelCreatorLibrary?.mount(document,{host:picker,request,refresh,scope:currentScope});
+ const creator=root.LeadIntelCreatorLibrary?.mount(document,{host:q('mw-writing-assistant-launcher'),request,refresh,scope:currentScope});
  const linkedCopy=document.querySelector('[data-copy-field=linkedin]');if(linkedCopy&&q('mw-header-actions'))q('mw-header-actions').append(linkedCopy);
  const dialog=el('dialog');dialog.className='sc-coming-soon';dialog.setAttribute('aria-labelledby','sc-call-title');const title=el('h2','Calling is coming soon');title.id='sc-call-title';dialog.append(title,el('p','You can prepare and copy your calling script today. Calling directly from LeadIntel will be available in a future update.'),button('Close',()=>dialog.close()));step.append(dialog);
  function showComingSoon(){dialog.showModal();dialog.querySelector('button').focus();}

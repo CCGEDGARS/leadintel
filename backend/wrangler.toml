@@ -3,6 +3,8 @@ main = "src/app.js"
 compatibility_date = "2026-07-20"
 
 [vars]
+# Server-side PIN verifier; creator access still requires the platform owner session.
+CREATOR_LIBRARY_PIN_SHA256 = "4fc779c823fd37ed61f66a6ae37c9dffed06bb295f3902d2fa9d485aa741a724"
 WORKSPACE_STORAGE_ENABLED = "true"
 STRIPE_ACCOUNT_ID = "acct_1Gn4gwGqAtOWOEjZ"
 STRIPE_LIVEMODE = "true"

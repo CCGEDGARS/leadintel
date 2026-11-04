@@ -3,7 +3,7 @@
 function mount(document,{host,request,refresh,scope}){
  const el=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  const panel=el('details');panel.id='creator-library';panel.className='cl-panel';panel.hidden=true;panel.append(el('summary','Creator Library'));
- const content=el('div'),notice=el('p');notice.setAttribute('role','status');panel.append(content,notice);host.before(panel);
+ const content=el('div'),notice=el('p');notice.setAttribute('role','status');panel.append(content,notice);host.after(panel);
  let allowed=false,unlocked=false,data=null,editing=null,dirty=false,busy=false,epoch=0,identity='',timer;
  const say=text=>notice.textContent=text;
  const button=(text,fn)=>{const b=el('button',text);b.type='button';b.className='secondary-btn';b.onclick=async()=>{if(busy)return;busy=true;b.disabled=true;const captured=epoch;try{await fn();}catch(e){if(captured===epoch)say(e.message);}finally{busy=false;if(b.isConnected)b.disabled=false;}};return b;};
@@ -16,9 +16,9 @@ function mount(document,{host,request,refresh,scope}){
  function draw(){
   content.replaceChildren();if(!allowed)return;
   if(!unlocked){
-   content.append(el('p','Creator access only. Enter your creator password. Unless separately configured, use your platform owner sign-in password. Unlock lasts up to 15 minutes.'));
-   const form=el('form'),label=el('label','Password'),password=el('input');password.type='password';password.autocomplete='current-password';password.required=true;password.maxLength=512;label.append(password);const submit=el('button','Unlock library');submit.className='primary-btn';submit.type='submit';form.append(label,submit);content.append(form);
-   form.onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;const captured=epoch;try{const result=await request('/creator/unlock',{method:'POST',body:{password:password.value}});password.value='';if(captured!==epoch)return;unlocked=true;timer=setTimeout(()=>{clear();draw();say('Unlock expired. Enter your password again.');},Math.max(1,result.expiresAt-Date.now()));await load();say('');}catch(e){password.value='';if(captured===epoch)say(e.message);}finally{busy=false;submit.disabled=false;}};return;
+   content.append(el('p','Creator access only. Enter your 4-digit PIN. Unlock lasts up to 15 minutes.'));
+   const form=el('form'),label=el('label','PIN code'),password=el('input');password.type='password';password.autocomplete='off';password.inputMode='numeric';password.pattern='[0-9]{4}';password.required=true;password.minLength=4;password.maxLength=4;label.append(password);const submit=el('button','Unlock library');submit.className='primary-btn';submit.type='submit';form.append(label,submit);content.append(form);
+   form.onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;const captured=epoch;try{const result=await request('/creator/unlock',{method:'POST',body:{password:password.value}});password.value='';if(captured!==epoch)return;unlocked=true;timer=setTimeout(()=>{clear();draw();say('Unlock expired. Enter your PIN again.');},Math.max(1,result.expiresAt-Date.now()));await load();say('');}catch(e){password.value='';if(captured===epoch)say(e.message);}finally{busy=false;submit.disabled=false;}};return;
   }
   content.append(el('p','Private source drafts → review → activate a channel/style master. Active patterns are used for new script preparation. Existing customer drafts stay intact. Only {{field}} placeholders change; literal wording is preserved.'));
   const actions=el('div');actions.className='cl-actions';actions.append(button('New script',()=>edit({id:root.crypto.randomUUID(),revision:0,channel:'email',style:'professional',name:'',folder:'',subject:'',body:'',original:''})),button('Refresh',async()=>{if(dirty&&!await confirm('Discard unsaved changes and refresh?'))return;editing=null;dirty=false;await load();}),button('Lock library',lock));content.append(actions);
