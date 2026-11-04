@@ -103,7 +103,7 @@
       const running=ACTIVE.has(job.status);owner.peopleStatus=running?'loading':owner.people?.length?'complete':job.status==='complete'?'empty':'error';
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
-      const ref={id:job.id,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
+      const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
       owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
@@ -137,7 +137,7 @@
         if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
           const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
-          const jobSelected=job?.input?.scope==='selected_buyers'||Boolean(jobIds?.length),scopeCovered=selected?jobSelected&&scope.personIds.every(id=>jobIds?.map(String).includes(id)):!jobSelected;
+          const jobSelected=job?.input?.scope==='selected_buyers'||Boolean(jobIds?.length),scopeCovered=selected?jobSelected&&new Set((jobIds||[]).map(String)).size===selected.size&&scope.personIds.every(id=>jobIds?.map(String).includes(id)):!jobSelected;
           const selectedRoster=value=>roster({people:(value?.people||[]).filter(person=>!selected||selected.has(String(person.id)))});
           const covered=scopeCovered&&selectedRoster(owner)===selectedRoster(job?.candidate);
           if(job&&!covered)job=null;
@@ -167,3 +167,4 @@
   }
   return {...createClient(),createClient,requestInput};
 });
+

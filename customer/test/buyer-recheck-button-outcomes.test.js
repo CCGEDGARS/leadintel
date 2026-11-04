@@ -50,3 +50,17 @@ test('durable Recheck exposes startup failures and releases its pending state',a
   const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[data-recheck-buyer]').disabled,false);
  }finally{r.close();}
 });
+
+
+test('durable selected recheck marks only that buyer busy and preserves other ready controls',()=>{
+ const r=runtime();try{
+  const other={...r.person,id:'other',name:'Other Buyer'};r.candidate.people=[r.person,other];r.candidate.peopleStatus='loading';r.candidate.publicContactStatus='loading';r.candidate.buyerResearchJob={id:'selected-job',status:'running',personIds:[String(r.person.id)],startedAt:new Date(Date.now()-40000).toISOString()};r.candidate.buyerResearchProgress={startedAt:r.candidate.buyerResearchJob.startedAt,label:'Reading official contact page',timing:{estimate:{samples:8,lowerSeconds:60,upperSeconds:180}}};
+  r.c.verifiedBuyerEmail=()=> 'confirmed@example.com';
+  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
+  assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Rechecking…');assert.match(node.querySelector('[data-buyer-contact-progress]').textContent,/Reading official contact page.*40s elapsed.*1–3 min remaining/);
+  node.innerHTML=r.c.prospectContactControls(r.candidate,other);assert.equal(node.querySelector('[data-buyer-contact-progress]'),null);assert.equal(node.querySelector('[data-recheck-buyer]').textContent,'Recheck');assert.equal(node.querySelector('[data-prospect-enrich-email]').disabled,false);assert.equal(node.querySelector('[data-keep-buyer]').disabled,false);assert.match(node.textContent,/another buyer/);
+ }finally{r.close();}
+});
+test('contact progress reports unknown estimates honestly and queue waits explicitly',()=>{
+ const r=runtime();try{r.candidate.buyerResearchProgress={startedAt:new Date(Date.now()-10000).toISOString(),executionStatus:'queued',label:'Contact evidence',timing:{estimate:{samples:1,lowerSeconds:30,upperSeconds:60}}};assert.match(r.c.buyerContactProgressText(r.candidate),/Waiting to continue.*10s elapsed.*Time estimate not available yet/);}finally{r.close();}
+});

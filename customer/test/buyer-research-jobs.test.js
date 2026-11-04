@@ -212,3 +212,17 @@ test('a second buyer Recheck cannot silently reuse another buyer pending command
  const job=snapshot(owner);job.input={scope:'selected_buyers',personIds:['anna']};finish(job);
  await first;
 });
+
+
+test('restored selected job retains its exact buyer scope for card progress',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));let reads=0;
+ const job={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna']}};
+ const scopes=[];const h=harness(()=>({...job,status:++reads===1?'running':'complete',revision:reads}));
+ await h.client.restore(owner,{persist:()=>scopes.push(structuredClone(owner.buyerResearchJob.personIds))});
+ assert.deepEqual(scopes,[['anna'],['anna']]);assert.ok(h.calls.every(c=>c.method==='GET'));
+});
+test('one-person Recheck cannot reuse a broader selected-person job',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));const old={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna','bob']}};
+ const h=harness(call=>call.method==='POST'?{...snapshot(owner),id:'new-selected',input:{scope:'selected_buyers',personIds:['anna']}}:old);
+ await h.client.research(owner,{personIds:['anna'],force:true});const post=h.calls.find(c=>c.method==='POST');assert.ok(post);assert.deepEqual(post.body.personIds,['anna']);assert.equal(post.body.paidResearch,false);assert.deepEqual(owner.buyerResearchJob.personIds,['anna']);
+});
