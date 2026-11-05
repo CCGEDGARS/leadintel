@@ -367,3 +367,27 @@ test('an ineligible primary buyer does not move automatic spending to a lower-ra
  c.publicResearch.conflicts=[{person_id:'p0',reason:'Current employer conflict'}];
  assert.deepEqual(P.targets(c,{automaticBuyerLimit:1}),[]);
 });
+
+test('an independently verified email survives a conflicting optional enrichment profile without accepting that profile',async()=>{
+ const f=runtime();await f.loaded;const p=f.c.people[0];
+ f.w.LeadIntelDiscovery=require('../discovery-engine.js');
+ const contact={external_person_id:p.id,name:p.name,title:p.title,company_id:'company',work_email:'anna@example.com',email_status:'verified'};
+ const data={version:1,personId:p.id,domain:f.c.domain,identityName:p.name,identityTitle:p.title,identityOrganization:p.organization,checkedAt:new Date().toISOString(),status:'updated',profile:{status:'provider_reported',company:'Unrelated Employer',linkedinUrl:'https://linkedin.com/in/other-person'},phone:{status:'not_requested'}};
+ let applied;f.adapter.accept=async(c,p,result)=>{applied=result;f.contact.set(p.id,result.contact);};
+ f.w.fetch=async()=>({ok:true,json:async()=>({contact,contactData:data,research:{status:'verified'}})});
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,p),true);
+ assert.equal(applied.contact.work_email,'anna@example.com');
+ assert.equal(applied.contactData.profile.status,'conflict');
+ assert.equal(applied.contactData.profile.company,undefined);
+ assert.equal(applied.contactData.profile.linkedinUrl,undefined);
+ assert.equal(applied.contactData.status,'partial');
+ f.close();
+});
+
+for(const field of ['personId','domain','identityName','identityTitle','identityOrganization','identityLinkedinUrl'])test('optional profile isolation cannot bypass a different research '+field,async()=>{
+ const f=runtime();await f.loaded;const p=f.c.people[0];p.publicLinkedinUrl='https://www.linkedin.com/in/anna-buyer';f.w.LeadIntelDiscovery=require('../discovery-engine.js');
+ const data={version:1,personId:p.id,domain:f.c.domain,identityName:p.name,identityTitle:p.title,identityOrganization:p.organization,identityLinkedinUrl:p.publicLinkedinUrl,profile:{status:'provider_reported',company:'Unrelated Employer'},phone:{status:'not_requested'},[field]:field==='identityLinkedinUrl'?'https://www.linkedin.com/in/another-buyer':'other'};
+ f.w.fetch=async()=>({ok:true,json:async()=>({contactData:data,research:{status:'not_found'}})});
+ assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,p),false);
+ assert.equal(p.contactData,undefined);assert.equal(f.contact.size,0);f.close();
+});
