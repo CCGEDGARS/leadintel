@@ -60,3 +60,11 @@ test('reopening merged directory evidence preserves an exact manual profile revi
  const people=D.mergeBuyerPool([p],[sparse],{decisionMakers:c.buyerRoles}),saved=D.normalizeDiscoveryState({selectedProspects:[{...c,people}]}).selectedProspects[0];assert.equal(saved.people[0].linkedinConfirmedUrl,url);assert.equal(D.confirmedBuyerShortlist(saved.people,{decisionMakers:c.buyerRoles},saved).priorityIds.length,1);
  for(const change of [{name:'Another Person',publicName:'Another Person'},{publicLinkedinUrl:'https://linkedin.com/in/another-person'}]){const merged=D.mergeBuyerPool([p],[{...sparse,...change}],{decisionMakers:c.buyerRoles});const changed=merged.find(row=>row.name==='Another Person'||row.publicLinkedinUrl===change.publicLinkedinUrl);assert.notEqual(changed?.linkedinConfirmedUrl,url);}
 });
+
+test('malformed zero-prefixed and repeated-digit phones never qualify as confirmed contact data',()=>{
+ const c=fixture(),p=c.people[2],url='https://example.com/team',checkedAt=new Date().toISOString();
+ for(const phone of ['000 33.00 18','000000000','111111111','+461234567890123456']){
+  Object.assign(p,{publicPhone:phone,publicPhoneUrl:url,publicPhoneEvidence:{version:2,url,quote:p.name+' '+phone,checkedAt,sourceRead:true,sourceKind:'official'},publicPhoneSourceCheck:{version:2,url,status:'attributed',checkedAt}});
+  assert.equal(D.confirmedBuyerPhone(c,p),'',phone);
+ }
+});

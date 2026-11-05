@@ -391,7 +391,7 @@
     if(options.complete&&isExecutiveBuyer(person)&&!safeCorporateRoleEvidence(person.corporateRoleEvidence))return {...person,roleReview:{version:1,status:'unconfirmed',reason:'Current executive role has no independent company evidence; review before recommending',checkedAt:new Date().toISOString(),sources:[]}};
     return person;
   }
-  function validPublishedPhone(value){const text=clean(value);return /^\+?[\d () .-]{7,32}$/.test(text)&&text.replace(/\D/g,'').length>=7&&!/^\d{3}[-–]\d{4}[-–]\d{2}$/.test(text);}
+  function validPublishedPhone(value){const text=clean(value);return /^\+?[\d () .-]{7,32}$/.test(text)&&text.replace(/\D/g,'').length>=7&&text.replace(/\D/g,'').length<=15&&!/^0{3}/.test(text.replace(/\D/g,''))&&!/^(\d)\1+$/.test(text.replace(/\D/g,''))&&!/^\d{3}[-–]\d{4}[-–]\d{2}$/.test(text);}
   function directPhonePassage(text,nameAt,name,person,personalEmail){
     let after=text.slice(nameAt+name.length,nameAt+name.length+260).split(/\n\s*\n|\n[-*#]|\b(?:Fackliga|Unionen|SACO|Ledarna)\b|\b(?:interviews?\s*:|for interviews|book (?:an? )?interview|press office|media enquiries|press enquiries|presskontakt|presschef)\b/i)[0];
     const allowed=new Set(clean(person.title).toLowerCase().split(/[^\p{L}]+/u));
