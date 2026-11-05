@@ -74,6 +74,9 @@ export async function journeyFixture({durableJobs=false,externalFetch,roleReview
   if(url.origin===origin)return originalFetch(input,options);
   externalCalls.push({url:url.href,method:options?.method||'GET'});
   if(externalFetch){const response=await externalFetch(input,options);if(response)return response;}
+  // Only the named staff page publishes the fixture contacts. Returning the
+  // same contact card for every URL made source binding depend on read order.
+  if(url.hostname==='forge.example'&&url.href!==sourceUrl)return new Response('<html><body><h1>Forge Industries</h1><a href="/team">Our team</a></body></html>',{headers:{'Content-Type':'text/html'}});
   if(url.hostname==='forge.example'){if(sourceGate){sourceGate.started();await sourceGate.wait;}return new Response('<html><body><h3>Robert Lund</h3><div>Head of Procurement</div><div>Phone: +46 70 123 45 67</div><div><a href="mailto:robert@forge.example">robert@forge.example</a></div><div>Forge Industries</div><h3>Alice Berg</h3><div>Chief Operating Officer</div><div>Forge Industries</div><a href="mailto:alice@forge.example">alice@forge.example</a></body></html>',{headers:{'Content-Type':'text/html'}});}
   throw Error('Acceptance harness blocked unplanned external request: '+url.origin+url.pathname);
  };
