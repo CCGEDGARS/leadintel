@@ -55,6 +55,7 @@ const TREG_CONNECTION_ERRORS=Object.freeze({
  TREG_ACCESS_DENIED:'Treg denied the connection request (HTTP 403). Team permissions or a provider access restriction need checking; this does not establish that the key is wrong.',
  TREG_RATE_LIMITED:'Treg temporarily rate-limited the connection check (HTTP 429). Keep the key and try later.',
  TREG_UNAVAILABLE:'Treg returned a server error during the connection check. Keep the key and try later.',
+ TREG_REDIRECT_BLOCKED:'Treg redirected the connection check. LeadIntel did not forward your credential; the endpoint needs checking.',
  TREG_HTTP_ERROR:'Treg returned an unexpected HTTP status during the connection check.',
  TREG_TIMEOUT:'Treg connection check timed out. This does not establish that the key is wrong.',
  TREG_NETWORK_ERROR:'LeadIntel could not reach the Treg connection endpoint. This does not establish that the key is wrong.',
@@ -91,14 +92,15 @@ async function verifyHunter(apiKey){
   const remaining=kind=>{const value=payload.data.requests?.[kind]?.remaining;return value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))?Number(value):null;};
   return {plan:clean(payload.data.plan_name,80),remaining_credits:remaining('credits'),remaining_searches:remaining('searches'),remaining_verifications:remaining('verifications')};
 }
-async function verifyTreg(apiKey){
+export async function verifyTreg(apiKey){
   // Check the same REST credential surface as /call/, not MCP OAuth.
   // /home is a read-only member endpoint: it proves a resolved team and balance
   // without dispatching a metered contact lookup. Never forward this token in
   // Authorization: /call/ relays that header to upstream providers.
   let response;
-  try{response=await fetch('https://treg.to/home',{method:'GET',headers:{'X-Treg-Token':apiKey,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});}
+  try{response=await fetch('https://treg.to/home',{method:'GET',headers:{'X-Treg-Token':apiKey,Accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(20000)});}
   catch(cause){throw tregConnectionFailure(cause?.name==='TimeoutError'||cause?.name==='AbortError'?'TREG_TIMEOUT':'TREG_NETWORK_ERROR');}
+  if(response.status>=300&&response.status<400)throw tregConnectionFailure('TREG_REDIRECT_BLOCKED',response.status);
   if(!response.ok)throw tregConnectionFailure(response.status===401?'TREG_AUTH_REJECTED':response.status===403?'TREG_ACCESS_DENIED':response.status===429?'TREG_RATE_LIMITED':response.status>=500?'TREG_UNAVAILABLE':'TREG_HTTP_ERROR',response.status);
   let account;try{account=await response.json();}catch{throw tregConnectionFailure('TREG_INVALID_RESPONSE',response.status);}
   if(!account||typeof account!=='object'||Array.isArray(account))throw tregConnectionFailure('TREG_INVALID_RESPONSE',response.status);

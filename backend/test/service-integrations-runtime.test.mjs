@@ -542,7 +542,7 @@ sqliteTest('Treg Settings checks the REST token used by paid lookups without spe
  const {env,token,DB}=await fixture(),old=globalThis.fetch,calls=[];
  DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
  const secret='treg-test-private-token';let rejected=false;
- globalThis.fetch=async(url,options)=>{calls.push({url,options});assert.equal(url,'https://treg.to/home');assert.equal(options.method,'GET');assert.equal(options.headers['X-Treg-Token'],secret);assert.equal(options.headers.Authorization,undefined);assert.equal(options.redirect,'error');return rejected?Response.json({detail:'not authenticated '+secret},{status:401}):Response.json({team:'test-team',balance_micro:921026,account:'private@example.test',own_tools:['private-tool']});};
+ globalThis.fetch=async(url,options)=>{calls.push({url,options});assert.equal(url,'https://treg.to/home');assert.equal(options.method,'GET');assert.equal(options.headers['X-Treg-Token'],secret);assert.equal(options.headers.Authorization,undefined);assert.equal(options.redirect,'manual');return rejected?Response.json({detail:'not authenticated '+secret},{status:401}):Response.json({team:'test-team',balance_micro:921026,account:'private@example.test',own_tools:['private-tool']});};
  try{
   const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:secret}}),env,{});
   assert.equal(saved.status,200);const savedText=await saved.text();assert.doesNotMatch(savedText,/treg-test-private-token|private@example|private-tool/);
@@ -565,6 +565,7 @@ sqliteTest('Treg connection failures expose only fixed diagnostic categories in 
  const {env,token,DB}=await fixture(),old=globalThis.fetch,secret='private-team-secret';
  DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
  const scenarios=[
+  [()=>new Response(null,{status:302,headers:{Location:'https://untrusted.example/'+secret}}),'TREG_REDIRECT_BLOCKED',302],
   [()=>Response.json({detail:secret},{status:401}),'TREG_AUTH_REJECTED',401],
   [()=>new Response(secret,{status:403}),'TREG_ACCESS_DENIED',403],
   [()=>Response.json({detail:secret},{status:429}),'TREG_RATE_LIMITED',429],
