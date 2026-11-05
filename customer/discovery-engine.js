@@ -1964,6 +1964,14 @@
   function buyerResearchIdentityKey(candidate={},person={}){
     return [companyIdentityDomain(candidate.domain),clean(candidate.company),clean(person.publicName||person.name),clean(person.title),clean(person.organization),normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)].join('|').toLowerCase();
   }
+  function equivalentBuyerResearchIdentity(left,right){
+    if(!left||!right)return false;
+    if(left===right)return true;
+    const a=String(left).split('|'),b=String(right).split('|');
+    // Only an established role alias can vary. Company, person, employer and
+    // profile remain exact, and every reused query still needs its own receipt.
+    return a.length===6&&b.length===6&&a.every((value,index)=>index===3?Boolean(value&&b[index]&&typeof Dossier?.roleKey==='function'&&Dossier.roleKey(value)===Dossier.roleKey(b[index])):value===b[index]);
+  }
   function restoreBuyerResearchReceipts(candidate={},savedPeople=[],now=Date.now()){
     // Restore execution evidence, not identity, selection, rank or contact acceptance.
     // Acquisition IDs can change; the research identity binds company, full name,
@@ -1973,10 +1981,10 @@
     let changed=false;
     for(const person of candidate.people||[]){
       const key=buyerResearchIdentityKey(candidate,person);
-      if(!hasFullBuyerName(person.publicName||person.name)||(candidate.people||[]).filter(p=>buyerResearchIdentityKey(candidate,p)===key).length!==1)continue;
-      const saved=savedPeople.find(p=>buyerResearchIdentityKey(candidate,p)===key&&p.contactResearch?.identityKey===key&&p.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version);
+      if(!hasFullBuyerName(person.publicName||person.name)||(candidate.people||[]).filter(p=>equivalentBuyerResearchIdentity(buyerResearchIdentityKey(candidate,p),key)).length!==1)continue;
+      const saved=savedPeople.find(p=>equivalentBuyerResearchIdentity(buyerResearchIdentityKey(candidate,p),key)&&equivalentBuyerResearchIdentity(p.contactResearch?.identityKey,key)&&p.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version);
       if(!saved)continue;
-      const prior=safeContactResearch(saved.contactResearch),validLocal=person.contactResearch?.identityKey===key&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version;
+      const prior=safeContactResearch(saved.contactResearch),validLocal=equivalentBuyerResearchIdentity(person.contactResearch?.identityKey,key)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version;
       const local=validLocal?safeContactResearch(person.contactResearch):{...prior,checks:{},channels:{}};
       const before=JSON.stringify([person.contactResearch,person.emailResearch,person.gmailMatches,person.gmailCandidates]);
       let recovered=false,gmail=false;const recoveredChecks=new Set();
@@ -1989,7 +1997,7 @@
         const check=name==='company'?'direct_email':name,checkedAt=channel.checkedAt||prior.checks[check]?.checkedAt;
         if(recoveredChecks.has(check)&&fresh(checkedAt)&&Date.parse(checkedAt)>time(local.channels[name]))local.channels[name]={...channel,checkedAt};
       }
-      person.contactResearch=local;
+      local.identityKey=key;person.contactResearch=local;
       if(fresh(saved.emailResearch?.checkedAt)&&time(saved.emailResearch)>time(person.emailResearch))person.emailResearch=safeEmailResearch(saved.emailResearch);
       if(gmail){const safe=safeBuyer(saved,candidate.domain);person.gmailMatches=safe.gmailMatches;person.gmailCandidates=safe.gmailCandidates;}
       if(JSON.stringify([person.contactResearch,person.emailResearch,person.gmailMatches,person.gmailCandidates])!==before)changed=true;
@@ -2016,7 +2024,7 @@
   }
   function buyerResearchCheckPassed(candidate={},person={},key,options={}){
     const now=Date.parse(options.now||new Date().toISOString()),fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;},check=person.contactResearch?.checks?.[key],rows=check?.queryLog,queries=buyerResearchQueryPlan(candidate,person)[key];
-    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===2||!rows.some(row=>row.resultCount>0)));
+    return Boolean(hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&equivalentBuyerResearchIdentity(person.contactResearch?.identityKey,buyerResearchIdentityKey(candidate,person))&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version&&check?.status==='complete'&&fresh(check.checkedAt)&&queries?.length>0&&rows?.length===queries.length&&rows.every((row,index)=>buyerResearchQueryReceiptPassed(row)&&row.query===queries[index]&&fresh(row.checkedAt))&&(key!=='linkedin'||check.profileMatchVersion===2||!rows.some(row=>row.resultCount>0)));
   }
   function buyerResearchCoveragePassed(candidate={},options={}){
     const people=(options.researchPeople||candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
@@ -2163,7 +2171,7 @@
       return receipts;
     };
     const reusableQueryCheck=(previous,key,queries)=>!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(Date.parse(previous.checkedAt))&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000);
-    const currentChecks=person=>person.contactResearch?.identityKey===buyerResearchIdentityKey(candidate,person)?person.contactResearch.checks||{}:{};
+    const currentChecks=person=>equivalentBuyerResearchIdentity(person.contactResearch?.identityKey,buyerResearchIdentityKey(candidate,person))?person.contactResearch.checks||{}:{};
     const completedWork=person=>{
       const checks=currentChecks(person),plan=buyerResearchQueryPlan(candidate,person);
       return policy.requiredChecks.every(key=>reusableQueryCheck(checks[key],key,plan[key]))&&(!options.buyerAgentContext||reusableQueryCheck(checks.buyer_agent,'buyer_agent',buyerAgentQueries(candidate,person,options.buyerAgentContext)))&&(!checks.independent||checks.independent.status==='not_needed'||reusableQueryCheck(checks.independent,'independent',[`Independent grounded check: ${clean(person.publicName||person.name)} | ${clean(candidate.company)} | ${person.title}`]))&&(!priorities.includes(person)||attributable(person)||reusableQueryCheck(checks.deep,'deep',plan.deep));
@@ -2177,7 +2185,7 @@
       await guard();const name=clean(person.publicName||person.name),identityKey=buyerResearchIdentityKey(candidate,person);
       if(!hasFullBuyerName(name)||person.identityStatus==='pending'||person.nameVerification==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
       const prior=person.contactResearch;
-      const research=prior?.identityKey===identityKey?prior:{version:1,evidenceVersion:2,identityKey,checks:{},channels:{}};person.contactResearch=research;person.gmailCandidates=gmailGuessCandidates(person);
+      const research=equivalentBuyerResearchIdentity(prior?.identityKey,identityKey)?prior:{version:1,evidenceVersion:2,identityKey,checks:{},channels:{}};research.identityKey=identityKey;person.contactResearch=research;person.gmailCandidates=gmailGuessCandidates(person);
       collect(person,sourceRows.slice());let failed=profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0,searches=0,successfulSearches=0;const failedPages=new Set();
       const run=async(key,queries,execute=search)=>{
         const previous=research.checks[key];
