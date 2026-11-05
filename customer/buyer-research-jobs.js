@@ -55,6 +55,7 @@
       let contextTimer;
       const canceled=new Promise((_,reject)=>{stop=()=>{transport.abort();reject(abortError());};contextTimer=setInterval(()=>{if(!scope.current())stop();},100);controller.signal.addEventListener('abort',stop,{once:true});timer=setTimeout(()=>{transport.abort();reject(Object.assign(Error('Buyer research status request timed out. Reopen the company to read saved progress.'),{code:'BUYER_JOB_REQUEST_TIMEOUT'}));},requestTimeoutMs);});
       const query=new URLSearchParams({workspace_id:scope.workspaceId,...(jobId?{job_id:jobId}:{domain:domain(scope.owner.domain||scope.owner.website)})});
+      if(scope.restoreReceipts&&method==='GET'&&!jobId)query.set('restore','1');
       try{
         const operation=(async()=>{const response=await fetchImpl(`${apiBase}/api/buyers/research?${query}`,{method,credentials:'include',headers:{Accept:'application/json',...(method==='POST'?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:transport.signal});const payload=await response.json();if(!response.ok)throw Object.assign(Error(typeof payload.error==='string'?payload.error:payload.error?.message||'Buyer research request failed.'),{status:response.status,code:payload.error?.code});return payload.job||null;})();
         const job=await Promise.race([operation,canceled]);if(!scope.current()||controller.signal.aborted)throw abortError();return job;
@@ -76,6 +77,7 @@
       const previous=references.get(scope.owner);if(previous?.id===job.id&&Number(job.revision)<Number(previous.revision))return false;
       const unchanged=!job.retainedEvidenceRecovered&&previous?.id===job.id&&Number(job.revision)===Number(previous.revision)&&previous.status===job.status;
       const owner=scope.owner,source=root.LeadIntelDiscovery?.mergeRetainedBuyerResearch?.(owner,job.candidate||{},{retainPeople:true})||job.candidate||{},jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
+      const receiptOwners=scope.restoreReceipts?(owner.people||[]).filter(p=>!['contactResearch','emailResearch','gmailMatches','gmailCandidates'].some(k=>Object.hasOwn(scope.localEdits(p),k))):[];
       for(const person of (unchanged?[]:source.people||[]).slice(0,10)){
         const existing=byId.get(String(person.id));if(selected&&!selected.has(String(person.id)))continue;
         if(existing){
@@ -107,6 +109,7 @@
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
       owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
+      if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
     }
     async function observe(scope,job,options,controller){
@@ -123,6 +126,7 @@
     }
     async function execute(owner,options,readOnly){
       const scope=capture(owner,options),key=`${scope.workspaceId}|${domain(owner.domain)}`,old=active.get(key);
+      scope.restoreReceipts=readOnly&&!scope.personIds?.length;
       if(old&&old.scope.owner===owner&&old.scope.current()&&(readOnly||!old.readOnly)){
         const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
         if(!readOnly&&!samePeople){

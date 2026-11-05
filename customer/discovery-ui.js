@@ -104,10 +104,12 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
       const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate);
       const selectionKey=value=>LeadIntelDiscovery.buyerSelectionRoles({decisionMakers:value}).map(role=>role.toLowerCase()).sort().join(';');
       if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
+      const retainedReceipts=candidate.people||[];
       const profile={decisionMakers:roles||candidate.buyerRoles},saved=LeadIntelDiscovery.mergeBuyerPool([...(candidate.people||[]),...(candidate.buyerDiscovery?.pool||[])],candidate.buyerDiscovery?.companyContacts||[],profile);
       if(candidate.buyerRolesChanged&&LeadIntelDiscovery.canReassessSavedBuyerRoles(candidate,saved,profile))candidate.buyerRolesChanged=false;
       const visible=LeadIntelDiscovery.retainBuyerIdentities(saved,profile,candidate),ids=new Set(visible.map(person=>String(person.id)));
       candidate.people=[...visible,...(candidate.people||[]).filter(person=>!ids.has(String(person.id))&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending')].slice(0,10);
+      LeadIntelDiscovery.restoreBuyerResearchReceipts(candidate,retainedReceipts);
     }return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
 function saveDiscovery(){
   // CRM hydration on every page load calls this with an unchanged section. Rewriting it

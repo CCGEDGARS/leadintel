@@ -1628,6 +1628,16 @@
     }
     next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
     next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
+    // A directory/identity record carries no search execution authority. Its
+    // default null/not_searched fields must not erase receipts during reload.
+    // Real incoming attempts (including partial/failed) remain authoritative.
+    const sameReceiptIdentity=['name','title','organization'].every(key=>clean(key==='name'?old.publicName||old.name:old[key]).toLowerCase()===clean(key==='name'?next.publicName||next.name:next[key]).toLowerCase())&&oldProfile===nextProfile;
+    if(sameReceiptIdentity&&old.contactResearch&&!person.contactResearch){
+      next.contactResearch=old.contactResearch;
+      if(!person.emailResearch||person.emailResearch.status==='not_searched')next.emailResearch=old.emailResearch;
+      if(!person.gmailMatches?.length)next.gmailMatches=old.gmailMatches;
+      if(!person.gmailCandidates?.length)next.gmailCandidates=old.gmailCandidates;
+    }
     for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
     return preserveConfirmedPublicEmail(old,next);
   }
@@ -1953,6 +1963,38 @@
   }
   function buyerResearchIdentityKey(candidate={},person={}){
     return [companyIdentityDomain(candidate.domain),clean(candidate.company),clean(person.publicName||person.name),clean(person.title),clean(person.organization),normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)].join('|').toLowerCase();
+  }
+  function restoreBuyerResearchReceipts(candidate={},savedPeople=[],now=Date.now()){
+    // Restore execution evidence, not identity, selection, rank or contact acceptance.
+    // Acquisition IDs can change; the research identity binds company, full name,
+    // role, employer and profile. Ambiguous current identities are never merged.
+    const fresh=value=>{const time=Date.parse(value||'');return Number.isFinite(time)&&time<=now&&now-time<30*86400000;};
+    const time=value=>Date.parse(value?.checkedAt||'')||0;
+    let changed=false;
+    for(const person of candidate.people||[]){
+      const key=buyerResearchIdentityKey(candidate,person);
+      if(!hasFullBuyerName(person.publicName||person.name)||(candidate.people||[]).filter(p=>buyerResearchIdentityKey(candidate,p)===key).length!==1)continue;
+      const saved=savedPeople.find(p=>buyerResearchIdentityKey(candidate,p)===key&&p.contactResearch?.identityKey===key&&p.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version);
+      if(!saved)continue;
+      const prior=safeContactResearch(saved.contactResearch),validLocal=person.contactResearch?.identityKey===key&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version;
+      const local=validLocal?safeContactResearch(person.contactResearch):{...prior,checks:{},channels:{}};
+      const before=JSON.stringify([person.contactResearch,person.emailResearch,person.gmailMatches,person.gmailCandidates]);
+      let recovered=false,gmail=false;const recoveredChecks=new Set();
+      for(const [name,check] of Object.entries(prior.checks)){
+        if(!fresh(check.checkedAt)||!['complete','not_needed','partial','unavailable'].includes(check.status)||time(check)<=time(local.checks[name]))continue;
+        local.checks[name]=check;recoveredChecks.add(name);recovered=true;if(name==='gmail')gmail=true;
+      }
+      if(!recovered)continue;
+      for(const [name,channel] of Object.entries(prior.channels)){
+        const check=name==='company'?'direct_email':name,checkedAt=channel.checkedAt||prior.checks[check]?.checkedAt;
+        if(recoveredChecks.has(check)&&fresh(checkedAt)&&Date.parse(checkedAt)>time(local.channels[name]))local.channels[name]={...channel,checkedAt};
+      }
+      person.contactResearch=local;
+      if(fresh(saved.emailResearch?.checkedAt)&&time(saved.emailResearch)>time(person.emailResearch))person.emailResearch=safeEmailResearch(saved.emailResearch);
+      if(gmail){const safe=safeBuyer(saved,candidate.domain);person.gmailMatches=safe.gmailMatches;person.gmailCandidates=safe.gmailCandidates;}
+      if(JSON.stringify([person.contactResearch,person.emailResearch,person.gmailMatches,person.gmailCandidates])!==before)changed=true;
+    }
+    return changed;
   }
   function buyerResearchQueryPlan(candidate={},person={}){
     const domain=companyIdentityDomain(candidate.domain),company=clean(candidate.company),name=clean(person.publicName||person.name);
@@ -3247,6 +3289,6 @@
     const q=assessCompanyQualification(candidate,profile,marketState,settings,now);
     return {...q,eligible:q.automaticEligible,gaps:q.automaticGaps};
   }
-  return {mandatoryBuyerResearchPriorities,buyerSourceReadLocation,reconcileBuyerEvidence,safeBuyerPaidResearch,mergeOfficialContactInventory,mergeRetainedBuyerResearch,confirmedBuyerContactData,confirmedBuyerShortlist,retainBuyerIdentities,canReassessSavedBuyerRoles,acceptedOfficialBuyerEmail,effectiveBuyerRoles,safeBuyerReviewEvidence,buyerResearchCheckPassed,officialContactResearchQueries,officialContactCoveragePassed,buyerResearchIdentityKey,buyerResearchQueryPlan,buyerRecheckPlan,buyerPhoneContact,confirmedBuyerPhone,safePhoneEnrichment,phoneLookupState,BUYER_AGENT_VERSION,buyerAgentContext,buyerAgentQueries,assessBuyerAgent,safeBuyerAgent,safeContactData,OFFICIAL_CONTACT_RESEARCH_POLICY,officialCompanyContactInventory,safeOfficialContactInventory,runOfficialContactResearch,BUYER_QUALITY_VERSION,buyerResearchCoveragePassed,buyerReviewSignature,safeBuyerAiReview,buyerQualityAssessment,BUYER_CONTACT_RESEARCH_POLICY,createBuyerResearchAccountability,recordBuyerResearchTool,safeBuyerResearchAccountability,buyerDeepContactQueries,buyerDirectEmailQueries,buyerGmailResearchQueries,gmailResearchMatches,runMandatoryBuyerResearch,isSelectedCompanyContact,discoverCompanyContacts,mergeCompanyContacts,registeredCompanyContacts,searchPlanningVersion:2,searchLocation:market=>marketRule(market)?.searchNames?.[0]||clean(market),prioritizeCompanyMentions,normalizeSearchFeedback,recordSearchFeedback,searchFeedbackForProfile,searchContextKey,buyerSupervisorEvidence,buyerReviewEvidence,buyerEvidenceExcerpt,matchBuyerRoleEvidence,effectiveTargetingProfile:Market.effectiveTargetingProfile,matchBuyerDecisionEvidence,buyerDecisionEvidence,isExecutiveBuyer,buyerSelectionRoles,linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,buyerResearchCandidates,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,assessAutomaticCompanyQualification,assessCompanyQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,companyOperatingEvidence,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,estimateDiscoveryCalls,discoveryCallBudget,DISCOVERY_COST_MODEL,companyMentionKey,buyerRolesForTarget,buyerRoleSelectionContext,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {restoreBuyerResearchReceipts,mandatoryBuyerResearchPriorities,buyerSourceReadLocation,reconcileBuyerEvidence,safeBuyerPaidResearch,mergeOfficialContactInventory,mergeRetainedBuyerResearch,confirmedBuyerContactData,confirmedBuyerShortlist,retainBuyerIdentities,canReassessSavedBuyerRoles,acceptedOfficialBuyerEmail,effectiveBuyerRoles,safeBuyerReviewEvidence,buyerResearchCheckPassed,officialContactResearchQueries,officialContactCoveragePassed,buyerResearchIdentityKey,buyerResearchQueryPlan,buyerRecheckPlan,buyerPhoneContact,confirmedBuyerPhone,safePhoneEnrichment,phoneLookupState,BUYER_AGENT_VERSION,buyerAgentContext,buyerAgentQueries,assessBuyerAgent,safeBuyerAgent,safeContactData,OFFICIAL_CONTACT_RESEARCH_POLICY,officialCompanyContactInventory,safeOfficialContactInventory,runOfficialContactResearch,BUYER_QUALITY_VERSION,buyerResearchCoveragePassed,buyerReviewSignature,safeBuyerAiReview,buyerQualityAssessment,BUYER_CONTACT_RESEARCH_POLICY,createBuyerResearchAccountability,recordBuyerResearchTool,safeBuyerResearchAccountability,buyerDeepContactQueries,buyerDirectEmailQueries,buyerGmailResearchQueries,gmailResearchMatches,runMandatoryBuyerResearch,isSelectedCompanyContact,discoverCompanyContacts,mergeCompanyContacts,registeredCompanyContacts,searchPlanningVersion:2,searchLocation:market=>marketRule(market)?.searchNames?.[0]||clean(market),prioritizeCompanyMentions,normalizeSearchFeedback,recordSearchFeedback,searchFeedbackForProfile,searchContextKey,buyerSupervisorEvidence,buyerReviewEvidence,buyerEvidenceExcerpt,matchBuyerRoleEvidence,effectiveTargetingProfile:Market.effectiveTargetingProfile,matchBuyerDecisionEvidence,buyerDecisionEvidence,isExecutiveBuyer,buyerSelectionRoles,linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,buyerResearchCandidates,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,assessAutomaticCompanyQualification,assessCompanyQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,companyOperatingEvidence,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,estimateDiscoveryCalls,discoveryCallBudget,DISCOVERY_COST_MODEL,companyMentionKey,buyerRolesForTarget,buyerRoleSelectionContext,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
 
