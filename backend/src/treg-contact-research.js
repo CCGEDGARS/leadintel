@@ -57,7 +57,7 @@ async function saveBuyerData(env,context,candidate,person,companyId,attemptKey,d
 }
 
 // One backend boundary owns attribution, request ceilings and idempotency.
-export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,signal,guard=async()=>{},onDispatch=()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null}={},deps={}){
+export async function findTregWorkEmail(env,context,candidate,person,companyId,{attemptKey,signal,guard=async()=>{},onDispatch=()=>{},dataLookup=false,includePhone=false,includeEmail=true,existingContact=null,allowAuthReconnect=false}={},deps={}){
  const parentGuard=guard,resolveCredential=deps.credential||resolveWorkspaceServiceCredential;
  await parentGuard();
  const credential=await resolveCredential(env,context.workspaceId,'treg');
@@ -78,7 +78,13 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
  let total=0,newCalls=0;const callIds=[];
  const call=async(phase,endpoint,body,{poll=false}={})=>{
   await guard({phase});const saved=await previous(phase);
-  if(saved){const retained=JSON.parse(saved.result_json);if(retained._leadintel?.credentialHash!==credentialHash)throw fail('The saved lookup belongs to a previous Treg connection. Review its retained receipt.',409,'ADDITIONAL_CONTACT_PROVIDER_CHANGED');if(!poll&&retained._leadintel?.status==='settled'){total+=Number(saved.cost_micro)||0;if(saved.call_id)callIds.push(saved.call_id);return retained;}}
+  if(saved){const retained=JSON.parse(saved.result_json);if(retained._leadintel?.credentialHash!==credentialHash){
+    // A fresh manual approval may retry an authentication rejection which never
+    // reached a recorded provider call. Never transfer charged/ambiguous phases
+    // or automatically spend against a replacement connection.
+    const rejectedBeforeDispatch=allowAuthReconnect&&[401,403].includes(retained._leadintel?.httpStatus)&&retained._leadintel?.status==='uncertain'&&!saved.call_id&&Number(saved.cost_micro)===0;
+    if(!rejectedBeforeDispatch)throw fail('The saved lookup belongs to a previous Treg connection. Review its retained receipt.',409,'ADDITIONAL_CONTACT_PROVIDER_CHANGED');
+  }if(!poll&&retained._leadintel?.status==='settled'){total+=Number(saved.cost_micro)||0;if(saved.call_id)callIds.push(saved.call_id);return retained;}}
   const headers={'X-Treg-Token':credential.apiKey,'Content-Type':'application/json',Accept:'application/json','X-Treg-Meta':`customer=${tag(context.workspaceId)},workspace=${tag(context.workspaceId)},feature=buyer-email`,'X-Treg-Route-Max-Cost':poll?'0':phase==='phone'?'0.25':['find','profile'].includes(phase)?'0.05':'0.025','Idempotency-Key':`leadintel-${requestKey(phase)}-${phase}`};
   if(phase==='find'){headers['X-Treg-Route-Verify']='false';headers['X-Treg-Route-Exclude']='tomba';}
   if(phase==='verify')headers['X-Treg-Route-Prefer']='bounceban';

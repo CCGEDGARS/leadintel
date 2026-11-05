@@ -187,3 +187,20 @@ test('normalized profile and phone matches cannot hide conflicting raw identity 
   assert.equal(result.contactData.profile.status,'conflict');assert.equal(result.contactData.phone.status,'conflict');assert.equal(result.contactData.phone.number,undefined);assert.equal(result.contact.work_email,'anna@example.com');
  }
 });
+
+
+test('a replacement token can retry only a manually approved uncharged authentication rejection',async()=>{
+ for(const scenario of [{status:401,cost:0,callId:null,manual:true,allowed:true},{status:403,cost:0,callId:null,manual:true,allowed:true},{status:401,cost:0,callId:null,manual:false},{status:401,cost:10,callId:null,manual:true},{status:401,cost:0,callId:'provider-call',manual:true},{status:503,cost:0,callId:null,manual:true}]){
+  const f=await fixture(),db=new DatabaseSync(':memory:');
+  db.exec("CREATE TABLE treg_contact_calls(workspace_id TEXT,request_key TEXT,phase TEXT,call_id TEXT,cost_micro INTEGER,result_json TEXT,poll_count INTEGER DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(workspace_id,request_key,phase));CREATE TABLE workspace_service_integrations(workspace_id TEXT,provider TEXT,last_used_at TEXT,updated_at TEXT);");
+  const env={DB:{prepare(sql){let args=[];return {bind(...v){args=v;return this;},async first(){return db.prepare(sql).get(...args)||null;},async run(){return db.prepare(sql).run(...args);}};}}};
+  delete f.deps.receipt;let credential='old-token',calls=0;
+  f.deps.credential=async()=>({source:'customer',apiKey:credential});
+  f.deps.fetch=async()=>{calls++;return Response.json({error:'refused'},{status:scenario.status,headers:{'X-Treg-Cost-Micro':String(scenario.cost),...(scenario.callId?{'X-Treg-Call-Id':scenario.callId}:{})}});};
+  await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'reconnect'},f.deps));
+  credential='new-token';f.deps.fetch=async()=>{calls++;return Response.json({output:{}});};
+  const retry=()=>f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'reconnect',allowAuthReconnect:scenario.manual},f.deps);
+  if(scenario.allowed){assert.equal((await retry()).research.status,'not_found');assert.equal(calls,2);}else{await assert.rejects(retry,error=>error.code==='ADDITIONAL_CONTACT_PROVIDER_CHANGED');assert.equal(calls,1);}
+  db.close();
+ }
+});
