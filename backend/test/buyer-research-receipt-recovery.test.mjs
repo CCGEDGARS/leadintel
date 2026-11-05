@@ -19,6 +19,7 @@ test('reopening restores all four saved receipts across aliases and many selecte
  }
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='complete',phase='done',result_json=? WHERE id=?").run(JSON.stringify(full),initial.id);
  for(let i=0;i<9;i++)insert('repeat-'+i,{...full,people:[full.people[0]]},[full.people[0].id]);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.scope','all_buyers'),result_json=? WHERE id='repeat-8'").run(JSON.stringify({...full,people:full.people.filter(p=>p.name!=='Bob Buyer')}));
  insert('wrong-seller',{...full,people:[{...full.people[1],emailResearch:{status:'unavailable',checkedAt:new Date().toISOString()}}]},[full.people[1].id],'different-seller-context');
  insert('latest',{...full,people:[full.people[3]]},[full.people[3].id]);
  const before=f.DB.raw.prepare('SELECT total_changes() n').get().n,calls=[];
@@ -35,6 +36,8 @@ test('reopening restores all four saved receipts across aliases and many selecte
  assert.deepEqual(reopened.people.map(p=>p.contactResearch),owner.people.map(p=>p.contactResearch));
  await client.restore(reopened,{profile:initial.input.profile});
  assert.equal(f.DB.raw.prepare('SELECT total_changes() n').get().n,before);
+ const partial={...structuredClone(owner),people:owner.people.filter(p=>p.name!=='Bob Buyer').map(p=>structuredClone(p))};
+ await client.restore(partial,{profile:initial.input.profile});assert.equal(partial.people.length,4);assert.ok(partial.people.some(p=>p.name==='Bob Buyer'));assert.equal(new Set(partial.people.map(p=>p.name)).size,4);
  // A locally empty company must recover its full roster even after many
  // single-person rechecks. No paid/provider work or database write is needed.
  const empty={...structuredClone(owner),people:[],peopleStatus:'error'};
