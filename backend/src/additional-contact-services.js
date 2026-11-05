@@ -215,7 +215,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   try{
     if(providerName==='treg'){
       await guard();
-      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,signal:deps.signal,dataLookup,includePhone,includeEmail,existingContact:existing||null});
+      const result=await (deps.findTreg||findTregWorkEmail)(env,context,candidate,person,companyId,{attemptKey:month,guard,onDispatch,signal:deps.signal,dataLookup,includePhone,includeEmail,existingContact:existing||null,allowAuthReconnect:input.automatic!==true&&input.approved===true});
       const retained=await retainTregAttempt({result,status:result.contact&&C.accepted(result.contact,candidate.domain,confirmationLevel)?'verified':result.request?.status==='processing'?'processing':'not_found'});
       return {...result,...(retained.contact?{contact:retained.contact}:{}),...(retained.contactData?{contactData:retained.contactData}:{}),research:retained.research};
     }

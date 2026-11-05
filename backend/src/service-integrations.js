@@ -77,11 +77,14 @@ async function verifyHunter(apiKey){
   return {plan:clean(payload.data.plan_name,80),remaining_credits:remaining('credits'),remaining_searches:remaining('searches'),remaining_verifications:remaining('verifications')};
 }
 async function verifyTreg(apiKey){
-  const response=await fetch('https://treg.to/mcp/',{method:'POST',headers:{Authorization:'Bearer '+apiKey,Accept:'application/json, text/event-stream','Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'balance',arguments:{}}}),signal:AbortSignal.timeout(20000)});
-  const payload=await response.json().catch(()=>({}));let balance=payload.result?.structuredContent;
-  if(!balance){try{balance=JSON.parse(payload.result?.content?.find(row=>row.type==='text')?.text||'{}');}catch{}}
-  if(!response.ok||payload.error||payload.result?.isError||!balance?.team||!Number.isFinite(Number(balance.balance_usd)))throw new Error('Treg could not verify this team token.');
-  return {team:clean(balance.team,100),balance_usd:Number(balance.balance_usd)};
+  // Check the same REST credential surface as /call/, not MCP OAuth.
+  // /home is a read-only member endpoint: it proves a resolved team and balance
+  // without dispatching a metered contact lookup. Never forward this token in
+  // Authorization: /call/ relays that header to upstream providers.
+  const response=await fetch('https://treg.to/home',{method:'GET',headers:{'X-Treg-Token':apiKey,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});
+  const account=await response.json().catch(()=>null);
+  if(!response.ok||!account||typeof account.team!=='string'||!account.team.trim()||!Number.isSafeInteger(account.balance_micro))throw new Error('Treg could not verify this team token for REST lookups.');
+  return {team:clean(account.team,100),balance_usd:account.balance_micro/1_000_000,authentication_surface:'rest'};
 }
 async function verifyCredential(provider,apiKey){if(provider==='treg')return verifyTreg(apiKey);if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
 
