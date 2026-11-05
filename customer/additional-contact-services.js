@@ -2,6 +2,7 @@
   'use strict';
   const API='https://leadintel-api.edgars-7e7.workers.dev',P=root.LeadIntelAdditionalContactPolicy;
   let adapter=null,loadedWorkspace='',policy=null,provider=null,hunter=null,treg=null,busyPolicy=false,policyRole='',policyRequest=0,loadedContext='',policyEpoch=0,policyOperation=null;
+  const paidProgress=new Map();
   const publicChecking=new Map(),running=new Map(),automaticAttempts=new Set(),outcomes=new Map(),bridgeIdentities=new WeakMap();let bridgeIdentity=0;
   const bridge=()=>root.LeadIntelServerBridge,workspace=()=>bridge()?.workspace?.id||'';
   const policyContext=()=>{const owner=bridge();if(owner&&!bridgeIdentities.has(owner))bridgeIdentities.set(owner,++bridgeIdentity);return JSON.stringify([workspace(),owner?.session?.user?.id||'',owner?.session?.authenticated===true,policyEpoch,bridgeIdentities.get(owner)||0]);};
@@ -121,13 +122,21 @@
     // sibling channel; a wrong buyer/domain/title envelope still fails closed.
     return D.safeContactData({...value,status:'partial',profile:{status:'conflict',reason:'Returned profile does not match the selected buyer; profile was not applied.'},lastAttempt:{...value.lastAttempt,status:'partial',profile:'conflict'}},person,domain)||null;
   }
+  function progress(candidate,person){
+    const state=paidProgress.get(key(candidate,person));
+    if(!state?.current())return '';
+    const elapsed=Math.max(0,Math.floor((Date.now()-state.startedAt)/1000));
+    return state.label+' · '+elapsed+'s elapsed'+(elapsed>=60?' · Taking longer than expected; '+(state.label.startsWith('Searching')?'waiting for the provider.':'still processing.'):'');
+  }
   function card(candidate,person){
     if(person.contactData){
       const data=safeData(candidate,person);if(!data)return '<p class="additional-contact-note" role="status">Saved contact details have a different buyer identity. Recheck this buyer; those details were not applied.</p>';
       const latest=person.contactVerification?.status==='error'&&Date.parse(person.contactVerification.checkedAt)>Date.parse(person.contactData.checkedAt||'1970-01-01')?' · Newer saved attempt: '+(person.contactVerification.issues||[]).join(' · '):'';
       const help=/rejected the saved team token/i.test(JSON.stringify(person.contactData))?' Saved token failure: reconnect Treg in Settings, then explicitly retry the saved lookup. This record does not test the new connection.':'';
       const d=data,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status||'not_requested').replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Saved phone check · '+String(phone.status||'not_requested').replaceAll('_',' ')+(phone.reason?' · '+phone.reason:'')];
-      return '<p class="additional-contact-note" role="status">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Saved checks need review':'No new data')+' · '+esc(d.checkedAt)+esc(help)+esc(latest)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>Latest check needs review; previously found details retained.':'')+'</p>';
+      const acceptedEmail=Boolean(adapter?.email?.(candidate,person));
+      const success=acceptedEmail?'<p class="additional-contact-note" style="color:#0b6b57;font-weight:600" role="status">Email confirmed · ready to proceed.</p>':'';
+      return success+'<details class="additional-contact-details"'+(!acceptedEmail&&d.status==='partial'?' open':'')+'><summary>Paid lookup details'+(p.status==='conflict'?' · separate profile needs review':d.status==='partial'?' · checks incomplete':'')+'</summary><p class="additional-contact-note">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Saved checks need review':'No new data')+' · '+esc(d.checkedAt)+esc(help)+esc(latest)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>'+(acceptedEmail?'Email remains confirmed. Separate profile or phone checks need review.':'Latest check needs review; previously found details retained.'):'')+'</p></details>';
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');
@@ -182,7 +191,8 @@
   async function run(candidate,person,{automatic=false,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
     const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly}),existing=running.get(identity);
     if(existing?.current?.()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly});}
-    const pendingToken={};const pendingPerson=person;
+    const pendingToken={};const pendingPerson=person;let progressTimer;
+    const report=label=>{paidProgress.set(identity,{label,startedAt:paidProgress.get(identity)?.startedAt||Date.now(),current});adapter.render();};
     const execute=(async()=>{
       const domain=candidate.domain,personId=person.id;
       const check=()=>{if(!current())throw Error('Workspace or buyer changed. Retry in the current workspace.');person=candidate.people.find(p=>String(p.id)===String(personId));const ready=readiness(candidate,person,{automatic,dataLookup,...(dataLookup||phoneOnly?{confirmedEmail:''}:{})});if(!ready.eligible)throw Object.assign(Error(ready.reason+(ready.code==='ADDITIONAL_CONTACT_COMPANY_REQUIRED'?'':/public research|mandatory public/i.test(ready.reason)?' Use Recheck to finish this buyer’s free checks.':'')),{code:ready.code});return ready;};
@@ -217,10 +227,16 @@
             if(!current())return false;
             if(!approved){record(candidate,person,[...receipts,`${name} · skipped: not approved`].join(' · '));return false;}
           }
-          checkAuthority();adapter.pending(candidate,person,true,pendingToken);adapter.render();
+          checkAuthority();adapter.pending(candidate,person,true,pendingToken);
+          report('Preparing paid '+(phoneOnly?'phone':emailOnly?'email':'contact')+' lookup');
+          progressTimer=root.setInterval(()=>{
+            if(!current())return;
+            for(const node of document.querySelectorAll('[data-paid-contact-progress]'))if(node.dataset.paidContactProgress===identity)node.textContent=progress(candidate,person);
+          },1000);
           try{
             const company=await adapter.prepare(candidate,person,{automatic});checkAuthority();
             if(!company?.id)throw Error('The selected CRM company could not be prepared.');
+            report('Searching and checking '+(phoneOnly?'phone number':emailOnly?'work email':'contact details')+' · '+name);
             const result=await api('/api/additional-contact-services/email',{method:'POST',body:JSON.stringify({company_id:company.id,person_id:personId,provider:service,automatic,...(automatic?{automatic_buyer_limit:buyerLimit()}:{}),approved:!automatic,...(service==='treg'?{data_lookup:lookupData,phone_approved:includePhone,email_lookup:includeEmail}:{}),hunter_approved:service==='hunter'&&!automatic})});
             if(!current())return false;
             if(!result||typeof result!=='object'||Array.isArray(result))throw Error('Invalid contact result identity; result was not applied.');
@@ -250,6 +266,7 @@
             const outcome=result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
             receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${result.reason?': '+result.reason:''}`);
             if(result.contact){
+              report('Saving checked contact result');
               await adapter.accept(candidate,person,result);
               if(!current())return false;person=candidate.people.find(p=>String(p.id)===String(personId));
               record(candidate,person,receipts.join(' · '),{status:adapter.email(candidate,person)?'verified':'not_verified'});
@@ -263,7 +280,7 @@
             if(!current())return false;
             receipts.push(`${/^ADDITIONAL_CONTACT_(?:DAILY|MONTHLY|COMPANY)_LIMIT$/.test(error.code||'')?'LeadIntel · blocked':name+' · error'}: ${error.message}`);record(candidate,person,receipts.join(' · '),{status:'error',lookup:{provider:service,phone:includePhone,email:includeEmail,code:error.code||'PROVIDER_ERROR'}});
             // A failed provider is visible and does not impersonate a successful zero-result search.
-          }finally{adapter.pending(candidate,pendingPerson,false,pendingToken);if(current())adapter.render();}
+          }finally{root.clearInterval(progressTimer);paidProgress.delete(identity);adapter.pending(candidate,pendingPerson,false,pendingToken);if(current())adapter.render();}
         }
         return false;
       }catch(error){if(current()){record(candidate,person,error.message,{status:'error',lookup:{provider:policy?.provider||'unknown',phone:!emailOnly&&(phoneOnly||dataLookup&&policy?.phoneEnabled===true),email:!phoneOnly&&(emailOnly||policy?.provider!=='treg'||policy?.enabled===true),code:error.code||'CONTACT_CHECK_BLOCKED'}});adapter.toast?.(error.message);}return false;}
@@ -310,7 +327,7 @@
     }catch(error){if(policyCurrent(originContext))status(error.message);}
     finally{finishPolicyOperation(operation);}
   });
-  root.LeadIntelAdditionalContacts={mountPaidSearch,mountSettings,policy:()=>loadedCurrent()?{...policy}:null,register(value){adapter=value;void load();},load,card,label,confirm,run,auto,readiness};
+  root.LeadIntelAdditionalContacts={mountPaidSearch,mountSettings,policy:()=>loadedCurrent()?{...policy}:null,register(value){adapter=value;void load();},load,card,progress,progressKey:key,label,confirm,run,auto,readiness};
   root.addEventListener('leadintel:workspace-reset',()=>{++policyEpoch;++policyRequest;loadedWorkspace='';loadedContext='';policy=null;provider=null;treg=null;hunter=null;policyRole='';busyPolicy=false;policyOperation=null;automaticAttempts.clear();outcomes.delete('policy-error');renderPolicy();});
   root.addEventListener('leadintel:server-ready',()=>void load());
   root.addEventListener('leadintel:service-settings-changed',()=>void load());

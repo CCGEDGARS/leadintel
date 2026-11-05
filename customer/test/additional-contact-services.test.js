@@ -391,3 +391,21 @@ for(const field of ['personId','domain','identityName','identityTitle','identity
  assert.equal(await f.w.LeadIntelAdditionalContacts.run(f.c,p),false);
  assert.equal(p.contactData,undefined);assert.equal(f.contact.size,0);f.close();
 });
+
+test('paid progress identifies the selected channel, updates only its buyer, and clears on completion',async()=>{
+ const f=runtime({enabled:true});await f.loaded;const started=deferred(),response=deferred(),original=f.w.fetch;
+ f.w.fetch=async(url,options)=>{if(url.includes('/email?')){started.resolve();return response.promise;}return original(url,options);};
+ const api=f.w.LeadIntelAdditionalContacts,p=f.c.people[0],other=f.c.people[1];
+ const run=api.run(f.c,p,{channel:'email'});await started.promise;
+ assert.match(api.progress(f.c,p),/Searching and checking work email.*elapsed/);
+ assert.equal(api.progress(f.c,other),'');
+ const own=f.w.document.createElement('p'),sibling=f.w.document.createElement('p');own.dataset.paidContactProgress=api.progressKey(f.c,p);sibling.dataset.paidContactProgress=api.progressKey(f.c,other);sibling.textContent='Unchanged buyer';f.w.document.body.append(own,sibling);
+ await new Promise(r=>setTimeout(r,1100));assert.match(own.textContent,/work email.*1s elapsed/);assert.equal(sibling.textContent,'Unchanged buyer');
+ response.resolve({ok:true,json:async()=>({contact:{external_person_id:p.id,name:p.name,work_email:'anna@example.com'}})});assert.equal(await run,true);assert.equal(api.progress(f.c,p),'');f.close();
+});
+test('confirmed paid email success is separate from an optional profile conflict',async()=>{
+ const f=runtime({confirmed:true});await f.loaded;f.w.LeadIntelDiscovery=require('../discovery-engine.js');const p=f.c.people[0];
+ p.contactData={version:1,personId:p.id,domain:f.c.domain,identityName:p.name,identityTitle:p.title,identityOrganization:p.organization,checkedAt:new Date().toISOString(),status:'partial',profile:{status:'conflict'},phone:{status:'not_requested'},lastAttempt:{status:'partial'}};
+ const holder=f.w.document.createElement('div');holder.innerHTML=f.w.LeadIntelAdditionalContacts.card(f.c,p);
+ assert.match(holder.querySelector(':scope > p').textContent,/Email confirmed/);assert.match(holder.querySelector('details summary').textContent,/separate profile needs review/);assert.equal(holder.querySelector('details').open,false);assert.match(holder.querySelector('details').textContent,/Email remains confirmed/);f.close();
+});

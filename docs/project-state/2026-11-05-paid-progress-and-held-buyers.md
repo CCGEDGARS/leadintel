@@ -1,0 +1,9 @@
+# Paid progress and retained buyer visibility
+
+Customer screenshots confirm Charlotte now has a Treg-verified email and usable Proceed. While the request ran, the UI showed a generic neutral "Checking contact details" line. After success, an optional profile conflict dominated the card's summary. The same screen had three shortlisted contacts; prior evidence placed Robert in Other contacts under a dossier role hold. Current saved dossier conflict inputs remain unavailable; do not claim the person was deleted or restore qualification without evidence.
+
+Paid operations now expose preparing, provider-request and saving activity for the exact buyer/channel. The selected card displays green activity with elapsed time updated once per second without rerendering sibling cards. These are client-observable stages, not invented provider milestones or percentage estimates. After 60 seconds the text explains the delay. Timers stop on completion/failure and stale workspace/identity operations cannot update visible status.
+
+An accepted paid email gets a separate green success summary. Optional profile/phone diagnostics and cost remain available under Paid lookup details; conflicting profiles are not accepted. Existing qualification and Proceed gates remain authoritative. The shortlist gap names retained buyers on role hold and points to their preserved cards in Other contacts, without changing ranking or qualification.
+
+Validation includes delayed paid request, selected-card elapsed updates, unchanged sibling status, cleared progress, accepted email with conflicting optional profile, and retained hold visibility without data mutation. Current customer acceptance of Robert's exact role conflict remains open pending the scoped Download research report; this change improves visibility and does not assert that hold is resolved. No paid provider requests or outreach are made by the tests.
