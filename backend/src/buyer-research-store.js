@@ -90,6 +90,22 @@ async function retainedJobCandidate(env,row,input,current){
  }
  return candidate;
 }
+export async function savedBuyerRoster(env,row){
+ if(!row)return [];
+ const input=parse(row.input_json);if(!input.workspaceContext)return [];
+ // A one-person job is not the company's roster. Restore the latest retained
+ // full roster only within the same workspace, company, seller context and roles.
+ const old=await stmt(env,`SELECT result_json FROM buyer_research_jobs
+ WHERE workspace_id=? AND domain=? AND updated_at>datetime('now','-30 days')
+ AND json_extract(input_json,'$.workspaceContext')=?
+ AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')!='selected_buyers'
+ AND COALESCE(json_extract(input_json,'$.roles'),'[]')=?
+ AND json_array_length(result_json,'$.people')>0 ORDER BY rowid DESC LIMIT 1`,row.workspace_id,row.domain,input.workspaceContext,JSON.stringify(input.roles||[])).first();
+ if(!old)return [];
+ const candidate=D.reconcileBuyerEvidence(parse(old.result_json,{}),{trustedAgentSources:true});
+ if(D.canonicalDomain(candidate.domain)!==row.domain)return [];
+ return (candidate.people||[]).slice(0,10);
+}
 export async function savedBuyerResearchReceipts(env,row){
  if(!row)return [];
  const input=parse(row.input_json);if(!input.workspaceContext)return [];
