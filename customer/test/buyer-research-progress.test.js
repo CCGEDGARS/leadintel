@@ -33,8 +33,8 @@ test('compact timing distinguishes an empirical forecast, no history, and exceed
  const vm=require('node:vm'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
  const candidate={buyerResearchProgress:{jobId:'j',phase:'contacts',step:4,executionStatus:'running',startedAt:new Date(Date.now()-60000).toISOString(),timing:{estimate:{lowerSeconds:180,upperSeconds:300,samples:5}}}};
  assert.match(context.buyerResearchProgressHtml(candidate),/About 2–4 min remaining/);
- candidate.buyerResearchProgress.startedAt=new Date(Date.now()-600000).toISOString();assert.match(context.buyerResearchProgressHtml(candidate),/Taking longer than estimated/);
- candidate.buyerResearchProgress.timing={};assert.match(context.buyerResearchProgressHtml(candidate),/Remaining time not yet available/);
+ candidate.buyerResearchProgress.startedAt=new Date(Date.now()-600000).toISOString();candidate.buyerResearchProgress.timing.lastResultAt=new Date().toISOString();assert.match(context.buyerResearchProgressHtml(candidate),/Taking longer than estimated/);
+ candidate.buyerResearchProgress.startedAt=new Date().toISOString();candidate.buyerResearchProgress.timing={};assert.match(context.buyerResearchProgressHtml(candidate),/Finish time unavailable/);
  candidate.buyerResearchProgress.executionStatus='queued';candidate.buyerResearchProgress.label='Reading official company sources';assert.match(context.buyerResearchProgressHtml(candidate),/Waiting to continue/);
 });
 
@@ -43,3 +43,9 @@ test('compact timing distinguishes an empirical forecast, no history, and exceed
  const html=context.buyerResearchProgressHtml({buyerResearchProgress:{jobId:'j',phase:'official',executionStatus:'queued',startedAt:new Date(Date.now()-180000).toISOString(),checkpointAt:new Date().toISOString(),timing:{lastResultAt:null}}});
  assert.doesNotMatch(html,/Last completed check:/);assert.match(html,/No new saved activity/);
  });
+
+test('a stalled check is visible outside collapsed research details',()=>{
+ const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const dom=new JSDOM(context.buyerResearchProgressHtml({buyerResearchProgress:{jobId:'j',phase:'dossier',step:2,executionStatus:'running',startedAt:new Date(Date.now()-394000).toISOString(),timing:{lastResultAt:new Date(Date.now()-180000).toISOString()}}}));
+ dom.window.document.querySelectorAll('details').forEach(n=>n.remove());assert.match(dom.window.document.body.textContent,/Delayed · no completed check for 3 min/);dom.window.close();
+});

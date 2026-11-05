@@ -129,3 +129,17 @@ test('terminal incomplete research resumes its earliest missing phase without re
  const before={searches,reads,dossiers,reviews};independentReady=true;const resumed=await commandBuyerJob(f.env,workspaceId,f.users.owner,{action:'resume',jobId:job.id,expectedRevision:terminal.revision});assert.equal(resumed.id,job.id);assert.equal(resumed.status,'queued');assert.equal(resumed.phase,'contacts');
  await run(f.env,{jobId:job.id,services:controlled});const restored=await readBuyerJob(f.env,workspaceId,{id:job.id});assert.equal(JSON.parse(restored.result_json).people[0].contactResearch.checks.independent.status,'complete');assert.equal(independentCalls,3);assert.equal(searches,before.searches);assert.equal(reads,before.reads);assert.equal(dossiers,before.dossiers);assert.equal(reviews,before.reviews);assert.equal(restored.phase,'review');
 });
+
+test('completed dossier is reused without provider dispatch',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),candidate=JSON.parse(job.result_json);
+ candidate.buyerDiscovery={...candidate.buyerDiscovery,companyDossier:{status:'complete',people:[],facts:[],sources:[],channels:[],passes:[]}};
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='dossier',result_json=? WHERE id=?").run(JSON.stringify(candidate),job.id);
+ await run(f.env,{jobId:job.id,services:services({dossier:async()=>assert.fail('completed company research must not repeat')})});
+ assert.equal((await readBuyerJob(f.env,workspaceId,{id:job.id})).phase,'identities');
+});
+test('exhausted dossier budget advances to buyers without another provider request',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='dossier',phase_ms=360000 WHERE id=?").run(job.id);
+ await run(f.env,{jobId:job.id,services:services({dossier:async()=>assert.fail('exhausted phase must advance')})});
+ const saved=await readBuyerJob(f.env,workspaceId,{id:job.id});assert.equal(saved.phase,'identities');assert.match(saved.diagnostic_json,/time limit reached/);assert.equal(JSON.parse(saved.result_json).people.length,1);
+});
