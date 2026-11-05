@@ -84,3 +84,11 @@ test('legacy paid-contact hold cannot look like a completed phone search',()=>{
  const {ctx,person,candidate}=runtime();person.contactResearch.channels.phone={status:'complete'};person.contactVerification={status:'error',checkedAt:'2026-10-28T10:00:00Z',issues:['Treg · error: Additional-services lookup limit reached or approval was revoked']};
  const field=documentFor(ctx.buyerContactRows(person,candidate)).querySelector('[data-contact-channel="phone"]');assert.equal(field.dataset.contactStatus,'incomplete');assert.match(field.textContent,/blocked|needs review/i);assert.doesNotMatch(visibleText(field),/Not found/);
 });
+
+test('a retained buyer with a role hold is named beside the shortlist gap without clearing the hold',()=>{
+ const {ctx,candidate,person}=runtime();candidate.publicResearch.conflicts=[{person_id:person.id,reason:'Current employer conflict'}];
+ const before=JSON.stringify(person),doc=documentFor(ctx.renderSelectedProspects([candidate]));
+ assert.match(doc.querySelector('.buyer-retained-holds').textContent,/Anna Smith/);
+ assert.match(doc.querySelector('.buyer-other-contacts').textContent,/On hold/);
+ assert.equal(JSON.stringify(person),before);
+});
