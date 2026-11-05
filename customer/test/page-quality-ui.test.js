@@ -58,3 +58,13 @@ test('a newly raised sync conflict refreshes page checks and recovery opens visi
  h.w.LeadIntelServerBridge.conflict=false;h.w.dispatchEvent(new h.w.Event('leadintel:server-synced'));await Promise.resolve();assert.equal(panel.dataset.state,'ready');
  }finally{h.close();}
 });
+
+test('Messages recipient review opens Buyers focus rather than the Companies view',async()=>{
+ const h=harness();try{
+ const d=h.w.document;d.querySelector('.step-view.active').dataset.step='6';let opened=null,genericNavigation=0;
+ h.w.LeadIntelDiscoveryUI={open(value){opened=value;}};h.w.LeadIntelCustomerNavigation.setStep=()=>genericNavigation++;
+ h.api.register('messages',{read:()=>({loaded:true,checks:[h.api.check('recipient','Recipient reviewed',false,'Review the selected recipient.',{state:'blocked',target:{step:5,focus:'buyers',id:'discovery-buyers-guide'}})]})});
+ await h.api.open('messages');d.querySelector('[data-quality-resolve]').click();
+ assert.equal(opened?.focus,'buyers');assert.equal(genericNavigation,0);
+ }finally{h.close();}
+});
