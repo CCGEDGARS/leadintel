@@ -536,3 +536,27 @@ sqliteTest('an upstream Firecrawl 429 is announced with its retry-after and bloc
   assert.notEqual(scrape.status,429,'the block is per endpoint kind: scrape is not blocked by a search 429');
  }finally{globalThis.fetch=old;}
 });
+
+
+sqliteTest('Treg Settings checks the REST token used by paid lookups without spending credits',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch,calls=[];
+ DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
+ const secret='treg-test-private-token';let rejected=false;
+ globalThis.fetch=async(url,options)=>{calls.push({url,options});assert.equal(url,'https://treg.to/home');assert.equal(options.method,'GET');assert.equal(options.headers['X-Treg-Token'],secret);assert.equal(options.headers.Authorization,undefined);assert.equal(options.redirect,'error');return rejected?Response.json({detail:'not authenticated '+secret},{status:401}):Response.json({team:'test-team',balance_micro:921026,account:'private@example.test',own_tools:['private-tool']});};
+ try{
+  const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:secret}}),env,{});
+  assert.equal(saved.status,200);const savedText=await saved.text();assert.doesNotMatch(savedText,/treg-test-private-token|private@example|private-tool/);
+  const row=DB.raw.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE provider='treg'").get();assert.deepEqual(JSON.parse(row.metadata_json),{team:'test-team',balance_usd:.921026,authentication_surface:'rest'});
+  rejected=true;const checked=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{});const result=await checked.json();assert.equal(result.providers.find(p=>p.provider==='treg').state,'bad');assert.doesNotMatch(JSON.stringify(result),/treg-test-private-token/);
+  const retry=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:secret}}),env,{});assert.equal(retry.status,422);assert.equal(calls.length,3);
+ }finally{globalThis.fetch=old;DB.raw.close();}
+});
+
+sqliteTest('Treg REST verification rejects a missing team or malformed balance and accepts zero credit',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch;
+ DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
+ try{for(const [body,expected] of [[{team:null,balance_micro:10},422],[{team:'team',balance_micro:null},422],[{team:'team',balance_micro:'10'},422],[{team:'team',balance_micro:0},200]]){
+  globalThis.fetch=async()=>Response.json(body);
+  const r=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:'treg-test-token'}}),env,{});assert.equal(r.status,expected);
+ }}finally{globalThis.fetch=old;DB.raw.close();}
+});
