@@ -35,6 +35,10 @@ export async function step6Fixture(){
   main.answers={...main.answers,buying_outcomes:'production flow downtime',value_proposition:'simplify production flow',differentiation:'Our team supports industrial projects.',proof_points:'No approved proof yet',objections:'Unknown',delivery_approach:'Project-specific engineering and installation.',meeting_value:'relevant project lessons'};
   main.answerStatus=Object.fromEntries(Object.keys(main.answers).map(key=>[key,'user']));
   main.brandIdentity={senderName:'Robin Lane',senderTitle:'Commercial Director',companyDisplayName:'Fixture Industrial',website:'https://seller.example',email:'robin@seller.example',linkedinUrl:'https://www.linkedin.com/in/robin-lane'};
+  // Sidebar navigation uses the real completed Setup activation as well as the
+  // saved handoff. The fixture previously omitted this production prerequisite.
+  main.websiteActivation={status:'active',url:main.website};
+  main.scrapedSources=[{type:'website',url:main.website,text:'Fixture Industrial supplies industrial automation and custom machinery.'}];
   main.messageStudio={};
   main.profile=Profile.buildCompanyIntelligenceProfile(main);Canonical.confirmProfileContext(main);main.approved=true;
   await f.replace(saved.payload,saved.version);

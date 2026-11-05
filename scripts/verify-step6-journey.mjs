@@ -59,6 +59,11 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   await edit(page,manual);await save(page,manual);assertSnapshot(crmSnapshots(f).at(-1),manual);await persist(page);
   const saved=await current(page);assert.equal(saved.messageStudioDraft.mode,'brutal');assert.deepEqual(saved.messageStudioDraft.tailoredOriginal,protectedOriginal,'manual save preserves the deterministic original');assert.ok(saved.dossier.messageBrief||saved.dossier.researchBrief||saved.dossier.evidence?.length,'source evidence is retained with saved draft');
   await shot('02-exact-manual-crm-save.png');
+  await page.locator('#back-to-discovery').click();
+  await page.locator('[data-workflow-stage="6"] > div > strong').click();
+  await settled(page,'brutal');assert.deepEqual(await fields(page),manual,'sidebar reopening preserves the saved recipient draft');
+  assert.equal(await page.evaluate(()=>LeadIntelPageQuality.getReport('messages').checks.find(row=>row.id==='recipient-confirmed')?.status),'pass','sidebar reopening revalidates the saved recipient');
+
   const providerBeforeReopen=f.providerRequests.length,readsBeforeReopen=f.externalCalls.filter(row=>new URL(row.url).hostname==='forge.example').length;
   await page.context().close();page=await open();await settled(page,'brutal');assert.deepEqual(await fields(page),manual);assert.equal((await current(page)).selectedPersonId,'robert');assert.deepEqual((await current(page)).messageStudioDraft.tailoredOriginal,protectedOriginal);assert.equal(await page.locator('#mw-draft-badge').textContent(),'Saved');
   assert.equal(f.providerRequests.length,providerBeforeReopen,'fresh reopen does not repeat provider work');assert.equal(f.externalCalls.filter(row=>new URL(row.url).hostname==='forge.example').length,readsBeforeReopen,'fresh reopen does not repeat official reads');
