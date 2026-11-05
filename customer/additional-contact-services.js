@@ -112,7 +112,15 @@
     person.contactVerification={status,lookup,checkedAt:new Date().toISOString(),issues:[...(append?person.contactVerification?.issues||[]:[]),message].slice(-12)};
     adapter?.saveOutcome?.(candidate,person);adapter?.render?.();
   }
-  function safeData(candidate,person,value=person.contactData){return root.LeadIntelDiscovery?.safeContactData?.(value,person,root.LeadIntelDiscovery.canonicalDomain(candidate.domain))||null;}
+  function safeData(candidate,person,value=person.contactData){
+    const D=root.LeadIntelDiscovery;if(!D?.safeContactData)return null;
+    const domain=D.canonicalDomain(candidate.domain),accepted=D.safeContactData(value,person,domain);
+    if(accepted||!value?.profile)return accepted||null;
+    // Optional provider profile evidence is not the identity envelope or the
+    // independently verified email. Reject that profile without losing a valid
+    // sibling channel; a wrong buyer/domain/title envelope still fails closed.
+    return D.safeContactData({...value,status:'partial',profile:{status:'conflict',reason:'Returned profile does not match the selected buyer; profile was not applied.'},lastAttempt:{...value.lastAttempt,status:'partial',profile:'conflict'}},person,domain)||null;
+  }
   function card(candidate,person){
     if(person.contactData){
       const data=safeData(candidate,person);if(!data)return '<p class="additional-contact-note" role="status">Saved contact details have a different buyer identity. Recheck this buyer; those details were not applied.</p>';
@@ -219,13 +227,25 @@
             if(result.error)throw Error(result.error);
             if(!result.contact&&!result.contactData&&!(typeof (result.research?.status||result.request?.status)==='string'&&(result.research?.status||result.request?.status).trim()))throw Error('Invalid empty contact result; retry the saved lookup.');
             person=candidate.people.find(p=>String(p.id)===String(personId));
-            if(result.contact){
-              const contact=result.contact,expectedProfile=person.publicLinkedinUrl||person.linkedin_url,normalizeProfile=root.LeadIntelDiscovery?.normalizeLinkedInUrl||normalized;
-              if(typeof contact!=='object'||Array.isArray(contact)||!contact.name||!contact.external_person_id||contact.linkedin_url&&expectedProfile&&normalizeProfile(contact.linkedin_url)!==normalizeProfile(expectedProfile)||contact.title&&normalized(contact.title)!==normalized(person.title)||contact.organization&&normalized(contact.organization)!==normalized(person.organization))throw Object.assign(Error('Contact result identity does not match the selected buyer; result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
+            const mismatches=[],contact=result.contact,data=result.contactData;
+            if(contact){
+              const expectedProfile=person.publicLinkedinUrl||person.linkedin_url,normalizeProfile=root.LeadIntelDiscovery?.normalizeLinkedInUrl||normalized;
+              if(typeof contact!=='object'||Array.isArray(contact))mismatches.push('contact format');
+              if(!contact.name||normalized(contact.name)!==normalized(person.publicName||person.name))mismatches.push('contact name');
+              if(!contact.external_person_id||String(contact.external_person_id)!==String(personId))mismatches.push('contact buyer ID');
+              if(contact.linkedin_url&&expectedProfile&&normalizeProfile(contact.linkedin_url)!==normalizeProfile(expectedProfile))mismatches.push('contact LinkedIn profile');
+              if(contact.title&&normalized(contact.title)!==normalized(person.title))mismatches.push('contact role');
+              if(contact.organization&&normalized(contact.organization)!==normalized(person.organization))mismatches.push('contact employer');
+              if(contact.company_id&&String(contact.company_id)!==String(company.id))mismatches.push('CRM company');
             }
-            if(result.contact?.external_person_id&&String(result.contact.external_person_id)!==String(personId)||result.contactData&&(String(result.contactData.personId)!==String(personId)||result.contactData.domain!==domain||result.contactData.identityName&&String(result.contactData.identityName).trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase())||result.contact?.name&&String(result.contact.name).trim().toLowerCase()!==String(person.publicName||person.name).trim().toLowerCase()||result.contact?.company_id&&String(result.contact.company_id)!==String(company.id))throw Object.assign(Error('Contact result identity does not match the selected buyer; result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
-            if(result.contactData&&!safeData(candidate,person,result.contactData))throw Object.assign(Error('Contact result identity does not match the selected buyer; result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
-            if(result.contactData){person.contactData=safeData(candidate,person,result.contactData);adapter?.saveOutcome?.(candidate,person);}
+            if(data){
+              if(String(data.personId)!==String(personId))mismatches.push('research buyer ID');
+              if(data.domain!==domain)mismatches.push('research company domain');
+              if(data.identityName&&normalized(data.identityName)!==normalized(person.publicName||person.name))mismatches.push('research name');
+              if(!safeData(candidate,person,data))mismatches.push('saved research identity');
+            }
+            if(mismatches.length)throw Object.assign(Error('Contact result identity does not match the selected buyer ('+[...new Set(mismatches)].join(', ')+'); result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
+            if(result.contactData){result.contactData=safeData(candidate,person,result.contactData);person.contactData=result.contactData;adapter?.saveOutcome?.(candidate,person);}
             const cost=result.research?.costMicro;
             const outcome=result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
             receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${result.reason?': '+result.reason:''}`);
