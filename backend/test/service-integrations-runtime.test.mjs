@@ -560,3 +560,26 @@ sqliteTest('Treg REST verification rejects a missing team or malformed balance a
   const r=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:'treg-test-token'}}),env,{});assert.equal(r.status,expected);
  }}finally{globalThis.fetch=old;DB.raw.close();}
 });
+
+sqliteTest('Treg connection failures expose only fixed diagnostic categories in Settings and audit',async()=>{
+ const {env,token,DB}=await fixture(),old=globalThis.fetch,secret='private-team-secret';
+ DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
+ const scenarios=[
+  [()=>Response.json({detail:secret},{status:401}),'TREG_AUTH_REJECTED',401],
+  [()=>new Response(secret,{status:403}),'TREG_ACCESS_DENIED',403],
+  [()=>Response.json({detail:secret},{status:429}),'TREG_RATE_LIMITED',429],
+  [()=>new Response(secret,{status:503}),'TREG_UNAVAILABLE',503],
+  [()=>new Response(secret,{status:404}),'TREG_HTTP_ERROR',404],
+  [()=>{throw Object.assign(Error(secret),{name:'TimeoutError'});},'TREG_TIMEOUT'],
+  [()=>{throw Error(secret);},'TREG_NETWORK_ERROR'],
+  [()=>new Response('<html>'+secret+'</html>'),'TREG_INVALID_RESPONSE',200],
+  [()=>Response.json({team:null,balance_micro:5}),'TREG_TEAM_REQUIRED',200],
+  [()=>Response.json({team:'test',balance_micro:'5'}),'TREG_BALANCE_RESPONSE_INVALID',200]
+ ];
+ try{for(const [answer,code,http] of scenarios){
+  globalThis.fetch=async()=>answer();
+  const r=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'treg',api_key:secret}}),env,{}),body=await r.json();
+  assert.equal(r.status,422);assert.equal(body.code,code);assert.doesNotMatch(JSON.stringify(body),/private-team-secret|Check the API key/);
+  const audit=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='service.provider_check_failed' ORDER BY rowid DESC LIMIT 1").get();const metadata=JSON.parse(audit.metadata_json);assert.equal(metadata.code,code);assert.equal(metadata.http_status,http);assert.doesNotMatch(audit.metadata_json,/private-team-secret/);
+ }}finally{globalThis.fetch=old;DB.raw.close();}
+});
