@@ -1614,15 +1614,19 @@ async function findPotentialDecisionMakers(domain,{refreshDossier=false}={}){
 }
 async function startSelectedBuyerResearch(candidate){
   if(!candidate||(discovery.selectedProspects||[]).includes(candidate)===false||candidate.people?.length||candidate.buyerDiscovery?.checkedAt||candidate.publicContactStatus==='loading'||candidate.peopleStatus&&candidate.peopleStatus!=='idle')return false;
+  const restoreWorkspace=bridge()?.workspace?.id;
   try{
     setJourneyFocus('buyers',{scroll:false});
     if(bridge()?.conflict)throw new Error('Resolve the workspace synchronization conflict, then press Refresh to start buyer research.');
     if(!crmAuthenticated())throw new Error('Sign in, then press Refresh to start buyer research.');
+    await runDurableBuyerResearch(candidate,{restore:true});
+    if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
+    if(candidate.people?.length)return true;
     const result=await findPotentialDecisionMakers(candidate.domain);
     if(result===false&&(!candidate.peopleStatus||candidate.peopleStatus==='idle'))throw new Error('Buyer research could not start. Check your buyer roles and workspace readiness, then press Refresh.');
     return result;
   }catch(error){
-    if(!(discovery.selectedProspects||[]).includes(candidate))return false;
+    if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
     candidate.peopleStatus='error';candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),researchIncomplete:true,lastError:{message:String(error?.message||'Buyer research could not start').slice(0,300),phase:'start'}};
     saveDiscovery();renderAll();showToast(candidate.buyerDiscovery.lastError.message);return false;
   }

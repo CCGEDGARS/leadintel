@@ -35,6 +35,16 @@ test('reopening restores all four saved receipts across aliases and many selecte
  assert.deepEqual(reopened.people.map(p=>p.contactResearch),owner.people.map(p=>p.contactResearch));
  await client.restore(reopened,{profile:initial.input.profile});
  assert.equal(f.DB.raw.prepare('SELECT total_changes() n').get().n,before);
+ // A locally empty company must recover its full roster even after many
+ // single-person rechecks. No paid/provider work or database write is needed.
+ const empty={...structuredClone(owner),people:[],peopleStatus:'error'};
+ await client.restore(empty,{profile:initial.input.profile});
+ assert.deepEqual(empty.people.map(p=>p.name).sort(),full.people.map(p=>p.name).sort());
+ for(const p of empty.people)for(const key of D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks)assert.equal(D.buyerResearchCheckPassed(empty,p,key),true,p.name+': '+key);
+ const emptyPacked=Budget.prepareForSync({discovery:{selectedProspects:[empty]}});
+ assert.equal(Budget.restoreFromSync(emptyPacked.payload||emptyPacked).discovery.selectedProspects[0].people.length,4);
+ assert.equal(f.DB.raw.prepare('SELECT total_changes() n').get().n,before);
+ const scopedEmpty={...structuredClone(empty),people:[]};await client.restore(scopedEmpty,{profile:initial.input.profile,personIds:['dossier-3']});assert.equal(scopedEmpty.people.length,0);
  // A contact-scoped read cannot import another buyer's saved receipts.
  const targeted=structuredClone(owner);delete targeted.people[1].contactResearch;targeted.people[1].emailResearch={status:'not_searched'};
  const untouched=JSON.stringify(targeted.people[1]);await client.restore(targeted,{profile:initial.input.profile,personIds:['local-3']});assert.equal(JSON.stringify(targeted.people[1]),untouched);assert.doesNotMatch(calls.at(-1)[1],/restore=1/);
