@@ -52,3 +52,11 @@ test('receipt recovery accepts a translated title but not a changed employer or 
  const other=JSON.parse(JSON.stringify(candidate));other.people[0].organization='Other Works';delete other.people[0].contactResearch;
  assert.equal(D.restoreBuyerResearchReceipts(other,[saved]),false);
 });
+
+test('research report is scoped and read-only, with evidence states but no credentials, contact values, drafts or URL tokens',()=>{
+ const {candidate,person}=fixture();candidate.apiKey='SECRET_KEY';candidate.draft='PRIVATE_DRAFT';person.publicEmail='PRIVATE_EMAIL';candidate.buyerDiscovery={companyDossier:{checkedAt:stamp(),conflicts:[{name:person.name,reason:'Different role or employment status in source-backed research',titles:['Head of Procurement','Finance Director'],sources:['https://example.com/team?token=SECRET_TOKEN#private']}],people:[{name:person.name,title:person.title,status:'current',quote:'PRIVATE_BODY',sourceUrl:'https://example.com/team?token=SECRET_TOKEN'}]}};
+ const before=JSON.stringify(candidate),report=D.buyerResearchDiagnostic(candidate),serialized=JSON.stringify(report);
+ assert.equal(JSON.stringify(candidate),before);assert.equal(report.buyers.length,1);assert.equal(report.buyers[0].checks.gmail.passed,true);
+ assert.match(report.buyers[0].roleHold,/conflict/);assert.deepEqual(report.dossier.conflicts[0].sources,['https://example.com/team']);
+ for(const value of ['SECRET_KEY','PRIVATE_DRAFT','PRIVATE_EMAIL','SECRET_TOKEN','PRIVATE_BODY'])assert.equal(serialized.includes(value),false);
+});

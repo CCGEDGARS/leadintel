@@ -15,3 +15,7 @@ Existing dossier reconciliation removes an obsolete equivalent-title hold only w
 New tests cover bilingual literal sources, obsolete hold recovery through serialization, preserved channel checks, four-buyer missing-Gmail continuation, saved receipt restoration, and negative identity changes. Existing timeline and research-resume tests remain required, alongside CI's authenticated HTTP/scheduler/browser/persistence journeys. No live paid lookup or outreach is authorized or executed by these tests.
 
 Emma's paid-email customer outcome is confirmed by the later screenshot. The overall four-buyer acceptance remains open until the current authenticated saved dossier and per-person coverage are inspected; a release proof is not that acceptance. Never fill the fourth card by suppressing genuine qualification holds or label unexecuted research as complete.
+
+## Read-only customer evidence
+
+Research details now offers Download research report for the selected company. Its allowlisted projection includes buyer identities, per-channel execution counts/status, role holds and conflicting dossier titles/source locations. It excludes API/provider settings, contact addresses/numbers, drafts, raw source bodies and URL queries/fragments. Downloading it does not save, refresh, spend, send or alter research. This enables current-state diagnosis when authenticated remote access is absent, without using broad workspace exports or repeated screenshots. The report's privacy and no-mutation behavior are covered by tests.
