@@ -1628,6 +1628,16 @@
     }
     next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
     next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
+    // A directory/identity record carries no search execution authority. Its
+    // default null/not_searched fields must not erase receipts during reload.
+    // Real incoming attempts (including partial/failed) remain authoritative.
+    const sameReceiptIdentity=['name','title','organization'].every(key=>clean(key==='name'?old.publicName||old.name:old[key]).toLowerCase()===clean(key==='name'?next.publicName||next.name:next[key]).toLowerCase())&&oldProfile===nextProfile;
+    if(sameReceiptIdentity&&old.contactResearch&&!person.contactResearch){
+      next.contactResearch=old.contactResearch;
+      if(!person.emailResearch||person.emailResearch.status==='not_searched')next.emailResearch=old.emailResearch;
+      if(!person.gmailMatches?.length)next.gmailMatches=old.gmailMatches;
+      if(!person.gmailCandidates?.length)next.gmailCandidates=old.gmailCandidates;
+    }
     for(const field of ['flowSelected','flowConfirmEmail','flowConfirmPhone','flowEmailCompletedFor','flowPhoneCompletedFor'])if(old[field])next[field]=old[field];
     return preserveConfirmedPublicEmail(old,next);
   }
@@ -1969,13 +1979,16 @@
       const prior=safeContactResearch(saved.contactResearch),validLocal=person.contactResearch?.identityKey===key&&person.contactResearch?.policyVersion===BUYER_CONTACT_RESEARCH_POLICY.version;
       const local=validLocal?safeContactResearch(person.contactResearch):{...prior,checks:{},channels:{}};
       const before=JSON.stringify([person.contactResearch,person.emailResearch,person.gmailMatches,person.gmailCandidates]);
-      let recovered=false,gmail=false;
+      let recovered=false,gmail=false;const recoveredChecks=new Set();
       for(const [name,check] of Object.entries(prior.checks)){
         if(!fresh(check.checkedAt)||!['complete','not_needed','partial','unavailable'].includes(check.status)||time(check)<=time(local.checks[name]))continue;
-        local.checks[name]=check;recovered=true;if(name==='gmail')gmail=true;
+        local.checks[name]=check;recoveredChecks.add(name);recovered=true;if(name==='gmail')gmail=true;
       }
       if(!recovered)continue;
-      for(const [name,channel] of Object.entries(prior.channels))if(fresh(channel.checkedAt)&&time(channel)>time(local.channels[name]))local.channels[name]=channel;
+      for(const [name,channel] of Object.entries(prior.channels)){
+        const check=name==='company'?'direct_email':name,checkedAt=channel.checkedAt||prior.checks[check]?.checkedAt;
+        if(recoveredChecks.has(check)&&fresh(checkedAt)&&Date.parse(checkedAt)>time(local.channels[name]))local.channels[name]={...channel,checkedAt};
+      }
       person.contactResearch=local;
       if(fresh(saved.emailResearch?.checkedAt)&&time(saved.emailResearch)>time(person.emailResearch))person.emailResearch=safeEmailResearch(saved.emailResearch);
       if(gmail){const safe=safeBuyer(saved,candidate.domain);person.gmailMatches=safe.gmailMatches;person.gmailCandidates=safe.gmailCandidates;}
