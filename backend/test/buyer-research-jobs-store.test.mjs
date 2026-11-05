@@ -123,3 +123,13 @@ test('timing uses five same-workspace same-scope completed runs and distinguishe
  const selected={...job,input_json:JSON.stringify({...JSON.parse(job.input_json),scope:'selected_buyers',personIds:['robert']})};
  assert.equal((await publicBuyerJob(f.env,selected)).progress.timing.estimate,null);
 });
+
+test('company refresh reuses server dossier and retained buyers across a selected-person generation',async t=>{
+ const f=await buyerJobsFixture(t),first=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),saved=JSON.parse(first.result_json);
+ saved.buyerDiscovery={...saved.buyerDiscovery,companyDossier:{status:'complete',facts:[],people:[],channels:[],sources:[],passes:[]}};
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',result_json=? WHERE id=?").run(JSON.stringify(saved),first.id);
+ const selected=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,personIds:['robert'],force:true});
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review' WHERE id=?").run(selected.id);
+ const resumed=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,resumeIncomplete:true,candidate:{...f.candidate,people:[]}});
+ const result=JSON.parse(resumed.result_json);assert.equal(result.people.length,saved.people.length);assert.equal(result.buyerDiscovery.companyDossier.status,'complete');
+});

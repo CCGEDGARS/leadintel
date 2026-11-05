@@ -12,7 +12,7 @@ const D=globalThis.LeadIntelDiscovery,C=globalThis.LeadIntelCompanyDossier;
 const phaseBudget={official:180000,dossier:360000,identities:90000,contacts:180000,review:45000,paid:360000};
 // The public engine's 180s deadline bounds one pass. Scheduler slices resume
 // that same finite task plan; their accumulated wall time is not completion.
-const phaseExhausted=(phase,ms,runs)=>runs>=18||(!['official','dossier','contacts'].includes(phase)&&ms>=phaseBudget[phase]);
+const phaseExhausted=(phase,ms,runs)=>runs>=18||(!['official','contacts'].includes(phase)&&ms>=phaseBudget[phase]);
 const nextPhase={official:'dossier',dossier:'identities',identities:'contacts',contacts:'review',review:'paid',paid:'done'};
 const errorReason=(error,phase)=>`${phase}: ${error?.name==='TimeoutError'?'provider deadline reached':/\((?:4|5)\d{2}\)/.test(error?.message||'')?'provider HTTP '+error.message.match(/\((\d{3})\)/)[1]:error?.code==='TIME_BUDGET'||error?.name==='AbortError'?'time budget reached':error?.status===401||error?.status===403?'authorization changed':/limit|budget/i.test(error?.message||'')?'bounded work limit reached':'provider or source unavailable'}`;
 const jsonSize=value=>new TextEncoder().encode(JSON.stringify(value)).byteLength;
@@ -147,7 +147,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
     if(D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
    }else if(phase==='dossier'){
-    try{
+    if(candidate.buyerDiscovery?.companyDossier?.status==='complete'){phase=nextPhase[phase];}
+    else if(phaseMs>=phaseBudget.dossier){diagnostics.push({phase,reason:'Company research time limit reached; continuing buyer checks with saved evidence',at:new Date().toISOString()});phase=nextPhase[phase];}
+    else try{
      const plan=D.buyerResearchPlan(candidate,input.profile);
      const result=await (services.dossier||researchWorkspaceDossier)(env,row.workspace_id,{company:candidate.company,domain:row.domain,seller:parse(D.buyerFitContext(input.profile)),roles:input.roles,formulas:plan.dossierFormulas,opportunity:candidate.buyerFit?.purchase||candidate.fitDescription||'',incremental:true},{signal:controller.signal,guard,readSource:read,authorization:{userId:row.requested_by,sessionTokenHash:row.session_hash},writeAuthority:()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]}),providerTimeoutMs:Math.min(remaining,180000)});
      candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),companyDossier:result};acquirePeople();
