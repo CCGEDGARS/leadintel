@@ -50,7 +50,22 @@ async function deniedOwnerCommit(env,{workspaceId,user,provider,operationId,cors
   return error(status===401?'Authentication expired or was revoked. Sign in again before changing connections.':'Workspace owner permission changed. Reload Settings.',status,cors);
 }
 function encryptionConfigured(env){return Boolean(String(env.OAUTH_TOKEN_ENCRYPTION_KEY||'').trim());}
+const TREG_CONNECTION_ERRORS=Object.freeze({
+ TREG_AUTH_REJECTED:'Treg rejected the connection request (HTTP 401). The saved credential was not accepted.',
+ TREG_ACCESS_DENIED:'Treg denied the connection request (HTTP 403). Team permissions or a provider access restriction need checking; this does not establish that the key is wrong.',
+ TREG_RATE_LIMITED:'Treg temporarily rate-limited the connection check (HTTP 429). Keep the key and try later.',
+ TREG_UNAVAILABLE:'Treg returned a server error during the connection check. Keep the key and try later.',
+ TREG_HTTP_ERROR:'Treg returned an unexpected HTTP status during the connection check.',
+ TREG_TIMEOUT:'Treg connection check timed out. This does not establish that the key is wrong.',
+ TREG_NETWORK_ERROR:'LeadIntel could not reach the Treg connection endpoint. This does not establish that the key is wrong.',
+ TREG_INVALID_RESPONSE:'Treg returned an unreadable connection response. LeadIntel could not validate it.',
+ TREG_TEAM_REQUIRED:'Treg answered, but no active team was returned for this credential.',
+ TREG_BALANCE_RESPONSE_INVALID:'Treg answered, but its balance response did not match the expected format.'
+});
+function tregConnectionFailure(code,httpStatus){return Object.assign(new Error(TREG_CONNECTION_ERRORS[code]),{code,...(httpStatus?{httpStatus}:{})});}
+function verificationDiagnostic(provider,cause){return provider==='treg'&&Object.hasOwn(TREG_CONNECTION_ERRORS,cause?.code)?{code:cause.code,...(Number.isInteger(cause.httpStatus)&&cause.httpStatus>=100&&cause.httpStatus<=599?{http_status:cause.httpStatus}:{})}:{};}
 function verificationMessage(provider,cause){
+  if(provider==='treg'&&Object.hasOwn(TREG_CONNECTION_ERRORS,cause?.code))return TREG_CONNECTION_ERRORS[cause.code];
   // Provider bodies and network errors can echo credentials or account details.
   return creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message))?`${PROVIDER_NAMES[provider]} credits exhausted or payment required`:`${PROVIDER_NAMES[provider]} connection check failed. Check the API key and try again.`;
 }
@@ -81,9 +96,14 @@ async function verifyTreg(apiKey){
   // /home is a read-only member endpoint: it proves a resolved team and balance
   // without dispatching a metered contact lookup. Never forward this token in
   // Authorization: /call/ relays that header to upstream providers.
-  const response=await fetch('https://treg.to/home',{method:'GET',headers:{'X-Treg-Token':apiKey,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});
-  const account=await response.json().catch(()=>null);
-  if(!response.ok||!account||typeof account.team!=='string'||!account.team.trim()||!Number.isSafeInteger(account.balance_micro))throw new Error('Treg could not verify this team token for REST lookups.');
+  let response;
+  try{response=await fetch('https://treg.to/home',{method:'GET',headers:{'X-Treg-Token':apiKey,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});}
+  catch(cause){throw tregConnectionFailure(cause?.name==='TimeoutError'||cause?.name==='AbortError'?'TREG_TIMEOUT':'TREG_NETWORK_ERROR');}
+  if(!response.ok)throw tregConnectionFailure(response.status===401?'TREG_AUTH_REJECTED':response.status===403?'TREG_ACCESS_DENIED':response.status===429?'TREG_RATE_LIMITED':response.status>=500?'TREG_UNAVAILABLE':'TREG_HTTP_ERROR',response.status);
+  let account;try{account=await response.json();}catch{throw tregConnectionFailure('TREG_INVALID_RESPONSE',response.status);}
+  if(!account||typeof account!=='object'||Array.isArray(account))throw tregConnectionFailure('TREG_INVALID_RESPONSE',response.status);
+  if(typeof account.team!=='string'||!account.team.trim())throw tregConnectionFailure('TREG_TEAM_REQUIRED',response.status);
+  if(!Number.isSafeInteger(account.balance_micro))throw tregConnectionFailure('TREG_BALANCE_RESPONSE_INVALID',response.status);
   return {team:clean(account.team,100),balance_usd:account.balance_micro/1_000_000,authentication_surface:'rest'};
 }
 async function verifyCredential(provider,apiKey){if(provider==='treg')return verifyTreg(apiKey);if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
@@ -221,7 +241,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false,operationId
     let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}')||{};}catch{}
     let state='good',label='Connected';
     if(verify){
-      const trace=type=>audit(env,{workspaceId,userId,type,provider,metadata:{operation_id:operationId}});
+      const trace=(type,diagnostic={})=>audit(env,{workspaceId,userId,type,provider,metadata:{operation_id:operationId,...diagnostic}});
       await trace('service.provider_check_started');
       try{
         const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};
@@ -235,9 +255,9 @@ async function providerStatus(env,workspaceId,provider,{verify=false,operationId
       }
       catch(cause){
         if((await integrationRow(env,workspaceId,provider))?.encrypted_api_key!==row.encrypted_api_key){await trace('service.provider_check_superseded');return providerStatus(env,workspaceId,provider);}
-        await trace('service.provider_check_failed');
+        await trace('service.provider_check_failed',verificationDiagnostic(provider,cause));
         if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});
-        state='bad';label='Connection error';metadata={...metadata,error:verificationMessage(provider,cause)};
+        state='bad';label='Connection error';metadata={...metadata,error:verificationMessage(provider,cause),...verificationDiagnostic(provider,cause)};
       }
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
@@ -466,7 +486,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     let apiKey;try{apiKey=validateApiKey(body.api_key);}catch(cause){return error(cause.message,400,cors);}
     const previous=await integrationRow(env,workspaceId,provider);
     await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_started',provider,metadata:{operation_id:operationId}});
-    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='apollo'){let prior={};try{prior=JSON.parse((await integrationRow(env,workspaceId,provider))?.metadata_json||'{}');}catch{}for(const key of ['discovery_enabled','email_enrichment_enabled','phone_enrichment_enabled'])metadata[key]=prior[key]??(key==='discovery_enabled');}if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_failed',provider,metadata:{operation_id:operationId}});return error(verificationMessage(provider,cause),422,cors);}
+    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='apollo'){let prior={};try{prior=JSON.parse((await integrationRow(env,workspaceId,provider))?.metadata_json||'{}');}catch{}for(const key of ['discovery_enabled','email_enrichment_enabled','phone_enrichment_enabled'])metadata[key]=prior[key]??(key==='discovery_enabled');}if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_check_failed',provider,metadata:{operation_id:operationId,...verificationDiagnostic(provider,cause)}});return error(verificationMessage(provider,cause),422,cors,verificationDiagnostic(provider,cause).code);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
       const saved=await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at)
