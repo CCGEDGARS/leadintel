@@ -29,3 +29,14 @@ test('duplicate sync notifications share one pending CRM validation',async()=>{
   for(let n=0;n<5;n++)h.w.dispatchEvent(new h.w.Event('leadintel:server-synced'));await settle();assert.equal(reads,1);release();await settle();assert.equal(h.w.recipientReady(),true);
  }finally{release?.();h.w.close();}
 });
+test('company records changing during recipient validation release pending state and recover the same saved buyer',async()=>{
+ const {h,b,choice}=fixture();let release;try{
+ const get=b.getCrmCompany;b.getCrmCompany=async()=>{await new Promise(r=>release=r);return get();};
+ const pending=h.w.openBuyerScripts(choice);await settle();
+ h.w.dispatchEvent(new h.w.CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:'w1',domain:'buyer.example'}}));
+ b.getCrmCompany=get;release();await pending;await settle();
+ h.w.dispatchEvent(new h.w.Event('leadintel:server-synced'));await settle();
+ assert.equal(h.w.recipientReady(),true);
+ assert.doesNotMatch(h.w.document.body.textContent,/Checking your selected recipient/);
+ }finally{release?.();h.w.close();}
+});

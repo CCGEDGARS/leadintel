@@ -43,3 +43,11 @@ test('internal audit records are bounded, deduplicated and contain check results
  let buyer='Sensitive name';const c=Q.createCoordinator({session:()=>session});c.register('messages',{read:()=>({...context,inputs:{buyer,email:'private@buyer.example'}})});c.refresh('messages');assert.equal(c.getAuditTrail().length,1);
  for(let i=0;i<45;i++){buyer='Sensitive name '+i;c.refresh('messages');}const trail=c.getAuditTrail();assert.equal(trail.length,30);assert.doesNotMatch(JSON.stringify(trail),/Sensitive|private@/);trail[0].checks[0].status='fake';assert.notEqual(c.getAuditTrail()[0].checks[0].status,'fake');
 });
+test('slow preparation clears its timeout only after completion and rechecks remaining gates',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let release,ready=false;
+ const c=Q.createCoordinator({session:()=>session});
+ c.register('messages',{read:()=>({...context,checks:[Q.check('recipient','Recipient',ready,'Recipient still requires review',{actions:['save']})]}),prepare:()=>new Promise(r=>release=r)});
+ const pending=c.open('messages');t.mock.timers.tick(10000);assert.equal((await pending).state,'blocked');
+ release();await Promise.resolve();assert.equal(c.getReport('messages').state,'review');assert.equal(c.require('messages','save'),false);
+ ready=true;assert.equal(c.getReport('messages').state,'ready');
+});

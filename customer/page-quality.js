@@ -54,7 +54,13 @@
       // Preparation is an existing page operation; it never runs under an unsafe workspace.
       if(adapter?.prepare&&allowed(before,'prepare')){
         let timer;
-        try{await Promise.race([Promise.resolve(adapter.prepare()),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),10000);})]);}
+        try{
+          const prepared=Promise.resolve(adapter.prepare());
+          // A slow operation may finish after the opening deadline. Recheck its
+          // actual result instead of permanently retaining the timeout banner.
+          void prepared.then(()=>{if(token===generation&&owner===(session()?.workspaceId||'')&&openingFailures.has(page)){openingFailures.delete(page);refresh(page);}},()=>{});
+          await Promise.race([prepared,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),10000);})]);
+        }
         catch{if(token===generation&&owner===(session()?.workspaceId||'')){openingFailures.set(page,check('opening-failed','Opening procedure completed',false,'The page check could not finish. Reopen this page to retry.',{state:'blocked'}));return refresh(page);}}
         finally{clearTimeout(timer);}
       }
