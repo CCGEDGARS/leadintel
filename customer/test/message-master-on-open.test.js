@@ -12,3 +12,12 @@ for(const protectedCopy of [false,true])test('opening a saved buyer consults the
  assert.equal(h.requests.some(r=>/send|enqueue|ai\/generate/.test(String(r.url))),false);
  }finally{h.w.close();}
 });
+for(const changed of [false,true])test('an existing raw bracket master is personalized on reopen while manual alterations are preserved: '+changed,async()=>{
+ const h=setup();try{
+ const row={id:'email:professional',channel:'email',style:'professional',name:'Professional',subject:'[First name]. [Company]',body:'Hi [First name],\n\n[Your name] from [Company]. [result]',creatorSource:{id:'owner',revision:1}};
+ h.w.upsertItem({...h.item(),drafts:{...h.item().drafts,emailSubject:row.subject,emailBody:row.body+(changed?'\nMy manual addition':'')},messageStudioDraft:{mode:'professional',editorOrigin:'manual',channelLibrarySource:row.id}});h.w.renderAll();
+ h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:[row],personal:[],primary:[],canManage:false})});await tick();h.w.automaticallyPrepareMessage();await tick();await tick();
+ assert.equal(h.item().drafts.emailBody,changed?row.body+'\nMy manual addition':'Hi Alex,\n\nRobin Lane from North Works. [result]');
+ if(!changed){assert.equal(h.item().drafts.emailSubject,'Alex. North Works');assert.match(h.q('mw-updating-notice').textContent,/Needs information: result/);assert.equal(h.q('mw-add-flow').disabled,true);assert.equal(h.q('mw-save-message').disabled,false);}
+ }finally{h.w.close();}
+});

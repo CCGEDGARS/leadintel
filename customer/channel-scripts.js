@@ -3,10 +3,14 @@
 const Rich=()=>typeof module==='object'&&module.exports?require('./rich-text.js'):root.LeadIntelRichText;
 const channels={email:'Email',linkedin:'LinkedIn',phone:'Phone call'};
 const styles={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty',storyselling:'Storyselling',original:'Saved AI draft'};
+// Readable owner slots are an explicit vocabulary. Story participants such as
+// lowercase [company], dates and outcomes deliberately have no inferred value.
+const bracketFields={'First name':'firstName','Your name':'sender','Full name':'sender','Company':'company','ERCON':'company','Ercon':'company','Buyer company':'buyerCompany','email':'buyerEmail','Email':'buyerEmail','Calendly link':'calendly','Your booking URL':'calendly','Booking link':'calendly','Company website':'sellerWebsite','Website':'sellerWebsite','Your LinkedIn URL':'senderLinkedInUrl','City':'senderCity','Country':'senderCountry','meeting platform':'meetingPlatform','verified fact about their project':'verifiedDevelopment','verified project development':'verifiedDevelopment','specific project':'project','field / project':'serviceFocus','relevant work':'serviceFocus','relevant service':'serviceFocus','metalworking':'serviceFocus'};
 function fillScript(script,values={}){
- const missing=new Set();const fill=text=>String(text||'').replace(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g,(_,key)=>{if(!Object.hasOwn(values,key)||!String(values[key]??'').trim()){missing.add(key);return '{{'+key+'}}';}return String(values[key]);});
+ const missing=new Set(),usable=key=>Object.hasOwn(values,key)&&typeof values[key]==='string'&&values[key].trim()&&!/\[|\{\{/.test(values[key]);
+ const fill=text=>String(text||'').replace(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}|\[([^\[\]\n]+)\]/g,(original,curly,label)=>{const key=curly||bracketFields[label];if(!key||!usable(key)){missing.add(label||key);return original;}return values[key];});
  const draft={subject:script.channel==='email'?fill(script.subject):'',message:fill(script.body)};
- if(script.channel==='email'&&script.bodyHtml){const html=Rich().substitute(script.bodyHtml,values);Object.assign(draft,Rich()?.fields(draft.message,html));}
+ if(script.channel==='email'&&script.bodyHtml){const resolved=Object.fromEntries(Object.entries(values).filter(([key])=>usable(key)));const html=Rich().substitute(script.bodyHtml,resolved,{bracketFields});Object.assign(draft,Rich()?.fields(draft.message,html));}
  return {draft,missing:[...missing]};
 }
 function preferred(catalogue,channel){const id=catalogue?.primary?.find(p=>p.channel===channel)?.template_id;return catalogue?.personal?.find(s=>s.id===id&&s.channel===channel&&s.mode!=='inmail'&&!s.deleted)||null;}
@@ -57,7 +61,7 @@ function mount(document,adapter){
  async function applyRow(row,{confirm=true}={}){if(!row||row.deleted)throw Error('This script is unavailable.');if(busy||context().busy)throw Error('Finish the current operation first.');if(row.channel!==channel())throw Error('Switch to '+channels[row.channel]+' before loading this script.');if(confirm&&!(await confirmReplace()))return;
  if(row.builtin&&row.channel!=='phone'&&!row.creatorSource&&!row.id.startsWith('personal-')){adapter.selectBuiltin(row.style);return;}
  const result=row.style==='storyselling'&&row.builtin&&!row.creatorSource?{draft:document.defaultView.LeadIntelStorysellingNative.render(row.channel,adapter.values(row.style)),missing:[]}:fillScript(row,row.style==='storyselling'&&!row.creatorSource?document.defaultView.LeadIntelStorysellingNative.values(adapter.values(row.style)):adapter.values(row.style));if(channel()==='phone'){phone={...phone,previousDrafts:[...(phone.previousDrafts||[]),{message:phone.message,style:phone.style,sourceId:phone.sourceId||'',...(phone.writingAssistant?{writingAssistant:JSON.parse(JSON.stringify(phone.writingAssistant))}:{})}].slice(-20),tailoredOriginal:phone.tailoredOriginal||{message:result.draft.message,style:row.style,sourceId:row.id},message:result.draft.message,style:row.style,sourceId:row.id};delete phone.writingAssistant;phoneDirty=true;stash();field.value=phone.message;}else await adapter.applyDraft(result.draft,row.style,row.id);
- status(result.missing.length?'Complete these fields before saving: '+result.missing.join(', '):'Working copy loaded. Review and save.');render();adapter.syncAssistant();}
+ status(result.missing.length?'Known details filled. Still needed before use: '+result.missing.join(', '):'Working copy loaded. Review and save.');render();adapter.syncAssistant();}
  async function selectStyle(style,{fresh=false}={}){const key=feedbackKey(),selection=++styleSelection;lastStyleFeedback={key,style,state:'applying'};adapter.onStyleStatus?.();try{if(fresh||!catalogue){status('Loading your saved scripts…');const loaded=await refresh();if(!loaded)throw Error('Your active script could not be checked. Your current draft is preserved. Retry when the library is available.');}if(selection!==styleSelection||key!==feedbackKey())return;if(!catalogue)throw Error('Your saved scripts could not be loaded. Retry this style; your current script is preserved.');if(style==='original'){if(channel()==='phone'){await generatePhone();return;}adapter.selectBuiltin(style);return;}const row=rowFor(style);if(!row)throw Error('Awaiting an approved '+styles[style]+' script for '+channels[channel()]+'. Use Writing Assistant or your own template.');await applyRow(row,{confirm:false});if(channel()!=='phone'&&(!row.builtin||row.creatorSource)&&key===feedbackKey()){const launcher=document.querySelector('#mw-writing-assistant-launcher [data-wa-expand], #mw-writing-assistant-launcher [data-wa-open]');if(launcher&&!launcher.disabled)launcher.click();}}catch(error){if(selection===styleSelection&&key===feedbackKey()){lastStyleFeedback={key,style,state:'failed',error:error.message};adapter.onStyleStatus?.();}throw error;}finally{if(selection===styleSelection&&key===feedbackKey()&&lastStyleFeedback?.state==='applying'){lastStyleFeedback={key,style,state:'applied'};adapter.onStyleStatus?.();}}}
  async function generatePhone(){if(!phoneLoaded||busy||!context().usable)throw Error('Select a saved contact and finish pending operations first.');if(!(await confirmReplace()))return;const token=++generation,key=phoneScope;busy=true;render();status('Preparing an original calling script…');try{const next=await adapter.generatePhone();if(token!==generation||key!==phoneScope||channel()!=='phone')return;phone={...phone,message:next.message,style:'original',sourceId:''};delete phone.writingAssistant;phoneDirty=true;stash();status('AI working copy. Review the facts and save.');}finally{busy=false;render();adapter.syncAssistant();}}
  function saveEditedTemplate(input,{saveDraft}={}){
@@ -109,7 +113,20 @@ function mount(document,adapter){
  // Automatic preparation must consult the same owner catalogue as explicit style clicks.
  function prepareOnOpen(style){
   if(!styles[style]||style==='original'||channel()!=='email')return false;
-  if(adapter.source?.())return true;
+  if(adapter.source?.()){
+   // Upgrade only an untouched raw library copy, never a saved or edited draft.
+   const key=feedbackKey(),before=JSON.stringify(draft()),source=adapter.source();
+   void (async()=>{
+    if(adapter.canPersonalizeRawCopy?.()!==true)return;
+    if(!catalogue&&!await refresh())return;
+    if(key!==feedbackKey()||before!==JSON.stringify(draft())||adapter.canPersonalizeRawCopy?.()!==true)return;
+    const row=[...(catalogue?.core||[]),...(catalogue?.personal||[])].find(r=>r.id===source&&!r.deleted&&r.channel===channel());
+    if(!row||draft().message!==row.body||draft().subject!==(row.subject||''))return;
+    const next=fillScript(row,adapter.values(style));
+    if(next.draft.message!==draft().message||next.draft.subject!==draft().subject)await applyRow(row,{confirm:false});
+   })().catch(error=>status(error.message));
+   return true;
+  }
   if(adapter.canAutomaticallyApply?.()!==true)return false;
   const row=rowFor(style);if(catalogue&&row?.builtin&&!row.creatorSource)return false;
   const key=feedbackKey(),before=JSON.stringify(draft());

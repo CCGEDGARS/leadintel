@@ -93,7 +93,7 @@
  }
  function draftFactGaps(draft={}){
   const text=[draft.subject,draft.message].filter(Boolean).join(' '),out=[];
-  for(const match of text.matchAll(/\[Add (?:verified )?([^\]]+)\]|{{([^}]+)}}|\[(link)\]/gi))out.push((match[1]||match[2]||match[3]).trim());
+  for(const match of text.matchAll(/\[([^\[\]\n]+)\]|{{([^}]+)}}/g))out.push((match[1]||match[2]).replace(/^Add (?:verified )?/i,'').trim());
   return [...new Set(out)];
  }
  function sellerCompanyDescription(discipline,origin){

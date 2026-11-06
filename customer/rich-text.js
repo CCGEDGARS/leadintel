@@ -38,9 +38,10 @@
  function fields(text,html,key='messageHtml'){const safe=matchingHtml(text,html);return safe?{[key]:safe}:{};}
  function typography(html){const tree=parse(html);let result='';const walk=n=>{if(!result&&n.style)result=n.style.split(';').filter(s=>s.startsWith('font-family:')||s.startsWith('font-size:')).join(';');for(const c of n.children||[])walk(c);};walk(tree);return result;}
  // Replace text across inline tags without flattening emphasis around a slot.
- function substitute(html,values,{slots=false}={}){
+ function substitute(html,values,{slots=false,bracketFields={}}={}){
   const tree=parse(html),leaves=[];let joined='';const walk=n=>{if(n.text!==undefined){leaves.push({node:n,start:joined.length});joined+=n.text;}for(const c of n.children||[])walk(c);};walk(tree);
   const pairs=Object.entries(values||{}).filter(([key,value])=>/^[a-zA-Z][\w]*$/.test(key)&&String(value??'').length).map(([key,value])=>[slots?String(value):'{{'+key+'}}',slots?'{{'+key+'}}':String(value)]).sort((a,b)=>b[0].length-a[0].length);
+  if(!slots)for(const [label,key] of Object.entries(bracketFields))if(Object.hasOwn(values,key)&&String(values[key]??'').length)pairs.push(['['+label+']',String(values[key])]);
   const changes=[];for(const [needle,replacement] of pairs){let index=0;while((index=joined.indexOf(needle,index))>=0){const start=index,end=index+needle.length;if(!changes.some(c=>start<c.end&&end>c.start))changes.push({start,end,replacement,anchor:start+(slots?0:2)});index=end;}}
   for(const {node,start} of leaves){const end=start+node.text.length;let value='',cursor=0;for(const change of changes.filter(c=>c.start<end&&c.end>start).sort((a,b)=>a.start-b.start)){const from=Math.max(0,change.start-start),to=Math.min(node.text.length,change.end-start);value+=node.text.slice(cursor,from);if(change.anchor>=start&&change.anchor<end)value+=change.replacement;cursor=to;}node.text=value+node.text.slice(cursor);}
   return serialize(tree);
