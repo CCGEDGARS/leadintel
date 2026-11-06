@@ -7,7 +7,7 @@ function mount(document,{host,request,refresh,scope}){
  const header=el('header'),title=el('h2','Creator Library'),closeButton=el('button','Close');title.id='creator-library-title';closeButton.type='button';closeButton.className='secondary-btn';closeButton.setAttribute('aria-label','Close Creator Library');header.append(title,closeButton);
  const content=el('div'),notice=el('p');content.className='cl-content';notice.className='cl-status';notice.setAttribute('role','status');dialog.append(header,content,notice);host.after(panel);document.body.append(dialog);
  let allowed=false,unlocked=false,data=null,editing=null,dirty=false,busy=false,epoch=0,identity='',timer;
- const say=text=>notice.textContent=text;
+ const say=text=>{notice.textContent=text;if(text)notice.scrollIntoView?.({block:'nearest'});};
  function close(){const wasOpen=dialog.open;if(dialog.open){if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');}trigger.setAttribute('aria-expanded','false');if(wasOpen&&trigger.isConnected&&!panel.hidden)trigger.focus();}
  function open(){if(!allowed)return;trigger.setAttribute('aria-expanded','true');if(!dialog.open){if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');}(content.querySelector('input')||closeButton).focus();}
  trigger.onclick=event=>{event.preventDefault();open();};closeButton.onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('close',()=>trigger.setAttribute('aria-expanded',String(dialog.open)));
@@ -19,28 +19,36 @@ function mount(document,{host,request,refresh,scope}){
  function input(label,value,{multiline=false,maxLength=12000}={}){const l=el('label',label),n=el(multiline?'textarea':'input');n.value=value||'';n.maxLength=maxLength;if(multiline)n.rows=9;n.addEventListener('input',()=>dirty=true);l.append(n);content.append(l);return n;}
  async function edit(row){if(dirty&&!await confirm('Discard the unsaved script changes?'))return;editing={...row};dirty=false;draw();}
  function draw(){
-  content.replaceChildren();if(!allowed)return;
+  content.replaceChildren();dialog.append(notice);if(!allowed)return;
   if(!unlocked){
    content.append(el('p','Creator access only. Enter your 4-digit PIN. Unlock lasts up to 15 minutes.'));
    const form=el('form'),label=el('label','PIN code'),password=el('input');password.type='password';password.autocomplete='off';password.inputMode='numeric';password.pattern='[0-9]{4}';password.required=true;password.minLength=4;password.maxLength=4;label.append(password);const submit=el('button','Unlock library');submit.className='primary-btn';submit.type='submit';form.append(label,submit);content.append(form);
    form.onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;submit.disabled=true;const captured=epoch;try{const result=await request('/creator/unlock',{method:'POST',body:{password:password.value}});password.value='';if(captured!==epoch)return;unlocked=true;timer=setTimeout(()=>{clear();draw();say('Unlock expired. Enter your PIN again.');},Math.max(1,result.expiresAt-Date.now()));await load();say('');}catch(e){password.value='';if(captured===epoch)say(e.message);}finally{busy=false;submit.disabled=false;}};return;
   }
-  content.append(el('p','Review your original and pattern, then Save to make it the mandatory primary master for its channel and style. New script preparation uses this saved pattern. Existing customer drafts stay intact. Only {{field}} placeholders change; literal wording is preserved.'));
+  content.append(el('p','Paste your script, choose its channel and style, then review and Save. Your exact script becomes the core template for new preparations. Existing customer drafts stay intact.'));
   const actions=el('div');actions.className='cl-actions';actions.append(button('New script',()=>edit({id:root.crypto.randomUUID(),revision:0,channel:'email',style:'professional',name:'',folder:'',subject:'',body:'',original:''})),button('Refresh',async()=>{if(dirty&&!await confirm('Discard unsaved changes and refresh?'))return;editing=null;dirty=false;await load();}),button('Lock library',lock));content.append(actions);
   if(editing){
    const row=editing;content.append(el('h3',row.revision?'Edit source · v'+row.revision:'New source script'));
    const name=input('Script title',row.name,{maxLength:80}),folder=input('Subfolder (optional)',row.folder,{maxLength:80});
    const select=(label,values,value)=>{const l=el('label',label),s=el('select');for(const [id,title] of values){const o=el('option',title);o.value=id;s.append(o);}s.value=value;s.onchange=()=>dirty=true;l.append(s);content.append(l);return s;};
    const channel=select('Folder',[['email','Emails'],['linkedin','Messages'],['phone','Phone Calls']],row.channel),style=select('Style',[['professional','Professional'],['curiosity','NLP'],['friendly','Friendly'],['brutal','Brutal Honesty'],['storyselling','Storyselling']],row.style);
-   const original=input('Original script (preserved as supplied)',row.original,{multiline:true,maxLength:30000}),subject=input('Email subject pattern',row.subject,{maxLength:500}),body=input('Active script pattern',row.body,{multiline:true});
+   const original=input('Your script (wording preserved)',row.original,{multiline:true,maxLength:30000}),subject=input('Email subject pattern',row.subject,{maxLength:500}),body=input('Active script pattern',row.body&&row.body!==row.original?row.body:'',{multiline:true});
+   const advanced=el('details');advanced.append(el('summary','Advanced personalization (optional)'),body.parentElement);content.append(advanced);advanced.open=Boolean(body.value);
+   const subjectVisibility=()=>{subject.parentElement.hidden=channel.value!=='email';};subjectVisibility();channel.addEventListener('change',subjectVisibility);
    const upload=el('input');upload.type='file';upload.accept='.txt,.md,text/plain,text/markdown';const uploadLabel=el('label','Import original from .txt or .md');uploadLabel.append(upload);content.append(uploadLabel);upload.onchange=async()=>{try{const file=upload.files[0];if(!file)return;if(file.size>120000)throw Error('Choose a text file up to 120 KB.');const text=await file.text();if(text.length>30000)throw Error('Original exceeds 30,000 characters.');original.value=text;dirty=true;}catch(e){say(e.message);}};
-   content.append(el('p','Paste the original above. In the active pattern, replace changing facts with explicit fields such as {{firstName}}, {{buyerCompany}}, {{sender}}, {{company}}, {{offer}} and {{calendly}}. Unknown fields remain visible and prevent final use. No AI rewriting of masters.'));
-   const review=el('label'),check=el('input');check.type='checkbox';review.append(check,document.createTextNode(' I reviewed the original, pattern, reusable fields and claims. Save makes this the mandatory primary master for the selected channel and style.'));content.append(review);
+   content.append(el('p','Save uses your script exactly as entered. Bracketed notes stay visible for tailoring; saving does not fill them automatically. Advanced personalization is optional and preserves existing custom patterns.'));
+   const review=el('label'),check=el('input');check.type='checkbox';review.append(check,document.createTextNode(' I reviewed this script and its claims. Save makes this the mandatory primary master for the selected channel and style.'));content.append(review);
    const controls=el('div');controls.className='cl-actions';controls.append(button('Copy original to pattern',async()=>{if(body.value&&!await confirm('Replace the script pattern with the original text?'))return;body.value=original.value;dirty=true;}),button('Save',async()=>{
+    if(!name.value.trim()){name.focus();throw Error('Add a script title above, then press Save.');}
+    if(!original.value.trim()){original.focus();throw Error('Paste your script above, then press Save.');}
+    if(channel.value==='email'&&!subject.value.trim()){subject.focus();throw Error('Add an email subject, or choose Phone Calls for a calling script.');}
+    const pattern=body.value.trim()?body.value:original.value;
+    if(pattern.length>12000)throw Error('The active script must be 12,000 characters or fewer. Your text is still in the editor.');
     if(!check.checked)throw Error('Review the script and tick the confirmation.');
+    say('Saving your script…');
     const captured=epoch,selectedChannel=channel.value,selectedStyle=style.value;
     const expectedCoreRevision=data.active.find(r=>r.id===selectedChannel+':'+selectedStyle)?.revision||0;
-    const result=await request('/creator/'+row.id,{method:'PUT',body:{name:name.value,folder:folder.value,channel:selectedChannel,style:selectedStyle,original:original.value,subject:selectedChannel==='email'?subject.value:'',body:body.value,expectedRevision:row.revision}});
+    const result=await request('/creator/'+row.id,{method:'PUT',body:{name:name.value,folder:folder.value,channel:selectedChannel,style:selectedStyle,original:original.value,subject:selectedChannel==='email'?subject.value:'',body:pattern,expectedRevision:row.revision}});
     if(captured!==epoch)return;
     editing=result.script;dirty=false;
     try{await request('/creator/'+row.id+'/activate',{method:'POST',body:{expectedRevision:result.script.revision,expectedCoreRevision}});}
@@ -49,7 +57,7 @@ function mount(document,{host,request,refresh,scope}){
     await load();if(captured!==epoch)return;
     try{await refresh();}catch(error){if(captured===epoch)say('Primary master saved. Reload the script catalogue before preparing a new message. '+error.message);return;}
     if(captured===epoch)say('Saved as the mandatory primary master for '+selectedChannel+' · '+selectedStyle+'. New preparations use this script. Existing drafts are preserved.');
-   }),button('Close editor',async()=>{if(dirty&&!await confirm('Discard unsaved script changes?'))return;editing=null;dirty=false;draw();}));content.append(controls);
+   }),button('Close editor',async()=>{if(dirty&&!await confirm('Discard unsaved script changes?'))return;editing=null;dirty=false;draw();}));content.append(controls,notice);
   }
   const folders=el('div');folders.className='cl-folders';content.append(folders);
   for(const [channel,title] of [['email','Emails'],['linkedin','Messages'],['phone','Phone Calls']]){

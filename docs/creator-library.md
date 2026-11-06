@@ -9,8 +9,8 @@ Owner-approved 1 November 2026. Private platform-creator source management in Me
 3. Choose **New script**, or copy an existing active master into a source draft.
 4. Choose Emails, Messages (LinkedIn direct messages), or Phone Calls, and a style. Optional subfolders group sources within each channel.
 5. Paste the exact original, or import `.txt`/`.md`. Paste the reusable pattern separately, or copy the original into it and replace factual values with explicit `{{field}}` placeholders. Email requires a subject pattern.
-6. Confirm review and **Save draft**. Saving does not change generation.
-7. **Activate version** after reviewing the confirmation. The saved snapshot becomes that channel/style's core master. Later source edits remain drafts until reactivated.
+6. Confirm review and **Save**. The pasted script is saved and activated as that channel/style’s core master. A second pattern is not required.
+7. Advanced personalization is optional. Existing separate patterns are preserved. Bracketed notes remain literal until tailored; they are not automatically resolved by Save.
 
 Multiple source drafts may be stored; one master is active per channel/style. Literal wording is preserved except explicit factual fields. AI gains no authority to rewrite originals. Messages means LinkedIn direct messages; this feature adds no WhatsApp delivery. Four-stage InMail stays in its existing editor; its master writes also require this unlock.
 
