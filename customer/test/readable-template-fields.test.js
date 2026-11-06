@@ -9,3 +9,10 @@ test('readable slots fill across all channels without inventing a customer refer
 test('missing fields remain visible and block final use; unverified marker values are not substituted',()=>{const result=fillScript({channel:'email',body:'Hi [First name]. [City]. [result]',subject:'[Company]'},{firstName:'Alex',senderCity:'[Add verified city]'});assert.deepEqual(E.draftFactGaps(result.draft),['Company','City','result']);assert.equal(result.draft.message,'Hi Alex. [City]. [result]');});
 test('bold readable fields retain their formatting and escape supplied markup',()=>{const result=fillScript({channel:'email',body:'Hi [First name] from [Company]',bodyHtml:'<p>Hi <strong>[First name]</strong> from [Company]</p>'},{firstName:'Alex & Jo',company:'<Example>'});assert.equal(Rich.toText(result.draft.messageHtml),result.draft.message);assert.match(result.draft.messageHtml,/<strong>Alex &amp; Jo<\/strong>/);assert.doesNotMatch(result.draft.messageHtml,/<Example>/);});
 test('one buyer cannot inherit another buyer values and replacement values cannot introduce nested replacements',()=>{const script={channel:'email',body:'[First name] [Company]'};assert.equal(fillScript(script,{firstName:'Alex',company:'One'}).draft.message,'Alex One');assert.equal(fillScript(script,{firstName:'Beth',company:'Two'}).draft.message,'Beth Two');assert.equal(fillScript(script,{firstName:'[Company]',company:'Two'}).draft.message,'[First name] Two');});
+test('phone conversation cues stay readable without becoming missing facts, while factual gaps remain',()=>{
+ const body='Hi [First name]. [Answers]. [their words]. [manager]. [agreed day]. [certifications]. [result].';
+ const phone=fillScript({channel:'phone',body},{firstName:'Alex'});
+ assert.equal(phone.draft.message,body.replace('[First name]','Alex'));
+ assert.deepEqual(phone.missing,['certifications','result']);
+ assert.ok(fillScript({channel:'email',body},{}).missing.includes('Answers'),'email factual checks are unchanged');
+});

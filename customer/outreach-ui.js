@@ -9,7 +9,7 @@ import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';
 import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&native-storyselling=20261026-v4';
 import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=20261019-v1&rich-text=20261025-v1';
-import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261106-v5';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261106-v7';
 import './writing-workspace.js?v=20261023-v1&book-skills=20261027-v1&messages-reliability=20261031-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&storyselling=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
@@ -557,6 +557,17 @@ function renderDossier(){let item=currentItem();if(item&&!item.approved&&message
 function localizeVisibleItem(){const item=currentItem();if(!item||item.approved||item.channel==='linkedin'||item.messageStudioDraft)return;const main=mainState();const localized=LeadIntelOutreach.localizeGeneratedItem(item,selectedCandidate()||item.dossier,main.profile||{},main.market||{},contentLanguage());if(localized!==item)upsertItem(localized);}
 function renderAll(){if(window.LeadIntelPageQuality)queueMicrotask(()=>window.LeadIntelPageQuality.refresh('messages'));const editingDraft=typeof messageEditor!=='undefined'&&messageEditor?.state().editing?editorDraft():null;ensureSelection();renderCampaignStudio();localizeVisibleItem();renderSelector();renderDossier();renderMessageStudio();if(editingDraft&&messageEditor?.state().editing){q('outreach-email-subject').value=editingDraft.subject;q(currentItem()?.channel==='linkedin'?'outreach-linkedin':'outreach-email-body').value=editingDraft.message;globalThis.LeadIntelRichTextEditor?.get(q('outreach-email-body'))?.setHtml(editingDraft.messageHtml);}}
 function messageQualityContext(){
+ const phoneWorkspace=globalThis.LeadIntelChannelWorkspace;
+ if(phoneWorkspace?.phoneActive()){
+  const Q=window.LeadIntelPageQuality,phone=phoneWorkspace.phoneReadiness(),c=phoneWorkspace.context();
+  return {loaded:Boolean(q('sc-phone-editor')),busy:phone.busy,inputs:{channel:'phone',contact:c.contactId,draft:phoneWorkspace.draft()},checks:[
+   Q.check('phone-contact','Saved call recipient',phone.loaded&&Boolean(c.companyId&&c.contactId),'Select a saved CRM contact in Buyers.',{state:'blocked',actions:['prepare','generate','save','library'],target:{step:5,focus:'buyers'}}),
+   Q.check('phone-script','Calling script prepared',phone.hasDraft,'Choose a phone style or write your calling script.',{actions:['save'],target:{id:'sc-phone-editor'}}),
+   Q.check('phone-facts','Call facts reviewed',!phone.missing.length,'Review the remaining factual fields in your calling script. Conversation prompts can be completed during the call.',{actions:[],target:{id:'sc-phone-editor'}}),
+   Q.check('phone-saved','Calling script saved',!phone.dirty,'Save your calling script.',{actions:[],target:{id:'sc-phone-editor'}}),
+   Q.check('phone-manual','Calls are manual',false,'Calling directly from LeadIntel is not available.',{actions:['approve','flow','send']})
+  ]};
+ }
  const Q=window.LeadIntelPageQuality,item=currentItem(),studio=studioState(),draft=editorDraft(),editor=messageEditor?.state()||{},context=studioMessageContext(item,selectedCandidate()),make=Q.check,info=item?.messageStudioDraft||{},event=info.eventSnapshot;
  const finalActions=['approve','flow','send'],checks=[
   make('recipient-confirmed','Recipient and company confirmed',buyerHandoffPending?null:messageRecipientReady(),buyerHandoffPending?'Checking the selected recipient against saved CRM details…':'Review the selected recipient in Buyers. Your saved email and draft are retained.',{actions:['generate','save','library',...finalActions],state:buyerHandoffPending?'preparing':'blocked',target:buyerHandoffPending?null:{step:5,focus:'buyers',id:'discovery-buyers-guide'}}),
@@ -590,6 +601,7 @@ function messageQualityContext(){
  return {loaded:Boolean(q('message-studio')),busy:buyerHandoffPending||studioGenerationBusy||messageTranslationBusy||messageFactResearchBusy||editor.busy||editor.saving,inputs:{workspace:crmBridge()?.workspace?.id,recipient:item?.selectedPersonId,domain:item?.domain,context,studio,draft,info,approved:item?.approved},checks};
 }
 async function prepareMessagePageQuality(){
+ if(globalThis.LeadIntelChannelWorkspace?.phoneActive())return false;
  if(!messageRecipientReady()){
   const choice=readJson(DISCOVERY_META_KEY).scriptBuyer;
   if(choice?.workspaceId===crmBridge()?.workspace?.id)return openBuyerScripts(choice);
