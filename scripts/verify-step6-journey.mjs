@@ -82,6 +82,23 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   await settled(page,'brutal');assert.deepEqual(await fields(page),manual,'sync recovery preserves exact saved draft');
   assert.equal(await page.evaluate(()=>LeadIntelPageQuality.getReport('messages').checks.find(row=>row.id==='recipient-confirmed')?.status),'pass');
 
+  // A CRM records notification invalidates a pending validation. The old
+  // response must not commit, and the saved buyer must recover automatically.
+  await page.evaluate(async()=>{
+   const b=LeadIntelServerBridge,choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')).scriptBuyer;
+   const get=b.getCrmCompany.bind(b);let release,entered;
+   const waiting=new Promise(r=>entered=r);
+   b.getCrmCompany=async id=>{entered();await new Promise(r=>release=r);return get(id);};
+   const pending=LeadIntelOutreachUI.openBuyerScripts(choice);await waiting;
+   b.getCrmCompany=get;
+   dispatchEvent(new CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:b.workspace.id,domain:choice.domain}}));
+   release();await pending;
+  });
+  await settled(page,'brutal');assert.deepEqual(await fields(page),manual,'CRM refresh recovery preserves exact saved draft');
+  assert.equal(await page.evaluate(()=>LeadIntelPageQuality.getReport('messages').checks.find(row=>row.id==='recipient-confirmed')?.status),'pass');
+
+
+
   await page.setViewportSize({width:390,height:844});await visible(page,'mw-edit-message');await edit(page,{subject:'Cancelled change',message:'This must be cancelled.'});await (await visible(page,'mw-cancel-edit')).click();assert.deepEqual(await fields(page),manual);await visible(page,'mw-save-message');await visible(page,'mw-restore-original');await shot('04-narrow-primary-controls.png');await page.setViewportSize({width:1440,height:1100});
   let failedSaves=0;
   const failureRoute=async route=>{if(route.request().method()==='POST'){failedSaves++;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Controlled CRM save failure'})});}else await route.continue();};
@@ -130,7 +147,7 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);assert.deepEqual(errors,[]);
   const evidence={verdict:'LOCAL_CONTROLLED_ACCEPTANCE',workspace:workspaceId,authenticatedBrowserContexts:contexts.length,browser:'Chromium',viewports:[{width:1440,height:1100},{width:390,height:844}],coreStyles:styleEvidence,invalidPreparation:{previousDraftPreserved:true,visibleRetry:true,retryApplied:true},exactManualCrmSnapshot:true,freshBrowserReopen:true,syncRecipientRecovery:true,readableTemplatePersonalization:true,newerCrmRecovery:{failedWorkspacePuts,exactTextRestored:true,savedBadgeTruthful:true},reopenProviderReplays:0,twoBuyerIsolation:true,lateOtherBuyerPreparationPreservedCurrentDraft:true,linkedin:{visibleProfileReviewAndCrmAcknowledgement:true,existingConfirmationGatePassed:true,exactCrmSave:true,freshBrowserReopen:true,emailDraftPreserved:true,reopenProviderReplays:0},failedSave:{attempts:failedSaves,workingTextPreserved:true,savedBadgeTruthful:true,retrySaved:true},providerRequests:f.providerRequests.slice(0,40),outboundMessages:0,paidContactRequests:0,consoleErrors:errors,blockedBrowserOrigins:[...new Set(blocked)],unproven:['arbitrary real-model semantic quality','production customer-session acceptance','translated-source preservation in authenticated browser','late provider response versus manual edit (editing is disabled while generation runs)','five enabled subjects for every style when all required facts are supplied','live external LinkedIn profile review'],requests:requestTrace(f.calls),screenshots};
   await fs.writeFile(path.join(artifactDir,'evidence.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
- }catch(error){await fs.mkdir(artifactDir,{recursive:true});if(page)await shot('journey-failure.png').catch(()=>{});const diagnostics={error:String(error),consoleErrors:errors,requests:requestTrace(f.calls),providers:f.providerRequests,state:await page?.evaluate(()=>({recipient:document.getElementById('message-recipient')?.textContent,readiness:document.getElementById('mw-readiness-text')?.textContent,notice:document.getElementById('mw-updating-notice')?.textContent,editor:document.getElementById('mw-editor-status')?.textContent,toast:document.getElementById('toast')?.textContent,conflict:window.LeadIntelServerBridge?.conflict})).catch(()=>null)};await fs.writeFile(path.join(artifactDir,'failure.json'),JSON.stringify(diagnostics,null,2)+'\n');console.error('Step 6 browser diagnostics',JSON.stringify(diagnostics));throw error;
+ }catch(error){await fs.mkdir(artifactDir,{recursive:true});if(page)await shot('journey-failure.png').catch(()=>{});const diagnostics={error:String(error),consoleErrors:errors,requests:requestTrace(f.calls),providers:f.providerRequests,state:await page?.evaluate(()=>({recipient:document.getElementById('message-recipient')?.textContent,readiness:document.getElementById('mw-readiness-text')?.textContent,notice:document.getElementById('mw-updating-notice')?.textContent,editor:document.getElementById('mw-editor-status')?.textContent,toast:document.getElementById('toast')?.textContent,conflict:window.LeadIntelServerBridge?.conflict,selection:JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')).scriptBuyer,items:JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')).items.map(x=>({id:x.selectedPersonId,style:x.messageStudioDraft?.mode,origin:x.messageStudioDraft?.editorOrigin,saved:x.messageStudioDraft?.scriptSavedAt,body:x.drafts?.emailBody?.slice(0,100)})),editDisabled:document.getElementById('mw-edit-message')?.disabled,report:LeadIntelPageQuality.getReport('messages')})).catch(()=>null)};await fs.writeFile(path.join(artifactDir,'failure.json'),JSON.stringify(diagnostics,null,2)+'\n');console.error('Step 6 browser diagnostics',JSON.stringify(diagnostics));throw error;
  }finally{providerGate?.release();await Promise.allSettled(contexts.map(context=>context.close()));await browser.close();await f.close();}
 }
 

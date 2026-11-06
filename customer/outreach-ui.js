@@ -78,10 +78,13 @@ function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.st
 function loadOutreach({recoverInterrupted=false}={}){const state=LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));if(recoverInterrupted)for(const item of state.items){if(['running','checking'].includes(item.localizationStatus)){item.localizationStatus='error';item.localizationApprovalBlocked=true;item.localizationMessage='Generation was interrupted by a reload. Regenerate this package before approval.';}if(item.researchStatus==='running')item.researchStatus='error';if(item.messageStudioDraft?.savePending)item.messageStudioDraft={...item.messageStudioDraft,savePending:false};}return state;}
 function reloadCompanyRecords(event){
   if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;
-  const affected=outreach.selectedDomain===event.detail.domain;
+  const affected=outreach.selectedDomain===event.detail.domain,interrupted=buyerHandoffPending;
   outreach=loadOutreach();
-  if(affected){buyerHandoffRequest++;messageChannelNavigationRequest++;scriptRestoreRequest++;handoffContact=null;messageTranslationController?.abort();messageTranslationOwner++;messageTranslationBusy=false;cancelPendingScriptGeneration();}
+  if(affected){buyerHandoffRequest++;buyerHandoffPending=false;messageChannelNavigationRequest++;scriptRestoreRequest++;handoffContact=null;messageTranslationController?.abort();messageTranslationOwner++;messageTranslationBusy=false;cancelPendingScriptGeneration();}
   renderAll();
+  // A records refresh invalidates the old validation, not the saved selection.
+  // Wait for any recovery owner to release its slot before validating fresh CRM data.
+  if(affected&&interrupted)queueMicrotask(()=>{void Promise.resolve(recipientRecoveryTask).then(()=>{recipientRecoveryAttempts=0;return restoreSavedMessageRecipient();});});
 }
 window.addEventListener('leadintel:company-records-changed',reloadCompanyRecords);
 function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
