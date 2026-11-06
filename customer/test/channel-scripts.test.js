@@ -34,3 +34,21 @@ test('real channel mount puts owner library below Writing Assistant and preserve
   f.setCatalogue({core:[],personal:[],primary:[],canManage:false});await f.ui.refresh();assert.equal(panel.hidden,true);assert.equal(panel.open,false);assert.equal(dialog.open,false);
  }finally{f.w.close();}
 });
+
+test('all fifteen style buttons load the active channel master directly without a replacement dialog',async()=>{
+ const f=await fixture();try{
+  const all=['professional','curiosity','friendly','brutal','storyselling'];let confirmations=0;f.w.LeadIntelDialogs.confirm=async()=>{confirmations++;return false;};
+  const host=f.w.document.getElementById('mw-style-options');for(const style of all.slice(1)){const b=f.w.document.createElement('button');b.dataset.writingStyle=style;b.textContent=style;host.append(b);}
+  const core=['email','linkedin','phone'].flatMap(channel=>all.map(style=>({id:channel+':'+style,channel,style,name:style,subject:channel==='email'?style+' subject':'',body:channel+' '+style+' {{firstName}}. [Original bracket remains].',builtin:true,creatorSource:{id:channel+style,revision:1}})));
+  f.setCatalogue({core,personal:[],primary:[],canManage:false});await f.ui.refresh();
+  for(const channel of ['email','linkedin','phone']){
+   await f.ui.openChannel(channel);await tick();
+   for(const style of all){
+    const button=channel==='phone'?[...f.w.document.querySelectorAll('.sc-phone-styles button')].find(b=>b.textContent===require('../channel-scripts.js').styles[style]):host.querySelector('[data-writing-style="'+style+'"]');
+    assert.ok(button,channel+' '+style);button.click();await tick();await tick();
+    assert.equal(f.ui.draft().message,channel+' '+style+' Alice. [Original bracket remains].');assert.equal(f.ui.styleFeedback().state,'applied');
+   }
+  }
+  assert.equal(confirmations,0);assert.equal(f.requests.some(([url,o])=>o.method==='PUT'||/send|enqueue|writing-assistant/.test(url)),false);
+ }finally{f.w.close();}
+});
