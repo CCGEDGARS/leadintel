@@ -9,7 +9,7 @@ import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';
 import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&native-storyselling=20261026-v4';
 import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=20261019-v1&rich-text=20261025-v1';
-import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261106-v3';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261106-v4';
 import './writing-workspace.js?v=20261023-v1&book-skills=20261027-v1&messages-reliability=20261031-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&storyselling=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
@@ -1594,13 +1594,27 @@ async function openVerifiedBuyerScripts(choice){
 }
 window.LeadIntelOutreachUI={openBuyerScripts};window.LeadIntelOutreachUI.openMessageChannel=openMessageChannel;
 window.addEventListener('leadintel:buyer-for-scripts',event=>{messageChannelNavigationRequest++;messageChannelNavigationBaseline=null;void openBuyerScripts(event.detail).then(opened=>{if(!opened)toast('The selected recipient could not be opened. Check email confirmation and workspace synchronization, then retry.');}).catch(()=>toast('Unable to load the selected CRM contact.'));});
-if(readJson(DISCOVERY_META_KEY).scriptBuyer&&(mainState().step===6||readJson(DISCOVERY_META_KEY).visibleStep===6))void openBuyerScripts(readJson(DISCOVERY_META_KEY).scriptBuyer).catch(()=>{});
-
-window.addEventListener('leadintel:server-ready',()=>{const choice=readJson(DISCOVERY_META_KEY).scriptBuyer;if(choice&&(mainState().step===6||readJson(DISCOVERY_META_KEY).visibleStep===6))void openBuyerScripts(choice).catch(()=>toast('Saved LinkedIn selection needs review.'));});
-
+// Hydration and conflict resolution can finish after the module has loaded.
+// Revalidate the saved selection at that boundary, once per in-flight attempt.
+// Never manufacture a handoff or weaken the identity/CRM checks above.
+let recipientRecoveryTask=null,recipientRecoveryKey='',recipientRecoveryAttempts=0;
+function restoreSavedMessageRecipient(){
+ const b=crmBridge(),meta=readJson(DISCOVERY_META_KEY),choice=meta.scriptBuyer,editor=messageEditor?.state();
+ if(messageRecipientReady()||buyerHandoffPending||recipientRecoveryTask)return recipientRecoveryTask;
+ if(!b?.ready||!b.session?.authenticated||b.conflict||b.resolvingSync||!choice||choice.workspaceId!==b.workspace?.id||!(mainState().step===6||meta.visibleStep===6)||editor?.editing||editor?.saving||editor?.preview||editor?.busy)return;
+ const key=JSON.stringify([b.workspace.id,b.session.user?.id,choice]);
+ if(key!==recipientRecoveryKey){recipientRecoveryKey=key;recipientRecoveryAttempts=0;}
+ // Repeated autosave events must not become an unbounded CRM retry loop.
+ if(recipientRecoveryAttempts>=2)return;
+ recipientRecoveryAttempts++;
+ recipientRecoveryTask=openBuyerScripts(choice).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
+ return recipientRecoveryTask;
+}
+void restoreSavedMessageRecipient();
+window.addEventListener('leadintel:server-ready',()=>{void restoreSavedMessageRecipient();});
 for(const event of ['leadintel:server-conflict','leadintel:sync-resolving'])window.addEventListener(event,()=>{cancelPendingScriptGeneration();renderMessageWorkspace();});
-window.addEventListener('leadintel:sync-settled',()=>renderMessageWorkspace());
-window.addEventListener('leadintel:server-synced',()=>{if(!crmBridge()?.resolvingSync)renderMessageWorkspace();});
+window.addEventListener('leadintel:sync-settled',()=>{recipientRecoveryAttempts=0;renderMessageWorkspace();void restoreSavedMessageRecipient();});
+window.addEventListener('leadintel:server-synced',()=>{if(!crmBridge()?.resolvingSync){renderMessageWorkspace();void restoreSavedMessageRecipient();}});
 
 
 window.addEventListener('leadintel:language-pack-updated',()=>{if(q('message-translation-panel'))renderMessageWorkspace();});
