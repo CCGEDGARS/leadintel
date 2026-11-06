@@ -6,13 +6,71 @@ const styles={professional:'Professional',curiosity:'NLP',friendly:'Friendly',br
 // Readable owner slots are an explicit vocabulary. Story participants such as
 // lowercase [company], dates and outcomes deliberately have no inferred value.
 const bracketFields={'First name':'firstName','Your name':'sender','Full name':'sender','Company':'company','ERCON':'company','Ercon':'company','Buyer company':'buyerCompany','email':'buyerEmail','Email':'buyerEmail','Calendly link':'calendly','Your booking URL':'calendly','Booking link':'calendly','Company website':'sellerWebsite','Website':'sellerWebsite','Your LinkedIn URL':'senderLinkedInUrl','City':'senderCity','Country':'senderCountry','meeting platform':'meetingPlatform','verified fact about their project':'verifiedDevelopment','verified project development':'verifiedDevelopment','specific project':'project','field / project':'serviceFocus','relevant work':'serviceFocus','relevant service':'serviceFocus','metalworking':'serviceFocus'};
+// Explicit aliases from the owner's readable scripts. Lowercase [company] is
+// deliberately a case-study participant, never the current seller identity.
+Object.assign(bracketFields,{
+ 'Your full name':'sender','Your LinkedIn profile URL':'senderLinkedInUrl','role':'senderRole',
+ 'Current project phase':'milestoneWork','project location':'projectLocation','facility / project':'projectType',
+ 'verified completion year':'openingYear','product / structure':'deliveryItem',
+ 'company location and description':'sellerDescriptionPlain','verified years of experience':'experienceDuration',
+ 'industry':'industry','target market':'targetMarket','relevant work packages':'workPackages',
+ 'relevant company data':'meetingData','verified comparable projects':'comparableProjects',
+ 'specific project — verified fact':'verifiedDevelopment','verified project development':'verifiedDevelopment',
+ 'project':'project','field':'serviceFocus','client story':'buyerFacts','seller story':'sellerFacts',
+ 'X':'experienceNumber','countries':'exportCountries','Scandinavia':'exportCountries',
+ 'certifications':'certifications','reference, with permission':'referenceStatement',
+ 'One short, verified reference.':'referenceStatement','real proof':'referenceStatement',
+ 'Real reference: “Recently we …..”':'referenceStatement','Real reference: “Recently we ….”':'referenceStatement',
+ 'Real reference: “Recently we …”':'referenceStatement','Real reference: “…..”':'referenceStatement'
+});
+function readableValues(studio,context={},identity={},profile={}){
+ const S=typeof module==='object'&&module.exports?require('./message-studio.js'):root.LeadIntelMessageStudio;
+ const E=typeof module==='object'&&module.exports?require('./message-editor.js'):root.LeadIntelMessageEditor;
+ const V=typeof module==='object'&&module.exports?require('./message-evidence.js'):root.LeadIntelMessageEvidence;
+ const clean=value=>typeof value==='string'&&!/\[|\{\{|\b(?:unknown|unconfirmed)\b/i.test(value)?value.trim():'';
+ const plain=value=>String(value||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/^\s*[#*]+\s*/gm,'');
+ const supplied=studio.essentials||{},approvedAnswer=key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])?clean(context.sellerAnswers?.[key]):'';
+ // Explicit message details win; approved Profile answers fill missing fields.
+ // Research suggestions and unaccepted answers never become seller claims.
+ const e={...supplied,offer:clean(supplied.offer)||approvedAnswer('priority_offers'),difference:clean(supplied.difference)||approvedAnswer('differentiation'),proof:clean(supplied.proof)||approvedAnswer('proof_points'),approach:clean(supplied.approach)||approvedAnswer('delivery_approach')};
+ const resolvedStudio={...studio,essentials:e},ctx={...context,sellerEvidence:(context.sellerEvidence||[]).map(row=>({...row,text:plain(row.text||row.excerpt)}))};
+ const atoms=E.factualValues({...resolvedStudio,mode:'professional'},ctx);
+ // Use the reviewed fact audit when present: it handles contradictory/past years.
+ for(const row of context.factPreparation?.facts||[])atoms[row.id]=row.status==='known'?row.value:'';
+ const known=Object.fromEntries(Object.entries(atoms).map(([key,value])=>[key,clean(value)]));
+ const approved=Object.entries(context.sellerAnswers||{}).filter(([key])=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(([,value])=>value);
+ const statements=[e.offer,e.difference,e.proof,e.approach,...approved,...S.subjectEvidenceSources(ctx).map(row=>row.text)].filter(Boolean).flatMap(V.sellerStatements);
+ const seller=statements.join(' '),duration=known.experienceDuration||seller.match(/\b(?:(?:more than|over|at least)\s+)?(?:\d+\+?|thirty|twenty|forty|fifty)\s+years\b/i)?.[0]||'';
+ const industry=seller.match(/\bin (?:the )?([\p{L}-]+) industry\b/iu)?.[1]||(/\bmetalworking\b/i.test(seller)?'metalworking':S.subjectSellerFacts(ctx,e).steel?'steel':'');
+ const market=seller.match(/\bspeciali[sz]\w*\s+in\s+(?:the\s+)?([^.!?]{1,70}? market)\b/i)?.[1]||'';
+ const exports=statements.map(text=>text.match(/\bexport(?:s|ing)?(?: mostly| mainly)? to ([^.!?]{1,100})/i)?.[1]).find(Boolean)||'';
+ const t=V.factualTrigger(context.trigger,context.buyerCompany),reviewed=['user_reviewed','source_verified'].includes(t?.verification)&&Boolean(V.domain(t.url));
+ const event=reviewed?String(t.excerpt||t.summary||''):'';
+ const location=event.match(/\b(?:in|at)\s+([\p{Lu}][\p{L}'-]+(?:\s+[\p{Lu}][\p{L}'-]+){0,2})(?=[.,;:]|\s|$)/u)?.[1]||'';
+ const proof=clean(e.proof),reference=proof&&/\b(?:delivered|completed|installed|manufactured|built)\b/i.test(proof)&&!/^https?:/i.test(proof)?proof:'';
+ const certificates=statements.filter(text=>/\b(?:we|our|certified|certification)\b/i.test(text)).flatMap(text=>text.match(/\b(?:ISO\s+\d+(?:-\d+)?(?::\d{4})?|EN\s+1090(?:-[12])?(?::\d{4})?|EXC\s*[234])\b/g)||[]);
+ const companyDescription=clean(E.factualValues({...resolvedStudio,mode:'professional'},ctx).sellerDescription).replace(/^(?:a|an)\s+/i,'');
+ return {...e,milestoneWork:known.milestoneWork||'',projectType:known.projectType||'',openingYear:known.openingYear||'',deliveryItem:known.deliveryItem||'',sender:clean(e.sender)||clean(identity.senderName),company:clean(e.company)||clean(identity.companyDisplayName),
+  firstName:clean(context.firstName),buyerName:clean(context.buyerName),buyerCompany:clean(context.buyerCompany),buyerRole:clean(context.buyerRole),
+  senderRole:clean(identity.senderTitle),senderCity:clean(identity.city)||clean(profile.city),senderCountry:clean(identity.country)||clean(profile.country),
+  senderLinkedInUrl:S.approvedSenderLinkedIn(context.senderLinkedInUrl||identity.linkedinUrl),sellerWebsite:clean(context.sellerWebsite),
+  calendly:S.subjectDomain(e.calendly)?e.calendly:'',meetingPlatform:S.meetingLabel(e),
+  verifiedDevelopment:reviewed?clean(t.summary||t.excerpt):'',project:reviewed?S.projectFact(context,80):'',projectLocation:reviewed?location:'',
+  sellerDescriptionPlain:companyDescription,experienceDuration:duration,experienceNumber:duration.replace(/\s+years$/i,''),industry,targetMarket:market,exportCountries:exports,
+  serviceFocus:clean(e.offer)||known.deliveryMaterial,workPackages:clean(e.offer)||known.deliveryMaterial,
+  meetingData:clean(e.meetingValue),referenceStatement:reference,comparableProjects:/\b(?:comparable|similar)\b/i.test(reference)?reference:'',certifications:[...new Set(certificates)].join(', '),
+  buyerFacts:reviewed?clean(t.summary||t.excerpt):'',sellerFacts:companyDescription,
+  // Never derive story participants, rescue outcomes, agreed dates or commitments.
+ };
+}
 // These are explicit live conversation cues, not missing seller/project facts.
 const phoneConversationPrompts=new Set(['answers','their words','manager','colleague named earlier','chosen meeting option','agreed day','agreed date','agreed follow-up day','chosen follow-up day','agreed follow-up day, time, time zone','repeat the buyer’s three requested topics',"repeat the buyer's three requested topics"]);
+function fieldKey(label){if(Object.hasOwn(bracketFields,label))return bracketFields[label];if(/^Real reference:\s*[\"“].*[\"”]$/.test(label||''))return 'referenceStatement';return null;}
 function fillScript(script,values={}){
  const missing=new Set(),usable=key=>Object.hasOwn(values,key)&&typeof values[key]==='string'&&values[key].trim()&&!/\[|\{\{/.test(values[key]);
- const fill=text=>String(text||'').replace(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}|\[([^\[\]\n]+)\]/g,(original,curly,label)=>{if(label&&(/^[\d\s,–-]+$/.test(label)||script.channel==='phone'&&phoneConversationPrompts.has(label.trim().toLowerCase())))return original;const key=curly||bracketFields[label];if(!key||!usable(key)){missing.add(label||key);return original;}return values[key];});
+ const fill=text=>String(text||'').replace(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}|\[([^\[\]\n]+)\]/g,(original,curly,label)=>{if(label&&(/^[\d\s,–-]+$/.test(label)||script.channel==='phone'&&phoneConversationPrompts.has(label.trim().toLowerCase())))return original;const key=curly||fieldKey(label);if(!key||!usable(key)){missing.add(label||key);return original;}return values[key];});
  const draft={subject:script.channel==='email'?fill(script.subject):'',message:fill(script.body)};
- if(script.channel==='email'&&script.bodyHtml){const resolved=Object.fromEntries(Object.entries(values).filter(([key])=>usable(key)));const html=Rich().substitute(script.bodyHtml,resolved,{bracketFields});Object.assign(draft,Rich()?.fields(draft.message,html));}
+ if(script.channel==='email'&&script.bodyHtml){const resolved=Object.fromEntries(Object.entries(values).filter(([key])=>usable(key)));const aliases={...bracketFields};for(const match of String(script.body||'').matchAll(/\[([^\[\]\n]+)\]/g)){const key=fieldKey(match[1]);if(key)aliases[match[1]]=key;}const html=Rich().substitute(script.bodyHtml,resolved,{bracketFields:aliases});Object.assign(draft,Rich()?.fields(draft.message,html));}
  return {draft,missing:[...missing]};
 }
 function preferred(catalogue,channel){const id=catalogue?.primary?.find(p=>p.channel===channel)?.template_id;return catalogue?.personal?.find(s=>s.id===id&&s.channel===channel&&s.mode!=='inmail'&&!s.deleted)||null;}
@@ -166,5 +224,5 @@ function mount(document,adapter){
  capture(base){if(channel()!=='phone')return base;const context={...base.context,channel:'phone',style:phone.style,appliedStyle:phone.style,maximumWords:null,currentDraft:{subject:'',message:phone.message},eventCampaign:null,scriptSourceId:phone.sourceId||'',mandatoryScript:(()=>{const row=phone.sourceId&&!phone.sourceId.startsWith('personal-')?rowFor(phone.style,'phone'):null;return row&&row.id===phone.sourceId?{id:row.id,style:row.style,body:row.body,masterVersion:row.masterVersion||'',sourceFile:row.sourceFile||''}:null;})()};return {...base,draftAssistant:phone.writingAssistant||null,context,scope:base.scope+'|phone',fingerprint:JSON.stringify(context),usable:Boolean(adapter.context().usable&&!adapter.context().busy&&base.referenceRevision!==null&&phoneLoaded&&!busy)};}}
  render();return api;
 }
-const api={channels,styles,fillScript,preferred,mount};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelChannelScripts=api;
+const api={channels,styles,fillScript,readableValues,bracketFields:Object.freeze(bracketFields),preferred,mount};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelChannelScripts=api;
 })(typeof window==='object'?window:globalThis);

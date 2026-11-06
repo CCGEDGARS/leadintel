@@ -16,3 +16,55 @@ test('phone conversation cues stay readable without becoming missing facts, whil
  assert.deepEqual(phone.missing,['certifications','result']);
  assert.ok(fillScript({channel:'email',body},{}).missing.includes('Answers'),'email factual checks are unchanged');
 });
+
+test('owner NLP labels use reviewed facts, sender identity and links across every channel',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js');
+ const studio={...S.seed(),mode:'curiosity',essentials:{sender:'Robin Lane',company:'Example Works',offer:'steel fabrication and installation',difference:'We have more than 30 years in the metalworking industry, specialising in the Scandinavian market.',proof:'We completed the Northport conveyor installation for Example Mining.',meetingValue:'production capacity data',calendly:'https://calendly.com/example/review'}};
+ const context={firstName:'Alex',buyerName:'Alex Smith',buyerCompany:'Example Mining',sellerWebsite:'https://seller.example',senderLinkedInUrl:'https://www.linkedin.com/in/robin-lane',trigger:{summary:'Foundation work in Northport is under way. The new sorting plant is due to run in 2028.',excerpt:'Foundation work in Northport is under way. The new sorting plant is due to run in 2028.',url:'https://buyer.example/project',verification:'source_verified'},sellerEvidence:[{url:'https://seller.example/about',sourceRead:true,text:'Example Works is a Swedish steel fabrication and installation company. We have more than 30 years in the metalworking industry.'}]};
+ const values=readableValues(studio,E.prepareFactContext(studio,context),{senderTitle:'Director'});
+ const script={subject:'[First name]. [Company]',body:'Hi [First name],\n\n[Current project phase] in [project location] is under way. The new [facility / project] is due to run in [verified completion year].\n\nI’m [Your full name] from [Company], a [company location and description] with [verified years of experience] in [industry], specialising in [target market].\n\n[Real reference: “Recently we ….”]\n\n[relevant work packages]. [relevant company data]. [Your booking URL]\n[Your full name] | [Your LinkedIn profile URL]'};
+ for(const channel of ['email','linkedin','phone']){
+  const result=fillScript({...script,channel},values);assert.deepEqual(result.missing,[]);
+  assert.match(result.draft.message,/Foundation work in Northport is under way/);
+  assert.match(result.draft.message,/new sorting plant is due to run in 2028/);
+  assert.match(result.draft.message,/Robin Lane from Example Works, a Swedish steel fabrication and installation company with more than 30 years in metalworking/);
+  assert.match(result.draft.message,/We completed the Northport conveyor installation/);
+  assert.match(result.draft.message,/https:\/\/www.linkedin.com\/in\/robin-lane/);
+ }
+});
+test('unreviewed triggers, conflicting dates and other seller pages cannot fill factual slots',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js'),studio={...S.seed(),mode:'curiosity',essentials:{sender:'Robin',company:'Example',offer:'software development'}};
+ const context={sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://other.example',sourceRead:true,text:'We have 99 years of metalworking experience and ISO 45001 certification.'}],trigger:{summary:'Foundation work in Northport is under way. The new sorting plant is due to run in 2028.',verification:'unconfirmed',url:'https://buyer.example/project'}};
+ const v=readableValues(studio,E.prepareFactContext(studio,context));assert.equal(v.verifiedDevelopment,'');assert.equal(v.projectLocation,'');assert.equal(v.experienceDuration,'');assert.equal(v.certifications,'');
+ const conflicting={...context,trigger:{...context.trigger,verification:'source_verified',excerpt:context.trigger.summary+' The new plant is due to run in 2029.'}};
+ assert.equal(readableValues(studio,E.prepareFactContext(studio,conflicting)).openingYear,'');
+});
+test('published word-form experience is usable, but a capability page never invents a customer case',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js');const studio={...S.seed(),mode:'curiosity',essentials:{company:'Example Works',offer:'manufacturing and installation of metal structures'}};
+ const v=readableValues(studio,{sellerWebsite:'https://seller.example',sellerEvidence:[{url:'https://seller.example/about',sourceRead:true,text:'Our team has more than thirty years of experience in the metalworking industry. We offer manufacturing and installation services.'}]});
+ assert.equal(v.experienceDuration,'more than thirty years');assert.equal(v.industry,'metalworking');assert.equal(v.referenceStatement,'');assert.equal(v.comparableProjects,'');
+ assert.deepEqual(fillScript({channel:'email',body:'[Real reference: “Recently we ….”] [company] [result]'},v).missing,['Real reference: “Recently we ….”','company','result']);
+});
+test('new readable aliases retain rich formatting and exact literal script wording',()=>{
+ const result=fillScript({channel:'email',body:'I’m [Your full name]. [Real reference: “Recently we ….”]',bodyHtml:'<p>I’m <strong>[Your full name]</strong>. [Real reference: “Recently we ….”]</p>'},{sender:'Alex',referenceStatement:'We completed a supplied case.'});
+ assert.equal(result.draft.message,'I’m Alex. We completed a supplied case.');assert.match(result.draft.messageHtml,/<strong>Alex<\/strong>/);assert.equal(Rich.toText(result.draft.messageHtml),result.draft.message);
+});
+
+test('all fifteen channel/style combinations combine approved Profile, extracted seller website and reviewed buyer trigger',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js');
+ const studio={...S.seed(),mode:'professional',essentials:{company:'Example Systems',calendly:'https://calendly.com/example/demo'}};
+ const context={firstName:'Sam',buyerCompany:'Buyer Labs',sellerWebsite:'https://seller.example',sellerAnswers:{priority_offers:'laboratory software integration',proof_points:'We completed the instrument integration for Sample Labs.'},sellerAnswerStatus:{priority_offers:'accepted',proof_points:'user'},sellerEvidence:[{url:'https://seller.example/about',sourceRead:true,text:'Our team has twenty years of experience in the software industry. We provide laboratory software integration.'}],trigger:{summary:'Buyer Labs has started construction of a new laboratory in Uppsala.',excerpt:'Buyer Labs has started construction of a new laboratory in Uppsala.',url:'https://buyer.example/news/laboratory',verification:'source_verified'}};
+ const before=JSON.stringify(context),values=readableValues(studio,context,{senderName:'Robin Lane'});
+ for(const channel of ['email','linkedin','phone'])for(const style of ['professional','curiosity','friendly','brutal','storyselling']){
+  const script={channel,style,body:'Hi [First name]. [Your full name] from [Company]. [relevant service]. [verified years of experience] in [industry]. [verified project development]. [One short, verified reference.] [Your booking URL]'};
+  const snapshot=JSON.stringify(script),result=fillScript(script,values);
+  assert.deepEqual(result.missing,[]);assert.match(result.draft.message,/laboratory software integration/);assert.match(result.draft.message,/twenty years in software/);assert.match(result.draft.message,/new laboratory in Uppsala/);assert.match(result.draft.message,/completed the instrument integration for Sample Labs/);assert.doesNotMatch(result.draft.message,/steel|ERCON|Viscaria/);assert.equal(JSON.stringify(script),snapshot);
+ }
+ assert.equal(JSON.stringify(context),before);
+});
+test('explicit message facts override Profile defaults and unaccepted Profile references stay unknown',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js'),studio={...S.seed(),essentials:{offer:'user selected service',proof:'We completed the approved migration.'}};
+ const context={sellerAnswers:{priority_offers:'older service',proof_points:'We completed a different case.'},sellerAnswerStatus:{priority_offers:'accepted',proof_points:'accepted'}};
+ let values=readableValues(studio,context);assert.equal(values.serviceFocus,'user selected service');assert.equal(values.referenceStatement,'We completed the approved migration.');
+ values=readableValues({...studio,essentials:{}},{...context,sellerAnswerStatus:{priority_offers:'suggested',proof_points:'suggested'}});assert.equal(values.referenceStatement,'');assert.ok(!values.serviceFocus);
+});
