@@ -42,3 +42,5 @@ jobs:
           console.log(JSON.stringify({check:'remaining_recipient_checks',contactAcceptedPublic:Policy.accepted(contact,candidate.domain,'public_confirmed'),contactAcceptedProvider:Policy.accepted(contact,candidate.domain,'provider_verified'),personProfilesAgree:profilesOk(person),contactProfilesAgree:profilesOk(contact),savedPersonPresent:!!savedPerson,savedNameMatches:same(savedPerson?.publicName||savedPerson?.name,identity?.name),savedTitleMatches:same(savedPerson?.title,identity?.title),savedOrganizationMatches:same(savedPerson?.organization,identity?.organization),savedProfilesAgree:profilesOk(savedPerson),savedEmailMatches:!String(savedPerson?.email||savedPerson?.work_email||savedPerson?.normalized_email||'').trim()||same(savedPerson?.email||savedPerson?.work_email||savedPerson?.normalized_email,choice.email)}));
           
           NODE
+
+# Read-only diagnostic retry; output remains limited to status flags.
