@@ -31,7 +31,7 @@ test('held contacts stay collapsed and the four-contact shortfall keeps research
  const {dom,doc}=render({rolesChanged:true}),buyers=doc.querySelector('.selected-prospect-buyers');
  assert.equal(buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li').length,0);
  assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,/0\/4 priority buyers with confirmed contact data/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
- const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
+ const resume=doc.querySelector('.selected-prospect-company [data-find-prospect-buyers]');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
  dom.window.close();
 });
 test('other contacts and research controls start collapsed below priority contacts without losing evidence',()=>{
@@ -54,7 +54,7 @@ test('only confirmed relevant contacts occupy the main list, with a truthful sho
 });
 test('dossier preview has at most three findings and full evidence and provider details expand',()=>{
  const {dom,doc}=render(),dossier=doc.querySelector('.company-dossier'),full=dossier.querySelector(':scope > details');
- assert.equal(dossier.querySelector('.company-message-brief > ul').children.length,3);assert.equal(full.open,false);
+ assert.equal(dossier.querySelector('.company-message-brief details > ul').children.length,3);assert.equal(full.open,false);
  assert.match(full.textContent,/Company finding 4/);assert.match(full.textContent,/OpenAI/);assert.match(full.textContent,/Gemini/);dom.window.close();
 });
 test('empty and active searches retain primary Refresh action and visible next step',()=>{

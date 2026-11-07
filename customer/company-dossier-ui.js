@@ -64,7 +64,45 @@ function coverageHtml(d){const latest=d.lastAttempt?.research||d,coverage=latest
 function sourceReadsHtml(d){const latest=d.lastAttempt?.research||d,rows=(latest.passes||[]).flatMap(p=>(p.sourceReads||[]).map(r=>({...r,provider:p.provider})));if(!rows.length)return '';
  return `<details><summary>Source extraction details</summary><ul>${rows.map(r=>`<li>${esc(label(r.provider))} · ${r.reused?'Reused source':'Source read'} · ${esc(r.status)} · <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a><ul>${r.researchTrace.map(t=>`<li>${esc(label(t.provider))} · ${esc(t.status)}${t.httpStatus?' · HTTP '+t.httpStatus:''}${t.reason?' · '+esc(t.reason):''}</li>`).join('')}</ul></li>`).join('')}</ul></details>`;
 }
-function briefHtml(candidate,{profile={},person=null}={}){const B=typeof module==='object'&&module.exports?require('./research-brief.js'):globalThis.LeadIntelResearchBrief;if(!B)return '';const brief=B.build(candidate,profile,person),source=row=>`<a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>${row.date?' · '+esc(row.date):' · Source date unknown'}`;return `<section class="company-message-brief" aria-label="Message brief"><h5>Message brief</h5><p>${brief.facts.length?'Verified company facts used for the next message.':'Company facts are not ready. Resume source research before creating a new message.'}</p>${brief.facts.length?`<ul>${brief.facts.filter((row,i,rows)=>rows.findIndex(other=>other.text===row.text)===i).slice(0,3).map(row=>`<li>${esc(row.text)} ${source(row)}</li>`).join('')}</ul>`:'<p>No extracted company facts available yet.</p>'}${brief.signalSelection?`<details><summary>Why this observation comes first</summary><p>${esc(brief.signalSelection.reason)}</p><p>Evidence priority is not buying intent or confirmed purchasing authority.</p></details>`:''}${brief.buyer?`<p><strong>Selected buyer:</strong> ${esc(brief.buyer.name)} · ${esc(brief.buyer.title.replace(/^As\s+/i,''))} · ${brief.buyer.verified?'Role source verified':'Role needs verification'}</p>`:''}${brief.hypotheses.length?`<p><strong>Commercial relevance · Hypothesis:</strong> ${esc(brief.hypotheses[0].text)}</p>`:''}${brief.gaps.length?`<details><summary>Evidence gaps (${brief.gaps.length})</summary><ul>${brief.gaps.map(row=>`<li>${esc(row)}</li>`).join('')}</ul></details>`:''}</section>`;}
+const briefViews=new Map();
+function briefInput(candidate,{profile={},person=null,workspaceId=''}={}){
+ const B=typeof module==='object'&&module.exports?require('./research-brief.js'):globalThis.LeadIntelResearchBrief;
+ const brief=B?.build(candidate,profile,person),rows=(brief?.facts||[]).filter((row,i,all)=>all.findIndex(other=>other.text===row.text)===i).slice(0,3);
+ const source=Object.fromEntries(rows.map((row,i)=>['fact'+i,row.text]));
+ return {brief,rows,source,key:JSON.stringify(['brief-english-v1',workspaceId,D.domain(candidate.domain),rows.map(({text,url,date})=>({text,url,date}))])};
+}
+function cachedBriefView(root,workspaceId,key){
+ try{return JSON.parse(root.localStorage.getItem('leadintel_brief_english_'+workspaceId)||'[]').find(row=>row.key===key)?.view||null;}catch{return null;}
+}
+function validateBriefView(source,output,language){
+ language.validate(source,output,'en');
+ for(const key of Object.keys(source)){
+  const tokens=s=>(s.match(/https?:\/\/[^\s]+|\b[A-Z][A-Z0-9]{2,}\b/g)||[]).sort();
+  if(JSON.stringify(tokens(source[key]))!==JSON.stringify(tokens(output[key])))throw Error('Translation changed a source identifier');
+ }
+ return output;
+}
+async function prepareBrief(candidate,context,{root=globalThis,isCurrent=()=>true,onUpdate=()=>{},retry=false}={}){
+ const input=briefInput(candidate,context),workspaceId=String(context.workspaceId||''),language=root.LeadIntelContentLanguage;
+ if(!workspaceId||!input.rows.length||!language?.request||!isCurrent())return;
+ const existing=briefViews.get(input.key);if(existing&&(!retry||existing.status!=='error')){if(existing.status==='pending')existing.listeners.push(()=>{if(isCurrent())onUpdate();});return;}
+ const cached=cachedBriefView(root,workspaceId,input.key);
+ if(cached){try{validateBriefView(input.source,cached,language);briefViews.set(input.key,{status:'ready',values:cached});onUpdate();return;}catch{}}
+ if(briefViews.size>=30){const old=[...briefViews].find(([,v])=>v.status!=='pending');if(old)briefViews.delete(old[0]);}
+ const pending={status:'pending',listeners:[()=>{if(isCurrent())onUpdate();}]};briefViews.set(input.key,pending);onUpdate();
+ try{
+  const values=validateBriefView(input.source,await language.request(root,workspaceId,'en',input.source,{force:retry}),language);
+  briefViews.set(input.key,{status:'ready',values});
+  if(isCurrent())try{const name='leadintel_brief_english_'+workspaceId,rows=JSON.parse(root.localStorage.getItem(name)||'[]');root.localStorage.setItem(name,JSON.stringify([{key:input.key,view:values},...rows.filter(row=>row.key!==input.key)].slice(0,10)));}catch{}
+ }catch{briefViews.set(input.key,{status:'error'});}
+ pending.listeners.forEach(update=>update());
+}
+function briefHtml(candidate,context={}){
+ const {brief,rows,key}=briefInput(candidate,context);if(!brief)return '';
+ const view=briefViews.get(key),source=row=>`<a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>${row.date?' · '+esc(row.date):' · Source date unknown'}`;
+ const facts=rows.length?`${view?.status==='ready'?`<p>English reading view · translated from the linked sources.</p><ul>${rows.map((row,i)=>`<li>${esc(view.values['fact'+i])} ${source(row)}</li>`).join('')}</ul>`:`<p role="status">${view?.status==='pending'?'Preparing the English reading view…':view?.status==='error'?'English translation unavailable. The original evidence is retained.':'English reading view is not prepared yet.'}</p>${view?.status!=='pending'?`<button class="secondary-btn small" type="button" data-translate-company-brief="${esc(candidate.domain)}">${view?.status==='error'?'Retry English translation':'Read in English'}</button>`:''}`}<details><summary>Original source excerpts (${rows.length})</summary><p>Verbatim evidence in the source language. Translation does not confirm buying intent.</p><ul>${rows.map(row=>`<li>${esc(row.text)} ${source(row)}</li>`).join('')}</ul></details>`:'<p>No extracted company facts available yet.</p>';
+ return `<section class="company-message-brief" aria-label="Message brief"><h5>Message brief</h5><p>${brief.facts.length?'Source-backed company context. Review its relevance before using it in a message.':'Company facts are not ready. Resume source research before creating a new message.'}</p>${facts}${brief.signalSelection?`<details><summary>Why this observation comes first</summary><p>${esc(brief.signalSelection.reason)}</p><p>Evidence priority is not buying intent or confirmed purchasing authority.</p></details>`:''}${brief.buyer?`<p><strong>Selected buyer:</strong> ${esc(brief.buyer.name)} · ${esc(brief.buyer.title.replace(/^As\s+/i,''))} · ${brief.buyer.verified?'Role source verified':'Role needs verification'}</p>`:''}${brief.hypotheses.length?`<p><strong>Commercial relevance · Hypothesis:</strong> ${esc(brief.hypotheses[0].text)}</p>`:''}${brief.gaps.length?`<details><summary>Evidence gaps (${brief.gaps.length})</summary><ul>${brief.gaps.map(row=>`<li>${esc(row)}</li>`).join('')}</ul></details>`:''}</section>`;
+}
 function render(candidate,context={}){const d=D.safe(candidate.buyerDiscovery?.companyDossier,candidate.domain);if(!d)return '<section class="company-dossier"><h4>Company dossier</h4><p>Research the company with two providers before selecting buyers.</p>'+briefHtml(candidate,context)+'</section>';
  const progress=candidate.buyerResearchProgress,loading=candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading';
  const running=loading&&(!progress?.phase||['company','dossier'].includes(progress.phase));
@@ -76,5 +114,5 @@ function settingsHtml(providers=[],settings={},disabled=false){
  const choices=selected=>['<option value="">Automatic</option>',...D.PROVIDERS.map(p=>`<option value="${p}" ${p===selected?'selected':''} ${providers.some(r=>r.provider===p&&r.configured)?'':'disabled'}>${label(p)}</option>`)].join('');
  return `<section class="ai-settings-section company-dossier-settings"><h3>Company research</h3><p>Two different providers research each company. The second searches independently. A third connected provider replaces a failed researcher.</p><label class="ai-settings-field">Main researcher<select id="dossier-main-provider" ${disabled?'disabled':''}>${choices(settings.primary_provider)}</select></label><label class="ai-settings-field">Second researcher<select id="dossier-second-provider" ${disabled?'disabled':''}>${choices(settings.secondary_provider)}</select></label><p>Automatic main uses your main engine. Automatic second follows Gemini → Claude → OpenAI, excluding the main. Provider API usage is billed to your connected accounts.</p><button class="ai-settings-btn" type="button" id="save-dossier-settings" ${disabled?'disabled':''}>Save research settings</button></section>`;
 }
-return {render,research,evidenceRows,settingsHtml};
+return {render,research,evidenceRows,settingsHtml,briefHtml,prepareBrief};
 });
