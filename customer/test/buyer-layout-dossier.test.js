@@ -31,7 +31,7 @@ test('held contacts stay collapsed and the four-contact shortfall keeps research
  const {dom,doc}=render({rolesChanged:true}),buyers=doc.querySelector('.selected-prospect-buyers');
  assert.equal(buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li').length,0);
  assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,/0\/4 priority buyers with confirmed contact data/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
- const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findPublicContacts,'example.com');
+ const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
  dom.window.close();
 });
 test('other contacts and research controls start collapsed below priority contacts without losing evidence',()=>{
