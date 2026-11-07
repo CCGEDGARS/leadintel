@@ -128,6 +128,7 @@
   const check=()=>signal?.throwIfAborted();
   const merged=()=>({...context,sellerEvidence:[...(context.sellerEvidence||[]),...collected.filter(r=>r.owner==='seller')],buyerFactEvidence:[...(context.buyerFactEvidence||[]),...collected.filter(r=>r.owner==='buyer')]});
   const gaps=()=>resolve(merged()).missing;
+  const searchable=owner=>gaps().filter(label=>owner==='buyer'?/project|phase|location|facility|completion|development/i.test(label):/experience|industry|market|reference|certif|company data|work packages|country|city/i.test(label));
   const trigger=context.researchTrigger||context.trigger,buyer=domain(trigger?.url)||context.buyerDomain,seller=domain(context.sellerWebsite);
   const reviewed=['source_verified','user_reviewed'].includes(trigger?.verification);
   const eligible=(url,owner)=>domain(url)===(owner==='buyer'?buyer:seller)&&Boolean(domain(url));
@@ -150,13 +151,13 @@
   onProgress('Checking saved website, documents and Profile answers…');check();const initial=gaps();
   // Always inspect the user's chosen article, including when its quote already fills a slot.
   let article;if(reviewed&&eligible(trigger.url,'buyer'))article=await visit(trigger.url,'buyer',true);
-  let homepage;if(gaps().length&&seller)homepage=await visit(context.sellerWebsite,'seller');
+  let homepage;if(searchable('seller').length&&seller)homepage=await visit(context.sellerWebsite,'seller');
   for(const row of [article,homepage].filter(Boolean))for(const url of links(row).slice(0,2)){if(!gaps().length)break;await visit(url,row.owner,false,row.url);}
   // At most one focused query per owner. Search results are candidates only.
   for(const owner of ['buyer','seller']){
    check();if(!gaps().length||reads>=8||searches>=2)break;
    const host=owner==='buyer'?buyer:seller;if(!host)continue;
-   const needed=gaps().filter(label=>owner==='buyer'?/project|phase|location|facility|completion|development/i.test(label):/experience|industry|market|reference|certif|company data|work packages|country|city/i.test(label));
+   const needed=searchable(owner);
    if(!needed.length)continue;
    const query=`site:${host} ${owner==='buyer'?String(trigger?.title||'').slice(0,100):''} ${needed.slice(0,4).join(' ')}`;searches++;onProgress(`Resolving remaining facts (${searches}/2 searches)…`);
    try{const results=await search(query,signal);check();receipts.push({kind:'search',owner,query,ok:true,count:results.length});for(const row of results.slice(0,4)){if(!gaps().length||reads>=8)break;await visit(row.url,owner);}}

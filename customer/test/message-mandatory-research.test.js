@@ -45,3 +45,7 @@ test('an official article may supply its linked PDF, while unrelated external pa
 test('a deadline preserves completed evidence receipts without applying late content',async()=>{
  const controller=new AbortController();let calls=0;try{await V.researchTemplate({script,context,resolve,now,signal:controller.signal,read:async()=>{if(++calls===2)controller.abort();return {markdown:article};},search:async()=>[]});assert.fail('Expected cancellation');}catch(error){assert.equal(error.name,'AbortError');assert.equal(error.partialResearch.sources.length,1);assert.equal(error.partialResearch.sources[0].url,context.trigger.url);assert.equal(error.partialResearch.status,'incomplete');}
 });
+test('private story outcomes and booking details do not trigger unrelated seller research',async()=>{
+ const calls=[];const result=await V.researchTemplate({script,context,now,resolve:()=>({missing:['result','Your booking URL']}),read:async url=>{calls.push(url);return {markdown:article};},search:async()=>{assert.fail('Do not search for private commitments');}});
+ assert.deepEqual(calls,[context.trigger.url]);assert.equal(result.searches,0);
+});
