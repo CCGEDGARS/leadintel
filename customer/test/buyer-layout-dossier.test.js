@@ -1,14 +1,21 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom');
 const D=require('../discovery-engine.js'),Dossier=require('../company-dossier.js'),UI=require('../company-dossier-ui.js');
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
-function render({empty=false,loading=false,rolesChanged=false,confirmedIds=['0','1','2','3']}={}){
+function render({empty=false,loading=false,rolesChanged=false,confirmedIds=['0','1','2','3'],companies=1,meta={}}={}){
  const people=Array.from({length:6},(_,i)=>({id:String(i),name:`Anna Buyer${i}`,title:i===0?'CEO':i===1?'COO':i===2?'Procurement Director':'Operations Director',organization:'Example',publicNameUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}));
  const facts=Array.from({length:5},(_,i)=>({text:`Company finding ${i}`,quote:`Company finding ${i}`,sourceUrl:'https://example.com/news'}));
  const dossier=Dossier.reconcile(['openai','gemini'].map(provider=>({provider,webSearch:true,status:'complete',facts,people:[],channels:[],sources:['https://example.com/news'],extractedSources:['https://example.com/news'],gaps:[]})),{company:'Example',domain:'example.com'});
  const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_qualified',people:empty?[]:people,peopleStatus:loading?'loading':'complete',buyerRolesChanged:rolesChanged,buyerRoles:['Executive leadership','Procurement Director','Operations Director'],buyerDiscovery:{companyDossier:dossier,checkedAt:new Date().toISOString(),found:6}};
- const ctx={buyerCardLayouts:new WeakMap(),buyerRecheckLayouts:new WeakSet(),bridge:()=>null,verifiedBuyerEmail:(_candidate,person)=>confirmedIds.includes(person.id)?person.id+'@example.com':'',window:{LeadIntelCompanyDossierUi:UI},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:v=>String(v??''),mainState:()=>({}),loadMeta:()=>({}),enrichmentResults:new Map(),selectedBuyerEnrichment:new Set(),buyerCompanyRemovalPending:new Set(),buyerCompanySavePending:new Set(),buyerCompanySaved:()=>false,crmAuthenticated:()=>true,candidateBuyerRoles:()=>candidate.buyerRoles,personKey:(c,p)=>p.id,selectedBuyerKey:(c,p)=>p.id,linkedInSearchUrl:()=>'',buyerQualificationHtml:()=>'<p>Current role supported</p>',buyerContactRows:()=>'<div>Company email: not confirmed</div>',enrichmentResultHtml:()=>'',prospectContactControls:()=>'<button>Find email</button>',buyerResearchProgressHtml:()=>'<p role="status">Researching decision-makers…</p>',buyerQualitySupervisorHtml:()=>'<section class="buyer-quality-supervisor">Buyer quality · Needs attention</section>',companyContactDossierHtml:()=>'<details class="company-contact-dossier"><summary>All company contacts</summary></details>',buyerProviderStatusHtml:()=>'<p>Research incomplete</p>',buyerResearchAccountabilityHtml:()=>'<details><summary>Research accountability</summary></details>'};
+ const ctx={buyerCardLayouts:new WeakMap(),buyerRecheckLayouts:new WeakSet(),bridge:()=>null,verifiedBuyerEmail:(_candidate,person)=>confirmedIds.includes(person.id)?person.id+'@example.com':'',window:{LeadIntelCompanyDossierUi:UI},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'),mainState:()=>({}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},enrichmentResults:new Map(),selectedBuyerEnrichment:new Set(),buyerCompanyRemovalPending:new Set(),buyerCompanySavePending:new Set(),buyerCompanySaved:()=>false,crmAuthenticated:()=>true,candidateBuyerRoles:()=>candidate.buyerRoles,personKey:(c,p)=>p.id,selectedBuyerKey:(c,p)=>p.id,linkedInSearchUrl:()=>'',buyerQualificationHtml:()=>'<p>Current role supported</p>',buyerContactRows:()=>'<div>Company email: not confirmed</div>',enrichmentResultHtml:()=>'',prospectContactControls:()=>'<button>Find email</button>',buyerResearchProgressHtml:()=>'<p role="status">Researching decision-makers…</p>',buyerQualitySupervisorHtml:()=>'<section class="buyer-quality-supervisor">Buyer quality · Needs attention</section>',companyContactDossierHtml:()=>'<details class="company-contact-dossier"><summary>All company contacts</summary></details>',buyerProviderStatusHtml:()=>'<p>Research incomplete</p>',buyerResearchAccountabilityHtml:()=>'<details><summary>Research accountability</summary></details>'};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerActionIdentity('),source.indexOf('function captureBuyerAction(')),ctx);vm.runInContext(source.slice(source.indexOf('function renderSelectedProspects('),source.indexOf('function renderPipeline(')),ctx);
- const dom=new JSDOM(ctx.renderSelectedProspects([candidate]));return {dom,doc:dom.window.document,candidate,ctx};
+ const rows=Array.from({length:companies},(_,i)=>i?{...structuredClone(candidate),domain:`company${i}.example`,company:`Company ${i}`} :candidate);
+ ctx.buyerSelectionRows=()=>[...rows].sort((a,b)=>Number(b.domain===meta.activeBuyerCompanyDomain)-Number(a.domain===meta.activeBuyerCompanyDomain));
+ const dom=new JSDOM('<div id="customer-pipeline"></div>'),doc=dom.window.document;ctx.document=doc;ctx.$=id=>doc.getElementById(id);
+ ctx.renderPipeline=()=>{doc.getElementById('customer-pipeline').innerHTML=ctx.renderSelectedProspects(ctx.buyerSelectionRows());};
+ vm.runInContext(source.slice(source.indexOf('function focusBuyerCompany('),source.indexOf('function rememberSelectedProspect(')),ctx);
+ vm.runInContext(source.slice(source.indexOf('function buyerControlTargetCurrent('),source.indexOf('async function withBuyerControlFocus(')),ctx);
+ vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),ctx);
+ ctx.renderPipeline();return {dom,doc,candidate,ctx,rows,meta:()=>meta};
 }
 test('company actions are in the header beneath qualification, followed by dossier and four contacts',()=>{
  const {dom,doc}=render(),card=doc.querySelector('.selected-prospect-row'),header=card.querySelector('header');
@@ -69,4 +76,47 @@ test('selected Recheck preserves other card positions and recommendation badges 
  const r=render(),cards=[...r.doc.querySelectorAll('.selected-prospect-person')],before=cards.filter(n=>!n.textContent.includes('Anna Buyer0')).map(n=>n.outerHTML);
  r.ctx.buyerRecheckLayouts.add(r.candidate);r.candidate.people[0].buyerRelevanceScore=1;r.candidate.people[0].title='Operations Director';
  const next=new JSDOM(r.ctx.renderSelectedProspects([r.candidate]));assert.deepEqual([...next.window.document.querySelectorAll('.selected-prospect-person')].filter(n=>!n.textContent.includes('Anna Buyer0')).map(n=>n.outerHTML),before);next.window.close();r.dom.window.close();
+});
+
+
+test('company pages render ten companies and only the chosen full dossier without changing retained research',()=>{
+ const r=render({companies:23}),before=JSON.stringify(r.rows);
+ assert.equal(r.doc.querySelectorAll('[data-buyer-company]').length,10);
+ assert.equal(r.doc.querySelectorAll('[data-buyer-company-expanded]').length,1);
+ assert.equal(r.doc.querySelectorAll('.company-dossier').length,1);
+ assert.equal(r.doc.querySelectorAll('.buyer-company-collapsed').length,9);
+ assert.equal(r.doc.querySelector('.buyer-company-collapsed .selected-prospect-people'),null);
+ r.doc.querySelector('[data-buyer-company-page="1"]').click();
+ assert.equal(r.doc.querySelectorAll('[data-buyer-company]').length,10);
+ assert.equal(r.doc.querySelectorAll('.company-dossier').length,0);
+ assert.match(r.doc.querySelector('[data-buyer-company-pagination]').textContent,/11–20 of 23/);
+ r.doc.querySelector('[data-buyer-company-page="2"]').click();
+ assert.equal(r.doc.querySelectorAll('[data-buyer-company]').length,3);
+ assert.equal(r.doc.querySelector('[data-buyer-company-page="3"]').disabled,true);
+ assert.equal(JSON.stringify(r.rows),before);r.dom.window.close();
+});
+test('opening a past company expands it alone, survives restored view state and makes no research requests',()=>{
+ const r=render({companies:23}),before=JSON.stringify(r.rows);
+ for(const name of ['findPotentialDecisionMakers','findPublicProspectContacts','saveDiscovery'])r.ctx[name]=()=>assert.fail('Opening a saved company must not run '+name);
+ r.doc.querySelector('[data-buyer-company-page="1"]').click();
+ r.doc.querySelector('[data-open-buyer-company="company12.example"]').click();
+ assert.equal(r.doc.querySelector('[data-buyer-company-expanded]').dataset.buyerCompany,'company12.example');
+ assert.equal(r.doc.querySelectorAll('.company-dossier').length,1);
+ assert.equal(r.doc.querySelectorAll('[data-buyer-company]').length,10);
+ assert.ok(r.doc.querySelector('[data-open-buyer-company="example.com"]'));
+ assert.equal(r.meta().buyerCompanyPage,0);assert.equal(r.doc.activeElement.tagName,'H4');
+ assert.equal(JSON.stringify(r.rows),before);
+ const restored=render({companies:23,meta:JSON.parse(JSON.stringify(r.meta()))});
+ assert.equal(restored.doc.querySelector('[data-buyer-company-expanded]').dataset.buyerCompany,'company12.example');
+ assert.equal(r.ctx.openBuyerCompany('unselected.example'),false);
+ assert.equal(r.ctx.changeBuyerCompanyPage(-1),false);assert.equal(r.ctx.changeBuyerCompanyPage(2.5),false);assert.equal(r.ctx.changeBuyerCompanyPage(3),false);
+ restored.dom.window.close();r.dom.window.close();
+});
+test('company pagination clamps after removals and hides controls for ten or fewer',()=>{
+ for(const companies of [1,10,11]){const r=render({companies,meta:{buyerCompanyPage:99}});assert.equal(r.doc.querySelectorAll('[data-buyer-company]').length,companies===11?1:companies);assert.equal(Boolean(r.doc.querySelector('[data-buyer-company-pagination]')),companies>10);r.dom.window.close();}
+});
+test('collapsed company summaries retain active research and error visibility',()=>{
+ const r=render({companies:3});r.rows[1].peopleStatus='loading';r.rows[2].peopleStatus='error';r.ctx.renderPipeline();
+ assert.match(r.doc.querySelector('[data-open-buyer-company="company1.example"]').textContent,/Research in progress/);
+ assert.match(r.doc.querySelector('[data-open-buyer-company="company2.example"]').textContent,/Research needs attention/);r.dom.window.close();
 });
