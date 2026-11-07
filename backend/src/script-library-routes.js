@@ -2,6 +2,7 @@ import {handleCreatorLibrary,creatorUnlocked} from './creator-library.js';
 import {validSkillAttribution} from './workspace-skill-attribution.js';
 import StorysellingNative from '../../customer/storyselling-native.js';
 import {validCompanyMaterialAttribution} from './company-materials-context.js';
+import ScriptContract from '../../customer/script-contract.js';
 import RichText from '../../customer/rich-text.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
@@ -95,7 +96,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  if(path==='/api/script-library'&&request.method==='GET'){
   const personal=await env.DB.prepare('SELECT id,payload_json,revision FROM personal_script_library WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
-  return json({canManage,core:(await coreScripts(env.DB)).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
+  return json({canManage,core:(await coreScripts(env.DB)).map(row=>({...row,...ScriptContract.contract(row)})).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),...ScriptContract.contract({...JSON.parse(r.payload_json),id:r.id}),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
  const maximumPayload=path==='/api/script-library/draft'?500000:path==='/api/script-library/inmail-draft'?250000:40000;
  if(Number(request.headers.get('Content-Length'))>maximumPayload)fail('Script payload too large',413);

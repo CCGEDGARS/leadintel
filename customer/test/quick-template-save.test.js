@@ -7,6 +7,7 @@ async function setup(){
  let ctx={workspaceId:'w',userId:'u',companyId:'co',contactId:'ct',channel:'email',style:'friendly',usable:true},draft={subject:'Hello Alex',message:'Hi Alex,\n\nMy exact edited words.'},catalogue={core:[],personal:[],primary:[],canManage:false},failTemplate=false,failDraft=false;
  const requests=[],saves=[];
  w.fetch=async(url,options)=>{requests.push({url:String(url),options});if(options.method==='PUT'){if(failTemplate)return {ok:false,json:async()=>({error:'Library unavailable'})};const data=JSON.parse(options.body),id=new URL(url).pathname.split('/').pop(),record={...data,id,revision:data.expectedRevision+1};catalogue.personal=[record];return {ok:true,json:async()=>({script:record})};}return {ok:true,json:async()=>catalogue};};
+ w.eval(fs.readFileSync(require.resolve('../script-contract.js'),'utf8'));
  w.eval(fs.readFileSync(require.resolve('../channel-scripts.js'),'utf8'));
  const ui=w.LeadIntelChannelScripts.mount(w.document,{context:()=>ctx,draft:()=>draft,reusable:d=>({subject:d.subject.replace('Alex','{{firstName}}'),body:d.message.replace('Alex','{{firstName}}')}),values:()=>({firstName:'Alex'}),syncAssistant(){}});
  const saveDraft=async record=>{saves.push(record);return {ok:!failDraft,localOnly:failDraft};};

@@ -319,6 +319,7 @@
     if(item.contextNeedsRefresh)return {...item,approved:false,error:'Your commercial profile changed. Regenerate the dossier and scripts before approval.'};
     if(!translationReady(item))return {...item,approved:false,error:'The English source changed. Update and review this translation before approval.'};
     const drafts={commercialContext:item.drafts?.commercialContext||{},emailSubject:String(editedDrafts.emailSubject??''),emailBody:String(editedDrafts.emailBody??""),linkedinMessage:String(editedDrafts.linkedinMessage??""),callOpener:String(editedDrafts.callOpener??item?.drafts?.callOpener??""),followUp:String(editedDrafts.followUp??item?.drafts?.followUp??""),objectionReply:String(editedDrafts.objectionReply??item?.drafts?.objectionReply??""),tone:clean(editedDrafts.tone||item?.drafts?.tone||"consultative")};
+    {const C=typeof module==='object'&&module.exports?require('./script-contract.js'):globalThis.LeadIntelScriptContract;try{C?.assertFits(drafts.emailBody,item.messageStudioDraft?.scriptContract||{});}catch(error){return {...item,drafts,approved:false,error:error.message};}}
     if(item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())throw Error('Event validation unavailable');EventCampaigns().validateDraft(item.messageStudioDraft.eventSnapshot,{subject:drafts.emailSubject,message:drafts.emailBody},item.messageStudioDraft.essentials||{});}catch(e){return {...item,drafts,approved:false,error:e.message};}}
     if(!drafts.emailSubject.trim()||!drafts.emailBody.trim())return {...item,drafts,approved:false,error:"Email subject and email body are required before approval."};
     if(/\[Add (?:verified )?[^\]]+\]|{{[^}]+}}|\[link\]/i.test(drafts.emailSubject+'\n'+drafts.emailBody))return {...item,drafts,approved:false,error:'Complete the unresolved message facts before approval. Your exact draft is preserved.'};
@@ -388,6 +389,7 @@
     return false; // Legacy approval history remains visible; sending needs explicit source review.
   }
   function approvalCurrent(item={}){
+    const C=typeof module==='object'&&module.exports?require('./script-contract.js'):globalThis.LeadIntelScriptContract;if(C?.audit(item?.drafts?.emailBody,item?.messageStudioDraft?.scriptContract||{}).ok===false)return false;
     if(!item?.approved||item.reapprovalRequired||item.contextNeedsRefresh||item.localizationApprovalBlocked||!['native','complete'].includes(item.localizationStatus)||item.approvalAuthority?.version!==2||!item.approvedSource||!translationReady(item))return false;
     const current=approvalContext(item);if(!current||current.contextKey!==item.approvalAuthority.contextKey||JSON.stringify(current.recipient)!==JSON.stringify(item.approvalAuthority.recipient))return false;
     return ['emailSubject','emailBody','emailBodyHtml'].every(key=>String(item.drafts?.[key]||'')===String(item.approvedSource?.[key]||''));
