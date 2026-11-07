@@ -31,3 +31,11 @@ for(const manual of [false,true])test('partially filled owner master repairs kno
  if(!manual)assert.equal(h.item().messageStudioDraft.templateUpdateUndo.draft.message,body);
  }finally{h.w.close();}
 });
+test('many unresolved slots do not cause ambiguous matching when a manual note follows',async()=>{
+ const h=setup();try{
+ const row={id:'email:professional',channel:'email',style:'professional',subject:'[First name]',body:'Hi [First name], '+Array.from({length:40},(_,i)=>'[Unknown fact '+i+']').join(' '),creatorSource:{id:'owner',revision:1}};
+ const body=row.body.replace('[First name]','Alex')+' Manual note.';
+ h.w.upsertItem({...h.item(),drafts:{...h.item().drafts,emailSubject:'Alex',emailBody:body},messageStudioDraft:{mode:'professional',editorOrigin:'manual',channelLibrarySource:row.id}});h.w.renderAll();
+ h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:[row],personal:[],primary:[],canManage:false})});await tick();h.w.automaticallyPrepareMessage();await tick();await tick();assert.equal(h.item().drafts.emailBody,body);
+ }finally{h.w.close();}
+});
