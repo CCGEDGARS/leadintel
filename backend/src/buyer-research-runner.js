@@ -1,3 +1,4 @@
+import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
 import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
 import {runBuyerPaidResearch} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
@@ -38,9 +39,11 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
-  const timer=setTimeout(()=>controller.abort(Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,windowMs));
+  const runWindow=buyerRunWindow(row,input,clock()),windowPause=()=>Object.assign(Error(BUYER_RUN_WINDOW_REASON),{code:'RUN_WINDOW'});
+  const timer=setTimeout(()=>controller.abort(runWindow.remainingMs<=windowMs?windowPause():Object.assign(Error('Job processing slice ended'),{code:'TIME_BUDGET'})),Math.max(1,Math.min(windowMs,runWindow.remainingMs)));
   const guard=async({checkpoint=false}={})=>{
    if(!checkpoint&&!activeTaskReservations&&invocationBudget&&!invocationBudget.hasRoom(32)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
+   if(!checkpoint&&(runWindow.expired||clock()>=Date.parse(runWindow.deadlineAt)))throw windowPause();
    if(!checkpoint&&(!accepting||controller.signal.aborted))throw Object.assign(Error('Processing slice stopped'),{code:'TIME_BUDGET'});
    const live=await stmt(env,`SELECT status,lease_token,lease_until,CASE WHEN ${authoritySql} THEN 1 ELSE 0 END authorized FROM buyer_research_jobs WHERE id=?`,row.id).first();
    if(!live||live.status!=='running'||live.lease_token!==lease||!live.authorized)throw lost();
@@ -81,7 +84,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     if(!saved.meta.changes)throw lost();changed++;return result;
    }catch(error){
     // Do not let an expired, canceled or revoked worker record a late receipt.
-    if(accepting&&!controller.signal.aborted&&!['TIME_BUDGET','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code))await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
+    if(accepting&&!controller.signal.aborted&&!['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code))await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
     throw error;
    }
   };
@@ -194,7 +197,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   }catch(error){
    const phaseAdvanced=phase!==row.phase;
    if(phaseAdvanced){phaseMs=0;phaseRuns=0;}
-   if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
+   if(error.code==='RUN_WINDOW'||controller.signal.reason?.code==='RUN_WINDOW'){status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='run_window';diagnostics.push({phase,code:'run_window',reason:BUYER_RUN_WINDOW_REASON,at:new Date().toISOString()});}
+   else if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
    else if(error.code==='LEASE_EXPIRED')status='queued';
    else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if((phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
    else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}

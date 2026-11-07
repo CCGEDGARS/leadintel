@@ -119,7 +119,7 @@
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       if(!selected)owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
-      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
@@ -130,7 +130,7 @@
         if(!scope.current()||controller.signal.aborted)throw abortError();
         if(!apply(scope,job,options))return null;
         if(!ACTIVE.has(job.status))return job;
-        if(Date.now()-started>=observationTimeoutMs)throw Error('Buyer research continues on the server. Reopen this company to read its progress.');
+        if(Date.now()-started>=observationTimeoutMs)throw Object.assign(Error('Status updates stopped. Check saved progress to see whether research is still running.'),{code:'BUYER_OBSERVATION_LIMIT'});
         await new Promise((resolve,reject)=>{let timer;const stop=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);reject(abortError());};timer=setTimeout(()=>{controller.signal.removeEventListener('abort',stop);resolve();},pollMs);controller.signal.addEventListener('abort',stop,{once:true});});
         job=await request(scope,'GET',null,job.id,controller);
       }
@@ -165,7 +165,11 @@
         }
         let job=observedJob;
         if(job&&!matching(scope,job))job=null;
-        if(!readOnly){
+        if(!readOnly&&options.resumeExisting){
+          if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before resuming buyer research.');
+          if(!job)throw Error('Saved research no longer matches this company. Check its current research first.');
+          if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',jobId:job.id,expectedRevision:job.revision},null,controller);
+        }else if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');
           const jobIds=job?.input?.personIds||job?.progress?.personIds,selected=scope.personIds?.length?new Set(scope.personIds):null;
           const jobSelected=job?.input?.scope==='selected_buyers'||Boolean(jobIds?.length),scopeCovered=selected?jobSelected&&new Set((jobIds||[]).map(String)).size===selected.size&&scope.personIds.every(id=>jobIds?.map(String).includes(id)):!jobSelected;
@@ -195,7 +199,7 @@
       entry?.controller.abort();apply(scope,result,options);return result;
     }
     function isObserving(owner){const b=getBridge(),entry=active.get(`${b?.workspace?.id}|${domain(owner?.domain)}`);return Boolean(entry&&entry.scope.owner===owner&&!entry.controller.signal.aborted&&entry.scope.current());}
-    return {isObserving,research:(owner,options={})=>execute(owner,options,false),restore:(owner,options={})=>execute(owner,options,true),cancel};
+    return {isObserving,resume:(owner,options={})=>execute(owner,{...options,resumeExisting:true},false),research:(owner,options={})=>execute(owner,options,false),restore:(owner,options={})=>execute(owner,options,true),cancel};
   }
   return {...createClient(),createClient,requestInput};
 });

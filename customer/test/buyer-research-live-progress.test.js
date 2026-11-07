@@ -30,3 +30,10 @@ test('live progress updates preserve other company inputs, disclosures and focus
  const start=source.indexOf('function refreshBuyerProgress('),end=source.indexOf('function buyerResearchProgressHtml(',start);assert.ok(start>=0,'progress has a scoped renderer');vm.runInContext(source.slice(start,end),ctx);
  ctx.refreshBuyerProgress({domain:'example.com'});assert.equal(input.value,'draft source URL');assert.equal(dom.window.document.activeElement,input);assert.equal(dom.window.document.querySelector('details').open,true);assert.match(dom.window.document.querySelector('.buyer-research-progress').textContent,/New progress/);
 });
+
+test('contact work cannot claim that the company dossier is still running',()=>{
+ const dossier=D.reconcile([],{company:'Example',domain:'example.com'});
+ const c={domain:'example.com',company:'Example',peopleStatus:'loading',publicContactStatus:'loading',buyerResearchProgress:{jobId:'j',phase:'contacts'},buyerDiscovery:{companyDossier:dossier}};
+ assert.doesNotMatch(UI.render(c),/Company research in progress/);assert.match(UI.render(c),/Company research needs attention/);
+ c.buyerResearchProgress.phase='dossier';assert.match(UI.render(c),/Company research in progress/);
+});
