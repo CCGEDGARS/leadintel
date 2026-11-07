@@ -32,7 +32,7 @@ function readableValues(studio,context={},identity={},profile={}){
  const supplied=studio.essentials||{},approvedAnswer=key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])?clean(context.sellerAnswers?.[key]):'';
  // Explicit message details win; approved Profile answers fill missing fields.
  // Research suggestions and unaccepted answers never become seller claims.
- const e={...supplied,offer:clean(supplied.offer)||approvedAnswer('priority_offers'),difference:clean(supplied.difference)||approvedAnswer('differentiation'),proof:clean(supplied.proof)||approvedAnswer('proof_points'),approach:clean(supplied.approach)||approvedAnswer('delivery_approach')};
+ const e={...supplied,offer:clean(supplied.offer)||approvedAnswer('priority_offers'),difference:clean(supplied.difference)||approvedAnswer('differentiation'),proof:clean(supplied.proof)||approvedAnswer('proof_points'),approach:clean(supplied.approach)||approvedAnswer('delivery_approach'),value:clean(supplied.value)||approvedAnswer('value_proposition'),meetingValue:clean(supplied.meetingValue)||approvedAnswer('meeting_value')};
  const resolvedStudio={...studio,essentials:e},ctx={...context,sellerEvidence:(context.sellerEvidence||[]).map(row=>({...row,text:plain(row.text||row.excerpt)}))};
  const atoms=E.factualValues({...resolvedStudio,mode:'professional'},ctx);
  // Use the reviewed fact audit when present: it handles contradictory/past years.
@@ -40,7 +40,7 @@ function readableValues(studio,context={},identity={},profile={}){
  const known=Object.fromEntries(Object.entries(atoms).map(([key,value])=>[key,clean(value)]));
  const approved=Object.entries(context.sellerAnswers||{}).filter(([key])=>['priority_offers','differentiation','proof_points','delivery_approach'].includes(key)&&['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(([,value])=>value);
  const statements=[e.offer,e.difference,e.proof,e.approach,...approved,...S.subjectEvidenceSources(ctx).map(row=>row.text)].filter(Boolean).flatMap(V.sellerStatements);
- const seller=statements.join(' '),duration=known.experienceDuration||seller.match(/\b(?:(?:more than|over|at least)\s+)?(?:\d+\+?|thirty|twenty|forty|fifty)\s+years\b/i)?.[0]||'';
+ const seller=statements.join(' '),duration=V.experienceDuration(statements);
  const industry=seller.match(/\bin (?:the )?([\p{L}-]+) industry\b/iu)?.[1]||(/\bmetalworking\b/i.test(seller)?'metalworking':S.subjectSellerFacts(ctx,e).steel?'steel':'');
  const market=seller.match(/\bspeciali[sz]\w*\s+in\s+(?:the\s+)?([^.!?]{1,70}? market)\b/i)?.[1]||'';
  const exports=statements.map(text=>text.match(/\bexport(?:s|ing)?(?: mostly| mainly)? to ([^.!?]{1,100})/i)?.[1]).find(Boolean)||'';
@@ -48,7 +48,8 @@ function readableValues(studio,context={},identity={},profile={}){
  const event=reviewed?String(t.excerpt||t.summary||''):'';
  const location=event.match(/\b(?:in|at)\s+([\p{Lu}][\p{L}'-]+(?:\s+[\p{Lu}][\p{L}'-]+){0,2})(?=[.,;:]|\s|$)/u)?.[1]||'';
  const unsupportedClaim=/\b(?:not|never|no|plan|plans|planned|planning|pending|seek|seeking|aim|will|would|could|may|might|target|expired|revoked|formerly|previously|partners?|subcontractors?|suppliers?)\b/i;
- const proof=clean(e.proof),reference=proof&&!unsupportedClaim.test(proof)&&/\b(?:delivered|completed|installed|manufactured|built)\b/i.test(proof)&&!/^https?:/i.test(proof)?proof:'';
+ const publishedCases=[...new Set(statements.filter(value=>/^(?:we|our team|our company)\b/i.test(value)&&/\b(?:delivered|completed|installed|manufactured|built)\b/i.test(value)&&!unsupportedClaim.test(value)))];
+ const proof=clean(e.proof)||(publishedCases.length===1?publishedCases[0]:''),reference=proof&&!unsupportedClaim.test(proof)&&/\b(?:delivered|completed|installed|manufactured|built)\b/i.test(proof)&&!/^https?:/i.test(proof)?proof:'';
  const certificates=statements.filter(text=>!unsupportedClaim.test(text)&&!/\b(?:customers?|clients?|required|requirements?)\b/i.test(text)&&/\bcertif(?:ied|ication)\b/i.test(text)).flatMap(text=>text.match(/\b(?:ISO\s+\d+(?:-\d+)?(?::\d{4})?|EN\s+1090(?:-[12])?(?::\d{4})?|EXC\s*[234])\b/g)||[]);
  const companyDescription=clean(E.factualValues({...resolvedStudio,mode:'professional'},ctx).sellerDescription).replace(/^(?:a|an)\s+/i,'');
  return {...e,milestoneWork:known.milestoneWork||'',projectType:known.projectType||'',openingYear:known.openingYear||'',deliveryItem:known.deliveryItem||'',sender:clean(e.sender)||clean(identity.senderName),company:clean(e.company)||clean(identity.companyDisplayName),

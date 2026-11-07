@@ -6,7 +6,7 @@ test('unresolved fields highlight across formatting without altering saved text 
  const input=w.document.querySelector('textarea');input.value='Hi Alex, [project location]. [reference]';input.readOnly=true;
  const editor=w.LeadIntelRichTextEditor.mount(input),html='Hi <strong>Alex</strong>, [project <em>location</em>]. [reference]';editor.setHtml(html);
  const key='leadintel-missing-email-rich';assert.deepEqual(Array.from(w.CSS.highlights.get(key),r=>r.toString()),['[project location]','[reference]']);
- assert.equal(editor.getHtml(),html);assert.equal(input.value,'Hi Alex, [project location]. [reference]');assert.equal(editor.body.querySelector('mark'),null);
+ assert.equal(editor.getHtml(),html);assert.equal(input.value,'Hi Alex, [project location]. [reference]');assert.equal(editor.body.querySelector('mark'),null);assert.equal(editor.body.querySelector('[data-missing-field]').style.fontWeight,'700');
  input.readOnly=false;editor.update();editor.body.textContent='Hi Alex, Kiruna. [reference]';editor.body.dispatchEvent(new w.Event('input',{bubbles:true}));
  assert.deepEqual(Array.from(w.CSS.highlights.get(key),r=>r.toString()),['[reference]']);assert.equal(input.value,'Hi Alex, Kiruna. [reference]');
  editor.destroy();assert.equal(w.CSS.highlights.has(key),false);assert.equal(w.document.getElementById(key+'-style'),null);w.close();

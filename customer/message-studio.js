@@ -91,12 +91,9 @@
  function projectFact(context={},max=22){return Evidence.projectLabel(context,max);}
  // Subject facts use confirmed answers and extracted pages from the current seller only.
  function subjectDomain(value){try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?u.hostname.toLowerCase().replace(/^www\./,''):'';}catch{return '';}}
- function subjectEvidenceSources(context={}){
-  const domain=subjectDomain(context.sellerWebsite);if(!domain)return [];
-  return (context.sellerEvidence||[]).filter(row=>subjectDomain(row?.url)===domain&&Evidence.sourceRead(row)).map(row=>({url:row.url,title:String(row.title||''),text:String(row.text||row.excerpt||'').slice(0,12000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text));
- }
+ function subjectEvidenceSources(context={}){return Evidence.sources(context);}
  function subjectStatements(text){return String(text||'').split(/(?<=[.!?])\s+|\n+/).map(value=>value.replace(/[#*]/g,'').trim()).filter(value=>value&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|\b(?:no|not|never|without|cannot|can't|do not|don't)\b/i.test(value));}
- function subjectSellerFacts(context={},e={}){return cachedFact('seller',[context.sellerWebsite,context.sellerEvidence,context.sellerAnswers,context.sellerAnswerStatus,e.offer,e.difference,e.proof,e.approach],()=>computeSubjectSellerFacts(context,e));}
+ function subjectSellerFacts(context={},e={}){return cachedFact('seller',[context.sellerWebsite,context.sellerEvidence,context.sellerDocuments,context.sellerAnswers,context.sellerAnswerStatus,e.offer,e.difference,e.proof,e.approach],()=>computeSubjectSellerFacts(context,e));}
  function computeSubjectSellerFacts(context={},e={}){
   const approvedSellerFields=['priority_offers','differentiation','proof_points','delivery_approach'].filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers?.[key]);
   const supplied=[e.offer,e.difference,e.proof,e.approach,...approvedSellerFields].filter(Boolean).flatMap(Evidence.sellerStatements);
@@ -134,7 +131,7 @@
  function messageEvidenceAudit(studio,context={}){return {...Evidence.assess({style:studio.mode,essentials:studio.essentials,context}),subjects:subjectAudit(studio,context)};}
  function subjectResearchKey(studio,context={}){
   const profile=subjectEvidenceSources({...context,sellerEvidence:context.profileEvidence||[]}).map(row=>{let hash=2166136261;for(const char of row.text){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return [row.url,row.text.length,(hash>>>0).toString(16)];});
-  return JSON.stringify(['subject-evidence-v8',context.factPreparation?.version||'',context.researchBrief?.key||'',studio.mode,studio.essentials,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,profile,context.trigger?.url,context.trigger?.excerpt,context.researchTrigger?.url,context.researchTrigger?.excerpt,context.researchTrigger?.summary,context.buyerName,context.buyerCompany,context.buyerRole]);
+  return JSON.stringify(['subject-evidence-v8',context.factPreparation?.version||'',context.researchBrief?.key||'',studio.mode,studio.essentials,context.sellerWebsite,context.sellerDocuments,context.sellerAnswers,context.sellerAnswerStatus,profile,context.trigger?.url,context.trigger?.excerpt,context.researchTrigger?.url,context.researchTrigger?.excerpt,context.researchTrigger?.summary,context.buyerName,context.buyerCompany,context.buyerRole]);
  }
  function subjectResearchPlan(studio,context={}){return defaults.some(row=>row.id===studio.mode)?Evidence.plan({style:studio.mode,essentials:studio.essentials,context}):[];}
  function professionalSubject(studio,context,e,language){

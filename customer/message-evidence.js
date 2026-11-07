@@ -14,8 +14,23 @@
   return (relevant.length?relevant.map(row=>row.value):lines.slice(0,8)).join('\n').slice(0,6000);
  }
  function sourceRead(row={}){return row.sourceRead!==false&&row.extracted!==false&&!/snippet|model_summary/i.test(row.evidenceKind||'')&&!/error|failed|pending/i.test(row.status||'')&&(row.sourceRead===true||row.extracted===true||row.verification==='source_verified'&&Number.isFinite(Date.parse(row.extractedAt||'')));}
- function sources(context={}){const host=domain(context.sellerWebsite);return host?(context.sellerEvidence||[]).filter(row=>domain(row?.url)===host&&sourceRead(row)).map(row=>({...row,text:String(row.text||row.excerpt||'').slice(0,12000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text)):[];}
- function reference(context={}){return sources(context).find(row=>/\/(?:projects?|case-stud(?:y|ies)|references?|portfolio|gallery)(?:\/|[-_]|$)/i.test(new URL(row.url).pathname)&&statements(row.text).some(text=>/\b(?:manufactur\w*|installation|installed|delivered|production|completed|designed|developed)\b/i.test(text)))||null;}
+ function sources(context={}){
+  const host=domain(context.sellerWebsite),web=host?(context.sellerEvidence||[]).filter(row=>domain(row?.url)===host&&sourceRead(row)):[];
+  // These documents come only from the active seller Profile, not buyer research.
+  const docs=(context.sellerDocuments||[]).filter(row=>row&&row.name&&String(row.text||'').trim()&&['ready','complete','completed','extracted'].includes(row.status||'ready')).map(row=>({id:row.id,title:row.name,name:row.name,type:'document',owner:'seller',sourceRead:true,url:'',text:row.text}));
+  return [...web,...docs].map(row=>({...row,text:String(row.text||row.excerpt||'').slice(0,25000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text));
+ }
+ function experienceDuration(input=[]){
+  const values=[];
+  for(const sentence of input.flatMap(sellerStatements)){
+   if(/\b(?:ago|warranty|guarantee|project duration|plan|plans|planned|planning|will|could|may|might)\b/i.test(sentence))continue;
+   const match=sentence.match(/(?<![\w.])((?:(?:more than|over|at least)\s+)?(?:\d+\+?|twenty|thirty|forty|fifty)\s+years)\s+(?:of\s+)?(?:(?:[a-z-]+\s+){0,4}(?:experience|expertise)|in\b|working\b)/i)||sentence.match(/\b(?:worked|working|operated|operating|manufacturing|fabricating)\b[^.!?]{0,70}\bfor\s+((?:(?:more than|over|at least)\s+)?\d+\+?\s+years)\b/i);
+   if(match)values.push(match[1].toLowerCase());
+  }
+  const distinct=[...new Set(values)];return distinct.length===1?distinct[0]:'';
+ }
+
+ function reference(context={}){return sources(context).find(row=>domain(row.url)&&/\/(?:projects?|case-stud(?:y|ies)|references?|portfolio|gallery)(?:\/|[-_]|$)/i.test(new URL(row.url).pathname)&&statements(row.text).some(text=>/\b(?:manufactur\w*|installation|installed|delivered|production|completed|designed|developed)\b/i.test(text)))||null;}
  const fields=Object.freeze([
   {id:'sender',label:'Sender identity',owner:'user',field:'sender'},
   {id:'seller',label:'Seller company',owner:'user',field:'company'},
@@ -96,5 +111,5 @@
   if((context.subjectFactsLanguage||essentials.language||'en')===language){const offers=[...new Set(statements(essentials.offer).flatMap(value=>value.split(/[,;]|\s+and\s+/i)).map(clean).filter(value=>value&&value.split(/\s+/).length<=4&&!/https?:|\d/.test(value)))].sort((a,b)=>a.length-b.length);for(let i=0;i<offers.length;i++)for(let j=i+1;j<offers.length;j++){const question=offers[i]+' '+orWord+' '+offers[j];if(fits(question))return {text:question,kind:'services',verification:'user_supplied'};}}
   return {text:timing[language]||timing.en,kind:'timing',verification:'open_question'};
  }
- return Object.freeze({VERSION,fields,styleFields,neutralContext,projectLabel,factualTrigger,sourceRead,domain,statements,sellerStatements,selectExcerpt,sources,reference,assess,plan,meetingDates,comparison,timing});
+ return Object.freeze({VERSION,fields,styleFields,neutralContext,projectLabel,factualTrigger,sourceRead,domain,experienceDuration,statements,sellerStatements,selectExcerpt,sources,reference,assess,plan,meetingDates,comparison,timing});
 });
