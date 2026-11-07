@@ -30,7 +30,7 @@ test('one company research action remains while selected-person resume and Stop 
  const c={domain:'example.com',buyerResearchJob:{id:'job'},buyerResearchProgress:{jobId:'job',phase:'error',step:4}};
  let html=ctx.buyerResearchProgressHtml(c,{companyActionVisible:true});assert.doesNotMatch(html,/data-resume-buyer-job|data-check-buyer-job/);assert.match(html,/button above/);
  c.buyerResearchJob.personIds=['buyer'];html=ctx.buyerResearchProgressHtml(c,{companyActionVisible:true});assert.match(html,/Resume selected buyer checks/);
- delete c.buyerResearchJob.personIds;c.buyerResearchProgress.connection='unavailable';html=ctx.buyerResearchProgressHtml(c,{companyActionVisible:true});assert.match(html,/data-stop-buyer-job/);assert.doesNotMatch(html,/data-check-buyer-job/);
+ c.buyerResearchProgress.connection='unavailable';html=ctx.buyerResearchProgressHtml(c,{companyActionVisible:true});assert.match(html,/data-stop-buyer-job/);assert.doesNotMatch(html,/data-check-buyer-job/);
 });
 test('explicit retry bypasses a cached translation rejected for changed identifiers',async()=>{
  const U=ui(),f=fixture('LKAB bygger en ny fabrik med 20 anställda.');let calls=0;f.root.fetch=async()=>({ok:true,json:async()=>({text:JSON.stringify({fact0:++calls===1?'The company is building a new factory with 20 employees.':'LKAB is building a new factory with 20 employees.'})})});await U.prepareBrief(f.candidate,f.context,{root:f.root});assert.match(U.briefHtml(f.candidate,f.context),/translation unavailable/);await U.prepareBrief(f.candidate,f.context,{root:f.root,retry:true});assert.equal(calls,2);assert.match(U.briefHtml(f.candidate,f.context),/LKAB is building/);
