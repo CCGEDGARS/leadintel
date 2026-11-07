@@ -52,3 +52,28 @@ test('all fifteen style buttons load the active channel master directly without 
   assert.equal(confirmations,0);assert.equal(f.requests.some(([url,o])=>o.method==='PUT'||/send|enqueue|writing-assistant/.test(url)),false);
  }finally{f.w.close();}
 });
+
+test('typing while a phone style catalogue loads preserves the newer working copy',async()=>{
+ const f=await fixture();try{
+  await f.ui.openChannel('phone');let resolve;const fetch=f.w.fetch;f.w.fetch=(url,options)=>String(url).includes('/script-library?')?new Promise(r=>resolve=r):fetch(url,options);
+  const pending=f.ui.selectStyle('friendly',{fresh:true});await tick();const input=f.w.document.querySelector('[aria-label="Phone script"]');input.value='New manual words during loading';input.dispatchEvent(new f.w.Event('input'));
+  resolve({ok:true,json:async()=>({core:[{id:'phone:friendly',channel:'phone',style:'friendly',name:'Friendly',body:'Older request for [First name]',creatorSource:{id:'owner'}}],personal:[],primary:[]})});
+  await assert.rejects(pending,/changed|preserved/i);assert.equal(input.value,'New manual words during loading');assert.equal(f.ui.draft().message,input.value);
+ }finally{f.w.close();}
+});
+test('a personal-template confirmation cannot apply to a different buyer',async()=>{
+ const f=await fixture();try{
+  f.setCatalogue({core:[],personal:[{id:'p',channel:'email',style:'friendly',name:'Personal',body:'First buyer text'}],primary:[{channel:'email',template_id:'p'}]});await f.ui.refresh();let confirm;f.w.LeadIntelDialogs.confirm=()=>new Promise(r=>confirm=r);
+  const pending=f.find('Use my primary').onclick();await tick();f.ctx.contactId='another';confirm(true);await pending;
+  assert.equal(f.email().message,'Keep email');assert.match(f.w.document.getElementById('sc-status').textContent,/changed|preserved/i);
+ }finally{f.w.close();}
+});
+
+test('a stalled library read times out, preserves the draft and allows a fresh retry',async()=>{
+ const f=await fixture();try{
+  const fetch=f.w.fetch,timer=f.w.setTimeout.bind(f.w);f.w.setTimeout=(fn,ms)=>timer(fn,ms===20000?1:ms);
+  f.w.fetch=(url,options)=>new Promise((resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(new f.w.DOMException('Aborted','AbortError')),{once:true}));
+  assert.equal(await f.ui.refresh(),undefined);assert.match(f.w.document.getElementById('sc-status').textContent,/timed out/i);assert.equal(f.email().message,'Keep email');
+  f.w.fetch=fetch;assert.equal(await f.ui.refresh(),true);
+ }finally{f.w.close();}
+});

@@ -108,7 +108,7 @@
  }
  // Fill factual spans in the owner's sentence frames, not a generic Profile summary.
  function sourceVoiceValues(style,e,raw,context,values){
-  const approved=Object.entries(context.sellerAnswers||{}).filter(([k])=>['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(([,v])=>String(v));
+  const approved=Object.entries(context.sellerAnswers||{}).filter(([k])=>['priority_offers','differentiation','proof_points','delivery_approach'].includes(k)&&['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(([,v])=>String(v));
   const statements=[raw.offer,raw.difference,raw.proof,raw.approach,...approved,...S.subjectEvidenceSources(context).map(row=>row.text)].filter(Boolean).flatMap(Evidence.sellerStatements).filter(v=>! /\b(?:unconfirmed|unknown)\b/i.test(v));
   const seller=statements.join(' '),facts=S.subjectSellerFacts(context,raw),manufacturing=/\b(?:fabricat\w*|manufactur\w*|turn\w* drawings)\b/i.test(seller);
   const origin=[['Latvian','Latvia'],['Swedish','Sweden'],['Norwegian','Norway'],['German','Germany'],['British','the UK']].find(([adjective,country])=>statements.some(text=>{
