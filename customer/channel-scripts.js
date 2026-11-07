@@ -196,8 +196,20 @@ function mount(document,adapter){
     if(!catalogue&&!await refresh())return;
     if(key!==feedbackKey()||before!==JSON.stringify(draft())||adapter.canPersonalizeRawCopy?.()!==true)return;
     const row=[...(catalogue?.core||[]),...(catalogue?.personal||[])].find(r=>r.id===source&&!r.deleted&&r.channel===channel());
-    if(!row||draft().message!==row.body||draft().subject!==(row.subject||''))return;
-    const next=fillScript(row,adapter.values(style));
+    if(!row)return;
+    const values=adapter.values(style),escape=text=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    // Accept only original literals and slots that are either still raw or
+    // exactly equal to their current resolved value. Never match arbitrary edits.
+    const unchanged=(pattern,current)=>{
+     let expression='',offset=0;
+     for(const match of pattern.matchAll(/\{\{[^{}]+\}\}|\[[^\]\n]+\]/g)){
+      const token=match[0],filled=fillScript({...row,subject:'',body:token},values).draft.message;
+      expression+=escape(pattern.slice(offset,match.index))+'(?:'+escape(token)+'|'+escape(filled)+')';offset=match.index+token.length;
+     }
+     return new RegExp('^'+expression+escape(pattern.slice(offset))+'$').test(current);
+    };
+    if(!unchanged(row.body,draft().message)||!unchanged(row.subject||'',draft().subject))return;
+    const next=fillScript(row,values);
     if(next.draft.message!==draft().message||next.draft.subject!==draft().subject)await applyRow(row,{confirm:false});
    })().catch(error=>status(error.message));
    return true;

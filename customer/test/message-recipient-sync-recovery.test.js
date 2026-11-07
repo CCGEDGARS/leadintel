@@ -40,3 +40,15 @@ test('company records changing during recipient validation release pending state
  assert.doesNotMatch(h.w.document.body.textContent,/Checking your selected recipient/);
  }finally{release?.();h.w.close();}
 });
+test('recipient verification deadline clears pending, exposes retry and rejects the late response',async()=>{
+ const {h,b,choice}=fixture();let release,expire;try{
+ const get=b.getCrmCompany,originalTimer=h.w.setTimeout;
+ h.w.setTimeout=(callback,ms,...args)=>ms===30000?(expire=callback,987654):originalTimer(callback,ms,...args);
+ b.getCrmCompany=async()=>{await new Promise(r=>release=r);return get();};
+ const pending=h.w.openBuyerScripts(choice);await settle();assert.equal(h.q('mw-updating-notice').dataset.state,'busy');assert.equal(h.q('mw-missing-facts').hidden,true);assert.equal(h.q('mw-editor-status').hidden,true);assert.equal(typeof expire,'function');expire();await pending;
+ assert.doesNotMatch(h.q('mw-readiness-text').textContent,/Checking your selected recipient/);
+ assert.match(h.q('mw-resolve').textContent,/Retry recipient/);assert.equal(h.q('mw-resolve').hidden,false);
+ release();await settle();assert.equal(h.w.recipientReady(),false);
+ b.getCrmCompany=get;h.q('mw-resolve').click();await settle();assert.equal(h.w.recipientReady(),true);assert.doesNotMatch(h.q('mw-readiness-text').textContent,/Checking your selected recipient|timed out/);
+ }finally{release?.();h.w.close();}
+});
