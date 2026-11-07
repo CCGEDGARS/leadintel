@@ -15,6 +15,7 @@ test('failed, empty and instruction-bearing documents cannot supply facts; other
  assert.deepEqual(V.sources({sellerDocuments:[]}),[]);
 });
 test('company experience rejects incidental periods and conflicting durations',()=>{
+ assert.equal(V.experienceDuration(['Our team brings more than 30 years of metalworking experience.']),'more than 30 years');
  assert.equal(V.experienceDuration(['We completed a steel project 2 years ago. We have more than 30 years of experience in steel.']),'more than 30 years');
  for(const text of ['Our warranty covers 2 years.','We started a project 2 years ago.','We plan to gain 30 years of experience.'])assert.equal(V.experienceDuration([text]),'');
  assert.equal(V.experienceDuration(['We have 30 years of experience.','We have 20 years of experience.']),'');
