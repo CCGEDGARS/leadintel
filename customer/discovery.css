@@ -763,3 +763,15 @@
 .buyer-research-progress-head strong{font-size:18px}.buyer-research-progress li.active{background:#0d5d4f;color:#fff;padding:8px;border-radius:8px}
 .buyer-research-live{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid #badace;font-size:13px}.buyer-research-live>span{flex:1;min-width:180px}.buyer-research-live ul{display:block;width:100%;margin:0;padding-left:18px}.buyer-research-live li{display:list-item;font-size:13px;color:#244e40;margin:5px 0}
 @media(prefers-reduced-motion:reduce){.buyer-research-spinner{animation:none}}
+
+/* Previous companies retain research without rendering their full dossiers. */
+.buyer-company-collapsed{padding:0;overflow:hidden}
+.buyer-company-open{display:flex;align-items:center;justify-content:space-between;gap:20px;width:100%;padding:20px 22px;border:0;background:transparent;color:#183c30;text-align:left;cursor:pointer;font:inherit}
+.buyer-company-open:hover{background:#eff7f3}
+.buyer-company-open:focus-visible{outline:3px solid #16745f;outline-offset:-3px}
+.buyer-company-open strong{display:block;font-size:18px}
+.buyer-company-open small{display:block;margin-top:6px;color:#53665e;line-height:1.5}
+.buyer-company-open-label{font-weight:700;white-space:nowrap}
+.buyer-company-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;color:#53665e;font-size:14px}
+.buyer-company-pagination span{text-align:center}
+@media(max-width:620px){.buyer-company-open{align-items:flex-start;flex-direction:column;gap:10px;padding:16px}.buyer-company-pagination{gap:8px}.buyer-company-pagination button{padding:9px}.selected-prospect-row.buyer-company-collapsed{padding:0}}
