@@ -1366,7 +1366,7 @@ test('recommended buyers precede potential buyers and unresolved research with c
  const people=Array.from({length:6},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,publicName:`Anna Buyer${i}`,title:'Procurement Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:{status:"complete",searches:3,failed:0,checkedAt:new Date().toISOString()}}));
  for(const person of people.slice(0,4)){person.publicLinkedinUrl='https://linkedin.com/in/'+person.id;person.linkedinConfirmedUrl=person.publicLinkedinUrl;person.linkedinConfirmationMethod='manual';}
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people,buyerDiscovery:{pool:[...people,{name:'Unresolved',title:'Procurement Director',identityStatus:'pending'}],providerStatus:{firecrawl:{status:'complete'}},researchIncomplete:true}}]);
- assert.ok(html.indexOf('4 confirmed priority contacts')>=0);assert.ok(html.indexOf('4 confirmed priority contacts')<html.indexOf('2 other potential buyers'));
+ assert.ok(html.indexOf('4 priority buyers')>=0);assert.ok(html.indexOf('4 priority buyers')<html.indexOf('2 other potential buyers'));
  assert.ok(html.indexOf('2 other potential buyers')<html.indexOf('1 unresolved identities'));
  assert.match(html,/<details class="buyer-pending-identities"><summary>/);
  assert.match(html,/<details class="buyer-provider-status"><summary>/);
@@ -1396,7 +1396,7 @@ test('confirmed contacts remain visible while incomplete research stays explicit
  const people=Array.from({length:11},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,title:i===10?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:i===10?{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}:{status:'partial',searches:1,failed:1,checkedAt:new Date().toISOString()}}));
  for(const person of [people[10],...people.slice(0,3)]){person.publicLinkedinUrl='https://linkedin.com/in/'+person.id;person.linkedinConfirmedUrl=person.publicLinkedinUrl;person.linkedinConfirmationMethod='manual';}
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:['Project Director','Procurement Director']}]);
- assert.match(html,/4 confirmed priority contacts/);assert.equal((html.match(/class="buyer-recommendation">Recommended</g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
+ assert.match(html,/4 priority buyers/);assert.equal((html.match(/class="buyer-recommendation">Recommended</g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
  assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Checks incomplete/);
 });
 
@@ -1419,7 +1419,7 @@ test('explicit refresh researches an unresearched individual while retained comp
 test('a stale role shows its actual hold reason beside a disabled proceed action',()=>{
  const context=loadDiscoveryRunner({renderNodes:true});
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people:[{id:'old',name:'Anna Buyer',title:'Project Director',organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:'2013-05-01'}],buyerRoles:['Project Director']}]);
- assert.match(html,/0\/4 confirmed contacts ready/);assert.match(html,/<details class="buyer-other-contacts"><summary>Show other contacts \(1\)/);assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
+ assert.match(html,/0\/4 priority buyers with confirmed contact data/);assert.match(html,/<details class="buyer-other-contacts"><summary>Show other contacts \(1\)/);assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);assert.doesNotMatch(html,/Recommended · researched match/);
 });
 
@@ -1534,7 +1534,7 @@ test('reserved executive cards display consecutive priority ranks independent of
  const candidate={company:'Northstar',domain:'northstar.com',buyerRoles:['Project Manager'],people,peopleStatus:'complete'};
  const html=context.__renderSelectedProspects([candidate]);
  const ranks=[...html.matchAll(/selected-prospect-rank">(\d+)</g)].slice(0,4).map(m=>Number(m[1]));
- assert.deepEqual(ranks,[1,2,3,4]);assert.match(html,/4 confirmed priority contacts/);
+ assert.deepEqual(ranks,[1,2,3,4]);assert.match(html,/4 priority buyers/);
 });
 
 
