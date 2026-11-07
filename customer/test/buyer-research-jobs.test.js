@@ -241,3 +241,11 @@ test('a selected click waits for another server-owned buyer job without replacin
  const h=harness(call=>call.method==='GET'?{...other,status:++reads<3?'running':'complete'}:{...snapshot(owner),input:{scope:'selected_buyers',personIds:['bob']}});
  await h.client.research(owner,{personIds:['bob'],force:true});assert.equal(reads,3);assert.equal(h.calls.filter(c=>c.method==='POST').length,1);assert.deepEqual(h.calls.at(-1).body.personIds,['bob']);assert.deepEqual(owner.people[0],before);
 });
+
+test('button busy state reflects a live scoped observer, not persisted loading flags',async()=>{
+ const owner=candidate();owner.peopleStatus='loading';let finish;const h=harness(()=>new Promise(resolve=>finish=resolve));
+ assert.equal(h.client.isObserving(owner),false);const pending=h.client.restore(owner);assert.equal(h.client.isObserving(owner),true);assert.equal(h.client.isObserving({...owner}),false);h.bridge.workspace.id='other';assert.equal(h.client.isObserving(owner),false);h.bridge.workspace.id='workspace-1';finish(snapshot(owner));await pending;assert.equal(h.client.isObserving(owner),false);
+});
+test('a failed status request releases the observable busy state for retry',async()=>{
+ const owner=candidate(),h=harness(()=>{throw Error('offline');});const pending=h.client.research(owner);assert.equal(h.client.isObserving(owner),true);await assert.rejects(pending,/offline/);assert.equal(h.client.isObserving(owner),false);
+});

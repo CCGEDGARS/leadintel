@@ -194,7 +194,8 @@
       const result=await request(scope,'POST',{action:'cancel',jobId:job.id,expectedRevision:job.revision},null,controller);
       entry?.controller.abort();apply(scope,result,options);return result;
     }
-    return {research:(owner,options={})=>execute(owner,options,false),restore:(owner,options={})=>execute(owner,options,true),cancel};
+    function isObserving(owner){const b=getBridge(),entry=active.get(`${b?.workspace?.id}|${domain(owner?.domain)}`);return Boolean(entry&&entry.scope.owner===owner&&!entry.controller.signal.aborted&&entry.scope.current());}
+    return {isObserving,research:(owner,options={})=>execute(owner,options,false),restore:(owner,options={})=>execute(owner,options,true),cancel};
   }
   return {...createClient(),createClient,requestInput};
 });
