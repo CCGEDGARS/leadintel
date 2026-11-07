@@ -21,3 +21,13 @@ for(const changed of [false,true])test('an existing raw bracket master is person
  if(!changed){assert.equal(h.item().drafts.emailSubject,'Alex. North Works');assert.match(h.q('mw-updating-notice').textContent,/Needs information: result/);assert.equal(h.q('mw-add-flow').disabled,true);assert.equal(h.q('mw-save-message').disabled,false);}
  }finally{h.w.close();}
 });
+for(const manual of [false,true])test('partially filled owner master repairs known remaining fields without replacing manual wording: '+manual,async()=>{
+ const h=setup();try{
+ const row={id:'email:professional',channel:'email',style:'professional',subject:'[First name]. [Company]',body:'Hi [First name],\n\n[Your full name] from [Company]. [result]',creatorSource:{id:'owner',revision:1}};
+ const body='Hi Alex,\n\n[Your full name] from North Works. [result]'+(manual?'\nKeep this note.':'');
+ h.w.upsertItem({...h.item(),drafts:{...h.item().drafts,emailSubject:'Alex. North Works',emailBody:body},messageStudioDraft:{mode:'professional',editorOrigin:'manual',channelLibrarySource:row.id}});h.w.renderAll();
+ h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:[row],personal:[],primary:[],canManage:false})});await tick();h.w.automaticallyPrepareMessage();await tick();await tick();
+ assert.equal(h.item().drafts.emailBody,manual?body:'Hi Alex,\n\nRobin Lane from North Works. [result]');
+ if(!manual)assert.equal(h.item().messageStudioDraft.templateUpdateUndo.draft.message,body);
+ }finally{h.w.close();}
+});
