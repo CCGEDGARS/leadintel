@@ -15,7 +15,7 @@
  }
  function sourceRead(row={}){return row.sourceRead!==false&&row.extracted!==false&&!/snippet|model_summary/i.test(row.evidenceKind||'')&&!/error|failed|pending/i.test(row.status||'')&&(row.sourceRead===true||row.extracted===true||row.verification==='source_verified'&&Number.isFinite(Date.parse(row.extractedAt||'')));}
  function sources(context={}){
-  const host=domain(context.sellerWebsite),web=host?(context.sellerEvidence||[]).filter(row=>domain(row?.url)===host&&sourceRead(row)):[];
+  const host=domain(context.sellerWebsite),web=host?(context.sellerEvidence||[]).filter(row=>(domain(row?.url)===host||row.fullSourceRead===true&&domain(row.linkedFrom)===host&&/\.pdf(?:$|\?)/i.test(row.url))&&sourceRead(row)):[];
   // These documents come only from the active seller Profile, not buyer research.
   const docs=(context.sellerDocuments||[]).filter(row=>row&&row.name&&String(row.text||'').trim()&&['ready','complete','completed','extracted'].includes(row.status||'ready')).map(row=>({id:row.id,title:row.name,name:row.name,type:'document',owner:'seller',sourceRead:true,url:'',text:row.text}));
   return [...web,...docs].map(row=>({...row,text:String(row.text||row.excerpt||'').slice(0,25000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text));
@@ -111,5 +111,62 @@
   if((context.subjectFactsLanguage||essentials.language||'en')===language){const offers=[...new Set(statements(essentials.offer).flatMap(value=>value.split(/[,;]|\s+and\s+/i)).map(clean).filter(value=>value&&value.split(/\s+/).length<=4&&!/https?:|\d/.test(value)))].sort((a,b)=>a.length-b.length);for(let i=0;i<offers.length;i++)for(let j=i+1;j<offers.length;j++){const question=offers[i]+' '+orWord+' '+offers[j];if(fits(question))return {text:question,kind:'services',verification:'user_supplied'};}}
   return {text:timing[language]||timing.en,kind:'timing',verification:'open_question'};
  }
- return Object.freeze({VERSION,fields,styleFields,neutralContext,projectLabel,factualTrigger,sourceRead,domain,experienceDuration,statements,sellerStatements,selectExcerpt,sources,reference,assess,plan,meetingDates,comparison,timing});
+
+ // One bounded evidence pass for every library channel. Source reads, not search
+ // snippets, are reusable facts. Missing personal/case-story details are never guessed.
+ const RESEARCH_POLICY='template-research-20261107-v1';
+ function researchKey(script,context,essentials={}){
+  const input=JSON.stringify([RESEARCH_POLICY,script.channel,script.id,script.subject,script.body,context.buyerDomain,context.buyerName,context.trigger,context.sellerWebsite,context.profileEvidence,context.sellerDocuments,context.sellerAnswers,context.sellerAnswerStatus,essentials]);
+  const hash=seed=>{let value=seed;for(let i=0;i<input.length;i++)value=Math.imul(value^input.charCodeAt(i),16777619);return (value>>>0).toString(16);};return RESEARCH_POLICY+':'+hash(2166136261)+hash(2246822519);
+ }
+ async function researchTemplate({script,context,resolve,read,search,signal,onProgress=()=>{},now=Date.now(),cached,retry=false}){
+  const key=researchKey(script,context,context.essentials),age=now-Date.parse(cached?.checkedAt||'');
+  if(!retry&&cached?.key===key&&age>=0&&age<(cached.status==='incomplete'?5*60000:24*3600000)){
+   onProgress('Using saved research.');return {...cached,reused:true};
+  }
+  const collected=[],receipts=[],errors=[],seen=new Set();let reads=0,searches=0;
+  const check=()=>signal?.throwIfAborted();
+  const merged=()=>({...context,sellerEvidence:[...(context.sellerEvidence||[]),...collected.filter(r=>r.owner==='seller')],buyerFactEvidence:[...(context.buyerFactEvidence||[]),...collected.filter(r=>r.owner==='buyer')]});
+  const gaps=()=>resolve(merged()).missing;
+  const trigger=context.researchTrigger||context.trigger,buyer=domain(trigger?.url)||context.buyerDomain,seller=domain(context.sellerWebsite);
+  const reviewed=['source_verified','user_reviewed'].includes(trigger?.verification);
+  const eligible=(url,owner)=>domain(url)===(owner==='buyer'?buyer:seller)&&Boolean(domain(url));
+  const existing=[...(context.buyerFactEvidence||[]).map(r=>({...r,owner:'buyer'})),...sources(context).map(r=>({...r,owner:'seller'}))];
+  async function visit(url,owner,mandatory=false,linkedFrom=''){
+   const linkedPdf=domain(url)&&/\.pdf(?:$|\?)/i.test(url)&&eligible(linkedFrom,owner)&&collected.some(row=>row.url===linkedFrom&&row.owner===owner&&row.text.includes(url));
+   check();if(!(eligible(url,owner)||linkedPdf)||seen.has(url)||reads>=8)return;seen.add(url);
+   const saved=existing.find(r=>r.url===url&&r.owner===owner&&sourceRead(r)&&r.fullSourceRead===true&&now-Date.parse(r.extractedAt||'')>=0&&now-Date.parse(r.extractedAt)<24*3600000);
+   if(saved&&!retry){collected.push(saved);receipts.push({kind:'reuse',owner,url,ok:true});return saved;}
+   reads++;onProgress(mandatory?'Reading the selected trigger source…':`Checking supporting sources (${reads}/8)…`);
+   try{
+    const result=await read(url,signal);check();const text=String(result.markdown||result.text||'').slice(0,25000);
+    if(text.trim().length<40||/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(text))throw Error('Source did not return usable article text.');
+    const row={owner,url,...(linkedPdf?{linkedFrom}:{}),title:String(result.title||'').slice(0,200),text,sourceRead:true,fullSourceRead:true,verification:'source_verified',extractedAt:new Date(now).toISOString()};
+    collected.push(row);receipts.push({kind:'read',owner,url,ok:true});return row;
+   }catch(error){check();const message=String(error.message).slice(0,180);errors.push(message);receipts.push({kind:'read',owner,url,ok:false,error:message});}
+  }
+  const links=row=>[...String(row?.text||'').matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)].map(m=>{try{return new URL(m[1],row.url).href;}catch{return '';}}).filter(url=>domain(url)&&(eligible(url,row.owner)||/\.pdf(?:$|\?)/i.test(url))&&/project|news|press|about|compan|certif|capabil|manufactur|\.pdf(?:$|\?)/i.test(url));
+  try{
+  onProgress('Checking saved website, documents and Profile answers…');check();const initial=gaps();
+  // Always inspect the user's chosen article, including when its quote already fills a slot.
+  let article;if(reviewed&&eligible(trigger.url,'buyer'))article=await visit(trigger.url,'buyer',true);
+  let homepage;if(gaps().length&&seller)homepage=await visit(context.sellerWebsite,'seller');
+  for(const row of [article,homepage].filter(Boolean))for(const url of links(row).slice(0,2)){if(!gaps().length)break;await visit(url,row.owner,false,row.url);}
+  // At most one focused query per owner. Search results are candidates only.
+  for(const owner of ['buyer','seller']){
+   check();if(!gaps().length||reads>=8||searches>=2)break;
+   const host=owner==='buyer'?buyer:seller;if(!host)continue;
+   const needed=gaps().filter(label=>owner==='buyer'?/project|phase|location|facility|completion|development/i.test(label):/experience|industry|market|reference|certif|company data|work packages|country|city/i.test(label));
+   if(!needed.length)continue;
+   const query=`site:${host} ${owner==='buyer'?String(trigger?.title||'').slice(0,100):''} ${needed.slice(0,4).join(' ')}`;searches++;onProgress(`Resolving remaining facts (${searches}/2 searches)…`);
+   try{const results=await search(query,signal);check();receipts.push({kind:'search',owner,query,ok:true,count:results.length});for(const row of results.slice(0,4)){if(!gaps().length||reads>=8)break;await visit(row.url,owner);}}
+   catch(error){check();errors.push(String(error.message).slice(0,180));receipts.push({kind:'search',owner,query,ok:false,error:String(error.message).slice(0,180)});}
+  }
+  check();const missing=gaps(),status=errors.length?'incomplete':missing.length?'needs_review':'checked';
+  const result={key,policy:RESEARCH_POLICY,status,sources:collected,receipts,errors,missing,initialMissing:initial.length,reads,searches,checkedAt:new Date(now).toISOString()};
+  onProgress(`Research finished: ${Math.max(0,initial.length-missing.length)} details added; ${missing.length} need review.${errors.length?' Some sources were unavailable.':''}`);return result;
+  }catch(error){error.partialResearch={key,policy:RESEARCH_POLICY,status:'incomplete',sources:collected,receipts,errors:[String(error.message).slice(0,180)],missing:[],reads,searches,checkedAt:new Date(now).toISOString()};throw error;}
+ }
+
+ return Object.freeze({researchTemplate,researchKey,RESEARCH_POLICY,VERSION,fields,styleFields,neutralContext,projectLabel,factualTrigger,sourceRead,domain,experienceDuration,statements,sellerStatements,selectExcerpt,sources,reference,assess,plan,meetingDates,comparison,timing});
 });

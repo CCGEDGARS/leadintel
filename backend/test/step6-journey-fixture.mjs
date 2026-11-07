@@ -10,9 +10,11 @@ export const reviewedLinkedInUrl='https://www.linkedin.com/in/robert-lund';
 // Only the external provider is controlled. Authentication, migrations, routes,
 // workspace CAS, CRM contact confirmation and CRM snapshots execute normally.
 export async function step6Fixture(){
- const providerRequests=[];let nextFailure=null,nextGate=null;
+ const researchReads=[],providerRequests=[];let nextFailure=null,nextGate=null;
  const f=await journeyFixture({externalFetch:async(input,options)=>{
   const url=new URL(typeof input==='string'?input:input.url);
+  if(url.hostname==='forge.example'&&url.pathname==='/expansion'){researchReads.push(url.href);return new Response('<html><body><h1>Forge plant construction</h1><p>Forge Industries is expanding its production facility. The production facility is in Northport. Building completion is expected at the end of 2027. BuildCo has been awarded the main structural steel contract.</p></body></html>',{headers:{'Content-Type':'text/html'}});}
+  if(url.hostname==='seller.example'){researchReads.push(url.href);return new Response('<html><body><h1>Fixture Industrial</h1><p>Our team manufactures industrial automation equipment and supplies custom machinery.</p></body></html>',{headers:{'Content-Type':'text/html'}});}
   if(url.hostname!=='api.openai.com')return;
   const body=JSON.parse(options.body),data=JSON.parse(body.input||'{}');
   const request={kind:body.tools?'research':data.sources?'fields':data.context?.channel==='linkedin'?'linkedin':'other',style:data.style||data.mode||null,status:'pending'};
@@ -57,7 +59,7 @@ export async function step6Fixture(){
   const linkedState=await f.getState(),company=linkedState.payload.discovery.selectedProspects[0],person=company.people.find(person=>person.id==='robert');
   person.publicLinkedinUrl=reviewedLinkedInUrl;
   await f.replace(linkedState.payload,linkedState.version);
-  return {...f,providerRequests,failNextPreparation(kind='unavailable'){nextFailure=kind;},holdNextPreparation(){
+  return {...f,researchReads,providerRequests,failNextPreparation(kind='unavailable'){nextFailure=kind;},holdNextPreparation(){
    let started,release;const began=new Promise(resolve=>started=resolve),wait=new Promise(resolve=>release=resolve);
    nextGate={started,wait};return {began,release};
   }};

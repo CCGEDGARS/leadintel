@@ -40,3 +40,11 @@ test('message fact context keeps the item company when a stale selected candidat
   assert.equal(context.buyerCompany,'Buyer');assert.equal(context.buyerDomain,'buyer.example');assert.equal(context.fitScore,null);assert.notEqual(context.buyerEvidence,'Foreign evidence');
  }finally{h.w.close();}
 });
+test('late library source response cannot replace a manually changed draft',async()=>{
+ const h=setup();try{
+ const original=h.w.fetch;let release;h.w.fetch=(url,options)=>String(url).startsWith('/api/integrations/services/firecrawl/scrape')?new Promise(resolve=>release=resolve):original(url,options);
+ h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:[{id:'email:friendly',channel:'email',style:'friendly',body:'Hello [First name]. [project location]',creatorSource:{id:'owner',revision:1}}],personal:[],primary:[],canManage:false})});await tick();
+ const pending=h.w.LeadIntelChannelWorkspace.selectStyle('friendly');await tick();assert.ok(release);const item=h.item();item.drafts.emailBody='My words typed while the source was being read.';h.w.upsertItem(item);h.w.renderAll();release({ok:true,json:async()=>({success:true,data:{markdown:'Buyer is building its new sorting plant in Northport. The facility is due to run in 2028.'}})});
+ await assert.rejects(pending,/changed.*preserved/i);assert.equal(h.item().drafts.emailBody,'My words typed while the source was being read.');assert.equal(h.item().messageStudioDraft.libraryResearch,undefined);
+ }finally{h.w.close();}
+});

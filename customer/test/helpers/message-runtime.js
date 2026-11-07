@@ -15,7 +15,7 @@ function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null,r
  w.LeadIntelWritingAssistantContext=require('../../writing-assistant-context.js');
  w.eval(read('original-scripts.js'));w.eval(read('original-scripts-ui.js'));
  w.eval(read('message-workspace.js'));w.eval(read('message-translation-ui.js'));w.eval(read('sender-identity-location.js'));
- const requests=[];w.fetch=(url,options)=>new Promise(resolve=>requests.push({url,options,resolve}));
+ const requests=[];w.fetch=(url,options)=>new Promise(resolve=>{requests.push({url,options,resolve});if(String(url).startsWith('/api/integrations/services/firecrawl/'))resolve({ok:true,json:async()=>String(url).includes('/scrape')?{success:true,data:{markdown:trigger.excerpt}}:{success:true,data:[]}});});
  w.eval(read('outreach-ui.js').replace(/^import .*;\s*$/gm,'')+"\nhandoffContact={domain:'buyer.example',personId:'p1',channel:'email',contact:{work_email:'alex@buyer.example'}};renderAll();\n"+runtimeSetup);
  return {w,q:id=>w.document.getElementById(id),requests,item:()=>JSON.parse(w.localStorage.getItem('leadintel_customer_v2_outreach')).items[0],before:E.workingDraft(item)};
 }
