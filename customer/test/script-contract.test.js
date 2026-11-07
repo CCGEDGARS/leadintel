@@ -54,3 +54,9 @@ test('template Undo restores its character contract with its exact draft',()=>{
  const restored=E.undoTemplateUpdate(next);
  assert.equal(restored.drafts.emailBody,'First message');assert.equal(restored.messageStudioDraft.channelLibrarySource,'email:friendly');assert.equal(restored.messageStudioDraft.scriptContract.maximumCharacters,500);
 });
+
+test('cookie retention remains excluded even when it uses years in a browser',()=>{
+ const V=require('../message-evidence.js');
+ assert.equal(V.experienceDuration(['This cookie lasts 2 years in the browser.']),'');
+ assert.equal(V.experienceDuration(['This cookie lasts 2 years in the browser.','Our team has more than thirty years of metalworking experience.']),'more than thirty years');
+});

@@ -23,7 +23,7 @@
  function experienceDuration(input=[]){
   const values=[];
   for(const sentence of input.flatMap(sellerStatements)){
-   if(/\b(?:ago|warranty|guarantee|project duration|plan|plans|planned|planning|will|could|may|might)\b/i.test(sentence))continue;
+   if(/\b(?:ago|warranty|guarantee|cookies?|retention|analytics|session|expires?|expiration|project duration|plan|plans|planned|planning|will|could|may|might)\b/i.test(sentence))continue;
    const match=sentence.match(/(?<![\w.])((?:(?:more than|over|at least)\s+)?(?:\d+\+?|twenty|thirty|forty|fifty)\s+years)\s+(?:of\s+)?(?:(?:[a-z-]+\s+){0,4}(?:experience|expertise)|in\b|working\b)/i)||sentence.match(/\b(?:worked|working|operated|operating|manufacturing|fabricating)\b[^.!?]{0,70}\bfor\s+((?:(?:more than|over|at least)\s+)?\d+\+?\s+years)\b/i);
    if(match)values.push(match[1].toLowerCase());
   }
