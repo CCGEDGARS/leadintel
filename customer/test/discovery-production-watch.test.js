@@ -169,7 +169,7 @@ const boundedDiscoveryRuntime = [
   'Research incomplete',
   'Buyer research saved locally',
   'Company website verification:',
-  'buyer-contacts-v23-company-record Resume incomplete checks Identity discovery',
+  'buyer-contacts-v23-company-record Resume buyer research Identity discovery',
   'async function confirmResearchedPublicEmails await confirmResearchedPublicEmails(candidate,controller.signal,researchWorkspace,canContinue,owner,{readMissing:false}) contextGuard,researchOwner',
   'function buyerResearchCandidates( function buyerReviewEvidence( target:10,shortfall',
   "typeof response.text==='function'?response.text() Optional evidence review unavailable; individual source checks are retained timeoutMs:Math.min(DISCOVERY_REQUEST_TIMEOUT_MS,12000)",

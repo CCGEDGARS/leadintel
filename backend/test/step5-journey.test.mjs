@@ -67,3 +67,10 @@ test('authenticated Chromium Recheck runs Charlotte alone through HTTP and sched
  const e=await verifyRetainedViscariaJourney({artifactDir:await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-charlotte-recheck-')),recheck:true});
  assert.equal(e.mainContacts,4);assert.equal(e.freshBrowserReopen,true);assert.equal(e.profileOnlyProceedBlocked,true);assert.equal(e.paidContactRequests,0);assert.equal(e.outboundMessages,0);
 });
+
+ test('company Resume button continues saved checks through HTTP and scheduler after reopening',{timeout:90000},async t=>{
+  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; required in Customer CI');return;}
+  const {verifyBuyerActionJourney}=await import('../../scripts/verify-buyer-action-journey.mjs');
+  const e=await verifyBuyerActionJourney({artifactDir:await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step5-test-company-actions-'))});
+  assert.equal(e.primaryResumeSameJob,true);assert.equal(e.headerAndSummaryAgree,true);assert.equal(e.realSchedulerPause,true);assert.equal(e.sourceReceiptsRetained,true);assert.equal(e.statusOutageRecoverable,true);assert.equal(e.serverCancellation,true);assert.equal(e.noAutomaticRestartOnReload,true);assert.deepEqual(e.consoleErrors,[]);
+ });
