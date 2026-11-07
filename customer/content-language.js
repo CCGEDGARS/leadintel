@@ -113,8 +113,9 @@
     }
     return output;
   }
-  async function request(root,workspace,language,source){
+  async function request(root,workspace,language,source,{force=false}={}){
     const key=cacheKey(workspace,language,source);
+    if(force&&!pending.has(key))cache.delete(key);
     if(cache.has(key))return cache.get(key);
     if(pending.has(key))return pending.get(key);
     const task=(async()=>{
