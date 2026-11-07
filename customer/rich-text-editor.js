@@ -13,6 +13,7 @@
   const pref=preferences();let font=R.FONTS.includes(pref.font)?pref.font:'Arial',size=Object.values(R.SIZES).includes(pref.size)?pref.size:16;let baseFont=font,baseSize=size,commandRunning=false;
   function remember(){try{w.localStorage.setItem('leadintel_editor_typography_v1',JSON.stringify({font,size}));}catch{}}
   function highlightMissing(){
+   for(const mark of body.querySelectorAll('[data-missing-field]'))mark.replaceWith(...mark.childNodes);
    if(!w.CSS?.highlights||!w.Highlight)return;
    const name='leadintel-missing-'+body.id.replace(/[^a-z0-9-]/gi,'-'),nodes=[],walker=d.createTreeWalker(body,w.NodeFilter.SHOW_TEXT);let node,total=0;
    while((node=walker.nextNode())){nodes.push({node,start:total,end:total+node.length});total+=node.length;}
@@ -21,6 +22,7 @@
     const start=nodes.find(row=>row.end>match.index),end=nodes.find(row=>row.end>=match.index+match[0].length);
     if(!start||!end)continue;const range=d.createRange();range.setStart(start.node,match.index-start.start);range.setEnd(end.node,match.index+match[0].length-end.start);ranges.push(range);
    }
+   if(textarea.readOnly)for(const range of [...ranges].reverse()){const mark=d.createElement('span');mark.dataset.missingField='true';mark.style.fontWeight='700';mark.append(range.extractContents());range.insertNode(mark);range.selectNodeContents(mark);}
    w.CSS.highlights.set(name,new w.Highlight(...ranges));
    let style=d.getElementById(name+'-style');if(!style){style=d.createElement('style');style.id=name+'-style';style.textContent='::highlight('+name+'){background-color:#fff0bb;color:#684500;text-decoration:underline;}';d.head.append(style);}
    body.dataset.missingFields=String(ranges.length);
@@ -30,7 +32,7 @@
   const state=()=>({text,html});
   function push(){history.push(state());history=history.slice(-40);future=[];}
   function emit(){descriptor.set.call(textarea,text);textarea.dispatchEvent(new w.Event('input',{bubbles:true}));onChange?.({message:text,...R.fields(text,html)});}
-  function markup(){return R.sanitize('<div style="font-family:'+baseFont+';font-size:'+baseSize+'px">'+body.innerHTML+'</div>');}
+  function markup(){const clean=body.cloneNode(true);for(const mark of clean.querySelectorAll('[data-missing-field]'))mark.replaceWith(...mark.childNodes);return R.sanitize('<div style="font-family:'+baseFont+';font-size:'+baseSize+'px">'+clean.innerHTML+'</div>');}
   function commit(previous){const nextHtml=markup(),nextText=R.toText(nextHtml);if(nextText.length>(textarea.maxLength>0?textarea.maxLength:12000)){renderBody();status.textContent='Message is too long. The last edit was not applied.';return false;}if(nextText===text&&nextHtml===html)return false;if(previous!==false)push();text=nextText;html=nextHtml;selection=null;emit();update();return true;}
   function capture(){const s=w.getSelection();if(s?.rangeCount&&body.contains(s.anchorNode)&&body.contains(s.focusNode))selection=s.getRangeAt(0).cloneRange();}
   function restore(){body.focus();const s=w.getSelection();if(selection&&body.contains(selection.commonAncestorContainer)){s.removeAllRanges();s.addRange(selection);}else{const range=d.createRange();range.selectNodeContents(body);range.collapse(false);s.removeAllRanges();s.addRange(range);}return s;}
