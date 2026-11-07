@@ -1,0 +1,14 @@
+# Library template research before personalization
+
+Explicit style selection in Email, LinkedIn and Phone runs the same bounded evidence pass before filling the owner's flexible fields. The original template remains unchanged. Existing manual/saved text and its Undo history are protected; repairing readable slots in an untouched historical copy uses saved facts without starting network research.
+
+1. Resolve known values from the active seller website evidence, extracted seller documents, accepted Profile answers, sender identity and selected buyer research.
+2. Read the full selected, reviewed trigger article even if its short quotation already fills a field. A fresh full-source receipt may be reused. Search snippets and model summaries are not source reads.
+3. For remaining template gaps, read the seller website and relevant official links, including PDFs explicitly linked by the article. Follow at most two focused searches, restricted to the appropriate company's official domain. Total page attempts are capped at eight; the client operation has a sixty-second deadline. Direct public extraction runs first, with configured extraction providers as fallback. Unavailable sources produce incomplete receipts, not invented values.
+4. Fill supported declared slots. Building completion is not production start; case-study participants, results and private meeting agreements remain unresolved without supplied evidence. Reading a contract award is not proof that work packages remain available. Canonical literal wording is not silently rewritten.
+5. Show progress, source links and remaining fields. Completed checks are cached for twenty-four hours per template/context; incomplete attempts for five minutes, with an explicit retry. Changing the template, selected trigger, seller documents, accepted answers, identity or supplied message context invalidates the matching cache. Successful reads retain their timestamps. Cached research never certifies a source remains factually current indefinitely.
+6. Persist evidence and execution receipts with the message snapshot. A deadline retains completed source reads but preserves the current draft. Responses for a changed workspace, recipient, source, Profile or draft cannot apply. No outreach or paid contact enrichment is part of this process.
+
+This is a bounded factual preparation process, not an assertion that every sentence can be verified or every slot found. Unsupported labels remain visible for review. Some slots depend on facts that cannot be inferred from a public website, such as an approved comparable reference, actual cost basis or a meeting commitment.
+
+Regression coverage includes article-to-slot extraction, source ownership, linked PDF provenance, incidental cookie durations, schedule distinctions, read/search limits, cache expiry, cancellation, manual-edit races, all channel styles, and the authenticated browser → API → CRM save/reopen path.

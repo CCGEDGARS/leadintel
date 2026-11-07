@@ -29,14 +29,15 @@
  function buyerFactText(context={}){
   const t=context.trigger;if(!['source_verified','user_reviewed'].includes(t?.verification)||!t.url)return '';
   const base=String(t.excerpt||t.summary||''),project=S.projectFact(context),host=S.subjectDomain(t.url),out=[base];
-  if(!project)return base;
+
   const needle=String(project).toLocaleLowerCase();
   for(const row of context.buyerFactEvidence||[]){
-   if(S.subjectDomain(row.url)!==host||!Evidence.sourceRead(row))continue;
+   if((S.subjectDomain(row.url)!==host&&!(row.fullSourceRead===true&&row.linkedFrom===t.url&&/\.pdf(?:$|\?)/i.test(row.url)))||!Evidence.sourceRead(row))continue;
    const text=String(row.text||row.excerpt||row.markdown||'');if(!text||/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(text))continue;
-   const sameSource=row.url===t.url,article=(String(row.title||'').toLocaleLowerCase().includes(needle)||text.slice(0,900).toLocaleLowerCase().includes(needle))&&new URL(row.url).pathname.replace(/^\/(?:en|sv|lv)?\/?$/,'').length>1;
+   const sameSource=row.url===t.url||row.fullSourceRead===true&&row.linkedFrom===t.url,article=(String(row.title||'').toLocaleLowerCase().includes(needle)||text.slice(0,900).toLocaleLowerCase().includes(needle))&&new URL(row.url).pathname.replace(/^\/(?:en|sv|lv)?\/?$/,'').length>1;
    const paragraphs=text.split(/\n\s*\n/).filter(v=>v.toLocaleLowerCase().includes(needle));
-   if(article){paragraphs.length=0;paragraphs.push(text);}
+   if(sameSource||project&&article){paragraphs.length=0;paragraphs.push(text);}
+   else if(!project)continue;
    for(const paragraph of paragraphs){
     if(!sameSource&&!article&&!paragraph.toLocaleLowerCase().includes(needle))continue;
     out.push(paragraph.slice(0,6000));
