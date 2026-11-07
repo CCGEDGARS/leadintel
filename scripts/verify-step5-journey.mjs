@@ -131,6 +131,7 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   await shot('02-messages-exact-recipient.png');
   // The empty first Messages item is saved through the actual draft button. No
   // generation, approval, contact purchase or delivery action is authorized.
+  await page.waitForFunction(()=>{const button=document.getElementById('message-save-draft');return button&&!button.disabled;},null,{timeout:15000});
   assert.equal(await page.evaluate(()=>{const button=document.getElementById('message-save-draft');if(button.disabled)return false;button.click();return true;}),true);
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}').items?.[0]?.messageStudioDraft?.scriptSavedAt,null,{timeout:10000});
   assert.equal((await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}))).saved,true);
