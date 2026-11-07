@@ -249,3 +249,18 @@ test('button busy state reflects a live scoped observer, not persisted loading f
 test('a failed status request releases the observable busy state for retry',async()=>{
  const owner=candidate(),h=harness(()=>{throw Error('offline');});const pending=h.client.research(owner);assert.equal(h.client.isObserving(owner),true);await assert.rejects(pending,/offline/);assert.equal(h.client.isObserving(owner),false);
 });
+
+test('explicit Resume keeps the saved paid intent and scoped job instead of replacing it with a free run',async()=>{
+ const owner=candidate(),job={...snapshot(owner,'needs_review',7),resumePhase:'contacts',input:{scope:'all_buyers',paidResearch:true}};
+ const h=harness(call=>call.method==='GET'?job:{...job,revision:8});
+ await h.client.resume(owner,{profile:{decisionMakers:'COO'}});
+ const writes=h.calls.filter(c=>c.method==='POST');assert.equal(writes.length,1);assert.deepEqual(writes[0].body,{action:'resume',jobId:'job-1',expectedRevision:7});assert.equal(owner.people[0].id,'anna');
+});
+test('a reloaded durable job retains real stage evidence and can be stopped without a Task Centre id',async()=>{
+ const owner=candidate(),job={...snapshot(owner,'running',7),progress:{stages:{official:true,dossier:false,identities:true,contacts:false,review:false},completed:49,timing:{runWindow:{deadlineAt:new Date(Date.now()+60000).toISOString()}}}};
+ let applied;const gate=new Promise(r=>applied=r),h=harness(call=>call.method==='POST'?{...job,status:'canceled',revision:8}:job);
+ const work=h.client.restore(owner,{onProgress:()=>applied()}).catch(e=>{assert.equal(e.name,'AbortError');});await gate;
+ assert.equal(owner.buyerResearchProgress.stages.dossier,false);assert.equal(owner.buyerResearchProgress.taskId,undefined);
+ await h.client.cancel(owner);await work;
+ assert.equal(owner.buyerResearchJob.status,'canceled');assert.equal(h.calls.filter(c=>c.method==='POST').length,1);assert.equal(h.calls.find(c=>c.method==='POST').body.action,'cancel');
+});

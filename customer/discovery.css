@@ -775,3 +775,6 @@
 .buyer-company-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;color:#53665e;font-size:14px}
 .buyer-company-pagination span{text-align:center}
 @media(max-width:620px){.buyer-company-open{align-items:flex-start;flex-direction:column;gap:10px;padding:16px}.buyer-company-pagination{gap:8px}.buyer-company-pagination button{padding:9px}.selected-prospect-row.buyer-company-collapsed{padding:0}}
+
+.buyer-research-progress.needs-attention{border-color:#c58b2e;background:#fff8e9}
+.buyer-research-progress li.needs-review{color:#875c16;background:#fff2d7}

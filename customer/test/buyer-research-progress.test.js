@@ -26,7 +26,7 @@ test('buyer progress has accessible live status and bounded progress bar',()=>{
 test('actual progress panel identifies queued work, saved activity and request age rather than an idle spinner',()=>{
  const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
  const now=Date.now(),html=context.buyerResearchProgressHtml({buyerResearchProgress:{jobId:'saved-job',phase:'official',executionStatus:'queued',step:1,startedAt:new Date(now-300000).toISOString(),elapsedSeconds:300,checkpointAt:new Date(now-180000).toISOString(),completedChecks:2,inProgressChecks:0,label:'Reading official company sources'}}),dom=new JSDOM(html),text=dom.window.document.body.textContent;
- assert.match(text,/Research queued/);assert.match(text,/300s since request/);assert.match(text,/2 saved checks/);assert.match(text,/No new saved activity/);dom.window.close();
+ assert.match(text,/Research delayed/);assert.match(text,/5 min 0s since request/);assert.match(text,/2 saved checks/);assert.match(text,/No new saved activity/);dom.window.close();
 });
 
 test('compact timing distinguishes an empirical forecast, no history, and exceeded estimate',()=>{
@@ -48,4 +48,21 @@ test('a stalled check is visible outside collapsed research details',()=>{
  const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
  const dom=new JSDOM(context.buyerResearchProgressHtml({buyerResearchProgress:{jobId:'j',phase:'dossier',step:2,executionStatus:'running',startedAt:new Date(Date.now()-394000).toISOString(),timing:{lastResultAt:new Date(Date.now()-180000).toISOString()}}}));
  dom.window.document.querySelectorAll('details').forEach(n=>n.remove());assert.match(dom.window.document.body.textContent,/Delayed · no completed check for 3 min/);dom.window.close();
+});
+
+test('reopened slow durable research shows a stop control and does not call an incomplete dossier complete',()=>{
+ const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const dom=new JSDOM(context.buyerResearchProgressHtml({domain:'example.com',buyerResearchProgress:{jobId:'j',phase:'contacts',step:4,executionStatus:'running',startedAt:new Date(Date.now()-3435000).toISOString(),stages:{official:true,dossier:false,identities:true,contacts:false,review:false},timing:{lastResultAt:new Date(Date.now()-300000).toISOString(),runWindow:{deadlineAt:new Date(Date.now()-1000).toISOString()}}}}));
+ const doc=dom.window.document;assert.equal(doc.querySelector('[data-stop-buyer-job]').dataset.stopBuyerJob,'example.com');assert.equal(doc.querySelectorAll('li.done').length,2);assert.match(doc.querySelector('li.needs-review').textContent,/Company research.*needs review/);assert.equal(doc.querySelector('.buyer-research-spinner'),null);assert.match(doc.body.textContent,/Research time limit reached/);assert.match(doc.body.textContent,/57 min 15s since request/);dom.window.close();
+});
+test('a lost status connection offers status recovery and Stop, while a saved pause offers Resume',()=>{
+ const vm=require('node:vm'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const c={domain:'example.com',buyerResearchProgress:{jobId:'j',phase:'error',step:4,connection:'unavailable'}};
+ assert.match(context.buyerResearchProgressHtml(c),/data-check-buyer-job/);assert.match(context.buyerResearchProgressHtml(c),/data-stop-buyer-job/);assert.doesNotMatch(context.buyerResearchProgressHtml(c),/data-resume-buyer-job/);
+ c.buyerResearchProgress.connection='connected';assert.match(context.buyerResearchProgressHtml(c),/data-resume-buyer-job/);
+});
+test('resuming an old job starts a new elapsed display without treating earlier checks as a current stall',()=>{
+ const vm=require('node:vm'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const now=Date.now(),html=context.buyerResearchProgressHtml({domain:'example.com',buyerResearchProgress:{jobId:'j',phase:'contacts',step:4,executionStatus:'queued',startedAt:new Date(now-3600000).toISOString(),timing:{lastResultAt:new Date(now-3500000).toISOString(),runWindow:{startedAt:new Date(now-1000).toISOString(),deadlineAt:new Date(now+1799000).toISOString()}}}});
+ assert.match(html,/1s since request/);assert.doesNotMatch(html,/Research delayed|no completed check for/);
 });
