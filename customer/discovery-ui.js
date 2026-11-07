@@ -1610,7 +1610,7 @@ async function findPotentialDecisionMakers(domain,{refreshDossier=false,explicit
   if(authoritativeQualifiedHandoff){candidate.buyerSearchMode="user_selected_qualified";candidate.qualified=true;candidate.needsRecheck=false;}
   const observing=window.LeadIntelBuyerResearchJobs?.isObserving?.(candidate);
   if(candidate.__leadIntelBuyerStart||observing===true||observing===undefined&&(candidate.peopleStatus==="loading"||candidate.publicContactStatus==="loading"))return false;
-  if(!crmAuthenticated())return fail('Sign in before finding buyers.');
+  if((window.LeadIntelBuyerResearchJobs||explicitSelection)&&!crmAuthenticated())return fail('Sign in before finding buyers.');
   if(bridge()?.conflict||bridge()?.resolvingSync)return fail('Resolve workspace synchronization before finding buyers. Your saved research is retained.');
   const roles=String(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"").trim();
   if(!roles)return fail("Add buyer roles to your company profile before searching");
