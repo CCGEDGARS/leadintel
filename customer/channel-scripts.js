@@ -42,7 +42,7 @@ function readableValues(studio,context={},identity={},profile={}){
  const known=Object.fromEntries(Object.entries(atoms).map(([key,value])=>[key,clean(value)]));
  const approved=Object.entries(context.sellerAnswers||{}).filter(([key])=>['priority_offers','differentiation','proof_points','delivery_approach'].includes(key)&&['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(([,value])=>value);
  const statements=[e.offer,e.difference,e.proof,e.approach,...approved,...S.subjectEvidenceSources(ctx).map(row=>row.text)].filter(Boolean).flatMap(V.sellerStatements);
- const seller=statements.join(' '),duration=V.experienceDuration(statements),experienceOwner=statements.some(text=>/\b(?:our|the) team\b/i.test(text)&&V.experienceDuration([text])===duration)?'team':'company';
+ const seller=statements.join(' '),duration=V.experienceDuration(statements),experienceOwner=duration&&statements.some(text=>/\b(?:our|the) team\b/i.test(text)&&V.experienceDuration([text])===duration)?'team':'company';
  const industry=seller.match(/\bin (?:the )?([\p{L}-]+) industry\b/iu)?.[1]||(/\bmetalworking\b/i.test(seller)?'metalworking':S.subjectSellerFacts(ctx,e).steel?'steel':'');
  const market=seller.match(/\bspeciali[sz]\w*\s+in\s+(?:the\s+)?([^.!?]{1,70}? market)\b/i)?.[1]||'';
  const exports=statements.map(text=>text.match(/\bexport(?:s|ing)?(?: mostly| mainly)? to ([^.!?]{1,100})/i)?.[1]).find(Boolean)||'';
