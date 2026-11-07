@@ -23,6 +23,6 @@ test('before research the company card is the only lower-level decision-maker ac
  const end=ui.indexOf('function renderPipeline',start);
  const block=ui.slice(start,end);
  assert.match(block,/data-find-prospect-buyers=/);
- assert.match(block,/Refreshing…/);
+ assert.match(block,/Finding buyers…/);
  assert.doesNotMatch(block,/Buyer intelligence<\/span><h3>Find decision-makers/);
 });

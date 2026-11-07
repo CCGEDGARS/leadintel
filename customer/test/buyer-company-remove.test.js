@@ -96,8 +96,8 @@ function mount(r){
  vm.runInContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),ctx);ctx.renderAll();return dom;
 }
 const settle=async ctx=>{while(ctx.buyerCompanyRemovalPending.size||ctx.buyerCompanySavePending.size)await new Promise(resolve=>setImmediate(resolve));};
-test('company cards show exactly Refresh, Save and Remove in that order and the actions are wired',async()=>{
- const r=runtime(),dom=mount(r),doc=dom.window.document;assert.deepEqual([...doc.querySelector('.selected-prospect-actions').children].map(b=>b.textContent),['Refresh','Save','Remove']);
+test('company cards show exactly Find buyers, Save and Remove in that order and the actions are wired',async()=>{
+ const r=runtime(),dom=mount(r),doc=dom.window.document;assert.deepEqual([...doc.querySelector('.selected-prospect-actions').children].map(b=>b.textContent),['Find buyers','Save','Remove']);
  doc.querySelector('[data-save-buyer-research]').click();await settle(r.ctx);assert.equal(doc.querySelector('[data-save-buyer-research]').textContent,'Saved ✓');
  doc.querySelector('[data-remove-buyer-company]').click();await settle(r.ctx);assert.equal(doc.querySelectorAll('.selected-prospect-row').length,1);assert.equal(doc.getElementById('selection-count').textContent,'1 selected');dom.window.close();
 });
