@@ -2,7 +2,7 @@
 
 Owner instruction: use only real, reference-backed facts; the core template remains the reference; the adjusted message cannot exceed its character ceiling.
 
-Every active Email, LinkedIn and Phone template has a numeric `maximumCharacters`, calculated from its own original body. An original is wording authority, not factual evidence. Where a legacy template has no separate original, its saved body is the reference. The server calculates the ceiling before stripping private originals from the public-to-workspace catalogue. Personal templates use their own reference. A revised master has its own ceiling; existing drafts/history are preserved.
+Every active Email, LinkedIn and Phone template has a numeric `maximumCharacters`, calculated from its own original body. An original is wording authority, not factual evidence. Where a legacy template has no separate original, its saved body is the reference. The server calculates the ceiling before stripping private originals from the public-to-workspace catalogue. Personal templates use their own reference. Each InMail sequence step uses its own saved stage body and never inherits the direct LinkedIn message ceiling. A revised master has its own ceiling; existing drafts/history are preserved.
 
 NLP email has an explicit upper ceiling of **1,074 characters**, agreed from the uploaded NLP.docx. This excludes the heading “NLP STYLE”. The body includes spaces, blank lines, greeting, signature and full links. Subjects are separate and retain the 60-character ceiling. Count NFC-normalized Unicode code points, with CRLF/CR counted as one LF; HTML and highlighting markup do not count.
 

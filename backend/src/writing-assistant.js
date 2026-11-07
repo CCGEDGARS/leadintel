@@ -41,7 +41,7 @@ export async function prepareAssistantRequest(env,scope,body){
   if(coreStyle&&!master)fail('This mandatory calling script is unavailable. Select another approved style or your own template.',409);
  }
  if(context.maximumCharacters!==undefined&&context.maximumCharacters!==null&&(!Number.isSafeInteger(context.maximumCharacters)||context.maximumCharacters<=0||context.maximumCharacters>30000))fail('Maximum message characters is invalid');
- if(!general&&context.channel!=='phone'&&/^(email|linkedin):/.test(context.scriptSourceId||'')){const master=(await coreScripts(env.DB)).find(row=>row.id===context.scriptSourceId&&row.channel===context.channel&&!row.deleted);if(!master)fail('The selected reference script is unavailable.',409);context.maximumCharacters=ScriptContract.contract(master).maximumCharacters;}
+ if(!general&&context.channel!=='phone'&&/^(email|linkedin|linkedin-inmail):/.test(context.scriptSourceId||'')){const master=(await coreScripts(env.DB)).find(row=>row.id===context.scriptSourceId&&row.channel===context.channel&&!row.deleted);if(!master)fail('The selected reference script is unavailable.',409);const reference=inmail?master.stages?.find(stage=>stage.id===context.inmailStage):master;if(!reference)fail('The selected InMail step is unavailable.',409);context.maximumCharacters=ScriptContract.contract(reference).maximumCharacters;}
  if(JSON.stringify(context).length>60000)fail('Writing context is too large');
  if(!object(context.currentDraft))fail('Current draft is required');
  text(context.currentDraft.message,12000,'Current message');text(context.currentDraft.subject||'',500,'Current subject');
