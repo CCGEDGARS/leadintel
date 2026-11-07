@@ -33,3 +33,10 @@ test('all five managed email styles replace subject and body together with recov
 });
 
 async function resolveLatestCatalogue(h){const request=h.requests.filter(r=>String(r.url).includes('/script-library?')).at(-1),data=h.w.LeadIntelChannelWorkspace.catalogue();request.resolve({ok:true,json:async()=>data});await tick();}
+
+test('message fact context keeps the item company when a stale selected candidate belongs elsewhere',()=>{
+ const h=setup();try{
+  const context=h.w.studioMessageContext(h.item(),{domain:'foreign.example',company:'Foreign Company',fitScore:99,companyEvidence:'Foreign evidence'});
+  assert.equal(context.buyerCompany,'Buyer');assert.equal(context.buyerDomain,'buyer.example');assert.equal(context.fitScore,null);assert.notEqual(context.buyerEvidence,'Foreign evidence');
+ }finally{h.w.close();}
+});

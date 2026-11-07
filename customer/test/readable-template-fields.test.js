@@ -68,3 +68,22 @@ test('explicit message facts override Profile defaults and unaccepted Profile re
  let values=readableValues(studio,context);assert.equal(values.serviceFocus,'user selected service');assert.equal(values.referenceStatement,'We completed the approved migration.');
  values=readableValues({...studio,essentials:{}},{...context,sellerAnswerStatus:{priority_offers:'suggested',proof_points:'suggested'}});assert.equal(values.referenceStatement,'');assert.ok(!values.serviceFocus);
 });
+
+test('readable credentials reject planned, expired and third-party certificates',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js');
+ for(const text of ['We plan to become ISO 45001:2018 certified.','Our ISO 45001:2018 certification expired.','We work with ISO 45001:2018 certified partners.','We previously held ISO 45001:2018 certification.']){
+  const v=readableValues({...S.seed(),essentials:{proof:text}});assert.equal(v.certifications,'',text);
+ }
+ assert.equal(readableValues({...S.seed(),essentials:{proof:'We are ISO 45001:2018 certified.'}}).certifications,'ISO 45001:2018');
+});
+test('negated or planned case claims do not satisfy the completed-reference slot',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js');
+ for(const proof of ['We have not completed a reference project.','We will have completed the project next year.','Our partner completed the project.'])assert.equal(readableValues({...S.seed(),essentials:{proof}}).referenceStatement,'',proof);
+});
+
+test('buyer targeting answers cannot become seller experience or certifications',()=>{
+ const {readableValues}=require('../channel-scripts.js'),S=require('../message-studio.js'),studio={...S.seed(),mode:'professional',essentials:{company:'Seller',offer:'software integration'}};
+ const context={sellerAnswers:{ideal_customer:'A Swedish steel manufacturer with 99 years of experience. We are ISO 45001:2018 certified.'},sellerAnswerStatus:{ideal_customer:'accepted'}};
+ const prepared=E.prepareFactContext(studio,context),values=readableValues(studio,prepared);
+ assert.equal(values.experienceDuration,'');assert.equal(values.certifications,'');assert.doesNotMatch(values.sellerDescriptionPlain,/Swedish|steel/);
+});
