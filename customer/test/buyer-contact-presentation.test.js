@@ -115,3 +115,11 @@ test('a retained buyer with a role hold is named beside the shortlist gap withou
   const {ctx,candidate}=runtime();candidate.people=[];assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Find buyers');
   candidate.people=[{id:'saved'}];ctx.LeadIntelDiscovery={...D,buyerResearchCoveragePassed:()=>true};assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');
  });
+
+ test('finished research awaiting a better contact outcome refreshes instead of resuming a finished plan',async()=>{
+  const {ctx,candidate}=runtime();candidate.buyerResearchJob={id:'saved',status:'needs_review'};candidate.buyerDiscovery={researchIncomplete:true};candidate.buyerResearchProgress={stages:{official:true,dossier:true,identities:true,contacts:true,review:true}};
+  let options;ctx.selectedProspects=()=>[candidate];ctx.findPotentialDecisionMakers=async(_domain,value)=>{options=value;};
+  assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(options.forceResearch,true);assert.equal(options.resumeExisting,false);
+  candidate.buyerResearchProgress.stages.review=false;assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research');
+  candidate.buyerResearchProgress.stages.review=true;candidate.buyerResearchJob.personIds=['anna'];assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research','one person cannot establish full-company completion');
+ });
