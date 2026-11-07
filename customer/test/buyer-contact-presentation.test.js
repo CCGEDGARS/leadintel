@@ -55,7 +55,7 @@ test('Resume uses the same current research-coverage decision as its label, reta
   vm.runInNewContext(source.slice(source.indexOf('function buyerCompanyResearchAction('),source.indexOf('function renderPipeline(')),context);
   vm.runInNewContext(source.slice(source.indexOf('function buyerControlTargetCurrent('),source.indexOf('async function withBuyerControlFocus(')),context);
   vm.runInNewContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),context);
-  const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.forceResearch,coveragePassed);assert.equal(request.options.resumeExisting,false);assert.equal(request.options.refreshDossier,true);
+  const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.forceResearch,coveragePassed);assert.equal(request.options.resumeExisting,false);assert.equal(request.options.refreshDossier,!coveragePassed);
  }
 });
 
@@ -119,7 +119,7 @@ test('a retained buyer with a role hold is named beside the shortlist gap withou
  test('finished research awaiting a better contact outcome refreshes instead of resuming a finished plan',async()=>{
   const {ctx,candidate}=runtime();candidate.buyerResearchJob={id:'saved',status:'needs_review'};candidate.buyerDiscovery={researchIncomplete:true};candidate.buyerResearchProgress={stages:{official:true,dossier:true,identities:true,contacts:true,review:true}};
   let options;ctx.selectedProspects=()=>[candidate];ctx.findPotentialDecisionMakers=async(_domain,value)=>{options=value;};
-  assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(options.forceResearch,true);assert.equal(options.resumeExisting,false);
+  assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(options.forceResearch,true);assert.equal(options.refreshDossier,false);assert.equal(options.resumeExisting,false);
   candidate.buyerResearchProgress.stages.review=false;assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research');
   candidate.buyerResearchProgress.stages.review=true;candidate.buyerResearchJob.personIds=['anna'];assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research','one person cannot establish full-company completion');
  });
