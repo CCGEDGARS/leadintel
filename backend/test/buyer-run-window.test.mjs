@@ -28,3 +28,9 @@ test('fresh successful receipts do not extend the explicit run deadline; stage a
  f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,status) VALUES(?,'latest','search','complete')").run(row.id);
  const view=await publicBuyerJob(f.env,await readBuyerJob(f.env,workspaceId,{id:row.id}));assert.equal(view.progress.timing.runWindow.startedAt,start);assert.equal(view.progress.stages.dossier,false);assert.equal(view.progress.stages.contacts,false);assert.equal(view.progress.stages.identities,true);
 });
+test('crossing the window during a provider response pauses rather than accepting a late result or advancing to review',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);let now=Date.now(),calls=0;t.mock.method(Date,'now',()=>now);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts',input_json=json_set(input_json,'$.executionWindowStartedAt',?) WHERE id=?").run(new Date(now-30*60000+1000).toISOString(),job.id);
+ await schedule(f,job.id,{search:async()=>{calls++;now+=1500;return [];},read:async()=>{calls++;now+=1500;return {markdown:'Late source'};},independent:async()=>{calls++;now+=1500;return {status:'not_configured',results:[]};}});
+ const row=await readBuyerJob(f.env,workspaceId,{id:job.id});assert.ok(calls>0);assert.equal(row.status,'needs_review');assert.equal(row.phase,'contacts');assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'run_window');assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND status IN ('failed','complete')").get(job.id).n,0,'Interrupted dispatch is not a provider-failure or success receipt');
+});
