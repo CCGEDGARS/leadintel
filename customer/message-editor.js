@@ -201,12 +201,12 @@
  // and prepared AI sentences cannot replace this frame when its facts are supplied.
  function coreExperience(style,raw,context,e){
   const source=[raw.difference,raw.offer,...['priority_offers','differentiation','proof_points','delivery_approach'].filter(k=>['user','accepted'].includes(context.sellerAnswerStatus?.[k])).map(k=>context.sellerAnswers[k])].filter(Boolean).flatMap(text=>String(text).split(/(?<=[.!?])\s+|\n+/)).filter(text=>!/\b(?:no|not|never|without|cannot|can't|do not|don't)\b/i.test(text)).join(' ');
-  const duration=source.match(/\b(?:(?:more than|over|at least)\s+)?\d+\s+years\b/i)?.[0]?.toLowerCase();
+  const duration=Evidence.experienceDuration([source]);
   const facts=S.subjectSellerFacts(context,raw),drawings=/\bdrawings?|drawing development\b/i.test(source),manufacturing=/\bmanufactur\w*\b/i.test(source),installation=/\binstall\w*\b/i.test(source),people=/\bqualified (?:people|workforce)\b/i.test(source);
   if(duration&&facts.steel&&drawings&&manufacturing&&installation&&people){
    if(style==='friendly')return 'We are a metalworking team that has spent '+duration+' on the less glamorous part of projects like yours: turning drawings into steel that shows up on time and fits.';
    const work=style==='brutal'?'development':'drawing development';
-   return 'For '+duration+' '+(style==='brutal'?raw.company+' have':'our team has')+' taken steel from drawing to installed structure: '+work+', manufacturing, installation and the qualified people to do it.';
+   return 'For '+duration+' '+(style==='brutal'?'their team has':'our team has')+' taken steel from drawing to installed structure: '+work+', manufacturing, installation and the qualified people to do it.';
   }
   // Other industries retain the declared supplied experience slot; example facts
  // never become defaults. The capabilities stay in their existing factual slot.
@@ -436,7 +436,7 @@
    const continuing=options.continueTemplateUpdate&&updateUndo(item);
    const priorUndo=continuing?copy(info.templateUpdateUndo):null;
    const appliedDraft={subject:draft.subject||'',message:draft.message||'',...(item.channel==='email'?Rich()?.fields(draft.message,draft.messageHtml??item.drafts?.emailBodyHtml):{})};
-   info.templateUpdateUndo=priorUndo?{...priorUndo,appliedDraft}:{draft:copy(before),appliedDraft,context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft'].filter(k=>k==='languageVersions'||info[k]!==undefined).map(k=>[k,info[k]??null]))),localizationProvenance:copy(item.localizationProvenance||{}),campaignScenario:copy(item.campaignScenario||{})};
+   info.templateUpdateUndo=priorUndo?{...priorUndo,appliedDraft}:{draft:copy(before),appliedDraft,context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft','channelLibrarySource','scriptContract'].filter(k=>k==='languageVersions'||info[k]!==undefined).map(k=>[k,info[k]??null]))),localizationProvenance:copy(item.localizationProvenance||{}),campaignScenario:copy(item.campaignScenario||{})};
    if(!continuing)info.previousDrafts=[...(info.previousDrafts||[]).slice(-4),{emailSubject:before.subject,emailBody:before.message,savedAt:new Date().toISOString()}];
    delete info.scriptSavedAt;delete info.savedDraft;
   }
@@ -460,7 +460,7 @@
  function undoTemplateUpdate(item){
   const draft=updateUndo(item);if(!draft)throw Error('Message changed since the template update. Your current text is preserved.');
   const next=apply(item,draft,{origin:'manual'}),context=item.messageStudioDraft.templateUpdateUndo.context||{};
-  for(const key of ['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft']){if(key==='languageVersions'&&!Object.prototype.hasOwnProperty.call(context,key))continue;delete next.messageStudioDraft[key];if(context[key]!=null)next.messageStudioDraft[key]=copy(context[key]);}
+  for(const key of ['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions','writingAssistant','writingAssistantDraft','channelLibrarySource','scriptContract']){if(key==='languageVersions'&&!Object.prototype.hasOwnProperty.call(context,key))continue;delete next.messageStudioDraft[key];if(context[key]!=null)next.messageStudioDraft[key]=copy(context[key]);}
   const undo=item.messageStudioDraft.templateUpdateUndo;if(undo.localizationProvenance)next.localizationProvenance=copy(undo.localizationProvenance);if(undo.campaignScenario)next.campaignScenario=copy(undo.campaignScenario);
   delete next.messageStudioDraft.templateUpdateUndo;return next;
  }

@@ -3,6 +3,7 @@ const S=require('../../message-studio.js'),E=require('../../message-editor.js'),
 const read=name=>fs.readFileSync(path.join(__dirname,'..','..',name),'utf8');
 function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null,runtimeSetup=''}={}){
  const w=new JSDOM(read('index.html'),{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
+ w.eval(read('script-contract.js'));
  const essentials={sender:'Robin Lane',company:'North Works',offer:'steel and installation',target:'industrial teams',problem:'supplier handoffs',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons',calendly:'https://calendly.com/north/intro',nextAction:'Choose a suitable time here: {{calendly}}'};
  const main={step:1,website:'https://north.example',brandIdentity:{senderName:essentials.sender,companyDisplayName:essentials.company},profile:{companyName:essentials.company,priorityOffers:essentials.offer,idealCustomer:essentials.target,customerProblem:essentials.problem,valueProposition:essentials.value,differentiation:essentials.difference,deliveryApproach:essentials.approach,meetingValue:essentials.meetingValue}};
  if(mainSnapshot)Object.assign(main,JSON.parse(JSON.stringify(mainSnapshot)));

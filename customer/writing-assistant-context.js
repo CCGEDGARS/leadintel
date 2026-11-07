@@ -22,6 +22,7 @@
   }
   if(!draft||typeof draft.subject!=='string'||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000||/\{\{|\}\}/.test(draft.message))throw Error('Writing Assistant returned an invalid or unfilled draft. Your message is preserved.');
   if((context.channel||'email')==='email'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
+  const Contract=typeof module==='object'&&module.exports?require('./script-contract.js'):root.LeadIntelScriptContract;Contract?.assertFits(draft.message,context);
   if(Number.isSafeInteger(context.maximumWords)&&context.maximumWords>0&&draft.message.trim().split(/\s+/).length>context.maximumWords)throw Error(`Writing Assistant exceeded the ${context.maximumWords}-word limit. Your message is preserved.`);
   if(context.mode==='inmail'){
    if(context.channel!=='linkedin'||!['initial','connection','followup','calendar'].includes(context.inmailStage))throw Error('Invalid InMail writing context.');
