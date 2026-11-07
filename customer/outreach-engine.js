@@ -389,7 +389,7 @@
     return false; // Legacy approval history remains visible; sending needs explicit source review.
   }
   function approvalCurrent(item={}){
-    const C=typeof module==='object'&&module.exports?require('./script-contract.js'):globalThis.LeadIntelScriptContract;if(C?.audit(item.drafts?.emailBody,item.messageStudioDraft?.scriptContract||{}).ok===false)return false;
+    const C=typeof module==='object'&&module.exports?require('./script-contract.js'):globalThis.LeadIntelScriptContract;if(C?.audit(item?.drafts?.emailBody,item?.messageStudioDraft?.scriptContract||{}).ok===false)return false;
     if(!item?.approved||item.reapprovalRequired||item.contextNeedsRefresh||item.localizationApprovalBlocked||!['native','complete'].includes(item.localizationStatus)||item.approvalAuthority?.version!==2||!item.approvedSource||!translationReady(item))return false;
     const current=approvalContext(item);if(!current||current.contextKey!==item.approvalAuthority.contextKey||JSON.stringify(current.recipient)!==JSON.stringify(item.approvalAuthority.recipient))return false;
     return ['emailSubject','emailBody','emailBodyHtml'].every(key=>String(item.drafts?.[key]||'')===String(item.approvedSource?.[key]||''));

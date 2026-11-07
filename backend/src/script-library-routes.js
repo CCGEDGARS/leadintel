@@ -75,7 +75,7 @@ export async function coreScripts(db){
   if(obsolete&&!saved.deleted)rows.set(row.id,{...master,id:row.id,revision:row.revision,history:[...(saved.history||[]),{body:saved.body,subject:saved.subject,name:saved.name,revision:row.revision,...(saved.stages?{stages:saved.stages}:{})}].slice(-30)});
   else rows.set(row.id,{...saved,id:row.id,revision:row.revision,builtin:!saved.deleted&&saved.body===master?.body&&saved.subject===master?.subject});
  }
- return [...rows.values()].map(row=>({...row,...ScriptContract.contract(row)}));
+ return [...rows.values()];
 }
 async function cas(db,table,keys,values,payload,expected,extra={}){
  if(!Number.isSafeInteger(expected)||expected<0)fail('Expected revision is required');
@@ -96,7 +96,7 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  if(path==='/api/script-library'&&request.method==='GET'){
   const personal=await env.DB.prepare('SELECT id,payload_json,revision FROM personal_script_library WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
-  return json({canManage,core:(await coreScripts(env.DB)).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),...ScriptContract.contract({...JSON.parse(r.payload_json),id:r.id}),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
+  return json({canManage,core:(await coreScripts(env.DB)).map(row=>({...row,...ScriptContract.contract(row)})).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),...ScriptContract.contract({...JSON.parse(r.payload_json),id:r.id}),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);
  }
  const maximumPayload=path==='/api/script-library/draft'?500000:path==='/api/script-library/inmail-draft'?250000:40000;
  if(Number(request.headers.get('Content-Length'))>maximumPayload)fail('Script payload too large',413);
