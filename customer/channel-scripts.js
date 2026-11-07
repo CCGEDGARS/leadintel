@@ -204,7 +204,7 @@ function mount(document,adapter){
      let expression='',offset=0;
      for(const match of pattern.matchAll(/\{\{[^{}]+\}\}|\[[^\]\n]+\]/g)){
       const token=match[0],filled=fillScript({...row,subject:'',body:token},values).draft.message;
-      expression+=escape(pattern.slice(offset,match.index))+'(?:'+escape(token)+'|'+escape(filled)+')';offset=match.index+token.length;
+      expression+=escape(pattern.slice(offset,match.index))+(token===filled?escape(token):'(?:'+escape(token)+'|'+escape(filled)+')');offset=match.index+token.length;
      }
      return new RegExp('^'+expression+escape(pattern.slice(offset))+'$').test(current);
     };
