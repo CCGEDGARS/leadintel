@@ -59,3 +59,33 @@ test('removal during saved-roster restoration cannot start new research',async()
 test('workspace change during restore cannot launch research',async()=>{
  const {ctx,candidate,calls,b}=runtime();ctx.runDurableBuyerResearch=async()=>{b.workspace.id='two';return false;};await ctx.startSelectedBuyerResearch(candidate);assert.deepEqual(calls,['buyers']);
 });
+
+function manualResearchRuntime(){
+ const r=runtime();Object.assign(r.candidate,{buyerSearchMode:'user_selected_qualified',peopleStatus:'error',buyerRoles:'Procurement'});
+ Object.assign(r.ctx,{mainState:()=>({}),buyerSelectionRows:()=>[r.candidate],candidateIsActionable:()=>false,crmCompanyByDomain:()=>null,LeadIntelDiscovery:{...D,buyerRolesForTarget:()=> 'Procurement'},LeadIntelBuyerResearchJobs:{isObserving:()=>false},searchDecisionMakers:async(c,options)=>{r.calls.push({candidate:c,options});return true;}});
+ r.ctx.discovery.potentialMatches=[];
+ vm.runInContext(source.slice(source.indexOf('async function findPotentialDecisionMakers('),source.indexOf('async function startSelectedBuyerResearch(')),r.ctx);return r;
+}
+test('explicit Find buyers retries the current saved target without inventing qualification',async()=>{
+ const r=manualResearchRuntime(),evidence=[{url:'https://example.com/team',text:'Saved evidence'}];r.candidate.evidence=evidence;
+ assert.equal(await r.ctx.findPotentialDecisionMakers('example.com'),false,'automatic callers still require qualification');
+ assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true,refreshDossier:true}),true);
+ assert.equal(r.calls.length,1);assert.equal(r.calls[0].options.refreshDossier,true);assert.equal(r.candidate.buyerSearchMode,'user_selected_target');assert.equal(r.candidate.qualified,undefined);assert.equal(r.candidate.evidence,evidence);
+});
+test('Find buyers reconciles stale loading flags but never overlaps an active observer',async()=>{
+ for(const status of ['peopleStatus','publicContactStatus']){const r=manualResearchRuntime();r.candidate[status]='loading';assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),true);assert.equal(r.calls.length,1);}
+ const active=manualResearchRuntime();active.ctx.LeadIntelBuyerResearchJobs.isObserving=()=>true;assert.equal(await active.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),false);assert.equal(active.calls.length,0);
+});
+test('rapid clicks launch once, explain errors in the card and release the control for retry',async()=>{
+ const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);
+ const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});assert.ok(r.candidate.__leadIntelBuyerStart);
+ assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),false);
+ reject(Error('Research service unavailable'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStart,undefined);assert.equal(r.candidate.__leadIntelBuyerStartMessage,'Research service unavailable');assert.equal(JSON.stringify(r.candidate).includes('__leadIntel'),false,'ephemeral button state is never saved');
+ r.ctx.searchDecisionMakers=async()=>true;assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),true);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
+});
+test('manual retry cannot bypass current selection, authentication or synchronization',async()=>{
+ for(const reason of ['removed','signed-out','conflict']){const r=manualResearchRuntime();if(reason==='removed')r.ctx.buyerSelectionRows=()=>[];if(reason==='signed-out')r.b.session.authenticated=false;if(reason==='conflict')r.b.conflict=true;assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),false);assert.equal(r.calls.length,0);assert.ok(r.candidate.__leadIntelBuyerStartMessage);}
+});
+test('late research failure cannot write feedback into a replacement workspace',async()=>{
+ const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});r.b.workspace.id='two';reject(Error('Old workspace failure'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
+});
