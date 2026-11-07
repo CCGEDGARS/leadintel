@@ -41,7 +41,7 @@
   }
   function inputKey(owner,profile){return stable([companyIdentity(owner),roles(owner.buyerRoles||profile.decisionMakers),pick(profile,PROFILE)]);}
   const abortError=()=>Object.assign(Error('Buyer research observation stopped; saved research can be reopened.'),{name:'AbortError',code:'BUYER_OBSERVATION_STOPPED'});
-  function createClient({fetchImpl=(...args)=>root.fetch(...args),getBridge=()=>root.LeadIntelServerBridge,apiBase='https://leadintel-api.edgars-7e7.workers.dev',pollMs=2500,requestTimeoutMs=15000,observationTimeoutMs=1800000}={}){
+  function createClient({fetchImpl=(...args)=>root.fetch(...args),getBridge=()=>root.LeadIntelServerBridge,apiBase='https://leadintel-api.edgars-7e7.workers.dev',pollMs=2500,requestTimeoutMs=15000,observationTimeoutMs=2100000}={}){
     const active=new Map(),references=new WeakMap();
     function capture(owner,options){
       const bridge=getBridge(),workspaceId=bridge?.workspace?.id,userId=bridge?.session?.user?.id;

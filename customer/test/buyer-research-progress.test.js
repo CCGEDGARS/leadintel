@@ -61,3 +61,8 @@ test('a lost status connection offers status recovery and Stop, while a saved pa
  assert.match(context.buyerResearchProgressHtml(c),/data-check-buyer-job/);assert.match(context.buyerResearchProgressHtml(c),/data-stop-buyer-job/);assert.doesNotMatch(context.buyerResearchProgressHtml(c),/data-resume-buyer-job/);
  c.buyerResearchProgress.connection='connected';assert.match(context.buyerResearchProgressHtml(c),/data-resume-buyer-job/);
 });
+test('resuming an old job starts a new elapsed display without treating earlier checks as a current stall',()=>{
+ const vm=require('node:vm'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const now=Date.now(),html=context.buyerResearchProgressHtml({domain:'example.com',buyerResearchProgress:{jobId:'j',phase:'contacts',step:4,executionStatus:'queued',startedAt:new Date(now-3600000).toISOString(),timing:{lastResultAt:new Date(now-3500000).toISOString(),runWindow:{startedAt:new Date(now-1000).toISOString(),deadlineAt:new Date(now+1799000).toISOString()}}}});
+ assert.match(html,/1s since request/);assert.doesNotMatch(html,/Research delayed|no completed check for/);
+});
