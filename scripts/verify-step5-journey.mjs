@@ -69,7 +69,7 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   await settleInitialSave(page);
   assert.equal((await channels(page)).email,'');
   assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),0,'unconfirmed saved people stay out of the main four');
-  assert.equal(await page.locator('.buyer-other-contacts').evaluate(element=>element.open),false);assert.match(await page.locator('.buyer-shortlist-gap').textContent(),/0\/4 confirmed contacts ready/);
+  assert.equal(await page.locator('.buyer-other-contacts').evaluate(element=>element.open),false);assert.match(await page.locator('.buyer-shortlist-gap').textContent(),/0\/4 priority buyers with confirmed contact data/);
   for(const width of [1440,390,320]){await page.setViewportSize({width,height:1100});const control=page.locator('.buyer-public-summary [data-find-prospect-buyers]');await control.evaluate(element=>element.scrollIntoView({block:'center',behavior:'instant'}));await control.click({trial:true});assert.equal(await control.isEnabled(),true);const box=await control.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width);assert.equal(await control.evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true,'role recovery remains reachable at '+width);const file=path.join(artifactDir,'00-saved-contacts-'+width+'.png');await page.screenshot({path:file,fullPage:false});screenshots.push(file);}
   await page.setViewportSize({width:1440,height:1100});
   await page.locator('.selected-prospect-company [data-find-prospect-buyers]').click();
@@ -94,7 +94,7 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   assert.equal(f.providerCalls.length,providerCount,'read-only restore cannot replay provider requests');
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);
   assert.equal(await page.evaluate(()=>discovery.selectedProspects[0].buyerRolesChanged),false,'official named role evidence clears the stale hold');
-  assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),2);assert.match(await page.locator('.buyer-shortlist-gap').textContent(),/2\/4 confirmed contacts ready/);
+  assert.equal(await page.locator('.selected-prospect-buyers > .buyer-shortlist-group > .selected-prospect-people > li').count(),2);assert.match(await page.locator('.buyer-shortlist-gap').textContent(),/2\/4 priority buyers with confirmed contact data/);
   const restoreProviderReplays=f.providerCalls.length-providerCount;
   const completedTasks=f.DB.raw.prepare("SELECT task_key,result_json,attempts FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id);
   await settleInitialSave(page);

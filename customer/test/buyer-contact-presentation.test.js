@@ -35,14 +35,14 @@ test('qualification keeps priority and research status compact while role and au
 test('company research summary shows incomplete checks and a usable existing resume action above the shortlist',()=>{
  const {ctx,candidate}=runtime(),doc=documentFor(ctx.renderSelectedProspects([candidate]));
  const summary=doc.querySelector('.buyer-public-summary');assert.ok(summary,'one visible company-level research summary');assert.equal(doc.querySelectorAll('.buyer-public-summary').length,1);
- assert.match(summary.textContent,/Public research/);assert.match(summary.textContent,/incomplete|needs checking/i);assert.equal(summary.querySelector('[data-find-public-contacts]').textContent,'Find 4 confirmed contacts');
+ assert.match(summary.textContent,/Public research/);assert.match(summary.textContent,/incomplete|needs checking/i);assert.equal(summary.querySelector('[data-find-public-contacts]').textContent,'Resume buyer research');
  assert.ok(summary.compareDocumentPosition(doc.querySelector('.buyer-shortlist-group'))&4);
  assert.doesNotMatch(doc.querySelector('.selected-prospect-buyers').innerHTML,/Contact research incomplete\. Review individual contact status before proceeding/);
 });
 test('saved research summary preserves actual progress and the recorded cancellation gap',()=>{
  const {ctx,candidate}=runtime();candidate.publicResearch.accountability={...D.createBuyerResearchAccountability(),status:'partial',checkedPeople:5,totalPeople:10,officialPages:17,reusedChecks:23,stopReason:'canceled',gaps:['Research canceled','5 retained identities have unfinished checks']};
  const summary=documentFor(ctx.renderSelectedProspects([candidate])).querySelector('.buyer-public-summary');
- assert.match(summary.textContent,/5\/10 buyers fully researched/);assert.match(summary.textContent,/17 official pages read/);assert.match(summary.textContent,/Research canceled/);assert.equal(summary.querySelector('button').textContent,'Find 4 confirmed contacts');
+ assert.match(summary.textContent,/5\/10 buyers fully researched/);assert.match(summary.textContent,/17 official pages read/);assert.match(summary.textContent,/Research canceled/);assert.equal(summary.querySelector('button').textContent,'Resume buyer research');
 });
 test('a selected-buyer batch is labelled so one checked person cannot look like full company coverage',()=>{
  const {ctx,candidate}=runtime();candidate.people.push({...candidate.people[0],id:'bob',name:'Bob Buyer'});candidate.publicResearch.researchScope='selected_buyers';candidate.publicResearch.accountability={...D.createBuyerResearchAccountability(),status:'partial',checkedPeople:1,totalPeople:1};
@@ -51,10 +51,11 @@ test('a selected-buyer batch is labelled so one checked person cannot look like 
 test('Resume uses the same current research-coverage decision as its label, retaining completed email checks',()=>{
  for(const coveragePassed of [false,true]){
   const candidate={domain:'example.com',people:[{id:'anna',emailResearch:{status:'complete'}}]};let handler,request;
-  const context={$:()=>({addEventListener:(_name,fn)=>{handler=fn;}}),LeadIntelDiscovery:{...D,buyerResearchCoveragePassed:()=>coveragePassed},canonicalDomain:D.canonicalDomain,selectedProspects:()=>[candidate],findPublicProspectContacts:(domain,options)=>{request={domain,options};}};
+  const context={$:()=>({addEventListener:(_name,fn)=>{handler=fn;}}),LeadIntelDiscovery:{...D,buyerResearchCoveragePassed:()=>coveragePassed},canonicalDomain:D.canonicalDomain,selectedProspects:()=>[candidate],findPotentialDecisionMakers:(domain,options)=>{request={domain,options};}};
+  vm.runInNewContext(source.slice(source.indexOf('function buyerCompanyResearchAction('),source.indexOf('function renderPipeline(')),context);
   vm.runInNewContext(source.slice(source.indexOf('function buyerControlTargetCurrent('),source.indexOf('async function withBuyerControlFocus(')),context);
   vm.runInNewContext(source.split('\n').find(line=>line.includes('$("customer-pipeline")?.addEventListener("click"')),context);
-  const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.force,coveragePassed);
+  const button={disabled:false,dataset:{findPublicContacts:'example.com'},hasAttribute:()=>false};handler({target:{closest:()=>button}});assert.equal(request.domain,candidate.domain);assert.equal(request.options.forceResearch,coveragePassed);assert.equal(request.options.resumeExisting,false);assert.equal(request.options.refreshDossier,true);
  }
 });
 
@@ -92,3 +93,25 @@ test('a retained buyer with a role hold is named beside the shortlist gap withou
  assert.match(doc.querySelector('.buyer-other-contacts').textContent,/On hold/);
  assert.equal(JSON.stringify(person),before);
 });
+
+ test('company research action preserves the saved job on resume and only forces explicit refresh',async()=>{
+  const {ctx,candidate}=runtime();let request;
+  ctx.selectedProspects=()=>[candidate];ctx.findPotentialDecisionMakers=async(domain,options)=>{request={domain,options};return true;};
+  candidate.buyerResearchJob={id:'saved-paid-job',status:'needs_review',personIds:null};
+  const before=JSON.stringify(candidate.people);assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Resume buyer research');
+  await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(request.options.resumeExisting,true);assert.equal(request.options.forceResearch,false);assert.equal(JSON.stringify(candidate.people),before);
+  candidate.buyerRolesChanged=true;assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(request.options.resumeExisting,false);assert.equal(request.options.forceResearch,true);
+  candidate.buyerResearchProgress={connection:'unavailable'};ctx.controlSavedBuyerResearch=async(domain,action)=>{request={domain,action};return true;};assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Check research status');await ctx.runBuyerCompanyAction(candidate.domain);assert.equal(request.action,'check');
+ });
+ test('names and matched profiles do not claim completed contact research or email readiness',()=>{
+  const {ctx,candidate}=runtime(),doc=documentFor(ctx.renderSelectedProspects([candidate]));
+  assert.equal(doc.querySelector('.selected-prospect-actions button').textContent,'Resume buyer research');
+  assert.equal(doc.querySelector('.buyer-public-summary button').textContent,'Resume buyer research');
+  assert.doesNotMatch(doc.body.textContent,/confirmed priority contacts|confirmed contacts ready/);
+  assert.match(doc.body.textContent,/Buyers have been found.*mandatory checks are unfinished/);
+  assert.match(doc.body.textContent,/Company-wide contact listings do not confirm an email for each buyer/);
+ });
+ test('empty company starts discovery; fully checked company refreshes instead',()=>{
+  const {ctx,candidate}=runtime();candidate.people=[];assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Find buyers');
+  candidate.people=[{id:'saved'}];ctx.LeadIntelDiscovery={...D,buyerResearchCoveragePassed:()=>true};assert.equal(ctx.buyerCompanyResearchAction(candidate).label,'Refresh buyers');
+ });

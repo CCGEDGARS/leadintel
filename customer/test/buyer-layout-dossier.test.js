@@ -30,8 +30,8 @@ test('company actions are in the header beneath qualification, followed by dossi
 test('held contacts stay collapsed and the four-contact shortfall keeps research recovery actionable',()=>{
  const {dom,doc}=render({rolesChanged:true}),buyers=doc.querySelector('.selected-prospect-buyers');
  assert.equal(buyers.querySelectorAll(':scope > .buyer-shortlist-group > .selected-prospect-people > li').length,0);
- assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,/0\/4 confirmed contacts ready/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
- const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findProspectBuyers,'example.com');
+ assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,/0\/4 priority buyers with confirmed contact data/);assert.equal(buyers.querySelector('.buyer-other-contacts').open,false);assert.equal(buyers.querySelectorAll('.buyer-potential-list > li').length,6);
+ const resume=buyers.querySelector('.buyer-public-summary button');assert.equal(resume.disabled,false);assert.equal(resume.dataset.findPublicContacts,'example.com');
  dom.window.close();
 });
 test('other contacts and research controls start collapsed below priority contacts without losing evidence',()=>{
@@ -48,7 +48,7 @@ test('only confirmed relevant contacts occupy the main list, with a truthful sho
   assert.equal(main.length,Math.min(4,ids.length));
   const other=buyers.querySelector('.buyer-other-contacts');assert.equal(other.open,false);assert.equal(other.querySelectorAll('.buyer-potential-list > li').length,6-main.length);
   for(const card of main)assert.ok(ids.some(id=>card.textContent.includes('Anna Buyer'+id)));
-  if(ids.length<4)assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,new RegExp(ids.length+'/4 confirmed contacts ready'));else assert.equal(buyers.querySelector('.buyer-shortlist-gap'),null);
+  if(ids.length<4)assert.match(buyers.querySelector('.buyer-shortlist-gap').textContent,new RegExp(ids.length+'/4 priority buyers with confirmed contact data'));else assert.equal(buyers.querySelector('.buyer-shortlist-gap'),null);
   dom.window.close();
  }
 });
