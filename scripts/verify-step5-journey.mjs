@@ -35,7 +35,10 @@ async function remoteEdit(page,edit){
    const result=await page.evaluate(async({statePath,edit})=>{
     const response=await fetch(statePath),state=await response.json();
     if(!response.ok)return {status:response.status};
-    const record=edit==='unrelated'?state.payload.main.answers:state.payload.discovery.selectedProspects[0].people.find(p=>p.id==='robert'),field=edit==='unrelated'?'meeting_value':'title',value=edit==='unrelated'?'Remote reviewed meeting value':'Head of Purchasing';
+    // Profile answers belong to the targeting/Strategy signature. Changing
+    // meeting_value legitimately locks downstream navigation. A saved brand
+    // color exercises an unrelated revision through the real state normalizer.
+    const record=edit==='unrelated'?(state.payload.main.brandIdentity||={}):state.payload.discovery.selectedProspects[0].people.find(p=>p.id==='robert'),field=edit==='unrelated'?'primaryColor':'title',value=edit==='unrelated'?'#123456':'Head of Purchasing';
     // A reload can discard the acknowledgement after the real PUT committed.
     // Its read-back makes this same-field edit safe to retry without replaying
     // a stale whole-workspace payload or reporting a fabricated save success.
@@ -126,7 +129,7 @@ export async function verifyStep5Journey({artifactDir='/tmp/leadintel-step5-jour
   const selected=await page.evaluate(()=>({choice:loadMeta().scriptBuyer,item:JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')).items[0],main:JSON.parse(localStorage.getItem('leadintel_customer_v2_state'))}));
   assert.equal(selected.choice.email,'robert@forge.example');assert.equal(selected.choice.personId,'robert');assert.equal(selected.choice.recipientIdentity.name,'Robert Lund');assert.equal(selected.item.selectedPersonId,'robert');
   assert.equal(selected.item.dossier.people.find(p=>p.id==='robert').email,'robert@forge.example');assert.equal(selected.item.approved,false);
-  if(competingEdit)assert.equal(selected.main.answers.meeting_value,'Remote reviewed meeting value');
+  if(competingEdit)assert.equal(selected.main.brandIdentity.primaryColor,'#123456');
   assert.deepEqual(await channels(page),{email:'robert@forge.example',phone:'+46 70 123 45 67',sourceRead:true,phoneRead:true});
   await shot('02-messages-exact-recipient.png');
   // The empty first Messages item is saved through the actual draft button. No

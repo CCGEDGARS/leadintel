@@ -23,7 +23,11 @@ test('Step 6 fixture executes the authorized production AI boundary with hashed 
  }finally{await f.close();}
 });
 
-test('authenticated Chromium saves exact rich-text Messages to real CRM, reopens, recovers failed saves and isolates two buyers',{timeout:150000},async t=>{
+// This journey now includes repeated fresh contexts, LinkedIn, owner-library
+// personalization and phone save/reload. The former 150-second whole-test
+// deadline cancels it under the full-suite browser load. Keep the runner's
+// individual action deadlines; allow four minutes for the complete workflow.
+test('authenticated Chromium saves exact rich-text Messages to real CRM, reopens, recovers failed saves and isolates two buyers',{timeout:240000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Local Chromium/Playwright unavailable; LEADINTEL_REQUIRE_BROWSER=true makes browser acceptance mandatory.');return;}
  const {verifyStep6Journey}=await import('../../scripts/verify-step6-journey.mjs');
  const artifactDir=await fs.mkdtemp(path.join(os.tmpdir(),'leadintel-step6-test-')),evidence=await verifyStep6Journey({artifactDir});
