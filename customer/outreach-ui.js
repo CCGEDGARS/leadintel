@@ -1113,7 +1113,11 @@ async function useAssistantDraft(draft,style,assistant=null){
  const context={...captured.context,maximumWords:null,currentDraft:draft};
  globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(draft,context);
  const item=currentItem(),studio=studioState();if(item.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,draft,studio.essentials,item.channel);
- const next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ const next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ // Continue explicitly accepts this validated working copy in the captured context.
+ // An earlier template proposal must not keep it bound to superseded settings.
+ delete next.messageStudioDraft.pendingTemplateUpdate;
+ if(!item.messageStudioDraft?.eventSnapshot)next.messageStudioDraft.appliedTriggerSnapshot=JSON.parse(JSON.stringify(item.dossier?.selectedTrigger||null));
  next.messageStudioDraft.assistantSourceStyle=assistant?.storyRef?'storyselling':style;if(assistant){next.messageStudioDraft.writingAssistant=JSON.parse(JSON.stringify(assistant));next.messageStudioDraft.writingAssistantDraft={subject:draft.subject,message:draft.message,...globalThis.LeadIntelRichText?.fields(draft.message,draft.messageHtml)};}else{delete next.messageStudioDraft.writingAssistant;delete next.messageStudioDraft.writingAssistantDraft;}upsertItem(next);renderAll();
  const result=await saveScriptPackage(next);
  if(captured.scope!==captureWritingAssistantContext().scope)throw Error('Workspace or recipient changed. Check the original recipient’s saved draft.');
