@@ -29,3 +29,8 @@ test('authenticated Chromium preserves early website input through startup, acti
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
  const {verifyWebsiteStartupInput}=await import('../../scripts/verify-step1-journey.mjs'),evidence=await verifyWebsiteStartupInput();assert.equal(evidence.typedBeforeInitialization,true);assert.equal(evidence.preservedAfterBlur,true);assert.equal(evidence.activationSucceeded,true);assert.equal(evidence.savedReopen,true);assert.deepEqual(evidence.pageErrors,[]);t.diagnostic(JSON.stringify(evidence));
 });
+
+test('authenticated Chromium targeting confirmation saves edited answers, reports failed sync and reopens',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
+ const {verifyTargetingConfirmation}=await import('../../scripts/verify-targeting-confirmation.mjs');const evidence=await verifyTargetingConfirmation();for(const key of ['confirmedThroughHttp','freshBrowserReopen','mobileButtonVisible','savedBadgesAgree','failedSaveIsActionable','retrySaved'])assert.equal(evidence[key],true,key);assert.deepEqual(evidence.pageErrors,[]);
+});
