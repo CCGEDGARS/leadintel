@@ -7133,8 +7133,10 @@
       "status": 200,
       "contains": [
         ".slice(0,20).map(document",
-        "const documentBudget=",
-        "text:d.text.slice(0,docChars)"
+        "MAX_AI_PDF_CHARS=20000",
+        "const rows=[...safeSources,...safeDocuments]",
+        "remaining-=take",
+        "limits[safeSources.length+i]"
       ]
     },
     {

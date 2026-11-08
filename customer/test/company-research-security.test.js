@@ -15,7 +15,7 @@ test('research shell loads AI evidence security wrapper before research UI',()=>
 test('AI research evidence is bounded below the backend prompt ceiling',()=>{
   const source=read('company-research-security.js');
   assert.match(source,/MAX_AI_WEB_CHARS=3200/);
-  assert.match(source,/MAX_AI_PDF_CHARS=2200/);
+  assert.match(source,/MAX_AI_PDF_CHARS=20000/);
   assert.match(source,/MAX_AI_PROMPT_CHARS=68000/);
   assert.match(source,/slice\(0,MAX_AI_PROMPT_CHARS\)/);
 });
@@ -35,3 +35,9 @@ test('actual security wrapper retains all supported document identities inside t
  const result=context.window.LeadIntelCompanyResearch.buildAiPrompt({website:'https://seller.example/',uiLanguage:'en',sources,documents,answers:{notes:'x'.repeat(14000)}});
  assert.ok(result.prompt.length<=68000);for(const doc of documents)assert.ok(result.prompt.includes('['+doc.id+']'),doc.id);assert.match(result.prompt,/Unique source 19/);assert.match(result.system,/untrusted evidence data/);
 });
+
+ test('a complete multi-page brochure fits beside website evidence without losing later-page facts',()=>{
+ const vm=require('node:vm'),context={window:{},URL};context.globalThis=context.window;vm.runInNewContext(read('company-research-engine.js'),context);vm.runInNewContext(read('company-research-security.js').replace(/^import .*;\s*$/gm,'').replace(/^export .*;\s*$/gm,''),context);
+ const document='page:1\nCompany overview. '+ 'Readable details. '.repeat(600)+'\n\npage:8\nFactory supports TIG (141), Norway and Denmark entities.';const sources=Array.from({length:12},(_,i)=>({id:'S'+i,url:'https://seller.example/'+i,text:'Official website evidence. '.repeat(200)}));
+ const result=context.window.LeadIntelCompanyResearch.buildAiPrompt({website:'https://seller.example',sources,documents:[{id:'D1',name:'Company.pdf',text:document}]});assert.ok(result.prompt.length<=68000);assert.ok(result.prompt.includes(document),'the entire supplied PDF evidence fits and must remain intact');assert.match(result.prompt,/TIG \(141\)/);
+ });

@@ -48,3 +48,8 @@ test('an unavailable AI service cannot erase deterministic PDF text or fabricate
  globalThis.fetch=async()=>{calls++;return Response.json({error:{message:'private upstream diagnostic'}},{status:503});};
  try{const result=await processCompanyMaterial(env,row);assert.ok(calls);assert.equal(result.analysisMode,'source-excerpts');assert.equal(result.analysis.customer,'');assert.equal(result.analysis.outcome,'');assert.match(result.analysis.evidence[0].quote,/KNOWN EXACT SOURCE/);assert.ok(!JSON.stringify(result).includes('private upstream'));}finally{globalThis.fetch=prior;}
 });
+
+test('profile context keeps every page intact when an uneven brochure fits the total document budget',async()=>{
+ const {env,row}=await source();await runCompanyMaterialJobs(env);const current=await env.DB.prepare('SELECT * FROM company_materials WHERE id=?').bind(row.id).first();const sections=Array.from({length:8},(_,i)=>({location:'page:'+(i+1),text:i===3?'Engineering details. '.repeat(180)+' END_LONG_PAGE':('Company evidence '+i+'. ').repeat(40)}));const coverage={total:8,readable:8,unreadable:0};await env.WRITING_REFERENCES_BUCKET.put(current.text_key,JSON.stringify({sections,coverage}));
+ const response=await handleCompanyMaterialsRoute(req('/profile-context'),env),data=await response.json(),doc=data.documents[0];assert.equal(doc.partial,false);assert.deepEqual(doc.coverage,coverage);for(const section of sections)assert.ok(doc.text.includes(section.location+'\n'+section.text),section.location);assert.match(doc.text,/END_LONG_PAGE/);
+});

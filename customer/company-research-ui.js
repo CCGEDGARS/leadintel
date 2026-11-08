@@ -1,7 +1,7 @@
 import './commercial-profile-adviser.js?v=20261101-v1';
 import './message-evidence.js?v=20261010-evidence-v3&messages-reliability=20261031-v1';
 import './first-party-research.js?v=20260930-research-pipeline-v1&message-evidence=20261010-v1';
-import './company-research-engine.js?v=20260918-translation-fidelity-v3&message-evidence=20261010-v1&profile-audit=20261030-v1&profile-adviser=20261101-v2&source-ingestion=20261102-v1';
+import './company-research-engine.js?v=20260918-translation-fidelity-v3&message-evidence=20261010-v1&profile-audit=20261030-v1&profile-adviser=20261101-v2&source-ingestion=20261102-v1&pdf-coverage=20261108-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
