@@ -56,6 +56,11 @@
     estimate.textContent='Email research: approx. €0.30/contact. Phone lookup: approx. €0.20 extra per number found.'+(isTreg&&policy.enabled&&policy.phoneEnabled?' Estimated combined cost: €0.50/contact.':'')+' Planning estimates for research and AI, not fixed prices; provider, AI and scraping usage vary. Existing subscription charges are separate. Numbers may be unavailable or unconfirmed.';
     let note=card.querySelector('[data-paid-search-status]');if(!note){note=document.createElement('p');note.className='field-help';note.dataset.paidSearchStatus='1';note.setAttribute('role','status');estimate.after(note);}
     note.textContent=!valid?'Sign in or reload paid-search settings.':isTreg&&(policy.enabled||policy.phoneEnabled)?'Treg · Email '+(policy.enabled?'ON':'OFF')+' · Phone '+(policy.phoneEnabled?'ON':'OFF')+' · Automatic: up to '+buyerLimit()+' priority contacts per company · manual: selected buyer · '+policy.dailyLimit+' lookups/day · '+policy.monthlyLimit+'/month. Preferences are saved. ON records permission, not remaining budget or successful research. Lookup limits and provider readiness are checked on each request. Automatic paid research fills missing enabled channels after free checks and evidence review, including in manual delivery mode. Sending requires separate activation.':treg?.configured?'Treg connected. Paid email and phone research are off. Saving settings does not start paid searches or send messages.':'Connect your Treg team token in Settings before activation.';
+    if(card.id==='delivery-setup'){
+      let details=card.querySelector('[data-paid-research-details]');
+      if(!details){details=document.createElement('details');details.dataset.paidResearchDetails='1';details.className='paid-research-settings';const summary=document.createElement('summary');summary.textContent='Research settings';details.append(summary);footer.after(details);}
+      for(const node of [estimate,note,limits])if(node.parentElement!==details)details.append(node);
+    }
   }
   function mountSettings(){const card=document.querySelector('[data-paid-contact-settings]');if(card)mountPaidSearch(card);}
   function renderPaidControls(){mountPaidSearch();mountSettings();}
@@ -70,7 +75,7 @@
       if(!policyCurrent(originContext))return;
       const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});if(!policyCurrent(originContext))return;policy=saved.policy;automaticAttempts.clear();renderPolicy();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
     }catch(error){if(policyCurrent(originContext)){status(error.message);outcomes.set('policy-error',error.message);}}
-    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
+    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=document.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');const details=note.closest('[data-paid-research-details]');if(details)details.open=true;outcomes.delete('policy-error');}}}
   }
   async function savePaidLimits(card){
     if(busyPolicy||!loadedCurrent()||policyRole!=='owner')return;
@@ -84,7 +89,7 @@
       const saved=await api('/api/additional-contact-services/policy',{method:'PUT',body:JSON.stringify(input)});if(!policyCurrent(originContext))return;
       policy=saved.policy;automaticAttempts.clear();root.dispatchEvent(new CustomEvent('leadintel:paid-search-changed'));
     }catch(error){if(policyCurrent(originContext))outcomes.set('policy-error',error.message);}
-    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=card.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');outcomes.delete('policy-error');}}}
+    finally{finishPolicyOperation(operation);if(policyCurrent(originContext)){renderPaidControls();const note=card.querySelector('[data-paid-search-status]');if(note&&outcomes.has('policy-error')){note.textContent=outcomes.get('policy-error');const details=note.closest('[data-paid-research-details]');if(details)details.open=true;outcomes.delete('policy-error');}}}
   }
   function renderPolicy(){
     renderPaidControls();

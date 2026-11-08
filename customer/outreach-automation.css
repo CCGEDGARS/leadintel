@@ -54,3 +54,8 @@
 }
 
 @media(max-width:680px){.delivery-settings-footer [data-paid-search-toggle],.delivery-settings-footer [data-paid-phone-toggle]{width:100%;min-height:44px}.paid-search-estimate{font-size:14px}}
+
+.paid-research-settings{margin-top:16px;border-top:1px solid #dbe7e1;padding-top:4px}
+.paid-research-settings>summary{cursor:pointer;min-height:44px;padding:12px 0;font-weight:600;color:#28584a}
+.paid-research-settings>summary:focus-visible{outline:2px solid #14755f;outline-offset:3px;border-radius:4px}
+.delivery-setup [data-automatic-plan-description][hidden]{display:none}
