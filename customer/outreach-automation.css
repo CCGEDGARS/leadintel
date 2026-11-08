@@ -16,7 +16,15 @@
 .oa-actions button,.oa-queue-preview button{background:#fff;color:#203329;border-color:#bccfc2;min-height:44px;font:600 14px 'DM Sans',sans-serif}.oa-actions button:hover:not(:disabled),.oa-queue-preview button:hover:not(:disabled){border-color:#277362;background:#f1f8f3}.oa-actions .oa-primary{background:#0d5d4f;color:#fff;border-color:#0d5d4f!important}.oa-actions .oa-danger{color:#a33737;border-color:#e5b7b7!important}.oa-message[data-error="1"],.oa-load-error{color:#9b3333}
 .oa-suppression-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}.oa-suppression-head p{margin:0 0 16px;max-width:760px}.oa-suppression-head .oa-role{flex-shrink:0;background:#f5f7f5;color:#526159}.oa-card .eyebrow{color:#236e58}#oa-suppress-form label{margin:0;min-width:0}#oa-suppress-form button{min-height:44px}#outreach-contact-suppression details{margin-top:16px;font-size:14px}#outreach-contact-suppression summary{cursor:pointer;font-weight:600}#oa-suppress-message:empty{display:none}
 @media(max-width:680px){.outreach-automation-panel,.oa-card{padding:18px}.oa-suppression-head{flex-direction:column;gap:8px}#oa-suppress-form{flex-direction:column;align-items:stretch}#oa-suppress-form label{width:100%}.oa-role{white-space:normal}.oa-head{gap:12px}}
-.delivery-setup-header .delivery-setup-badge{display:flex;flex-direction:column;align-items:flex-start;gap:3px;white-space:normal;min-width:164px;text-transform:none;letter-spacing:0}.delivery-setup-badge strong{font:700 12px/1.3 "DM Sans",sans-serif}.delivery-setup-badge small{font:500 11px/1.3 "DM Sans",sans-serif;color:#356a5c}
+/* A compact status card; override the general live-status message spacing. */
+.delivery-setup .delivery-setup-header .delivery-setup-badge{display:inline-flex;flex:0 0 auto;flex-direction:column;align-items:flex-start;gap:4px;width:max-content;min-width:0;max-width:100%;box-sizing:border-box;padding:10px 14px;margin:2px 0 0;border:1px solid #cee3d9;border-radius:12px;background:#f0f8f4;color:#155c49;white-space:normal;text-transform:none;letter-spacing:0}
+.delivery-setup-badge strong{display:flex;align-items:center;gap:7px;font:700 13px/1.35 "DM Sans",sans-serif}
+.delivery-setup-badge strong::before{content:"";flex:0 0 6px;width:6px;height:6px;border-radius:50%;background:#267558}
+.delivery-setup-badge small{padding-left:13px;font:500 12px/1.4 "DM Sans",sans-serif;color:#426858}
+.delivery-setup .delivery-setup-header .delivery-setup-badge[data-unsaved="true"]{border-color:#ead5aa;background:#fff8eb;color:#755018}
+.delivery-setup-badge[data-unsaved="true"] strong::before{background:#a36a12}
+.delivery-setup-badge[data-unsaved="true"] small{color:#805c25}
+@media(max-width:680px){.delivery-setup .delivery-setup-header .delivery-setup-badge{margin-top:14px}}
 
 /* Unified setup controls: labels above fields, no truncated options. */
 .delivery-setup [data-qualification-settings]{border-top:1px solid #d9e4df;margin-top:24px;padding-top:20px}
