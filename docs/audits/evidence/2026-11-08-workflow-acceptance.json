@@ -1,0 +1,115 @@
+{
+  "checkedAt": "2026-11-08T14:03:23.998377+00:00",
+  "baseCommit": "2a3645f4857eb422ff7df9db828226468694da93",
+  "realPaidEmailLookups": 0,
+  "realPaidPhoneLookups": 0,
+  "outreachSent": 0,
+  "journeys": [
+    {
+      "journey": "setup",
+      "artifact": "/tmp/leadintel-step1-journey/evidence.json",
+      "sha256": "f6ebb1b4904d7feb6c5a6eed8c2fd156efef8bc7c213769711a8e15912e04d05",
+      "sourceMismatches": [],
+      "sourceHashCount": 34,
+      "artifactModifiedAt": "2026-11-08T13:46:37.808141+00:00",
+      "verdict": "LOCAL_CONTROLLED_ACCEPTANCE",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    },
+    {
+      "journey": "targeting",
+      "artifact": "/tmp/takeover-targeting/evidence.json",
+      "sha256": "5fd77878e5510ddc94d48f0b21e25a55cd364be6d08fcf3a503c3945033faae2",
+      "sourceMismatches": [],
+      "sourceHashCount": 0,
+      "artifactModifiedAt": "2026-11-08T13:45:05.941489+00:00",
+      "verdict": "PASS: runner returned successfully",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    },
+    {
+      "journey": "buyers",
+      "artifact": "/tmp/leadintel-step5-journey/evidence.json",
+      "sha256": "a056a04127efcf093b6b71aeeb85b6b4c45cc3fa0f8ee5403da6004801946adb",
+      "sourceMismatches": [],
+      "sourceHashCount": 17,
+      "artifactModifiedAt": "2026-11-08T13:47:00.540793+00:00",
+      "verdict": "LOCAL_CONTROLLED_ACCEPTANCE",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    },
+    {
+      "journey": "buyer-controls",
+      "artifact": "/tmp/leadintel-buyer-action-journey/evidence.json",
+      "sha256": "82ca131026cf098250ee27bf766801ba19374f0e25467853fd563a9cfe5b5b71",
+      "sourceMismatches": [],
+      "sourceHashCount": 0,
+      "artifactModifiedAt": "2026-11-08T13:47:39.997906+00:00",
+      "verdict": "CONTROLLED_BROWSER_ACCEPTANCE",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    },
+    {
+      "journey": "controlled-paid-contacts",
+      "artifact": "/tmp/takeover-paid-buyers/evidence.json",
+      "sha256": "8fcd2b4c5981c349e1d64f93917e3c8f2eb3bf788a1c3d9ca8410e9d87b3ea8e",
+      "sourceMismatches": [],
+      "sourceHashCount": 12,
+      "artifactModifiedAt": "2026-11-08T13:45:32.394253+00:00",
+      "verdict": "PASS: runner returned successfully",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    },
+    {
+      "journey": "messages",
+      "artifact": "/tmp/leadintel-step6-test-ZkkZjB/evidence.json",
+      "sha256": "af42c079b7bd0a14574fccc7b6f2e9764d92bd2c9d5dadd74efd15e41b090382",
+      "sourceMismatches": [],
+      "sourceHashCount": 0,
+      "artifactModifiedAt": "2026-11-08T14:02:36.319843+00:00",
+      "verdict": "LOCAL_CONTROLLED_ACCEPTANCE",
+      "environment": "controlled local browser and SQL; external providers simulated",
+      "wholeTestDurationMs": 160791.431817
+    },
+    {
+      "journey": "delivery",
+      "artifact": "/tmp/leadintel-step7-journey/evidence.json",
+      "sha256": "4d066ee583dde59968a6bcd9f6a008dbe04eb7ef49fc5ad3b90f985c88b2e696",
+      "sourceMismatches": [],
+      "sourceHashCount": 14,
+      "artifactModifiedAt": "2026-11-08T13:49:54.397777+00:00",
+      "verdict": "LOCAL_CONTROLLED_ACCEPTANCE",
+      "environment": "controlled local browser and SQL; external providers simulated"
+    }
+  ],
+  "customerAccountAcceptance": "BLOCKED: no controllable signed-in browser session",
+  "productionProfileError": "OPEN: screenshot only; no authenticated failing request captured",
+  "customerTests": {
+    "passed": 5749,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "build": "PASS",
+  "backendRerun": {
+    "command": "npm --prefix backend test",
+    "passed": 1890,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 275474.539343
+  },
+  "repairCommit": "8ddec9fc3c07dffb984f171fae8e8f5c774649e9",
+  "pullRequest": "https://github.com/CCGEDGARS/leadintel/pull/906",
+  "newerMainObserved": "ee07c362c63b042adebe5d680aacb1405618d60f",
+  "ci": {
+    "testedMergeCommit": "ccb4bc59059d637397c575fd7d3ee7ccd8a048f5",
+    "profileStrategyJob": 128752678823,
+    "profileStrategyResult": "PASS",
+    "customerRun": 42487560804,
+    "backendRun": 42487560846,
+    "overallResult": "PENDING",
+    "backendResult": "PASS"
+  },
+  "executionLogHashes": {
+    "customer-suite": "62d75a49b2706334d9eac54f3d773356e17d1324d103946b8a13f2d73284317c",
+    "backend-suite": "671f464eedd6df33b2882071c29d4def44367abc2286a19ab811646202209a86",
+    "backend-isolated": "e61d59f3598d1870aeecb48b0fd8b11ca3df5ca97ab85124b73dbe194c72a205",
+    "backend-final": "cfc7333394d2732200e692ddb76b9c52a9198a34a408c51072da196c6ed62856"
+  }
+}
