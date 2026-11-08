@@ -14,9 +14,10 @@ async function harness(t){
 }
 test('Setup keeps all preference controls locked until the saved policy refresh finishes',async t=>{
  const h=await harness(t),saved=deferred(),status=deferred(),original=h.bridge.saveOutreachAutomationPolicy;
+ assert.equal(h.doc.querySelector('.delivery-setup-note').hidden,true);assert.equal(h.doc.querySelector('[data-automatic-plan-description]').hidden,true);
  h.bridge.saveOutreachAutomationPolicy=async value=>{await saved.promise;return original(value);};
  h.bridge.getOutreachAutomationStatus=()=>status.promise;
- h.select('automatic');h.doc.querySelector('#delivery-setup-save').click();await tick();
+ h.select('automatic');assert.equal(h.doc.querySelector('.delivery-setup-note').hidden,false);assert.equal(h.doc.querySelector('[data-automatic-plan-description]').hidden,false);h.doc.querySelector('#delivery-setup-save').click();await tick();
  assert.equal(h.mode('manual').matches(':disabled'),true,'cannot edit while PUT is pending');
  assert.equal(h.doc.querySelector('#delivery-setup-limit').disabled,true);
  saved.resolve();await tick();
@@ -28,7 +29,8 @@ test('Setup keeps all preference controls locked until the saved policy refresh 
  assert.equal(h.mode('automatic').checked,true);assert.equal(h.mode('manual').matches(':disabled'),false);
  assert.equal(h.doc.querySelector('#delivery-setup-save').disabled,false);
  assert.match(h.doc.querySelector('#delivery-setup-message').textContent,/Settings saved/);
- h.select('manual');h.doc.querySelector('#delivery-setup-save').click();await tick();
+ h.select('manual');assert.equal(h.doc.querySelector('.delivery-setup-note').hidden,true);h.doc.querySelector('#delivery-setup-save').click();await tick();
+ assert.doesNotMatch(h.doc.querySelector('#delivery-setup-message').textContent,/workflow.*activation/i);
  assert.deepEqual(h.saves.map(value=>value.mode),['automatic','manual']);
  assert.ok(h.saves.every(value=>value.enabled===false),'preference saves must not activate sending');
 });

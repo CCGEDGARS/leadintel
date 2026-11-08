@@ -7661,6 +7661,17 @@
         "const startupWebsiteInput=window.LeadIntelWebsiteInputSync?.pendingWebsiteInput?.(true)",
         "if(startupWebsiteInput!==undefined)"
       ]
+    },
+    {
+      "id": "manual-paid-research-details",
+      "type": "text",
+      "url": "/customer/additional-contact-services.js",
+      "status": 200,
+      "contains": [
+        "data-paid-research-details",
+        "summary.textContent='Research settings'",
+        "node.parentElement!==details"
+      ]
     }
   ],
   "retry": {

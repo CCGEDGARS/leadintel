@@ -16,7 +16,7 @@ function activeAutomatic(){const p=serverPolicy(),b=bridge();return Boolean(isOw
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261024-delivery-experience-v1&delivery-spacing=20261024-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261024-delivery-experience-v1&delivery-spacing=20261024-v1&manual-settings=20261108-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){syncOwner();return policyOwner===stateOwner&&String(status?.role||policy?.role||'')==='owner'&&(!bridge()?.workspace?.role||bridge().workspace.role==='owner');}
 function serverPolicy(){syncOwner();return policyOwner===stateOwner?(policy?.policy||policy||{automaticDelivery:'manual_only'}):{automaticDelivery:'manual_only'};}
@@ -55,7 +55,7 @@ function setupBadge(mode,active,dirty=false){
   if(active&&mode==='automatic')return {title:'Automatic',detail:dirty?'Sending on · Save changes':'Sending on'};
   if(active)return {title:'Manual selected',detail:'Sending on until saved'};
   if(mode==='automatic')return {title:'Automatic plan',detail:dirty?'Sending off · Save to keep':'Sending off · Saved'};
-  return {title:'Manual',detail:dirty?'Automatic sending off · Save to keep':'Automatic sending off'};
+  return {title:'Manual',detail:dirty?'Unsaved changes':'Saved'};
 }
 function updateSetupBadge(card,active,dirty=false){
   const mode=card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual';
@@ -76,19 +76,27 @@ function renderSetup(){
   const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
   const initialBadge=setupBadge(preferred,active,Boolean(setupDraft));
   card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Workflow settings</span><h3>Choose how LeadIntel works</h3><p>Set your delivery mode and company qualification rules.</p></div><span class="brand-identity-status delivery-setup-badge" id="delivery-setup-badge" role="status" aria-live="polite"><strong>${initialBadge.title}</strong><small>${initialBadge.detail}</small></span></div>
-    <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
+    <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small data-automatic-plan-description>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
     <div id="delivery-setup-auto-limits" class="delivery-setup-controls" ${preferred==='automatic'?'':'hidden'}><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save settings</button></div>
     <p class="delivery-setup-note">${!authenticated?'Sign in to save this preference to your workspace.':!ready?esc(policyLoadError||'Loading delivery settings…'):!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving settings will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite">${esc(policyLoadError)}</p>${authenticated&&(!ready||policyLoadError)?'<button id="delivery-setup-retry" class="secondary-btn" type="button">Retry delivery settings</button>':''}`;
   root.LeadIntelQualificationSettings?.mount(card);
   const footer=document.createElement('div');footer.className='delivery-settings-footer';footer.appendChild(card.querySelector('#delivery-setup-save'));card.appendChild(footer);root.LeadIntelAdditionalContacts?.mountPaidSearch?.(card);
   lockSetupControls(card);
   card.querySelector('#delivery-setup-retry')?.addEventListener('click',()=>refresh());
+  const updateModeDescription=()=>{
+    const automatic=card.querySelector('[name="delivery-setup-mode"]:checked')?.value==='automatic';
+    card.querySelector('[data-automatic-plan-description]').hidden=!automatic;
+    const note=card.querySelector('.delivery-setup-note');
+    if(ready&&owner)note.textContent=automatic?(active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving settings will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'):(active?'Automatic sending remains active until you save Manual mode.':'');
+    note.hidden=!note.textContent;
+  };
+  updateModeDescription();
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
   if(setupDraft)custom.value=setupDraft.custom;
   const captureDraft=()=>{setupDraft={mode:card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual',choice:choice.value,custom:custom.value};updateSetupBadge(card,active,true);};
   choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';captureDraft();});
   custom.addEventListener('input',captureDraft);
-  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.querySelector('#delivery-setup-auto-limits').hidden=card.querySelector('[name="delivery-setup-mode"]:checked')?.value!=='automatic';captureDraft();}));
+  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.querySelector('#delivery-setup-auto-limits').hidden=card.querySelector('[name="delivery-setup-mode"]:checked')?.value!=='automatic';captureDraft();updateModeDescription();}));
   card.querySelector('#delivery-setup-save').addEventListener('click',async()=>{
     const mode=card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual';
     const value=mode==='automatic'?Number(choice.value==='custom'?custom.value:choice.value):limit,notice=card.querySelector('#delivery-setup-message');
@@ -104,7 +112,7 @@ function renderSetup(){
       const expected={mode,workspaceDailyLimit:value,mailboxDailyLimit:mode==='automatic'?value:Number(p.mailboxDailyLimit||limit)};setupDraft.savedPolicy=expected;
       const refreshed=await refreshSetupSave();if(!current())return;
       if(!refreshed?.ok||!matchesSavedPreference(refreshed.policy,expected)){policyLoadError='Your preference was saved, but could not be reloaded. Retry delivery settings to confirm it.';renderSetup();document.getElementById('delivery-setup-message').textContent=policyLoadError;return;}
-      setupDraft=null;renderSetup();document.getElementById('delivery-setup-message').textContent='Settings saved. Review and approve the workflow separately before activation.';
+      setupDraft=null;renderSetup();document.getElementById('delivery-setup-message').textContent=mode==='manual'?'Settings saved. Review and send each approved message yourself.':'Settings saved. Review and approve the workflow separately before activation.';
     }catch(error){if(current())(document.getElementById('delivery-setup-message')||notice).textContent=error.message||'Settings could not be saved. Retry.';}finally{if(setupSaveOwner===owner){setupSaveOwner=null;busy=false;setupSaving=false;lockSetupControls(document.getElementById('delivery-setup'));}syncOwner();}
   });
 }

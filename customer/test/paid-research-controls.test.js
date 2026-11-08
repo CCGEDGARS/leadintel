@@ -17,6 +17,7 @@ test('automatic paid research runs after research in manual delivery mode and do
 });
 test('main Settings and Step 1 share independent persisted phone controls',async()=>{
  const f=await fixture();assert.ok(f.w.document.querySelector('[data-paid-contact-settings] [data-paid-phone-toggle]'));
+ const details=f.w.document.querySelector('#delivery-setup [data-paid-research-details]');assert.equal(details.open,false);assert.ok(details.querySelector('[data-paid-limits]'));assert.equal(f.w.document.querySelector('#delivery-setup [data-paid-phone-toggle]').closest('details'),null);assert.equal(f.w.document.querySelector('#delivery-setup [data-paid-search-toggle]').closest('details'),null);details.open=true;f.w.LeadIntelAdditionalContacts.mountPaidSearch();assert.equal(details.open,true);
  f.w.document.querySelector('[data-paid-contact-settings] [data-paid-phone-toggle]').click();await new Promise(r=>setTimeout(r,10));assert.equal(f.w.LeadIntelAdditionalContacts.policy().enabled,true);assert.equal(f.w.LeadIntelAdditionalContacts.policy().phoneEnabled,true);assert.equal(f.w.document.querySelector('#delivery-setup [data-paid-phone-toggle]').getAttribute('aria-pressed'),'true');assert.equal(f.calls.filter(r=>r.kind==='lookup').length,0);f.dom.window.close();
 });
 test('manual data and phone buttons request only their own channel and respect phone OFF',async()=>{
