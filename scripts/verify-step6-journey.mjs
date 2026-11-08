@@ -165,7 +165,11 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   let releaseCatalogue,catalogueStarted;const catalogueGate=new Promise(resolve=>releaseCatalogue=resolve),started=new Promise(resolve=>catalogueStarted=resolve);
   const slowCatalogue=async route=>{catalogueStarted();await catalogueGate;await route.continue();};
   await page.route('**/api/script-library?*',slowCatalogue);
-  await page.locator('.sc-phone-styles').getByRole('button',{name:'Professional',exact:true}).click();await started;
+  await page.locator('.sc-phone-styles').getByRole('button',{name:'Professional',exact:true}).click();
+  let catalogueDeadline;
+  try{await Promise.race([started,new Promise((_,reject)=>{catalogueDeadline=setTimeout(()=>reject(Error('Phone style catalogue request was not dispatched')),10000);})]);}
+  catch(error){releaseCatalogue();throw error;}
+  finally{clearTimeout(catalogueDeadline);}
   const duringLoad='Manual calling notes written during a slow style request.';await callField.fill(duringLoad);releaseCatalogue();
   await page.waitForFunction(()=>/edits are preserved/.test(document.getElementById('sc-status')?.textContent||''));assert.equal(await callField.inputValue(),duringLoad);
   await page.unroute('**/api/script-library?*',slowCatalogue);
