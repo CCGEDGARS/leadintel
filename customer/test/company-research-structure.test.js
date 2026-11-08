@@ -43,7 +43,7 @@ test('Continue prepares initial research and explains the next action',()=>{
   assert.match(ui,/Continue to Profile/);
   assert.match(ui,/rerun-company-research/);
   assert.match(ui,/Setup complete — ready for company research/);
-  assert.match(ui,/Usually takes up to 1 minute/);
+  assert.match(ui,/Usually takes 1–2 minutes/);
   assert.match(ui,/Website required/);
   assert.match(ui,/Market required/);
   assert.doesNotMatch(ui,/function scheduleInitialCompanyResearch/);

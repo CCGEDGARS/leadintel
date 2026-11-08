@@ -7719,6 +7719,26 @@
         "window.LeadIntelCustomerNavigation?.currentStep?.()",
         "(!current||current===5)"
       ]
+    },
+    {
+      "id": "profile-independent-stage-deadlines",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/company-research-ui.js",
+      "contains": [
+        "Source collection and synthesis are independently bounded stages.",
+        "Preparing your AI profile…",
+        "Usually takes 1–2 minutes."
+      ]
+    },
+    {
+      "id": "profile-stage-deadlines-entry",
+      "type": "text",
+      "status": 200,
+      "url": "/customer/",
+      "contains": [
+        "profile-stage-deadlines=20261108-v1"
+      ]
     }
   ],
   "retry": {
