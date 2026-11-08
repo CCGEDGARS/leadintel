@@ -12,3 +12,12 @@ test('successful same-identity checks are reused on focused Recheck and keep the
  await D.runMandatoryBuyerResearch(candidate,{rows:[page],recheckPlans:{ada:plan},search:async q=>{queries.push(q);return [];},readPage:async()=>page});
  assert.equal(person.contactResearch.checks.phone.checkedAt,stamp);assert.ok(!queries.includes(D.buyerResearchQueryPlan(candidate,person).phone[0]));assert.deepEqual(queries,plan.queries);
 });
+test('focused Recheck reads the known named source before fallback searches exhaust the slice',async()=>{
+ const person={id:'alex',name:'Alex Jensen',publicName:'Alex Jensen',title:'Procurement Director',organization:'Supplier',publicNameUrl:'https://supplier.example/team',publicEmail:'alex.jensen@supplier.example',publicEmailUrl:'https://career-global.supplier.example/people/alex-jensen'},candidate={company:'Supplier',domain:'supplier.example',buyerRoles:'Procurement Director',people:[person]},events=[];
+ await D.runMandatoryBuyerResearch(candidate,{search:async()=>[]});
+ person.contactResearch.checks.gmail={status:'not_searched'};
+ const report=await D.runMandatoryBuyerResearch(candidate,{recheckPlans:{alex:D.buyerRecheckPlan(candidate,person)},search:async query=>{events.push('search');throw Object.assign(Error('Contact research time budget reached'),{code:'TIME_BUDGET'});},readPage:async url=>{events.push('read');return {url,markdown:'# Alex Jensen\nProcurement Director\nSupplier\nEmail [alex.jensen@supplier.example](mailto:alex.jensen@supplier.example)',sourceRead:true};}});
+ assert.equal(events[0],'read');
+ assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),'alex.jensen@supplier.example');
+ assert.equal(report.status,'partial','unfinished searches remain incomplete');
+});

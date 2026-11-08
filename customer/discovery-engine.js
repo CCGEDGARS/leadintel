@@ -2218,6 +2218,13 @@
         research.checks[key]={...research.checks[key],...(key==='linkedin'?{profileMatchVersion:2}:{}),status:errors.length?'partial':research.checks[key].queryLog.every(entry=>entry.status==='not_needed')?'not_needed':'complete',reason:errors.join(' · ').slice(0,220),checkedAt:new Date().toISOString()};onProgress?.({label:`Checking ${name} · ${key==='deep'?'deeper public sources':key}`});
       };
       const queries=buyerResearchQueryPlan(candidate,person);
+      // Revalidate the known named source before broad fallback searches can
+      // consume this slice. Attribution does not imply completed research.
+      if(!profilesOnly){
+        const confirmedSource=person.publicEmailSourceCheck?.status==='confirmed'&&clean(person.publicEmailSourceCheck.email).toLowerCase()===clean(person.publicEmail).toLowerCase()?person.publicEmailSourceCheck.url:'';
+        const savedSource=(acceptedOfficialBuyerEmail(candidate,person)?person.publicEmailUrl:confirmedSource)||person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
+        if(savedSource&&readPage)for(const receipt of await extract(person,[{url:savedSource}]))if(receipt.status==='partial')failedPages.add(receipt.url);
+      }
       if(!profilesOnly&&options.recheckPlans?.[String(person.id)])await run('gmail',queries.gmail);
       if(!profilesOnly&&options.recheckPlans?.[String(person.id)]?.queries?.length)await run('followup',options.recheckPlans[String(person.id)].queries);
       if(!profileWaveDone.has(person)){
@@ -2227,9 +2234,6 @@
         onProgress?.({label:`LinkedIn profiles · ${people.filter(p=>p.publicLinkedinUrl||p.linkedin_url).length}/${people.length} found`,profilesReady:true});
       }
       if(profilesOnly){person.emailResearch={...(person.emailResearch||{}),status:'partial',searches:(person.emailResearch?.searches||0)+searches,failed,checkedAt:''};return;}
-      const confirmedSource=person.publicEmailSourceCheck?.status==='confirmed'&&clean(person.publicEmailSourceCheck.email).toLowerCase()===clean(person.publicEmail).toLowerCase()?person.publicEmailSourceCheck.url:'';
-      const savedSource=(acceptedOfficialBuyerEmail(candidate,person)?person.publicEmailUrl:confirmedSource)||person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
-      if(savedSource&&readPage)for(const receipt of await extract(person,[{url:savedSource}]))if(receipt.status==='partial')failedPages.add(receipt.url);
       const company=clean(candidate.company);
       for(const key of policy.requiredChecks.filter(key=>key!=='linkedin'&&!(key==='gmail'&&options.recheckPlans?.[String(person.id)])))await run(key,queries[key]);
       if(options.crossCheck&&(!attributable(person)||!person.publicPhone))await run('independent',[`Independent grounded check: ${name} | ${company} | ${person.title}`],async()=>{
