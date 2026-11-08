@@ -23,6 +23,8 @@ on:
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'scripts/verify-worker-propagation.mjs'
+      - 'scripts/verify-targeting-confirmation.mjs'
+      - 'scripts/verify-profile-strategy-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -57,6 +59,8 @@ on:
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'scripts/verify-worker-propagation.mjs'
+      - 'scripts/verify-targeting-confirmation.mjs'
+      - 'scripts/verify-profile-strategy-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -194,6 +198,11 @@ jobs:
         with:
           name: step5-browser-acceptance-${{ github.sha }}
           path: |
+            /tmp/leadintel-profile-strategy/evidence.json
+            /tmp/leadintel-profile-strategy/failure.json
+            /tmp/leadintel-profile-strategy/*.png
+            /tmp/leadintel-targeting-*/evidence.json
+            /tmp/leadintel-targeting-*/*.png
             /tmp/leadintel-step1-test-*/evidence.json
             /tmp/leadintel-step1-test-*/*.png
             /tmp/leadintel-step5-test-*/evidence.json
