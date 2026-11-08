@@ -215,6 +215,39 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  event-planning-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser and backend dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify event preparation through saved unsent Delivery
+        env:
+          LEADINTEL_REQUIRE_BROWSER: 'true'
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/event-planning-journey.test.mjs
+      - name: Preserve event acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-planning-acceptance-${{ github.sha }}
+          path: /tmp/leadintel-event-journey/
+          if-no-files-found: warn
+          retention-days: 14
+
   profile-strategy-journey:
     runs-on: ubuntu-24.04
     timeout-minutes: 3

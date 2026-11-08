@@ -1,5 +1,25 @@
 const test=require('node:test'),assert=require('node:assert/strict'),{JSDOM}=require('jsdom'),{readFileSync}=require('node:fs');
 const C=require('../email-campaigns.js');
+test('a fresh browser restores its saved workspace campaign selection and clearing it stays cleared',async()=>{
+ for(const savedWorkspace of ['w1','other-workspace']){
+  const w=new JSDOM('<section id="step-2"></section><section id="step-6"></section><section id="step-7"></section>',{runScripts:'outside-only',url:'https://app.test'}).window;
+  const key='leadintel_customer_v2_discovery_meta';w.localStorage.setItem(key,JSON.stringify({scriptBuyer:{personId:'preserve'},emailCampaignSelection:{workspaceId:savedWorkspace,campaignId:'saved-campaign'}}));
+  w.LeadIntelEmailCampaigns=C;w.LeadIntelServerBridge={ready:true,workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};let loads=0;
+  w.fetch=async url=>{const pathname=new URL(url).pathname;let data;
+   if(pathname.endsWith('/templates'))data={templates:[]};else if(pathname.endsWith('/recipients'))data={recipients:[]};else if(pathname.endsWith('/companies'))data={companies:[],nextCursor:null};else if(pathname.endsWith('/saved-campaign')){loads++;data={campaign:{id:'saved-campaign',name:'Saved event invitations',members:[],companies:[],selection:{eventCampaignId:'event-a'}}};}else data={campaigns:[{id:'saved-campaign',name:'Saved event invitations'}]};return {ok:true,json:async()=>data};};
+  w.eval(readFileSync(require.resolve('../email-campaign-ui.js'),'utf8'));w.dispatchEvent(new w.CustomEvent('leadintel:server-ready'));await new Promise(r=>setTimeout(r,30));
+  assert.equal(w.LeadIntelEmailCampaignUI.active()?.id,savedWorkspace==='w1'?'saved-campaign':undefined);assert.equal(loads,savedWorkspace==='w1'?1:0);
+  if(savedWorkspace==='w1'){const select=w.document.querySelector('[data-campaign-field="saved"]');select.value='';select.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(r=>setTimeout(r,10));const meta=JSON.parse(w.localStorage.getItem(key));assert.equal(meta.emailCampaignSelection,undefined);assert.equal(meta.scriptBuyer.personId,'preserve');}
+  w.close();
+ }
+});
+test('changing workspace during the event-audience confirmation cannot reveal the old event in the new workspace',async()=>{
+ const w=new JSDOM('<section id="step-2"></section><section id="step-6"></section><section id="step-7"></section>',{runScripts:'outside-only',url:'https://app.test'}).window;
+ w.LeadIntelEmailCampaigns=C;w.LeadIntelServerBridge={ready:true,workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};w.LeadIntelCustomerNavigation={openModule:async()=>true};w.fetch=async()=>({ok:true,json:async()=>({campaigns:[],templates:[],recipients:[],companies:[],nextCursor:null})});
+ w.eval(readFileSync(require.resolve('../email-campaign-ui.js'),'utf8'));await w.LeadIntelEmailCampaignUI.openEvent({id:'first',name:'First event'});
+ let release,started;const began=new Promise(r=>started=r);w.LeadIntelDialogs={confirm:()=>{started();return new Promise(r=>release=r);}};const pending=w.LeadIntelEmailCampaignUI.openEvent({id:'private',name:'Private old-workspace event'});await began;
+ w.LeadIntelServerBridge.workspace={id:'w2'};w.dispatchEvent(new w.CustomEvent('leadintel:workspace-changed'));release(true);await assert.rejects(pending,/Workspace changed/);assert.doesNotMatch(w.document.querySelector('[data-campaign-field="name"]').value,/Private old-workspace/);w.close();
+});
 test('CSV accepts quoted commas, UTF-8 names and CRLF, maps required headers and rejects bad/oversized inputs',()=>{const rows=C.parseCsv('\ufeffcompany,website,name,email,title\r\n"Company, Ltd",https://buyer.example,Žanis Bērziņš,zanis@buyer.example,CEO\r\n');assert.equal(rows[0].company,'Company, Ltd');assert.equal(rows[0].name,'Žanis Bērziņš');assert.throws(()=>C.parseCsv('company,name\nC,A'),/website|email/i);assert.throws(()=>C.parseCsv('company,website,name,email\n"broken'),/quote/i);});
 test('one per company is the default, duplicate emails are excluded, missing addresses cannot select',()=>{assert.deepEqual(C.defaultSelection([{contactId:'a',companyId:'c',email:'a@buyer.example'},{contactId:'b',companyId:'c',email:'b@buyer.example'},{contactId:'d',companyId:'d',email:'A@buyer.example'},{contactId:'e',companyId:'e',email:''}]),['a']);});
 test('API refuses a late response after workspace changes',async()=>{let workspace='w1',finish;const api=C.createApi({workspace:()=>workspace,fetchImpl:()=>new Promise(r=>finish=r)});const pending=api.request('');workspace='w2';finish({ok:true,json:async()=>({campaigns:[{name:'Private'}]})});await assert.rejects(pending,/workspace|account/i);});
