@@ -60,6 +60,21 @@ function contentLanguage(){return window.LeadIntelContentLanguage?.workspaceCont
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function mainState(){try{return JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||"{}");}catch{return {};}}
+function refreshSelectedCompanyQualifications(){
+  let changed=false;
+  const fields=['market','buyerFit','buyerFitIssue','buyerFitIssueCode','fitScore','fitDescription','qualificationGaps','qualified','marketVerified','fitVerified','buyerVerified','needsRecheck','strategyFingerprint','researchedAt','score'];
+  for(const selected of discovery?.selectedProspects||[]){
+    const fresh=(discovery.candidates||[]).find(row=>row!==selected&&canonicalDomain(row.domain)===canonicalDomain(selected.domain));
+    if(!fresh||!candidateIsActionable(fresh))continue;
+    const merged=mergeWorkflowCompanies([selected],[fresh])[0],qualification=qualificationAssessment(fresh);
+    const before=JSON.stringify([fields.map(key=>selected[key]),selected.evidence,selected.matchedSignals,selected.qualification]);
+    for(const key of fields){if(Object.hasOwn(fresh,key))selected[key]=fresh[key];else delete selected[key];}
+    selected.evidence=merged.evidence;selected.matchedSignals=merged.matchedSignals;selected.qualification=qualification;
+    if(before!==JSON.stringify([fields.map(key=>selected[key]),selected.evidence,selected.matchedSignals,selected.qualification]))changed=true;
+  }
+  if(changed)saveDiscovery();
+  return changed;
+}
 function selectedTargets(main=mainState()){return window.LeadIntelReferenceCustomers?.normalizeTargetCompanies?.(main.targetCompanies,main.website||main.profile?.website)||(Array.isArray(main.targetCompanies)?main.targetCompanies.slice(0,50):[]);}
 function mergeWorkflowCompanies(previous=[],current=[],{replaceDomains=[]}={}){
   const replaced=new Set(replaceDomains.map(canonicalDomain)),byDomain=new Map();
@@ -478,7 +493,7 @@ function renderDiscoveryFocus(focus){
   if(back)back.textContent=buyers?"← Companies":"← Strategy";
   syncBuyerStageNavigation();
 }
-function setJourneyFocus(focus,{scroll=true}={}){const normalized=focus==='buyers'?'buyers':'companies';saveMeta({...loadMeta(),activeJourneyStage:normalized==='buyers'?5:4,visibleStep:5});renderDiscoveryFocus(normalized);window.dispatchEvent?.(new CustomEvent('leadintel:journey-focus-changed',{detail:{focus:normalized}}));window.LeadIntelJourney?.refresh?.();if(scroll){const target=normalized==='buyers'?(pipelineRows().length?document.querySelector(".pipeline-panel")||$("discovery-buyers-guide") :$("discovery-buyers-guide")) :$("run-company-discovery");target?.scrollIntoView?.({behavior:"smooth",block:"center"});}return normalized;}
+function setJourneyFocus(focus,{scroll=true}={}){const normalized=focus==='buyers'?'buyers':'companies';if(normalized==='buyers')refreshSelectedCompanyQualifications();saveMeta({...loadMeta(),activeJourneyStage:normalized==='buyers'?5:4,visibleStep:5});renderDiscoveryFocus(normalized);window.dispatchEvent?.(new CustomEvent('leadintel:journey-focus-changed',{detail:{focus:normalized}}));window.LeadIntelJourney?.refresh?.();if(scroll){const target=normalized==='buyers'?(pipelineRows().length?document.querySelector(".pipeline-panel")||$("discovery-buyers-guide") :$("discovery-buyers-guide")) :$("run-company-discovery");target?.scrollIntoView?.({behavior:"smooth",block:"center"});}return normalized;}
 let discoveryStageOpenRevision=0;
 function showDiscoveryStep(focus="companies"){
  if(!moduleReady()){showToast("Add your company website first");return;}
@@ -1670,6 +1685,7 @@ async function selectQualifiedForBuyers(reference){
     if(crmAuthenticated()&&!await saveCandidate(reference,{pipeline:false}))return false;
     if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
     const existing=(discovery.selectedProspects||[]).find(item=>researchReviewKey(item)===key);
+    if(existing)refreshSelectedCompanyQualifications();
     const selected=existing||{...candidate,buyerSearchMode:'user_selected_qualified'};
     rememberSelectedProspect(selected);renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);owner.outcome='pass';void startSelectedBuyerResearch(selected);return true;
   }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Unable to save selection; retained research is available for retry.');return false;}
