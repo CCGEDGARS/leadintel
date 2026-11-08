@@ -1115,12 +1115,20 @@ async function useAssistantDraft(draft,style,assistant=null){
  const context={...captured.context,maximumWords:null,currentDraft:draft};
  globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(draft,context);
  const item=currentItem(),studio=studioState();if(item.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,draft,studio.essentials,item.channel);
- const next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ let next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
  // Continue explicitly accepts this validated working copy in the captured context.
  // An earlier template proposal must not keep it bound to superseded settings.
  delete next.messageStudioDraft.pendingTemplateUpdate;
  if(item.channel==='email'&&!item.messageStudioDraft?.eventSnapshot&&captured.messageScope)next.messageStudioDraft.reviewedMessageScope=captured.messageScope;
  if(!item.messageStudioDraft?.eventSnapshot)next.messageStudioDraft.appliedTriggerSnapshot=JSON.parse(JSON.stringify(item.dossier?.selectedTrigger||null));
+ if(item.channel==='email'&&!item.messageStudioDraft?.eventSnapshot&&captured.context.language==='en'){
+  // Continue reviews the current English working copy. This is a manual
+  // language decision, never a claim that an AI provider or translator ran.
+  next.campaignScenario={...item.campaignScenario,language:'en',resolvedLanguage:'en',languageSource:'manual'};
+  next.localizationProvenance={provider:'manual-review',model:'explicit-working-copy-v1',language:'en',selectionSource:'manual'};
+  next.localizationStatus='native';next.localizationMessage='English working copy reviewed. No translation performed.';
+  if(globalThis.LeadIntelMessageTranslations?.capture){next=globalThis.LeadIntelMessageTranslations.capture(next);next.messageStudioDraft.languageVersions.versions.en.provenance={...next.localizationProvenance};}
+ }
  next.messageStudioDraft.assistantSourceStyle=assistant?.storyRef?'storyselling':style;if(assistant){next.messageStudioDraft.writingAssistant=JSON.parse(JSON.stringify(assistant));next.messageStudioDraft.writingAssistantDraft={subject:draft.subject,message:draft.message,...globalThis.LeadIntelRichText?.fields(draft.message,draft.messageHtml)};}else{delete next.messageStudioDraft.writingAssistant;delete next.messageStudioDraft.writingAssistantDraft;}upsertItem(next);renderAll();
  const result=await saveScriptPackage(next);
  if(captured.scope!==captureWritingAssistantContext().scope)throw Error('Workspace or recipient changed. Check the original recipient’s saved draft.');
@@ -1132,8 +1140,10 @@ function isAssistantDraftSaved(draft,style,assistant=null){
  if(writingContextMode==='general')return Boolean(generalWritingRecord?.scope===writingScopeIdentity()&&generalWritingRecord.kind==='draft'&&exact(generalWritingRecord));
  if(globalThis.LeadIntelChannelWorkspace?.phoneActive()||globalThis.LeadIntelInMail?.active())return false;
  const item=currentItem(),info=item?.messageStudioDraft;
- const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captureWritingAssistantContext().messageScope);
- return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
+ const captured=item?.channel==='email'?captureWritingAssistantContext():null;
+ const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captured.messageScope);
+ const languageCurrent=captured?.context?.language!=='en'||info?.eventSnapshot||Boolean(item.campaignScenario?.language==='en'&&item.localizationProvenance?.language==='en'&&item.localizationProvenance.provider&&item.localizationProvenance.model&&item.localizationProvenance.selectionSource==='manual'&&['native','complete'].includes(item.localizationStatus));
+ return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
