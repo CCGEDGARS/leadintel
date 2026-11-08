@@ -3,8 +3,8 @@ const Editor=require('../message-editor.js');
 const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8'),helper=source.slice(source.indexOf('function isAssistantDraftSaved('),source.indexOf('function setAssistantDraftLength('));
 test('actual save detection requires confirmed exact text, HTML and source provenance',()=>{
  const draft={subject:'Subject',message:'Hi Alex',messageHtml:'<p>Hi <strong>Alex</strong></p>'},assistant={workspaceId:'w',referenceRevision:2};
- const item={messageStudioDraft:{scriptSavedAt:'2026-10-29T18:00:00Z',savedDraft:draft,writingAssistant:assistant}};
- const saved=new Function('currentItem','LeadIntelMessageEditor','globalThis',"const writingContextMode='customer';"+helper+';return isAssistantDraftSaved;')(()=>item,Editor,{});
+ const essentials={sender:'Alex Seller'},item={channel:'email',messageStudioDraft:{essentials,reviewedMessageScope:'current-context',scriptSavedAt:'2026-10-29T18:00:00Z',savedDraft:draft,writingAssistant:assistant}};
+ const saved=new Function('currentItem','studioState','captureWritingAssistantContext','LeadIntelMessageEditor','globalThis',"const writingContextMode='customer';"+helper+';return isAssistantDraftSaved;')(()=>item,()=>({essentials}),()=>({messageScope:'current-context'}),Editor,{});
  assert.equal(saved(draft,'friendly',assistant),true);
  assert.equal(saved({...draft,message:'Hi Ben'},'friendly',assistant),false);
  assert.equal(saved({...draft,messageHtml:'<p>Hi Alex</p>'},'friendly',assistant),false);
