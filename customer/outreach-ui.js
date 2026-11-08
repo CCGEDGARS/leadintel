@@ -1081,7 +1081,7 @@ function captureWritingAssistantContext(){
  }
  const item=currentItem(),studio=studioState(),state=messageEditor?.state();
  const facts=studioMessageContext(item,selectedCandidate()),base=globalThis.LeadIntelWritingAssistantContext.captureWritingContext({workspace:identity.workspaceId,item,candidate:selectedCandidate(),person:selectedContact(item),studio,facts,currentDraft:editorDraft(),refs:references,language:globalThis.LeadIntelMessageTranslations?.book?.(item||{})?.activeLanguage,usable:captureMessageAuthority().current()&&messageWorkspaceUsable()&&!buyerHandoffPending&&!state?.editing&&!state?.saving&&!state?.busy&&!state?.preview&&!subjectEditing&&!subjectBusy&&!studioGenerationBusy&&!messageTranslationBusy&&!messageFactResearchBusy&&!messageFlowBusy&&!originalScriptBusy&&!crmBridge()?.conflict});
- base.messageScope=LeadIntelMessageEditor.scope(identity.workspaceId,item,studio,{...facts,eventCampaign:null});
+ base.messageScope=globalThis.LeadIntelMessageEditor?.scope?.(identity.workspaceId,item,studio,{...facts,eventCampaign:null});
  base.context.writingContext='customer';base.scope=JSON.stringify([captureMessageAuthority().key,identity.userId,base.scope]);base.fingerprint=JSON.stringify(base.context);
  const channelContext=globalThis.LeadIntelChannelWorkspace?.capture(base)||base;return globalThis.LeadIntelInMail?.capture(channelContext)||channelContext;
 }
