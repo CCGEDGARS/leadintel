@@ -72,3 +72,31 @@ test('unchanged assistant text is saved only when its reviewed context and setti
  item.messageStudioDraft.reviewedMessageScope='different-context';assert.equal(check(draft),false);
  item.messageStudioDraft.reviewedMessageScope='current-context';item.messageStudioDraft.pendingTemplateUpdate={key:'pending'};assert.equal(check(draft),false);
 });
+
+test('explicit English Continue records manual language review without inventing AI execution or translating the draft',async()=>{
+ const source=read('outreach-ui.js'),helper=source.slice(source.indexOf('async function useAssistantDraft('),source.indexOf('function installWritingAssistant(')),Editor=require('../message-editor.js'),Context=require('../writing-assistant-context.js'),Translations=require('../message-translations.js');
+ for(const company of ['Fabrication Customer','Unrelated Retailer']){
+  const draft={subject:'Supplier contact',message:'Hi Alex, Bob represents '+company+'.'},assistant={workspaceId:'w1',referenceRevision:0,sourceRefs:[],appliedAt:'2026-11-08T10:00:00Z'},essentials={sender:'Bob',language:'en'};
+  let item={domain:'buyer.test',channel:'email',selectedPersonId:'alex',drafts:{emailSubject:draft.subject,emailBody:draft.message},campaignScenario:{id:'core',language:'da',offer:'Reviewed offer'},localizationProvenance:{},messageStudioDraft:{tailoredOriginal:{key:'original',draft:{subject:'Original',message:'Protected original'}}}},saved;
+  const run=new Function('captureWritingAssistantContext','currentItem','studioState','LeadIntelMessageEditor','LeadIntelMessageStudio','upsertItem','renderAll','saveScriptPackage','globalThis',"const writingContextMode='customer';"+helper+';return {use:useAssistantDraft,isSaved:isAssistantDraftSaved};')(()=>({scope:'w1:alex',messageScope:'current-context',usable:true,context:{channel:'email',language:'en',seller:{sender:'Bob'},currentDraft:draft}}),()=>item,()=>({mode:'professional',essentials}),Editor,{missing:()=>[]},next=>item=next,()=>{},async next=>{saved=JSON.parse(JSON.stringify(next));return {ok:true};},{LeadIntelWritingAssistantContext:Context,LeadIntelMessageTranslations:Translations});
+  await run.use(draft,'professional',assistant);
+  assert.deepEqual(saved.localizationProvenance,{provider:'manual-review',model:'explicit-working-copy-v1',language:'en',selectionSource:'manual'});
+  assert.equal(saved.campaignScenario.language,'en');assert.equal(saved.campaignScenario.offer,'Reviewed offer');
+  assert.equal(saved.localizationStatus,'native');assert.equal(saved.localizationApprovalBlocked,false);
+  assert.equal(saved.drafts.emailBody,draft.message);assert.deepEqual(saved.messageStudioDraft.writingAssistant,assistant);
+  assert.equal(saved.messageStudioDraft.tailoredOriginal.draft.message,'Protected original');
+  assert.deepEqual(Translations.book(saved).versions.en.provenance,saved.localizationProvenance);
+  Object.assign(item.messageStudioDraft,{scriptSavedAt:'2026-11-08T10:01:00Z',savedDraft:draft});
+  assert.equal(run.isSaved(draft,'professional',assistant),true);
+  item.localizationProvenance={};assert.equal(run.isSaved(draft,'professional',assistant),false,'legacy saved text must still record its explicit language review');
+  assert.equal(saved.approved,false);assert.equal(saved.messageStudioDraft.flowMembership,undefined);
+ }
+});
+
+test('Continue on an existing translation preserves its provider and immutable English source',async()=>{
+ const source=read('outreach-ui.js'),helper=source.slice(source.indexOf('async function useAssistantDraft('),source.indexOf('function installWritingAssistant(')),Editor=require('../message-editor.js'),Context=require('../writing-assistant-context.js'),Translations=require('../message-translations.js');
+ const english={subject:'Supplier',message:'Hi Alex, Bob here.'},draft={subject:'Lieferant',message:'Hallo Alex, Bob hier.'},provenance={provider:'recorded-provider',model:'recorded-model',language:'de',selectionSource:'manual'},essentials={sender:'Bob',language:'de'};
+ let item={domain:'buyer.test',channel:'email',selectedPersonId:'alex',drafts:{emailSubject:draft.subject,emailBody:draft.message},campaignScenario:{language:'de'},localizationProvenance:provenance,localizationStatus:'complete',messageStudioDraft:{languageVersions:{originalLanguage:'en',activeLanguage:'de',versions:{en:english,de:{...draft,source:english,provenance}}}}};
+ const run=new Function('captureWritingAssistantContext','currentItem','studioState','LeadIntelMessageEditor','LeadIntelMessageStudio','upsertItem','renderAll','saveScriptPackage','globalThis',"const writingContextMode='customer';"+helper+';return useAssistantDraft;')(()=>({scope:'w1:alex',messageScope:'current-context',usable:true,context:{channel:'email',language:'de',seller:{sender:'Bob'},currentDraft:draft}}),()=>item,()=>({mode:'professional',essentials}),Editor,{missing:()=>[]},next=>item=next,()=>{},async()=>({ok:true}),{LeadIntelWritingAssistantContext:Context,LeadIntelMessageTranslations:Translations});
+ await run(draft,'professional');assert.deepEqual(item.localizationProvenance,provenance);assert.deepEqual(Translations.book(item).versions.en,english);assert.equal(item.drafts.emailBody,draft.message);assert.equal(item.approved,false);
+});
