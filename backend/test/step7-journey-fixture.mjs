@@ -23,7 +23,7 @@ export const exactDrafts={
 // Real sessions, all migrations, workspace CAS, CRM contact confirmation and
 // production domain approval. Only outbound HTTP providers are controlled.
 // These synthetic drafts are explicit manual review fixtures, not AI claims.
-export async function step7Fixture({connected=true}={}){
+export async function step7Fixture({connected=true,activated=false}={}){
  const providerRequests=[];let nextMode='accepted',nextGate=null;
  const f=await journeyFixture({externalFetch:async(input,options={})=>{
   const url=new URL(typeof input==='string'?input:input.url);
@@ -49,6 +49,7 @@ export async function step7Fixture({connected=true}={}){
   main.answers={...main.answers,buying_outcomes:'production flow downtime',value_proposition:'simplify production flow',differentiation:'Our team supports industrial projects.',proof_points:'No approved proof yet',objections:'Unknown',delivery_approach:'Project-specific engineering and installation.',meeting_value:'relevant project lessons'};
   main.answerStatus=Object.fromEntries(Object.keys(main.answers).map(key=>[key,'user']));
   main.brandIdentity={senderName:'Robin Lane',senderTitle:'Commercial Director',companyDisplayName:'Fixture Industrial',website:'https://seller.example',email:'robin@seller.example'};
+  if(activated){main.websiteActivation={status:'active',url:main.website,activatedAt:'2026-10-30T10:00:00Z'};main.scrapedSources=[{type:'website',url:main.website,title:'Fixture Industrial',text:'Fixture Industrial supplies industrial automation and custom machinery. Project-specific engineering and installation.',status:'ready'}];}
   main.messageStudio={};main.profile=Profile.buildCompanyIntelligenceProfile(main);
   main={...main,...Profile.normalizeSavedState(main),market:Market.normalizeMarketState(main.market),brandIdentity:Brand.normalize(main.brandIdentity),senderIdentityVersion:1};
   // Approve the canonical projection used by browser restore, including the
