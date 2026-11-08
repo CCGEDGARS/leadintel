@@ -1,0 +1,9 @@
+# Company-subdomain contact evidence
+
+The previous acceptance conclusion attributed the email blocker to incomplete Gemini/source research. Further investigation found an independent contact-classification defect: the retained named Hasse Faxe email was read from `career-global.kitron.com`, but strict host equality classified it as a third-party listing. The shared evidence policy already recognizes child hosts of the verified company domain as first-party. Arbitrary child-host prefixes are not stripped by the company-identity normalizer, correctly keeping distinct company identities separate; contact source ownership must use the existing first-party predicate instead.
+
+A public read of the retained source confirms the exact name, Chief Commercial Officer role and published work email. Use the shared first-party predicate for named contact source classification, official-email acceptance and preservation across workspace normalization. Continue requiring a read source body, exact person/email attribution, fresh timestamp, source-URL binding, accepted company-domain address and existing identity/role/recipient gates. Previously stored third-party classifications are not automatically promoted without a fresh matching read.
+
+Regression covers two unrelated companies, saved/CRM roundtrips with partial research retained, and rejection of unread pages, model summaries, foreign hosts, domain-suffix spoofing and a different named person. Both positive cases fail before the change and pass after it. Existing contact/source preservation and button-contract regressions pass. Gemini timeout and failed-source receipts remain incomplete; this change cannot declare research complete or authorize sending/paid research.
+
+Remaining acceptance: exact production proof, actual app Recheck of the named source, source-confirmed email/Proceed, Messages save/CRM reopen and Delivery preparation without sending.
