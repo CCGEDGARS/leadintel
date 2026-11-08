@@ -14,8 +14,9 @@ export async function companyProfileDocuments(env,workspace){
   // Give every readable page/image a share of the context budget, retaining physical locations.
   const perDocument=Math.min(20000,Math.floor(60000/Math.max(1,rows.length)));
   const perSection=Math.max(1,Math.floor(perDocument/Math.max(1,sections.length)));
-  const text=sections.map(s=>`${s.location}\n${s.text.slice(0,perSection)}`).join('\n\n');
-  if(text)documents.push({id:'material:'+row.id,name:row.filename,status:'ready',text,materialId:row.id,materialRevision:row.revision,managedMaterial:true,coverage:extracted.coverage||null,partial:sections.some(s=>s.text.length>perSection)||Boolean(extracted.coverage?.unreadable)});
+  const complete=sections.reduce((n,s)=>n+s.text.length,0)<=perDocument;
+  const text=sections.map(s=>`${s.location}\n${complete?s.text:s.text.slice(0,perSection)}`).join('\n\n');
+  if(text)documents.push({id:'material:'+row.id,name:row.filename,status:'ready',text,materialId:row.id,materialRevision:row.revision,managedMaterial:true,coverage:extracted.coverage||null,partial:!complete||Boolean(extracted.coverage?.unreadable)});
  }
  // Deletion or retry during the read must not hand stale evidence to profile synthesis.
  for(const doc of documents)if(!await env.DB.prepare("SELECT id FROM company_materials WHERE workspace_id=? AND id=? AND revision=? AND status='Ready'").bind(workspace,doc.materialId,doc.materialRevision).first())fail('Company material changed. Retry profile preparation.',409);
