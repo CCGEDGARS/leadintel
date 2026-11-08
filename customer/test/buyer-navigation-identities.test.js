@@ -13,8 +13,10 @@ for(const [company,domain] of [['Northstar Systems','northstar.example'],['Indep
     const candidate={company,domain,market:'Denmark'};
     const row={url:`https://${domain}/contact-us`,sourceRead:true,markdown:`# Team\nMilda Zybartienė\nSourcing Director\nRafał Smyjewski\nGlobal Commodity Manager - Mechanics - EU&US\n${company}\nHead Office\nInvestor Relations Contacts\nFor Suppliers Supplier Code of Conduct\nCorporate Governance\nSustainability\nCapital Markets Day\nAnalysts`};
     const office={...row,markdown:`# Contact\n## ${company}\nHead Office`};
-    const contacts=D.discoverCompanyContacts([row,office],candidate);
+    const stale={id:'old-office',name:company,title:'Head Office',organization:company,identityStatus:'confirmed',nameVerification:'confirmed',publicNameUrl:row.url};
+    const contacts=D.discoverCompanyContacts([row,office],candidate,[stale]);
     assert.deepEqual(contacts.map(p=>p.name).sort(),['Milda Zybartienė','Rafał Smyjewski']);
+    assert.equal(D.retainBuyerIdentities([stale,...contacts],{decisionMakers:'Sourcing Director; Commodity Manager'},candidate).some(p=>p.name===company),false,'old office entries cannot consume the retained identity quota');
     const restored=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target',people:contacts,buyerDiscovery:{companyContacts:contacts}}]}).selectedProspects[0];
     assert.deepEqual(restored.people.map(p=>p.name).sort(),['Milda Zybartienė','Rafał Smyjewski']);
   });

@@ -1644,7 +1644,7 @@
   function mergeBuyerPool(previous=[],incoming=[],profile={}){
     const merged=new Map(),aliases=new Map();
     for(const person of [...previous,...incoming]){
-      if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name))continue;
+      if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name)||isOfficeContactRole(person.title))continue;
       let key=buyerIdentity(person);if(!key)continue;
       const full=clean(person.publicName||person.name).toLowerCase(),url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
       const same=[...merged.entries()].filter(([oldKey,old])=>{
@@ -1702,12 +1702,12 @@
   }
   function retainBuyerIdentities(pool=[],profile={},candidate={}){
     const ranked=rankedBuyerShortlist(pool,profile,candidate).people,ids=new Set(ranked.map(buyerIdentity));
-    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&(!candidate.company||!person.organization||companyNameMatches(person.organization,candidate.company)));
+    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&!isOfficeContactRole(person.title)&&(!candidate.company||!person.organization||companyNameMatches(person.organization,candidate.company)));
     const relevant=selectDecisionMakers(known,profile,20),ordered=[...relevant,...known.filter(person=>!relevant.some(row=>buyerIdentity(row)===buyerIdentity(person)))];
     return [...ranked,...ordered.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10);
   }
   function rankedBuyerShortlist(pool=[],profile={},candidate={}){
-    const eligible=pool.filter(person=>person.identityStatus!=='pending'&&person.nameVerification!=='pending'
+    const eligible=pool.filter(person=>!isOfficeContactRole(person.title)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'
       &&hasFullBuyerName(person.publicName||person.name)
       &&Boolean(person.identitySource==='apollo'||normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))
       &&(!candidate.company||companyNameMatches(person.organization,candidate.company))
@@ -2465,8 +2465,9 @@
     return Boolean(brand&&squashed&&brand.length>=4&&squashed===brand);
   }
 
+  function isOfficeContactRole(value){return /^(?:head office|headquarters|corporate office)$/i.test(clean(value));}
   function namedStaffRole(value){
-    const role=clean(value);return Boolean(role&&!/^(?:head office|headquarters|corporate office)$/i.test(role)&&role.length<=120&&/[\p{L}]/u.test(role)&&(!/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(role)||/manager|engineer|director|chief|president|officer|specialist|designer|head|partner|consultant|advisor|accountant|attorney|developer|therapist|nurse|vadītāj|priekšsēdētāj|chef|direktör|administration/i.test(role))&&!/@|https?:|^(?:tel(?:efon)?\.?|phone|e-post|email|contact us|read more)\b|\b(?:former|previous|retired|tidigare)\b/i.test(role));
+    const role=clean(value);return Boolean(role&&!isOfficeContactRole(role)&&role.length<=120&&/[\p{L}]/u.test(role)&&(!/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(role)||/manager|engineer|director|chief|president|officer|specialist|designer|head|partner|consultant|advisor|accountant|attorney|developer|therapist|nurse|vadītāj|priekšsēdētāj|chef|direktör|administration/i.test(role))&&!/@|https?:|^(?:tel(?:efon)?\.?|phone|e-post|email|contact us|read more)\b|\b(?:former|previous|retired|tidigare)\b/i.test(role));
   }
   function safeCorporateRoleEvidence(value){
     if(value?.version!==1||value.sourceKind!=='registry'||!normalizeUrl(value.url)||!clean(value.company)||!clean(value.title)||!clean(value.quote))return null;
@@ -2509,7 +2510,7 @@
   function mergeCompanyContacts(previous=[],incoming=[],candidate={}){
     const contacts=new Map();
     for(const person of [...previous,...incoming]){
-      if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name))continue;
+      if(malformedBuyerRole(person.title)||isNonPersonBuyerHeading(person.publicName||person.name)||isOfficeContactRole(person.title))continue;
       if(!hasFullBuyerName(person.publicName||person.name)||!companyNameMatches(person.organization,candidate.company))continue;
       let key=clean(person.publicName||person.name).toLowerCase();
       const existing=contacts.get(key),profile=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),existingProfile=normalizeLinkedInUrl(existing?.publicLinkedinUrl||existing?.linkedin_url);
