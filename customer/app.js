@@ -49,7 +49,7 @@ let pendingResearchMode="";
 let brandIdentityUI=null;
 let legacyProfileAnalysis=null;
 let activeMarketResearchRun=null;
-let strategySavedBaseline=null;
+let strategySavedBaseline=null,strategySavedState=null,strategySavedContext="";
 let targetingSaveOwner=null,targetingSaveError="";
 let monitoringRequestSerial=0;
 const $=id=>document.getElementById(id);
@@ -71,7 +71,7 @@ function loadState(){
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
     base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
     base.senderIdentityVersion=source.senderIdentityVersion===1?1:0;
-    strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(source)||null;window.__leadIntelLocalStrategyConflict=false;
+    strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(source)||null;strategySavedState=JSON.parse(JSON.stringify(source));strategySavedContext=profileApprovalContext();window.__leadIntelLocalStrategyConflict=false;window.__leadIntelLocalStrategyConflictPaths=[];
     base.step=window.LeadIntelWorkspaceIsolation?.safeStep
       ?window.LeadIntelWorkspaceIsolation.safeStep(localStorage,base,source.step)
       :([1,2,3,4,5,6,7].includes(Number(source.step))?Number(source.step):base.step);
@@ -84,17 +84,18 @@ function saveState(){
   // Keep the modal's latest lists and activation when an older in-memory app state saves.
   try{
     const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    if(!current||typeof current!=="object"||Array.isArray(current))return false;
     if(current.websiteScans&&typeof current.websiteScans==="object")state.websiteScans=current.websiteScans;
     if(current.eventCampaigns&&typeof current.eventCampaigns==="object")state.eventCampaigns=current.eventCampaigns;
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
     if(typeof checkStrategyLocalPersistence==='function'&&!checkStrategyLocalPersistence(current))return false;
-  }catch{}
+  }catch{showToast("Saved workspace could not be compared safely. Your local edits are retained; retry after reviewing the saved version.");return false;}
   if(typeof syncStrategyApproval==='function')syncStrategyApproval();
   if(state.targetingConfirmation&&!LeadIntelTargeting.isConfirmed(state))state.targetingConfirmation=null;
   if(typeof renderTargetingConfirmation==="function")renderTargetingConfirmation();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(state)||null;updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();return true;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));const persisted=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(persisted)||null;strategySavedState=persisted;strategySavedContext=profileApprovalContext();updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();return true;
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
@@ -121,6 +122,7 @@ function setStep(step,{review=false}={}){
   if(Number(step)>=4&&!reviewingCompanies&&!campaignModuleAllowed(step)&&!state.approved){
     LeadIntelTargeting.focusControl(window,{step:state.profile?3:2,id:state.profile?'approve-profile':'analyze-company',message:'Approve your reviewed profile before continuing to Strategy.'});return false;
   }
+  if(Number(step)!==5)window.__leadIntelPendingDiscoveryOpen=false;
   state.step=step;saveState();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
@@ -130,7 +132,7 @@ function setStep(step,{review=false}={}){
   window.scrollTo({top:0,behavior:"smooth"});
   return true;
 }
-window.LeadIntelCustomerNavigation={setStep,openModule};
+window.LeadIntelCustomerNavigation={setStep,openModule,currentStep:()=>Number(state?.step)||0};
 window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)};
 window.addEventListener("leadintel:open-module",event=>{const step=Number(event.detail?.step);if(step>=1&&step<=7)void openModule(step);});
 function restoreResetLanding(){
@@ -259,15 +261,44 @@ function readSources(){
 function renderTargetingConfirmation(){
   if(targetingSaveOwner&&targetingSaveOwner.context!==profileApprovalContext()){targetingSaveOwner=null;targetingSaveError="";}
   const confirmed=LeadIntelTargeting.isConfirmed(state),button=$("confirm-targeting"),status=$("targeting-confirmation-status"),saving=Boolean(targetingSaveOwner);
-  if(button){button.disabled=saving;button.setAttribute?.("aria-busy",String(saving));button.textContent=saving?"Saving targeting…":targetingSaveError?"Retry targeting save →":confirmed?"Targeting confirmed ✓":"Confirm targeting →";}
-  if(status)status.textContent=saving?"Saving your confirmed targeting to the workspace…":targetingSaveError||(confirmed?"Saved. Company search will use these answers.":"Complete the four required answers, then confirm targeting before searching for companies.");
+  if(button){button.disabled=saving;button.setAttribute?.("aria-busy",String(saving));button.textContent=saving?(targetingSaveOwner.reviewing?"Reviewing changes…":"Saving targeting…"):window.__leadIntelLocalStrategyConflict?"Review conflicting changes →":targetingSaveError?"Retry targeting save →":confirmed?"Targeting confirmed ✓":"Confirm targeting →";}
+  if(status)status.textContent=saving?(targetingSaveOwner.reviewing?"Review both versions before applying conflicting changes.":"Saving your confirmed targeting to the workspace…"):targetingSaveError||(confirmed?"Saved. Company search will use these answers.":"Complete the four required answers, then confirm targeting before searching for companies.");
+}
+async function reviewTargetingConflict(context){
+  const record=strategyRecoveryRecord(),sync=window.LeadIntelWorkspaceSync;
+  if(!record?.base||!sync?.merge||!window.LeadIntelDialogs?.confirm)throw Error("Conflict review is not available yet. Both versions are retained; retry after the workspace finishes loading.");
+  const local=JSON.parse(JSON.stringify(state)),saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+  const scope=value=>JSON.stringify([String(value.website||value.profile?.website||'').trim().toLowerCase().replace(/\/$/,''),(Array.isArray(value.targetMarkets)?value.targetMarkets:value.targetMarkets?[value.targetMarkets]:[]).map(String).sort()]);
+  if(record.context!==context||scope(record.base)!==scope(saved)||scope(local)!==scope(saved))throw Error("The company or target market changed in another view. Both versions are retained. Open the current company Profile before confirming targeting.");
+  if(!sync.equal(saved,record.saved))throw Error("The saved version changed again. Retry to compare the newest changes; both versions are retained.");
+  const paths=record.paths||[],read=(value,path)=>path.replace(/^main\.?/,'').replace(/\[([^\]]+)\]/g,'.$1').split('.').filter(Boolean).reduce((node,key)=>Array.isArray(node)?node.find(row=>String(row?.id||row?.domain)===key):node?.[key],value);
+  const text=value=>{const body=typeof value==='string'?value:JSON.stringify(value,null,2);return body||'(empty)';};
+  const label=path=>window.LeadIntelStep2Readiness?.QUESTION_COPY?.[path.split('.')[2]]?.question||(typeof profileFields!=='undefined'?profileFields.find(([key])=>path.includes('.'+key))?.[1]:null)||path.replace(/^main\./,'').replaceAll('_',' ');
+  const comparisons=paths.map(path=>`${label(path)}\nThis view: ${text(read(local,path))}\nSaved view: ${text(read(saved,path))}`).join('\n\n');
+  const operation={context,reviewing:true};targetingSaveOwner=operation;renderTargetingConfirmation();
+  try{
+    const choice=await window.LeadIntelDialogs.confirm('The same fields were edited differently. Choose which version to keep for these conflicts. Independent changes and both original versions are preserved.\n\n'+comparisons,{title:'Review conflicting changes',action:'Keep my reviewed changes',alternativeAction:'Use saved changes'});
+    if(!choice)return false;
+    if(!profileApprovalCurrent(context)||targetingSaveOwner!==operation||!sync.equal(state,local)||!sync.equal(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'),saved))throw Error("Answers or workspace changed while the comparison was open. Retry to review the newest versions.");
+    const preference=choice==='alternative'?'server':'local',merged=sync.merge({main:record.base},{main:local},{main:saved},{conflictPreference:preference});
+    if(!merged.safe)throw Error("The changes could not be combined safely. Both versions are retained.");
+    localStorage.setItem(STRATEGY_RECOVERY_KEY,JSON.stringify({...record,resolution:preference,resolvedAt:new Date().toISOString()}));
+    state=merged.payload.main;strategySavedState=saved;strategySavedBaseline=strategyIntegrity().signature(saved);strategySavedContext=context;
+    window.__leadIntelLocalStrategyConflict=false;window.__leadIntelLocalStrategyConflictPaths=[];
+    syncInputsFromState();
+    if(saveState()===false)throw Error("The reviewed changes could not be saved. Both versions are retained; retry saving.");
+    return true;
+  }finally{if(targetingSaveOwner===operation)targetingSaveOwner=null;renderTargetingConfirmation();}
 }
 async function confirmTargeting(){
   if(targetingSaveOwner)return false;
   targetingSaveError="";
   const context=profileApprovalContext();let operation,timer;
   try{
-    if(readAnswers()===false||window.__leadIntelLocalStrategyConflict)throw Error("Targeting could not be saved because the workspace changed. Your edits are retained; review the workspace save status before retrying.");
+    if(readAnswers({fields:Object.keys(LeadIntelTargeting.fields)})===false||window.__leadIntelLocalStrategyConflict){
+      if(window.__leadIntelLocalStrategyConflict&&await reviewTargetingConflict(context))return await confirmTargeting();
+      throw Error(window.__leadIntelLocalStrategyConflict?"Conflicting changes were not applied. Both versions are retained. Press Review conflicting changes to compare them.":"Targeting could not be saved locally. Your answers are retained; retry saving.");
+    }
     const missing=LeadIntelTargeting.missing(state);
     for(const id of Object.keys(LeadIntelTargeting.fields)){const input=document.querySelector(`[data-question="${id}"]`);input?.setAttribute("aria-invalid",missing.includes(id)?"true":"false");}
     if(missing.length){targetingSaveError=`Complete ${missing.length} required ${missing.length===1?"answer":"answers"} before confirming targeting.`;document.querySelector(`[data-question="${missing[0]}"]`)?.focus();return false;}
@@ -290,8 +321,9 @@ async function confirmTargeting(){
   }catch(error){if(profileApprovalCurrent(context)){targetingSaveError="Could not confirm targeting. "+(error.message||"Your answers are retained; retry saving.");showToast(targetingSaveError);}return false;}
   finally{clearTimeout(timer);if(targetingSaveOwner===operation)targetingSaveOwner=null;renderTargetingConfirmation();}
 }
-function readAnswers(){
-  const changed=[];document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question,value=el.value.trim();if(state.answers[id]!==value)changed.push(id);state.answers[id]=value;});
+function readAnswers(options={}){
+  const editedId=options?.target?.dataset?.question,selected=editedId?new Set([editedId]):Array.isArray(options.fields)?new Set(options.fields):null;
+  const changed=[];document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question;if(selected&&!selected.has(id))return;const value=el.value.trim();if(state.answers[id]!==value)changed.push(id);state.answers[id]=value;});
   if(changed.length){
     targetingSaveError="";
     state=globalThis.LeadIntelStep2Brief?.applyAnswers?.(state,changed)||state;
@@ -309,7 +341,7 @@ function validateStep1(){
   if(!state.targetMarkets.length){$("step1-error").textContent="Choose at least one target market.";return false;}
   $("step1-error").textContent="";return true;
 }
-function validateStep2(){readAnswers();if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website and target market in Setup first.";return false;}$("step2-error").textContent="";return true;}
+function validateStep2(){if(readAnswers({fields:[]})===false){$("step2-error").textContent="Review conflicting changes with Confirm targeting before continuing. Your answers are retained.";return false;}if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website and target market in Setup first.";return false;}$("step2-error").textContent="";return true;}
 
 async function getPdfModule(){
   if(pdfModule)return pdfModule;
@@ -490,12 +522,35 @@ function strategyReviewCurrent(){try{return strategyIntegrity()?.signature(state
 function strategyRecoveryRecord(){try{const record=JSON.parse(localStorage.getItem(STRATEGY_RECOVERY_KEY)||'null');return record?.context===profileApprovalContext()?record:null;}catch{return null;}}
 function checkStrategyLocalPersistence(saved){
   const integrity=strategyIntegrity();if(!integrity)return true;
-  const signature=integrity.signature(saved);if(strategySavedBaseline&&signature!==strategySavedBaseline&&signature!==integrity.signature(state)){
-    window.__leadIntelLocalStrategyConflict=true;let retained=false;
-    try{localStorage.setItem(STRATEGY_RECOVERY_KEY,JSON.stringify({version:1,context:profileApprovalContext(),at:new Date().toISOString(),local:state,saved}));retained=true;}catch{}
-    const message=retained?'Strategy changed in another view. Both drafts are preserved. Download the local recovery copy, then reload to review the saved version.':'Strategy changed in another view. Recovery storage is unavailable; keep this tab open and copy your edits before reloading.';
+  const signature=integrity.signature(saved),diverged=strategySavedBaseline&&signature!==strategySavedBaseline&&signature!==integrity.signature(state);
+  const baseline=typeof strategySavedState!=="undefined"?strategySavedState:null,context=profileApprovalContext();
+  const ownsBaseline=Boolean(baseline&&typeof strategySavedContext!=="undefined"&&strategySavedContext===context);
+  let paths=[];
+  if(diverged){
+    // Reuse the field-level workspace merge. A hash difference alone does not
+    // establish a competing edit: readiness metadata and independent fields can change.
+    const scope=value=>JSON.stringify([String(value.website||value.profile?.website||'').trim().toLowerCase().replace(/\/$/,''),(Array.isArray(value.targetMarkets)?value.targetMarkets:value.targetMarkets?[value.targetMarkets]:[]).map(String).sort()]);
+    if(ownsBaseline&&scope(baseline)===scope(saved)&&scope(baseline)===scope(state)&&window.LeadIntelWorkspaceSync?.merge){
+      try{
+        const reviewed=value=>{const copy=JSON.parse(JSON.stringify(value));for(const [id,status] of Object.entries(copy.answerStatus||{}))if(status==='user')copy.answerStatus[id]='accepted';return {main:copy};};
+        const result=window.LeadIntelWorkspaceSync.merge(reviewed(baseline),reviewed(state),reviewed(saved));
+        if(result.safe){
+          state=result.payload.main;
+          if(typeof document!=="undefined")document.querySelectorAll?.('[data-question]').forEach(input=>{const value=state.answers?.[input.dataset.question]||'';if(input.value.trim()!==value)input.value=value;});
+          window.__leadIntelLocalStrategyConflict=false;window.__leadIntelLocalStrategyConflictPaths=[];return true;
+        }
+        paths=result.conflicts||[];
+      }catch{paths=['main'];}
+    }else paths=['main.website','main.targetMarkets'];
+    window.__leadIntelLocalStrategyConflict=true;window.__leadIntelLocalStrategyConflictPaths=paths;let retained=false;
+    try{localStorage.setItem(STRATEGY_RECOVERY_KEY,JSON.stringify({version:2,context,at:new Date().toISOString(),base:ownsBaseline?baseline:null,local:state,saved,paths}));retained=true;}catch{}
+    const message=retained?'Conflicting edits were found in another view. Both versions are preserved; review the conflicting fields before saving.':'Conflicting edits were found and recovery storage is unavailable. Keep this tab open and copy your edits before reloading.';
     setActivationFeedback(message,'error');showToast(message);return false;
-  }return !window.__leadIntelLocalStrategyConflict;
+  }
+  // A prior conflict is not permanent. Retry is safe once the saved version is
+  // unchanged from our acknowledged baseline, or already agrees with this view.
+  if(window.__leadIntelLocalStrategyConflict&&!ownsBaseline&&signature!==integrity.signature(state))return false;
+  window.__leadIntelLocalStrategyConflict=false;window.__leadIntelLocalStrategyConflictPaths=[];return true;
 }
 function downloadStrategyRecovery(){const record=strategyRecoveryRecord();if(!record)return false;const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='leadintel-strategy-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;}
 function syncStrategyApproval(){
@@ -1580,10 +1635,11 @@ function waitForDiscoveryOpen(timeoutMs=5000){
   });
 }
 async function openDiscoveryAfterActivation(){
-  window.__leadIntelPendingDiscoveryOpen=true;
+  const request={};window.__leadIntelPendingDiscoveryOpen=request;
   if(window.LeadIntelDiscoveryUI?.open)window.LeadIntelDiscoveryUI.open();
   else window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
   const opened=await waitForDiscoveryOpen();
+  if(!opened&&window.__leadIntelPendingDiscoveryOpen!==request)return false;
   window.__leadIntelPendingDiscoveryOpen=!opened;
   return opened;
 }

@@ -44,7 +44,7 @@ test('answer input saves synchronized state, revokes scripts and preserves compa
  const entries=new Map([['leadintel_customer_v2_discovery',JSON.stringify({candidates:[{domain:'buyer.example'}],pipeline:[{domain:'saved.example'}]})],['leadintel_customer_v2_outreach',JSON.stringify({items:[{approved:true,approvedAt:'yesterday',drafts:{emailBody:'Old proof'}}]})]]);
  let saved,event;
  const context={state,LeadIntelStep2Brief:Brief,globalThis:null,document:{querySelectorAll:()=>[{dataset:{question:'proof_points'},value:'New approved proof'}]},localStorage:{getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value)},saveState:()=>saved=JSON.parse(JSON.stringify(context.state)),CustomEvent:class{constructor(type,detail){this.type=type;Object.assign(this,detail);}},window:{dispatchEvent:value=>event=value}};context.globalThis=context;
- const fn=source.slice(source.indexOf('function readAnswers(){'),source.indexOf('function validateStep1(){'));vm.runInNewContext(fn+';readAnswers();',context);
+ const fn=source.slice(source.indexOf('function readAnswers('),source.indexOf('function validateStep1(){'));vm.runInNewContext(fn+';readAnswers();',context);
  assert.equal(saved.profile.proofPoints,'New approved proof');assert.equal(saved.approved,false);assert.equal(JSON.parse(entries.get('leadintel_customer_v2_outreach')).items[0].contextNeedsRefresh,true);assert.equal(JSON.parse(entries.get('leadintel_customer_v2_discovery')).pipeline[0].domain,'saved.example');assert.equal(event.type,'leadintel:commercial-context-changed');
 });
 test('CRM script snapshot retains commercial context and stale approval protection',()=>{

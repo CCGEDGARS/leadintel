@@ -227,6 +227,7 @@
     };storagePatched=true;
   }
   function syncAnswerStatusFromMeta(root){
+    if(root.LeadIntelProfileAnswers?.isReady?.()){renderReadiness(root);return false;}
     const current=readJson(root.localStorage,STORAGE_KEY,{});if(!current||typeof current!=="object")return false;const next=normalizedBrowserState(root);if(payloadsEquivalent(current,next))return false;root.localStorage.setItem(STORAGE_KEY,JSON.stringify(next));return true;
   }
   function injectFeedbackStyle(root){
