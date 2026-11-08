@@ -61,3 +61,14 @@ test('explicitly saved assistant copy adopts current settings and replaces a pen
  assert.equal(Editor.updateUndo(item).message,'Prior working copy');
  assert.equal(item.approved,false);assert.equal(item.localizationApprovalBlocked,false);assert.equal(item.messageStudioDraft.flowMembership,undefined);
 });
+
+test('unchanged assistant text is saved only when its reviewed context and settings are current',()=>{
+ const source=read('outreach-ui.js'),helper=source.slice(source.indexOf('function isAssistantDraftSaved('),source.indexOf('function setAssistantDraftLength(')),Editor=require('../message-editor.js'),draft={subject:'Review',message:'Reviewed working copy'},essentials={calendly:'https://calendly.com/seller/current'};
+ const item={channel:'email',drafts:{emailSubject:draft.subject,emailBody:draft.message},messageStudioDraft:{scriptSavedAt:'today',savedDraft:draft,essentials:{calendly:'https://calendly.com/seller/previous'},pendingTemplateUpdate:{key:'old'}}};
+ const check=new Function('currentItem','studioState','captureWritingAssistantContext','LeadIntelMessageEditor','globalThis',"const writingContextMode='customer';"+helper+';return isAssistantDraftSaved;')(()=>item,()=>({essentials}),()=>({messageScope:'current-context'}),Editor,{});
+ assert.equal(check(draft),false,'unchanged text must not skip explicit current-context review');
+ Object.assign(item.messageStudioDraft,{essentials,reviewedMessageScope:'current-context'});delete item.messageStudioDraft.pendingTemplateUpdate;
+ assert.equal(check(draft),true,'repeating Continue for the same reviewed version remains idempotent');
+ item.messageStudioDraft.reviewedMessageScope='different-context';assert.equal(check(draft),false);
+ item.messageStudioDraft.reviewedMessageScope='current-context';item.messageStudioDraft.pendingTemplateUpdate={key:'pending'};assert.equal(check(draft),false);
+});
