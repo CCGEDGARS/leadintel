@@ -1132,7 +1132,8 @@ function isAssistantDraftSaved(draft,style,assistant=null){
  if(writingContextMode==='general')return Boolean(generalWritingRecord?.scope===writingScopeIdentity()&&generalWritingRecord.kind==='draft'&&exact(generalWritingRecord));
  if(globalThis.LeadIntelChannelWorkspace?.phoneActive()||globalThis.LeadIntelInMail?.active())return false;
  const item=currentItem(),info=item?.messageStudioDraft;
- return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
+ const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captureWritingAssistantContext().messageScope);
+ return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
