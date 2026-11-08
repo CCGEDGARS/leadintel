@@ -155,7 +155,8 @@
         normalized.profile.valueProposition=clean(normalized.profile.valueProposition||rawAnswers.value_proposition);
         normalized.profile.proofPoints=clean(normalized.profile.proofPoints||rawAnswers.proof_points);
         normalized.profile.commonObjections=clean(normalized.profile.commonObjections||rawAnswers.objections);
-        normalized.profile.marketFocus=clean(normalized.profile.marketFocus||answers.ideal_customer);
+        const canonicalFocus=normalized.profile.canonical?.fields?.marketFocus;
+        normalized.profile.marketFocus=canonicalFocus?clean(canonicalFocus.value):clean(normalized.profile.marketFocus||answers.ideal_customer);
       }
       return normalized;
     };
