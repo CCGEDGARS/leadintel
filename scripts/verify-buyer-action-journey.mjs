@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {journeyFixture,loadPlaywright,sessionToken} from '../backend/test/step5-journey-fixture.mjs';
 import {ready,settleInitialSave} from './verify-step5-journey.mjs';
-export async function verifyBuyerActionJourney({artifactDir}){
+export async function verifyBuyerActionJourney({artifactDir='/tmp/leadintel-buyer-action-journey'}={}){
 const dir=artifactDir;await fs.mkdir(dir,{recursive:true});
 const f=await journeyFixture(),{chromium}=await loadPlaywright(),b=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context;const errors=[];
 try{
@@ -10,8 +12,8 @@ try{
  const button=p.locator('.selected-prospect-company [data-find-prospect-buyers]');await button.click();await p.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob?.id);const job=f.DB.raw.prepare('SELECT * FROM buyer_research_jobs').get();await f.runJobs(job.id);
  const people=JSON.parse(f.DB.raw.prepare('SELECT result_json FROM buyer_research_jobs WHERE id=?').get(job.id).result_json).people.map(p=>p.id),receipts=f.DB.raw.prepare("SELECT task_key,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id);
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts',status='queued',input_json=json_set(input_json,'$.executionWindowStartedAt',?),created_at=datetime('now','-58 minutes'),revision=revision+1 WHERE id=?").run(new Date(Date.now()-58*60000).toISOString(),job.id);
- await p.reload({waitUntil:'domcontentloaded'});await ready(p);await p.evaluate(()=>showDiscoveryStep('buyers'));await p.locator('[data-stop-buyer-job]').waitFor();assert.match(await p.locator('.buyer-research-progress').textContent(),/Research time limit reached/);await p.locator('.buyer-research-progress').screenshot({path:dir+'/overdue.png'});
- await f.runJobs(job.id);await p.waitForFunction(()=>document.querySelector('.selected-prospect-company [data-find-prospect-buyers]')?.textContent==='Resume buyer research',{},{timeout:20000});assert.equal(f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id).status,'needs_review');assert.equal(await p.locator('.buyer-research-progress .buyer-research-spinner').count(),0);assert.deepEqual(f.DB.raw.prepare("SELECT task_key,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id),receipts);await p.locator('.buyer-research-progress').screenshot({path:dir+'/paused.png'});
+ await p.reload({waitUntil:'domcontentloaded'});await ready(p);await p.evaluate(()=>showDiscoveryStep('buyers'));await p.locator('[data-stop-buyer-job]').waitFor();assert.match(await p.locator('.buyer-research-progress').textContent(),/Research time limit reached/);await p.screenshot({path:dir+'/overdue.png',fullPage:true});
+ await f.runJobs(job.id);await p.waitForFunction(()=>document.querySelector('.selected-prospect-company [data-find-prospect-buyers]')?.textContent==='Resume buyer research',{},{timeout:20000});assert.equal(f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id).status,'needs_review');assert.equal(await p.locator('.buyer-research-progress .buyer-research-spinner').count(),0);assert.deepEqual(f.DB.raw.prepare("SELECT task_key,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' ORDER BY task_key").all(job.id),receipts);await p.screenshot({path:dir+'/paused.png',fullPage:true});
  assert.equal(await button.textContent(),'Resume buyer research');assert.equal(await p.locator('.buyer-public-summary button').count(),0);assert.equal(await p.locator('.buyer-research-progress [data-resume-buyer-job]').count(),0);await button.click();await p.locator('[data-stop-buyer-job]').waitFor();assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);assert.equal(f.calls.filter(c=>c.path==='/api/buyers/research'&&c.action==='resume').length,1);
  const route='**/api/buyers/research?*';await p.route(route,r=>r.request().method()==='GET'?r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Controlled status outage'})}):r.continue());await p.waitForFunction(()=>document.querySelector('.selected-prospect-company [data-find-prospect-buyers]')?.textContent==='Check research status',{},{timeout:20000});assert.equal(await p.locator('[data-stop-buyer-job]').isEnabled(),true);await p.unroute(route);await button.click();await p.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchProgress.connection==='connected');
  await p.locator('[data-stop-buyer-job]').click();await p.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchJob.status==='canceled');assert.equal(f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id).status,'canceled');assert.deepEqual(JSON.parse(f.DB.raw.prepare('SELECT result_json FROM buyer_research_jobs WHERE id=?').get(job.id).result_json).people.map(p=>p.id),people);
@@ -31,3 +33,4 @@ try{
 }finally{await context?.close();await b.close();await f.close();}
 
 }
+if(process.argv[1]&&fileURLToPath(import.meta.url)===path.resolve(process.argv[1]))verifyBuyerActionJourney({artifactDir:process.env.LEADINTEL_BUYER_ACTION_ARTIFACT_DIR}).then(result=>console.log(JSON.stringify(result,null,2))).catch(error=>{console.error(error);process.exitCode=1;});

@@ -141,7 +141,7 @@ function renderResearchReview(){
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
     } else {
       const hasWebsite=Boolean(normalizeUrl(state.website));const hasMarkets=selectedMarkets(state).length>0;const ready=hasWebsite&&hasMarkets;
-      let title='Setup complete — ready for company research',detail='LeadIntel will analyse your website and selected market. Usually takes up to 1 minute.',badge='Ready to research',label='Start company research <span aria-hidden="true">→</span>';
+      let title='Setup complete — ready for company research',detail='LeadIntel will analyse your website and selected market. Usually takes 1–2 minutes.',badge='Ready to research',label='Start company research <span aria-hidden="true">→</span>';
       if(!hasWebsite){title='Add your company website';detail=hasMarkets?'Your target market is saved. Add and activate your website to prepare company research.':'Add and activate your website, then select at least one target market.';badge='Website required';label='Add website';}
       else if(!hasMarkets){title='Select a target market';detail='Your website is saved. Select at least one country, region or market to prepare company research.';badge='Market required';label='Select market';}
       const step1Action=ready?'':' data-go-step1="true"';const primaryClass=ready?' research-primary':'';
@@ -448,7 +448,7 @@ async function runCompanyResearch({rerun=false}={}){
   let context=captureResearchContext(state);const researchLanguage='en';const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value??(Array.isArray(state.additionalLinks)?state.additionalLinks.join('\n'):'')).split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(website!==normalizeUrl(state.website)||(window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive&&!window.LeadIntelWebsiteActivation.isCurrentWebsiteActive(state.website))){const message='Activate the company website in Setup before researching it.';if(error)error.textContent=message;toast(message);return;}if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
-  const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);const taskId=`company-research:${Date.now()}`;const taskCentre=window.LeadIntelTaskCentre;
+  let runController=new AbortController();let runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);const taskId=`company-research:${Date.now()}`;const taskCentre=window.LeadIntelTaskCentre;
   taskCentre?.start({id:taskId,type:'company-research',title:'Company research',stage:'Scanning company sources',total:4,completed:0,canCancel:true,canRetry:true});
   let canceled=false;taskCentre?.registerActions(taskId,{cancel:()=>{canceled=true;runController.abort();},retry:()=>runCompanyResearch({rerun:true})});
   let failures=0;const receipts=[];
@@ -496,6 +496,13 @@ async function runCompanyResearch({rerun=false}={}){
       writeMeta({website,generatedAt:new Date().toISOString(),mode:'evidence',sourceCount:sources.length,quality,failures,execution:execution(),reason:'AI profile preparation has not completed.',fields:{}});
     }
     context=captureResearchContext(readState());
+    // Source collection and synthesis are independently bounded stages. Slow
+    // searches must not consume the AI provider's entire preparation window.
+    // Cancellation keeps targeting the active stage through the same closure.
+    clearTimeout(runTimer);runController=new AbortController();
+    runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
+    setProgress('Preparing your AI profile…','Interpreting the collected evidence. This stage can take up to one minute.');
+    taskCentre?.update(taskId,{stage:'Preparing AI profile',completed:3,resultCount:sources.length});
     const fallback=researchEngine.buildEvidenceDraft({website,answers:state.answers||{},sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage,answers:state.answers||{}},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();assertResearchContext(context,latest);
     if(ai.receipt)receipts.push({...ai.receipt,id:`R${receipts.length+1}`});

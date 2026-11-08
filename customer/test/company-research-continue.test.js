@@ -4,21 +4,22 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const engine=require('../company-research-engine.js');
 const code=fs.readFileSync(require.resolve('../company-research-ui.js'),'utf8').replace(/^import .*?;\s*/gm,'')+'\nglobalThis.hooks={bind,runCompanyResearch};';
-function runtime({completed=false,active=true,markets=['Germany'],aiFailure=false,step=1,profile=null,hangAi=false}={}){
-  const storage=new Map(),listeners=new Map(),calls=[],timers=[];let reloads=0;
+function runtime({completed=false,active=true,markets=['Germany'],aiFailure=false,step=1,profile=null,hangAi=false,holdSources=false}={}){
+  const storage=new Map(),listeners=new Map(),calls=[],timers=[],sourceWaiters=[],aiSignals=[];let reloads=0,now=0;
   const website='https://sample.example/';
   storage.set('leadintel_customer_v2_state',JSON.stringify({step,profile,website,targetMarkets:markets,answers:{priority_offers:'Confirmed software offer'},scrapedSources:[],documents:[]}));
   if(completed)storage.set('leadintel_customer_v2_research_meta_v1',JSON.stringify({website,generatedAt:'2026-10-12',fields:{}}));
   const document={readyState:'loading',activeElement:null,addEventListener(type,fn){listeners.set(type,fn);},querySelectorAll(){return [];},querySelector(){return {};},getElementById(){return null;}};
   const window={LeadIntelCompanyResearch:engine,LeadIntelWebsiteActivation:{isCurrentWebsiteActive:()=>active},LeadIntelFirstPartyResearch:{selectInternalLinks:()=>[]},LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({})},addEventListener(){},dispatchEvent(){}};
-  const context={document,window,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},URL,URLSearchParams,AbortController,CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout(){},location:{reload(){reloads++;}},console,fetch:async(url)=>{
-    calls.push(url);if(hangAi&&url.includes('/api/ai/generate'))return new Promise(()=>{});
+  const context={document,window,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},URL,URLSearchParams,AbortController,CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},setTimeout:(fn,ms)=>{timers.push({fn,ms,at:now+ms,active:true});return timers.length;},clearTimeout(id){if(timers[id-1])timers[id-1].active=false;},location:{reload(){reloads++;}},console,fetch:async(url,options)=>{
+    calls.push(url);if(url.includes('/api/ai/generate'))aiSignals.push(options.signal);if(hangAi&&url.includes('/api/ai/generate'))return new Promise(()=>{});
+    if(holdSources&&!url.includes('/api/ai/generate'))await new Promise(resolve=>sourceWaiters.push(resolve));
     if(url.includes('/api/ai/generate'))return {ok:!aiFailure,status:aiFailure?409:200,json:async()=>aiFailure?{error:'No AI provider'}:{text:JSON.stringify({fields:{value_proposition:{value:'Help operations teams streamline inventory work',confidence:'medium',draft_type:'hypothesis',source_ids:[],rationale:'Review this proposed benefit.'},delivery_approach:{value:'Online onboarding',confidence:'medium',draft_type:'evidence',source_ids:['S1'],rationale:'Website states online onboarding.'}}})}};
     if(url.includes('scrape'))return {ok:true,json:async()=>({data:{markdown:'We provide inventory software for manufacturing customers with online onboarding.',metadata:{title:'Sample Software'}}})};
     return {ok:true,json:async()=>({data:[]})};
   }};
   vm.runInNewContext(code,context);context.hooks.bind();
-  return {calls,storage,context,timers,get reloads(){return reloads;},click(){let prevented=false;const target={id:'to-questionnaire',dataset:{},closest:()=>target};const event={target,preventDefault(){prevented=true;},stopImmediatePropagation(){}};listeners.get('click')?.(event);return prevented;},state:()=>JSON.parse(storage.get('leadintel_customer_v2_state'))};
+  return {calls,storage,context,timers,aiSignals,advance(ms){now+=ms;for(const timer of [...timers])if(timer.active&&timer.at<=now){timer.active=false;timer.fn();}},releaseSources(){sourceWaiters.splice(0).forEach(resolve=>resolve());},get waitingSources(){return sourceWaiters.length;},get reloads(){return reloads;},click(){let prevented=false;const target={id:'to-questionnaire',dataset:{},closest:()=>target};const event={target,preventDefault(){prevented=true;},stopImmediatePropagation(){}};listeners.get('click')?.(event);return prevented;},state:()=>JSON.parse(storage.get('leadintel_customer_v2_state'))};
 }
 async function flush(){await new Promise(resolve=>setImmediate(resolve));}
 test('Continue prepares website answers before opening a fresh commercial brief',async()=>{const r=runtime();assert.equal(r.click(),true);await flush();assert.ok(r.calls.some(url=>url.includes('/api/ai/generate')));assert.equal(r.state().answers.value_proposition,'Help operations teams streamline inventory work');assert.equal(r.state().answers.delivery_approach,'Online onboarding');assert.equal(r.state().answers.priority_offers,'Confirmed software offer');assert.equal(r.state().step,2);const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1'));assert.equal(meta.fields.value_proposition.origin,'hypothesis_draft');assert.equal(meta.fields.value_proposition.reviewed,false);});
@@ -49,7 +50,7 @@ test('a late result cannot write into another workspace researching the same web
 });
 
  test('collected evidence is checkpointed before a stalled AI request',async()=>{const r=runtime({hangAi:true});r.click();await flush();assert.ok(r.calls.some(url=>url.includes('/api/ai/generate')));assert.equal(r.state().scrapedSources.length,1);assert.ok(JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')).generatedAt);});
- test('AI deadline settles even when a provider ignores abort and never reloads',async()=>{const r=runtime({hangAi:true});r.click();await flush();for(const timer of [...r.timers].filter(t=>t.ms>=60000))timer.fn();await flush();const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')||'{}');assert.equal(meta.mode,'evidence');assert.match(meta.reason,/60 seconds|timed out/i);for(const timer of r.timers.filter(t=>t.ms===180))timer.fn();assert.equal(r.reloads,0);});
+ test('AI deadline settles even when a provider ignores abort and never reloads',async()=>{const r=runtime({hangAi:true});r.click();await flush();r.advance(60000);await flush();const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1')||'{}');assert.equal(meta.mode,'evidence');assert.match(meta.reason,/60 seconds|timed out/i);for(const timer of r.timers.filter(t=>t.ms===180))timer.fn();assert.equal(r.reloads,0);});
  test('successful research updates the page without reloading',async()=>{const r=runtime();r.click();await flush();for(const timer of r.timers.filter(t=>t.ms===180))timer.fn();assert.equal(r.reloads,0);});
 
 test('background market normalization does not discard valid company research',async()=>{
@@ -63,4 +64,27 @@ test('background answer-status normalization does not discard unchanged answer c
 
 test('metadata-only synchronization does not discard unchanged company evidence and answers',async()=>{
  const r=runtime();r.click();r.storage.set('leadintel_customer_v2_research_meta_v1',JSON.stringify({fields:{},reason:'Background status refreshed'}));await flush();assert.equal(r.state().answers.delivery_approach,'Online onboarding');
+});
+
+ test('source collection cannot consume the independent saved-evidence AI deadline',async()=>{
+ const r=runtime({hangAi:true,holdSources:true});r.click();await flush();
+ // Every source wave finishes within its own 25-second deadline; together
+ // they consume 50 seconds before synthesis, matching the customer trace.
+ for(const elapsed of [20000,20000,10000]){assert.ok(r.waitingSources);r.advance(elapsed);r.releaseSources();await flush();}
+ assert.equal(r.aiSignals.length,1);assert.ok(r.state().scrapedSources.length);
+ r.advance(10000);await flush();
+ assert.equal(r.aiSignals[0].aborted,false,'source deadline must not cancel ten-second-old synthesis');
+ r.advance(50000);await flush();
+ assert.equal(r.aiSignals[0].aborted,true,'synthesis still has a bounded sixty-second deadline');
+ const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1'));
+ assert.equal(meta.mode,'evidence');assert.match(meta.reason,/60 seconds|timed out/i);assert.ok(r.state().scrapedSources.length);assert.equal(r.reloads,0);
+});
+
+test('Cancel targets the new synthesis stage and preserves the source checkpoint',async()=>{
+ const r=runtime({hangAi:true});let cancel;
+ r.context.window.LeadIntelTaskCentre={start(){},update(){},registerActions(id,actions){cancel=actions.cancel;},get(){return {status:'canceled'};}};
+ r.click();await flush();assert.equal(r.aiSignals.length,1);assert.ok(r.state().scrapedSources.length);
+ cancel();await flush();assert.equal(r.aiSignals[0].aborted,true);
+ const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1'));
+ assert.match(meta.lastFailure,/canceled/i);assert.ok(r.state().scrapedSources.length);assert.equal(r.state().answers.priority_offers,'Confirmed software offer');
 });
