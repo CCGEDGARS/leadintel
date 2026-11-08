@@ -7672,6 +7672,17 @@
         "summary.textContent='Research settings'",
         "node.parentElement!==details"
       ]
+    },
+    {
+      "id": "setup-status-badge-design",
+      "type": "text",
+      "url": "/customer/outreach-automation.css",
+      "status": 200,
+      "contains": [
+        ".delivery-setup .delivery-setup-header .delivery-setup-badge",
+        "padding:10px 14px",
+        "data-unsaved=\"true\""
+      ]
     }
   ],
   "retry": {
