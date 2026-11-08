@@ -2,7 +2,7 @@
   const domain=value=>{try{return new URL(/^https?:\/\//i.test(value)?value:'https://'+value).hostname.toLowerCase().replace(/^www\./,'');}catch{return '';}};
   function level(value='public_confirmed'){return value==='public_confirmed'?'public_confirmed':'provider_verified';}
   function publicSource(email,name,url,companyDomain){
-    try{const source=new URL(url);return source.protocol==='https:'&&!source.username&&!source.password&&domain(source.href)===domain(companyDomain)&&String(name||'').trim().split(/\s+/).length>=2&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&String(email).toLowerCase().endsWith('@'+domain(companyDomain))&&!/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email);}catch{return false;}
+    try{const source=new URL(url);return source.protocol==='https:'&&!source.username&&!source.password&&Boolean(domain(companyDomain)&&(domain(source.href)===domain(companyDomain)||domain(source.href).endsWith('.'+domain(companyDomain))))&&String(name||'').trim().split(/\s+/).length>=2&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&String(email).toLowerCase().endsWith('@'+domain(companyDomain))&&!/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email);}catch{return false;}
   }
   function accepted(contact={},companyDomain='',confirmationLevel='public_confirmed',now=Date.now()){
     const addresses=[contact.normalized_email,contact.work_email,contact.email].filter(value=>value!==undefined&&value!==null&&String(value).trim()!=='').map(value=>String(value).trim().toLowerCase());
