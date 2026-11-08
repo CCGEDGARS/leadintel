@@ -7695,6 +7695,30 @@
         "Workspace save was not confirmed.",
         "targetingSaveOwner===operation"
       ]
+    },
+    {
+      "id": "targeting-local-reconciliation",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "async function reviewTargetingConflict(context)",
+        "strategySavedState=persisted",
+        "window.LeadIntelWorkspaceSync.merge(reviewed(baseline),reviewed(state),reviewed(saved))",
+        "Keep my reviewed changes",
+        "Use saved changes"
+      ]
+    },
+    {
+      "id": "discovery-navigation-intent",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function restoreDiscoveryNavigation()",
+        "window.LeadIntelCustomerNavigation?.currentStep?.()",
+        "(!current||current===5)"
+      ]
     }
   ],
   "retry": {

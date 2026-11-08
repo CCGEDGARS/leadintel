@@ -34,3 +34,26 @@ test('authenticated Chromium targeting confirmation saves edited answers, report
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
  const {verifyTargetingConfirmation}=await import('../../scripts/verify-targeting-confirmation.mjs');const evidence=await verifyTargetingConfirmation();for(const key of ['confirmedThroughHttp','freshBrowserReopen','mobileButtonVisible','savedBadgesAgree','failedSaveIsActionable','retrySaved'])assert.equal(evidence[key],true,key);assert.deepEqual(evidence.pageErrors,[]);
 });
+
+
+test('authenticated Chromium review-status synchronization cannot wedge targeting confirmation',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
+ const {verifyTargetingConfirmation}=await import('../../scripts/verify-targeting-confirmation.mjs');const evidence=await verifyTargetingConfirmation({synchronizeReview:true,artifactDir:'/tmp/leadintel-targeting-review-sync'});assert.equal(evidence.confirmedThroughHttp,true);assert.equal(evidence.freshBrowserReopen,true);assert.equal(evidence.retrySaved,true);
+});
+
+
+test('authenticated Chromium compares genuine conflicting edits, preserves cancellation and merges only the chosen changes',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
+ const {verifyTargetingConfirmation}=await import('../../scripts/verify-targeting-confirmation.mjs');const evidence=await verifyTargetingConfirmation({conflictingEdit:true,artifactDir:'/tmp/leadintel-targeting-real-conflict'});assert.equal(evidence.staleComparisonPreserved,true);assert.equal(evidence.cancelPreservedBoth,true);assert.equal(evidence.independentSavedEvidencePreserved,true);assert.equal(evidence.freshBrowserReopen,true);
+});
+
+
+test('authenticated Chromium can choose the saved conflicting answer while preserving independent changes',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
+ const {verifyTargetingConfirmation}=await import('../../scripts/verify-targeting-confirmation.mjs');const evidence=await verifyTargetingConfirmation({conflictingEdit:true,conflictChoice:'saved',artifactDir:'/tmp/leadintel-targeting-saved-conflict'});assert.equal(evidence.staleComparisonPreserved,true);assert.equal(evidence.independentSavedEvidencePreserved,true);assert.equal(evidence.freshBrowserReopen,true);
+});
+
+test('authenticated Chromium runs fresh Setup through reviewed Profile and saved Strategy into Companies',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in journey CI.');return;}
+ const {verifyProfileStrategyJourney}=await import('../../scripts/verify-profile-strategy-journey.mjs');const evidence=await verifyProfileStrategyJourney();for(const key of ['setupResearchOpenedProfile','profileReviewedAndApproved','strategySavedBeforeCompanies','companySearchFinishedWithoutInventingResults','lateNavigationPreserved','freshBrowserReopen'])assert.equal(evidence[key],true);assert.deepEqual(evidence.pageErrors,[]);
+});

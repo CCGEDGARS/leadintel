@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import {step1Fixture} from '../backend/test/step1-journey-fixture.mjs';
 import {loadPlaywright,sessionToken} from '../backend/test/step5-journey-fixture.mjs';
 
-export async function verifyTargetingConfirmation({artifactDir='/tmp/leadintel-targeting-confirmation'}={}){
+export async function verifyTargetingConfirmation({artifactDir='/tmp/leadintel-targeting-confirmation',synchronizeReview=false,conflictingEdit=false,conflictChoice='local'}={}){
  const f=await step1Fixture();await f.connectControlledExtraction();await f.connectControlledAi();
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[],evidence={};await fs.mkdir(artifactDir,{recursive:true});
@@ -12,10 +12,19 @@ export async function verifyTargetingConfirmation({artifactDir='/tmp/leadintel-t
  try{
   let page=await open();await page.locator('#company-website').fill('seller.example');await page.locator('#activate-website').click();await page.waitForFunction(()=>document.getElementById('website-activation-status')?.dataset.state==='active');await page.locator('[data-target-market="Sweden"]').click();await page.locator('#to-questionnaire').click();await page.locator('#step-2.active').waitFor();
   for(const [id,value] of Object.entries(answers))await page.locator(`[data-question="${id}"]`).fill(value);
+  if(synchronizeReview)await page.evaluate(()=>window.dispatchEvent(new CustomEvent('leadintel:workspace-changed',{detail:{source:'profile-review-status'}})));
   assert.equal(await page.evaluate(()=>Boolean(window.__leadIntelLocalStrategyConflict)),false,'normal answer edits must not create a Strategy conflict');
-  await page.locator('#confirm-targeting').click();await page.waitForFunction(()=>document.getElementById('confirm-targeting')?.textContent.includes('confirmed'));
+  if(conflictingEdit){
+   if(conflictChoice==='saved')await page.setViewportSize({width:390,height:1000});
+   await page.evaluate(()=>{const key='leadintel_customer_v2_state',saved=JSON.parse(localStorage.getItem(key));saved.answers.priority_offers='Saved external machining';saved.answers.proof_points='External verified reference';saved.answerStatus.proof_points='accepted';localStorage.setItem(key,JSON.stringify(saved));});
+   answers.priority_offers='Local reviewed assembly';await page.locator('[data-question="priority_offers"]').fill(answers.priority_offers);
+   await page.locator('#confirm-targeting').click();const review=page.getByRole('dialog',{name:'Review conflicting changes'});await review.waitFor();await page.screenshot({path:artifactDir+'/conflict-review.png'});await page.evaluate(()=>{const key='leadintel_customer_v2_state',saved=JSON.parse(localStorage.getItem(key));saved.answers.proof_points='Newest external verified reference';localStorage.setItem(key,JSON.stringify(saved));});await review.getByRole('button',{name:'Keep my reviewed changes',exact:true}).click();await page.waitForFunction(()=>document.getElementById('targeting-confirmation-status')?.textContent.includes('comparison was open'));assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).answers.proof_points),'Newest external verified reference');evidence.staleComparisonPreserved=true;await page.locator('#confirm-targeting').click();await review.waitFor();await page.keyboard.press('Escape');await review.waitFor({state:'detached'});
+   const retained=await page.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')));assert.equal(retained.answers.priority_offers,'Saved external machining');assert.equal(await page.locator('[data-question="priority_offers"]').inputValue(),'Local reviewed assembly');evidence.cancelPreservedBoth=true;
+   await page.locator('#confirm-targeting').click();await page.getByRole('dialog',{name:'Review conflicting changes'}).getByRole('button',{name:conflictChoice==='saved'?'Use saved changes':'Keep my reviewed changes',exact:true}).click();if(conflictChoice==='saved')answers.priority_offers='Saved external machining';
+  }else await page.locator('#confirm-targeting').click();
+  await page.waitForFunction(()=>document.getElementById('confirm-targeting')?.textContent.includes('confirmed'));
   await page.waitForFunction(()=>!document.getElementById('confirm-targeting')?.disabled);
-  const saved=(await f.getState()).payload.main;assert.equal(saved.targetingConfirmation?.version,1);for(const [id,value] of Object.entries(answers))assert.equal(saved.answers[id],value);evidence.confirmedThroughHttp=true;
+  const saved=(await f.getState()).payload.main;assert.equal(saved.targetingConfirmation?.version,1);for(const [id,value] of Object.entries(answers))assert.equal(saved.answers[id],value);evidence.confirmedThroughHttp=true;if(conflictingEdit){assert.equal(saved.answers.proof_points,'Newest external verified reference');evidence.independentSavedEvidencePreserved=true;}
   await page.context().close();page=await open(390);await page.evaluate(()=>LeadIntelCustomerNavigation.setStep(2));await page.locator('#step-2.active').waitFor();assert.match(await page.locator('#confirm-targeting').textContent(),/confirmed/);for(const [id,value] of Object.entries(answers))assert.equal(await page.locator(`[data-question="${id}"]`).inputValue(),value);evidence.freshBrowserReopen=true;
   await page.waitForFunction(()=>['priority_offers','ideal_customer','buyer_roles','exclusions'].every(id=>document.querySelector(`[data-answer-save="${id}"]`)?.textContent.includes('Saved to LeadIntel')));evidence.savedBadgesAgree=true;
   await page.locator('#confirm-targeting').scrollIntoViewIfNeeded();await page.screenshot({path:artifactDir+'/confirmed-mobile.png'});const bounds=await page.locator('#confirm-targeting').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=390);evidence.mobileButtonVisible=true;

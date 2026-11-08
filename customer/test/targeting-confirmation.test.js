@@ -38,3 +38,6 @@ test('confirmation timeout keeps a stalled save actionable',async()=>{
 test('missing required targeting stays explained after the action finishes',async()=>{
  const r=confirmationRuntime();r.inputs[0].value='';assert.equal(await r.confirm(),false);assert.equal(r.calls(),0);assert.match(r.nodes['targeting-confirmation-status'].textContent,/Complete 1 required answer/);
 });
+
+test('a native answer edit cannot promote stale displayed text in another field',()=>{const r=confirmationRuntime();r.inputs[0].value='New reviewed offer';r.inputs[1].value='Stale displayed recommendation';r.context.readAnswers({target:r.inputs[0]});assert.equal(r.context.state.answers.priority_offers,'New reviewed offer');assert.equal(r.context.state.answers.ideal_customer,'Hotels and offices');});
+test('Profile review cannot advance after a blocked local save',()=>{const source=fs.readFileSync(require.resolve('../app.js'),'utf8'),body=source.slice(source.indexOf('function validateStep2(){'),source.indexOf('async function getPdfModule(){')),status={},c={readAnswers:()=>false,LeadIntelProfile:{canBuildProfile:()=>true},state:{},$:()=>status};vm.createContext(c);vm.runInContext(body,c);assert.equal(c.validateStep2(),false);assert.match(status.textContent,/conflict|save|review/i);});

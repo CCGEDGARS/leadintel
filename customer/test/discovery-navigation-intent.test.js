@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+function restoreSource(){const marker=source.indexOf('function restoreDiscoveryNavigation('),rest=source.slice(marker),end=rest.indexOf('\nfunction ',1);assert.ok(marker>=0);return rest.slice(0,end);}
+function run(currentStep,{savedStep=5,visibleStep=5,pending=false}={}){let shown=0,opened=0,mounted=0;const c={window:{__leadIntelPendingDiscoveryOpen:pending,LeadIntelCustomerNavigation:{currentStep:()=>currentStep}},mainState:()=>({step:savedStep}),loadMeta:()=>({visibleStep}),moduleReady:()=>true,currentJourneyFocus:()=> 'companies',showDiscoveryStep:()=>{shown++;},openDiscoveryFromHandoff:()=>{opened++;return true;},ensureDiscoveryMounted:()=>{mounted++;}};vm.createContext(c);vm.runInContext(restoreSource()+';restoreDiscoveryNavigation();',c);return {shown,opened,mounted};}
+test('late Companies initialization does not replace a newer Profile or Strategy navigation',()=>{for(const step of [2,3,4])assert.equal(run(step).shown,0);});
+test('saved Companies navigation still restores when it is the current requested module',()=>{assert.equal(run(5).shown,1);assert.equal(run(0).shown,1);});
+test('an explicit pending Companies handoff is consumed once',()=>{assert.equal(run(4,{pending:true}).opened,1);});

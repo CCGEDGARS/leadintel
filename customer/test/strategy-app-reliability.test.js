@@ -36,3 +36,5 @@ test('a stalled large workspace save remains bounded and cannot activate from a 
  const pending=r.activate();for(let i=0;i<20;i++)await Promise.resolve();clock.advance(120000);assert.equal(await pending,false);assert.equal(r.opened(),0);assert.equal(r.researchStarts(),0);assert.equal(I.status(r.state).current,false);
  acknowledge();for(let i=0;i<20;i++)await Promise.resolve();assert.equal(r.opened(),0);assert.equal(r.researchStarts(),0);
 });
+
+test('a deferred Companies open cannot re-arm after the user navigates away',async()=>{let finish;const w={},c={window:w,waitForDiscoveryOpen:()=>new Promise(resolve=>finish=resolve),CustomEvent:class{}};w.dispatchEvent=()=>{};vm.createContext(c);vm.runInContext(extract('openDiscoveryAfterActivation'),c);const work=c.openDiscoveryAfterActivation();w.__leadIntelPendingDiscoveryOpen=false;finish(false);assert.equal(await work,false);assert.equal(w.__leadIntelPendingDiscoveryOpen,false);});

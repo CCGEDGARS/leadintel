@@ -23,6 +23,8 @@ on:
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'scripts/verify-worker-propagation.mjs'
+      - 'scripts/verify-targeting-confirmation.mjs'
+      - 'scripts/verify-profile-strategy-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -57,6 +59,8 @@ on:
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'scripts/verify-worker-propagation.mjs'
+      - 'scripts/verify-targeting-confirmation.mjs'
+      - 'scripts/verify-profile-strategy-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -194,6 +198,11 @@ jobs:
         with:
           name: step5-browser-acceptance-${{ github.sha }}
           path: |
+            /tmp/leadintel-profile-strategy/evidence.json
+            /tmp/leadintel-profile-strategy/failure.json
+            /tmp/leadintel-profile-strategy/*.png
+            /tmp/leadintel-targeting-*/evidence.json
+            /tmp/leadintel-targeting-*/*.png
             /tmp/leadintel-step1-test-*/evidence.json
             /tmp/leadintel-step1-test-*/*.png
             /tmp/leadintel-step5-test-*/evidence.json
@@ -203,5 +212,38 @@ jobs:
             /tmp/leadintel-step6-test-*/*.png
             /tmp/leadintel-step7-test-*/evidence.json
             /tmp/leadintel-step7-test-*/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  profile-strategy-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser and backend dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify fresh Profile and Strategy save, research and late navigation
+        env:
+          LEADINTEL_REQUIRE_BROWSER: 'true'
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through' backend/test/step1-journey.test.mjs
+      - name: Preserve focused navigation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-strategy-acceptance-${{ github.sha }}
+          path: /tmp/leadintel-profile-strategy/
           if-no-files-found: warn
           retention-days: 14

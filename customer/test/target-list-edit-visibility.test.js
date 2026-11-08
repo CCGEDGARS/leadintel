@@ -18,7 +18,7 @@ test('main app saves retain target edits made by the company list modal',()=>{
   const app=read('app.js');
   const source=app.slice(app.indexOf('function saveState(){'),app.indexOf('\nfunction esc(',app.indexOf('function saveState(){')));
   const values=new Map([['leadintel_customer_v2_state',JSON.stringify({targetCompanies:[{companyName:'Nordic Paper',website:'https://www.nordic-paper.com/'}]})]]);
-  const context={state:{step:2,targetCompanies:[]},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)},STORAGE_KEY:'leadintel_customer_v2_state',updateCompleteness(){},updateNavigationAvailability(){},window:{LeadIntelJourney:{refresh(){}}}};
+  const context={state:{step:2,targetCompanies:[]},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)},STORAGE_KEY:'leadintel_customer_v2_state',updateCompleteness(){},updateNavigationAvailability(){},profileApprovalContext:()=>'test-account-scope',window:{LeadIntelJourney:{refresh(){}}}};
   vm.runInNewContext(source+';saveState();',context);
   assert.equal(JSON.parse(values.get(context.STORAGE_KEY)).targetCompanies[0].companyName,'Nordic Paper');
 });
