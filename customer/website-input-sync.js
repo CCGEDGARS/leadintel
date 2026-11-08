@@ -9,6 +9,7 @@
   const STORAGE_KEY="leadintel_customer_v2_state";
   const INPUT_ID="company-website";
   const CHECK_DELAYS=[0,120,500,1200,2500];
+  let pendingInput=null;
 
   function normalizeUrl(value){
     const raw=String(value??"").trim();
@@ -64,6 +65,20 @@
     return true;
   }
 
+  // Keep focused user input until app.js has accepted it. Startup and blur
+  // restoration must not erase an edit made before authenticated app bindings.
+  function rememberUserInput(input){
+    if(root.document.activeElement!==input)return;
+    const bridge=root.LeadIntelServerBridge,cache=root.LeadIntelAccountCache;
+    const workspace=bridge?.workspace?.id,user=bridge?.session?.user?.id,authenticated=bridge?.session?.authenticated,account=root.localStorage.getItem('leadintel_account_context_v1');
+    pendingInput={value:input.value,current:()=>bridge===root.LeadIntelServerBridge&&cache===root.LeadIntelAccountCache&&workspace===bridge?.workspace?.id&&user===bridge?.session?.user?.id&&authenticated===bridge?.session?.authenticated&&account===root.localStorage.getItem('leadintel_account_context_v1')};
+  }
+  function pendingWebsiteInput(consume=false){
+    const input=root?.document?.getElementById(INPUT_ID);
+    if(!pendingInput?.current()||!input||input.value!==pendingInput.value){pendingInput=null;return undefined;}
+    const value=pendingInput.value;if(consume)pendingInput=null;return value;
+  }
+
   // Passive browser restore/autofill is never a source of truth. On page lifecycle
   // checks, the visible field is rebuilt from the saved LeadIntel workspace only.
   function restoreSavedWebsite(){
@@ -71,6 +86,11 @@
     if(!input)return false;
     if(root.document.activeElement===input)return false;
     const state=readState(),saved=normalizeUrl(state.setupWebsiteDraft??state.website);
+    const pending=pendingWebsiteInput();
+    if(pending!==undefined){
+      if(normalizeUrl(pending)!==saved||pending.trim()&&!saved)return false;
+      pendingInput=null;
+    }
     const display=toVisibleWebsite(saved);
     const changed=input.value!==display;
     if(changed)input.value=display;
@@ -84,10 +104,11 @@
     const input=root?.document?.getElementById(INPUT_ID);
     if(!input)return false;
     const visible=normalizeUrl(input.value);
-    if(!visible)return false;
+    if(!visible){rememberUserInput(input);return false;}
     const display=toVisibleWebsite(visible);
     const displayChanged=input.value!==display;
     if(displayChanged)input.value=display;
+    rememberUserInput(input);
     dispatchSynced(visible,"user-input");
     return displayChanged;
   }
@@ -121,5 +142,5 @@
     root.document.getElementById("target-market-selector")?.addEventListener("pointerdown",restoreSavedWebsite,{capture:true});
   }
 
-  return {STORAGE_KEY,normalizeUrl,toVisibleWebsite,resolveWebsite,mergeVisibleWebsite,readState,simplifyStepOne,restoreSavedWebsite,syncVisibleWebsite,guardPassiveRestore,install};
+  return {STORAGE_KEY,normalizeUrl,toVisibleWebsite,resolveWebsite,mergeVisibleWebsite,readState,simplifyStepOne,pendingWebsiteInput,restoreSavedWebsite,syncVisibleWebsite,guardPassiveRestore,install};
 });

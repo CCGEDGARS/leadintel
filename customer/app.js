@@ -1761,8 +1761,11 @@ function bind(){
 }
 function init(){
   state=loadState();
+  const startupWebsiteInput=window.LeadIntelWebsiteInputSync?.pendingWebsiteInput?.(true);
   window.LeadIntelStartupTrace?.('app state:complete');
-  syncInputsFromState();bind();initBrandIdentity();updateCompleteness();updateNavigationAvailability();observeNavigation();
+  syncInputsFromState();bind();
+  if(startupWebsiteInput!==undefined){$("company-website").value=startupWebsiteInput;readSources();}
+  initBrandIdentity();updateCompleteness();updateNavigationAvailability();observeNavigation();
   window.LeadIntelStartupTrace?.('app bindings:complete');
   setStep(state.step||1);
   window.LeadIntelStartupTrace?.('app mount:complete');
