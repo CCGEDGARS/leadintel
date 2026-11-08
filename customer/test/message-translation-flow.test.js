@@ -10,3 +10,21 @@ test('translation voice follows the English applied style, not an unapplied sele
 test('native Storyselling translation bypasses the legacy four-master reference store and preserves saved originals',async()=>{for(const channel of ['email','linkedin']){const h=harness(),S=require('../original-scripts.js'),records=S.save({},channel,'professional','lv','Protected saved voice',{role:'owner'});h.item.channel=channel;if(channel==='email'){h.item.drafts.emailBody=h.item.drafts.linkedinMessage;h.item.drafts.emailSubject='';}h.item.messageStudioDraft={mode:'storyselling'};h.ctx.readStudio=()=>({mode:'storyselling',linkedinMode:'storyselling',originalScripts:records,essentials:{sender:'Alex',company:'Seller'}});const before=JSON.stringify(records),payloads=[];h.ctx.fetch=async(_url,options)=>{payloads.push(JSON.parse(options.body));return {ok:true,json:async()=>({text:JSON.stringify({subject:'',message:'Sveiki, Sam, 30 minūtes Zoom https://calendly.com/alex/call'})})};};await h.ctx.translateMessageLanguage('lv');assert.equal(payloads.length,2);h.ctx.applyMessageTranslation();assert.match(h.item.drafts[channel==='email'?'emailBody':'linkedinMessage'],/Sveiki/);assert.equal(T.book(h.item).versions.lv.voiceReference,null);assert.equal(JSON.stringify(records),before);assert.equal(h.ctx.messageTranslationBusy,false);}});
 
 test('Cancel discards preview and Undo restores the exact previous English working version',async()=>{const h=harness(),pending=h.ctx.translateMessageLanguage('lv');await h.started;h.complete();await pending;h.ctx.cancelMessageTranslation();assert.equal(h.ctx.translationSession().preview,null);assert.match(h.item.drafts.linkedinMessage,/Hi Sam/);const again=h.ctx.translateMessageLanguage('lv');await new Promise(r=>setImmediate(r));h.complete();await again;h.ctx.applyMessageTranslation();assert.match(h.item.drafts.linkedinMessage,/Sveiki/);h.ctx.undoMessageTranslation();assert.match(h.item.drafts.linkedinMessage,/Hi Sam/);assert.equal(T.book(h.item).activeLanguage,'en');assert.ok(T.book(h.item).versions.lv);});
+
+test('translation deadline releases controls even when the provider ignores abort',async()=>{
+ const h=harness();let expire;h.ctx.setTimeout=fn=>{expire=fn;return 1;};h.ctx.clearTimeout=()=>{};
+ const pending=h.ctx.translateMessageLanguage('lv');await h.started;expire();
+ const outcome=await Promise.race([pending.then(()=>true),new Promise(r=>setTimeout(()=>r(false),40))]);
+ h.complete();await pending;
+ assert.equal(outcome,true);assert.equal(h.ctx.messageTranslationBusy,false);assert.match(h.ctx.messageTranslationError,/timed out/);assert.equal(Boolean(h.ctx.translationSession().preview),false);assert.match(h.item.drafts.linkedinMessage,/Hi Sam/);
+});
+test('translation deadline includes CRM save and cannot launch a late provider request',async()=>{
+ const h=harness();let expire,finish,calls=0;h.ctx.setTimeout=fn=>{expire=fn;return 1;};h.ctx.clearTimeout=()=>{};h.ctx.saveScriptPackage=()=>new Promise(r=>finish=r);h.ctx.fetch=async()=>{calls++;return {ok:true,json:async()=>({})};};
+ const pending=h.ctx.translateMessageLanguage('lv');await new Promise(r=>setImmediate(r));expire();const outcome=await Promise.race([pending.then(()=>true),new Promise(r=>setTimeout(()=>r(false),40))]);finish({ok:true});await pending;
+ assert.equal(outcome,true);assert.equal(calls,0);assert.equal(h.ctx.messageTranslationBusy,false);assert.match(h.ctx.messageTranslationError,/timed out/);
+});
+
+test('translation deadline also bounds a stalled JSON response body',async()=>{
+ const h=harness();let expire,finish,reading;const started=new Promise(r=>reading=r);h.ctx.setTimeout=fn=>{expire=fn;return 1;};h.ctx.clearTimeout=()=>{};let calls=0;h.ctx.fetch=async()=>{calls++;return {ok:true,json:()=>{reading();return new Promise(r=>finish=r);}};};
+ const pending=h.ctx.translateMessageLanguage('lv');await started;expire();await pending;assert.equal(h.ctx.messageTranslationBusy,false);assert.match(h.ctx.messageTranslationError,/timed out/);finish({text:JSON.stringify({subject:'',message:'Sveiki, Sam, 30 minūtes Zoom https://calendly.com/alex/call'})});await new Promise(r=>setImmediate(r));assert.equal(calls,1);assert.equal(Boolean(h.ctx.translationSession().preview),false);
+});

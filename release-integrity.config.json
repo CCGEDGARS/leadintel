@@ -7604,6 +7604,39 @@
         "source=unchanged?{}:",
         "await waitForTurn(old.promise.catch(()=>{}),options.signal,queuedCurrent)"
       ]
+    },
+    {
+      "id": "messages-phone-reload-owner-guard",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "async function reloadPhone()",
+        "owner!==feedbackKey()",
+        "snapshot!==JSON.stringify(phone)"
+      ]
+    },
+    {
+      "id": "messages-translation-stage-deadlines",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "const waitForTranslation=task",
+        "await waitForTranslation(()=>saveScriptPackage())",
+        "await waitForTranslation(()=>response.json())",
+        "await waitForTranslation(()=>review.json())"
+      ]
+    },
+    {
+      "id": "messages-translation-save-guidance",
+      "type": "text",
+      "url": "/customer/message-translation-ui.js",
+      "status": 200,
+      "contains": [
+        "Translate creates a preview. Apply it, then Save draft.",
+        "Translation available. Review it and use Save draft to save changes."
+      ]
     }
   ],
   "retry": {

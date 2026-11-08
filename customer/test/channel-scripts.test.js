@@ -91,3 +91,12 @@ test('phone counter shows its own reference limit and prevents copying an oversi
   assert.equal(input.value,'A message that is much too long');
  }finally{f.w.close();}
 });
+
+test('phone reload confirmation cannot discard edits made while the dialog is open',async()=>{
+ const f=await fixture({savedDraft:{message:'Saved',style:'professional',revision:1}});
+ try{await f.ui.openChannel('phone');const input=f.w.document.querySelector('[aria-label="Phone script"]');input.value='First edit';input.dispatchEvent(new f.w.Event('input'));let answer;f.w.LeadIntelDialogs.confirm=()=>new Promise(r=>answer=r);const pending=f.find('Reload saved script').onclick();await tick();input.value='Newer edit';input.dispatchEvent(new f.w.Event('input'));const before=f.requests.length;answer(true);await pending;assert.equal(input.value,'Newer edit');assert.equal(f.requests.length,before);}finally{f.w.close();}
+});
+test('phone reload confirmation cannot reload a different recipient',async()=>{
+ const f=await fixture({savedDraft:{message:'Saved',style:'professional',revision:1}});
+ try{await f.ui.openChannel('phone');const input=f.w.document.querySelector('[aria-label="Phone script"]');input.value='Original buyer draft';input.dispatchEvent(new f.w.Event('input'));let answer;f.w.LeadIntelDialogs.confirm=()=>new Promise(r=>answer=r);const pending=f.find('Reload saved script').onclick();await tick();f.ctx.contactId='other';f.ui.render();await tick();await tick();input.value='Other buyer draft';input.dispatchEvent(new f.w.Event('input'));const before=f.requests.length;answer(true);await pending;assert.equal(input.value,'Other buyer draft');assert.equal(f.requests.length,before);f.ctx.contactId='ct';f.ui.render();await tick();assert.equal(input.value,'Original buyer draft');}finally{f.w.close();}
+});

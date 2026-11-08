@@ -46,3 +46,8 @@ test('outside shortcut follows the saved default independently of preview select
  prefs=T.changeSettings(prefs,'remove','sv',item);w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:prefs});assert.equal(quick.hidden,true);
  w.close();
 });
+
+test('translation availability never claims a working version was saved to CRM',()=>{
+ const w=new JSDOM('<div class="mw-generate-bar"><label>Language<select id="message-language"></select></label></div>',{runScripts:'outside-only'}).window;
+ try{w.LeadIntelMessageTranslations=T;w.eval(fs.readFileSync(require.resolve('../message-translation-ui.js'),'utf8'));w.LeadIntelMessageTranslationUI.mount(w.document,{save(){},translate(){},activate(){}});const item={channel:'linkedin',drafts:{linkedinMessage:'Hello'},localizationProvenance:{language:'en'}};w.document.getElementById('message-translation-panel').dataset.target='lv';w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true});assert.match(w.document.getElementById('message-translation-status').textContent,/preview.*Apply.*Save draft/);const working=T.translated(item,'lv',{subject:'',message:'Sveiki'});w.LeadIntelMessageTranslationUI.render(w.document,working,{usable:true});assert.match(w.document.getElementById('message-language-tabs').textContent,/Latvian · available/);assert.doesNotMatch(w.document.getElementById('message-language-tabs').textContent,/saved/);assert.match(w.document.getElementById('message-translation-status').textContent,/use Save draft/);}finally{w.close();}
+});
