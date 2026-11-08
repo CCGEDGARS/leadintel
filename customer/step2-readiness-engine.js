@@ -250,6 +250,10 @@
     if(!value){pendingAnswerSaves.delete(id);return {text:"Not answered",className:"local"};}
     if(bridge?.conflict)return {text:"Saved locally · resolve sync conflict",className:"problem"};
     if(!bridge?.session?.authenticated){pendingAnswerSaves.delete(id);return {text:"Saved in this browser",className:"local"};}
+    // A field's receipt is independent of navigation or other unsaved workspace sections.
+    const acknowledged=root.LeadIntelWorkspacePersistence?.syncedBase?.(bridge?.workspace?.id)?.payload?.main;
+    const local=readJson(root.localStorage,STORAGE_KEY,{}),reviewState=status=>["accepted","user"].includes(status)?"reviewed":status||"missing";
+    if(acknowledged&&clean(acknowledged.answers?.[id])===value&&reviewState(acknowledged.answerStatus?.[id])===reviewState(local.answerStatus?.[id])){pendingAnswerSaves.delete(id);return {text:"Saved to LeadIntel ✓",className:"synced"};}
     if(root.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.())return {text:"Unsaved changes",className:"saving"};
     if(pendingAnswerSaves.has(id))return {text:"Saving…",className:"saving"};
     if(status.includes("synced to leadintel"))return {text:"Saved to LeadIntel ✓",className:"synced"};
@@ -286,6 +290,8 @@
     const state=readJson(root.localStorage,STORAGE_KEY,{});const value=clean(state.profile?.buyingOutcomes);const ideal=editor.querySelector("#profile-idealCustomer")?.closest(".profile-field");const html=`<div class="profile-field wide"><label for="profile-buyingOutcomes">Customer problem / desired outcome</label><textarea id="profile-buyingOutcomes" data-profile-field="buyingOutcomes" rows="3" readonly>${String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}</textarea></div>`;if(ideal)ideal.insertAdjacentHTML("afterend",html);else editor.insertAdjacentHTML("beforeend",html);
   }
   function updateAnswerStatus(root,id,status){
+    // The main app owns answer writes and downstream invalidation. This layer only reports readiness.
+    if(root.LeadIntelProfileAnswers?.isReady?.()){pendingAnswerSaves.add(id);queueMicrotask(()=>renderReadiness(root));return;}
     const state=readJson(root.localStorage,STORAGE_KEY,{});state.answers={...(state.answers||{})};state.answerStatus={...(state.answerStatus||{})};const textarea=root.document.querySelector(`[data-question="${id}"]`);const value=clean(textarea?.value??state.answers[id]);state.answers[id]=value;state.answerStatus[id]=explicitStatus(status,value);pendingAnswerSaves.add(id);root.localStorage.setItem(STORAGE_KEY,JSON.stringify(state));renderReadiness(root);
   }
   function bindReviewState(root){
@@ -309,6 +315,7 @@
   function install(root){
     if(installed)return;installed=true;injectFeedbackStyle(root);patchProfileEngine(root.LeadIntelProfile,root);patchStateStorage(root);migrateQuestionDom(root);syncAnswerStatusFromMeta(root);renderReadiness(root);bindReviewState(root);bindSyncStatusObserver(root);hideDuplicateSyncStatus(root);pollResearchEngine(root);
     setTimeout(()=>{syncAnswerStatusFromMeta(root);renderReadiness(root);hideDuplicateSyncStatus(root);resolveEquivalentConflict(root);},0);
+    root.addEventListener("leadintel:server-synced",()=>queueMicrotask(()=>handleSyncStatusChange(root)));
     root.addEventListener("leadintel:server-ready",()=>{hideDuplicateSyncStatus(root);syncAnswerStatusFromMeta(root);renderReadiness(root);bindSyncStatusObserver(root);resolveEquivalentConflict(root);});
     root.addEventListener("leadintel:workspace-changed",()=>{migrateQuestionDom(root);syncAnswerStatusFromMeta(root);renderReadiness(root);});
     root.addEventListener("leadintel:module-opened",event=>{migrateQuestionDom(root);renderReadiness(root);if(Number(event.detail?.step)===3)setTimeout(()=>renderBuyingOutcomesProfileField(root),0);});

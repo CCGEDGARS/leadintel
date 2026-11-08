@@ -50,6 +50,7 @@ let brandIdentityUI=null;
 let legacyProfileAnalysis=null;
 let activeMarketResearchRun=null;
 let strategySavedBaseline=null;
+let targetingSaveOwner=null,targetingSaveError="";
 let monitoringRequestSerial=0;
 const $=id=>document.getElementById(id);
 function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
@@ -130,6 +131,7 @@ function setStep(step,{review=false}={}){
   return true;
 }
 window.LeadIntelCustomerNavigation={setStep,openModule};
+window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)};
 window.addEventListener("leadintel:open-module",event=>{const step=Number(event.detail?.step);if(step>=1&&step<=7)void openModule(step);});
 function restoreResetLanding(){
   setStep(1);
@@ -255,23 +257,43 @@ function readSources(){
   saveState();window.LeadIntelWebsiteActivation?.render?.();
 }
 function renderTargetingConfirmation(){
-  const confirmed=LeadIntelTargeting.isConfirmed(state),button=$("confirm-targeting"),status=$("targeting-confirmation-status");
-  if(button)button.textContent=confirmed?"Targeting confirmed ✓":"Confirm targeting →";
-  if(status)status.textContent=confirmed?"Saved. Company search will use these answers.":"Complete the four required answers, then confirm targeting before searching for companies.";
+  if(targetingSaveOwner&&targetingSaveOwner.context!==profileApprovalContext()){targetingSaveOwner=null;targetingSaveError="";}
+  const confirmed=LeadIntelTargeting.isConfirmed(state),button=$("confirm-targeting"),status=$("targeting-confirmation-status"),saving=Boolean(targetingSaveOwner);
+  if(button){button.disabled=saving;button.setAttribute?.("aria-busy",String(saving));button.textContent=saving?"Saving targeting…":targetingSaveError?"Retry targeting save →":confirmed?"Targeting confirmed ✓":"Confirm targeting →";}
+  if(status)status.textContent=saving?"Saving your confirmed targeting to the workspace…":targetingSaveError||(confirmed?"Saved. Company search will use these answers.":"Complete the four required answers, then confirm targeting before searching for companies.");
 }
-function confirmTargeting(){
-  readAnswers();const missing=LeadIntelTargeting.missing(state);
-  for(const id of Object.keys(LeadIntelTargeting.fields)){const input=document.querySelector(`[data-question="${id}"]`);input?.setAttribute("aria-invalid",missing.includes(id)?"true":"false");}
-  if(missing.length){$("targeting-confirmation-status").textContent=`Complete ${missing.length} required ${missing.length===1?"answer":"answers"} before confirming targeting.`;document.querySelector(`[data-question="${missing[0]}"]`)?.focus();return false;}
-  state.targetingConfirmation=LeadIntelTargeting.confirm(state);
-  try{const key="leadintel_customer_v2_research_meta_v1",meta=JSON.parse(localStorage.getItem(key)||"{}");for(const id of Object.keys(LeadIntelTargeting.fields)){if(meta.fields?.[id]){meta.fields[id].reviewed=true;meta.fields[id].origin="user";}}localStorage.setItem(key,JSON.stringify(meta));}catch{}
-  for(const id of Object.keys(LeadIntelTargeting.fields))state.answerStatus[id]="accepted";
-  if(state.profile){Object.assign(state.profile,LeadIntelTargeting.profileFields(state));for(const key of Object.values(LeadIntelTargeting.fields)){const record=state.profile.canonical?.fields?.[key];if(record)Object.assign(record,{value:state.profile[key],status:"user_confirmed",provenance:"user",confidence:"high"});}}
-  saveState();showToast("Targeting confirmed and saved");return true;
+async function confirmTargeting(){
+  if(targetingSaveOwner)return false;
+  targetingSaveError="";
+  const context=profileApprovalContext();let operation,timer;
+  try{
+    if(readAnswers()===false||window.__leadIntelLocalStrategyConflict)throw Error("Targeting could not be saved because the workspace changed. Your edits are retained; review the workspace save status before retrying.");
+    const missing=LeadIntelTargeting.missing(state);
+    for(const id of Object.keys(LeadIntelTargeting.fields)){const input=document.querySelector(`[data-question="${id}"]`);input?.setAttribute("aria-invalid",missing.includes(id)?"true":"false");}
+    if(missing.length){targetingSaveError=`Complete ${missing.length} required ${missing.length===1?"answer":"answers"} before confirming targeting.`;document.querySelector(`[data-question="${missing[0]}"]`)?.focus();return false;}
+    const bridge=window.LeadIntelServerBridge;
+    if(!bridge?.session?.authenticated||!bridge.workspace?.id||typeof bridge.saveNow!=="function"||!profileApprovalCurrent(context))throw Error("Sign in and wait for the workspace to finish loading, then retry targeting confirmation. Your answers are retained.");
+    operation={context,signature:LeadIntelTargeting.signature(state)};targetingSaveOwner=operation;
+    const current=()=>targetingSaveOwner===operation&&profileApprovalCurrent(context)&&operation.signature===LeadIntelTargeting.signature(state);
+    state.targetingConfirmation=LeadIntelTargeting.confirm(state);
+    try{const key="leadintel_customer_v2_research_meta_v1",meta=JSON.parse(localStorage.getItem(key)||"{}");for(const id of Object.keys(LeadIntelTargeting.fields)){if(meta.fields?.[id]){meta.fields[id].reviewed=true;meta.fields[id].origin="user";}}localStorage.setItem(key,JSON.stringify(meta));}catch{}
+    for(const id of Object.keys(LeadIntelTargeting.fields))state.answerStatus[id]="accepted";
+    if(state.profile){Object.assign(state.profile,LeadIntelTargeting.profileFields(state));for(const key of Object.values(LeadIntelTargeting.fields)){const record=state.profile.canonical?.fields?.[key];if(record)Object.assign(record,{value:state.profile[key],status:"user_confirmed",provenance:"user",confidence:"high"});}}
+    if(saveState()===false)throw Error("Targeting could not be saved locally. Your edits are retained; retry after resolving the workspace save status.");
+    renderTargetingConfirmation();
+    const saved=await Promise.race([Promise.resolve().then(()=>{if(!current())throw Error("Answers or workspace changed while saving. Confirm the updated targeting again.");return bridge.saveNow({saveIntent:true,explicitSave:true});}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error("Targeting save timed out. Your answers are retained in this browser; retry saving.")),STRATEGY_SAVE_TIMEOUT_MS);})]);
+    if(!current())throw Error("Answers or workspace changed while saving. Confirm the updated targeting again.");
+    if(saved?.saved!==true||saved.dirty===true)throw Error("Workspace save was not confirmed. Your answers are retained in this browser; retry targeting save.");
+    const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+    if(!LeadIntelTargeting.isConfirmed(stored)||LeadIntelTargeting.signature(stored)!==operation.signature)throw Error("Targeting changed in another view while saving. Review the updated answers and confirm again.");
+    showToast("Targeting confirmed and saved");return true;
+  }catch(error){if(profileApprovalCurrent(context)){targetingSaveError="Could not confirm targeting. "+(error.message||"Your answers are retained; retry saving.");showToast(targetingSaveError);}return false;}
+  finally{clearTimeout(timer);if(targetingSaveOwner===operation)targetingSaveOwner=null;renderTargetingConfirmation();}
 }
 function readAnswers(){
   const changed=[];document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question,value=el.value.trim();if(state.answers[id]!==value)changed.push(id);state.answers[id]=value;});
   if(changed.length){
+    targetingSaveError="";
     state=globalThis.LeadIntelStep2Brief?.applyAnswers?.(state,changed)||state;
     for(const id of changed)state.answerStatus[id]='accepted';
     if(state.profile&&globalThis.LeadIntelCompanyBrain?.classifyCompany)state.profile.companyClassification=LeadIntelCompanyBrain.classifyCompany(state);
@@ -279,7 +301,7 @@ function readAnswers(){
     if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market.signals||[],state.market.deletedSignalIds);/* keep customer-defined (custom-*) signals when triggers change */}
     try{const key='leadintel_customer_v2_discovery',data=JSON.parse(localStorage.getItem(key)||'{}');data.needsRefresh=true;localStorage.setItem(key,JSON.stringify(data));}catch{}
   }
-  saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));
+  const saved=saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));return saved;
 }
 function validateStep1(){
   readSources();

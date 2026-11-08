@@ -7683,6 +7683,18 @@
         "padding:10px 14px",
         "data-unsaved=\"true\""
       ]
+    },
+    {
+      "id": "targeting-confirmation-save-ownership",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)}",
+        "Saving targeting…",
+        "Workspace save was not confirmed.",
+        "targetingSaveOwner===operation"
+      ]
     }
   ],
   "retry": {

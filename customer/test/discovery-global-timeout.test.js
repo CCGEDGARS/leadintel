@@ -1177,8 +1177,14 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
     fetchImpl:async (_url,options)=>{
       const body=JSON.parse(options.body);
       active+=1;maximum=Math.max(maximum,active);
-      await new Promise(resolve=>setTimeout(resolve,2));
-      active-=1;
+      // Model fetch cancellation: a timed-out request stops consuming a slot.
+      // Ignoring its AbortSignal makes slow CI count cancelled fake requests as active.
+      try{await new Promise((resolve,reject)=>{
+        let timer;const signal=options.signal;
+        const finish=error=>{clearTimeout(timer);signal?.removeEventListener('abort',onAbort);error?reject(error):resolve();};
+        const onAbort=()=>finish(Object.assign(new Error('Request aborted'),{name:'AbortError'}));
+        if(signal?.aborted){onAbort();return;}signal?.addEventListener('abort',onAbort,{once:true});timer=setTimeout(()=>finish(),2);
+      });}finally{active-=1;}
       const verified=/^site:/i.test(body.query);
       const data=verified?[{
         url:`https://${body.query.match(/^site:([^ ]+)/i)[1]}/news`,title:'Expansion',
@@ -1192,6 +1198,7 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
 
   await context.__runDiscovery();
 
+  assert.equal(active,0,'all completed or cancelled requests release their slots');
   assert.ok(maximum<=4,`expected at most four concurrent provider requests, observed ${maximum}`);
 });
 
