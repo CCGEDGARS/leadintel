@@ -41,6 +41,17 @@
   }
   function inputKey(owner,profile){return stable([companyIdentity(owner),roles(owner.buyerRoles||profile.decisionMakers),pick(profile,PROFILE)]);}
   const abortError=()=>Object.assign(Error('Buyer research observation stopped; saved research can be reopened.'),{name:'AbortError',code:'BUYER_OBSERVATION_STOPPED'});
+  async function waitForTurn(promise,signal,current){
+    if(signal?.aborted||!current())throw abortError();
+    let stop,timer;
+    const canceled=new Promise((_,reject)=>{
+      stop=()=>reject(abortError());
+      signal?.addEventListener('abort',stop,{once:true});
+      timer=setInterval(()=>{if(!current())stop();},100);
+    });
+    try{return await Promise.race([promise,canceled]);}
+    finally{clearInterval(timer);signal?.removeEventListener('abort',stop);}
+  }
   function createClient({fetchImpl=(...args)=>root.fetch(...args),getBridge=()=>root.LeadIntelServerBridge,apiBase='https://leadintel-api.edgars-7e7.workers.dev',pollMs=2500,requestTimeoutMs=15000,observationTimeoutMs=2100000}={}){
     const active=new Map(),references=new WeakMap();
     function capture(owner,options){
@@ -88,7 +99,7 @@
         }
         if(added){scope.owner.people=people;scope.acceptRoster();}
       }
-      const owner=scope.owner,source=root.LeadIntelDiscovery?.mergeRetainedBuyerResearch?.(owner,job.candidate||{},{retainPeople:true})||job.candidate||{},jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
+      const owner=scope.owner,source=unchanged?{}:root.LeadIntelDiscovery?.mergeRetainedBuyerResearch?.(owner,job.candidate||{},{retainPeople:true})||job.candidate||{},jobIds=job.input?.personIds||job.progress?.personIds,selectedIds=scope.personIds?.length?scope.personIds:Array.isArray(jobIds)&&jobIds.length?jobIds:null,selected=selectedIds&&new Set(selectedIds.map(String)),byId=new Map((owner.people||[]).map(p=>[String(p.id),p]));
       const receiptOwners=scope.restoreReceipts?(owner.people||[]).filter(p=>!['contactResearch','emailResearch','gmailMatches','gmailCandidates'].some(k=>Object.hasOwn(scope.localEdits(p),k))):[];
       for(const person of (unchanged?[]:source.people||[]).slice(0,10)){
         const existing=byId.get(String(person.id));if(selected&&!selected.has(String(person.id)))continue;
@@ -143,8 +154,9 @@
         const samePeople=stable([...(old.scope.personIds||[])].sort())===stable([...(scope.personIds||[])].sort());
         if(!readOnly&&!samePeople){
           const identities=(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n');
-          try{await old.promise;}catch{}
-          if(getBridge()!==scope.bridge||scope.bridge.workspace?.id!==scope.workspaceId||scope.bridge.session?.user?.id!==scope.userId||!scope.bridge.session?.authenticated||inputKey(owner,scope.profile)!==scope.key||options.signal?.aborted||options.isCurrent&&options.isCurrent()!==true||(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n')!==identities)throw abortError();
+          const queuedCurrent=()=>getBridge()===scope.bridge&&scope.bridge.workspace?.id===scope.workspaceId&&scope.bridge.session?.user?.id===scope.userId&&scope.bridge.session?.authenticated&&inputKey(owner,scope.profile)===scope.key&&(!options.isCurrent||options.isCurrent()===true)&&(owner.people||[]).filter(p=>scope.personIds?.includes(String(p.id))).map(personIdentity).sort().join('\n')===identities;
+          await waitForTurn(old.promise.catch(()=>{}),options.signal,queuedCurrent);
+          if(options.signal?.aborted||!queuedCurrent())throw abortError();
           if(active.get(key)===old)active.delete(key);
           return execute(owner,options,readOnly);
         }
@@ -160,7 +172,7 @@
         // merely because this click selected a different person.
         while(!readOnly&&observedJob&&matching(scope,observedJob)&&ACTIVE.has(observedJob.status)&&stable([...(observedJob.input?.personIds||[])].map(String).sort())!==stable([...(scope.personIds||[])].sort())){
           if(Date.now()-queueStarted>=observationTimeoutMs)throw Error('This buyer is waiting for the current research to finish. Retry when it completes.');
-          await new Promise(resolve=>setTimeout(resolve,pollMs));
+          await waitForTurn(new Promise(resolve=>setTimeout(resolve,pollMs)),controller.signal,scope.current);
           observedJob=await request(scope,'GET',null,null,controller);
         }
         let job=observedJob;

@@ -7593,6 +7593,17 @@
         "prepareBrief",
         "English translation unavailable"
       ]
+    },
+    {
+      "id": "buyer-observer-audit-recovery",
+      "type": "text",
+      "url": "/customer/buyer-research-jobs.js",
+      "status": 200,
+      "contains": [
+        "async function waitForTurn(",
+        "source=unchanged?{}:",
+        "await waitForTurn(old.promise.catch(()=>{}),options.signal,queuedCurrent)"
+      ]
     }
   ],
   "retry": {

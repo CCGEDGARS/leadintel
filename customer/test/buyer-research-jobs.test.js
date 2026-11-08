@@ -214,6 +214,41 @@ test('a second selected Recheck waits then submits only its own person instead o
  assert.deepEqual(h.calls.filter(c=>c.method==='POST').map(c=>c.body.personIds),[['anna'],['bob']]);
 });
 
+test('canceling a queued Recheck settles promptly without canceling the other buyer or posting a lookup',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));let finish;
+ const job={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna']}};
+ const h=harness(()=>new Promise(resolve=>{finish=resolve;}),{requestTimeoutMs:5000});
+ const first=h.client.research(owner,{personIds:['anna']});await tick();
+ const controller=new AbortController();
+ const second=h.client.research(owner,{personIds:['bob'],force:true,signal:controller.signal});
+ const settled=second.then(()=>false,error=>error.name==='AbortError');
+ controller.abort();
+ const canceled=await Promise.race([settled,new Promise(resolve=>setTimeout(()=>resolve(false),150))]);
+ finish(job);await first;await settled;
+ assert.equal(canceled,true,'A queued click must not keep its busy state until another buyer finishes');
+ assert.equal(h.calls.filter(call=>call.method==='POST').length,0);
+});
+
+test('unchanged polling checkpoints do not remerge retained evidence while timing continues updating',async t=>{
+ const D=require('../discovery-engine.js'),owner=candidate(),job=snapshot(owner,'running',7);let reads=0,merges=0,updates=0;
+ const merge=D.mergeRetainedBuyerResearch;t.mock.method(D,'mergeRetainedBuyerResearch',(...args)=>{merges++;return merge(...args);});
+ const h=harness(()=>++reads<5?job:{...job,status:'needs_review',revision:8});
+ await h.client.restore(owner,{onProgress:()=>updates++});
+ assert.equal(updates,5);assert.equal(merges,2,'Only changed snapshots need the expensive evidence merge');
+});
+
+test('leaving the workspace releases a queued Recheck before the other observation settles',async()=>{
+ const owner=candidate();owner.people.push(person('bob'));let finish;
+ const job={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna']}};
+ const h=harness(()=>new Promise(resolve=>{finish=resolve;}),{requestTimeoutMs:5000});
+ const first=h.client.research(owner,{personIds:['anna']}).catch(error=>error);await tick();
+ const second=h.client.research(owner,{personIds:['bob'],force:true}).catch(error=>error);
+ h.bridge.workspace.id='another-workspace';
+ const result=await Promise.race([second,new Promise(resolve=>setTimeout(()=>resolve(null),300))]);
+ finish(job);await first;await second;
+ assert.equal(result?.name,'AbortError');assert.equal(h.calls.filter(call=>call.method==='POST').length,0);
+});
+
 test('restored selected job retains its exact buyer scope for card progress',async()=>{
  const owner=candidate();owner.people.push(person('bob'));let reads=0;
  const job={...snapshot(owner),input:{scope:'selected_buyers',personIds:['anna']}};
