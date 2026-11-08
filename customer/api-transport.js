@@ -20,6 +20,9 @@
       const requestMethod=typeof Request!=='undefined'&&input instanceof Request?input.method:'';
       const method=String(options?.method||requestMethod||'GET').toUpperCase();
       if(method!=='GET'||options?.body!=null)return '';
+      // Polling, cancellation and other bounded readers own separate lifetimes.
+      // Sharing a response also shares its body stream and the leader's abort.
+      if(options?.signal||typeof Request!=='undefined'&&input instanceof Request&&input.signal)return '';
       const url=new URL(target,root.location.origin);
       if(url.origin!==root.location.origin||!url.pathname.startsWith('/api/'))return '';
       const headers=typeof Headers!=='undefined'&&options?.headers instanceof Headers?[...options.headers.entries()]:Object.entries(options?.headers||{});
