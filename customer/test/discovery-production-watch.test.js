@@ -69,7 +69,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
       return response({ json: { ...config.backendHealth.json,storyselling_version:'storyselling-v1' } });
     }
     if (parsed.pathname === '/customer/website-input-sync.js') {
-      return response({ text: 'toVisibleWebsite syncVisibleWebsite displayChanged' });
+      return response({text:fs.readFileSync(path.join(root,'customer/website-input-sync.js'),'utf8')});
     }
     if (parsed.pathname === '/customer/approved-workflow-ui.js') { return response({text:fs.readFileSync(path.join(root,'customer/approved-workflow-ui.js'),'utf8')}); }
     if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }

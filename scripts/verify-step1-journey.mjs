@@ -78,3 +78,23 @@ export async function verifyStep1Journey({artifactDir='/tmp/leadintel-step1-jour
  }finally{websiteGate?.release();await Promise.allSettled(contexts.map(context=>context.close()));await browser.close();await f?.close();}
 }
 if(process.argv[1]&&fileURLToPath(import.meta.url)===path.resolve(process.argv[1]))verifyStep1Journey({artifactDir:process.env.LEADINTEL_STEP1_ARTIFACT_DIR}).then(result=>console.log(JSON.stringify(result,null,2))).catch(error=>{console.error(error);process.exitCode=1;});
+
+// Hold only the app's authenticated initialization callback so a real user can
+// type while optional Setup modules have mounted but app.js has not bound yet.
+export async function verifyWebsiteStartupInput(){
+ const f=await step1Fixture(),{chromium}=await loadPlaywright();const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ try{
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}),errors=[];
+  await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
+  await context.addInitScript(()=>{
+   let cache;Object.defineProperty(window,'LeadIntelAccountCache',{configurable:true,get:()=>cache,set(value){cache=value;const original=value.afterVerification;value.afterVerification=fn=>original.call(value,()=>{if(fn.toString().includes('app state:complete')){window.__heldSetupInit=fn;return;}return fn();});}});
+  });
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>window.__heldSetupInit&&window.LeadIntelServerBridge?.ready&&window.LeadIntelWebsiteInputSync,null,{timeout:20000});
+  const input=page.locator('#company-website');await input.fill('seller.example');await input.press('Tab');assert.equal(await input.inputValue(),'seller.example','blur cannot erase a real edit made before app initialization');
+  await page.evaluate(()=>{const init=window.__heldSetupInit;delete window.__heldSetupInit;init();});assert.equal(await input.inputValue(),'seller.example');await page.waitForFunction(()=>!document.getElementById('activate-website').disabled);
+  await page.locator('#activate-website').click();await page.waitForFunction(()=>document.getElementById('website-activation-status')?.dataset.state==='active',null,{timeout:20000});await persist(page);await page.reload();await page.waitForFunction(()=>window.__heldSetupInit&&window.LeadIntelServerBridge?.ready,null,{timeout:20000});await page.evaluate(()=>{const init=window.__heldSetupInit;delete window.__heldSetupInit;init();});
+  assert.equal(await input.inputValue(),'seller.example');await page.waitForFunction(()=>document.getElementById('website-activation-status')?.dataset.state==='active');assert.deepEqual(errors,[]);assert.equal((await f.getState()).payload.main.website,website);
+  return {typedBeforeInitialization:true,preservedAfterBlur:true,activationSucceeded:true,savedReopen:true,pageErrors:errors,environment:'authenticated controlled browser and real SQL'};
+ }finally{await browser.close();await f.close();}
+}
