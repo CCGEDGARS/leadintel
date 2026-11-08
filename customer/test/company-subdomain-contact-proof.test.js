@@ -5,6 +5,14 @@ function fixture(domain='supplier.example',company='Independent Supplier'){
  const row={url:`https://career-global.${domain}/people/alex-jensen`,sourceRead:true,extractedAt:new Date().toISOString(),markdown:`# Alex Jensen\nProcurement Director\n${company}\nEmail [alex.jensen@${domain}](mailto:alex.jensen@${domain})`};
  return {person,candidate,row};
 }
+test('the retained Kitron careers listing requires a matching read before becoming official contact proof',()=>{
+ const candidate={company:'Kitron',domain:'kitron.com',buyerSearchMode:'user_selected_target'},url='https://career-global.kitron.com/people/1938162-hasse-faxe';
+ const body='# Hasse Faxe\n\n Chief Commercial Officer\n –\n\n Sales\n\nEmail\n\n[hasse.faxe@kitron.com](mailto:hasse.faxe@kitron.com)\n\n## Already working at Kitron Global?';
+ const person={id:'hasse',name:'Hasse Faxe',publicName:'Hasse Faxe',title:'Chief Commercial Officer',organization:'Kitron',identityStatus:'confirmed',nameVerification:'confirmed',publicNameUrl:'https://www.kitron.com/contact-us',publicEmail:'hasse.faxe@kitron.com',publicEmailUrl:url,publicEmailEvidence:{version:2,url,quote:body,sourceRead:true,sourceKind:'public_listing',checkedAt:new Date().toISOString()}};
+ assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),'','a stored classification is not silently upgraded');
+ const matched=D.matchPublicBuyerDetails([person],[{url,markdown:body,sourceRead:true,extractedAt:new Date().toISOString()}],candidate.domain,candidate.company)[0];
+ assert.equal(D.acceptedOfficialBuyerEmail(candidate,matched),'hasse.faxe@kitron.com');
+});
 for(const [domain,company] of [['supplier.example','Independent Supplier'],['clinic.example','Independent Clinic']])test(`read named company-subdomain email survives ${company} save and CRM reopen with incomplete research`,()=>{
  const {person,candidate,row}=fixture(domain,company),matched=D.matchPublicBuyerDetails([person],[row],domain,company)[0];
  assert.equal(D.acceptedOfficialBuyerEmail(candidate,matched),`alex.jensen@${domain}`);
