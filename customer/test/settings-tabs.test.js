@@ -120,14 +120,14 @@ test('arrow keys move between tabs and a tab without sections is not offered',as
   assert.equal(drawer.querySelector('[data-settings-tab="profile"]').getAttribute('aria-selected'),'true');
 });
 
-test('Delivery tab separates the sign-in account from the sending mailbox; Data sources offers Firecrawl, Treg and optional Hunter in one column',()=>{
+test('Delivery tab separates the sign-in account from the sending mailbox; Data sources offers Firecrawl, Apollo and Treg in one column',()=>{
   const extension=read('service-settings-extension.js');
   assert.match(settings,/gives LeadIntel no access to your mail/);
   assert.match(settings,/<div class="integration-subheading" role="heading" aria-level="4"><strong>Sending mailbox<\/strong>/);
   assert.match(settings,/providerCardClass\('google'\)/);assert.match(settings,/providerCardClass\('microsoft'\)/);
   assert.match(settings,/\?\(authProvider\(\)===provider\?'is-active':'is-alternate'\):''/);
   assert.doesNotMatch(settings,/Optional outbound delivery|Optional human-approved outbound/);
-  assert.match(extension,/\['firecrawl','treg'\]\.includes\(config\.provider\)/);
+  assert.match(extension,/const SETTINGS_PROVIDERS=SERVICE_PROVIDERS;/);assert.match(settings,/data-integration="apollo"/);
   assert.match(extension,/config\.provider==='treg'\)\{card=document\.createElement\('article'\)/);
   assert.match(extension,/data-paid-contact-settings/);
   assert.match(extension,/const meta=configured\?`Saved key \$\{esc\(row\.key_hint\|\|''\)\} · \$\{sourceLabel\(row\)\}`:'';/);

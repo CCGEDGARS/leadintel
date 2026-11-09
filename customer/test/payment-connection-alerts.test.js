@@ -22,10 +22,10 @@ async function mount({hunterPayment=false,connection=false,aiPayment=false,saveE
  w.document.getElementById('open-settings').click();await settle();return {w,recover:()=>{payment=false;}};
 }
 test('removed Hunter stays absent and cannot create workspace alerts through refresh and reopen',async()=>{
- // Removed legacy providers remain absent; their historical credit state must not block the main providers.
+ // Removed Hunter remains absent; its historical credit state must not block the main providers. Apollo remains a visible optional connection.
  // the system-health summary keeps reporting the critical checks (AI engine, sign-in, mailbox, Firecrawl).
  const {w,recover}=await mount({hunterPayment:true,connection:true});try{
-  const check=()=>{assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);assert.equal(w.document.querySelector('[data-integration="apollo"]'),null);assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.doesNotMatch(w.document.querySelector('.integration-summary-copy strong').textContent,/Hunter|Apollo/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
+  const check=()=>{assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);assert.ok(w.document.querySelector('[data-integration="apollo"]'));assert.ok(w.document.querySelector('[data-integration="apollo"] [data-apollo-discovery]'));assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.doesNotMatch(w.document.querySelector('.integration-summary-copy strong').textContent,/Hunter|Apollo/);assert.ok(w.document.querySelector('[data-integration="firecrawl"] .integration-status.warn'));};check();
   await w.refreshServicesForTest();await settle();check();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await settle();check();
   recover();await w.refreshServicesForTest();await settle();assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);assert.equal(w.document.querySelector('[data-integration="hunter"]'),null);
  }finally{w.close();}

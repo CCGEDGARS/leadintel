@@ -5,7 +5,8 @@ import {storageFailure} from './workspace-storage.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
-import {readPublicBuyerPage} from './service-integrations.js';
+import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
+import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
 import '../../customer/discovery-engine.js';
 import '../../customer/company-dossier.js';
@@ -53,16 +54,17 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   const writeGuard=`EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`;
   const current=async(checkpoint=false)=>{await guard({checkpoint});return [row.id,lease,clock(),contextVersion];};
-  let scheduledContactWork=false;
+  let scheduledContactWork=false,apolloIdentityChecked=Number(input.apolloIdentityVersion||0)>=1;
+  input.apolloIdentityReceipts=Array.isArray(input.apolloIdentityReceipts)?input.apolloIdentityReceipts.slice(0,4):[];
   let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
   const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
   const inflightTasks=new Map(),contactTasks=new Set();
   const readProjection=(value,requested)=>D.buyerSourceReadLocation(candidate,requested,value)?{...value,sourceRead:true}:{url:value.url,metadata:{sourceURL:value.metadata?.sourceURL,url:value.metadata?.url,statusCode:value.metadata?.statusCode},sourceRead:false};
-  const executeTaskBody=async(kind,value,operation)=>{
+  const executeTaskBody=async(kind,value,operation,{phase:taskPhase=phase}={})=>{
    await guard();const key=await sha256(kind+'|'+value),prior=await stmt(env,'SELECT * FROM buyer_research_tasks WHERE job_id=? AND task_key=?',row.id,key).first();
-   if(phase==='contacts')contactTasks.add(key);
+   if(taskPhase==='contacts')contactTasks.add(key);
    if(prior?.status==='complete'){const result=parse(prior.result_json);return kind==='read'?{...readProjection(result,value),reused:true}:result;}
    // A running row belongs to the previous expired/canceled slice. It is not
    // a provider-failure receipt. Keep earlier real failures, but restore the
@@ -75,8 +77,8 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(kind==='independent'&&windowMs-(clock()-start)<independentWindow)throw Object.assign(Error('Independent check deferred to the next processing slice'),{code:'TIME_BUDGET'});
    // Each finite phase owns its task allowance. Retained official/dossier
    // receipts are reusable evidence, not admissions against the contact plan.
-   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase=?',row.id,phase).first();if(!prior&&Number(count?.n)>=384)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
-   const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET attempts=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE (buyer_research_tasks.status='running' OR attempts<2) AND ${writeGuard}`,row.id,key,kind,phase,String(value).slice(0,4000),...args,attempts+1,...args));
+   const count=await stmt(env,'SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase=?',row.id,taskPhase).first();if(!prior&&Number(count?.n)>=384)throw Object.assign(Error('Research task budget reached'),{code:'TASK_LIMIT'});
+   const reserved=await scopedWrite(args=>stmt(env,`INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts) SELECT ?,?,?,?,?,'running',1 WHERE ${writeGuard} ON CONFLICT(job_id,task_key) DO UPDATE SET attempts=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE (buyer_research_tasks.status='running' OR attempts<2) AND ${writeGuard}`,row.id,key,kind,taskPhase,String(value).slice(0,4000),...args,attempts+1,...args));
    if(!reserved.meta.changes)throw lost();
    try{
     const result=await operation();await guard();if(jsonSize(result)>160000)throw Error('Source task response exceeds bounded storage');
@@ -90,13 +92,13 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   // Reserve a bounded task before dispatch. Its guards still enforce time,
   // lease and identity while the reserved query room permits receipt saving.
-  const executeTask=async(kind,value,operation)=>{
+  const executeTask=async(kind,value,operation,options)=>{
    if(invocationBudget&&!invocationBudget.admit(64)){invocationExhausted=true;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
    activeTaskReservations++;
-   try{return await executeTaskBody(kind,value,operation);}
+   try{return await executeTaskBody(kind,value,operation,options);}
    finally{activeTaskReservations--;invocationBudget?.release(64);}
   };
-  const task=(kind,value,operation)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
+  const task=(kind,value,operation,options)=>{const key=kind+'|'+value;if(inflightTasks.has(key))return inflightTasks.get(key);const pending=executeTask(kind,value,operation,options);inflightTasks.set(key,pending);pending.finally(()=>{if(inflightTasks.get(key)===pending)inflightTasks.delete(key);}).catch(()=>{});return pending;};
   const search=async query=>restoreSearch(await task('search',query,async()=>{
    let rows;try{rows=await nativeSearch(query,{signal:controller.signal,diversify:Boolean(input.recheck&&Object.values(input.recheck.plans).some(plan=>plan.queries.includes(query))||input.recheck&&candidate.people.some(person=>D.buyerGmailResearchQueries(candidate,person).includes(query)))});}catch(error){if(services.search)for(const entry of error.researchTrace||[])observe(entry);throw error;}
    if(!Array.isArray(rows))throw Error('Search response is invalid');
@@ -116,7 +118,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const allRows=async()=>{
    // Read bodies own factual attribution. A large search index must not evict
    // the completed company/staff pages merely because task hashes sort first.
-   const tasks=await stmt(env,"SELECT kind,request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' AND kind IN ('read','search') ORDER BY CASE kind WHEN 'read' THEN 0 ELSE 1 END,updated_at DESC LIMIT 160",row.id).all();
+   const tasks=await stmt(env,"SELECT kind,request_value,result_json FROM buyer_research_tasks WHERE job_id=? AND status='complete' AND kind IN ('read','search') AND (kind='read' OR json_type(result_json,'$.rows')='array') ORDER BY CASE kind WHEN 'read' THEN 0 ELSE 1 END,updated_at DESC LIMIT 160",row.id).all();
    return tasks.results.flatMap(r=>{const value=parse(r.result_json);return r.kind==='read'?[readProjection(value,r.request_value)]:r.kind==='search'?value.rows||[]:[];}).slice(0,160);
   };
   const reassessRoles=(people=candidate.people||[])=>{if(candidate.buyerRolesChanged&&D.canReassessSavedBuyerRoles(candidate,people,input.profile))candidate.buyerRolesChanged=false;};
@@ -146,6 +148,16 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   try{
    await guard();const context=await workspaceBuyerContext(env,row.workspace_id);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
+   if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
+    const before=new Set((candidate.people||[]).map(person=>person.id));
+    const directory=await discoverApolloBuyerIdentities({candidate,profile:input.profile,task,guard,record:observe,observed:input.apolloIdentityReceipts,
+      search:payload=>(services.apollo?services.apollo(payload,controller.signal,{workspaceId:row.workspace_id,userId:row.requested_by,guard}):searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,signal:controller.signal,guard,beforeDispatch:()=>{if(windowMs-(clock()-start)<15000)throw Object.assign(Error('Apollo discovery deferred to the next processing slice'),{code:'TIME_BUDGET'});}}))});
+    apolloIdentityChecked=true;
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:D.mergeBuyerPool(candidate.buyerDiscovery?.pool||candidate.people||[],directory.people,input.profile),
+      resultDiagnostics:[...(candidate.buyerDiscovery?.resultDiagnostics||[]),...directory.diagnostics].slice(-500),providerStatus:{...(candidate.buyerDiscovery?.providerStatus||{}),identity:{status:directory.status,results:directory.results,accepted:directory.people.length}}};
+    if(directory.people.length)acquirePeople();
+    if(['review','paid'].includes(phase)&&(candidate.people||[]).some(person=>!before.has(person.id))){phase='contacts';phaseMs=0;phaseRuns=0;}
+   }
    if(phase==='official'){
     await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();
     if(D.officialContactCoveragePassed(candidate)||Number(phaseRuns)>=2&&!changed)phase=nextPhase[phase];
@@ -215,7 +227,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}

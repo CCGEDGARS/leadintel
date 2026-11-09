@@ -1,11 +1,12 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
-async function mounted(provider="",authenticated=true){
+async function mounted(provider="",authenticated=true,apolloConfigured=false){
  const w=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const observers=[];const Observer=w.MutationObserver;w.MutationObserver=class extends Observer{constructor(callback){super(callback);observers.push(this);}};w.disposeObservers=()=>observers.forEach(observer=>observer.disconnect());
  w.LeadIntelServerBridge={session:{authenticated,user:{email:"user@example.com"}},authProvider:provider,workspace:{id:'w1',role:'owner'}};
  let identity={meetingPlatform:'zoom'};w.LeadIntelSenderIdentity={get:()=>identity,setMeetingPlatform:meetingPlatform=>{identity={meetingPlatform};}};
- w.fetch=async url=>({ok:true,json:async()=>String(url).includes('/ai/status')?{role:'owner',providers:[]}:{role:'owner',providers:[{provider:'apollo'},{provider:'firecrawl'},{provider:'hunter'}]}});
+ w.fixtureRequests=[];w.apolloMetadata={discovery_enabled:true,email_enrichment_enabled:false,phone_enrichment_enabled:false};
+ w.fetch=async(url,options={})=>{w.fixtureRequests.push({url:String(url),method:options.method||'GET'});if(options.method==='PUT'&&String(url).includes('/services/apollo/settings')){const body=JSON.parse(options.body);Object.assign(w.apolloMetadata,{discovery_enabled:body.discovery,email_enrichment_enabled:body.email,phone_enrichment_enabled:body.phone});}return {ok:true,status:200,json:async()=>String(url).includes('/ai/status')?{role:'owner',providers:[]}:{role:'owner',providers:[{provider:'apollo',configured:apolloConfigured,source:apolloConfigured?'customer':'none',state:apolloConfigured?'good':'neutral',metadata:{...w.apolloMetadata}},{provider:'firecrawl'},{provider:'hunter'}]}};};
  w.eval(read('personal-linkedin.js'));
  if(fs.existsSync(path.join(__dirname,'..','tool-account-links.js')))w.eval(read('tool-account-links.js'));
  w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,''));
@@ -15,13 +16,13 @@ async function mounted(provider="",authenticated=true){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- // The customer-facing contact controls use Treg; legacy evidence stays intact.
- assert.equal(w.document.querySelector('[data-integration="apollo"], [data-service-provider="apollo"], [data-tool-links="apollo"]'),null,'apollo paid settings must be absent');
+ assert.ok(w.document.querySelector('[data-integration="apollo"] [data-service-provider="apollo"]'),'Apollo connection management must be visible');
+ assert.match(w.document.querySelector('[data-apollo-capabilities]').textContent,/People discovery · 0 API credits/);
  assert.equal(w.document.querySelector('[data-integration="hunter"], [data-service-provider="hunter"], [data-tool-links="hunter"]'),null);
  assert.ok(w.document.querySelector('[data-paid-contact-settings]'));
- assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Apollo/);
+ assert.match(w.document.getElementById('ai-settings-drawer').textContent,/Apollo/);
  assert.doesNotMatch(w.document.getElementById('ai-settings-drawer').textContent,/Hunter/);
- for(const id of ['openai','anthropic','gemini','firecrawl','treg','calendly','personal-linkedin','zoom']){
+ for(const id of ['openai','anthropic','gemini','firecrawl','apollo','treg','calendly','personal-linkedin','zoom']){
   const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=(id==='treg'?1:2),`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }
@@ -61,4 +62,17 @@ test('signed-in workspace cards keep authentication controls inside LeadIntel on
 });
 test('signed-out workspace cards offer app login and explicitly named new-account links',async()=>{
  const w=await mounted('',false);try{for(const [id,name] of [['google','Google'],['microsoft-account','Microsoft']]){const card=w.document.querySelector(`[data-integration="${id}"]`);assert.ok(card.querySelector('[data-settings-signin]'));assert.match(card.querySelector('nav').textContent,new RegExp(`Create ${name} account`));assert.doesNotMatch(card.textContent,/Manage account/);}}finally{w.disposeObservers();w.close();}
+});
+
+test('Apollo discovery permission saves and restores while opening Settings never starts a lookup',async()=>{
+ const w=await mounted('',true,true);try{
+  const card=()=>w.document.querySelector('[data-integration="apollo"]');
+  assert.equal(card().querySelector('[data-apollo-discovery]').checked,true);assert.equal(card().querySelector('[data-apollo-email]').checked,false);assert.equal(card().querySelector('[data-apollo-phone]').checked,false);
+  assert.equal(card().querySelector('[data-service-key="apollo"]').type,'password');assert.equal(card().querySelector('[data-service-key="apollo"]').value,'');
+  assert.equal(card().querySelector('[data-apollo-settings]').open,false,'paid options stay a separate disclosure');
+  card().querySelector('[data-apollo-discovery]').checked=false;card().querySelector('[data-service-action="apollo-policy"]').click();await new Promise(r=>setTimeout(r,50));
+  assert.equal(w.apolloMetadata.discovery_enabled,false);assert.equal(w.apolloMetadata.email_enrichment_enabled,false);assert.equal(w.apolloMetadata.phone_enrichment_enabled,false);
+  w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await new Promise(r=>setTimeout(r,30));assert.equal(card().querySelector('[data-apollo-discovery]').checked,false);
+  assert.ok(!w.fixtureRequests.some(r=>/people-search|people\/match|enrichment-request/.test(r.url)),'render and preference save must not perform discovery or paid enrichment');
+ }finally{w.disposeObservers();w.close();}
 });

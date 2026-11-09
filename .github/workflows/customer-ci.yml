@@ -25,6 +25,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -61,6 +62,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
       - 'vercel.json'
@@ -166,7 +168,9 @@ jobs:
 
   buyers-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    # The serial journey suite takes ~451s before setup/artifact overhead.
+    # Keep every assertion and individual test deadline; allow the job to finish.
+    timeout-minutes: 10
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -247,6 +251,39 @@ jobs:
         with:
           name: event-planning-acceptance-${{ github.sha }}
           path: /tmp/leadintel-event-journey/
+          if-no-files-found: warn
+          retention-days: 14
+
+  apollo-discovery-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser and backend dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify Apollo Settings and free background discovery
+        env:
+          LEADINTEL_REQUIRE_BROWSER: 'true'
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/apollo-discovery-journey.test.mjs
+      - name: Preserve Apollo acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apollo-discovery-acceptance-${{ github.sha }}
+          path: /tmp/leadintel-apollo-journey/
           if-no-files-found: warn
           retention-days: 14
 
