@@ -7802,6 +7802,29 @@
       "contains": [
         "apollo-free=20261109-v1"
       ]
+    },
+    {
+      "id": "opportunity-completed-research-context-recovery",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function repairCompletedOpportunityResearchContext()",
+        "if(market.researchContextFingerprint!==original)return false;",
+        "if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();"
+      ]
+    },
+    {
+      "id": "strategy-recovery-backup-disclosure",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "id=\"strategy-recovery-details\" hidden",
+        "Saved recovery copy",
+        "This backup does not indicate a current cloud-save failure.",
+        "opportunity-context-recovery=20261109-v1"
+      ]
     }
   ],
   "retry": {

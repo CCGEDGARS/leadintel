@@ -521,6 +521,11 @@ function strategyContextCurrent(context){return Boolean(context&&!window.__leadI
 function assertStrategyContext(context){if(!strategyContextCurrent(context)){const error=Error('Account, workspace or Strategy changed. The old result was discarded; your saved work is retained.');error.code='STRATEGY_STALE';throw error;}}
 function strategyReviewCurrent(){try{return strategyIntegrity()?.signature(state)===strategyIntegrity()?.signature(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'));}catch{return false;}}
 function strategyRecoveryRecord(){try{const record=JSON.parse(localStorage.getItem(STRATEGY_RECOVERY_KEY)||'null');return record?.context===profileApprovalContext()?record:null;}catch{return null;}}
+function renderStrategyRecovery(){
+  const record=strategyRecoveryRecord(),details=$('strategy-recovery-details'),button=$('download-strategy-recovery');
+  if(button)button.hidden=!record;
+  if(details){details.hidden=!record;if(record&&window.__leadIntelLocalStrategyConflict)details.open=true;}
+}
 function checkStrategyLocalPersistence(saved){
   const integrity=strategyIntegrity();if(!integrity)return true;
   const signature=integrity.signature(saved),diverged=strategySavedBaseline&&signature!==strategySavedBaseline&&signature!==integrity.signature(state);
@@ -923,13 +928,31 @@ function researchContextFingerprint(){
   const material=integrity.material(state);delete material.evidence;delete material.opportunities;
   return `${integrity.VERSION}:research:${integrity.digest(JSON.stringify(material))}`;
 }
+function repairCompletedOpportunityResearchContext(){
+  const market=state?.market,execution=market?.researchExecution||{},integrity=strategyIntegrity();
+  if(!integrity?.material||!market?.researchContextFingerprint||!['complete','partial'].includes(market.researchStatus)
+    ||!['complete','partial'].includes(execution.status)||!execution.runId||!Number(execution.completedAt)||market.researchQuality?.passed===false)return false;
+  if(!(market.researchHistory||[]).some(run=>run.id===execution.runId&&Number(run.sourceCount)>0)
+    ||!(market.researchResults||[]).length||!(market.opportunities||[]).some(item=>item.active!==false&&item.profileOnly!==true&&item.evidence?.length))return false;
+  const opportunity=(market.icps||[]).filter(item=>item.type==='opportunity-led'||item.id==='icp-opportunity-led');
+  if(opportunity.length!==1||opportunity[0].active!==true)return false;
+  // Compare the complete original research scope with only this derived switch
+  // restored to Off. Any other edit must retain the normal stale-research gate.
+  const material=integrity.material(state);delete material.evidence;delete material.opportunities;
+  const prior=material.icps.find(item=>item.id===opportunity[0].id);if(!prior)return false;prior.active=false;
+  const original=`${integrity.VERSION}:research:${integrity.digest(JSON.stringify(material))}`;
+  if(market.researchContextFingerprint!==original)return false;
+  market.researchContextFingerprint=researchContextFingerprint();return true;
+}
 // Staleness is a live comparison, not a latch: it clears as soon as the saved research context matches again.
 // A forced marker in the fingerprint (e.g. 'stale:website-reactivated') keeps it stale until the next run rewrites it.
 function syncResearchContextStale(){
   const market=state.market;if(!market)return false;
   const hasResults=(market.researchResults||[]).length>0;
+  const currentFingerprint=market.researchContextFingerprint?researchContextFingerprint():'';
+  if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();
   const unrelated=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile,market.signals)||[];
-  const contextChanged=Boolean(market.researchContextFingerprint)&&market.researchContextFingerprint!==researchContextFingerprint();
+  const contextChanged=Boolean(market.researchContextFingerprint)&&market.researchContextFingerprint!==currentFingerprint;
   const stale=hasResults&&(contextChanged||unrelated.length>0);
   if(stale){market.strategyApproved=false;market.strategyApprovedAt='';}
   if(hasResults||market.researchContextStale)market.researchContextStale=stale;
@@ -1501,7 +1524,7 @@ function renderMarketStrategy(){
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
   if(state.market.strategyApprovalInvalidated&&$("activate-market-strategy")?.dataset.activationBusy!=='true')setActivationFeedback(state.market.strategyApprovalInvalidated.reason,'warning');
-  const recoveryButton=$("download-strategy-recovery");if(recoveryButton)recoveryButton.hidden=!strategyRecoveryRecord();
+  renderStrategyRecovery();
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketConditions();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 let researchReportUi;

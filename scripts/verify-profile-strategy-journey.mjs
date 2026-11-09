@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {step1Fixture} from '../backend/test/step1-journey-fixture.mjs';
-import {loadPlaywright,sessionToken} from '../backend/test/step5-journey-fixture.mjs';
+import {loadPlaywright,sessionToken,workspaceId} from '../backend/test/step5-journey-fixture.mjs';
 
-export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false}={}){
+export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false}={}){
  const f=await step1Fixture();await f.connectControlledExtraction();await f.connectControlledAi();const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[],evidence={};await fs.mkdir(artifactDir,{recursive:true});
  async function open({delayDiscovery=false}={}){const c=await browser.newContext({viewport:{width:1440,height:1000}});await c.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await c.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);if(delayDiscovery)await c.addInitScript(()=>{let engine,held=true;Object.defineProperty(window,'LeadIntelDiscovery',{configurable:true,get:()=>held?undefined:engine,set:value=>{engine=value;}});window.__releaseDiscoveryForTest=()=>{held=false;};});await c.addInitScript(()=>{window.__workflowNavigationTrace=[];for(const name of ['click','leadintel:module-opened','leadintel:open-discovery','leadintel:open-module'])window.addEventListener(name,event=>window.__workflowNavigationTrace.push({event:name,target:event.target?.id,closest:event.target?.closest?.('[id]')?.id,detail:event.detail,stack:new Error().stack}),true);});const p=await c.newPage();if(process.env.LEADINTEL_TEST_CPU_RATE){const debug=await c.newCDPSession(p);await debug.send('Emulation.setCPUThrottlingRate',{rate:Number(process.env.LEADINTEL_TEST_CPU_RATE)});}p.setDefaultTimeout(25000);p.on('pageerror',e=>errors.push(e.message));await p.goto(f.origin+'/customer/');await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&window.LeadIntelCustomerNavigation&&window.LeadIntelProfileAnswers?.isReady());await p.evaluate(()=>{const original=LeadIntelCustomerNavigation.setStep;LeadIntelCustomerNavigation.setStep=(...args)=>{window.__workflowNavigationTrace.push({event:'navigation-setStep',args,stack:new Error().stack});return original(...args);};});return p;}
@@ -31,9 +31,27 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    const opportunity=saved.market.icps.find(x=>x.type==='opportunity-led');assert.equal(opportunity.active,true);assert.equal(opportunity.requestedActive,true);assert.equal(saved.market.researchContextStale,false);assert.equal(opportunity.value,'');
    assert.match(await p.locator('#strategy-research-handoff').textContent(),/20 research sources/);
    evidence.researchHandoff={sources:20,reports:1,automaticCloudSave:!failResearchSave,opportunityAutoActivated:true,strategyAwaitingReview:true};
-   await p.context().close();p=await open();
+   await p.context().close();
+   if(legacyOpportunityContext){
+    // Reproduce an old saved run whose derived Opportunity-led switch was
+    // enabled after completion. Persist through the real authenticated API.
+    const current=await f.getState(),legacy=structuredClone(current.payload),material=globalThis.LeadIntelStrategyIntegrity.material(legacy.main);
+    material.icps.find(item=>item.type==='opportunity-led').active=false;delete material.evidence;delete material.opportunities;
+    legacy.main.market.researchContextFingerprint=globalThis.LeadIntelStrategyIntegrity.VERSION+':research:'+globalThis.LeadIntelStrategyIntegrity.digest(JSON.stringify(material));
+    legacy.main.market.researchContextStale=true;legacy.main.market.opportunityAutoActivationRunId='';
+    const result=await fetch(f.origin+'/api/customer/state?workspace_id='+workspaceId,{method:'PUT',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({version:current.version,payload:legacy})});assert.equal(result.status,200);
+   }
+   p=await open();
    const reopened=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
-   assert.equal(reopened.researchResults.length,20);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,20);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);assert.equal(reopened.opportunityAutoActivationRunId,reopened.researchExecution.runId);
+   assert.equal(reopened.researchResults.length,20);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,20);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);
+   if(legacyOpportunityContext){
+    await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#step-4.active').waitFor();const requests=f.externalCalls.length;
+    await p.locator('#activate-market-strategy').click();await p.locator('#strategy-handoff-dialog').waitFor({state:'visible'});assert.equal(await p.locator('#strategy-handoff-blockers').isVisible(),false);assert.equal(await p.locator('#confirm-strategy-handoff').isEnabled(),true);assert.equal(f.externalCalls.length,requests,'review must reuse research rather than dispatch another provider scan');
+    await p.locator('#confirm-strategy-handoff').click();await p.locator('#step-5.active').waitFor();await p.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.strategyApproved===true);
+    const persisted=(await f.getState()).payload.main;assert.equal(persisted.market.researchContextStale,false);assert.equal(persisted.market.researchResults.length,20);assert.equal(persisted.market.researchReports.length,1);assert.equal(persisted.market.researchExecution.runId,saved.market.researchExecution.runId);
+    await p.context().close();p=await open();const restored=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')));assert.equal(globalThis.LeadIntelStrategyIntegrity.status(restored).current,true);assert.equal(restored.market.researchContextStale,false);assert.equal(restored.market.researchResults.length,20);assert.equal(restored.market.researchReports.length,1);assert.equal(restored.market.researchExecution.runId,saved.market.researchExecution.runId);
+    evidence.legacyOpportunityRecovery={reviewOpened:true,approvalSaved:true,sources:20,reports:1,marketRunReused:true,coldReopen:true};
+   }else assert.equal(reopened.opportunityAutoActivationRunId,reopened.researchExecution.runId);
    evidence.researchFreshBrowserReopen=true;evidence.pageErrors=errors;assert.deepEqual(errors,[]);await fs.writeFile(artifactDir+'/evidence.json',JSON.stringify(evidence,null,2));return evidence;
   }
 
