@@ -21,6 +21,21 @@
     );
   }
 
+  function autoActivateOpportunityAfterResearch(market={}){
+    const execution=market.researchExecution||{},runId=clean(execution.runId);
+    const completed=["complete","partial"];
+    if(!runId||market.opportunityAutoActivationRunId===runId||!Number(execution.completedAt)
+      ||!completed.includes(execution.status)||!completed.includes(market.researchStatus)
+      ||market.researchContextStale||market.researchQuality?.passed===false)return false;
+    const history=(market.researchHistory||[]).find(item=>item.id===runId);
+    if(!(Number(history?.sourceCount)>0)||!hasVerifiedOpportunity(market.opportunities))return false;
+    const icp=(market.icps||[]).find(item=>item?.type===TYPE||item?.id===ID);
+    if(!icp)return false;
+    icp.active=true;icp.requestedActive=true;icp.opportunityDataAvailable=true;
+    market.opportunityAutoActivationRunId=runId;
+    return true;
+  }
+
   function buildOpportunityIcp(profile={},language="en"){
     const lv=isLv(language);
     const targetMarkets=clean(profile.targetMarkets)||currentMarkets(profile)||(lv?"Prioritārie tirgi vēl nav definēti":"Priority markets not yet defined");
@@ -67,6 +82,7 @@
     if(Market.__opportunityLedIcpInstalled)return Market;
 
     Market.hasVerifiedOpportunity=hasVerifiedOpportunity;
+    Market.autoActivateOpportunityAfterResearch=autoActivateOpportunityAfterResearch;
     const originalBuild=Market.buildIcpCandidates.bind(Market);
     const originalNormalize=Market.normalizeMarketState.bind(Market);
     const originalLocalize=Market.localizeGeneratedState.bind(Market);
@@ -114,5 +130,5 @@
     return Market;
   }
 
-  return {ID,TYPE,hasVerifiedOpportunity,buildOpportunityIcp,install};
+  return {ID,TYPE,hasVerifiedOpportunity,autoActivateOpportunityAfterResearch,buildOpportunityIcp,install};
 });

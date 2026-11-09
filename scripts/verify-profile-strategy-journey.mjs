@@ -28,12 +28,12 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    await p.waitForFunction(()=>document.getElementById('workspace-save-state')?.textContent==='Saved automatically to LeadIntel');
    const saved=(await f.getState()).payload.main;
    assert.equal(saved.market.researchResults.length,20);assert.equal(saved.market.researchReports.length,1);assert.equal(saved.market.researchProfileLink.sourceCount,20);assert.equal(saved.market.strategyApproved,false);
-   const opportunity=saved.market.icps.find(x=>x.type==='opportunity-led');assert.equal(opportunity.active,false);assert.equal(opportunity.requestedActive,false);assert.equal(opportunity.value,'');
+   const opportunity=saved.market.icps.find(x=>x.type==='opportunity-led');assert.equal(opportunity.active,true);assert.equal(opportunity.requestedActive,true);assert.equal(saved.market.researchContextStale,false);assert.equal(opportunity.value,'');
    assert.match(await p.locator('#strategy-research-handoff').textContent(),/20 research sources/);
-   evidence.researchHandoff={sources:20,reports:1,automaticCloudSave:!failResearchSave,optionalProfileStayedOff:true,strategyAwaitingReview:true};
+   evidence.researchHandoff={sources:20,reports:1,automaticCloudSave:!failResearchSave,opportunityAutoActivated:true,strategyAwaitingReview:true};
    await p.context().close();p=await open();
    const reopened=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
-   assert.equal(reopened.researchResults.length,20);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,20);
+   assert.equal(reopened.researchResults.length,20);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,20);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);assert.equal(reopened.opportunityAutoActivationRunId,reopened.researchExecution.runId);
    evidence.researchFreshBrowserReopen=true;evidence.pageErrors=errors;assert.deepEqual(errors,[]);await fs.writeFile(artifactDir+'/evidence.json',JSON.stringify(evidence,null,2));return evidence;
   }
 
