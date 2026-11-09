@@ -235,3 +235,9 @@ test('finding a name cannot mark Buyers complete before its quality requirements
  const before=Journey.buildJourneyModel(input)[4];assert.notEqual(before.status,'complete');assert.match(before.nextAction,/quality/i);
  const after=Journey.buildJourneyModel({...input,buyerQualityPassed:true})[4];assert.equal(after.status,'complete');assert.equal(after.completed,after.total);
 });
+
+test('a strong-fit search goal keeps the Companies journey incomplete when checked manual scores fill the amount',()=>{
+ const discovery={status:'complete',candidates:[{company:'A',domain:'a.example',qualification:{version:2,eligible:true,score:81}},{company:'B',domain:'b.example',qualification:{version:2,eligible:true,score:69}}]};
+ const model=Journey.buildJourneyModel({currentStep:5,discovery,discoveryMeta:{targetCount:2,companyGoal:'strong_fit'},availability:{5:true}});
+ assert.equal(model[3].steps.find(s=>s.id==='companies').complete,false);
+});

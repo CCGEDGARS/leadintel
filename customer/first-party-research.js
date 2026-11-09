@@ -45,7 +45,7 @@
         if(host(actual)!==domain)throw new Error('Website redirected outside the company domain');
         const text=String(data.markdown||data.content||'').trim().slice(0,60000);
         if((EvidencePolicy&&!EvidencePolicy.usable(data))||!usableText(text))throw new Error('Insufficient readable company evidence');
-        return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,...(EvidencePolicy?.publication(data)||{}),statusCode:Number(data.metadata?.statusCode)||200,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:new Date().toISOString()};
+        return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,...(EvidencePolicy?.publication(data)||{}),statusCode:Number(data.metadata?.statusCode)||200,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:response.leadIntelFetchedAt||new Date().toISOString()};
       }finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);signal?.removeEventListener('abort',abort);}
     }
     let home,homeError;

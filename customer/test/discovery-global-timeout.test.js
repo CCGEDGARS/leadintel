@@ -844,10 +844,10 @@ test('retry of a failed saved-target lookup uses the known domain and preserves 
   context.__setDiscovery({status:'error',savingMode:true,searchFailures:[{phase:'resolving',company:'Södra',queryMeta:{id:'resolve-sodra',kind:'resolution',company:'Södra',market:'Sweden',query:'"Södra" Sweden official company website'},reason:'network_error'}],funnel:{marketSearchesCompleted:1,marketSearchesTotal:1,openAiFallbackSearches:1}});
   await context.__retryFailedDiscoveryChecks();
   assert.equal(requests.length,2);
-  assert.match(requests[0].body.url,/sodra\.com/);
-  assert.match(requests[1].body.query,/site:sodra\.com/);
-  assert.doesNotMatch(requests[1].body.query,/official company website/);
-  assert.equal(requests[1].body.limit,2);
+  assert.match(requests[1].body.url,/sodra\.com/);
+  assert.match(requests[0].body.query,/site:sodra\.com/);
+  assert.doesNotMatch(requests[0].body.query,/official company website/);
+  assert.equal(requests[0].body.limit,2);
   assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,0);
   assert.equal(context.__discoveryState().funnel.companySitesChecked,0);
 });
@@ -933,7 +933,7 @@ test('transient Firecrawl failures are retried once before being reported',async
     return {ok:true,json:async()=>({success:true,data:[{url:'https://buyer.lv/news',title:'Buyer update',description:'Company update.'}]})};
   }});
   const result=await context.__firecrawlCompanySearch({id:'verify-buyer',market:'Latvia',domain:'buyer.lv',company:'Buyer',kind:'verification',query:'site:buyer.lv expansion'});
-  assert.equal(requests,3,'home check, successful search and a discovered internal-page recovery');
+  assert.equal(requests,4,'failed search, successful retry, home check and discovered internal-page recovery');
   assert.equal(result.length,1);
 });
 
@@ -970,7 +970,7 @@ test('failed company-site checks can be retried without repeating market searche
   await context.__retryFailedDiscoveryChecks();
 
   const state=context.__discoveryState();
-  assert.equal(requests,2,`one direct website read and the failed evidence search should be retried: ${JSON.stringify(context.__discoveryState().searchFailures)}`);
+  assert.equal(requests,1,`readable official search evidence must avoid a second website request: ${JSON.stringify(context.__discoveryState().searchFailures)}`);
   assert.equal(state.funnel.marketSearchesCompleted,4,'market searches must not be repeated or recounted');
   assert.equal(state.funnel.companySitesChecked,1);
   assert.equal(state.funnel.qualifiedCompanies,1,JSON.stringify({potential:state.potentialMatches,candidates:state.candidates,raw:state.rawResults,failures:state.searchFailures}));
@@ -1914,7 +1914,7 @@ test('Research review starts collapsed even when no company has completed the ch
 });
 test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});render();
- assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,3);assert.match(dom.window.document.getElementById('company-candidates').textContent,/3 of 5 checked companies available/);
+ assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,3);assert.match(dom.window.document.getElementById('company-candidates').textContent,/1 of 5 strong-fit companies found · 3 checked/);
  assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
 });
 test('additional results deduplicate checked identities and retain companies awaiting recheck',()=>{
@@ -2006,7 +2006,7 @@ test('a normal company search with pending companies and no previous review batc
  assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);
  context.__setDiscovery({...context.__discoveryState(),status:'partial'});
  await context.__runDiscovery();
- assert.ok(calls.some(call=>call.body.query),'ordinary discovery must reach its first provider query');
+ assert.ok(calls.some(call=>call.body.task==='buyer-fit'),'ordinary discovery must reach the saved-evidence assessment');assert.equal(calls.some(call=>call.body.query),false,'an unavailable saved-evidence assessment must stop before buying new web requests');assert.ok(context.__discoveryState().searchFailures.some(row=>row.phase==='buyer-fit'));
 });
 test('successive clicks rotate through incomplete companies and keep the queue after reload',async()=>{
  const {context,review,plan}=pendingCompanyBatchFixture();

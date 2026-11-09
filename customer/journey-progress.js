@@ -28,7 +28,7 @@
     return STATUS_LABELS[stage.status]||'Not started';
   }
 
-  function stageSteps({main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
+  function stageSteps({companyOutcome,main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
     const answers=main.answers&&typeof main.answers==='object'?main.answers:{};
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
@@ -68,7 +68,7 @@
       ],
       5:[
         step('scope','Discovery amount selected',Boolean(discoveryMeta.targetCount||discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
-        step('companies',discovery.status==='no_results'?(retainedCompanies?'No new checked companies · saved companies retained':'No checked companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>=requested,{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
+        step('companies',discovery.status==='no_results'?(retainedCompanies?'No new checked companies · saved companies retained':'No checked companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&(companyOutcome?companyOutcome.targetMet:(discoveryMeta.companyGoal==='strong_fit'?candidates.filter(c=>Number(c.qualification?.score)>=80).length:candidates.length)>=requested),{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
         step('review','Checked companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review checked companies'}),
         step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'}),

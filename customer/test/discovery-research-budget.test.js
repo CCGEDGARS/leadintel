@@ -104,7 +104,7 @@ const companyNames = ['North Steel', 'Svea Machinery', 'Nordic Foundry', 'Polar 
 const slugOf = company => company.toLowerCase().replace(/[^a-z]/g, '');
 const signalText = company => `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`;
 
-function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10, pendingCompanies = [], fitResponse = weakBuyerFitResponse } = {}) {
+function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10, pendingCompanies = [], fitResponse = weakBuyerFitResponse, verificationMarkdown = '' } = {}) {
   let source = uiSource;
   const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MIN_MS=(\d+);/);
   const runMargin = source.match(/const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=(\d+);/);
@@ -114,7 +114,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     .replace(runTimeout[0], 'const DISCOVERY_RUN_TIMEOUT_MIN_MS=4000;')
     .replace(runMargin[0], 'const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=500;')
     .replace(extractionTimeout[0], 'const COMPANY_EXTRACTION_TIMEOUT_MS=1000;')
-    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery=runCompanyDiscovery;\nglobalThis.__discoveryState=()=>discovery;\nglobalThis.__loadMeta=loadMeta;\n');
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery=runCompanyDiscovery;\nglobalThis.__discoveryState=()=>discovery;\nglobalThis.__loadMeta=loadMeta;\nglobalThis.__verifyCompany=firecrawlCompanySearch;\nglobalThis.__startBudget=startDiscoveryBudget;globalThis.__fetchDiscoveryResource=fetchDiscoveryResource;\n');
   assert.ok(source.includes('globalThis.__runDiscovery=runCompanyDiscovery'), 'test hook attached');
   const mainState = {
     website: 'https://acme.example/',
@@ -148,7 +148,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
       if (query.startsWith('site:')) {
         const domain = query.match(/^site:([^ ]+)/)[1];
         const company = companyNames.find(name => slugOf(name) === domain.split('.')[0]) || 'North Steel';
-        return { ok: true, json: async () => ({ success: true, data: [{ date: new Date().toISOString().slice(0, 10), url: `https://${domain}/news/new-factory`, title: `${company} opens a new factory in Latvia`, description: signalText(company), markdown: signalText(company) }] }) };
+        return { ok: true, json: async () => ({ success: true, data: [{ date: new Date().toISOString().slice(0, 10), url: `https://${domain}/news/new-factory`, title: `${company} opens a new factory in Latvia`, description: signalText(company), markdown: verificationMarkdown||signalText(company) }] }) };
       }
       if (query.startsWith('"') && query.includes('-site:')) return { ok: true, json: async () => ({ success: true, data: [] }) };
       const resolution = query.match(/^"([^"]+)"/);
@@ -216,6 +216,29 @@ test('a verified saved company can satisfy the target without opening another ma
  assert.equal(d.status,'complete');assert.equal(context.__loadMeta().autonomousDiscovery.exhausted,false);
 });
 
+test('fresh saved operating evidence is reassessed under current targeting before any paid website request',async()=>{
+ const text='Queued Manufacturing operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.';
+ const fitResponse=prompt=>JSON.stringify({companies:JSON.parse(prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Production operations are a specific application for the confirmed automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions[0].quoteId}]}))});
+ const pending={company:'Queued Manufacturing',domain:'queuedmanufacturing.lv',market:'Latvia',evidence:[{url:'https://queuedmanufacturing.lv/operations',text,sourceRead:true,verifiedAt:new Date().toISOString()}],buyerFit:{version:2,fit:85,context:'older-targeting-context'}};
+ const {context,calls}=loadRunner({targetCount:1,pendingCompanies:[pending],fitResponse});await context.__runDiscovery();
+ assert.equal(context.__discoveryState().candidates[0]?.domain,'queuedmanufacturing.lv');assert.equal(calls.search+calls.scrape,0,'existing fresh evidence must reach the AI reassessment before a new paid web check');assert.equal(calls.other,1);
+});
+test('a readable official search page avoids a redundant homepage crawl and is reused within the request',async()=>{
+ const verificationMarkdown='North Steel manufactures industrial equipment and operates production facilities in Latvia. Our engineering teams use industrial automation systems and manufacturing machinery to coordinate the production of equipment for business customers.';
+ const {context,calls}=loadRunner({verificationMarkdown});context.__startBudget(20);
+ const query={kind:'verification',verificationFocus:'operations',domain:'northsteel.lv',company:'North Steel',market:'Latvia',query:'site:northsteel.lv operations Latvia'};
+ const [first,second]=await Promise.all([context.__verifyCompany(query,new AbortController().signal),context.__verifyCompany(query,new AbortController().signal)]);
+ assert.equal(calls.scrape,0,'a supplied readable official operating page already satisfies the page-read step');assert.equal(calls.search,1,'the same successful query is not repurchased');assert.ok(first.some(e=>e.sourceRead&&e.verifiedAt));assert.equal(second[0].verifiedAt,first[0].verifiedAt,'reuse must not invent a later source-read timestamp');
+ const audit=Discovery.companyResearchAuditSummary(context.__discoveryState().researchAudit);assert.equal(audit.searches,1);assert.equal(audit.pageReads,0);assert.equal(audit.reused,1);
+});
+test('discovery finishes small verified-fit batches and stops acquisition once five strong companies exist',async()=>{
+ const fitResponse=prompt=>JSON.stringify({companies:JSON.parse(prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Manufacturing operations use the confirmed automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions.find(q=>q.quote.includes('Latvia')).quoteId}]}))});
+ const {context,calls}=loadRunner({targetCount:5,fitResponse});await context.__runDiscovery();
+ assert.ok(context.__discoveryState().candidates.filter(c=>c.qualification?.score>=80).length>=5);
+ assert.ok(calls.queries.filter(q=>q.startsWith('site:')).length<=8,'two four-company batches are sufficient; later websites must not be purchased first');
+ assert.ok(calls.search+calls.scrape<=50,'a controlled five-strong-fit case must finish far below the 200-call cap');
+});
+
 test('a company search stops at its Firecrawl budget without failing and reports what was skipped', async () => {
   const budget = 12;
   const { context, calls } = loadRunner({ engine: { ...Discovery, discoveryCallBudget: () => budget } });
@@ -259,12 +282,32 @@ test('a target-only research run stays under its own budget and reports usage ho
 test('the Companies step shows the research budget next to the amount selector and refreshes assets', () => {
   assert.match(uiSource, /id="discovery-cost-estimate"/);
   assert.match(uiSource, /function renderDiscoveryEstimate\(\)/);
-  assert.match(uiSource, /Research budget: up to \$\{estimate\.cap\} Firecrawl calls/);
+  assert.match(uiSource, /Research budget: up to \$\{boundedDiscoveryCallLimit\(estimate\.cap\)\} Firecrawl calls/);
   assert.match(uiSource, /if\(followUpQueries\.length&&!discoveryBudgetExhausted\(\)\)/);
   assert.match(uiSource, /autoPass<MAX_AUTONOMOUS_DISCOVERY_PASSES&&budgetAllowsPass/);
-  assert.match(uiSource, /fetchImpl:async\(url,init\)=>\{throwIfDiscoveryRunAborted\(runSignal\);reserveFirecrawlCall\('page'\);return fetch\(url,init\);\}/);
   assert.doesNotMatch(uiSource, /Saving Mode search limit reached/);
   assert.match(uiSource, /research-budget=20261019-v1/);
   assert.match(indexHtml, /discovery-engine\.js\?v=[^"]*research-budget=20261019-v1/);
   assert.match(indexHtml, /discovery-ui\.js\?v=[^"]*research-budget=20261019-v1/);
+});
+
+test('timed-out work cannot poison a later retry cache or mutate a replacement request ledger',async()=>{
+ const {context}=loadRunner();context.__startBudget(20);let finish,calls=0;
+ context.fetch=()=>{calls++;if(calls===1)return new Promise(resolve=>{finish=resolve;});return Promise.resolve({ok:true,json:async()=>({data:[]})});};
+ const abort=new AbortController(),init={method:'POST',body:JSON.stringify({query:'same source'}),signal:abort.signal};
+ const first=context.__fetchDiscoveryResource('https://provider.example/search',init,{signal:abort.signal}).catch(error=>error);
+ abort.abort();await context.__fetchDiscoveryResource('https://provider.example/search',{...init,signal:new AbortController().signal},{signal:new AbortController().signal});assert.equal(calls,2,'an aborted in-flight request must not absorb a new bounded retry');
+ context.__startBudget(20);const ledger=JSON.stringify(context.__discoveryState().researchAudit);finish({ok:true,json:async()=>({data:[]})});await first;assert.equal(JSON.stringify(context.__discoveryState().researchAudit),ledger,'a late response cannot cross the request boundary');
+});
+
+test('an unavailable AI assessment does not repurchase already fresh operating evidence',async()=>{
+ const text='Queued Manufacturing operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.';
+ const pending={company:'Queued Manufacturing',domain:'queuedmanufacturing.lv',market:'Latvia',evidence:[{url:'https://queuedmanufacturing.lv/operations',text,sourceRead:true,verifiedAt:new Date().toISOString()}],buyerFit:{version:2,fit:85,context:'older-targeting-context'}};
+ const {context,calls}=loadRunner({targetCount:1,pendingCompanies:[pending],fitResponse:()=>{throw new Error('AI temporarily unavailable');}});await context.__runDiscovery();
+ assert.equal(calls.search+calls.scrape,0,'an AI availability gap cannot be fixed with another web purchase');assert.ok(context.__discoveryState().searchFailures.some(row=>row.phase==='buyer-fit'));assert.equal(context.__discoveryState().candidates.length,0);
+});
+
+test('the saved web cap bounds actual provider requests and its persisted receipts',async()=>{
+ const {context,calls}=loadRunner({targetCount:5});const key='leadintel_customer_v2_discovery_meta',meta=JSON.parse(context.localStorage.getItem(key));context.localStorage.setItem(key,JSON.stringify({...meta,webCallCap:7}));await context.__runDiscovery();
+ const state=context.__discoveryState(),audit=Discovery.companyResearchAuditSummary(state.researchAudit);assert.equal(calls.search+calls.scrape,7);assert.equal(audit.requests,7);assert.equal(state.funnel.firecrawlCallLimit,7);assert.ok(state.researchAudit.completedAt);
 });
