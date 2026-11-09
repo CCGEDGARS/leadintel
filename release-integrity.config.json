@@ -70,6 +70,13 @@
   },
   "smokeChecks": [
     {
+      "id": "research-strategy-autosave-handoff",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": ["if(changed)window.dispatchEvent(new CustomEvent(\"leadintel:workspace-dirty\"))", "LeadIntelMarket.revalidateMarketOpportunities", "strategy-research-handoff", "!activeMarketResearchRun" ]
+    },
+    {
       "id": "strategy-large-workspace-save",
       "type": "text",
       "url": "/customer/app.js",
@@ -320,7 +327,7 @@
     {
       "id": "kazakhstan-discovery-geography",
       "type": "text",
-      "url": "/customer/discovery-engine.js",
+      "url": "/customer/evidence-policy.js",
       "status": 200,
       "contains": [
         "code:\"kz\"",

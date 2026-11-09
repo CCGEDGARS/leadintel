@@ -250,7 +250,7 @@ jobs:
 
   profile-strategy-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -271,12 +271,15 @@ jobs:
       - name: Verify fresh Profile and Strategy save, research and late navigation
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through' backend/test/step1-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
       - name: Preserve focused navigation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: profile-strategy-acceptance-${{ github.sha }}
-          path: /tmp/leadintel-profile-strategy/
+          path: |
+            /tmp/leadintel-profile-strategy/
+            /tmp/leadintel-research-handoff/
+            /tmp/leadintel-research-handoff-outage/
           if-no-files-found: warn
           retention-days: 14

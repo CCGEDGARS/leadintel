@@ -40,7 +40,7 @@ test('rejected or contradicted evidence is excluded from opportunity scoring',()
   const applied=verifier.applyVerification(results,{status:'complete',provider:'gemini',role:'verification',web_search:false,verdicts:[
     {evidence_id:'evidence-1',relevance:'reject',commercial_fit:'weak',contradiction:true,rationale:'Not relevant.',missing_evidence:[]}
   ]});
-  const opportunities=market.buildMarketOpportunities({targetMarkets:'Latvia',priorityOffers:'Equipment'},[],[],applied.results,'en');
+  const opportunities=market.buildMarketOpportunities({targetMarkets:'Latvia',priorityOffers:'Equipment'},[],[],applied.results.map(item=>({...item,title:'Latvia: '+item.title})),'en');
   assert.equal(opportunities[0].evidence.some(item=>item.url==='https://example.com/a'),false);
   assert.equal(opportunities[0].evidence.some(item=>item.url==='https://example.org/b'),true);
 });
