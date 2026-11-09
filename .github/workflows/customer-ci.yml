@@ -320,5 +320,7 @@ jobs:
             /tmp/leadintel-profile-strategy/
             /tmp/leadintel-research-handoff/
             /tmp/leadintel-research-handoff-outage/
+            /tmp/leadintel-research-handoff-legacy/
+            /tmp/leadintel-research-handoff-progress/
           if-no-files-found: warn
           retention-days: 14

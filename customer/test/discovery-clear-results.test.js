@@ -15,7 +15,7 @@ function fixture(status='complete'){
   loadMeta:()=>({targetCount:5,fingerprint:'keep',lastCompanyRun:{}}),
   saveMeta:m=>c.meta=m,
   saveDiscovery:()=>c.saved=JSON.parse(JSON.stringify(c.discovery)),
-  renderAll:()=>{},
+  renderAll:()=>{},clearCompanySearchProgressClock:()=>{},
   enrichmentResults:new Map(),enrichmentPending:new Set(),selectedBuyerEnrichment:new Set(),automaticPublicChecks:new Set(),
   discoveryProgress:{phase:'idle',completed:0,total:0},recoveredInterruptedRun:false
  };
