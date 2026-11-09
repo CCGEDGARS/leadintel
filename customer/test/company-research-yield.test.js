@@ -30,3 +30,8 @@ test('operating evidence planning is independent of seller names and follows the
 test('journey startup can request company progress before discovery has loaded',()=>{
  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),start=source.indexOf('function companySearchOutcome(){'),end=source.indexOf('function companyCandidateCardHtml(',start),context={discovery:null};vm.createContext(context);vm.runInContext(source.slice(start,end),context);assert.equal(context.companySearchOutcome(),null);
 });
+
+test('bounded receipts retain the full request allowance alongside repeated cache hits',()=>{
+ const entries=Array.from({length:600},(_,i)=>({id:'op-'+i,operation:'search',phase:'market',key:'key-'+i,outcome:i<200?'succeeded':'reused'}));
+ const audit=D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'three-pass-run',entries}}).researchAudit,result=D.companyResearchAuditSummary(audit);assert.equal(result.requests,200);assert.equal(result.reused,400);assert.equal(audit.entries.length,600);
+});
