@@ -7825,6 +7825,54 @@
         "This backup does not indicate a current cloud-save failure.",
         "opportunity-context-recovery=20261109-v1"
       ]
+    },
+    {
+      "id": "company-search-progress-view",
+      "type": "text",
+      "url": "/customer/company-search-progress.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelCompanySearchProgress",
+        "role=\"progressbar\"",
+        "aria-current=\"step\"",
+        "data-indeterminate",
+        "function model("
+      ]
+    },
+    {
+      "id": "company-search-progress-wiring",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "id=\"company-search-progress\"",
+        "function renderCompanySearchProgress()",
+        "data-cancel-company-search",
+        "discoveryProgress.completed=Math.floor(offset/16)+1",
+        "company-progress=20261109-v1"
+      ]
+    },
+    {
+      "id": "company-search-progress-visible-meter",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".company-search-progress-meter{height:20px",
+        "@keyframes company-search-working",
+        "@media(prefers-reduced-motion:reduce)",
+        ".company-search-progress-toolbar"
+      ]
+    },
+    {
+      "id": "company-search-progress-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-search-progress.js?v=20261109-v1",
+        "company-progress=20261109-v1"
+      ]
     }
   ],
   "retry": {
