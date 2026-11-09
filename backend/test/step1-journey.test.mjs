@@ -71,3 +71,7 @@ test('Quick Overview retains local results on cloud-save failure and a visible s
  const evidence=await verifyProfileStrategyJourney({researchHandoff:true,failResearchSave:true,artifactDir:'/tmp/leadintel-research-handoff-outage'});
  assert.equal(evidence.failedSaveRetainedLocalResults,true);assert.equal(evidence.researchFreshBrowserReopen,true);
 });
+test('Quick Overview completed before Opportunity-led activation reopens review, saves Strategy and reuses its research',{timeout:120000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in Profile/Strategy journey CI.');return;}
+ const {verifyProfileStrategyJourney}=await import('../../scripts/verify-profile-strategy-journey.mjs');const evidence=await verifyProfileStrategyJourney({researchHandoff:true,legacyOpportunityContext:true,artifactDir:'/tmp/leadintel-research-handoff-legacy'});for(const key of ['reviewOpened','approvalSaved','marketRunReused','coldReopen'])assert.equal(evidence.legacyOpportunityRecovery[key],true);assert.deepEqual(evidence.pageErrors,[]);
+});
