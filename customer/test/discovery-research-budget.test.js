@@ -198,6 +198,13 @@ test('a queue from a different seller-offer context cannot be researched as the 
  const {context,calls}=loadRunner({engine:{...Discovery,discoveryCallBudget:()=>12},targetCount:5,pendingCompanies:[{company:'Other Seller Target',domain:'other-seller-target.lv',market:'Latvia',searchContextKey:'different-seller-offer-context',evidence:[]}]});
  await context.__runDiscovery();assert.doesNotMatch(calls.queries[0],/other-seller-target/);assert.ok(calls.search+calls.scrape<=12);
 });
+test('a later search advances unfinished review instead of repeatedly spending on the first stalled companies',async()=>{
+ const pendingCompanies=Array.from({length:8},(_,i)=>({company:`Queued Manufacturing ${i}`,domain:`queued${i}.lv`,market:'Latvia',evidence:[],qualificationGaps:['Verify readable operating evidence']}));
+ const {context,calls}=loadRunner({engine:{...Discovery,discoveryCallBudget:()=>12},targetCount:5,pendingCompanies});
+ await context.__runDiscovery();const first=calls.queries[0],boundary=calls.queries.length;
+ await context.__runDiscovery();assert.notEqual(calls.queries[boundary],first,'the saved review attempt order must give untouched companies their turn');
+ assert.ok(calls.search+calls.scrape<=24,'two deliberate requests each retain their 12-call cap');
+});
 
 test('a verified saved company can satisfy the target without opening another market wave',async()=>{
  const fitResponse=prompt=>JSON.stringify({companies:JSON.parse(prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Industrial facilities are a specific application for the approved automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions.find(q=>q.quote.includes('Latvia')).quoteId}]}))});
