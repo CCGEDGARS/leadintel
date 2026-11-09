@@ -104,7 +104,7 @@ const companyNames = ['North Steel', 'Svea Machinery', 'Nordic Foundry', 'Polar 
 const slugOf = company => company.toLowerCase().replace(/[^a-z]/g, '');
 const signalText = company => `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`;
 
-function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10 } = {}) {
+function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10, pendingCompanies = [], fitResponse = weakBuyerFitResponse } = {}) {
   let source = uiSource;
   const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MIN_MS=(\d+);/);
   const runMargin = source.match(/const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=(\d+);/);
@@ -130,13 +130,13 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     ['leadintel_customer_v2_state', JSON.stringify(mainState)],
     ['leadintel_customer_v2_discovery_meta', JSON.stringify({ activeJourneyStage: 5, targetCount, targetMode: 'custom' })]
   ]);
-  const calls = { search: 0, scrape: 0, other: 0 };
+  const calls = { search: 0, scrape: 0, other: 0, queries: [] };
   let marketSearchIndex = 0;
   const fetchImpl = async (url, options) => {
     const target = String(url);
     const body = JSON.parse(options?.body || '{}');
     if (target.includes('/api/integrations/services/contact-policy')) return { ok: true, json: async () => ({ confirmationLevel: 'provider_verified' }) };
-    if (target.includes('/api/ai/generate')) { calls.other += 1; return { ok: true, json: async () => ({ text: weakBuyerFitResponse(body.prompt) }) }; }
+    if (target.includes('/api/ai/generate')) { calls.other += 1; return { ok: true, json: async () => ({ text: fitResponse(body.prompt) }) }; }
     if (target.includes('/firecrawl-scrape')) {
       calls.scrape += 1;
       return { ok: true, json: async () => ({ data: { markdown: 'Official company website. We operate an industrial manufacturing business in Latvia with production facilities, engineering capabilities and a management team planning a new factory.', links: [], metadata: { sourceURL: body.url, title: 'Official site' } } }) };
@@ -144,6 +144,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     if (target.includes('/firecrawl-search')) {
       calls.search += 1;
       const query = String(body.query || '');
+      calls.queries.push(query);
       if (query.startsWith('site:')) {
         const domain = query.match(/^site:([^ ]+)/)[1];
         const company = companyNames.find(name => slugOf(name) === domain.split('.')[0]) || 'North Steel';
@@ -166,6 +167,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     AbortController, DOMException, URL, URLSearchParams, TextEncoder, TextDecoder,
     dispatchEvent() {}, addEventListener() {}, removeEventListener() {},
     LeadIntelDiscovery: engine,
+    LeadIntelCompanySearchProgress: require('../company-search-progress.js'),
     LeadIntelStrategyIntegrity: StrategyIntegrity,
     LeadIntelTargeting: Targeting,
     LeadIntelServerBridge: null,
@@ -181,8 +183,38 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
   context.window = context;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'first-party-research.js'), 'utf8'), context);
   vm.runInNewContext(source, context, { filename: 'discovery-ui.js' });
+  context.__discoveryState().potentialMatches = pendingCompanies;
   return { context, calls };
 }
+
+test('saved unfinished companies are verified before buying another broad market search', async () => {
+  const {context,calls}=loadRunner({engine:{...Discovery,discoveryCallBudget:()=>12},targetCount:5,pendingCompanies:[{company:'Queued Manufacturing',domain:'queued.lv',website:'https://queued.lv/',market:'Latvia',evidence:[],qualificationGaps:['Verify target-market presence']}]});
+  await context.__runDiscovery();
+  assert.match(calls.queries[0],/queued\.lv/,'the known evidence gap is researched before another market wave');
+  assert.ok(calls.search+calls.scrape<=12,'prioritized review draws from the original request budget');
+  assert.notEqual(context.__discoveryState().status,'running');
+});
+test('a queue from a different seller-offer context cannot be researched as the current request',async()=>{
+ const {context,calls}=loadRunner({engine:{...Discovery,discoveryCallBudget:()=>12},targetCount:5,pendingCompanies:[{company:'Other Seller Target',domain:'other-seller-target.lv',market:'Latvia',searchContextKey:'different-seller-offer-context',evidence:[]}]});
+ await context.__runDiscovery();assert.doesNotMatch(calls.queries[0],/other-seller-target/);assert.ok(calls.search+calls.scrape<=12);
+});
+test('a later search advances unfinished review instead of repeatedly spending on the first stalled companies',async()=>{
+ const pendingCompanies=Array.from({length:8},(_,i)=>({company:`Queued Manufacturing ${i}`,domain:`queued${i}.lv`,market:'Latvia',evidence:[],qualificationGaps:['Verify readable operating evidence']}));
+ const {context,calls}=loadRunner({engine:{...Discovery,discoveryCallBudget:()=>12},targetCount:5,pendingCompanies});
+ await context.__runDiscovery();const first=calls.queries[0],boundary=calls.queries.length;
+ await context.__runDiscovery();assert.notEqual(calls.queries[boundary],first,'the saved review attempt order must give untouched companies their turn');
+ assert.ok(calls.search+calls.scrape<=24,'two deliberate requests each retain their 12-call cap');
+});
+
+test('a verified saved company can satisfy the target without opening another market wave',async()=>{
+ const fitResponse=prompt=>JSON.stringify({companies:JSON.parse(prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Industrial facilities are a specific application for the approved automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions.find(q=>q.quote.includes('Latvia')).quoteId}]}))});
+ const {context,calls}=loadRunner({targetCount:1,pendingCompanies:[{company:'Queued Manufacturing',domain:'queuedmanufacturing.lv',website:'https://queuedmanufacturing.lv/',market:'Latvia',evidence:[]}],fitResponse});
+ await context.__runDiscovery();const d=context.__discoveryState();
+ assert.equal(d.candidates.length,1,JSON.stringify({requested:context.__loadMeta().lastCompanyRun.requestedCount,pending:d.potentialMatches.map(c=>({domain:c.domain,gaps:c.qualification?.gaps,issue:c.buyerFitIssue})),domains:d.candidates.map(c=>c.domain)}));assert.equal(d.candidates[0].domain,'queuedmanufacturing.lv');assert.equal(d.candidates[0].qualification.score,85);
+ assert.ok(calls.queries.every(q=>q.includes('queuedmanufacturing.lv')||q.includes('Queued Manufacturing')),'a completed target must not trigger unrelated searches');
+ assert.ok(d.candidates[0].evidence.some(e=>e.verifiedAt),'readable evidence and freshness survive the queued handoff');
+ assert.equal(d.status,'complete');assert.equal(context.__loadMeta().autonomousDiscovery.exhausted,false);
+});
 
 test('a company search stops at its Firecrawl budget without failing and reports what was skipped', async () => {
   const budget = 12;

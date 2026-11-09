@@ -30,12 +30,12 @@
 .company-search-progress-stages li[aria-current="step"]{border:2px solid #16715b;background:#dcefe6;color:#124e3c;font-weight:700}
 .company-search-progress-stages li[aria-current="step"]>span{border-color:#16715b;background:#16715b;color:#fff}
 .company-search-progress-note{margin:10px 0!important;color:#48675b;font-size:13px!important;line-height:1.5}
-.company-search-progress-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:15px 0 0!important}
+.company-search-progress-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0 0!important}
 .company-search-progress-stats>div{padding:10px 12px;border:1px solid #cbded2;border-radius:9px;background:#fff}
 .company-search-progress-stats dt{font-size:12px;color:#526d60;line-height:1.4}
 .company-search-progress-stats dd{margin:4px 0 0;font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 .company-search-progress[data-state="partial"],.company-search-progress[data-state="error"],.company-search-progress[data-state="interrupted"]{border-color:#bb8d34;background:#fffbf0}
-@media(max-width:760px){.company-search-progress{padding:17px 15px}.company-search-progress-head{flex-wrap:wrap;gap:10px}.company-search-progress-head h3{font-size:20px!important}.company-search-progress-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.company-search-progress-count{flex-wrap:wrap}.company-search-progress-stats{gap:7px}.company-search-progress-stats>div{padding:9px 7px}}
+@media(max-width:760px){.company-search-progress{padding:17px 15px}.company-search-progress-head{flex-wrap:wrap;gap:10px}.company-search-progress-head h3{font-size:20px!important}.company-search-progress-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.company-search-progress-count{flex-wrap:wrap}.company-search-progress-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.company-search-progress-stats>div{padding:9px 7px}}
 @media(prefers-reduced-motion:reduce){.company-search-progress-meter>span{animation:none!important;transition:none!important}.company-search-progress-meter[data-indeterminate="true"]>span{transform:none;width:35%!important}}
 
 /* Discovery target control v2 */
@@ -809,3 +809,5 @@
 
 .buyer-research-progress.needs-attention{border-color:#c58b2e;background:#fff8e9}
 .buyer-research-progress li.needs-review{color:#875c16;background:#fff2d7}
+
+.company-fit-review-state{margin:8px 0;color:#526d60;font-size:13px;line-height:1.5}

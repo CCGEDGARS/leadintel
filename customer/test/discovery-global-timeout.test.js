@@ -70,6 +70,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     dispatchEvent() {},
     addEventListener() {},
     LeadIntelDiscovery: Discovery,
+    LeadIntelCompanySearchProgress: require('../company-search-progress.js'),
     LeadIntelStrategyIntegrity: StrategyIntegrity,
     LeadIntelTargeting: Targeting,
     LeadIntelServerBridge: bridgeImpl,
@@ -1690,10 +1691,22 @@ test('finished shortfall does not promise a background search that is no longer 
  vm.runInNewContext('qualificationAssessment=()=>({eligible:true,score:80});discovery.candidates=[{company:"Buyer",domain:"buyer.example",website:"https://buyer.example",evidence:[],matchedSignals:[],fitReasons:[],buyerFit:{}}];',context);
  context.__renderCandidates();
  const html=context.__elements.get('company-candidates').innerHTML;
- assert.match(html,/This search has finished/);assert.doesNotMatch(html,/will continue broadening the search automatically/);
+ assert.match(html,/checks did not finish/);assert.doesNotMatch(html,/will continue broadening the search automatically/);
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({autonomousDiscovery:{active:true}}));
  context.__renderCandidates();
- assert.match(context.__elements.get('company-candidates').innerHTML,/is broadening the search automatically/);
+ assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/is broadening the search automatically/,'stale active metadata cannot imply ongoing work after partial completion');
+});
+test('the visible shortlist distinguishes two completed checks from one strong-fit company',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ const rows=[81,69].map((score,i)=>({company:'Fixture Buyer '+i,domain:`buyer${i}.example`,website:`https://buyer${i}.example`,evidence:[],matchedSignals:[],fitReasons:[],buyerFit:{fit:score}}));
+ context.__setDiscovery({status:'complete',candidates:rows,potentialMatches:[],lastRunAt:new Date().toISOString()});
+ context.LeadIntelDiscovery={...context.LeadIntelDiscovery,rankQualifiedCompanies:items=>items,companyQualificationPresentation:()=>({routeLabel:'Company fit',referenceScore:null,explanation:'Controlled assessment'})};
+ vm.runInNewContext('qualificationAssessment=c=>({eligible:true,score:c.buyerFit.fit});',context);
+ context.__discoveryState().candidates=rows;
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:5,autonomousDiscovery:{pass:3,maxPasses:3,callsUsed:90,callLimit:200,exhausted:true}}));
+ context.__renderCandidates();const html=context.__elements.get('company-candidates').innerHTML;
+ assert.match(html,/2 checked companies/);assert.match(html,/1 strong fit \(80\+\)/);assert.match(html,/Manual review · below 80/);
+ assert.doesNotMatch(html,/2 qualified companies|exhausted the current research budget/);assert.match(html,/pass limit/);
 });
 test('campaign discovery discards async work when the account changes before evidence returns',async()=>{const b={session:{authenticated:true,user:{id:'u1'}},workspace:{id:'w1'}};let context,changed=false;context=loadDiscoveryRunner({requestTimeout:40,scaleProductionRunTimeout:1000,bridgeImpl:b,fetchImpl:async()=>{if(!changed){changed=true;b.workspace.id='w2';context.localStorage.setItem('leadintel_customer_v2_discovery',JSON.stringify({sentinel:'new-workspace'}));}return {ok:true,json:async()=>({success:true,data:[]})};}});await context.__runDiscovery({campaignPlan:{targetCount:1,researchDepth:'quick'},savingMode:true});assert.equal(changed,true);assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')).sentinel,'new-workspace');});
 

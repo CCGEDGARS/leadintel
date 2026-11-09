@@ -1240,7 +1240,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new qualified companies · saved companies retained",
+        "No new checked companies · saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },

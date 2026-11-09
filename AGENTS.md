@@ -63,6 +63,8 @@ Use `LeadIntelDialogs.confirm` for customer confirmations. Never introduce nativ
 
 ## Step 5 is the current product priority
 
+For Company-search counts, qualification labels, budget messages and continuation, follow `docs/project-state/2026-11-09-company-search-result-contract.md`. Checked manual results, strong fit (80+) and automatic readiness are different states. An unmet target must prioritize its saved unfinished evidence queue before another broad search within the existing request budget. A pass limit must never be reported as measured credit exhaustion. Verify actual queue ordering, budget bounds, mixed scores, partial preservation and saved browser reload; do not fix shortages by weakening evidence gates.
+
 User instruction, 21 October 2026: Buyers research, qualification, confirmed company emails and usable downstream recipients are the top priority. Use `docs/policies/buyer-quality-supervisor.md`. Test completion and production freshness prove implementation state; they do not prove the requested contacts were obtained. Report research coverage, AI review coverage and usable contact outcomes separately. Never mark the whole step complete while its explicit quality requirements remain unmet.
 
 ## Shared research brief is mandatory
