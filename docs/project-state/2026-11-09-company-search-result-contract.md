@@ -19,3 +19,7 @@ Required behavior:
 5. Guard the contract with executable tests: queue-before-market ordering, shared call cap, queued success without another market wave, mixed 81/69 score rendering, genuine versus false exhaustion, and authenticated persisted browser reload. Source-marker checks alone do not prove this contract.
 
 Acceptance must record code checks, exact-release proof and authenticated UI evidence separately. Use controlled provider fixtures for regression work. Do not spend another paid research run solely to repeat deterministic tests or export private workspace detail to prove a label change.
+
+## 10 November acquisition amendment
+
+See `2026-11-10-company-research-yield-audit.md`. Normal discovery now explicitly targets strong-fit (80+) companies; lower-score checked results still remain available for manual selection. Deliberate saved-target rechecks and campaign checks retain their checked-company completion semantics. Keep the goal and its actual count in the page and journey model consistent. Use fresh saved operating evidence before another web request, country/operations queries for static gaps, small complete acquisition/fit batches and a request-scoped deduplicated operation ledger. Earlier runs without receipts display aggregate totals only. Whole-request spending must be compared with whole-request counters, never the last-pass website count.

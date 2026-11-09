@@ -127,7 +127,7 @@ function readJourneyState(){
   const discovery=readStageJson(DISCOVERY_STORAGE_KEY),assess=window.LeadIntelDiscoveryUI?.assessCompany;
   discovery.candidates=typeof assess==='function'?(discovery.candidates||[]).map(candidate=>({...candidate,qualification:assess(candidate,{researchedAt:discovery.lastRunAt})})):[];
   return {
-    main:readProcessState(),discovery,discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
+    companyOutcome:window.LeadIntelDiscoveryUI?.getCompanyOutcome?.(),main:readProcessState(),discovery,discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
   };
 }
 function websiteActivated(main){
