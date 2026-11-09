@@ -310,7 +310,9 @@ jobs:
       - name: Verify fresh Profile and Strategy save, research and late navigation
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
+        run: |
+          node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js
       - name: Preserve focused navigation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -318,6 +320,7 @@ jobs:
           name: profile-strategy-acceptance-${{ github.sha }}
           path: |
             /tmp/leadintel-profile-strategy/
+            /tmp/leadintel-company-search-outcome/
             /tmp/leadintel-research-handoff/
             /tmp/leadintel-research-handoff-outage/
             /tmp/leadintel-research-handoff-legacy/
