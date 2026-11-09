@@ -1572,7 +1572,7 @@ function strategyHandoffModel(){
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   if(incompleteResearch)warnings.push(`Some research checks were unavailable; your ${evidence.length} saved sources will still be used.`);
-  if(!monitoring.enabled)warnings.push("Monitoring is optional; this one-time company search still runs normally. To enable scheduled checks once Strategy is active, go to Step 3 → Strategy → Website monitoring → Set up monitoring (or Edit settings). Choose websites, buying signals and frequency, tick Enable monitoring, then click Save and close. Scheduled checks use your connected provider credits.");
+  if(!monitoring.enabled)warnings.push("Monitoring is off (optional). This one-time company search will still run normally. To enable scheduled checks once Strategy is active, go to Step 3 → Strategy → Website monitoring → Set up monitoring (or Edit settings). Choose websites, buying signals and frequency, tick Enable monitoring, then click Save and close. Scheduled checks use your connected provider credits.");
   const providerStatus=globalThis.LeadIntelAttention?.providerStatus?.()||null;const providerConnected=provider=>Boolean(globalThis.LeadIntelAttentionModel?.providerConnected?.(providerStatus,provider));
   if(providerStatus){
     if(!providerConnected("apollo"))warnings.push("Apollo is not connected. Buyer identities will come from public sources only; connect Apollo in Settings for decision-maker search.");
