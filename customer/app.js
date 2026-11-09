@@ -95,7 +95,8 @@ function saveState(){
   if(typeof syncStrategyApproval==='function')syncStrategyApproval();
   if(state.targetingConfirmation&&!LeadIntelTargeting.isConfirmed(state))state.targetingConfirmation=null;
   if(typeof renderTargetingConfirmation==="function")renderTargetingConfirmation();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));const persisted=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(persisted)||null;strategySavedState=persisted;strategySavedContext=profileApprovalContext();updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();return true;
+  const serialized=JSON.stringify(state),changed=localStorage.getItem(STORAGE_KEY)!==serialized;
+  localStorage.setItem(STORAGE_KEY,serialized);if(changed)window.dispatchEvent(new CustomEvent("leadintel:workspace-dirty"));const persisted=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");strategySavedBaseline=globalThis.LeadIntelStrategyIntegrity?.signature(persisted)||null;strategySavedState=persisted;strategySavedContext=profileApprovalContext();updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();return true;
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
@@ -1473,6 +1474,8 @@ function renderMarketStrategy(){
   renderResearchReports();
   if(!state.profile)return;
   ensureMarketStrategySeeded();
+  state.market.opportunities=LeadIntelMarket.revalidateMarketOpportunities(state.profile,state.market.signals,state.market.opportunities);
+  syncStrategyApproval();
   const repaired=globalThis.LeadIntelCompanyBrain?.repairLegacyStrategy?.(state);
   if(repaired&&repaired!==state){state=repaired;saveState();}
   const conflicts=globalThis.LeadIntelCompanyBrain?.strategyConflicts?.(state.profile,state.market.signals)||[];
@@ -1483,6 +1486,9 @@ function renderMarketStrategy(){
   const marketSummary=LeadIntelMarket.splitList(state.profile.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile.currentMarkets).join(" · ")||"Provisional market";
   $("strategy-market-summary").textContent=marketSummary;
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
+  const researchSummary=$("strategy-research-handoff"),sources=state.market.researchResults||[];
+  if(researchSummary){researchSummary.hidden=!sources.length;researchSummary.textContent=`${sources.length} research sources · ${sources.filter(item=>item.extractedAt).length} pages read. Review your profiles and signals, then continue to Companies. Optional profiles stay off until enabled.`;}
+
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
   if(state.market.strategyApprovalInvalidated&&$("activate-market-strategy")?.dataset.activationBusy!=='true')setActivationFeedback(state.market.strategyApprovalInvalidated.reason,'warning');
@@ -1492,7 +1498,7 @@ function renderMarketStrategy(){
 let researchReportUi;
 function renderResearchReports(){
   if(!globalThis.LeadIntelResearchReport)return;
-  if(!state.market.researchReportsInitialized&&!state.market.researchReports?.length&&state.market.researchResults?.length&&state.market.researchStatus!=="running"){
+  if(!state.market.researchReportsInitialized&&!state.market.researchReports?.length&&state.market.researchResults?.length&&state.market.researchStatus!=="running"&&!activeMarketResearchRun){
     state.market.researchReports=[globalThis.LeadIntelResearchReport.snapshot(state,'imported-current')];state.market.researchReportsInitialized=true;
     saveState();
   }

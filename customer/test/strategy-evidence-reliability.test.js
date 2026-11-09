@@ -37,7 +37,7 @@ test('tracked and syndicated repeated sources cannot manufacture independent hig
  assert.notEqual(Market.buildMarketOpportunities(profile,[{active:true}],signals,evidence)[0].confidence,'High');
 });
 test('future and unknown publication dates never earn current-event timing',()=>{
- const timing=date=>Market.buildMarketOpportunities(profile,[],signals,[{market:'Sweden',url:'https://news.example/story',title:'Expansion',date,extractedAt:new Date().toISOString()}])[0].score.timing;
+ const timing=date=>Market.buildMarketOpportunities(profile,[],signals,[{market:'Sweden',url:'https://news.example/story',title:'Expansion in Sweden',date,extractedAt:new Date().toISOString()}])[0].score.timing;
  assert.ok(timing('2099-01-01')<timing(new Date().toISOString()));
  assert.ok(timing('')<timing(new Date().toISOString()));
 });
@@ -59,7 +59,7 @@ test('adaptive follow-up honors source selection and does not invent tender inte
  assert.deepEqual(Conditions.buildAdaptivePlan({...input,sourceTypes:[]}).queries,[]);
 });
 test('profile completeness and contact readiness do not substitute for evidence of commercial fit',()=>{
- const result={market:'Sweden',url:'https://example.com/a',title:'Expansion',contactReady:true};
+ const result={market:'Sweden',url:'https://example.com/a',title:'Expansion in Sweden',contactReady:true};
  const opportunity=Market.buildMarketOpportunities(profile,[{active:true}],signals,[result])[0];
  assert.equal(opportunity.score.fit,0);
  const verified=Market.buildMarketOpportunities(profile,[{active:true}],signals,[{...result,verification:{relevance:'strong',commercialFit:'strong'}}])[0];
@@ -100,7 +100,7 @@ test('disabled signals cannot receive positive intent from retained evidence',()
  assert.equal(Market.buildMarketOpportunities(profile,[],signals.map(s=>({...s,active:false})),evidence)[0].score.intent,0);
 });
 test('detection dates cannot be promoted to publication recency',()=>{
- const evidence={market:'Sweden',url:'https://example.com/a',title:'Expansion',date:new Date().toISOString(),dateSource:'detectedAt'};
+ const evidence={market:'Sweden',url:'https://example.com/a',title:'Expansion in Sweden',date:new Date().toISOString(),dateSource:'detectedAt'};
  const detected=Market.buildMarketOpportunities(profile,[],signals,[evidence])[0];
  const published=Market.buildMarketOpportunities(profile,[],signals,[{...evidence,dateSource:'metadata.datePublished'}])[0];
  assert.ok(detected.score.timing<published.score.timing);
@@ -234,7 +234,7 @@ test('durable research collection retains all 205 prior plus 20 newly selected s
 test('unverified second publisher cannot promote same-publisher verified stories to High confidence',()=>{
  const p={targetMarkets:'Sweden',priorityOffers:'industrial automation',opportunityValue:'€100,000'};
  const s=[{id:'expansion',keywords:'facility expansion',weight:10,active:true},{id:'investment',keywords:'investment',weight:10,active:true}];
- const rows=[1,2].map(i=>({market:'Sweden',url:`https://company.example/news/${i}`,title:'Facility expansion investment '+i,text:'Company story '+i+' describes distinct facility expansion investment',date:new Date().toISOString(),extractedAt:new Date().toISOString(),verification:{relevance:'strong',commercialFit:'strong'}}));
+ const rows=[1,2].map(i=>({market:'Sweden',url:`https://company.example/news/${i}`,title:'Sweden facility expansion investment '+i,text:'Swedish company story '+i+' describes distinct facility expansion investment',date:new Date().toISOString(),extractedAt:new Date().toISOString(),verification:{relevance:'strong',commercialFit:'strong'}}));
  rows.push({market:'Sweden',url:'https://unverified.example/comment',title:'Generic unrelated discussion',text:'Unverified generic commentary'});
  assert.equal(Market.buildMarketOpportunities(p,[],s,rows)[0].confidence,'Medium');
  rows[1].url='https://independent.example/news/2';assert.equal(Market.buildMarketOpportunities(p,[],s,rows)[0].confidence,'High');

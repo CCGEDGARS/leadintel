@@ -1,6 +1,23 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelEvidencePolicy=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
+  const MARKET_RULES=[
+    {code:"kz",suffixes:[".kz",".xn--80ao21a",".қаз"],searchNames:["Kazakhstan","Қазақстан","Казахстан"],aliases:["kazakhstan","kazakstan","kazahstan","kazakh","қазақстан","қазақстанда","казахстан","казахстане","kazahstāna","kazahstānas"]},
+    {code:"se",suffixes:[".se"],searchNames:["Sweden","Sverige"],aliases:["sweden","swedish","sverige","svenska","zviedrija","zviedrijas","zviedru"]},
+    {code:"fi",suffixes:[".fi"],searchNames:["Finland","Suomi"],aliases:["finland","finnish","suomi","somija","somijas","somu"]},
+    {code:"no",suffixes:[".no"],searchNames:["Norway","Norge"],aliases:["norway","norwegian","norge","norsk","norvēģija","norvēģijas","norvēģu"]},
+    {code:"dk",suffixes:[".dk"],searchNames:["Denmark","Danmark"],aliases:["denmark","danish","danmark","dansk","dānija","dānijas","dāņu"]},
+    {code:"lv",suffixes:[".lv"],searchNames:["Latvia","Latvija"],aliases:["latvia","latvian","latvija","latvijas","latviešu"]},
+    {code:"ee",suffixes:[".ee"],searchNames:["Estonia","Eesti"],aliases:["estonia","estonian","eesti","igaunija","igaunijas","igauņu"]},
+    {code:"lt",suffixes:[".lt"],searchNames:["Lithuania","Lietuva"],aliases:["lithuania","lithuanian","lietuva","lietuvā","lietuviešu"]},
+    {code:"de",suffixes:[".de"],searchNames:["Germany","Deutschland"],aliases:["germany","german","deutschland","deutsche","vācija","vācijas","vācu"]},
+    {code:"gb",suffixes:[".uk",".co.uk"],searchNames:["United Kingdom","Britain"],aliases:["united kingdom","britain","british","england","english","apvienotā karaliste","lielbritānija","lielbritānijas"]},
+    {code:"nl",suffixes:[".nl"],searchNames:["Netherlands","Nederland"],aliases:["netherlands","dutch","nederland","nīderlande","nīderlandes","holande"]},
+    {code:"pl",suffixes:[".pl"],searchNames:["Poland","Polska"],aliases:["poland","polish","polska","polija","polijas","poļu"]},
+    {code:"fr",suffixes:[".fr"],searchNames:["France"],aliases:["france","french","français","francija","francijas","franču"]},
+    {code:"es",suffixes:[".es"],searchNames:["Spain","España"],aliases:["spain","spanish","españa","spānija","spānijas","spāņu"]},
+    {code:"it",suffixes:[".it"],searchNames:["Italy","Italia"],aliases:["italy","italian","italia","itālija","itālijas","itāļu"]}
+  ];
   const SUPPORT_SUBDOMAINS=new Set(['www','media','investors','investor','newsroom','news','press','ir','en','sv','se','fi','de','fr','lv','lt','ee','pl','es','it','careers','career','jobs','job','corporate','corp','company','about','group','global','blog','shop','store','support','help','docs']);
   const SHARED_HOSTS=new Set(['github.io','wordpress.com','webflow.io','wixsite.com','notion.site','blogspot.com','azurewebsites.net','pages.dev','vercel.app']);
   function host(value){try{const raw=clean(value);if(!raw||/\s/.test(raw))return '';const url=new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(url.protocol)?url.hostname.toLowerCase().replace(/\.$/,'').replace(/^www\./,''):'';}catch{return '';}}
@@ -55,5 +72,16 @@
     }
     return prose.join(' ').slice(0,Math.max(0,budget));
   }
-  return {host,companyDomain,firstParty,publication,recency,usable,claimText,terms,researchText,isResearchBoilerplate:value=>RESEARCH_BOILERPLATE.test(String(value||'')),isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
+  function supportsMarketContext(item={},market=''){
+    const target=clean(market).toLowerCase();if(!target||target==='priority market')return false;
+    const rule=MARKET_RULES.find(rule=>rule.code===target||rule.aliases.includes(target));
+    const aliases=rule?.aliases||[target];
+    // Query labels and country-code publishers describe discovery, not the article's geography.
+    const content=clean(`${claimText(item.title)} ${claimText(item.description)} ${researchText(item.text,12000)}`).normalize('NFKC').toLowerCase();
+    return aliases.some(alias=>{
+      const term=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      return new RegExp('(?:^|[^\\p{L}\\p{N}])'+term+'(?![\\p{L}\\p{N}])','u').test(content);
+    });
+  }
+  return {MARKET_RULES,supportsMarketContext,host,companyDomain,firstParty,publication,recency,usable,claimText,terms,researchText,isResearchBoilerplate:value=>RESEARCH_BOILERPLATE.test(String(value||'')),isDisclaimer:value=>DISCLAIMER.test(String(value||''))};
 });

@@ -466,7 +466,7 @@
     const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
-      const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
+      const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()&&EvidencePolicy?.supportsMarketContext(item,market)===true&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
       const independentStories=new Set(evidence.map(item=>clean(item.text||item.description||item.title).toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu," ").trim()));
       const score=evidence.length?{
         fit:fitScore(evidence),
@@ -487,6 +487,13 @@
         score,confidence,evidence,profileOnly:evidence.length===0,active:true
       };
     }).sort((a,b)=>b.score.total-a.score.total);
+  }
+
+  function revalidateMarketOpportunities(profile={},signals=[],opportunities=[]){
+    return (Array.isArray(opportunities)?opportunities:[]).map(item=>{
+      const rebuilt=buildMarketOpportunities({...profile,researchMarkets:[item.market]},[],signals,item.evidence||[])[0];
+      return rebuilt?{...item,evidence:rebuilt.evidence,profileOnly:rebuilt.profileOnly,score:rebuilt.score,confidence:rebuilt.confidence}:{...item};
+    });
   }
 
   function localizeGeneratedState(market={},profile={},language='en'){
@@ -608,5 +615,5 @@
     return results;
   }
 
-  return {strategyActivationRequirement,profilePurposeHeadline,effectiveTargetingProfile,DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,removeSignal,restoreRemovedSignal,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {strategyActivationRequirement,profilePurposeHeadline,effectiveTargetingProfile,DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,removeSignal,restoreRemovedSignal,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchPlan,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,revalidateMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });

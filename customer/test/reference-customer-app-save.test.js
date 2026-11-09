@@ -12,7 +12,7 @@ test('main app saves preserve customer-model activation written by the customer 
   const stored={targetCompanies:[{name:'Södra'}],referenceCustomers:{activated:true,publishedModel:{active:true}},referenceCustomerPortfolio:{lists:[{id:'billerud',active:true,reference:{publishedModel:{active:true}}}]}};
   const values=new Map([['leadintel_customer_v2_state',JSON.stringify(stored)]]);
   const state={step:4,market:{icps:[]},referenceCustomers:{activated:false},referenceCustomerPortfolio:{lists:[]}};
-  const context={state,STORAGE_KEY:'leadintel_customer_v2_state',localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)},updateCompleteness(){},updateNavigationAvailability(){},profileApprovalContext:()=>'test-account-scope',window:{LeadIntelJourney:{refresh(){}}}};
+  const context={state,STORAGE_KEY:'leadintel_customer_v2_state',localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value)},updateCompleteness(){},updateNavigationAvailability(){},profileApprovalContext:()=>'test-account-scope',CustomEvent:class{constructor(type){this.type=type;}},window:{dispatchEvent(){},LeadIntelJourney:{refresh(){}}}};
   vm.runInNewContext(`${source.slice(start,end)}\nsaveState();`,context);
   const saved=JSON.parse(values.get('leadintel_customer_v2_state'));
   assert.equal(saved.step,4);

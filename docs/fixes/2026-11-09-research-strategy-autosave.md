@@ -1,0 +1,13 @@
+# Research results must reach cloud storage before the saved indicator clears
+
+A completed Quick Overview produced 20 sources and two report snapshots in the customer tab. An authenticated fresh server read still had the earlier empty research state. The customer's explicit Save workspace persisted all 20 sources and both reports. This was an automatic-save notification defect, not a failed research provider or exceeded storage allowance.
+
+The main app's `saveState()` wrote localStorage without notifying WorkspacePersistence. Storage interception had deliberately been retired in favor of the shared debounced autosave owner, so asynchronous main-app updates could leave the prior saved label visible until another edit or explicit save. Changed main-app writes now dispatch the existing workspace-dirty event; byte-identical saves do not restart the timer. WorkspacePersistence continues to own cloud writes, dirty indicators, conflict handling and recovery.
+
+The same first-run acceptance test exposed duplicate snapshots: the render-time legacy import ran just before the finishing run captured its report. Legacy recovery now waits until no research run owns completion. Existing reports are retained.
+
+Strategy remains Draft until reviewed. The Opportunity-led switch remains an explicit optional selection; empty commercial value is not an activation prerequisite. Strategy now explains the retained source count, extracted-page count and next action.
+
+An unrelated US factory-expansion article had inherited Denmark from its search query and entered a Danish opportunity. Opportunity evidence now requires a country mention in the article content, using shared country aliases. Query labels and publisher country domains do not supply that evidence. Reopening Strategy rechecks derived scores and evidence without deleting raw research, snapshots, manual opportunity text or activation choices. This establishes market context only; company qualification and commercial-fit gates remain separate. Unknown country aliases require the actual selected market name in source content.
+
+Acceptance covers authenticated real SQLite/HTTP browser journeys: completed Quick Overview -> profile review -> Strategy -> automatic save -> fresh browser; failed cloud save -> 20 local sources retained -> visible save retry -> fresh browser; and the existing fresh Setup -> reviewed Profile -> saved Strategy -> Companies path. One new research run produces one report. Source scope regression cases include Denmark/Danish/Danmark, a US article mislabeled Denmark, a .dk publisher with no Danish content, and another industry/market. No new paid research, sends or automatic strategy approvals are used in customer acceptance.

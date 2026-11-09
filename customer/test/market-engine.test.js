@@ -103,8 +103,8 @@ test('buildMarketOpportunities uses expanded research markets and produces trans
   const icps=Market.buildIcpCandidates(profile);
   const signals=Market.normalizeSignals(profile.recommendedSignals,[]);
   const research=[
-    {queryId:'q1',market:'Sweden',url:'https://example.com/1',title:'New factory expansion',description:'capacity expansion and automation investment',text:'new facility automation tender',date:'2026-08-21'},
-    {queryId:'q2',market:'Finland',url:'https://example.com/2',title:'Industrial investment',description:'equipment modernization',text:'capital investment equipment modernization',date:'2026-08-01'}
+    {queryId:'q1',market:'Sweden',url:'https://example.com/1',title:'New factory expansion in Sweden',description:'capacity expansion and automation investment',text:'new facility automation tender',date:'2026-08-21'},
+    {queryId:'q2',market:'Finland',url:'https://example.com/2',title:'Industrial investment in Finland',description:'equipment modernization',text:'capital investment equipment modernization',date:'2026-08-01'}
   ];
   const opportunities=Market.buildMarketOpportunities(profile,icps,signals,research);
   assert.ok(opportunities.length>=2);
@@ -179,7 +179,7 @@ test('strategy narratives are generated in selected Latvian',()=>{
 test('localizeGeneratedState updates only generated strategy prose and preserves customer edits and evidence',()=>{
   const english=Market.normalizeMarketState({icps:Market.buildIcpCandidates(profile,'en')});
   english.icps[0].description='Customer-edited definition';
-  english.opportunities=Market.buildMarketOpportunities(profile,english.icps,Market.normalizeSignals(profile.recommendedSignals,[]),[{market:'Sweden',url:'https://example.com/a',title:'Evidence'}],'en');
+  english.opportunities=Market.buildMarketOpportunities(profile,english.icps,Market.normalizeSignals(profile.recommendedSignals,[]),[{market:'Sweden',url:'https://example.com/a',title:'Sweden expansion evidence'}],'en');
   const localized=Market.localizeGeneratedState(english,profile,'lv');
   assert.equal(localized.icps[0].description,'Customer-edited definition');
   assert.equal(localized.icps[0].name,'Pamata ideālā klienta profils');
