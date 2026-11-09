@@ -1572,7 +1572,7 @@ function strategyHandoffModel(){
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   if(incompleteResearch)warnings.push(`Some research checks were unavailable; your ${evidence.length} saved sources will still be used.`);
-  if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time company search will still run normally. Turn on monitoring later to track new buying signals over time.");
+  if(!monitoring.enabled)warnings.push("Monitoring is optional; this one-time company search still runs normally. To enable scheduled checks once Strategy is active, go to Step 3 → Strategy → Website monitoring → Set up monitoring (or Edit settings). Choose websites, buying signals and frequency, tick Enable monitoring, then click Save and close. Scheduled checks use your connected provider credits.");
   const providerStatus=globalThis.LeadIntelAttention?.providerStatus?.()||null;const providerConnected=provider=>Boolean(globalThis.LeadIntelAttentionModel?.providerConnected?.(providerStatus,provider));
   if(providerStatus){
     if(!providerConnected("apollo"))warnings.push("Apollo is not connected. Buyer identities will come from public sources only; connect Apollo in Settings for decision-maker search.");
@@ -1594,7 +1594,7 @@ function strategyHandoffModel(){
       ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
       ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
       ["Evidence",evidence.length+" saved source"+(evidence.length===1?"":"s")],
-      ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional)"],
+      ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional) · Set up: Step 3 → Strategy → Website monitoring"],
       ["Company search",searchPlan?`Up to ${searchPlan.targetCount} checked companies · up to ${searchPlan.callLimit} Firecrawl calls, billed on your connected plan. AI analysis uses your connected provider.`:"One bounded search using the saved company amount and existing provider limits. Research uses your connected plans."],
       ["Next", "Continue starts company research when results are missing or stale. Current checked results are reused. Existing research and selections are preserved; buyer selection stays manual."]
     ]
