@@ -1947,7 +1947,6 @@
         "...(firecrawl.creditIssue?['Firecrawl']:[])"
       ],
       "notContains": [
-        "data-integration=\"apollo\"",
         "data-integration=\"hunter\""
       ]
     },
@@ -4420,15 +4419,17 @@
       ]
     },
     {
-      "id": "paid-provider-settings-removed",
+      "id": "customer-owned-discovery-and-paid-settings",
       "type": "text",
       "url": "/customer/service-settings-extension.js",
       "status": 200,
       "contains": [
-        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider))",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS",
         "for(const config of SETTINGS_PROVIDERS)",
         "data-paid-contact-settings",
-        "Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions"
+        "Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions",
+        "data-apollo-discovery",
+        "Paid email and phone options"
       ],
       "notContains": [
         "data-hunter-enabled",
