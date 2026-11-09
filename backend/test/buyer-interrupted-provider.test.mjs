@@ -117,7 +117,8 @@ test('the contact phase still enforces its own384-task ceiling without dispatchi
  for(let i=0;i<384;i++)f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,status,attempts,result_json) VALUES(?,?,'search','contacts','complete',1,'{\"rows\":[]}')").run(job.id,'contact-budget-'+i);
  const services={search:async()=>{calls++;return [];},read:async url=>{calls++;return {url,markdown:'Robert Lund is Head of Procurement at Forge Industries.'};},independent:async()=>{calls++;return {status:'complete',web_search:true,results:[]};}};
  await tick(f,job.id,services);const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),candidate=JSON.parse(saved.result_json);
- assert.equal(calls,0,'A full active-phase task plan cannot dispatch another provider');assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_tasks WHERE job_id=?').get(job.id).n,384);
+ assert.equal(calls,0,'A full active-phase task plan cannot dispatch another provider');assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts'").get(job.id).n,384);
+ const directory=f.DB.raw.prepare("SELECT phase,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value LIKE 'Apollo people search%'").all(job.id);assert.equal(directory.length,1);assert.equal(directory[0].phase,'identities');assert.equal(JSON.parse(directory[0].result_json).executed,false,'The optional unconfigured directory receipt consumes no contact-plan capacity or provider call');
  assert.equal(candidate.publicResearch.accountability.checkedPeople,0);assert.notEqual(candidate.publicResearch.accountability.status,'complete');
 });
 test('two interrupted dispatches cannot consume the two real provider-failure attempts',async t=>{

@@ -74,14 +74,25 @@
       "type": "text",
       "url": "/customer/opportunity-led-icp.js",
       "status": 200,
-      "contains": ["function autoActivateOpportunityAfterResearch", "market.opportunityAutoActivationRunId===runId", "market.researchQuality?.passed===false", "icp.active=true;icp.requestedActive=true"]
+      "contains": [
+        "function autoActivateOpportunityAfterResearch",
+        "market.opportunityAutoActivationRunId===runId",
+        "market.researchQuality?.passed===false",
+        "icp.active=true;icp.requestedActive=true"
+      ]
     },
     {
       "id": "research-strategy-autosave-handoff",
       "type": "text",
       "url": "/customer/app.js",
       "status": 200,
-      "contains": ["if(changed)window.dispatchEvent(new CustomEvent(\"leadintel:workspace-dirty\"))", "LeadIntelMarket.revalidateMarketOpportunities", "LeadIntelMarket.autoActivateOpportunityAfterResearch", "strategy-research-handoff", "!activeMarketResearchRun" ]
+      "contains": [
+        "if(changed)window.dispatchEvent(new CustomEvent(\"leadintel:workspace-dirty\"))",
+        "LeadIntelMarket.revalidateMarketOpportunities",
+        "LeadIntelMarket.autoActivateOpportunityAfterResearch",
+        "strategy-research-handoff",
+        "!activeMarketResearchRun"
+      ]
     },
     {
       "id": "strategy-large-workspace-save",
@@ -7758,6 +7769,37 @@
       "url": "/customer/",
       "contains": [
         "profile-stage-deadlines=20261108-v1"
+      ]
+    },
+    {
+      "id": "apollo-discovery-settings-card",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "People discovery · 0 API credits",
+        "data-integration=\"apollo\""
+      ]
+    },
+    {
+      "id": "apollo-discovery-settings-controls",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "20261109-apollo-discovery-v1",
+        "const SETTINGS_PROVIDERS=SERVICE_PROVIDERS",
+        "Paid email and phone options",
+        "data-apollo-discovery"
+      ]
+    },
+    {
+      "id": "apollo-discovery-settings-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "apollo-free=20261109-v1"
       ]
     }
   ],

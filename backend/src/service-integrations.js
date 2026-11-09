@@ -408,29 +408,40 @@ function publicApolloBuyer(person={}){
   };
 }
 
-async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
-  const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
-  const body=await request.json().catch(()=>null);if(!body||typeof body!=='object'||Array.isArray(body))return error('Apollo buyer-search payload is required',400,cors,'SERVICE_APOLLO_PAYLOAD_REQUIRED');
-  const normalized=normalizeApolloPeopleSearch(body);if(normalized.error)return error(normalized.error,400,cors,'SERVICE_APOLLO_DOMAIN_INVALID');
-  if(!(await apolloCapabilities(env,workspaceId)).discovery)return error('Apollo people discovery is disabled in Settings',409,cors,'SERVICE_APOLLO_DISCOVERY_DISABLED');
+function apolloFailure(message,status,code,executed=false,httpStatus=null){return Object.assign(Error(message),{status,code,executed,httpStatus});}
+// Shared identity-only adapter. HTTP and background callers supply their live
+// authenticated authority guard; paid match/reveal endpoints are never called.
+export async function searchWorkspaceApolloPeople(env,workspaceId,body,{userId,signal,guard,beforeDispatch=async()=>{}}={}){
+  if(!userId||typeof guard!=='function')throw apolloFailure('Apollo workspace authorization is required',403,'SERVICE_APOLLO_AUTHORIZATION_REQUIRED');
+  await guard();
+  const normalized=normalizeApolloPeopleSearch(body);if(normalized.error)throw apolloFailure(normalized.error,400,'SERVICE_APOLLO_DOMAIN_INVALID');
+  if(!(await apolloCapabilities(env,workspaceId)).discovery)throw apolloFailure('Apollo people discovery is disabled in Settings',409,'SERVICE_APOLLO_DISCOVERY_DISABLED');
   const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
-  if(!credential.configured||!credential.apiKey)return error('Apollo is not connected for this workspace. Connect it in Settings.',409,cors,'SERVICE_APOLLO_NOT_CONFIGURED');
-  let response;
-  try{response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':credential.apiKey},body:JSON.stringify(normalized.payload),signal:request.signal});}
-  catch{return error('Apollo buyer search is temporarily unavailable. Try again.',502,cors,'SERVICE_APOLLO_UNAVAILABLE');}
-  const upstream=await response.json().catch(()=>({}));
+  if(!credential.configured||!credential.apiKey)throw apolloFailure('Apollo is not connected for this workspace. Connect it in Settings.',409,'SERVICE_APOLLO_NOT_CONFIGURED');
+  await beforeDispatch();await guard();let response;
+  try{response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':credential.apiKey},body:JSON.stringify(normalized.payload),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000)});}
+  catch{throw apolloFailure('Apollo buyer search is temporarily unavailable. Try again.',502,'SERVICE_APOLLO_UNAVAILABLE',true);}
+  const upstream=await response.json().catch(()=>({}));await guard();
   if(!response.ok){
-    if(creditFailure(response.status,JSON.stringify(upstream).slice(0,800)))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'apollo',kind:'failed',source:credential.source});
-    if(response.status===401||response.status===403)return error('Apollo rejected this key or API access. Verify the Apollo connection in Settings.',502,cors,'SERVICE_APOLLO_AUTH_FAILED');
-    if(response.status===429)return error('Apollo request limit reached. Check the Apollo account and try again later.',429,cors,'SERVICE_APOLLO_RATE_LIMIT');
-    return error(`Apollo buyer search failed (${response.status})`,502,cors,'SERVICE_APOLLO_UPSTREAM_FAILED');
+    if(creditFailure(response.status,JSON.stringify(upstream).slice(0,800)))await recordProviderCredit(env,{workspaceId,userId,provider:'apollo',kind:'failed',source:credential.source});
+    if(response.status===401||response.status===403)throw apolloFailure('Apollo rejected this key or API access. Verify the Apollo connection in Settings.',502,'SERVICE_APOLLO_AUTH_FAILED',true,response.status);
+    if(response.status===429)throw apolloFailure('Apollo request limit reached. Check the Apollo account and try again later.',429,'SERVICE_APOLLO_RATE_LIMIT',true,response.status);
+    throw apolloFailure(`Apollo buyer search failed (${response.status})`,502,'SERVICE_APOLLO_UPSTREAM_FAILED',true,response.status);
   }
-  await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'apollo',kind:'recovered',source:credential.source});
+  await recordProviderCredit(env,{workspaceId,userId,provider:'apollo',kind:'recovered',source:credential.source});
   const rawPeople=Array.isArray(upstream?.people)?upstream.people:Array.isArray(upstream?.contacts)?upstream.contacts:Array.isArray(upstream?.data?.people)?upstream.data.people:[];
   const people=rawPeople.slice(0,normalized.payload.per_page).map(publicApolloBuyer).filter(person=>person.name||person.title);
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='apollo'`).bind(workspaceId).run();
-  await audit(env,{workspaceId,userId:access.user.id,type:'service.apollo_people_search',provider:'apollo',metadata:{source:credential.source,domain:normalized.domain,role_count:normalized.roleCount,result_count:people.length}});
-  return json({people},200,cors);
+  await audit(env,{workspaceId,userId,type:'service.apollo_people_search',provider:'apollo',metadata:{source:credential.source,domain:normalized.domain,role_count:normalized.roleCount,result_count:people.length}});
+  return {people};
+}
+
+async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
+  const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+  const body=await request.json().catch(()=>null);if(!body||typeof body!=='object'||Array.isArray(body))return error('Apollo buyer-search payload is required',400,cors,'SERVICE_APOLLO_PAYLOAD_REQUIRED');
+  const guard=async()=>{const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)throw apolloFailure(current.error,current.status,'SERVICE_APOLLO_AUTHORIZATION_CHANGED');};
+  try{return json(await searchWorkspaceApolloPeople(env,workspaceId,body,{userId:access.user.id,signal:request.signal,guard}),200,cors);}
+  catch(cause){return error(cause.message,cause.status||502,cors,cause.code||'SERVICE_APOLLO_UNAVAILABLE');}
 }
 
 export async function handleServiceIntegrationRoute(request,env,cors={}){

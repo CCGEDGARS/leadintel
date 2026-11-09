@@ -1,14 +1,14 @@
 import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20261104-auto-contact-selector-v1';
+const SETTINGS_VERSION='20261109-apollo-discovery-v1';
 const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
-  {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
+  {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'People discovery uses 0 Apollo API credits; email and phone enrichment have separate paid permissions'},
   {provider:'treg',name:'Treg',placeholder:'Treg team token',purpose:'Finds and verifies work e-mails and researches business phones, with separate paid-search permissions and a prepaid Treg balance. Open Treg, sign in, and paste your team token here'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'}
 ]);
-// Treg is the customer-facing paid contact provider; saved legacy provider evidence remains available.
-const SETTINGS_PROVIDERS=SERVICE_PROVIDERS.filter(config=>['firecrawl','treg'].includes(config.provider));
+// Apollo identity discovery and paid contact permissions remain separate.
+const SETTINGS_PROVIDERS=SERVICE_PROVIDERS;
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
 let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
@@ -57,9 +57,8 @@ function serviceControls(config,row){
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
       <button class="ai-settings-btn danger" data-service-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
     </div>
-    ${config.provider==='apollo'?'<details class="apollo-settings-details" data-apollo-settings><summary>Apollo settings</summary><div class="apollo-settings-body">':''}
-    ${config.provider==='apollo'?`<div data-apollo-capabilities><label><input type="checkbox" data-apollo-discovery ${row?.metadata?.discovery_enabled!==false?'checked':''} ${disabled||!configured?'disabled':''}>People discovery · 0 API credits</label><label><input type="checkbox" data-apollo-email ${row?.metadata?.email_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable email enrichment · uses Apollo credits</label><label><input type="checkbox" data-apollo-phone ${row?.metadata?.phone_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable phone enrichment · uses Apollo credits</label><label>Daily Apollo credit limit<input type="number" min="0" max="1000" data-apollo-daily value="${Number(apolloBudget.daily_credit_limit)||0}" ${disabled?'disabled':''}></label><label>Monthly Apollo credit limit<input type="number" min="0" max="10000" data-apollo-monthly value="${Number(apolloBudget.monthly_credit_limit)||0}" ${disabled?'disabled':''}></label><button type="button" class="ai-settings-btn" data-service-action="apollo-policy" ${disabled||!configured||busy==='apollo'?'disabled':''}>Save Apollo permissions & limits</button><small>Connecting a key does not enable credit-consuming enrichment. Automatic use also requires workflow approval. A phone request can reserve up to 9 credits.</small></div>`:''}
-    ${config.provider==='apollo'?'</div></details>':''}
+
+    ${config.provider==='apollo'?`<div data-apollo-capabilities><label><input type="checkbox" data-apollo-discovery ${row?.metadata?.discovery_enabled!==false?'checked':''} ${disabled||!configured?'disabled':''}>People discovery · 0 API credits</label><small>Runs with company-wide buyer research. Email and phone reveals are separate.</small><details class="apollo-settings-details" data-apollo-settings><summary>Paid email and phone options</summary><div class="apollo-settings-body"><label><input type="checkbox" data-apollo-email ${row?.metadata?.email_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable email enrichment · uses Apollo credits</label><label><input type="checkbox" data-apollo-phone ${row?.metadata?.phone_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable phone enrichment · uses Apollo credits</label><label>Daily Apollo credit limit<input type="number" min="0" max="1000" data-apollo-daily value="${Number(apolloBudget.daily_credit_limit)||0}" ${disabled?'disabled':''}></label><label>Monthly Apollo credit limit<input type="number" min="0" max="10000" data-apollo-monthly value="${Number(apolloBudget.monthly_credit_limit)||0}" ${disabled?'disabled':''}></label></div></details><button type="button" class="ai-settings-btn" data-service-action="apollo-policy" ${disabled||!configured||busy==='apollo'?'disabled':''}>Save Apollo permissions & limits</button><small>Connecting a key does not enable credit-consuming enrichment. Automatic use also requires workflow approval. A phone request can reserve up to 9 credits.</small></div>`:''}
     <div class="ai-provider-error" data-payment-error="${Boolean(window.LeadIntelPaymentError?.(error))}" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
   </div>`;
 }
@@ -73,7 +72,7 @@ function calendlyCard(){
   </div>${window.LeadIntelToolAccountLinks?.html('calendly')||''}</article>`;
 }
 function serviceDetail(config,row,current){
-  if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Connect your own Apollo key'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
+  if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Connect your own Apollo key'} · free people discovery ${row?.metadata?.discovery_enabled===false?'Off':'On'} · paid credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
   if(config.provider==='treg')return 'Team '+(row.metadata?.team||'connected')+' · '+(Number.isFinite(row.metadata?.balance_usd)?'$'+Number(row.metadata.balance_usd).toFixed(4)+' prepaid balance':'Pay per use')+(row.last_used_at?' · last used '+shortDate(row.last_used_at):'');
@@ -114,7 +113,7 @@ function decorateCards(){
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   grid.querySelector('[data-integration="hunter"]')?.remove();
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Apollo finds buyer identities with its 0-credit people search; Firecrawl reads public websites for research; Treg finds and verifies buyer work e-mails and researches phone numbers with separate permissions. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
   for(const config of SETTINGS_PROVIDERS){
     let card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card&&config.provider==='treg'){card=document.createElement('article');card.className='integration-card';card.dataset.integration=config.provider;card.innerHTML=`<div class="integration-card-head"><div><strong>${esc(config.name)}</strong><small>Buyer work e-mail and phone research</small></div><span class="integration-status">Not connected</span></div><p class="integration-purpose"></p><div class="integration-meta"></div>${window.LeadIntelToolAccountLinks?.html(config.provider)||''}`;grid.appendChild(card);}if(!card)continue;
     const row=providerState(config.provider);
