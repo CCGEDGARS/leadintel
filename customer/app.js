@@ -7,7 +7,7 @@ import './business-identity.js?v=20260924-workspace-profile-english-v1&startup-t
 import './reference-customers.js?v=20261030-reference-reliability-v1';
 import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&reference-auto=20261101-v1';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&list-lifecycle=20261002-v1&qualification-context=20261020-v1&reference-auto=20261101-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1&observer-stability=20261016-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1&accepted-context=20261101-v1&activation-gates=20261101-v1&reference-auto=20261101-v1&research-row=20261101-v1&research-title-alignment=20261101-v1&confirmed-profile=20261104-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1&observer-stability=20261016-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1&accepted-context=20261101-v1&activation-gates=20261101-v1&reference-auto=20261101-v1&research-row=20261101-v1&research-title-alignment=20261101-v1&confirmed-profile=20261104-v1&opportunity-auto=20261109-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './strategy-integrity.js?strategy-audit=20261030-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&local-storage=20261016-v1&startup-cleanup=20261016-v1&research-recovery=20261020-v1&research-storage=20261101-v1';
@@ -814,7 +814,16 @@ function beginMarketResearchRun(mode,runtime){
   run.scopeTimer=setInterval(()=>{if(!marketResearchScopeCurrent(run)){run.stopReason="Account, workspace or Strategy changed";run.controller.abort();}},100);
   return run;
 }
-function finishMarketResearchRun(run){clearTimeout(run.deadlineTimer);clearInterval(run.scopeTimer);if(activeMarketResearchRun===run)activeMarketResearchRun=null;}
+function finishMarketResearchRun(run){
+  const current=marketResearchScopeCurrent(run)&&!run.controller.signal.aborted;
+  clearTimeout(run.deadlineTimer);clearInterval(run.scopeTimer);if(activeMarketResearchRun===run)activeMarketResearchRun=null;
+  // Activation is a result of this completed run. Release its scope guard first,
+  // then persist the new selection with the same researched inputs.
+  if(current&&state.market.researchExecution?.runId===run.id&&LeadIntelMarket.autoActivateOpportunityAfterResearch?.(state.market)){
+    state.market.researchContextFingerprint=researchContextFingerprint();
+    saveState();renderMarketStrategy();
+  }
+}
 function recordMarketResearchReceipt(run,provider,stage,query,status="planned"){
   const receipt={provider,stage,query:String(query||"").slice(0,180),status,attempt:0,startedAt:0,completedAt:0,resultCount:0};run.execution.receipts.push(receipt);return receipt;
 }
@@ -1487,7 +1496,7 @@ function renderMarketStrategy(){
   $("strategy-market-summary").textContent=marketSummary;
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
   const researchSummary=$("strategy-research-handoff"),sources=state.market.researchResults||[];
-  if(researchSummary){researchSummary.hidden=!sources.length;researchSummary.textContent=`${sources.length} research sources · ${sources.filter(item=>item.extractedAt).length} pages read. Review your profiles and signals, then continue to Companies. Optional profiles stay off until enabled.`;}
+  if(researchSummary){researchSummary.hidden=!sources.length;researchSummary.textContent=`${sources.length} research sources · ${sources.filter(item=>item.extractedAt).length} pages read. Opportunity-led switches on when completed research finds usable opportunity evidence. Review your profiles and signals, then continue to Companies.`;}
 
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);

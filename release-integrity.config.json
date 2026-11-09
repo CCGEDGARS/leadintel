@@ -70,11 +70,18 @@
   },
   "smokeChecks": [
     {
+      "id": "opportunity-research-auto-activation",
+      "type": "text",
+      "url": "/customer/opportunity-led-icp.js",
+      "status": 200,
+      "contains": ["function autoActivateOpportunityAfterResearch", "market.opportunityAutoActivationRunId===runId", "market.researchQuality?.passed===false", "icp.active=true;icp.requestedActive=true"]
+    },
+    {
       "id": "research-strategy-autosave-handoff",
       "type": "text",
       "url": "/customer/app.js",
       "status": 200,
-      "contains": ["if(changed)window.dispatchEvent(new CustomEvent(\"leadintel:workspace-dirty\"))", "LeadIntelMarket.revalidateMarketOpportunities", "strategy-research-handoff", "!activeMarketResearchRun" ]
+      "contains": ["if(changed)window.dispatchEvent(new CustomEvent(\"leadintel:workspace-dirty\"))", "LeadIntelMarket.revalidateMarketOpportunities", "LeadIntelMarket.autoActivateOpportunityAfterResearch", "strategy-research-handoff", "!activeMarketResearchRun" ]
     },
     {
       "id": "strategy-large-workspace-save",
