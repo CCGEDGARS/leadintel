@@ -191,7 +191,9 @@ jobs:
           LEADINTEL_REQUIRE_BROWSER: 'true'
         # Each journey launches Chromium. Keep the existing timeouts and assertions
         # while avoiding four competing browser processes on the same runner.
-        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/manual-paid-lookup.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
+        # Quick Overview cases run in the mandatory profile-strategy-journey job;
+        # avoid repeating those isolated research cases in the combined Buyers suite.
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 --test-skip-pattern='^Quick Overview' backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/manual-paid-lookup.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
       - name: Upload controlled journey evidence
         if: always()
         uses: actions/upload-artifact@v4
