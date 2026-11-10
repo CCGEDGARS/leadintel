@@ -12,6 +12,7 @@ const clean=(v,n=1000)=>String(redactProtectedData(String(v??''))).replace(/\s+/
 const sourceText=v=>String(redactProtectedData(String(v??''))).slice(0,7000);
 const parse=(v,f={})=>{try{return JSON.parse(v)}catch{return f}};
 const planJson=v=>{const text=String(v||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const result=parse(text);return result&&typeof result==='object'&&!Array.isArray(result)?result:{};};
+const sourceHost=url=>new URL(url).hostname.replace(/^www\./,'');
 const noResearch=q=>/\b(?:do not|don't|without|no)\s+(?:web\s+)?(?:search|brows\w*|research)\b/i.test(q);
 const rawUrls=q=>[...String(q).matchAll(/https?:\/\/[^\s<>"']+/gi)].map(m=>m[0].replace(/[),.;!?]+$/,''));
 function sourceUrl(v,{profile=false}={}){try{const u=new URL(v);if(u.href.length>1600||u.username||u.password||u.port||[...u.searchParams.keys()].some(k=>/token|secret|password|auth|key|signature/i.test(k)))return '';if(/(?:^|\.)linkedin\.com$/.test(u.hostname))return profile&&/^https:$/.test(u.protocol)&&/^\/(?:in|company)\/[\w%-]+\/?$/.test(u.pathname)?u.origin+u.pathname:'';return copilotResearchUrls(u.href)[0]||'';}catch{return ''}}
@@ -71,7 +72,7 @@ function contactQueries(state){const t=state.target;if(!t.personName||!t.company
 function discoveredLinks(state,page){
  const base=sourceUrl(page.url);if(!base)return;
  const links=[...(page.links||[]),...[...String(page.description||page.markdown||'').matchAll(/\[[^\]]+\]\(([^\s)]+)\)/g)].map(m=>m[1])];
- let added=0;for(const item of links){let u;try{u=new URL(typeof item==='string'?item:item.url,base);}catch{continue;}if(u.hostname!==new URL(base).hostname||!/contact|team|people|leadership|management|about|procurement|\.pdf$/i.test(u.pathname))continue;const url=sourceUrl(u.href);if(url){addTask(state,'read',url);if(++added===2)break;}}
+ let added=0;for(const item of links){let u;try{u=new URL(typeof item==='string'?item:item.url,base);}catch{continue;}if(sourceHost(u.href)!==sourceHost(base)||!/contact|team|people|leadership|management|about|procurement|\.pdf$/i.test(u.pathname))continue;const url=sourceUrl(u.href);if(url){addTask(state,'read',url);if(++added===2)break;}}
 }
 function contactFindings(state){
  const t=state.target;if(!t.personName||!t.companyDomain)return [];
@@ -135,7 +136,7 @@ export async function runCopilotResearchJobs(env,{jobId,now=Date.now(),windowMs=
       if(!state.target.companyDomain&&state.sources.some(s=>new URL(s.url).hostname.replace(/^www\./,'')===next.companyDomain)){state.target.companyDomain=next.companyDomain;addTask(state,'read','https://'+next.companyDomain+'/');}
       if(input.contact)contactQueries(state);
      }else if(task.kind==='read'){
-      const raw=await bounded(()=>services.read?services.read(task.value):readPublicBuyerPage(env,row.workspace_id,task.value,{signal:controller.signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}),18000);await guard();const p=raw.data||raw,actual=sourceUrl(p.url||p.metadata?.sourceURL||task.value);if(!actual||new URL(actual).hostname!==new URL(task.value).hostname)throw Error('Source attribution changed');const rawText=String(p.description||p.markdown||p.text||'').slice(0,60000),text=sourceText(state.target.personName?D.buyerEvidenceExcerpt({markdown:rawText},[{name:state.target.personName}],7000):rawText);if(text.length<40)throw Error('Source did not return readable evidence');
+      const raw=await bounded(()=>services.read?services.read(task.value):readPublicBuyerPage(env,row.workspace_id,task.value,{signal:controller.signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}),18000);await guard();const p=raw.data||raw,actual=sourceUrl(p.url||p.metadata?.sourceURL||task.value);if(!actual||sourceHost(actual)!==sourceHost(task.value))throw Error('Source attribution changed');const rawText=String(p.description||p.markdown||p.text||'').slice(0,60000),text=sourceText(state.target.personName?D.buyerEvidenceExcerpt({markdown:rawText},[{name:state.target.personName}],7000):rawText);if(text.length<40)throw Error('Source did not return readable evidence');
       const source={...p,url:actual,description:text,evidenceKind:'page_extract',accessed_at:p.accessed_at||new Date().toISOString()};acceptSource(state,source);discoveredLinks(state,source);
       for(const trace of raw.researchTrace||[])record(trace);record({operation:'read_public_page',provider:'public_extraction',status:'succeeded',url:actual});
       const t=state.target;if(t.companyDomain===new URL(actual).hostname.replace(/^www\./,'')&&t.companyName&&text.toLowerCase().includes(t.companyName.toLowerCase()))addTask(state,'apollo',t.companyDomain);
