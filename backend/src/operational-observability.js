@@ -1,7 +1,7 @@
 // Receipts describe actual handler execution. They never assert delivery,
 // provider billing settlement, or the success of work swallowed by a handler.
 export const SCHEDULED_TASKS=Object.freeze({
-  storage_reconciliation:60,buyer_research:60,writing_references:60,workspace_skills:60,company_materials:60,language_packs:60,
+  storage_reconciliation:60,copilot_research:60,buyer_research:60,writing_references:60,workspace_skills:60,company_materials:60,language_packs:60,
   market_monitoring:3600,source_health:3600,saved_flows:3600,approved_workflows:3600,
   conversation_poll:3600,conversation_enrollment:3600,conversation_plans:3600,outreach_replies:3600,outreach_delivery:3600
 });

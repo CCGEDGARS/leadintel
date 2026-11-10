@@ -29,8 +29,11 @@ export function forgetCopilotMemory(id){return requestCopilot(`/api/copilot/memo
 export function getCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function deleteCopilotConversation(id){return requestCopilot(`/api/copilot/conversations/${encodeURIComponent(id)}`,{method:'DELETE',timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function clearCopilotHistory(){return requestCopilot('/api/copilot/conversations',{method:'DELETE',timeoutMs:DEFAULT_TIMEOUT_MS});}
-export function sendCopilotMessage(payload,{onProgress,onDelta}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:payload||{},headers:{Accept:'text/event-stream'},onProgress,onDelta,timeoutMs:CHAT_TIMEOUT_MS});}
+export function sendCopilotMessage(payload,{onProgress,onDelta}={}){return requestCopilot('/api/copilot/chat',{method:'POST',body:{...(payload||{}),research_mode:'thorough'},headers:{Accept:'text/event-stream'},onProgress,onDelta,timeoutMs:CHAT_TIMEOUT_MS});}
+
+export async function getCopilotResearch(id){const result=await requestCopilot(`/api/copilot/research/${encodeURIComponent(id)}`);return result?.job||null;}
+export async function controlCopilotResearch(id,action,revision){const result=await requestCopilot(`/api/copilot/research/${encodeURIComponent(id)}`,{method:'POST',body:{action,revision}});return result?.job||null;}
 export function confirmCopilotAction(id,idempotencyKey){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/confirm`,{method:'POST',headers:{'Idempotency-Key':String(idempotencyKey||'')},body:{idempotency_key:String(idempotencyKey||'')},timeoutMs:DEFAULT_TIMEOUT_MS});}
 export function rejectCopilotAction(id){return requestCopilot(`/api/copilot/actions/${encodeURIComponent(id)}/reject`,{method:'POST',body:{},timeoutMs:DEFAULT_TIMEOUT_MS});}
 
-if(typeof window!=='undefined')window.LeadIntelCopilotApi={requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,deleteCopilotConversation,clearCopilotHistory,listCopilotMemories,forgetCopilotMemory,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};
+if(typeof window!=='undefined')window.LeadIntelCopilotApi={getCopilotResearch,controlCopilotResearch,requestCopilot,bootstrapCopilot,listCopilotConversations,getCopilotConversation,deleteCopilotConversation,clearCopilotHistory,listCopilotMemories,forgetCopilotMemory,sendCopilotMessage,confirmCopilotAction,rejectCopilotAction};

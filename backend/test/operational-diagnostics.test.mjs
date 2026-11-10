@@ -173,7 +173,7 @@ test('safe stage hook persists enum/numeric data and bounded pruning touches onl
 test('actual scheduled entry emits receipts for invoked minute jobs with no configured-heartbeat fabrication',async()=>{
  const value=env(),pending=[];const warn=console.warn;console.warn=()=>{};
  try{await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},value,{waitUntil:promise=>pending.push(promise)});await Promise.allSettled(pending);}finally{console.warn=warn;}
- const tasks=value.DB.raw.prepare("SELECT DISTINCT entity_type FROM audit_events WHERE event_type='operations.scheduler'").all().map(row=>row.entity_type).sort();assert.deepEqual(tasks,['buyer_research','company_materials','language_packs','workspace_skills','writing_references']);
+ const tasks=value.DB.raw.prepare("SELECT DISTINCT entity_type FROM audit_events WHERE event_type='operations.scheduler'").all().map(row=>row.entity_type).sort();assert.deepEqual(tasks,['buyer_research','company_materials','copilot_research','language_packs','workspace_skills','writing_references']);
  assert.equal(value.DB.raw.prepare("SELECT COUNT(*) n FROM audit_events WHERE event_type='operations.scheduler' AND entity_type='saved_flows'").get().n,0);
 });
 

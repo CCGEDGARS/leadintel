@@ -141,3 +141,7 @@ sqliteTest('the progress stream emits delta events with answer text before the r
  const texts=[...stream.matchAll(/event: delta\ndata: (\{.*\})\n/g)].map(match=>JSON.parse(match[1]).text);assert.equal(texts.join(''),'Step 1 is the profile.');
  const result=JSON.parse(stream.split('event: result\ndata: ')[1].split('\n\n')[0]);assert.equal(result.answer,'Step 1 is the profile.');
 });
+
+sqliteTest('long conversations retain the latest target and stable message order for follow-up research',async()=>{
+ const {env,token,db}=await fixture();db.raw.prepare("INSERT INTO copilot_conversations(id,workspace_id,title) VALUES('long','w1','Long research')").run();for(let i=0;i<110;i++)db.raw.prepare("INSERT INTO copilot_messages(id,workspace_id,conversation_id,role,content,created_at) VALUES(?,'w1','long','user',?,'2026-01-01 00:00:00')").run('m-'+i,i===109?'Find Alex Berg at North Works':'Earlier '+i);const result=await(await handleCopilotRoute(req('/api/copilot/conversations/long?workspace_id=w1',{token}),env,{})).json();assert.equal(result.messages.length,100);assert.equal(result.messages[0].content,'Earlier 10');assert.equal(result.messages.at(-1).content,'Find Alex Berg at North Works');
+});

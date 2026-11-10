@@ -1,3 +1,4 @@
+import {runCopilotResearchJobs} from './copilot-research-jobs.js';
 import {handleBuyerResearchRoute} from './buyer-research-routes.js';
 import {runBuyerResearchJobs} from './buyer-research-runner.js';
 import {enrollConversationWorkflows} from './conversation-workflows.js';
@@ -47,7 +48,7 @@ import {runCompanyMaterialJobs} from './company-materials-analysis.js';
 import {handleAccessRoute} from './access-invitations.js';
 import {observeScheduledTask} from './operational-observability.js';
 
-const scheduledJobs={runBuyerResearchJobs,reconcileStorageObjects,runWritingReferenceJobs,runWorkspaceSkillJobs,runCompanyMaterialJobs,runLanguagePackJobs,runSavedFlows,runApprovedWorkflows,pollConversations,enrollConversationWorkflows,runConversationPlans,pollOutreachReplies,runOutreachAutomation,runDueMarketMonitoring,runDueSourceHealthChecks};
+const scheduledJobs={runCopilotResearchJobs,runBuyerResearchJobs,reconcileStorageObjects,runWritingReferenceJobs,runWorkspaceSkillJobs,runCompanyMaterialJobs,runLanguagePackJobs,runSavedFlows,runApprovedWorkflows,pollConversations,enrollConversationWorkflows,runConversationPlans,pollOutreachReplies,runOutreachAutomation,runDueMarketMonitoring,runDueSourceHealthChecks};
 
 export default {
   async fetch(request,env,ctx){
@@ -107,7 +108,7 @@ export default {
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
       const brandAsset=await handleBrandAssetRoute(request,env,cors);if(brandAsset)return brandAsset;
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
-      const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
+      const copilot=await handleCopilotRoute(request,env,cors,ctx);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const additionalContacts=await handleAdditionalContactRoute(request,env,cors);if(additionalContacts)return additionalContacts;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
@@ -131,7 +132,7 @@ export default {
     const storageEnv=env;env=withWorkspaceStorage(env);
     const observed=(task,operation)=>observeScheduledTask(env,task,operation,{scheduledAt:now.getTime()});
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(observeScheduledTask(storageEnv,'storage_reconciliation',()=>jobs.reconcileStorageObjects(storageEnv),{scheduledAt:now.getTime()}).catch(()=>console.warn('Workspace file accounting needs a retry')));
-    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([...(jobs.runBuyerResearchJobs?[observed('buyer_research',()=>jobs.runBuyerResearchJobs(env,{now:now.getTime()}))]:[]),observed('writing_references',()=>jobs.runWritingReferenceJobs(env,{now:now.getTime()})),observed('workspace_skills',()=>jobs.runWorkspaceSkillJobs(env,{now:now.getTime()})),observed('company_materials',()=>jobs.runCompanyMaterialJobs(env,{now:now.getTime()})),observed('language_packs',()=>jobs.runLanguagePackJobs(env,{now:now.getTime()}))]));return;}
+    if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([...(jobs.runCopilotResearchJobs?[observed('copilot_research',()=>jobs.runCopilotResearchJobs(env,{now:now.getTime()}))]:[]),...(jobs.runBuyerResearchJobs?[observed('buyer_research',()=>jobs.runBuyerResearchJobs(env,{now:now.getTime()}))]:[]),observed('writing_references',()=>jobs.runWritingReferenceJobs(env,{now:now.getTime()})),observed('workspace_skills',()=>jobs.runWorkspaceSkillJobs(env,{now:now.getTime()})),observed('company_materials',()=>jobs.runCompanyMaterialJobs(env,{now:now.getTime()})),observed('language_packs',()=>jobs.runLanguagePackJobs(env,{now:now.getTime()}))]));return;}
     const outreachCycle=observed('saved_flows',()=>jobs.runSavedFlows(env,{now})).then(()=>observed('approved_workflows',()=>jobs.runApprovedWorkflows(env,{now}))).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>observed('conversation_poll',()=>jobs.pollConversations(env,{now}))).then(()=>observed('conversation_enrollment',()=>jobs.enrollConversationWorkflows(env,{now})).catch(cause=>console.error('Conversation workflow enrollment cycle failed',cause))).then(()=>observed('conversation_plans',()=>jobs.runConversationPlans(env,{now}))).then(()=>observed('outreach_replies',()=>jobs.pollOutreachReplies(env,{now})).then(()=>observed('outreach_delivery',()=>jobs.runOutreachAutomation(env,{now}))));
     ctx.waitUntil(Promise.allSettled([
       observed('market_monitoring',()=>jobs.runDueMarketMonitoring(env,now)),

@@ -1,3 +1,4 @@
+import {handleCopilotRoute} from '../src/copilot-routes.js';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -23,7 +24,7 @@ export const workspaceId='storage-w1',sessionToken='step5-controlled-session';
 export const sourceUrl='https://forge.example/team';
 export const sourceText='### Robert Lund\nHead of Procurement\nPhone: +46 70 123 45 67\n[robert@forge.example](mailto:robert@forge.example)\nForge Industries\n\n### Alice Berg\nChief Operating Officer\nForge Industries\n[alice@forge.example](mailto:alice@forge.example)';
 
-export async function journeyFixture({durableJobs=false,externalFetch,roleReviewPending=false,incompleteDossier=false,initialCandidate,researchServices}={}){
+export async function journeyFixture({durableCopilot=false,durableJobs=false,externalFetch,roleReviewPending=false,incompleteDossier=false,initialCandidate,researchServices}={}){
  const DB=storageDb();
  DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'storage-owner',datetime('now','+1 day'))").run(await sha256(sessionToken));
  const now=new Date().toISOString(),source={url:sourceUrl,markdown:sourceText,sourceRead:true,extractedAt:now,checkedAt:now};
@@ -54,7 +55,7 @@ export async function journeyFixture({durableJobs=false,externalFetch,roleReview
     const body=Buffer.concat(chunks),request=new Request(url,{method:req.method,headers:req.headers,...(body.length?{body}:{})});
     const call={method:req.method,path:url.pathname,workspaceId:url.searchParams.get('workspace_id')};calls.push(call);
     if(url.pathname==='/api/buyers/research'&&req.method==='POST'){call.action=JSON.parse(body).action;call.payloadBytes=body.byteLength;}
-    const response=url.pathname==='/api/buyers/research'?await handleBuyerResearchRoute(request,env,{},undefined):await app.fetch(request,env,{waitUntil(promise){pending.add(promise);promise.finally(()=>pending.delete(promise));}});
+    const response=durableCopilot&&url.pathname.startsWith('/api/copilot/')?await handleCopilotRoute(request,env,{},undefined):url.pathname==='/api/buyers/research'?await handleBuyerResearchRoute(request,env,{},undefined):await app.fetch(request,env,{waitUntil(promise){pending.add(promise);promise.finally(()=>pending.delete(promise));}});
     call.status=response.status;const out=Buffer.from(await response.arrayBuffer());
     if(url.pathname==='/api/customer/state'&&req.method==='PUT'){try{call.version=JSON.parse(body).version;call.result=JSON.parse(out);}catch{}}
     res.writeHead(response.status,Object.fromEntries(response.headers));res.end(out);return;
