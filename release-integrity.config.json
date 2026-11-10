@@ -65,7 +65,8 @@
       "delivery_integrity_version": "20261031-delivery-v1",
       "operational_diagnostics_version": "20261031-operations-v1",
       "research_storage_version": "20261101-v1",
-      "research_expanded_limit_bytes": 33554432
+      "research_expanded_limit_bytes": 33554432,
+      "copilot_research_version": "public-research-20261110-v1"
     }
   },
   "smokeChecks": [
@@ -7872,6 +7873,38 @@
       "contains": [
         "company-search-progress.js?v=20261109-v1",
         "company-progress=20261109-v1"
+      ]
+    },
+    {
+      "id": "copilot-durable-public-research-api",
+      "type": "text",
+      "url": "/customer/copilot-api.js",
+      "status": 200,
+      "contains": [
+        "research_mode:",
+        "research_mode:'thorough'",
+        "getCopilotResearch",
+        "controlCopilotResearch"
+      ]
+    },
+    {
+      "id": "copilot-durable-research-progress",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "function watchResearch(",
+        "Paid contact reveals and verification are off.",
+        "function attachResearch("
+      ]
+    },
+    {
+      "id": "copilot-durable-research-assets",
+      "type": "text",
+      "url": "/customer/copilot-loader.js",
+      "status": 200,
+      "contains": [
+        "public-research=20261110-v1"
       ]
     }
   ],
