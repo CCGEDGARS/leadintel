@@ -49,8 +49,23 @@ export function buildMonitoringQueries(payload={},rawConfig={}){
   const sourceTypes=config.sourceTypes.filter(type=>type!=='tenders'||signals.some(isTenderSignal));
   const terms=signals.flatMap(signal=>list(String(signal.keywords||signal.name||'').replace(/,/g,';')).slice(0,2)).slice(0,config.researchDepth==='deep'?12:4);const limit=config.researchDepth==='deep'?12:4;const combinations=[];
   for(const marketName of (markets.length?markets:['priority market']))for(const offer of (offers.length?offers:['commercial opportunity']))for(const sourceType of sourceTypes)combinations.push({market:marketName,offer,sourceType});
-  for(const customSource of config.customSources){const host=new URL(customSource).hostname;combinations.push({market:(markets[0]||'priority market'),offer:(offers[0]||'commercial opportunity'),sourceType:'custom',customHost:host});}
-  const rows=[];for(let index=0;rows.length<limit&&combinations.length;index++){const base=combinations[index%combinations.length];const term=terms[index%Math.max(1,terms.length)]||'business expansion';const query=[base.customHost?`site:${base.customHost}`:base.market,base.offer,term,SOURCE_TYPES[base.sourceType]||'',new Date().getUTCFullYear()].filter(Boolean).join(' ');if(!rows.some(row=>row.query===query))rows.push({...base,query});if(index>limit*4)break;}return rows;
+  const custom=config.customSources.map((customSource,index)=>{const url=new URL(customSource);return {market:markets[0],offer:offers[0],sourceType:'custom',customSource,query:[`site:${url.hostname}${url.pathname==='/'?'':url.pathname}`,markets[0],offers[0],terms[index%Math.max(1,terms.length)]||'',new Date().getUTCFullYear()].filter(Boolean).join(' ')};});
+  const rows=[...custom];for(let index=0;rows.length<limit&&combinations.length;index++){const base=combinations[index%combinations.length];const term=terms[index%Math.max(1,terms.length)]||'business expansion';const query=[base.market,base.offer,term,SOURCE_TYPES[base.sourceType]||'',new Date().getUTCFullYear()].filter(Boolean).join(' ');if(!rows.some(row=>row.query===query))rows.push({...base,query});if(index>limit*4)break;}return rows.slice(0,limit);
+}
+// Each source group gets a turn within the existing four/twelve-query budget.
+// Persisted cursors prevent larger saved website lists from being skipped forever.
+export function buildMonitoringRunPlan(payload,rawConfig,mandatoryQueries=[],cursor={}){
+  const config=normalizeMonitoringConfig(rawConfig),limit=config.researchDepth==='deep'?12:4;
+  const custom=config.customSources.flatMap(url=>buildMonitoringQueries(payload,{...config,sourceTypes:[],customSources:[url]})).filter(row=>row.sourceType==='custom');
+  const groups={custom,mandatory:mandatoryQueries,categories:buildMonitoringQueries(payload,{...config,customSources:[]})};
+  const nextCursor={},used={},queries=[],seen=new Set();
+  for(const key of Object.keys(groups)){nextCursor[key]=Number.isSafeInteger(cursor[key])&&cursor[key]>=0?cursor[key]:0;used[key]=0;}
+  while(queries.length<limit){let remaining=false;for(const [key,rows] of Object.entries(groups)){
+    if(used[key]>=rows.length)continue;remaining=true;
+    const row=rows[nextCursor[key]%rows.length];nextCursor[key]=(nextCursor[key]+1)%rows.length;used[key]++;
+    if(!seen.has(row.query)){seen.add(row.query);queries.push(row);if(queries.length===limit)break;}
+  }if(!remaining)break;}
+  return {queries,nextCursor};
 }
 export function scoreMonitoringEvidence(evidence={},signals=[],now=new Date()){
   const corpus=clean(`${evidence.title||''} ${evidence.description||''} ${evidence.text||''}`,12000).toLowerCase();const matched=[];let signalPoints=0;

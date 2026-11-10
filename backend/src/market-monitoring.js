@@ -2,7 +2,7 @@ import {readOwnedPayload} from './workspace-record-store.js';
 import {sha256,cookieValue} from './security.js';
 import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
-import {normalizeMonitoringConfig,nextMonitoringRun,buildMonitoringQueries,scoreMonitoringEvidence,canonicalMonitoringUrl,isTenderSignal,monitoringTargetingProfile,monitoringEventIdentity} from './market-monitoring-engine.js';
+import {normalizeMonitoringConfig,nextMonitoringRun,buildMonitoringRunPlan,scoreMonitoringEvidence,canonicalMonitoringUrl,isTenderSignal,monitoringTargetingProfile,monitoringEventIdentity} from './market-monitoring-engine.js';
 import {buildMandatorySourceQueries} from './intelligence-sources-engine.js';
 import '../../customer/strategy-integrity.js';
 
@@ -73,9 +73,10 @@ async function runWorkspaceMonitoring(env,row,triggerType='scheduled',request,du
   await assertFresh();const payload=currentState.payload,signals=activeSignals(payload,config),profile=monitoringTargetingProfile(payload?.main||{});
   mandatorySources=await loadMandatorySources(env,workspaceId);
   mandatorySources=mandatorySources.filter(source=>source.sourceType!=='tenders'||(config.sourceTypes.includes('tenders')&&signals.some(isTenderSignal)));
-  const limit=config.researchDepth==='deep'?12:4;
-  queries=[...buildMandatorySourceQueries(mandatorySources,signals,profile),...buildMonitoringQueries(payload,config)].slice(0,limit);
-  await env.DB.prepare('UPDATE market_monitoring_runs SET query_count=?,snapshot_json=? WHERE id=?').bind(queries.length,JSON.stringify({markets:profile.targetMarkets||'',source_types:config.sourceTypes,signal_ids:config.signalIds,config_revision:row.revision,strategy_signature:row.strategy_signature,mandatory_sources:mandatorySources.map(source=>({id:source.id,host:source.host,signal_ids:source.triggerIds}))}),runId).run();
+  const previous=await env.DB.prepare("SELECT snapshot_json FROM market_monitoring_runs WHERE workspace_id=? AND status IN ('completed','partial') ORDER BY started_at DESC,rowid DESC LIMIT 1").bind(workspaceId).first();
+  const snapshot=parse(previous?.snapshot_json,{}),cursor=snapshot.config_revision===row.revision?snapshot.next_query_cursor:{};
+  const plan=buildMonitoringRunPlan(payload,config,buildMandatorySourceQueries(mandatorySources,signals,profile),cursor);queries=plan.queries;
+  await env.DB.prepare('UPDATE market_monitoring_runs SET query_count=?,snapshot_json=? WHERE id=?').bind(queries.length,JSON.stringify({markets:profile.targetMarkets||'',source_types:config.sourceTypes,signal_ids:config.signalIds,config_revision:row.revision,strategy_signature:row.strategy_signature,next_query_cursor:plan.nextCursor,queried_websites:queries.filter(query=>query.customSource).map(query=>query.customSource),mandatory_sources:mandatorySources.map(source=>({id:source.id,host:source.host,signal_ids:source.triggerIds}))}),runId).run();
   if(!queries.length)throw failure('no_active_monitoring_queries');
   const seen=new Set(),signalMap=new Map(signals.map(signal=>[clean(signal.id),signal]));
   for(const query of queries){
@@ -119,6 +120,7 @@ export async function handleMarketMonitoringRoute(request,env,cors={}){
   if(request.method==='PUT'){
    const body=await request.json().catch(()=>null);if(!body)return error('Monitoring configuration is required',400,cors);const config=normalizeMonitoringConfig(body);let state;try{state=await strategyState(env,workspaceId);}catch{if(config.enabled)return error('Saved workspace is unreadable. Restore it and approve Strategy before enabling monitoring.',409,cors);state={approval:{current:false,signature:''},row:null};}
    if(config.enabled&&!state.approval.current)return error(state.approval.reason||'Approve the current Profile and Strategy before enabling monitoring',409,cors);
+   if(config.enabled&&config.signalIds.some(id=>!(state.payload?.main?.market?.signals||[]).some(signal=>signal.active!==false&&signal.id===id)))return error('Selected buying signals are no longer active. Review monitoring settings and select active signals.',409,cors);
    if(config.enabled&&Object.prototype.hasOwnProperty.call(body,'strategy_signature')&&body.strategy_signature!==state.approval.signature)return error('Strategy changed; review or reload Strategy before enabling monitoring.',409,cors);
    const freshAccess=await requireMember(request,env,workspaceId,['owner','researcher']);if(freshAccess.error)return error(freshAccess.error,freshAccess.status,cors);
    const revision=Number.isSafeInteger(body.revision)?body.revision:0,next=config.enabled?new Date().toISOString():null,signature=state.approval.current?state.approval.signature:'';

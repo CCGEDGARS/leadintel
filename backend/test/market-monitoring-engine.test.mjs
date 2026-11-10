@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeMonitoringConfig,nextMonitoringRun,buildMonitoringQueries,scoreMonitoringEvidence} from '../src/market-monitoring-engine.js';
+import {normalizeMonitoringConfig,nextMonitoringRun,buildMonitoringQueries,buildMonitoringRunPlan,scoreMonitoringEvidence} from '../src/market-monitoring-engine.js';
 
 test('monitoring configuration is normalized and cost-bounded',()=>{
   const config=normalizeMonitoringConfig({enabled:true,frequency:'weekly',research_depth:'deep',minimum_score:150,source_types:['news','tenders','unsafe'],signal_ids:['one','two'],custom_sources:['https://example.com','javascript:bad']});
@@ -33,6 +33,25 @@ test('custom public sources become domain-restricted monitoring queries',()=>{
   const config=normalizeMonitoringConfig({research_depth:'deep',source_types:['news'],signal_ids:['move'],custom_sources:['https://example.com/industry/news']});
   const queries=buildMonitoringQueries(payload,config);
   assert.ok(queries.some(row=>row.sourceType==='custom'&&/site:example\.com/.test(row.query)));
+});
+test('Quick monitoring reserves room for an entered website before default source categories',()=>{
+ const payload={main:{profile:{targetMarkets:'Denmark',priorityOffers:'Automation'},market:{signals:[{id:'growth',active:true,keywords:'new factory; expansion'}]}}};
+ const rows=buildMonitoringQueries(payload,{researchDepth:'quick',customSources:['https://www.jobindex.dk/engineering/jobs']});
+ assert.equal(rows.length,4);assert.equal(rows[0].sourceType,'custom');
+ assert.match(rows[0].query,/site:www\.jobindex\.dk\/engineering\/jobs/);assert.match(rows[0].query,/Denmark/);
+});
+test('bounded run planning rotates websites and mandatory sources without starving selected categories',()=>{
+ for(const [market,offer] of [['Denmark','Automation'],['Norway','Clinical training']]){
+  const payload={main:{profile:{targetMarkets:market,priorityOffers:offer},market:{signals:[{id:'growth',active:true,keywords:'expansion'}]}}};
+  const customSources=Array.from({length:9},(_,i)=>`https://source-${i}.example/news`),mandatory=Array.from({length:7},(_,i)=>({query:`site:mandatory-${i}.example ${market} ${offer} expansion`,sourceType:'company',sourceId:'m'+i}));
+  let cursor={},customSeen=new Set(),mandatorySeen=new Set();
+  for(let i=0;i<9;i++){
+   const plan=buildMonitoringRunPlan(payload,{researchDepth:'quick',customSources},mandatory,cursor);cursor=plan.nextCursor;
+   assert.equal(plan.queries.length,4);assert.ok(plan.queries.some(r=>r.sourceType==='custom'));assert.ok(plan.queries.some(r=>r.sourceId));assert.ok(plan.queries.some(r=>r.sourceType==='news'||r.sourceType==='jobs'||r.sourceType==='investments'||r.sourceType==='company'&&!r.sourceId));
+   for(const row of plan.queries){assert.ok(row.query.includes(market)&&row.query.includes(offer));if(row.customSource)customSeen.add(row.customSource);if(row.sourceId)mandatorySeen.add(row.sourceId);}
+  }
+  assert.equal(customSeen.size,9);assert.equal(mandatorySeen.size,7);
+ }
 });
 
 test('evidence scoring rewards selected signal matches and recent dated evidence',()=>{

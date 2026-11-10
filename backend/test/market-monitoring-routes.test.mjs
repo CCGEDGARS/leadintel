@@ -32,6 +32,15 @@ sqliteTest('owner can enable monitoring and retrieve the durable configuration',
   response=await handleMarketMonitoringRoute(request('/api/market-monitoring/config?workspace_id=w1',{token}),env,{});const result=await response.json();
   assert.equal(result.config.enabled,true);assert.equal(result.config.frequency,'daily');assert.equal(result.config.minimumScore,72);assert.ok(result.config.nextRunAt);
 });
+sqliteTest('off monitoring settings save before Strategy approval without scheduling research',async()=>{
+ const f=await fixture();const response=await handleMarketMonitoringRoute(request('/api/market-monitoring/config?workspace_id=w1',{method:'PUT',token:f.token,body:{enabled:false,frequency:'daily',research_depth:'quick',custom_sources:['https://www.jobindex.dk/'],minimum_score:80}}),f.env);
+ assert.equal(response.status,200);const config=(await response.json()).config;assert.equal(config.enabled,false);assert.equal(config.frequency,'daily');assert.equal(config.researchDepth,'quick');assert.equal(config.minimumScore,80);assert.equal(config.nextRunAt,'');
+ assert.equal((await runDueMarketMonitoring(f.env)).length,0);assert.equal(f.db.raw.prepare('SELECT count(*) n FROM market_monitoring_runs').get().n,0);
+});
+sqliteTest('enabled monitoring rejects retired signal IDs before committing an unusable schedule',async()=>{
+ const f=await fixture();saveMain(f.db,approvedMain());const response=await configure(f,{signal_ids:['retired-signal']});
+ assert.equal(response.status,409);assert.match((await response.json()).error,/signals.*no longer active/i);assert.equal(f.db.raw.prepare('SELECT count(*) n FROM market_monitoring_configs').get().n,0);
+});
 
 sqliteTest('monitoring alerts are workspace scoped and can be marked read',async()=>{
   const {env,token,db}=await fixture();
@@ -52,6 +61,15 @@ async function configure(f,extra={}){return handleMarketMonitoringRoute(request(
 async function connectedFixture(){const f=await fixture();saveMain(f.db,approvedMain());const secret=await encryptSecret('fc-fixture-only',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY));f.db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'fixture')").run(secret);assert.equal((await configure(f)).status,200);return f;}
 const evidence=()=>({url:'https://example.com/story?utm_source=fixture#fragment',title:'New office relocation',description:'Company announced new office relocation',date:new Date().toISOString()});
 async function run(f,signal){return handleMarketMonitoringRoute(new Request(request('/api/market-monitoring/run?workspace_id=w1',{method:'POST',token:f.token}),signal?{signal}:{}),f.env,{});}
+sqliteTest('saved run cursors rotate larger website lists through actual API execution within four queries per run',async()=>{
+ const f=await connectedFixture(),sites=Array.from({length:9},(_,i)=>`https://site-${i}.example/news`),old=globalThis.fetch,queried=[];
+ assert.equal((await configure(f,{revision:1,research_depth:'quick',custom_sources:sites,source_types:['news','jobs','investments','company']})).status,200);
+ globalThis.fetch=async(_,options)=>{queried.push(JSON.parse(options.body).query);return Response.json({data:[]});};
+ try{for(let i=0;i<5;i++){const before=queried.length;assert.equal((await (await run(f)).json()).run.status,'completed');assert.equal(queried.length-before,4);}
+  for(let i=0;i<sites.length;i++)assert.ok(queried.some(q=>q.includes(`site:site-${i}.example/news`)),sites[i]);
+  const snapshot=JSON.parse(f.db.raw.prepare('SELECT snapshot_json FROM market_monitoring_runs ORDER BY rowid DESC LIMIT 1').get().snapshot_json);assert.ok(snapshot.next_query_cursor);assert.ok(snapshot.queried_websites.length);
+ }finally{globalThis.fetch=old;}
+});
 
 sqliteTest('monitoring enable rejects absent, legacy and materially stale approval',async()=>{
  const f=await fixture();assert.equal((await configure(f)).status,409);

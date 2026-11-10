@@ -152,6 +152,6 @@ It must not show:
 6. Start the selected research mode.
 7. Review researched and verified evidence, opportunity scores and findings.
 8. Activate Market Strategy when ready.
-9. Configure monitoring frequency, threshold, signals and sources.
+9. Open Step 2 → Profile → Website Scanning → Monitor websites. Configure frequency, threshold, active signals and public websites. Settings can be saved while monitoring is off, before Strategy activation.
 10. Save monitoring settings. LeadIntel saves the workspace before enabling the schedule.
-11. Review new opportunity alerts and monitoring history in Market Strategy.
+11. Review in-app opportunity alerts and monitoring history in the same monitoring panel. Due schedules are checked hourly. Quick runs use at most four searches and Deep runs at most twelve; entered websites, mandatory sources and selected categories share the budget, with saved rotation cursors for longer lists. These are public-index searches with extraction, not byte-by-byte website change tracking.

@@ -316,6 +316,7 @@ jobs:
           node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js customer/test/buyer-start-persistence.test.js
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/monitoring-journey.test.mjs
       - name: Preserve focused navigation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -327,6 +328,7 @@ jobs:
             /tmp/leadintel-buyer-start/
             /tmp/leadintel-copilot-research/
             /tmp/leadintel-buyer-review-wake/
+            /tmp/leadintel-monitoring/
             /tmp/leadintel-research-handoff/
             /tmp/leadintel-research-handoff-outage/
             /tmp/leadintel-research-handoff-legacy/

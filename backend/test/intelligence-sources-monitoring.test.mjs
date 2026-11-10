@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {buildMandatorySourceQueries} from '../src/intelligence-sources-engine.js';
-import {buildMonitoringQueries,monitoringTargetingProfile} from '../src/market-monitoring-engine.js';
+import {buildMonitoringQueries,buildMonitoringRunPlan,monitoringTargetingProfile} from '../src/market-monitoring-engine.js';
 
 const monitoringSource=fs.readFileSync(new URL('../src/market-monitoring.js',import.meta.url),'utf8');
 
@@ -14,7 +14,9 @@ test('mandatory Intelligence Sources augment normal monitoring instead of replac
   assert.ok(base.length>0);assert.equal(mandatory.length,1);
   assert.ok([...mandatory,...base].every(row=>row.query.includes('Norway')&&row.query.includes('Clinical training')));
   assert.match(monitoringSource,/profile=monitoringTargetingProfile\(payload\?\.main\|\|\{\}\)/);
-  assert.match(monitoringSource,/queries=\[\.\.\.buildMandatorySourceQueries\(mandatorySources,signals,profile\),\.\.\.buildMonitoringQueries\(payload,config\)\]\.slice\(0,limit\)/);
+  const plan=buildMonitoringRunPlan(payload,{sourceTypes:['news'],customSources:['https://custom.example/news']},mandatory);
+  assert.ok(plan.queries.some(row=>row.sourceType==='custom'));assert.ok(plan.queries.some(row=>row.sourceId==='registry'));assert.ok(plan.queries.some(row=>row.sourceType==='news'));
+  assert.match(monitoringSource,/buildMonitoringRunPlan\(payload,config,buildMandatorySourceQueries\(mandatorySources,signals,profile\),cursor\)/);
 });
 
 test('mandatory source queries are site-scoped and limited to mapped active signals',()=>{
