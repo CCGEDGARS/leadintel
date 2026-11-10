@@ -223,7 +223,7 @@ jobs:
 
   event-planning-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -289,7 +289,9 @@ jobs:
 
   profile-strategy-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Cold browser installation plus the mandatory research journeys exceeded 5m
+    # after every assertion passed. Retain test deadlines and artifact upload.
+    timeout-minutes: 7
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
