@@ -52,6 +52,7 @@ let activeMarketResearchRun=null;
 let strategySavedBaseline=null,strategySavedState=null,strategySavedContext="";
 let targetingSaveOwner=null,targetingSaveError="";
 let monitoringRequestSerial=0;
+let monitoringApprovalContext=null;
 const $=id=>document.getElementById(id);
 function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
 
@@ -1430,6 +1431,40 @@ function monitoringContextCurrent(context){
 }
 
 function monitoringHasEdits(){return monitoringDraftMarket===state.market&&monitoringDraftBaseline!==null&&monitoringFormSnapshot()!==monitoringDraftBaseline;}
+function monitoringApprovalCurrent(owner=monitoringApprovalContext){
+  const current=Boolean(owner&&owner===monitoringApprovalContext&&monitoringContextCurrent(owner)&&owner.website===state.website&&owner.markets===JSON.stringify([...(state.targetMarkets||[])].sort()));
+  if(!current&&owner===monitoringApprovalContext)monitoringApprovalContext=null;
+  return current;
+}
+function renderMonitoringApprovalGuide(){
+  const guide=$("monitoring-approval-guide");if(!guide)return;
+  const visible=monitoringApprovalCurrent()&&[2,3].includes(Number(state.step));guide.hidden=!visible;
+  const host=visible?$("step-"+state.step):null;if(host&&guide.parentElement!==host)host.prepend(guide);
+}
+function clearMonitoringApproval(){monitoringApprovalContext=null;renderMonitoringApprovalGuide();}
+function beginMonitoringApproval(){
+  if(monitoringBusy||monitoringHasEdits())return false;
+  monitoringApprovalContext={...captureMonitoringContext(),website:state.website,markets:JSON.stringify([...(state.targetMarkets||[])].sort())};
+  renderMonitoringApprovalGuide();
+  if(setStep(4)===false)return false;
+  openStrategyHandoff();return true;
+}
+function continueMonitoringApproval(){
+  if(!monitoringApprovalCurrent()||!state.approved)return false;
+  try{if(setStep(4)===false)return false;openStrategyHandoff();return true;}
+  catch{clearMonitoringApproval();showToast("Profile saved. Reopen monitoring to continue the Strategy review.");return false;}
+}
+function returnToMonitoring(owner=monitoringApprovalContext){
+  if(!monitoringApprovalCurrent(owner)){renderMonitoringApprovalGuide();return false;}
+  clearMonitoringApproval();closeStrategyHandoff();
+  if(setStep(2)===false)return false;
+  if(!window.LeadIntelWebsiteScanUI?.openMonitoring?.()){showToast("Strategy saved. Open Website Scanning → Monitor websites to continue.");return false;}
+  return true;
+}
+function cancelStrategyHandoff(){
+  if(monitoringApprovalCurrent())return returnToMonitoring();
+  clearMonitoringApproval();return state.market.researchContextStale?returnToProfileResearch():closeStrategyHandoff();
+}
 function updateMonitoringDisclosure(){
   const open=!$("monitoring-settings").hidden,config=state.market.monitoring;
   const configured=Boolean(config.customSources?.length||config.signalIds?.length||config.enabled||config.lastRunAt);
@@ -1607,6 +1642,11 @@ function strategyHandoffModel(){
 }
 function renderStrategyHandoff(){
   const model=strategyHandoffModel();
+  const monitoring=monitoringApprovalCurrent();$("strategy-handoff-dialog").dataset.destination=monitoring?"monitoring":"companies";
+  $("strategy-handoff-title").textContent=monitoring?"Review Strategy for website monitoring":"Review before finding companies";
+  $("strategy-handoff-purpose").textContent=monitoring?"Review the strategy that will guide monitoring. This approval returns to your saved setup; enabling a schedule is a separate action.":"Confirm exactly what LeadIntel will use to find and rank companies.";
+  $("strategy-handoff-eyebrow").textContent=monitoring?"Monitoring review":"Companies review";
+  if(monitoring){model.summary=model.summary.filter(([label])=>label!=="Company search").map(([label,value])=>[label,label==="Next"?"Approve Strategy and return to monitoring. No research starts with this approval. Choose Run monitoring now or explicitly enable the saved schedule afterward.":value]);model.warnings=model.warnings.filter(text=>!text.startsWith("Monitoring is off (optional)."));}
   $("strategy-handoff-summary").innerHTML=model.summary.map(([label,value])=>`<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("");
   const renderNotice=(id,items)=>{const node=$(id);node.hidden=!items.length;node.querySelector("ul").innerHTML=items.map(item=>`<li>${esc(item)}</li>`).join("");};
   renderNotice("strategy-handoff-blockers",model.blockers);
@@ -1621,9 +1661,9 @@ function renderStrategyHandoff(){
   repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden&&repairRoles.hidden;
   const confirm=$("confirm-strategy-handoff");
   const back=$("cancel-strategy-handoff");
-  if(back)back.textContent=state.market.researchContextStale?"Go to Profile and update research":"Back to Strategy";
+  if(back)back.textContent=monitoring?"Back to monitoring":state.market.researchContextStale?"Go to Profile and update research":"Back to Strategy";
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":"Continue to Companies →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":monitoring?"Approve Strategy & return to monitoring":"Continue to Companies →";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
@@ -1691,18 +1731,22 @@ async function activateMarketStrategy(){
   const button=$("activate-market-strategy"),confirm=$("confirm-strategy-handoff");
   if(button?.dataset.activationBusy==="true")return false;
   const context=captureStrategyContext(),operation=window.LeadIntelReliabilityTrace?.begin('strategy_activation');let outcome='blocked',attemptedApproval=false,approvalSaved=false;
+  const monitoring=$("strategy-handoff-dialog")?.dataset.destination==='monitoring',monitoringOwner=monitoring?monitoringApprovalContext:null;
   try{
     assertStrategyContext(context);
+    if(monitoring&&!monitoringApprovalCurrent(monitoringOwner))throw Error('Monitoring review changed. Reopen monitoring before approving Strategy.');
     if(!strategyIntegrity())throw Error('Strategy verification is still loading. Retry in a moment.');
     if(window.LeadIntelServerBridge?.conflict)throw Error('Resolve the workspace synchronization conflict before activating Strategy.');
     if(!strategyReviewCurrent())throw Error('Strategy changed in another view. Reopen and review the saved Strategy before activating.');
     const model=strategyHandoffModel();if(model.blockers.length){renderStrategyHandoff();if(state.market.researchContextStale)returnToProfileResearch();return false;}
     const approval=strategyIntegrity().approval(state);if(!approval)throw Error(strategyIntegrity().requirements(state)?.reason||'Complete and review Strategy before activation.');
-    if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Companies…";}if(confirm){confirm.disabled=true;confirm.textContent="Opening Companies…";}
+    const pendingLabel=monitoring?"Saving Strategy…":"Opening Companies…";
+    if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent=pendingLabel;}if(confirm){confirm.disabled=true;confirm.textContent=pendingLabel;}
     setActivationFeedback('Saving your reviewed Strategy…','running');
     attemptedApproval=true;delete state.market.strategyApprovalInvalidated;state.market.strategyApproval=approval;state.market.strategyApproved=true;state.market.strategyApprovedAt=approval.approvedAt;saveState();
     if(!strategyReviewCurrent()||!strategyIntegrity().status(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')).current)throw Error('Strategy approval could not be saved locally. Your reviewed work is retained.');
     operation?.checkpoint('persistence','pending');await saveStrategyApproval(context);operation?.checkpoint('persistence','pass');assertStrategyContext(context);approvalSaved=true;
+    if(monitoring){if(!monitoringApprovalCurrent(monitoringOwner))throw Error('Strategy saved. Monitoring navigation was canceled or changed.');const returned=returnToMonitoring(monitoringOwner);outcome=returned?'pass':'needs-navigation';if(returned)showToast('Strategy approved. Monitoring settings are ready; choose when to run.');return returned;}
     closeStrategyHandoff();const opened=await openDiscoveryAfterActivation();assertStrategyContext(context);
     if(!opened){setActivationFeedback('Companies did not open. Please try again.','error');showToast('Companies did not open. Please try again.');if(button){button.disabled=false;button.textContent='Try Companies Again →';}return false;}
     const research=window.LeadIntelDiscoveryUI?.startFromStrategy?.();
@@ -1798,6 +1842,10 @@ async function factoryResetLeadIntel(){
 function bind(){
   $("download-strategy-recovery")?.addEventListener("click",downloadStrategyRecovery);
   window.addEventListener("leadintel:workspace-changed",acceptCanonicalProfileEdits);
+  window.addEventListener("leadintel:workspace-changed",event=>{renderMonitoringApprovalGuide();if(event.detail?.source==="profile-approval")continueMonitoringApproval();});
+  window.addEventListener("leadintel:module-opened",event=>{if(![2,3,4].includes(Number(event.detail?.step)))clearMonitoringApproval();else renderMonitoringApprovalGuide();});
+  $("cancel-monitoring-approval").addEventListener("click",()=>returnToMonitoring());
+  $("strategy-handoff-dialog").addEventListener("cancel",event=>{event.preventDefault();cancelStrategyHandoff();});
   $("company-website").addEventListener("input",()=>{
     // Website edits are proposals until verified activation commits the new company.
     // Keep the current profile, evidence and downstream work while the URL is edited.
@@ -1829,8 +1877,8 @@ function bind(){
   document.querySelector("[data-reopen-research-window]")?.addEventListener("click",reopenResearchProgressWindow);
   $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
-    openStrategyHandoff();
-  });$("cancel-strategy-handoff").addEventListener("click",()=>state.market.researchContextStale?returnToProfileResearch():closeStrategyHandoff());$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});window.addEventListener("leadintel:monitoring-opened",()=>{renderMonitoringControls();void loadMonitoringServerState();});$("monitoring-settings").addEventListener("input",updateMonitoringDisclosure);$("monitoring-settings").addEventListener("change",updateMonitoringDisclosure);$("monitoring-review-strategy").addEventListener("click",()=>{if(!monitoringBusy&&!monitoringHasEdits()&&setStep(4)!==false)openStrategyHandoff();});$("monitoring-enabled").addEventListener("change",()=>void saveMonitoringConfig({closeAfterSave:false}));$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+    clearMonitoringApproval();openStrategyHandoff();
+  });$("cancel-strategy-handoff").addEventListener("click",cancelStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))cancelStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});window.addEventListener("leadintel:monitoring-opened",()=>{renderMonitoringControls();void loadMonitoringServerState();});$("monitoring-settings").addEventListener("input",updateMonitoringDisclosure);$("monitoring-settings").addEventListener("change",updateMonitoringDisclosure);$("monitoring-review-strategy").addEventListener("click",beginMonitoringApproval);$("monitoring-enabled").addEventListener("change",()=>void saveMonitoringConfig({closeAfterSave:false}));$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
   $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);

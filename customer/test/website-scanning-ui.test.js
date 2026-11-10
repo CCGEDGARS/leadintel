@@ -1,5 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
 const wait=()=>new Promise(r=>setTimeout(r,15));
+test('approval return opens the real monitoring wrapper without starting a scan',async()=>{
+ const w=runtime();await wait();let requests=0,opened=0;w.fetch=async()=>{requests++;throw Error('No research expected');};w.addEventListener('leadintel:monitoring-opened',()=>opened++);
+ assert.equal(w.LeadIntelWebsiteScanUI.openMonitoring(),true);assert.equal(w.document.getElementById('website-scanning-workspace').hidden,false);assert.equal(w.document.getElementById('website-scanning-monitor').hidden,false);assert.equal(w.document.getElementById('monitoring-settings').hidden,false);assert.equal(requests,0);assert.equal(opened,1);w.close();
+});
 test('returning to monitoring announces visibility even when its settings were already open',async()=>{
  const w=runtime();await wait();let shown=0;w.addEventListener('leadintel:monitoring-opened',()=>shown++);
  w.document.querySelector('#website-scanning-open').click();w.document.querySelector('[data-scan-mode="monitor"]').click();
