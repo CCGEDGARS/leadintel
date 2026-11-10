@@ -67,7 +67,8 @@
       "research_storage_version": "20261101-v1",
       "research_expanded_limit_bytes": 33554432,
       "copilot_research_version": "public-research-20261110-v1",
-      "buyer_review_scheduling_version": "20261110-full-slice-v1"
+      "buyer_review_scheduling_version": "20261110-full-slice-v1",
+      "website_monitoring_version": "20261110-source-rotation-v1"
     }
   },
   "smokeChecks": [
@@ -7936,6 +7937,48 @@
       "status": 200,
       "contains": [
         "buyer-review=20261110-v1"
+      ]
+    },
+    {
+      "id": "website-monitoring-draft-activation",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "Saved:",
+        "Unsaved changes — save settings before running.",
+        "monitoring-review-strategy",
+        "Save your settings now. Review and activate Strategy in Step 3"
+      ]
+    },
+    {
+      "id": "website-monitoring-controls-and-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "monitoring-reliability=20261110-v1",
+        "id=\"monitoring-review-strategy\"",
+        "Larger website lists rotate between runs.",
+        "Alerts appear here in LeadIntel."
+      ]
+    },
+    {
+      "id": "website-monitoring-profile-wrapper",
+      "type": "text",
+      "url": "/customer/website-scanning-ui.js",
+      "status": 200,
+      "contains": [
+        "leadintel:monitoring-opened"
+      ]
+    },
+    {
+      "id": "website-monitoring-wrapper-cache",
+      "type": "text",
+      "url": "/customer/shell-support-loader.js",
+      "status": 200,
+      "contains": [
+        "website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1&monitoring-reliability=20261110-v1"
       ]
     }
   ],

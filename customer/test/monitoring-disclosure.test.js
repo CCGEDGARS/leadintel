@@ -76,6 +76,40 @@ test('locked strategy does not prevent opening or closing the optional panel',as
  assert.equal(await c.context.saveMonitoringConfig(),false);assert.equal(c.calls.length,0);
  c.context.requestCloseMonitoringSettings();assert.equal(c.$('monitoring-settings').hidden,true);
 });
+test('inactive Strategy allows saving an off monitoring draft, without enabling a schedule',async()=>{
+ const c=setup();c.state.market.strategyApproved=false;c.state.market.monitoring.enabled=false;
+ c.context.renderMonitoringControls();c.context.openMonitoringSettings();
+ c.$('monitoring-frequency').value='daily';c.$('monitoring-depth').value='quick';c.$('monitoring-custom-sources').value='https://jobindex.dk/';
+ assert.equal(c.$('save-monitoring').disabled,false);
+ assert.equal(c.$('monitoring-enabled').disabled,true);assert.equal(c.$('run-monitoring-now').disabled,true);
+ assert.equal(c.$('monitoring-review-strategy').hidden,false);
+ assert.equal(await c.context.saveMonitoringConfig(),true);assert.equal(c.calls[0].enabled,false);
+ c.context.openMonitoringSettings();assert.equal(c.$('monitoring-frequency').value,'daily');
+ assert.equal(c.$('monitoring-depth').value,'quick');assert.match(c.$('monitoring-saved-summary').textContent,/Saved:.*Daily.*Quick/);
+});
+test('stale Strategy approval cannot unlock monitoring through the legacy approved boolean',()=>{
+ const c=setup();c.state.market.monitoring.enabled=false;c.state.profile.priorityOffers='Changed offer';
+ c.context.renderMonitoringControls();c.context.openMonitoringSettings();
+ assert.equal(c.state.market.strategyApproved,true);assert.equal(c.$('monitoring-enabled').disabled,true);
+ assert.equal(c.$('run-monitoring-now').disabled,true);assert.equal(c.$('save-monitoring').disabled,false);
+});
+test('unsaved settings are labelled and a manual run explains why it cannot start',()=>{
+ const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
+ c.$('monitoring-frequency').value='daily';c.$('monitoring-depth').value='quick';c.context.updateMonitoringDisclosure();
+ assert.match(c.$('monitoring-saved-summary').textContent,/Saved:.*Weekly.*Deep/);
+ assert.match(c.$('monitoring-status').textContent,/Unsaved changes/);assert.equal(c.$('run-monitoring-now').disabled,true);
+});
+test('opening monitoring from Profile loads authoritative settings without visiting Strategy',async()=>{
+ const c=setup();let reads=0;
+ c.context.monitoringApi=async path=>{reads++;return path.endsWith('/config')?{config:{enabled:false,frequency:'monthly',researchDepth:'quick',revision:7,customSources:['https://saved.example/news']}}:{alerts:[],runs:[]};};
+ c.context.openMonitoringSettings();await new Promise(r=>setImmediate(r));
+ assert.equal(reads,3);assert.equal(c.state.market.monitoring.revision,7);assert.equal(c.$('monitoring-frequency').value,'monthly');assert.equal(c.$('monitoring-custom-sources').value,'https://saved.example/news');
+});
+test('retired saved signals expose the active choices and block a misleading manual run',()=>{
+ const c=setup();c.state.market.signals=[{id:'replacement',active:true,name:'New production project',keywords:'production',weight:7}];c.state.market.strategyApproval=I.approval(c.state);
+ c.context.renderMonitoringControls();assert.match(c.$('monitoring-status').textContent,/saved buying signals have changed/);
+ assert.equal(c.$('monitoring-advanced').open,true);assert.equal(c.$('run-monitoring-now').disabled,true);
+});
 test('Run now refuses unsaved changes without mutating saved configuration',async()=>{
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();
  c.$('monitoring-frequency').value='daily';c.$('monitoring-enabled').checked=false;
