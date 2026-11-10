@@ -95,3 +95,9 @@ test('compact source excerpts never remove uncertainty or conditional prefixes t
   const brief=O.buildResearchBrief({domain:'buyer.example',evidence:[{url,sourceRead:true,text:source}]},profile,person);assert.notEqual(brief.facts[0].text,'Buyer is constructing a new plant.');assert.ok(brief.facts[0].text.includes(source.startsWith('if ')?'if Buyer':'unconfirmed reports'));
  }
 });
+
+test('address markdown and generic corporate boilerplate cannot become message brief facts',()=>{
+ for(const source of ['Ltd.](https://buyer.example/location/china/) 1502 of 1501, Floor 15, Building 2, Jiuxianqiao Road, Beijing 100016 PR.','Whether in research and development, personnel policy, corporate strategy, customer service or product quality, the advantages of our long-term thinking are visible everywhere in the group.']){
+  const brief=O.buildResearchBrief(candidate(source),profile,person);assert.equal(brief.facts.length,0,'unusable source fragments stay out of message personalization');assert.equal(brief.hypotheses.length,0);
+ }
+});

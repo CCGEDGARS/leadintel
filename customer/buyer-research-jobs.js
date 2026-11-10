@@ -12,6 +12,13 @@
   const roster=c=>(c.people||[]).map(personIdentity).sort().join('\n');
   const companyIdentity=c=>stable([domain(c.domain||c.website),fold(c.company||c.companyName),domain(c.website||c.domain),c.crmId||'']);
   const roles=value=>(root.LeadIntelDiscovery?.buyerSelectionRoles?.({decisionMakers:value})||['Executive leadership','Procurement Director',...(Array.isArray(value)?value:text(value).split(/[;,\n]+/))]).map(fold).filter(Boolean).filter((value,index,rows)=>rows.indexOf(value)===index).sort();
+  const hasRoles=value=>Array.isArray(value)?value.some(v=>text(v)):Boolean(text(value));
+  function roleSelection(owner={},profile={}){
+    if(root.LeadIntelDiscovery?.buyerResearchRoles)return root.LeadIntelDiscovery.buyerResearchRoles(owner,profile);
+    const selected=[owner.buyerRoles,owner.buyerDiscovery?.opportunityRoles,profile.decisionMakers].find(hasRoles);
+    return ['Executive leadership','Procurement Director',...(Array.isArray(selected)?selected:text(selected).split(/[;,\n]+/))].filter(v=>text(v));
+  }
+  const rolesFor=(owner,profile)=>[...new Set(roleSelection(owner,profile).map(fold))].sort();
   // Only research inputs cross this boundary. Credentials, workspace snapshots,
   // enrichment approvals and delivery actions never belong to a public job.
   const PROFILE=['companyName','website','priorityOffers','idealCustomer','targetMarkets','currentMarkets','exclusions','decisionMakers','products','services','industry','description','valueProposition','buyerRoles','companyDomain'];
@@ -32,14 +39,14 @@
   function requestInput(owner,profile={}){
     // Saved research belongs to workspace/CRM records and durable task receipts.
     // A new command carries identity/source hints, never duplicate inventories.
-    const candidate=pick(owner,CANDIDATE);candidate.domain=domain(owner.domain||owner.website);candidate.people=(owner.people||[]).slice(0,10).map(person=>pick(person,PERSON_INPUT));
+    const candidate=pick(owner,CANDIDATE);candidate.domain=domain(owner.domain||owner.website);candidate.buyerRoles=roleSelection(owner,profile).join('; ');candidate.people=(owner.people||[]).slice(0,10).map(person=>pick(person,PERSON_INPUT));
     candidate.evidence=(owner.evidence||[]).slice(0,12).map(row=>{const hint=pick(row,['url','title','text','description','date','publishedAt','verifiedAt','sourceDomain','type']);for(const key of ['title','text','description'])if(typeof hint[key]==='string')hint[key]=hint[key].slice(0,1000);return hint;});
     if(owner.buyerDiscovery)candidate.buyerDiscovery={...pick(owner.buyerDiscovery,['opportunityRoles']),resultDiagnostics:(owner.buyerDiscovery.resultDiagnostics||[]).filter(row=>candidate.people.some(person=>fold(row.parsedName)===fold(person.publicName||person.name))).slice(0,20).map(row=>pick(row,['source','url','parsedName','parsedTitle','parsedCompany','parsing','companyVerification','roleMatching','accepted','identityStatus','rejectionReason']))};
     const result={candidate,profile:pick(profile,REQUEST_PROFILE)};
     if(new TextEncoder().encode(stable(result)).byteLength>240000)throw Error('Buyer research snapshot is too large. Save and review the company research first.');
     return result;
   }
-  function inputKey(owner,profile){return stable([companyIdentity(owner),roles(owner.buyerRoles||profile.decisionMakers),pick(profile,PROFILE)]);}
+  function inputKey(owner,profile){return stable([companyIdentity(owner),rolesFor(owner,profile),pick(profile,PROFILE)]);}
   const abortError=()=>Object.assign(Error('Buyer research observation stopped; saved research can be reopened.'),{name:'AbortError',code:'BUYER_OBSERVATION_STOPPED'});
   async function waitForTurn(promise,signal,current){
     if(signal?.aborted||!current())throw abortError();
@@ -72,15 +79,20 @@
         const job=await Promise.race([operation,canceled]);if(!scope.current()||controller.signal.aborted)throw abortError();return job;
       }finally{clearTimeout(timer);clearInterval(contextTimer);controller.signal.removeEventListener('abort',stop);transport.abort();}
     }
+    function contextFailure(scope,job){
+      const sameCompany=domain(job?.domain||job?.candidate?.domain)===domain(scope.owner.domain)&&fold(job?.candidate?.company||job?.candidate?.companyName)===fold(scope.owner.company||scope.owner.companyName);
+      const roleMismatch=sameCompany&&((job?.candidate?.buyerRoles&&stable(roles(job.candidate.buyerRoles))!==stable(rolesFor(scope.owner,scope.profile)))||(job?.input?.roles&&stable(roles(job.input.roles))!==stable(rolesFor(scope.owner,scope.profile))));
+      return Object.assign(Error(roleMismatch?'Saved research uses different buyer roles. Refresh buyers to research the current roles; completed evidence is retained.':'Saved research does not match the current company or seller context. Completed evidence is retained.'),{name:'BuyerResearchContextError',code:roleMismatch?'BUYER_JOB_ROLES_MISMATCH':'BUYER_JOB_CONTEXT_MISMATCH',phase:job?.phase||'start',jobId:sameCompany?job?.id:undefined});
+    }
     function matching(scope,job){
       if(!job||domain(job.domain||job.candidate?.domain)!==domain(scope.owner.domain)||!job.id||!ACTIVE.has(job.status)&&!TERMINAL.has(job.status))return false;
       const c=job.candidate;if(c&&fold(c.company||c.companyName)!==fold(scope.owner.company||scope.owner.companyName))return false;
-      if(c?.buyerRoles&&stable(roles(c.buyerRoles))!==stable(roles(scope.owner.buyerRoles||scope.profile.decisionMakers)))return false;
+      if(c?.buyerRoles&&stable(roles(c.buyerRoles))!==stable(rolesFor(scope.owner,scope.profile)))return false;
       const ref=references.get(scope.owner);
       if(ref?.id===job.id&&ref.contextKey&&job.contextKey!==ref.contextKey)return false;
       const input=job.input||job.request;
       if(input?.profile){const fit=root.LeadIntelDiscovery?.buyerFitContext||((p={})=>stable({offers:text(p.priorityOffers),buyers:text(p.idealCustomer),markets:text(p.targetMarkets),exclusions:text(p.exclusions),website:domain(p.website)}));if(fit(input.profile)!==fit(scope.profile))return false;}
-      if(input?.roles&&stable(roles(input.roles))!==stable(roles(scope.owner.buyerRoles||scope.profile.decisionMakers)))return false;
+      if(input?.roles&&stable(roles(input.roles))!==stable(rolesFor(scope.owner,scope.profile)))return false;
       return true;
     }
     function apply(scope,job,options){
@@ -128,7 +140,7 @@
       if(!selected&&owner.buyerRolesChanged&&root.LeadIntelDiscovery?.canReassessSavedBuyerRoles?.(owner,owner.people||[],scope.profile))owner.buyerRolesChanged=false;
       const running=ACTIVE.has(job.status);owner.peopleStatus=running?'loading':owner.people?.length?'complete':job.status==='complete'?'empty':'error';
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
-      if(!selected)owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};
+      if(!selected){owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};const error=owner.buyerDiscovery.lastError;if(error?.phase==='start'||/^BUYER_JOB_.*MISMATCH$/.test(error?.name||''))delete owner.buyerDiscovery.lastError;}
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
       owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
@@ -139,7 +151,7 @@
       const started=Date.now();
       while(job){
         if(!scope.current()||controller.signal.aborted)throw abortError();
-        if(!apply(scope,job,options))return null;
+        if(!apply(scope,job,options))throw contextFailure(scope,job);
         if(!ACTIVE.has(job.status))return job;
         if(Date.now()-started>=observationTimeoutMs)throw Object.assign(Error('Status updates stopped. Check saved progress to see whether research is still running.'),{code:'BUYER_OBSERVATION_LIMIT'});
         await new Promise((resolve,reject)=>{let timer;const stop=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);reject(abortError());};timer=setTimeout(()=>{controller.signal.removeEventListener('abort',stop);resolve();},pollMs);controller.signal.addEventListener('abort',stop,{once:true});});
@@ -176,7 +188,7 @@
           observedJob=await request(scope,'GET',null,null,controller);
         }
         let job=observedJob;
-        if(job&&!matching(scope,job))job=null;
+        if(job&&!matching(scope,job)){options.onMismatch?.(contextFailure(scope,job));job=null;}
         if(!readOnly&&options.resumeExisting){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before resuming buyer research.');
           if(!job)throw Error('Saved research no longer matches this company. Check its current research first.');

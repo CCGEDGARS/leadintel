@@ -299,3 +299,11 @@ test('a reloaded durable job retains real stage evidence and can be stopped with
  await h.client.cancel(owner);await work;
  assert.equal(owner.buyerResearchJob.status,'canceled');assert.equal(h.calls.filter(c=>c.method==='POST').length,1);assert.equal(h.calls.find(c=>c.method==='POST').body.action,'cancel');
 });
+
+test('validated matching progress clears an obsolete start error without changing the saved role choice',async()=>{
+ const owner=candidate();owner.buyerDiscovery={lastError:{name:'BUYER_JOB_ROLES_MISMATCH',phase:'start',message:'Earlier start did not match'}};const job=snapshot(owner,'complete',3),h=harness(()=>job);await h.client.restore(owner,{profile:{decisionMakers:'COO'}});assert.equal(owner.buyerDiscovery.lastError,undefined);assert.equal(owner.buyerRoles,'COO');
+});
+
+test('a matching job needing evidence review clears a false start error while retaining its incomplete state',async()=>{
+ const owner=candidate();owner.buyerDiscovery={lastError:{phase:'start',message:'Could not start'}};const h=harness(()=>snapshot(owner,'needs_review',3));await h.client.restore(owner,{profile:{decisionMakers:'COO'}});assert.equal(owner.buyerDiscovery.lastError,undefined);assert.equal(owner.buyerDiscovery.researchIncomplete,true);assert.equal(owner.buyerResearchJob.status,'needs_review');
+});
