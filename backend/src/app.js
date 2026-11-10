@@ -1,3 +1,4 @@
+import {runMonitoringDeliveries,pollMonitoringReplies} from './monitoring-delivery.js';
 import {runCopilotResearchJobs} from './copilot-research-jobs.js';
 import {handleBuyerResearchRoute} from './buyer-research-routes.js';
 import {runBuyerResearchJobs} from './buyer-research-runner.js';
@@ -48,7 +49,7 @@ import {runCompanyMaterialJobs} from './company-materials-analysis.js';
 import {handleAccessRoute} from './access-invitations.js';
 import {observeScheduledTask} from './operational-observability.js';
 
-const scheduledJobs={runCopilotResearchJobs,runBuyerResearchJobs,reconcileStorageObjects,runWritingReferenceJobs,runWorkspaceSkillJobs,runCompanyMaterialJobs,runLanguagePackJobs,runSavedFlows,runApprovedWorkflows,pollConversations,enrollConversationWorkflows,runConversationPlans,pollOutreachReplies,runOutreachAutomation,runDueMarketMonitoring,runDueSourceHealthChecks};
+const scheduledJobs={runMonitoringDeliveries,pollMonitoringReplies,runCopilotResearchJobs,runBuyerResearchJobs,reconcileStorageObjects,runWritingReferenceJobs,runWorkspaceSkillJobs,runCompanyMaterialJobs,runLanguagePackJobs,runSavedFlows,runApprovedWorkflows,pollConversations,enrollConversationWorkflows,runConversationPlans,pollOutreachReplies,runOutreachAutomation,runDueMarketMonitoring,runDueSourceHealthChecks};
 
 export default {
   async fetch(request,env,ctx){
@@ -134,10 +135,11 @@ export default {
     if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(observeScheduledTask(storageEnv,'storage_reconciliation',()=>jobs.reconcileStorageObjects(storageEnv),{scheduledAt:now.getTime()}).catch(()=>console.warn('Workspace file accounting needs a retry')));
     if(controller.cron==='* * * * *'){ctx.waitUntil(Promise.allSettled([...(jobs.runCopilotResearchJobs?[observed('copilot_research',()=>jobs.runCopilotResearchJobs(env,{now:now.getTime()}))]:[]),...(jobs.runBuyerResearchJobs?[observed('buyer_research',()=>jobs.runBuyerResearchJobs(env,{now:now.getTime()}))]:[]),observed('writing_references',()=>jobs.runWritingReferenceJobs(env,{now:now.getTime()})),observed('workspace_skills',()=>jobs.runWorkspaceSkillJobs(env,{now:now.getTime()})),observed('company_materials',()=>jobs.runCompanyMaterialJobs(env,{now:now.getTime()})),observed('language_packs',()=>jobs.runLanguagePackJobs(env,{now:now.getTime()}))]));return;}
     const outreachCycle=observed('saved_flows',()=>jobs.runSavedFlows(env,{now})).then(()=>observed('approved_workflows',()=>jobs.runApprovedWorkflows(env,{now}))).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>observed('conversation_poll',()=>jobs.pollConversations(env,{now}))).then(()=>observed('conversation_enrollment',()=>jobs.enrollConversationWorkflows(env,{now})).catch(cause=>console.error('Conversation workflow enrollment cycle failed',cause))).then(()=>observed('conversation_plans',()=>jobs.runConversationPlans(env,{now}))).then(()=>observed('outreach_replies',()=>jobs.pollOutreachReplies(env,{now})).then(()=>observed('outreach_delivery',()=>jobs.runOutreachAutomation(env,{now}))));
+    const monitoringCycle=observed('market_monitoring',()=>jobs.runDueMarketMonitoring(env,now));
     ctx.waitUntil(Promise.allSettled([
-      observed('market_monitoring',()=>jobs.runDueMarketMonitoring(env,now)),
+      monitoringCycle,
       observed('source_health',()=>jobs.runDueSourceHealthChecks(env,now)),
-      outreachCycle
+      Promise.allSettled([monitoringCycle,outreachCycle]).then(()=>jobs.pollMonitoringReplies?observed('monitoring_replies',()=>jobs.pollMonitoringReplies(env,{now})):null).then(()=>jobs.runMonitoringDeliveries?observed('monitoring_delivery',()=>jobs.runMonitoringDeliveries(env,{now})):null)
     ]));
   }
 };

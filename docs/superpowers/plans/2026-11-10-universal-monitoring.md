@@ -33,34 +33,34 @@
 **Files:** Create `customer/monitoring-model.js`, `backend/migrations/0071_universal_monitoring.sql`, `backend/migrations/0072_universal_monitoring_storage.sql`, `customer/test/monitoring-model.test.js`; modify `customer/market-engine.js` and `backend/src/market-monitoring-engine.js`.
 **Interfaces:** `normalizeWorkflow(input)`, `buildPlan(payload,config,cursor)`, `extractEvents(evidence,workflow)`, `assessEvent(event,workflow,now)`, `renderMessage(template,context)` shared via UMD. New workflow JSON remains optional in legacy configuration.
 
-- [ ] Write and run failing normalization, role/identity, source-update, purpose-query, deadline/unknown and literal-template tests.
-- [ ] Implement bounded shared functions and additive findings/versions/subjects/messages schema with storage accounting.
-- [ ] Run model, schema and existing monitoring-engine suites; commit a green task.
+- [x] Write and run failing normalization, role/identity, source-update, purpose-query, deadline/unknown and literal-template tests.
+- [x] Implement bounded shared functions and additive findings/versions/subjects/messages schema with storage accounting.
+- [x] Run model, schema and existing monitoring-engine suites; commit a green task.
 
 ### Task 2: Monitoring execution and inbox API
 
 **Files:** Create `backend/src/monitoring-inbox.js`, `backend/test/monitoring-inbox.test.mjs`; modify `backend/src/market-monitoring.js` and relevant monitoring fixtures.
 **Interfaces:** `recordFinding(env,scope,event,assessment,guard)`, `handleInboxRoute(request,env,scope)`, `getReviewedSubject(...)`. Existing monitoring entry authenticates/scopes all inbox calls.
 
-- [ ] Reproduce missing same-URL updates, independent-person records, restricted content and scope/revision rejection using actual SQL/HTTP.
-- [ ] Connect purpose search/page reads and retained event versions to existing leases/run budgets; expose paginated scoped inbox/review/message endpoints.
-- [ ] Verify legacy alert compatibility, stale writes, source failures and useful partial progress; commit a green task.
+- [x] Reproduce missing same-URL updates, independent-person records, restricted content and scope/revision rejection using actual SQL/HTTP.
+- [x] Connect purpose search/page reads and retained event versions to existing leases/run budgets; expose paginated scoped inbox/review/message endpoints.
+- [x] Verify legacy alert compatibility, stale writes, source failures and useful partial progress; commit a green task.
 
 ### Task 3: Inbox, settings, company intake and formats
 
 **Files:** Create `customer/monitoring-inbox.js`, `customer/monitoring-inbox.css`, `customer/test/monitoring-inbox.test.js`; modify `customer/app.js`, `customer/index.html`, loaders and necessary company-intake interfaces.
 **Interfaces:** One global inbox entry and the Profile link; existing known-target handoff for organizations; independent subject review and personal-template preview for all subjects. Settings serialize only the shared workflow contract.
 
-- [ ] Write failing DOM tests for purpose settings, drafts, scope changes, filters, reviewed organization intake and person review without fake companies.
-- [ ] Implement accessible responsive inbox/detail/message controls and matching cache identities.
-- [ ] Verify save/reopen, no implicit send, no paid research, exact format and safe source rendering; commit a green task.
+- [x] Write failing DOM tests for purpose settings, drafts, scope changes, filters, reviewed organization intake and person review without fake companies.
+- [x] Implement accessible responsive inbox/detail/message controls and matching cache identities.
+- [x] Verify save/reopen, no implicit send, no paid research, exact format and safe source rendering; commit a green task.
 
 ### Task 4: Guarded automatic delivery and full acceptance
 
 **Files:** Create `backend/src/monitoring-delivery.js`, `backend/test/monitoring-delivery.test.mjs`, `backend/test/universal-monitoring-journey.test.mjs`; modify registered scheduler, CI, release smoke configuration and cache fixtures.
 **Interfaces:** `runMonitoringDeliveries(env,{now,sendMessage})`, approved version-bound messages, native Gmail receipts and shared automation policy. Scheduler invocation is observable and independent of the browser.
 
-- [ ] Write failing tests for missing approvals, private-person review, templates, suppression, limits/windows, context/recipient races, duplicate and ambiguous acceptance.
-- [ ] Implement bounded reservation/dispatch/acceptance using existing native helpers; register the job and prove one controlled accepted delivery with no live send.
+- [x] Write failing tests for missing approvals, private-person review, templates, suppression, limits/windows, context/recipient races, duplicate and ambiguous acceptance.
+- [x] Implement bounded reservation/dispatch/acceptance using existing native helpers; register the job and prove one controlled accepted delivery with no live send.
 - [ ] Run three-purpose real HTTP/SQL/browser journeys, full customer/backend checks, a fresh whole-branch review and one verified fix pass.
 - [ ] Merge only after required CI, then obtain exact-SHA production proof and reopen preserved Ercon settings without enabling new message automation.

@@ -25,6 +25,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/verify-universal-monitoring.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
@@ -62,6 +63,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/verify-universal-monitoring.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
@@ -336,3 +338,30 @@ jobs:
             /tmp/leadintel-research-handoff-progress/
           if-no-files-found: warn
           retention-days: 14
+
+  universal-monitoring-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned dependencies and browser
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify universal inbox, literal format and registered delivery
+        run: node --import ./backend/test/register-wasm-loader.mjs scripts/verify-universal-monitoring.mjs
+      - name: Preserve universal workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-monitoring-${{ github.sha }}
+          path: /tmp/leadintel-universal-monitoring/

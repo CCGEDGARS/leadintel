@@ -23,6 +23,7 @@ CREATE TABLE monitoring_finding_versions(
  FOREIGN KEY(workspace_id,finding_id) REFERENCES monitoring_findings(workspace_id,id) ON DELETE CASCADE,
  UNIQUE(workspace_id,finding_id,revision)
 );
+CREATE TRIGGER monitoring_versions_immutable BEFORE UPDATE ON monitoring_finding_versions BEGIN SELECT RAISE(ABORT,'MONITORING_VERSION_IMMUTABLE'); END;
 CREATE TABLE monitoring_subjects(
  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, finding_id TEXT NOT NULL, subject_key TEXT NOT NULL,
  kind TEXT NOT NULL CHECK(kind IN ('person','organization','unresolved')), name TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
@@ -40,7 +41,7 @@ CREATE TABLE monitoring_messages(
  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','approved','sending','sent','held','canceled','ambiguous','replied')),
  revision INTEGER NOT NULL DEFAULT 1, prepared_by TEXT NOT NULL, approved_by TEXT, approved_at TEXT,
  connection_hash TEXT NOT NULL DEFAULT '', delivery_hash TEXT NOT NULL DEFAULT '', transport_id TEXT,
- thread_id TEXT, error_code TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT,
+ thread_id TEXT, error_code TEXT, next_attempt_at TEXT, last_reply_check_at TEXT, last_receipt_check_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at TEXT,
  FOREIGN KEY(workspace_id,finding_id) REFERENCES monitoring_findings(workspace_id,id) ON DELETE CASCADE,
  FOREIGN KEY(workspace_id,subject_id) REFERENCES monitoring_subjects(workspace_id,id) ON DELETE CASCADE,
  UNIQUE(workspace_id,id)
