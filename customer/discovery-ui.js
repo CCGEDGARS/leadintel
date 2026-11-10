@@ -16,7 +16,7 @@ const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
-const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261029-v2&buyers-guided=20261030-v1&adaptive-agent=20261030-v1&contact-resume=20261030-v1&live-parity=20261030-v1&buyer-buttons=20261031-v2&buyer-live-progress=20261101-v2&focused-dossier=20261101-v1&dossier-phase-budget=20261101-v1&buyer-outcome-recovery=20261101-v1&official-email-linkedin=20261102-v1&contact-recovery=20261102-v1&single-pass-contacts=20261102-v1&channel-evidence=20261102-v1&dossier-provider-passes=20261102-v1&durable-buyer-jobs=20261102-v1&buyer-company-pages=20261107-v1&research-lifecycle=20261107-v1&buyer-research-actions=20261107-v3&buyer-brief-view=20261108-v1&company-outcome=20261109-v1&company-yield=20261110-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&companies-controls=20261018-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&buyer-selection=20261005-bridge-v1&ranked-buyers=20261005-v40&linkedin-review-spacing=20261007-v2&research-budget=20261019-v1&full-roster=20261019-v1&public-confirmation=20261020-v1&company-verification=20261019-v3&company-ranked-list=20261019-v1&search-relevance=20261020-v1&research-recovery=20261020-v2&shortlist-display=20261020-v1&batch-review=20261020-v1&operating-evidence=20261020-v5&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261021-v3&buyer-email-button=20261021-v1&buyer-supervisor=20261021-v4&buyer-gmail=20261021-v2&buyer-company-remove=20261021-v2&buyer-crm-close=20261021-v1&buyer-layout=20261021-v1&buyer-polish=20261021-v2&formula-execution=20261021-v2&contact-data-retention=20261021-v1&buyer-agent=20261028-v1&phone-lifecycle=20261029-v2&buyers-guided=20261030-v1&adaptive-agent=20261030-v1&contact-resume=20261030-v1&live-parity=20261030-v1&buyer-buttons=20261031-v2&buyer-live-progress=20261101-v2&focused-dossier=20261101-v1&dossier-phase-budget=20261101-v1&buyer-outcome-recovery=20261101-v1&official-email-linkedin=20261102-v1&contact-recovery=20261102-v1&single-pass-contacts=20261102-v1&channel-evidence=20261102-v1&dossier-provider-passes=20261102-v1&durable-buyer-jobs=20261102-v1&buyer-company-pages=20261107-v1&research-lifecycle=20261107-v1&buyer-research-actions=20261107-v3&buyer-brief-view=20261108-v1&company-outcome=20261109-v1&company-yield=20261110-v1&buyer-start=20261110-v1";
 const LANGUAGE_ASSET_VERSION="20261108-brief-retry-v1";
 const OUTREACH_ASSET_VERSION="20261009-single-editor-v4&event-planning=20261014-v2&buyer-company-actions=20261021-v2&writing-workspace=20261023-v1&rich-text=20261025-v1&skills-writing=20261028-v1&buyer-actions=20261029-v2&calendar-connect=20261029-v1&delivery-toolbar=20261029-v2&step6-layout=20261029-v1&main-action=20261030-v1&step5-audit=20261030-v1&creator-library=20261104-v3&evidence-priority=20261101-v1&step5-handoff=20261102-v1&step6-journey=20261102-v1&character-contract=20261107-v1&messages-controls=20261108-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1758,7 +1758,7 @@ async function startSelectedBuyerResearch(candidate){
     if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
     if(candidate.people?.length)return true;
     const result=await findPotentialDecisionMakers(candidate.domain);
-    if(result===false&&(!candidate.peopleStatus||candidate.peopleStatus==='idle'))throw new Error('Buyer research could not start. Check your buyer roles and workspace readiness, then press Find buyers.');
+    if(result===false&&(!candidate.peopleStatus||candidate.peopleStatus==='idle'))throw new Error(candidate.__leadIntelBuyerStartMessage||'Buyer research status could not be confirmed. Reopen this company to check saved progress.');
     return result;
   }catch(error){
     if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
@@ -1786,12 +1786,15 @@ async function selectTargetForBuyers(domain){
 async function selectQualifiedForBuyers(reference){
   const stored=companyActionCandidate(reference);if(!stored||!candidateIsActionable(stored))return false;
   const key=researchReviewKey(stored),owner=claimCompanySelection(key);if(!owner)return false;
-  const qualification=qualificationAssessment(stored),candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
+  const qualification=qualificationAssessment(stored);
   try{
     if(crmAuthenticated()&&!await saveCandidate(reference,{pipeline:false}))return false;
     if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
+    // The CRM acknowledgement may populate the stored identity. Capture it
+    // after the await so subsequent hydration cannot invalidate the new job.
+    const candidate={...stored,qualification,matchedSignals:qualification.matchedSignals};
     const existing=(discovery.selectedProspects||[]).find(item=>researchReviewKey(item)===key);
-    if(existing)refreshSelectedCompanyQualifications();
+    if(existing){refreshSelectedCompanyQualifications();if(!existing.crmId&&candidate.crmId)existing.crmId=candidate.crmId;}
     const selected=existing||{...candidate,buyerSearchMode:'user_selected_qualified'};
     rememberSelectedProspect(selected);renderAll();showToast(`${candidate.company} selected for Buyers${crmAuthenticated()?' · saved in CRM':' · browser copy; sign in for CRM'}`);owner.outcome='pass';void startSelectedBuyerResearch(selected);return true;
   }catch(error){if(companyActionCurrent(owner))showToast(error?.message||'Unable to save selection; retained research is available for retry.');return false;}
@@ -1849,7 +1852,7 @@ async function runDurableBuyerResearch(candidate,options={}){
     if(lastRevision!==revision){lastRevision=revision;saveDiscovery();renderAll();}
     options.persist?.(candidate,job);
   };
-  const settings={profile,paidResearch,resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
+  const settings={profile,paidResearch,onMismatch:error=>{if(!current())return;candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code||error.name,message:error.message,phase:error.phase||'start'}};saveDiscovery();},resumeExisting:options.resumeExisting===true,personIds:options.personIds,force:options.force===true,resumeIncomplete:options.resumeIncomplete===true,signal:options.signal,isCurrent:current,persist,hydrateCrm:(owner,detail)=>{
     if(!current()||!buyerHydrationScope(owner,detail))return;
     for(const person of owner.people||[]){const ids=options.personIds||owner.buyerResearchJob?.personIds;if(ids?.length&&!ids.map(String).includes(String(person.id)))continue;const contact=buyerHydrationContact(owner,person,detail);if(contact)enrichmentResults.set(personKey(owner,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||'not_requested'}});
       const raw=(detail.contactData||[]).find(data=>String(data.personId)===String(person.id)),data=raw&&LeadIntelDiscovery.safeContactData(raw,person,owner.domain);if(data&&(!person.contactData||Date.parse(data.checkedAt)>=Date.parse(person.contactData.checkedAt||'')))person.contactData=data;
@@ -1869,6 +1872,7 @@ async function runDurableBuyerResearch(candidate,options={}){
     return Boolean(job);
   }catch(error){
     if(current()&&error.name!=='AbortError'){
+      if(error.code?.startsWith('BUYER_JOB_')&&error.code.endsWith('MISMATCH')){candidate.peopleStatus=candidate.people?.length?'complete':'error';candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),lastError:{name:error.code,message:error.message,phase:error.phase||'start'}};saveDiscovery();}
       if(observedJob){candidate.peopleStatus=candidate.people?.length?'complete':'error';candidate.publicContactStatus='error';candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:'error',connection:'unavailable',label:error.message};saveDiscovery();renderAll();}
       options.onError?.(error.message||'Buyer research status unavailable. Retry to read saved progress.');
       showToast(error.message||'Buyer research status unavailable. Reopen this company to read saved progress.');
@@ -2471,6 +2475,7 @@ async function saveCandidate(reference,{pipeline=false}={}){
   if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
   if(!saved.ok){showToast(saved.error||"CRM save failed");return false;}
   const company=validateCompanySave(candidate,saved);
+  stored.crmId=company.id;candidate.crmId=company.id;
   if(pipeline){const activated=await owner.bridge.addCrmToPipeline(company.id,"Discovered");if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;if(!activated.ok){showToast(activated.error||"Pipeline update failed");return false;}saveLocalPipeline(candidate);}
   await refreshCrmState({render:false});if(!companyActionCurrent(owner))return false;
   renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));showToast(pipeline?`${candidate.company} added to durable Pipeline`:`${candidate.company} saved to Master CRM`);return true;
@@ -4051,6 +4056,7 @@ function changeBuyerCompanyPage(value){
 function buyerCompanyResearchAction(candidate){
   const job=candidate.buyerResearchJob,people=candidate.people||[];
   if(job?.id&&candidate.buyerResearchProgress?.connection==='unavailable')return {action:'check',label:'Check research status'};
+  if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_ROLES_MISMATCH')return {action:'refresh',label:'Research current buyer roles'};
   if(candidate.buyerRolesChanged)return {action:'refresh',label:'Refresh buyers'};
   const finishedPlan=!job?.personIds?.length&&['official','dossier','identities','contacts','review'].every(key=>candidate.buyerResearchProgress?.stages?.[key]===true);
   if(people.length&&finishedPlan)return {action:'refresh',label:'Refresh buyers'};

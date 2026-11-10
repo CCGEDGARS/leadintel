@@ -2,10 +2,14 @@
 'use strict';
 const VERSION='shared-message-brief-20261022-v4',clean=v=>String(v??'').replace(/\s+/g,' ').trim(),copy=v=>JSON.parse(JSON.stringify(v));
 const unsafe=text=>/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|<[^>]*>|{{|}}/i.test(text);
+const boilerplate=text=>/^whether\b/i.test(text)&&/long.term thinking|personnel policy|corporate strategy/i.test(text);
 const navigation=text=>/^(?:read more|learn more|click here|find out more)\b/i.test(text);
 const development=text=>/\b(?:under construction|constructing|building|investing|expan(?:ding|sion)|new (?:plant|factory|warehouse|facility|office|hospital|system|platform)|launch(?:ed|ing)?|implement(?:ed|ing|ation)|moderni[sz](?:ed|ing|ation)|commission(?:ed|ing))\b/i.test(text);
-function quoteSentences(quote){return quote.replace(/\b([A-Z])\.\s+(?=[A-Z])/g,'$1\uE000 ').split(/(?<=[.!?])\s+/).map(sentence=>sentence.replace(/\uE000/g,'.'));}
-function conciseQuote(quote){const sentences=quoteSentences(quote).map(sentence=>sentence.includes('## ')?sentence.slice(sentence.lastIndexOf('## ')+3):sentence).filter(s=>!navigation(s)&&!/^Together with\b.*\b[A-Z]\.$/.test(s)&&s.length>=12&&s.length<=360&&/^[A-Z]/.test(s)&&!/https?:\/\/|\]\(/i.test(s));return sentences.find(development)||sentences[0]||(quote.length>320?quote.slice(0,320)+'…':quote);}
+function quoteSentences(quote){return String(quote).replace(/(^|\r?\n)[ \t]*#{1,6}[ \t]+/g,'$1').replace(/\b([A-Z])\.\s+(?=[A-Z])/g,'$1\uE000 ').split(/(?<=[.!?])\s+/).map(sentence=>clean(sentence.replace(/\uE000/g,'.')));}
+function conciseQuote(quote){
+ const sentences=quoteSentences(quote).map(sentence=>sentence.includes('## ')?sentence.slice(sentence.lastIndexOf('## ')+3):sentence).map(sentence=>sentence.replace(/^(?:Kontakt|Contact|Read more|Learn more)\]\(https?:\/\/[^)]+\)\s*/i,'')).filter(s=>!navigation(s)&&!boilerplate(s)&&!/^Together with\b.*\b[A-Z]\.$/.test(s)&&s.length>=12&&s.length<=360&&/^\p{L}/u.test(s)&&!/https?:\/\/|\]\(/i.test(s));
+ return sentences.find(development)||sentences[0]||'';
+}
 function fingerprint(value){let n=2166136261;for(const c of JSON.stringify(value))n=Math.imul(n^c.charCodeAt(0),16777619);return (n>>>0).toString(16);}
 const SIGNAL_POLICY='offer-evidence-priority-20261101-v1';
 function signalPriority(row={},profile={},person=null,now=Date.now()){
@@ -24,7 +28,7 @@ function signalPriority(row={},profile={},person=null,now=Date.now()){
  const score=usable?matches.length*5+roleMatches.length+(row.kind==='development'?3:0)+(freshness==='recent'?2:0):0;
  return {policy:SIGNAL_POLICY,score,usable,freshness,offerTerms:matches,reason:!usable?(future?'Source date is in the future; review required.':stale?'Older source retained as context; recheck before using it as a current event.':'Qualified or uncertain source wording retained as context only.'):[matches.length?'Matches supplied offer terms: '+matches.join(', ')+'.':'No direct offer-term match; commercial relevance remains a hypothesis.',row.kind==='development'?'Contains a company development.':'Company context.',freshness==='unknown'?'Source date unknown; this is not evidence of urgency.':freshness==='recent'?'Source dated within 90 days.':'Source date retained.'].join(' ')};
 }
-function fact(row,target){const url=D.url(row.url||row.sourceUrl),quote=clean(row.quote||row.text);if(!url||D.domain(url)!==target||quote.length<12||quote.length>1800||unsafe(quote)||row.extracted===false||row.evidenceKind==='model_summary'||/failed|error|pending/i.test(row.status||''))return null;const text=conciseQuote(quote);if(navigation(text)||/^Together with\b.*\b[A-Z]\.$/.test(text))return null;return {text,quote,url,date:/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')?row.date:'',checkedAt:clean(row.checkedAt||row.extractedAt||''),verification:'source_verified',origin:row.origin==='dossier'?'dossier':'extracted',kind:development(quote)?'development':'company'};}
+function fact(row,target){const url=D.url(row.url||row.sourceUrl),quote=clean(row.quote||row.text);if(!url||D.domain(url)!==target||quote.length<12||quote.length>1800||unsafe(quote)||row.extracted===false||row.evidenceKind==='model_summary'||/failed|error|pending/i.test(row.status||''))return null;const text=conciseQuote(row.quote||row.text);if(!text||boilerplate(text)||navigation(text)||/^Together with\b.*\b[A-Z]\.$/.test(text))return null;return {text,quote,url,date:/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')?row.date:'',checkedAt:clean(row.checkedAt||row.extractedAt||''),verification:'source_verified',origin:row.origin==='dossier'?'dossier':'extracted',kind:development(quote)?'development':'company'};}
 function safe(prior,target){if(prior?.version!==VERSION||D.domain(prior.domain)!==D.domain(target))return null;return {...prior,facts:(prior.facts||[]).filter(row=>row.verification==='source_verified').map(row=>fact(row,D.domain(target))).filter(Boolean).slice(0,16)};}
 function build(candidate={},profile={},person=null,prior=null){
  const target=D.domain(candidate.domain||candidate.website),d=D.safe(candidate.buyerDiscovery?.companyDossier,target),previous=safe(prior,target),facts=[];
@@ -38,7 +42,7 @@ function build(candidate={},profile={},person=null,prior=null){
  for(const row of [...provenFacts,...provenPeople])reads.add(row.sourceUrl);
  const extracted=[];
  for(const row of candidate.evidence||[]){if(d&&row.fromResearchBrief===true&&!reads.has(D.url(row.url))||row.sourceRead===false||/snippet|model_summary/i.test(row.evidenceKind||'')||!(row.sourceRead===true||row.extracted===true||row.verification==='source_verified'&&Number.isFinite(Date.parse(row.extractedAt||'')))||!row.text)continue;
-  for(const sentence of quoteSentences(clean(row.text)).filter(text=>text.length>=12&&text.length<=600).slice(0,12)){const item=fact({...row,text:sentence},target);if(item)extracted.push({...item,fromResearchBrief:row.fromResearchBrief===true});}}
+  for(const sentence of quoteSentences(row.text).filter(text=>text.length>=12&&text.length<=600).slice(0,12)){const item=fact({...row,text:sentence},target);if(item)extracted.push({...item,fromResearchBrief:row.fromResearchBrief===true});}}
  const newer=new Map();for(const row of extracted){const time=Date.parse(row.checkedAt);if(time>0&&time<=Date.now()+60000)newer.set(row.url,Math.max(newer.get(row.url)||0,time));}
  const dossierReadAt=url=>{const times=(d?.passes||[]).flatMap(pass=>(pass.sourceReads||[]).filter(row=>row.url===url&&row.status==='succeeded').map(row=>Date.parse(row.checkedAt))).filter(Number.isFinite);return times.length?Math.max(...times):Date.parse(d?.checkedAt)||0;},replacesDossier=url=>newer.has(url)&&newer.get(url)>dossierReadAt(url);
  for(const row of provenFacts){if(replacesDossier(row.sourceUrl))continue;const item=fact({...row,origin:'dossier',checkedAt:dossierReadAt(row.sourceUrl)?new Date(dossierReadAt(row.sourceUrl)).toISOString():''},target);if(item)facts.push(item);}

@@ -33,7 +33,7 @@ export function normalizeBuyerInput(body,stored={}){
  const domain=D.canonicalDomain(original);
  if(!domain||!domain.includes('.')||/^\d+(?:\.\d+){3}$/.test(domain)||/[\s:@[\]]/.test(domain)||/^(localhost|.*\.local)$/.test(domain)||!String(raw.company||'').trim())throw Object.assign(Error('A named company with a public domain is required'),{status:400});
  const saved=[...(stored.discovery?.selectedProspects||[]),...(stored.discovery?.candidates||[]),...(stored.discovery?.pipeline||[])].find(c=>D.canonicalDomain(c.domain)===domain);
- const selected=(body.personIds||[]).map(String).slice(0,10),roles=D.buyerSelectionRoles({decisionMakers:raw.buyerRoles||raw.buyerDiscovery?.opportunityRoles||body.profile?.decisionMakers||stored.main?.profile?.decisionMakers||''});
+ const selected=(body.personIds||[]).map(String).slice(0,10),roles=D.buyerResearchRoles(raw,body.profile||{},activeBuyerProfile(stored));
  const normalized=D.normalizeDiscoveryState({selectedProspects:[{...saved,...raw,domain,buyerSearchMode:'user_selected_target',buyerRoles:roles.join('; ')}]}).selectedProspects[0];
  if(!normalized)throw Object.assign(Error('Company research input is invalid'),{status:400});
  // Client snapshots are input claims, never server execution receipts. Source pages

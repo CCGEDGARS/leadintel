@@ -95,3 +95,20 @@ test('compact source excerpts never remove uncertainty or conditional prefixes t
   const brief=O.buildResearchBrief({domain:'buyer.example',evidence:[{url,sourceRead:true,text:source}]},profile,person);assert.notEqual(brief.facts[0].text,'Buyer is constructing a new plant.');assert.ok(brief.facts[0].text.includes(source.startsWith('if ')?'if Buyer':'unconfirmed reports'));
  }
 });
+
+test('address markdown and generic corporate boilerplate cannot become message brief facts',()=>{
+ for(const source of ['Ltd.](https://buyer.example/location/china/) 1502 of 1501, Floor 15, Building 2, Jiuxianqiao Road, Beijing 100016 PR.','Whether in research and development, personnel policy, corporate strategy, customer service or product quality, the advantages of our long-term thinking are visible everywhere in the group.']){
+  const brief=O.buildResearchBrief(candidate(source),profile,person);assert.equal(brief.facts.length,0,'unusable source fragments stay out of message personalization');assert.equal(brief.hypotheses.length,0);
+ }
+});
+
+test('a full article markdown heading cannot erase its reviewed trigger or linked project details',()=>{
+ const B=require('../research-brief'),C=require('../channel-scripts'),text='# Buyer plant construction\nBuyer is expanding its production facility. The production facility is in Northport. Building completion is expected at the end of 2027.',trigger={url,verification:'source_verified',excerpt:'Buyer is expanding its production facility.'};
+ const brief=B.build({company:'Buyer',domain:'buyer.example',evidence:[{url,text,sourceRead:true,fullSourceRead:true,extractedAt:new Date().toISOString()}]},profile,person);
+ assert.equal(B.supports(brief,trigger),true,'the actual reviewed sentence must survive heading removal');
+ assert.ok(brief.facts.some(row=>row.quote==='The production facility is in Northport.'));
+ assert.ok(brief.facts.every(row=>!row.text.startsWith('#')));
+ const uncertain=B.build({company:'Buyer',domain:'buyer.example',evidence:[{url,text:'# Unconfirmed expansion\nBuyer is expanding its production facility.',sourceRead:true}]},profile,person);assert.equal(B.supports(uncertain,trigger),false,'heading qualification must not disappear');
+ const context={buyerDomain:'buyer.example',buyerCompany:'Buyer',trigger,researchBrief:brief,buyerFactEvidence:B.evidenceRows(brief)};
+ assert.equal(C.readableValues(S.normalize({essentials}),context).projectLocation,'Northport');
+});

@@ -89,3 +89,27 @@ test('manual retry cannot bypass current selection, authentication or synchroniz
 test('late research failure cannot write feedback into a replacement workspace',async()=>{
  const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});r.b.workspace.id='two';reject(Error('Old workspace failure'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
 });
+
+test('a failed first selection keeps the specific readiness reason instead of replacing it with a roles hint',async()=>{
+ const {ctx,candidate}=runtime();ctx.findPotentialDecisionMakers=async()=>{candidate.__leadIntelBuyerStartMessage='Buyer research uses different buyer roles. Refresh the current committee.';return false;};await ctx.startSelectedBuyerResearch(candidate);assert.equal(candidate.buyerDiscovery.lastError.message,candidate.__leadIntelBuyerStartMessage);
+});
+
+test('a fresh qualified selection captures the acknowledged CRM identity before starting its job',async()=>{
+ const {ctx,candidate,calls}=runtime();ctx.discovery={candidates:[candidate],selectedProspects:[]};Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),saveCandidate:async()=>{await Promise.resolve();candidate.crmId='acknowledged-company';return true;}});ctx.startSelectedBuyerResearch=async selected=>{calls.push(selected.crmId);return true;};
+ assert.equal(await ctx.selectQualifiedForBuyers(0),true);assert.equal(ctx.discovery.selectedProspects[0].crmId,'acknowledged-company');assert.deepEqual(calls,['acknowledged-company']);
+});
+
+test('a company save commits its validated CRM ID before any later hydration can run',async()=>{
+ const {ctx,candidate,b}=runtime();ctx.discovery={candidates:[candidate],selectedProspects:[]};Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),LeadIntelCrm:{canonicalDomain:D.canonicalDomain,mapDiscoveryCandidateToCrm:()=>({company:{}})},refreshCrmState:async()=>{assert.equal(candidate.crmId,'acknowledged-company');}});b.saveCrmCompany=async()=>({ok:true,company:{id:'acknowledged-company',normalized_domain:'example.com',workspace_id:'one',lifecycle_status:'prospect'}});
+ assert.equal(await ctx.saveCandidate(0),true);assert.equal(candidate.crmId,'acknowledged-company');
+});
+
+test('an unexplained false start does not invent a missing-roles diagnosis',async()=>{
+ const {ctx,candidate}=runtime();ctx.findPotentialDecisionMakers=async()=>false;await ctx.startSelectedBuyerResearch(candidate);assert.match(candidate.buyerDiscovery.lastError.message,/saved progress/);assert.doesNotMatch(candidate.buyerDiscovery.lastError.message,/buyer roles|workspace readiness/);
+});
+
+test('the Pipeline handoff receives the same acknowledged CRM identity as the saved source',async()=>{
+ const {ctx,candidate,b}=runtime();ctx.discovery={candidates:[candidate],selectedProspects:[]};let handedOff;
+ Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),LeadIntelCrm:{canonicalDomain:D.canonicalDomain,mapDiscoveryCandidateToCrm:()=>({company:{}})},refreshCrmState:async()=>{},saveLocalPipeline:c=>{handedOff=c;}});b.saveCrmCompany=async()=>({ok:true,company:{id:'acknowledged-company',normalized_domain:'example.com',workspace_id:'one',lifecycle_status:'prospect'}});b.addCrmToPipeline=async()=>({ok:true});
+ assert.equal(await ctx.saveCandidate(0,{pipeline:true}),true);assert.equal(handedOff.crmId,'acknowledged-company');assert.equal(candidate.crmId,handedOff.crmId);
+});
