@@ -50,6 +50,7 @@ async function act(action,id){
  }catch(error){if(current()){status=error.message||'The scan could not complete. Saved results remain available.';if(snapshot){snapshot.notice=status;persist();}}}
  finally{clearTimeout(timer);if(current()){busy=false;render();}else load();}
 }
-root.LeadIntelWebsiteScanUI={mount,refresh:load,active:()=>snapshot};
+function openMonitoring(){mount();if(!loaded)load();mode='monitor';$('website-scanning-workspace').hidden=false;$('website-scanning-open').setAttribute('aria-expanded','true');render();if($('monitoring-settings')?.hidden)$('toggle-monitoring-settings')?.click();root.dispatchEvent(new root.CustomEvent('leadintel:monitoring-opened'));$('monitoring-custom-sources')?.focus({preventScroll:true});return true;}
+root.LeadIntelWebsiteScanUI={mount,refresh:load,active:()=>snapshot,openMonitoring};
 const start=()=>{mount();load();};if(d.readyState==='loading')d.addEventListener('DOMContentLoaded',start,{once:true});else start();root.addEventListener('leadintel:server-ready',start);root.addEventListener('leadintel:workspace-changed',start);root.addEventListener('leadintel:module-opened',mount);root.addEventListener('leadintel:support-modules-ready',mount);
 })(window);

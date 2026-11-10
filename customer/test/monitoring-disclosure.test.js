@@ -13,7 +13,7 @@ function setup(){
  const state={website:'https://seller.example',approved:true,profile:{priorityOffers:'Industrial automation',targetMarkets:'Finland'},market:{strategyApproved:true,icps:[{id:'core',active:true}],signals:[{id:'signal',name:'Expansion',keywords:'expansion',weight:7,active:true}],monitoring:{...config}}};state.market.strategyApproval=I.approval(state);
  window.LeadIntelStrategyIntegrity=I;window.LeadIntelServerBridge={ready:true,workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};window.LeadIntelAccountCache={current:()=>true};
  const calls=[];
- const context={window,document,$,state,monitoringBusy:false,monitoringLoaded:false,monitoringRequestSerial:0,monitoringDraftBaseline:null,monitoringDraftMarket:null,esc:String,saveState(){},showToast(){},LeadIntelMarket:Market,waitForMarketServerBridge:async()=>window.LeadIntelServerBridge,monitoringApi:async(path,options={})=>{if(options.method==='PUT'){const body=JSON.parse(options.body);calls.push(body);return {saved:true,config:serverConfig(body)};}return path.endsWith('/config')?{config:{...config}}:path.endsWith('/alerts')?{alerts:[]}:{runs:[]};}};
+ const context={window,document,$,state,monitoringBusy:false,monitoringLoaded:false,monitoringRequestSerial:0,monitoringDraftBaseline:null,monitoringDraftMarket:null,monitoringApprovalContext:null,closeStrategyHandoff(){},esc:String,saveState(){},showToast(){},LeadIntelMarket:Market,waitForMarketServerBridge:async()=>window.LeadIntelServerBridge,monitoringApi:async(path,options={})=>{if(options.method==='PUT'){const body=JSON.parse(options.body);calls.push(body);return {saved:true,config:serverConfig(body)};}return path.endsWith('/config')?{config:{...config}}:path.endsWith('/alerts')?{alerts:[]}:{runs:[]};}};
  window.LeadIntelWorkspacePersistence={saveWorkspace:async()=>true};
  const dialog=$('monitoring-close-dialog');if(dialog){dialog.showModal=()=>dialog.open=true;dialog.close=()=>dialog.open=false;}
  vm.createContext(context);
@@ -28,6 +28,27 @@ test('monitoring is optional and closed initially with an accessible explicit bu
  assert.equal(toggle?.getAttribute('aria-expanded'),'false');
  assert.equal(toggle?.getAttribute('aria-controls'),'monitoring-settings');
  assert.match(document.getElementById('monitoring-panel').textContent,/Optional/);
+});
+test('monitoring intent survives required Profile review without approving it automatically',()=>{
+ const c=setup();c.state.approved=false;c.state.step=3;let reviews=0;c.context.setStep=()=>false;c.context.openStrategyHandoff=()=>reviews++;
+ assert.equal(c.context.beginMonitoringApproval(),false);assert.equal(c.$('monitoring-approval-guide').hidden,false);assert.equal(c.state.approved,false);
+ assert.equal(c.context.continueMonitoringApproval(),false);assert.equal(reviews,0);
+ c.state.approved=true;c.context.setStep=step=>{assert.equal(step,4);return true;};
+ assert.equal(c.context.continueMonitoringApproval(),true);assert.equal(reviews,1);
+});
+for(const change of ['workspace','user','seller','market'])test('monitoring continuation is discarded after '+change+' changes',()=>{
+ const c=setup();c.context.setStep=()=>false;c.context.beginMonitoringApproval();let returned=0;c.context.window.LeadIntelWebsiteScanUI={openMonitoring:()=>{returned++;return true;}};
+ if(change==='workspace')c.window.LeadIntelServerBridge.workspace.id='other';if(change==='user')c.window.LeadIntelServerBridge.session.user.id='other';if(change==='seller')c.state.website='https://other.example/';if(change==='market')c.state.targetMarkets=['Other country'];
+ assert.equal(c.context.returnToMonitoring(),false);assert.equal(returned,0);assert.equal(c.context.monitoringApprovalContext,null);
+});
+test('cancel returns to the actual monitoring wrapper and consumes the continuation without enabling it',()=>{
+ const c=setup();c.state.market.monitoring.enabled=false;c.context.setStep=()=>false;c.context.beginMonitoringApproval();const opened=[];
+ c.context.setStep=step=>{opened.push(step);return true;};c.window.LeadIntelWebsiteScanUI={openMonitoring:()=>{opened.push('monitoring');return true;}};
+ assert.equal(c.context.returnToMonitoring(),true);assert.deepEqual(opened,[2,'monitoring']);assert.equal(c.context.monitoringApprovalContext,null);assert.equal(c.state.market.monitoring.enabled,false);assert.equal(c.$('monitoring-approval-guide').hidden,true);
+});
+test('a stale return ticket cannot consume a replacement monitoring review',()=>{
+ const c=setup();c.context.setStep=()=>false;c.context.beginMonitoringApproval();const old=c.context.monitoringApprovalContext;c.context.beginMonitoringApproval();const replacement=c.context.monitoringApprovalContext;
+ assert.equal(c.context.returnToMonitoring(old),false);assert.equal(c.context.monitoringApprovalContext,replacement);
 });
 test('open and close leave enabled configuration intact; reopening retains saved values',()=>{
  const c=setup();c.context.renderMonitoringControls();c.context.openMonitoringSettings();

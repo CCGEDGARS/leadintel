@@ -7980,6 +7980,41 @@
       "contains": [
         "website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1&monitoring-reliability=20261110-v1"
       ]
+    },
+    {
+      "id": "monitoring-approval-destination",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function beginMonitoringApproval()",
+        "function returnToMonitoring(",
+        "monitoringOwner=monitoring?monitoringApprovalContext:null",
+        "if(monitoring){if(!monitoringApprovalCurrent(monitoringOwner))",
+        "Approve Strategy & return to monitoring"
+      ]
+    },
+    {
+      "id": "monitoring-approval-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "monitoring-return=20261110-v1",
+        "id=\"monitoring-approval-guide\"",
+        "id=\"cancel-monitoring-approval\"",
+        "id=\"strategy-handoff-purpose\""
+      ]
+    },
+    {
+      "id": "monitoring-approval-wrapper",
+      "type": "text",
+      "url": "/customer/website-scanning-ui.js",
+      "status": 200,
+      "contains": [
+        "function openMonitoring()",
+        "active:()=>snapshot,openMonitoring"
+      ]
     }
   ],
   "retry": {
