@@ -4,6 +4,7 @@
   if(root)root.LeadIntelMarket=api;
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
+  const Monitoring=typeof module==='object'&&module.exports?require('./monitoring-model.js'):globalThis.LeadIntelMonitoringModel;
   const EvidencePolicy=typeof module==='object'&&module.exports?require('./evidence-policy.js'):globalThis.LeadIntelEvidencePolicy;
 
   const DEFAULT_MARKET_STATE=Object.freeze({
@@ -368,7 +369,7 @@
   function normalizeMonitoring(value={}){
     const frequency=["daily","weekly","monthly"].includes(value.frequency)?value.frequency:"weekly";
     const sourceTypes=splitList(value.sourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
-    return {revision:Number.isFinite(Number(value.revision))?Math.max(0,Math.min(Number.MAX_SAFE_INTEGER,Math.floor(Number(value.revision)))):0,enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:Array.isArray(value.sourceTypes)||sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
+    return {revision:Number.isFinite(Number(value.revision))?Math.max(0,Math.min(Number.MAX_SAFE_INTEGER,Math.floor(Number(value.revision)))):0,enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:Array.isArray(value.sourceTypes)||sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt),workflow:Monitoring.normalizeWorkflow(value.workflow)};
   }
   function appendResearchHistory(history=[],run={}){
     const item={id:clean(run.id)||`research-${Date.now()}`,mode:RESEARCH_MODES[run.mode]?run.mode:"quick",status:["complete","partial","error"].includes(run.status)?run.status:"error",sourceCount:Math.max(0,Number(run.sourceCount)||0),queryCount:Math.max(0,Number(run.queryCount)||0),completedAt:clean(run.completedAt)||new Date().toISOString()};

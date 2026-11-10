@@ -20,7 +20,7 @@ function harness({step=3,canonicalBeforeInit=false}={}){
   let verifiedInit;
   w.LeadIntelAccountCache={current:()=>true,afterVerification:init=>{verifiedInit=init;}};
   const load=file=>w.eval(read(file));
-  for(const file of ['content-language.js','step2-brief-schema.js','profile-engine.js','market-engine.js','targeting-policy.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','intelligence-profile-ui.js','profile-approval-ui.js'])load(file);
+  for(const file of ['content-language.js','step2-brief-schema.js','profile-engine.js','monitoring-model.js','market-engine.js','targeting-policy.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','intelligence-profile-ui.js','profile-approval-ui.js'])load(file);
   w.eval(read('evidence-view.js').slice(read('evidence-view.js').indexOf('(function(root,factory)')));
   const answers=Object.fromEntries(w.LeadIntelStep2Brief.FIELD_IDS.map(id=>[id,`Confirmed ${id}`]));
   Object.assign(answers,{priority_offers:'Industrial maintenance and installation services',ideal_customer:'Manufacturing plants',buyer_roles:'Maintenance Director; Operations Director',exclusions:'Residential customers',buying_triggers:'Factory expansion and equipment upgrades',buying_outcomes:'Reliable production and shorter downtime'});

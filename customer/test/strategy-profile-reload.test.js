@@ -5,7 +5,7 @@ const vm=require('node:vm');
 
 function runtime(){
   const scope={URL,console,Date,TextEncoder};vm.createContext(scope);
-  for(const file of ['step2-brief-schema.js','profile-engine.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','step2-readiness-engine.js','market-engine.js','strategy-integrity.js']){
+  for(const file of ['step2-brief-schema.js','profile-engine.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','step2-readiness-engine.js','monitoring-model.js','market-engine.js','strategy-integrity.js']){
     vm.runInContext('(function(){'+fs.readFileSync(require.resolve('../'+file),'utf8')+'\n})()',scope);
   }
   scope.LeadIntelStep2Readiness.patchProfileEngine(scope.LeadIntelProfile,scope);

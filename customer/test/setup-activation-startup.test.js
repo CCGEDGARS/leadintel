@@ -15,7 +15,7 @@ function harness(saved={}){
   w.LeadIntelServerBridge={ready:true,session:{authenticated:true,user:{id:'user-a'}},workspace:{id:'workspace-a'}};
   w.LeadIntelAccountCache={current:()=>true,afterVerification:fn=>{init=fn;}};
   w.LeadIntelWorkspacePersistence={saveWorkspace:async()=>true};
-  for(const name of ['content-language.js','step2-brief-schema.js','profile-engine.js','market-engine.js','targeting-policy.js','company-brain.js','workspace-isolation.js','website-activation.js'])load(name);
+  for(const name of ['content-language.js','step2-brief-schema.js','profile-engine.js','monitoring-model.js','market-engine.js','targeting-policy.js','company-brain.js','workspace-isolation.js','website-activation.js'])load(name);
   w.localStorage.setItem(MAIN,JSON.stringify(saved));
   w.LeadIntelWebsiteActivation.ensureActivationUi();
   w.LeadIntelWebsiteActivation.render();

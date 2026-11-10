@@ -102,3 +102,5 @@ test('monitoring queries use current markets, confirmed targeting answers and ac
   payload.main.market.icps=[];queries=buildMonitoringQueries(payload,{sourceTypes:['news']});assert.ok(queries.every(row=>row.query.includes('Sweden')&&row.query.includes('Reviewed offer')));
  }
 });
+
+test('public notice URL normalization does not apply keyword-length truncation',()=>{const url='https://court.example/notices?document='+('case-reference-'.repeat(85));assert.equal(normalizeMonitoringConfig({customSources:[url]}).customSources[0],url);});

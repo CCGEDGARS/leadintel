@@ -48,6 +48,6 @@ for(const options of [{current:false},{cancelled:true},{newerRun:true}])test(`ob
 });
 
 test('the core state schema retains the completed-run marker before the optional UI extension loads',()=>{
- const bare={LeadIntelEvidencePolicy:require('../evidence-policy.js')};vm.runInNewContext(fs.readFileSync(require.resolve('../market-engine.js'),'utf8'),bare);
+ const bare={LeadIntelEvidencePolicy:require('../evidence-policy.js'),LeadIntelMonitoringModel:require('../monitoring-model.js')};vm.runInNewContext(fs.readFileSync(require.resolve('../market-engine.js'),'utf8'),bare);
  assert.equal(bare.LeadIntelMarket.normalizeMarketState({opportunityAutoActivationRunId:'run-one'}).opportunityAutoActivationRunId,'run-one');
 });

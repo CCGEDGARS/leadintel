@@ -290,7 +290,7 @@
       "status": 200,
       "contains": [
         "Your AI business mentor. Every step of the way.",
-        "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move—with advice tailored to your business.",
+        "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move\u2014with advice tailored to your business.",
         "Explore capabilities",
         "I never change your settings"
       ]
@@ -352,8 +352,8 @@
       "status": 200,
       "contains": [
         "code:\"kz\"",
-        "Қазақстан",
-        "Казахстан",
+        "\u049a\u0430\u0437\u0430\u049b\u0441\u0442\u0430\u043d",
+        "\u041a\u0430\u0437\u0430\u0445\u0441\u0442\u0430\u043d",
         ".xn--80ao21a"
       ]
     },
@@ -596,7 +596,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -860,7 +860,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message · draft only"
+        "LinkedIn direct message \u00b7 draft only"
       ]
     },
     {
@@ -1022,7 +1022,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates · ",
+        "My LinkedIn Templates \u00b7 ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -1234,7 +1234,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit · local changes preserved"
+        "Workspace exceeds sync limit \u00b7 local changes preserved"
       ]
     },
     {
@@ -1243,7 +1243,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new checked companies · saved companies retained",
+        "No new checked companies \u00b7 saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -1284,7 +1284,7 @@
         "discovery.lastSuccessfulRunAt=discovery.lastRunAt;",
         "company-ranked-list=20261019-v1",
         "function restoreCheckedCompanyResearch()",
-        "Checked · Manual review"
+        "Checked \u00b7 Manual review"
       ]
     },
     {
@@ -1354,7 +1354,7 @@
         "Content Library",
         "Save as template",
         "Set as default",
-        "Continue to Delivery →",
+        "Continue to Delivery \u2192",
         "mw-browse-templates",
         "Restore selected template",
         "mw-subject-choices",
@@ -1519,7 +1519,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active · ",
+        "active \u00b7 ",
         "saved"
       ]
     },
@@ -1662,12 +1662,12 @@
         "styleSection.after(launcher)",
         "editorActions.append(q('mw-cancel-edit'),q('mw-restore-original')",
         "editor.busyAction==='shorten'",
-        "Shortening…",
+        "Shortening\u2026",
         "editorActions.prepend"
       ],
       "notContains": [
         "mw-message-length",
-        "Very short · about 50%",
+        "Very short \u00b7 about 50%",
         "Message editor</h3>"
       ]
     },
@@ -1848,7 +1848,7 @@
       ],
       "notContains": [
         "edgars-7go",
-        "Edgars Untāls"
+        "Edgars Unt\u0101ls"
       ]
     },
     {
@@ -1861,7 +1861,7 @@
         "sharing-privacy=20261011-v1"
       ],
       "notContains": [
-        "Edgars Untāls",
+        "Edgars Unt\u0101ls",
         "edgars-7go"
       ]
     },
@@ -2605,7 +2605,7 @@
       "status": 200,
       "contains": [
         "mw-draft-provenance",
-        "Working copy · originals preserved"
+        "Working copy \u00b7 originals preserved"
       ]
     },
     {
@@ -3082,7 +3082,7 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "This profile won’t be used",
+        "This profile won\u2019t be used",
         "Setup required",
         "icp-edit-fields",
         "monitoring-enabled\").addEventListener(\"change\""
@@ -3151,7 +3151,7 @@
       "url": "/customer/channel-scripts.js",
       "status": 200,
       "contains": [
-        "Make a call · Coming soon",
+        "Make a call \u00b7 Coming soon",
         "Script Library",
         "Set as primary",
         "Awaiting approved script",
@@ -3239,7 +3239,7 @@
       "url": "/customer/linkedin-inmail-ui.js",
       "status": 200,
       "contains": [
-        "InMail · paid account",
+        "InMail \u00b7 paid account",
         "inmail-stage-tabs",
         "Save as my InMail template",
         "inmail-primary",
@@ -3257,7 +3257,7 @@
         "FRIENDLY_LINKEDIN.docx",
         "BRUTAL_HONESTY_LINKEDIN.docx",
         "{{milestoneWork}} in {{projectShortName}} is under way.",
-        "For {{experienceDuration}} we’ve done the less glamorous part"
+        "For {{experienceDuration}} we\u2019ve done the less glamorous part"
       ]
     },
     {
@@ -3760,7 +3760,7 @@
         "function rankedCheckedCompanies(){",
         "function companyCandidateCardHtml(",
         "company-other-results",
-        "Show other companies ·",
+        "Show other companies \u00b7",
         "shortlist-display=20261020-v1"
       ]
     },
@@ -3829,7 +3829,7 @@
       "contains": [
         "sync.equal(sync.project(base.payload)",
         "base.version===Number(readDirtyLocalState()?.base_version??bridge.stateVersion)",
-        "Research running · changes preserved for sync retry"
+        "Research running \u00b7 changes preserved for sync retry"
       ]
     },
     {
@@ -4154,7 +4154,7 @@
       "url": "/customer/additional-contact-policy.js",
       "status": 200,
       "contains": [
-        "this buyer’s mandatory public research"
+        "this buyer\u2019s mandatory public research"
       ]
     },
     {
@@ -4212,9 +4212,9 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "Possible match · Unconfirmed",
+        "Possible match \u00b7 Unconfirmed",
         "Name-based Gmail patterns",
-        "Gmail research ·"
+        "Gmail research \u00b7"
       ]
     },
     {
@@ -4226,7 +4226,7 @@
         "function saveSelectedBuyerCompany(",
         "function removeSelectedBuyerCompany(",
         "b.deleteCrmCompany(company.id)",
-        "Saved ✓",
+        "Saved \u2713",
         "data-remove-buyer-company=",
         "Remove completely"
       ]
@@ -4259,7 +4259,7 @@
       "contains": [
         "alternativeAction:'Save to CRM'",
         "choice==='alternative'",
-        "Company saved to CRM · removed from the Buyers list",
+        "Company saved to CRM \u00b7 removed from the Buyers list",
         "Research changed during saving."
       ]
     },
@@ -4459,9 +4459,9 @@
       "contains": [
         "data-paid-search-toggle",
         "data-paid-phone-toggle",
-        "€0.30/contact",
-        "€0.20 extra",
-        "€0.50/contact",
+        "\u20ac0.30/contact",
+        "\u20ac0.20 extra",
+        "\u20ac0.50/contact",
         "provider:'treg'"
       ]
     },
@@ -4512,7 +4512,7 @@
       "contains": [
         "buyer-public-summary",
         "data-contact-channel=",
-        "View profile ↗",
+        "View profile \u2197",
         "officialPageReads",
         "buyer-polish=20261021-v2"
       ],
@@ -4752,7 +4752,7 @@
       "contains": [
         "Message brief",
         "Selected buyer:",
-        "Commercial relevance · Hypothesis:",
+        "Commercial relevance \u00b7 Hypothesis:",
         "Evidence gaps"
       ]
     },
@@ -4830,7 +4830,7 @@
         "mw-flow-readiness",
         "mw-flow-resolve",
         "mw-message-footer",
-        "Continue to Delivery →",
+        "Continue to Delivery \u2192",
         "This button does not send anything.",
         "mw-footer-main",
         "q('mw-add-flow').hidden=linkedin||Boolean(flowIssue?.target)"
@@ -7047,7 +7047,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "Official company email · Accepted",
+        "Official company email \u00b7 Accepted",
         "progress(detail?.profilesReady===true||detail?.sourceRead===true)"
       ]
     },
@@ -7512,7 +7512,7 @@
       "contains": [
         "const emailConfirmed=verified,linkedinConfirmed=",
         "const ready=verified&&crmAuthenticated()",
-        "Confirm this person’s email to continue",
+        "Confirm this person\u2019s email to continue",
         "official pages read in this run"
       ]
     },
@@ -7605,7 +7605,7 @@
         "data-buyer-contact-progress",
         "Time estimate not available yet",
         "buyerRecheckOutcomes",
-        "Recheck finished ·",
+        "Recheck finished \u00b7",
         "aria-live=\"polite\""
       ]
     },
@@ -7726,7 +7726,7 @@
       "status": 200,
       "contains": [
         "window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)}",
-        "Saving targeting…",
+        "Saving targeting\u2026",
         "Workspace save was not confirmed.",
         "targetingSaveOwner===operation"
       ]
@@ -7762,8 +7762,8 @@
       "url": "/customer/company-research-ui.js",
       "contains": [
         "Source collection and synthesis are independently bounded stages.",
-        "Preparing your AI profile…",
-        "Usually takes 1–2 minutes."
+        "Preparing your AI profile\u2026",
+        "Usually takes 1\u20132 minutes."
       ]
     },
     {
@@ -7781,7 +7781,7 @@
       "url": "/customer/ai-settings.js",
       "status": 200,
       "contains": [
-        "People discovery · 0 API credits",
+        "People discovery \u00b7 0 API credits",
         "data-integration=\"apollo\""
       ]
     },
@@ -7946,7 +7946,7 @@
       "status": 200,
       "contains": [
         "Saved:",
-        "Unsaved changes — save settings before running.",
+        "Unsaved changes \u2014 save settings before running.",
         "monitoring-review-strategy",
         "Save your settings now. Review and activate Strategy in Step 3"
       ]
@@ -7960,7 +7960,7 @@
         "monitoring-reliability=20261110-v1",
         "id=\"monitoring-review-strategy\"",
         "Larger website lists rotate between runs.",
-        "Alerts appear here in LeadIntel."
+        "Findings appear in the Monitoring inbox."
       ]
     },
     {
@@ -8063,6 +8063,65 @@
       "status": 200,
       "contains": [
         "workspace-transfer=20261110-v1"
+      ]
+    },
+    {
+      "id": "universal-monitoring-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "monitoring-model.js?v=20261110-universal-v1",
+        "monitoring-inbox.css?v=20261110-universal-v1",
+        "monitoring-purpose",
+        "monitoring-message-mode",
+        "universal-monitoring=20261110-v1"
+      ]
+    },
+    {
+      "id": "universal-monitoring-model",
+      "type": "text",
+      "url": "/customer/monitoring-model.js",
+      "status": 200,
+      "contains": [
+        "normalizeWorkflow",
+        "extractEvents",
+        "workflowCombination",
+        "versionMaterial",
+        "renderMessage"
+      ]
+    },
+    {
+      "id": "universal-monitoring-inbox",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.js",
+      "status": 200,
+      "contains": [
+        "monitoring-inbox-title",
+        "/inbox/summary",
+        "identitySourceUrl",
+        "Approve this exact message for automatic delivery"
+      ]
+    },
+    {
+      "id": "universal-monitoring-app",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "monitoring-inbox.js?v=20261110-universal-v1",
+        "workflow:config.workflow",
+        "updateMonitoringWorkflowHelp"
+      ]
+    },
+    {
+      "id": "universal-monitoring-responsive",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.css",
+      "status": 200,
+      "contains": [
+        ".monitoring-inbox",
+        "@media(max-width:640px)"
       ]
     }
   ],
