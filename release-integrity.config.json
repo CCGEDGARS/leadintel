@@ -66,7 +66,8 @@
       "operational_diagnostics_version": "20261031-operations-v1",
       "research_storage_version": "20261101-v1",
       "research_expanded_limit_bytes": 33554432,
-      "copilot_research_version": "public-research-20261110-v1"
+      "copilot_research_version": "public-research-20261110-v1",
+      "buyer_review_scheduling_version": "20261110-full-slice-v1"
     }
   },
   "smokeChecks": [
@@ -7905,6 +7906,36 @@
       "status": 200,
       "contains": [
         "public-research=20261110-v1"
+      ]
+    },
+    {
+      "id": "buyer-queued-review-coverage",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Contact checks complete for",
+        "AI evidence review:",
+        "(terminal||queued)&&progress.stages",
+        "!terminal&&!queued&&index+1===active"
+      ]
+    },
+    {
+      "id": "buyer-review-quality-handoff",
+      "type": "text",
+      "url": "/customer/buyer-research-jobs.js",
+      "status": 200,
+      "contains": [
+        "aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed'"
+      ]
+    },
+    {
+      "id": "buyer-review-fresh-assets",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "buyer-review=20261110-v1"
       ]
     }
   ],

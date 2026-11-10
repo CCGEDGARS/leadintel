@@ -183,6 +183,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
     }else{diagnostics.push({phase,reason:'No complete buyer identities were supported by the available sources',at:new Date().toISOString()});phase=nextPhase[phase];}
    }else if(phase==='review'){
+    // The HTTP wake owns 18s; the configured reviewer and its fallback own 45s.
+    // Yield before dispatch instead of spending a shortened failed attempt.
+    if(!services.review&&windowMs-(clock()-start)<46000)throw Object.assign(Error('AI evidence review queued for a full processing slice'),{code:'PHASE_DEFERRED'});
     const supplied=D.safeBuyerReviewEvidence(D.buyerSupervisorEvidence(candidate.people,rows));candidate.publicResearch.reviewEvidence=supplied;
     candidate.publicResearch.buyerAgent=D.assessBuyerAgent(candidate,rows,D.buyerAgentContext(candidate,input.profile));
     const signature=D.buyerReviewSignature(candidate),body={company:candidate.company,buyerAgent:candidate.publicResearch.buyerAgent,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,employer:p.organization,email:p.publicEmail,email_source:p.publicEmailUrl,linkedin:p.publicLinkedinUrl||p.linkedin_url,checks:p.contactResearch?.checks})),evidence:supplied,quality:{depth:D.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:report.status,checked_people:report.checkedPeople,official_pages:report.officialPages}};
@@ -211,7 +214,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(phaseAdvanced){phaseMs=0;phaseRuns=0;}
    if(error.code==='RUN_WINDOW'||controller.signal.reason?.code==='RUN_WINDOW'){status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='run_window';diagnostics.push({phase,code:'run_window',reason:BUYER_RUN_WINDOW_REASON,at:new Date().toISOString()});}
    else if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
-   else if(error.code==='LEASE_EXPIRED')status='queued';
+   else if(error.code==='LEASE_EXPIRED'||error.code==='PHASE_DEFERRED')status='queued';
    else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if((phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
    else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}
   }finally{
