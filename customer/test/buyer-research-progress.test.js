@@ -66,3 +66,9 @@ test('resuming an old job starts a new elapsed display without treating earlier 
  const now=Date.now(),html=context.buyerResearchProgressHtml({domain:'example.com',buyerResearchProgress:{jobId:'j',phase:'contacts',step:4,executionStatus:'queued',startedAt:new Date(now-3600000).toISOString(),timing:{lastResultAt:new Date(now-3500000).toISOString(),runWindow:{startedAt:new Date(now-1000).toISOString(),deadlineAt:new Date(now+1799000).toISOString()}}}});
  assert.match(html,/1s since request/);assert.doesNotMatch(html,/Research delayed|no completed check for/);
 });
+
+test('a window-paused final phase reports verified stage coverage rather than suggesting all five stages passed',()=>{
+ const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:value=>String(value??'')};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const dom=new JSDOM(context.buyerResearchProgressHtml({domain:'example.com',buyerDiscovery:{researchIncomplete:true},buyerResearchProgress:{jobId:'j',phase:'error',step:5,executionStatus:'needs_review',connection:'connected',label:'Research paused after 30 minutes.',diagnostics:[{code:'run_window'}],stages:{official:false,dossier:false,identities:true,contacts:false,review:false},timing:{runWindow:{expired:true}}}}));
+ const doc=dom.window.document;assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/1 of 5 stages verified/);assert.doesNotMatch(doc.querySelector('.buyer-research-progress-head').textContent,/Stage 5 of 5/);assert.equal(doc.querySelectorAll('li.done').length,1);assert.equal(doc.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'1');assert.equal(doc.querySelector('.buyer-research-progress-head strong').textContent,'Research paused');assert.match(doc.body.textContent,/Resume unfinished research/);dom.window.close();
+});

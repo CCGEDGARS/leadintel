@@ -112,3 +112,9 @@ test('a full article markdown heading cannot erase its reviewed trigger or linke
  const context={buyerDomain:'buyer.example',buyerCompany:'Buyer',trigger,researchBrief:brief,buyerFactEvidence:B.evidenceRows(brief)};
  assert.equal(C.readableValues(S.normalize({essentials}),context).projectLocation,'Northport');
 });
+
+test('a source heading cannot hide corporate boilerplate from the compact factual brief',()=>{
+ const text='Long-term thinking Whether in research and development, personnel policy, corporate strategy, customer service or product quality, the advantages of our long-term thinking are visible everywhere in the company.';
+ const c=candidate(text),before=JSON.stringify(c),brief=O.buildResearchBrief(c,profile,person);
+ assert.equal(brief.facts.length,0);assert.equal(JSON.stringify(c),before,'original receipts and source text stay intact');
+});

@@ -2,7 +2,7 @@
 'use strict';
 const VERSION='shared-message-brief-20261022-v4',clean=v=>String(v??'').replace(/\s+/g,' ').trim(),copy=v=>JSON.parse(JSON.stringify(v));
 const unsafe=text=>/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|<[^>]*>|{{|}}/i.test(text);
-const boilerplate=text=>/^whether\b/i.test(text)&&/long.term thinking|personnel policy|corporate strategy/i.test(text);
+const boilerplate=text=>/\bwhether\b/i.test(text)&&/long.term thinking|personnel policy|corporate strategy/i.test(text);
 const navigation=text=>/^(?:read more|learn more|click here|find out more)\b/i.test(text);
 const development=text=>/\b(?:under construction|constructing|building|investing|expan(?:ding|sion)|new (?:plant|factory|warehouse|facility|office|hospital|system|platform)|launch(?:ed|ing)?|implement(?:ed|ing|ation)|moderni[sz](?:ed|ing|ation)|commission(?:ed|ing))\b/i.test(text);
 function quoteSentences(quote){return String(quote).replace(/(^|\r?\n)[ \t]*#{1,6}[ \t]+/g,'$1').replace(/\b([A-Z])\.\s+(?=[A-Z])/g,'$1\uE000 ').split(/(?<=[.!?])\s+/).map(sentence=>clean(sentence.replace(/\uE000/g,'.')));}

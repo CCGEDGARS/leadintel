@@ -1,0 +1,11 @@
+# Buyer pause coverage and brief filtering
+
+The owner supplied a screenshot with a 30-minute pause, 129 saved checks, the final phase selected, and only Find people visibly verified. This is evidence of incomplete research, not a stopped start request or proof of a specific provider failure. The previous start/reopen repair did not establish completed contact qualification.
+
+The 7 November bounded-run policy explicitly requires a pause after 30 elapsed minutes. Keep that bound, explicit same-job continuation, saved successful task receipts, per-task attempts, independent paid permissions and current contact evidence gates. Do not solve an incomplete screenshot by raising a timeout, automatically resuming a paused job, weakening coverage, or repeating paid research.
+
+Two controlled presentation regressions were reproduced before changing code. The paused final phase printed Stage 5 of 5 even when only one stage passed; terminal durable progress now reports the actual number of verified stages. Corporate boilerplate prefixed with a source heading bypassed the beginning-of-string filter; reject that same boilerplate within its display sentence while retaining source records, uncertainty and protected drafts. This reproduction does not prove that the screenshot's specific original quote had that prefix. The public source asset contained the earlier filter when inspected.
+
+Authenticated inspection of the actual job's detailed diagnostics, then a reduced status/count payload, was rejected by automatic approval review as disclosure of private workspace metadata through Firecrawl. Do not retry through another channel to bypass that decision. Explicit scoped approval is required to inspect those saved job outcomes. Local SQL/scheduler and browser fixtures remain available; they cannot establish the actual private provider failure or Beumer contact yield.
+
+Acceptance separates the presentation repair, exact-SHA production proof, and the actual research outcome. Require regression coverage for a paused final phase with missing upstream evidence and for heading-prefixed boilerplate, including retained source records. Keep the existing window, scheduler/resume, shared-brief, Messages/CRM/reopen and approved-template tests. Live research performance and remaining provider gaps stay unverified until the authorized job inspection succeeds.
