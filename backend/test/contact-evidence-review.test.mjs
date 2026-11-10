@@ -75,3 +75,14 @@ test('independent reviewer receives the company trigger, employer and exact prof
   return {text:JSON.stringify({reviewed_person_ids:['klas'],conflicts:[],findings:[]})};
  }});
 });
+
+test('native AI-review fallback retains a safe timeout code instead of hiding the failed primary',async()=>{
+ const {reviewWorkspaceBuyerEvidence}=await import('../src/ai-routes.js'),{importAesKey,encryptSecret}=await import('../src/oauth.js'),secret=btoa(String.fromCharCode(...new Uint8Array(32).fill(26))),encrypted=await encryptSecret('fixture-key',await importAesKey(secret));
+ const env={OAUTH_TOKEN_ENCRYPTION_KEY:secret,DB:{prepare(sql){return {bind(){return this;},async first(){return {provider:sql.includes("provider='openai'")?'openai':'gemini',encrypted_api_key:encrypted,model:'fixture'};},async run(){return {};}};}}};
+ const result=await reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer',role:'CEO'}],evidence:[{url:'https://example.com/team',excerpt:'Anna Buyer CEO'}]},{generate:async options=>{if(options.provider==='gemini')throw Error('Gemini request timed out');return {text:JSON.stringify({reviewed_person_ids:['a'],findings:[],conflicts:[]})};}});assert.equal(result.provider,'openai');assert.equal(result.researchTrace[0].code,'AI_REVIEW_TIMEOUT');assert.equal(result.researchTrace[0].failureKind,'timeout');assert.equal(result.researchTrace[1].status,'succeeded');assert.doesNotMatch(JSON.stringify(result),/fixture-key/);
+});
+
+test('missing review evidence cannot fabricate a failed provider attempt',async()=>{
+ const {reviewWorkspaceBuyerEvidence}=await import('../src/ai-routes.js'),{importAesKey,encryptSecret}=await import('../src/oauth.js'),secret=btoa(String.fromCharCode(...new Uint8Array(32).fill(27))),encrypted=await encryptSecret('fixture-key',await importAesKey(secret));let calls=0;
+ const env={OAUTH_TOKEN_ENCRYPTION_KEY:secret,DB:{prepare(){return {bind(){return this;},async first(){return {provider:'openai',encrypted_api_key:encrypted,model:'fixture'};},async run(){return {};}};}}};const result=await reviewWorkspaceBuyerEvidence(env,'w',{company:'Example',people:[{id:'a',name:'Anna Buyer'}],evidence:[]},{generate:async()=>{calls++;throw Error('No model should run');}});assert.equal(calls,0);assert.equal(result.status,'unavailable');assert.deepEqual(result.researchTrace,[]);
+});

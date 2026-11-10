@@ -28,3 +28,9 @@ test('HTTP Resume defers the 45-second AI review to cron without consuming its p
 test('review deferral cannot extend the explicit 30-minute run window',async t=>{
  const f=await buyerJobsFixture(t),j=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='review',input_json=json_set(input_json,'$.executionWindowStartedAt',?,'$.apolloIdentityVersion',1) WHERE id=?").run(new Date(Date.now()-31*60000).toISOString(),j.id);let calls=0;await runBuyerResearchJobs(f.env,{jobId:j.id,maxJobs:1,windowMs:18000,services:{review:async()=>{calls++;return {};}}});const saved=await readBuyerJob(f.env,workspaceId,{id:j.id});assert.equal(calls,0);assert.equal(saved.status,'needs_review');assert.equal(saved.phase,'review');assert.equal(JSON.parse(saved.diagnostic_json).at(-1).code,'run_window');
 });
+
+test('failed AI-review execution receipts survive the same job checkpoint without approving partial public research',async t=>{
+ const f=await buyerJobsFixture(t),j=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='review',input_json=json_set(input_json,'$.apolloIdentityVersion',1) WHERE id=?").run(j.id);
+ await runBuyerResearchJobs(f.env,{jobId:j.id,maxJobs:1,services:{review:async()=>({status:'unavailable',provider:'none',reason:'AI review timed out',conflicts:[],researchTrace:[{provider:'ai_review',status:'failed',reason:'OpenAI request timed out',code:'AI_REVIEW_TIMEOUT',failureKind:'timeout'}]})}});
+ const saved=await readBuyerJob(f.env,workspaceId,{id:j.id}),result=JSON.parse(saved.result_json),receipt=result.publicResearch.accountability.tools.find(row=>row.provider==='ai_review');assert.equal(receipt.attempted,1);assert.equal(receipt.failed,1);assert.equal(receipt.lastFailure.code,'AI_REVIEW_TIMEOUT');assert.equal(result.publicResearch.aiReview.status,'unavailable');assert.equal(saved.status,'needs_review');
+});

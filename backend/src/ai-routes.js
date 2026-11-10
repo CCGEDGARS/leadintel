@@ -12,7 +12,7 @@ import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
-import {reviewContactEvidence} from './contact-evidence-review.js';
+import {contactReviewInput,reviewContactEvidence} from './contact-evidence-review.js';
 import {groundedContactSearch} from './grounded-contact-search.js';
 import {generateCompanyExtraction} from './company-extraction-fallback.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
@@ -91,6 +91,7 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,
   const started=Date.now(),duration=Math.max(1,Math.min(45000,maxDurationMs)),trace=[],unavailable=reason=>({status:'unavailable',provider:'none',web_search:false,reason,conflicts:[],researchTrace:trace});
   try{
     if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
+    const input=contactReviewInput(body);if(!input.company||!input.people.length||!input.evidence.length)return unavailable('Read source evidence and identified people are required before AI review');
     const configured=(await Promise.all([geminiIntegration(env,workspaceId),openAiIntegration(env,workspaceId),activeIntegration(env,workspaceId)])).filter(Boolean),choices=[...new Map(configured.map(row=>[row.provider,row])).values()].slice(0,2),seen=new Set();
     for(const integration of choices){
       if(seen.has(integration.provider))continue;seen.add(integration.provider);
@@ -103,7 +104,7 @@ export async function reviewWorkspaceBuyerEvidence(env,workspaceId,body,{signal,
           const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
           return reviewContactEvidence({body,apiKey,model:integration.model,provider:integration.provider,signal:attemptSignal,generate});
         },signal,attemptMs);
-      }catch(cause){const message=String(cause?.message||''),reason=/^(AI review (?:timed out|canceled)|(?:OpenAI|Gemini|Anthropic) (?:request|returned)|AI contact review returned invalid JSON)/.test(message)?message.slice(0,160):'AI evidence review unavailable';trace.push({provider:tool,status:'failed',reason});continue;}
+      }catch(cause){const message=String(cause?.message||''),reason=/^(AI review (?:timed out|canceled)|(?:OpenAI|Gemini|Anthropic) (?:request|returned)|AI contact review returned invalid JSON)/.test(message)?message.slice(0,160):'AI evidence review unavailable';const timeout=/timed out/i.test(message),canceled=/canceled/i.test(message),httpStatus=Number(message.match(/request failed \(([45]\d\d)\)/)?.[1])||null;trace.push({provider:tool,status:'failed',reason,code:timeout?'AI_REVIEW_TIMEOUT':canceled?'AI_REVIEW_CANCELED':httpStatus?'AI_REVIEW_HTTP_ERROR':'AI_REVIEW_UNAVAILABLE',failureKind:timeout?'timeout':canceled?'cancelled':httpStatus?'http':/invalid JSON/i.test(message)?'invalid_response':'',httpStatus});continue;}
       trace.push({provider:tool,status:'succeeded',results:result.supervisor.reviewedPersonIds.length,reason:integration.provider+' evidence review; no web search'});
       try{
         await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,integration.provider).run();
