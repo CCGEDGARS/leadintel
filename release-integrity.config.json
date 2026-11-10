@@ -3922,7 +3922,7 @@
       "url": "/customer/workspace-codec-worker.js",
       "status": 200,
       "contains": [
-        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1')",
+        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1')",
         "'prepareForSync','packWorkspaceSnapshot','packRecoveryRecord'",
         "self.postMessage({id,result})"
       ]
@@ -8014,6 +8014,55 @@
       "contains": [
         "function openMonitoring()",
         "active:()=>snapshot,openMonitoring"
+      ]
+    },
+    {
+      "id": "workspace-lossless-wire-budget",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "MAX_RECORD_WIRE_BYTES=4*1024*1024",
+        "const wireLimit=Math.min(syncLimit(options),MAX_RECORD_WIRE_BYTES)",
+        "after lossless packing; research and edits remain preserved locally."
+      ]
+    },
+    {
+      "id": "workspace-structured-save-errors",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "function workspaceSaveFailure(",
+        "throw workspaceSaveFailure(response,result)",
+        "Workspace save exceeded the server transfer limit. Your local changes are preserved."
+      ]
+    },
+    {
+      "id": "workspace-transfer-worker-cache",
+      "type": "text",
+      "url": "/customer/workspace-codec-worker.js",
+      "status": 200,
+      "contains": [
+        "workspace-transfer=20261110-v1"
+      ]
+    },
+    {
+      "id": "workspace-transfer-loader-cache",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "workspace-codec-worker.js?v=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1"
+      ]
+    },
+    {
+      "id": "workspace-transfer-entry-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "workspace-transfer=20261110-v1"
       ]
     }
   ],

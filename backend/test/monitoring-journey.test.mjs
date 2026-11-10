@@ -7,10 +7,11 @@ async function settleInitialSave(page){const result=await page.evaluate(()=>Lead
 import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {runDueMarketMonitoring} from '../src/market-monitoring.js';
 import app from '../src/app.js';
+import stateBudget from '../../customer/state-budget.js';
 
 for(const profileApproved of [true,false])test('monitoring saves before activation, returns without company research and retains scheduled alerts after reopening: '+(profileApproved?'approved Profile':'Profile approval required'),{timeout:120000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(e){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw e;t.skip('Chromium unavailable; mandatory in Customer CI.');return;}
- const dir='/tmp/leadintel-monitoring'+(profileApproved?'':'-profile-review');await fs.mkdir(dir,{recursive:true});const queries=[],errors=[];
+ const dir='/tmp/leadintel-monitoring'+(profileApproved?'':'-profile-review');await fs.mkdir(dir,{recursive:true});const queries=[],errors=[],workspaceWireBytes=[];let proxyRejections=0;
  const f=await journeyFixture({externalFetch:async(input,options)=>{
   if(new URL(typeof input==='string'?input:input.url).hostname==='api.firecrawl.dev'){
    const body=JSON.parse(options.body);queries.push(body.query);
@@ -18,11 +19,17 @@ for(const profileApproved of [true,false])test('monitoring saves before activati
   }
  }});
  const saved=await f.getState();if(!profileApproved){Object.assign(saved.payload.main.answers,{buying_outcomes:'Reduce production equipment downtime',value_proposition:'Engineering and manufacturing of custom machinery',differentiation:'Custom machinery for supplied project requirements',proof_points:'No approved proof yet',objections:'Confirm technical scope, capacity and installation timing',delivery_approach:'Review drawings and project requirements before manufacture',meeting_value:'Review the production equipment scope and drawings'});saved.payload.main.answerStatus=Object.fromEntries(Object.keys(saved.payload.main.answers).map(id=>[id,'user']));}saved.payload.main.approved=profileApproved;saved.payload.main.market.strategyApproved=false;delete saved.payload.main.market.strategyApproval;
+ const retainedText='Retained original research quote. Preserve punctuation and evidence. '.repeat(95);const retainedSources=profileApproved?Array.from({length:750},(_,i)=>({url:'https://archive.example/evidence/'+i,title:'Retained source '+i,text:retainedText,market:'Sweden'})):[];
+ if(retainedSources.length){saved.payload.discovery.rawResults=retainedSources;assert.ok(Buffer.byteLength(JSON.stringify(saved.payload))>4500000);}
  await f.replace(saved.payload,saved.version);f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,24).toString('base64');
  f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES(?,'firecrawl',?,'fixture')").run(workspaceId,await encryptSecret('controlled-firecrawl-key',await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY)));
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let page,context;
  const open=async()=>{
-  context=await browser.newContext({viewport:{width:1440,height:1050}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  context=await browser.newContext({viewport:{width:1440,height:1050}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());
+  // The real authenticated HTTP/SQL routes remain authoritative. Reproduce the
+  // production hosting hop's smaller envelope before those routes receive PUTs.
+  await context.route('**/api/customer/state?*',r=>{if(r.request().method()!=='PUT')return r.continue();const bytes=r.request().postDataBuffer()?.byteLength||0;workspaceWireBytes.push(bytes);if(bytes>4500000){proxyRejections++;return r.fulfill({status:413,json:{error:{code:'413',message:'Request Entity Too Large'}}});}return r.continue();});
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);assert.equal(await page.evaluate(()=>LeadIntelCustomerNavigation.setStep(2)),true);await page.locator('#step-2.active').waitFor();await page.locator('#website-scanning-open').click();await page.locator('[data-scan-mode=monitor]').click();await page.locator('#monitoring-custom-sources').waitFor();await page.waitForLoadState('networkidle');
  };
  const config=()=>f.DB.raw.prepare('SELECT * FROM market_monitoring_configs WHERE workspace_id=?').get(workspaceId);
@@ -57,7 +64,9 @@ for(const profileApproved of [true,false])test('monitoring saves before activati
   await open();assert.equal(await page.locator('#monitoring-enabled').isChecked(),true);assert.match(await page.locator('#monitoring-history').textContent(),/scheduled.*completed/);assert.equal(await page.locator('#monitoring-alerts .monitor-alert').count(),1);assert.equal(await page.locator('#monitoring-alerts [data-monitor-alert-read]').count(),0);
   await page.setViewportSize({width:390,height:844});await page.locator('#monitoring-settings').scrollIntoViewIfNeeded();const box=await page.locator('#monitoring-settings').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=391);await page.screenshot({path:dir+'/mobile.png',fullPage:true});await page.locator('#website-scanning-monitor').screenshot({path:dir+'/mobile-monitoring.png'});
   const pause=saveResponse();await page.locator('#monitoring-enabled').uncheck();await pause;assert.equal(config().enabled,0);const paused=queries.length;await hourly();assert.equal(queries.length,paused);assert.deepEqual(errors,[]);
-  await fs.writeFile(dir+'/result.json',JSON.stringify({draftSavedBeforeActivation:true,realStrategyActivation:true,profileReviewContinuation:!profileApproved,noCompanyResearchOnApproval:true,enteredWebsiteSearched:true,queriesPerRun:4,hourlyRunsWithoutBrowser:true,duplicateAlerts:0,alertReadStateRestored:true,dailySchedule:true,pauseStopsSchedule:true,freshBrowserReopen:true,mobile:true,pageErrors:errors},null,2));
+  assert.equal(proxyRejections,0);assert.ok(workspaceWireBytes.length>0);assert.ok(workspaceWireBytes.every(bytes=>bytes<4*1024*1024+1024));
+  if(retainedSources.length){const browserEvidence=await page.evaluate(expected=>{const rows=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery')).rawResults;return {count:rows.length,exact:rows.every((r,i)=>r.url==='https://archive.example/evidence/'+i&&r.text===expected)};},retainedText);assert.deepEqual(browserEvidence,{count:750,exact:true});const rows=stateBudget.restoreFromSync((await f.getState()).payload).discovery.rawResults;assert.equal(rows.length,750);assert.ok(rows.every((r,i)=>r.url===retainedSources[i].url&&r.text===retainedText));}
+  await fs.writeFile(dir+'/result.json',JSON.stringify({draftSavedBeforeActivation:true,realStrategyActivation:true,profileReviewContinuation:!profileApproved,noCompanyResearchOnApproval:true,largeWorkspaceProxyBoundary:Boolean(retainedSources.length),maxWorkspaceWireBytes:Math.max(...workspaceWireBytes),proxyRejections,retainedEvidenceRoundTrip:retainedSources.length?true:null,enteredWebsiteSearched:true,queriesPerRun:4,hourlyRunsWithoutBrowser:true,duplicateAlerts:0,alertReadStateRestored:true,dailySchedule:true,pauseStopsSchedule:true,freshBrowserReopen:true,mobile:true,pageErrors:errors},null,2));
  }catch(e){await page?.screenshot({path:dir+'/failure.png',fullPage:true}).catch(()=>{});await fs.writeFile(dir+'/failure.json',JSON.stringify({message:e.message,errors,monitoring:config(),calls:f.calls.filter(c=>c.path.includes('monitoring')),runtime:await page?.evaluate(()=>({step:document.querySelector('.step-view.active')?.id,notice:document.getElementById('required-action-notice')?.textContent,toast:document.getElementById('toast')?.textContent,blockers:document.getElementById('strategy-handoff-blockers')?.textContent})),queries},null,2));throw e;}
  finally{await context?.close();await browser.close();await f.close();}
 });

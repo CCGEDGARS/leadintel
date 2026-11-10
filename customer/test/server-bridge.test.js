@@ -3,6 +3,17 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const bridge=fs.readFileSync(path.join(__dirname,'..','server-bridge.js'),'utf8');
+test('workspace save failures preserve structured HTTP diagnostics without object coercion',()=>{
+ const start=bridge.indexOf('function workspaceSaveFailure(');assert.ok(start>=0);
+ const rest=bridge.slice(start),end=rest.indexOf('\n  async function saveNow(');assert.ok(end>0);
+ const failure=new Function(rest.slice(0,end)+'\nreturn workspaceSaveFailure;')();
+ const tooLarge=failure({status:413},{error:{code:'413',message:'Request Entity Too Large'}});
+ assert.match(tooLarge.message,/transfer limit.*local changes.*preserved/i);assert.equal(tooLarge.status,413);assert.equal(tooLarge.code,'413');assert.equal(tooLarge.requestPath,'/api/customer/state');assert.doesNotMatch(tooLarge.message,/\[object Object\]/);
+ assert.equal(failure({status:507},{error:'Storage is full',code:'WORKSPACE_STORAGE_FULL'}).message,'Storage is full');
+ assert.equal(failure({status:502},{error:{message:'Service temporarily unavailable',code:'backend_unavailable'}}).message,'Service temporarily unavailable');
+ assert.match(failure({status:500},{error:{unexpected:true}}).message,/Workspace save failed.*500/);
+ assert.match(bridge,/throw workspaceSaveFailure\(response,result\)/);
+});
 
 test('server bridge knows all Customer V2 storage namespaces and API base',()=>{
   for(const key of ['leadintel_customer_v2_state','leadintel_customer_v2_discovery','leadintel_customer_v2_outreach','leadintel_customer_v2_delivery','leadintel_customer_v2_discovery_meta'])assert.match(bridge,new RegExp(key));

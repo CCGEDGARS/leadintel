@@ -7,6 +7,9 @@
 
   const MAX_SYNC_BYTES=500*1024;
   const MAX_RECORD_SYNC_BYTES=8*1024*1024;
+  // Leave room for the versioned JSON envelope below the first-party proxy's
+  // 4.5 MB request limit. Backend record capacity is not a wire allowance.
+  const MAX_RECORD_WIRE_BYTES=4*1024*1024;
   function syncLimit(options={}){return Math.max(MAX_SYNC_BYTES,Math.min(MAX_RECORD_SYNC_BYTES,Number(options.maxSyncBytes)||MAX_SYNC_BYTES));}
   const TARGET_SYNC_BYTES=450*1024;
   const MAX_RESTORED_SECTION_BYTES=8*1024*1024;
@@ -262,9 +265,15 @@
   function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={},options={}){
     const original=clone(input);let payload=restoreFromSync(clone(input));let compressionBytes=null;
-    // Record-capable servers persist the complete research separately. Legacy
-    // clients keep their original bounded encoding until the server advertises it.
-    if(syncLimit(options)>MAX_SYNC_BYTES&&bytes(payload)<=syncLimit(options))return {payload,bytes:bytes(payload),compacted:false};
+    // Record-capable servers retain complete research. Compress before returning
+    // a large raw bundle, and never use the legacy evidence-trimming fallback.
+    if(syncLimit(options)>MAX_SYNC_BYTES){
+      const wireLimit=Math.min(syncLimit(options),MAX_RECORD_WIRE_BYTES),rawBytes=bytes(payload);
+      if(rawBytes>TARGET_SYNC_BYTES&&options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);compressionBytes=compressed?bytes(compressed):null;if(compressed&&compressionBytes<rawBytes)payload=compressed;}
+      const wireBytes=bytes(payload);
+      if(wireBytes>wireLimit)throw new Error(`Workspace exceeds the ${Math.floor(wireLimit/1024/1024)} MB transfer limit after lossless packing; research and edits remain preserved locally.`);
+      return {payload,bytes:wireBytes,compacted:wireBytes!==rawBytes,compressionBytes};
+    }
     if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);compressionBytes=compressed?bytes(compressed):null;if(compressed&&bytes(compressed)<=syncLimit(options))return {payload:compressed,bytes:bytes(compressed),compacted:true};}
     payload.main=compactMain(payload.main||{},8000,12000);
     for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
