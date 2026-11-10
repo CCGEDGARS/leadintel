@@ -223,7 +223,7 @@ jobs:
 
   event-planning-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -289,7 +289,9 @@ jobs:
 
   profile-strategy-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Cold browser installation plus the mandatory research journeys exceeded 5m
+    # after every assertion passed. Retain test deadlines and artifact upload.
+    timeout-minutes: 7
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -313,7 +315,7 @@ jobs:
         run: |
           node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js customer/test/buyer-start-persistence.test.js
-          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs
       - name: Preserve focused navigation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -324,6 +326,7 @@ jobs:
             /tmp/leadintel-company-search-outcome/
             /tmp/leadintel-buyer-start/
             /tmp/leadintel-copilot-research/
+            /tmp/leadintel-buyer-review-wake/
             /tmp/leadintel-research-handoff/
             /tmp/leadintel-research-handoff-outage/
             /tmp/leadintel-research-handoff-legacy/
