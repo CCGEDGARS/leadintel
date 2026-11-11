@@ -26,6 +26,7 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, sessionStatus=401, privateSettingsStatus=401,storageStatus=401, premiumCss }) {
   return async url => {
     const parsed = new URL(String(url));
+    if(parsed.pathname==='/customer/website-contact-ui.js')return response({text:fs.readFileSync(path.join(root,'customer/website-contact-ui.js'),'utf8')});
     if(['/customer/monitoring-model.js','/customer/monitoring-inbox.js','/customer/monitoring-inbox.css','/customer/monitoring-manager.js','/customer/monitoring-manager.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/company-search-progress.js')return response({text:fs.readFileSync(path.join(root,'customer/company-search-progress.js'),'utf8')});
     if(['/customer/website-activation.js','/customer/company-materials.js','/customer/delivery-ui.js','/customer/delivery-engine.js','/customer/buyer-research-jobs.js','/customer/buyer-handoff-recovery.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});

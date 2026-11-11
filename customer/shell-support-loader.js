@@ -2,7 +2,7 @@
 import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2&buyer-role-reload=20261020-v1&company-contact-record=20261020-v5&buyer-research-policy=20261020-v2&buyer-company-actions=20261021-v2&official-company-contacts=20261021-v4&company-assessment=20261021-v1&phone-lifecycle=20261029-v2&step5-audit=20261030-v1&companies-audit=20261031-v1';
 
 const SUPPORT_MODULES=[
-  './website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1&monitoring-reliability=20261110-v1&monitoring-return=20261110-v1',
+  './website-scanning-ui.js?v=20261018-v1&preferred-sources=20261018-v1&monitoring-reliability=20261110-v1&monitoring-return=20261110-v1&website-contacts=20261111-v1',
   './website-input-sync.js?v=20261006-sender-identity-v1&setup-audit=20261030-v1&step1-setup=20261102-v1&startup-input=20261108-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',

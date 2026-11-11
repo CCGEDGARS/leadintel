@@ -395,7 +395,8 @@ function normalizeApolloPeopleSearch(body){
   const seen=new Set();const titles=[];
   for(const raw of rawTitles){const title=clean(raw,120);const key=title.toLowerCase();if(!title||seen.has(key))continue;seen.add(key);titles.push(title);if(titles.length===10)break;}
   const broad=body.discovery_scope==='company',keywords=clean(body.q_keywords,180),fallback=broad&&body.companyNameFallback===true&&keywords&&keywords===clean(body.company_name,180);
-  return {payload:{...(fallback?{q_keywords:keywords}:{q_organization_domains_list:[domain]}),person_titles:broad?[]:titles,include_similar_titles:true,person_seniorities:broad?[]:[...APOLLO_PEOPLE_SENIORITIES],page:1,per_page:broad?25:10},domain,roleCount:broad?0:titles.length};
+  const page=broad&&Number.isInteger(body.page)&&body.page>=1&&body.page<=4?body.page:1;
+  return {payload:{...(fallback?{q_keywords:keywords}:{q_organization_domains_list:[domain]}),person_titles:broad?[]:titles,include_similar_titles:true,person_seniorities:broad?[]:[...APOLLO_PEOPLE_SENIORITIES],page,per_page:broad?25:10},domain,roleCount:broad?0:titles.length};
 }
 
 function publicApolloBuyer(person={}){
