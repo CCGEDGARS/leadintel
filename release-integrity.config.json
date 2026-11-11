@@ -8100,7 +8100,10 @@
         "monitoring-inbox-title",
         "/inbox/summary",
         "identitySourceUrl",
-        "Approve this exact message for automatic delivery"
+        "Approve this exact message for automatic delivery",
+        "mi-filter-grid",
+        "mi-inbox-actions",
+        "mi-button-primary"
       ]
     },
     {
@@ -8121,7 +8124,9 @@
       "status": 200,
       "contains": [
         ".monitoring-inbox",
-        "@media(max-width:640px)"
+        "@media(max-width:640px)",
+        ".mi-button-primary",
+        ".mi-inbox-actions"
       ]
     },
     {
