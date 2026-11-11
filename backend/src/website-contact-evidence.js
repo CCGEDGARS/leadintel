@@ -1,5 +1,11 @@
 import '../../customer/discovery-engine.js';
 const D=globalThis.LeadIntelDiscovery;
+export function websiteContactIdentity(person={}){
+ if(!D.isIndependentContactPerson(person))return false;
+ const source=person.publicNameUrl||'';
+ if(!source)return person.identityOrigin==='apollo';
+ try{const url=new URL(source);if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
+}
 export function websiteContactRole(value){
  const text=String(value||'').toLowerCase();
  if(/administrerende\s+direktør|adm\.?\s*direktør|verkställande\s+direktör/.test(text))return 'ceo';
@@ -7,6 +13,7 @@ export function websiteContactRole(value){
  return text.trim();
 }
 export function websiteFreeResearchComplete(candidate,person){
+ if(!websiteContactIdentity(person))return false;
  // Coverage is independent of the Buyer recommendation's two-provider
  // executive/committee rule. Actual identity conflicts still block it.
  const research=person.emailResearch,age=Date.now()-Date.parse(research?.checkedAt||'');
