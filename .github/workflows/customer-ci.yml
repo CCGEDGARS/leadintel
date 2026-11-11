@@ -26,6 +26,7 @@ on:
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
       - 'scripts/verify-universal-monitoring.mjs'
+      - 'scripts/verify-monitoring-categories.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
@@ -64,6 +65,7 @@ on:
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
       - 'scripts/verify-universal-monitoring.mjs'
+      - 'scripts/verify-monitoring-categories.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
       - 'release-integrity.config.json'
       - 'deployment-authority.json'
@@ -358,10 +360,14 @@ jobs:
           appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
           JS
       - name: Verify universal inbox, literal format and registered delivery
-        run: node --import ./backend/test/register-wasm-loader.mjs scripts/verify-universal-monitoring.mjs
+        run: |
+          node --import ./backend/test/register-wasm-loader.mjs scripts/verify-universal-monitoring.mjs
+          node --import ./backend/test/register-wasm-loader.mjs scripts/verify-monitoring-categories.mjs
       - name: Preserve universal workflow evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: universal-monitoring-${{ github.sha }}
-          path: /tmp/leadintel-universal-monitoring/
+          path: |
+            /tmp/leadintel-universal-monitoring/
+            /tmp/leadintel-monitoring-categories/
