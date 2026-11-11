@@ -1,4 +1,4 @@
-import {websiteFreeResearchComplete,websiteContactRole} from './website-contact-evidence.js';
+import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity} from './website-contact-evidence.js';
 import {storageFailure} from './workspace-storage.js';
 import {contactSql as sql,contactParse as parse,contactAuthority as authority,contactError,contactActive} from './website-contact-store.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
@@ -41,6 +41,7 @@ function localStaffCards(page,input){
 function acquire(state,input){
  const pages=reads(state).filter(p=>p.markdown&&!p.archived),candidate=candidateFor(input),roster=[...(state.people||[])];
  const add=(p,origin)=>{
+  if(!websiteContactIdentity({...p,identityOrigin:origin}))return;
   const name=clean(p.publicName||p.name),title=clean(p.title),profile=D.normalizeLinkedInUrl(p.publicLinkedinUrl||p.linkedin_url);if(!D.hasFullBuyerName(name))return;
   const matches=roster.filter(old=>clean(old.name).toLocaleLowerCase()===name.toLocaleLowerCase()&&websiteContactRole(old.title)===websiteContactRole(title)&&(!profile||!D.normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)||D.normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url)===profile));
   const prior=matches.length===1?matches[0]:null;
@@ -91,6 +92,8 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  const lease=crypto.randomUUID(),start=clock(),claim=await sql(env,`UPDATE website_contact_jobs SET status='running',lease_token=?,lease_until=?,updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM website_contact_jobs WHERE status IN ('queued','running') AND lease_until<? ${jobId?'AND id=?':''} ORDER BY updated_at,id LIMIT 1) RETURNING *`,lease,start+Math.max(90000,windowMs+30000),now,...(jobId?[jobId]:[])).first();
  if(!claim)return [];
  const row=claim,input=parse(row.input_json),state=parse(row.state_json),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),windowMs);let status='queued',valid=true;
+ const excluded=(state.people||[]).filter(p=>!websiteContactIdentity(p));
+ if(excluded.length){state.excludedIdentities=[...(state.excludedIdentities||[]),...excluded.map(p=>({...p,exclusionReason:'Indexed publication or unsupported professional identity'}))].slice(-300);state.people=state.people.filter(websiteContactIdentity);}
  const guard=async()=>{
   if(controller.signal.aborted)throw Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'});
   if(budget&&!budget.hasRoom(15))throw Object.assign(Error('Shared processing budget reached'),{code:'TIME_BUDGET'});

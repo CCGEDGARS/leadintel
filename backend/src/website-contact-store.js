@@ -1,5 +1,6 @@
 import {cookieValue,sha256} from './security.js';
 import {normalizeDomain} from './crm.js';
+import {websiteContactIdentity} from './website-contact-evidence.js';
 
 export const contactSql=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 export const contactParse=(value,fallback={})=>{try{return JSON.parse(value)}catch{return fallback}};
@@ -22,8 +23,8 @@ export async function readWebsiteContacts(env,workspaceId,{id,companyId}={}){
 }
 export function publicWebsiteContacts(row){
  if(!row)return null;
- const input=contactParse(row.input_json),state=contactParse(row.state_json),tasks=state.tasks||[],people=state.people||[];
- return {id:row.id,companyId:row.company_id,company:input.company,domain:input.domain,status:row.status,revision:row.revision,phase:state.phase||'discovery',label:state.label||'Public contact research queued',description:state.description||'',descriptionSourceUrl:state.descriptionSourceUrl||'',people,channels:state.channels||[],routes:state.routes||[],sources:tasks.filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result).map(({markdown,links,...source})=>source),tools:state.tools||[],gaps:state.gaps||[],coverage:state.coverage||{},counts:{discovered:people.length,checked:people.filter(p=>p.freeResearchStatus==='complete').length,review:people.filter(p=>p.freeResearchStatus==='needs_review').length,pending:people.filter(p=>!p.freeResearchStatus).length,reads:tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,completed:tasks.filter(t=>t.status==='complete').length,planned:tasks.length},paidContacts:false,canResume:['incomplete','canceled'].includes(row.status),updatedAt:row.updated_at};
+ const input=contactParse(row.input_json),state=contactParse(row.state_json),tasks=state.tasks||[],people=(state.people||[]).filter(websiteContactIdentity),excluded=(state.people||[]).length-people.length;
+ return {id:row.id,companyId:row.company_id,company:input.company,domain:input.domain,status:row.status,revision:row.revision,phase:state.phase||'discovery',label:excluded?'Publication results were excluded from professional identities. Saved sources are retained; continue public research.':state.label||'Public contact research queued',description:state.description||'',descriptionSourceUrl:state.descriptionSourceUrl||'',people,channels:state.channels||[],routes:state.routes||[],sources:tasks.filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result).map(({markdown,links,...source})=>source),tools:state.tools||[],gaps:state.gaps||[],coverage:{...state.coverage,excludedIndexedResults:excluded+(state.excludedIdentities||[]).length},counts:{discovered:people.length,checked:people.filter(p=>p.freeResearchStatus==='complete').length,review:people.filter(p=>p.freeResearchStatus==='needs_review').length,pending:people.filter(p=>!p.freeResearchStatus).length,reads:tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,completed:tasks.filter(t=>t.status==='complete').length,planned:tasks.length},paidContacts:false,canResume:['incomplete','canceled'].includes(row.status),updatedAt:row.updated_at};
 }
 export async function websiteContactView(env,row){
  const view=publicWebsiteContacts(row);if(!view)return null;
