@@ -1,8 +1,7 @@
 import '../../customer/discovery-engine.js';
 const D=globalThis.LeadIntelDiscovery;
 export function websiteContactIdentity(person={}){
- const name=String(person.publicName||person.name||'').trim();
- if(!D.hasFullBuyerName(name)||[person.name,person.publicName].some(value=>/['’]s\s+(?:post|activity|article|profile|comment)\b|\bon\s+(?:linkedin|facebook|instagram)\s*$/i.test(String(value||'')))||D.hasContactEmploymentSubject(person.title))return false;
+ if(!D.isIndependentContactPerson(person))return false;
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
  try{const url=new URL(source);if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
