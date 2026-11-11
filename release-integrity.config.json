@@ -8123,6 +8123,61 @@
         ".monitoring-inbox",
         "@media(max-width:640px)"
       ]
+    },
+    {
+      "id": "monitoring-categories-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "monitoring-manage",
+        "monitoring-manager.css?v=20261111-categories-v1",
+        "monitoring-categories=20261111-v1"
+      ]
+    },
+    {
+      "id": "monitoring-categories-manager",
+      "type": "text",
+      "url": "/customer/monitoring-manager.js",
+      "status": 200,
+      "contains": [
+        "Add category\u2026",
+        "Test on a page",
+        "Save paused draft",
+        "/previews",
+        "monitoring-manager-title"
+      ]
+    },
+    {
+      "id": "monitoring-categories-origins",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.js",
+      "status": 200,
+      "contains": [
+        "data-mi-monitor",
+        "data-mi-category",
+        "Manage monitors"
+      ]
+    },
+    {
+      "id": "monitoring-categories-responsive",
+      "type": "text",
+      "url": "/customer/monitoring-manager.css",
+      "status": 200,
+      "contains": [
+        ".monitoring-manager",
+        "@media(max-width:600px)"
+      ]
+    },
+    {
+      "id": "monitoring-categories-model",
+      "type": "text",
+      "url": "/customer/monitoring-model.js",
+      "status": 200,
+      "contains": [
+        "categoryId",
+        "categoryDefinitionHash"
+      ]
     }
   ],
   "retry": {
