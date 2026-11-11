@@ -67,11 +67,19 @@
       "research_storage_version": "20261101-v1",
       "research_expanded_limit_bytes": 33554432,
       "copilot_research_version": "public-research-20261110-v1",
+      "website_contact_research_version": "20261111-independent-v1",
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
       "website_monitoring_version": "20261110-source-rotation-v1"
     }
   },
   "smokeChecks": [
+    {
+      "id": "independent-website-contacts",
+      "type": "text",
+      "url": "/customer/website-contact-ui.js",
+      "status": 200,
+      "contains": ["Independent website research", "Approve paid email", "Approve paid phone", "Continue public research", "company_id="]
+    },
     {
       "id": "opportunity-research-auto-activation",
       "type": "text",

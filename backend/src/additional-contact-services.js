@@ -77,7 +77,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   const checkCancelled=()=>{if(deps.signal?.aborted)throw fail('Contact research was cancelled. No further provider lookup was started.',499,'ADDITIONAL_CONTACT_CANCELLED');};
   const parentGuard=async()=>{checkCancelled();await deps.guard?.();checkCancelled();};
   parentGuard.writeAuthority=context.writeAuthority||deps.guard?.writeAuthority;
-  context={...context,guard:parentGuard,writeAuthority:parentGuard.writeAuthority};
+  context={...context,guard:parentGuard,writeAuthority:parentGuard.writeAuthority,...(deps.researchScope?{contactResearchScope:deps.researchScope}: {})};
   checkCancelled();
   if(!['owner','researcher','sales'].includes(context.role))throw fail('Workspace role is not permitted',403);
   const providerName=input.provider||'apollo';
@@ -88,11 +88,11 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   const policy=await readAdditionalContactPolicy(env,context.workspaceId);
   if(providerName==='treg'&&(policy.provider!=='treg'||includeEmail&&!policy.enabled||includePhone&&!policy.phoneEnabled||!includeEmail&&!includePhone))throw fail('The requested paid email or phone search is off. Activate it in Setup.',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
   if(input.automatic===true?(providerName!=='treg'&&(!policy.enabled||policy.provider!==providerName)):input.approved!==true)throw fail('Paid contact research requires explicit approval',403,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');
-  const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=fromSnapshot(detail);
+  const detail=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),candidate=deps.researchScope?await deps.researchScope.candidate(detail):fromSnapshot(detail);
   const selectedId=String(input.person_id??'').trim(),identities=selectedId?candidate.people.filter(p=>String(p.id)===selectedId):[];
   if(identities.length!==1)throw fail('The saved buyer needs one unique nonempty identity. Refresh the company research before contact lookup.',409,'ADDITIONAL_CONTACT_IDENTITY_REQUIRED');
   const person=identities[0];
-  const readiness=P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
+  const readiness=deps.researchScope?await deps.researchScope.readiness(candidate,person):P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
   const confirmationLevel=await loadConfirmationLevel(env,context.workspaceId);
   let existing=detail.contacts?.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()).find(c=>C.accepted(c,candidate.domain,confirmationLevel));
   const canonicalTitle=value=>{const title=String(value||'').trim().toLowerCase(),name=String(person.publicName||person.name).trim().toLowerCase();return title.startsWith(name)?title.slice(name.length).replace(/^[\s—–:|-]+/,'').trim():title;};
@@ -155,10 +155,10 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   let providerStarted=false;
   const guard=async({phase}={})=>{
     await parentGuard();
-    const fresh=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),active=fromSnapshot(fresh);
+    const fresh=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),active=deps.researchScope?await deps.researchScope.candidate(fresh):fromSnapshot(fresh);
     const matching=active.people.filter(p=>String(p.id)===String(person.id)),selected=matching.length===1&&identityInput(active,matching[0])===originalIdentity?matching[0]:null;
     if(['suppressed','archived'].includes(fresh.company.lifecycle_status)||active.domain!==candidate.domain||active.company!==candidate.company||!selected)throw fail('Workspace company or buyer changed; reload the saved research.');
-    const currentReadiness=P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName});if(!currentReadiness.eligible)throw fail(currentReadiness.reason,409,currentReadiness.code);
+    const currentReadiness=deps.researchScope?await deps.researchScope.readiness(active,selected):P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName});if(!currentReadiness.eligible)throw fail(currentReadiness.reason,409,currentReadiness.code);
     if(input.automatic===true){const currentPolicy=await readAdditionalContactPolicy(env,context.workspaceId),limit=Math.min(currentPolicy.automaticBuyerLimit,P.automaticLimit(input.automatic_buyer_limit??policy.automaticBuyerLimit));if(!P.targets(active,{provider:providerName,automaticBuyerLimit:limit}).some(p=>String(p.id)===String(person.id)))throw fail('Automatic buyer selection changed. Review the saved research before continuing.',409,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');}
     if(input.contact_id&&!fresh.contacts?.some(canonicalMatch))throw fail('The saved contact changed; reload before phone research.');
     if(providerName!=='treg'&&input.automatic===true){
@@ -179,7 +179,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   guard.writeAuthority=parentGuard.writeAuthority?()=>{
     const prior=parentGuard.writeAuthority(),predicates=[prior.sql],values=[...prior.args];
     predicates.push("EXISTS(SELECT 1 FROM crm_companies WHERE id=? AND workspace_id=? AND normalized_domain=? AND company_name=? AND lifecycle_status NOT IN ('suppressed','archived'))");values.push(companyId,context.workspaceId,candidate.domain,candidate.company);
-    predicates.push("EXISTS(SELECT 1 FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p WHERE i.company_id=? AND i.workspace_id=? AND (SELECT COUNT(*) FROM json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p2 WHERE CAST(json_extract(p2.value,'$.id') AS TEXT)=?)=1 AND CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=?)");values.push(companyId,context.workspaceId,String(person.id),String(person.id),person.publicName||person.name||'',person.title||'',typeof person.organization==='object'?JSON.stringify(person.organization):person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'');
+    if(!deps.researchScope){predicates.push("EXISTS(SELECT 1 FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p WHERE i.company_id=? AND i.workspace_id=? AND (SELECT COUNT(*) FROM json_each(i.research_snapshot_json,'$.buyerResearch.buyers') p2 WHERE CAST(json_extract(p2.value,'$.id') AS TEXT)=?)=1 AND CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=?)");values.push(companyId,context.workspaceId,String(person.id),String(person.id),person.publicName||person.name||'',person.title||'',typeof person.organization==='object'?JSON.stringify(person.organization):person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'');}
     if(providerName==='treg'||input.automatic===true){predicates.push('EXISTS(SELECT 1 FROM additional_contact_policies WHERE workspace_id=? AND provider=? AND (?=0 OR enabled=1) AND (?=0 OR phone_enabled=1))');values.push(context.workspaceId,providerName,Number(providerName!=='treg'||includeEmail),Number(providerName==='treg'&&includePhone));}
     if(providerName==='hunter'){predicates.push("EXISTS(SELECT 1 FROM workspace_service_integrations WHERE workspace_id=? AND provider='hunter' AND json_extract(metadata_json,'$.additional_verification_enabled')=1)");values.push(context.workspaceId);}
     return {sql:predicates.map(s=>'('+s+')').join(' AND '),args:values};
@@ -224,7 +224,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
       const result=await (deps.findHunter||findHunterWorkEmail)(env,context,candidate,person,companyId,{guard,onDispatch});
       await env.DB.prepare('UPDATE additional_contact_attempts SET status=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND company_id=? AND person_id=? AND month=? AND provider=?').bind(result.contact?'verified':'not_found',JSON.stringify({...result,lookup_identity:lookupIdentity,provider_started:providerStarted||Boolean(resuming),automatic:input.automatic===true}),...args).run();return result;
     }
-    const resolved=await (deps.resolvePerson||((p)=>resolvePerson(env,candidate,p)))(person);
+    const resolved=await (deps.resolvePerson||((p)=>deps.researchScope?.resolvePerson?deps.researchScope.resolvePerson(env,p):resolvePerson(env,candidate,p)))(person);
     const request=new Request('https://leadintel.internal/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:resolved.id,name:person.publicName||person.name,title:person.title,allow_personal_email:false,phone_lookup:false}),...(deps.signal?{signal:deps.signal}:{})});
     await guard();providerStarted=true;
     const response=await (deps.enrich||enrichCrmContact)(request,env,{}, {context,guard},companyId),result=await response.json();

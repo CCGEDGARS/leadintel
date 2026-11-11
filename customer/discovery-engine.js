@@ -2833,7 +2833,10 @@
         officialClaims.push({...row,title:name+' | '+role+' | '+companyText,description:name+'\n'+role});
       }
     }
-    for(const [index,row] of (profile.collectAllCompanyContacts?officialClaims:[...officialClaims,...rows]).entries()){
+    // Independent website research may retain indexed professional identities
+    // with explicit employer evidence. Existing company-staff acquisition
+    // keeps its first-party-only scope; recipient/paid gates remain separate.
+    for(const [index,row] of (profile.collectAllCompanyContacts&&!profile.includeIndexedCompanyContacts?officialClaims:[...officialClaims,...rows]).entries()){
       const rawUrl=normalizeUrl(row.url||row.metadata?.sourceURL),linkedIn=normalizeLinkedInUrl(rawUrl),title=clean(row.title);
       const parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u),description=clean(row.description||row.markdown||row.content,3000),name=clean(parts[0]).replace(/\s+(?:Email(?:\s*&\s*Phone Number)?|Phone Number|Contact (?:Info|Information|Details))(?:\s*\.{3})?$/iu,'').trim();
       const diagnostic={index,source:['firecrawl','grounded'].includes(row.buyerSource)?row.buyerSource:'public',url:rawUrl,title,parsedName:name,parsedTitle:'',parsedCompany:'',parsing:'pending',companyVerification:'pending',roleMatching:'pending',accepted:false,rejectionReason:''};diagnostics.push(diagnostic);
@@ -2864,7 +2867,7 @@
       if(formerPattern.test(parts.slice(1).join(' | '))||(!companyPattern.test(parts.slice(1).join(' | '))&&formerPattern.test(description))){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       let role=clean(parts.find(part=>part!==name&&!supportedEmployer(part)&&!/^LinkedIn$/i.test(part))||'');
       if(titleEmploymentPart)role=clean(titleEmploymentPart.replace(new RegExp('(?:'+employmentLead+'|\\s+)'+evidencedEmployer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','iu'),''));
-      if(employment?.[1])role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
+      if(employment?.[1]&&!(profile.includeIndexedCompanyContacts&&role&&(explicitCompany||titleEmploymentPart)))role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
       if(malformedBuyerRole(role)){reject('roleMatching','Parsed role contains website navigation or markup');continue;}

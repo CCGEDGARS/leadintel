@@ -40,11 +40,13 @@ function buyerContactData(value,person,domain){
  return value?.version===1&&value.domain===domain&&String(value.personId)===String(person.id)&&(!value.identityTitle||nameKey(value.identityTitle)===nameKey(person.title))&&(!value.identityOrganization||nameKey(value.identityOrganization)===nameKey(person.organization))&&(!value.identityName||nameKey(value.identityName)===nameKey(person.publicName||person.name))&&(!value.identityLinkedinUrl||!(person.publicLinkedinUrl||person.linkedin_url)||profile(value.identityLinkedinUrl)===profile(person.publicLinkedinUrl||person.linkedin_url))?value:null;
 }
 async function currentBuyerData(env,context,person,companyId,domain){
+ if(context.contactResearchScope)return context.contactResearchScope.currentData(person);
  const row=await env.DB.prepare('SELECT research_snapshot_json FROM crm_intelligence WHERE company_id=? AND workspace_id=?').bind(companyId,context.workspaceId).first();
  const saved=(JSON.parse(row?.research_snapshot_json||'{}').buyerResearch?.buyers||[]).find(buyer=>String(buyer.id)===String(person.id));
  return {saved,data:buyerContactData(saved?.contactData,person,domain)};
 }
 async function saveBuyerData(env,context,candidate,person,companyId,attemptKey,data,{guard,includeEmail,includePhone}){
+ if(context.contactResearchScope)return context.contactResearchScope.saveData(data,{person,guard,includeEmail,includePhone,attemptKey,writeAuthority:context.writeAuthority});
  const expectedProfile=person.publicLinkedinUrl||person.linkedin_url||'',selected="SELECT e.key FROM json_each(research_snapshot_json,'$.buyerResearch.buyers') e WHERE CAST(json_extract(e.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicName'),''),json_extract(e.value,'$.name'))=? AND json_extract(e.value,'$.title')=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicLinkedinUrl'),''),json_extract(e.value,'$.linkedin_url'),'')=? LIMIT 1";
  const selectedArgs=[String(person.id),person.publicName||person.name,person.title,expectedProfile];
  for(let retry=0;retry<5;retry++){
@@ -205,8 +207,9 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
    if(!contact){const saved=await upsertCrmContacts(env.DB,context,companyId,[{external_person_id:person.id,name,title:person.title,linkedin_url:expectedProfile,source:'treg'}]);contact=saved[0];}
    // Read the selected channel inside the CRM write. A newer sibling snapshot
    // must not be replaced by this worker's earlier provider response.
-   const selectedPhone="SELECT json_extract(e.value,'$.contactData.phone.number') FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') e WHERE i.company_id=? AND i.workspace_id=? AND CAST(json_extract(e.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicName'),''),json_extract(e.value,'$.name'))=? AND json_extract(e.value,'$.title')=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicLinkedinUrl'),''),json_extract(e.value,'$.linkedin_url'),'')=? LIMIT 1";
-   const selectedArgs=[companyId,context.workspaceId,String(person.id),person.publicName||person.name,person.title,expectedProfile||''];
+   const defaultSelectedPhone="SELECT json_extract(e.value,'$.contactData.phone.number') FROM crm_intelligence i,json_each(i.research_snapshot_json,'$.buyerResearch.buyers') e WHERE i.company_id=? AND i.workspace_id=? AND CAST(json_extract(e.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicName'),''),json_extract(e.value,'$.name'))=? AND json_extract(e.value,'$.title')=? AND COALESCE(NULLIF(json_extract(e.value,'$.publicLinkedinUrl'),''),json_extract(e.value,'$.linkedin_url'),'')=? LIMIT 1";
+   const selectedScope=context.contactResearchScope?.phoneSelection(person),selectedPhone=selectedScope?.sql||defaultSelectedPhone;
+   const selectedArgs=selectedScope?.args||[companyId,context.workspaceId,String(person.id),person.publicName||person.name,person.title,expectedProfile||''];
    await guard();
    await writeCrmRecord(env.DB,context,"UPDATE crm_contacts SET phone_number=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_number ELSE COALESCE(("+selectedPhone+"),phone_number) END,phone_status=CASE WHEN LOWER(COALESCE(phone_status,''))='verified' THEN phone_status WHEN ("+selectedPhone+") IS NOT NULL THEN 'provider_listed' ELSE phone_status END,updated_at=CASE WHEN updated_at>? THEN updated_at ELSE ? END WHERE id=? AND workspace_id=? AND company_id=?",[...selectedArgs,...selectedArgs,data.phone.checkedAt||checkedAt,data.phone.checkedAt||checkedAt,contact.id,context.workspaceId,companyId]);
   }
