@@ -82,7 +82,7 @@ async function runWorkspaceMonitoring(env,row,triggerType='scheduled',request,du
   mandatorySources=mandatorySources.filter(source=>source.sourceType!=='tenders'||(config.sourceTypes.includes('tenders')&&signals.some(isTenderSignal)));
   const previous=await env.DB.prepare("SELECT snapshot_json FROM market_monitoring_runs WHERE workspace_id=? AND monitor_id=? AND status IN ('completed','partial') ORDER BY started_at DESC,rowid DESC LIMIT 1").bind(workspaceId,ms.id).first();
   const snapshot=parse(previous?.snapshot_json,{}),cursor=snapshot.config_revision===cursorRevision?snapshot.next_query_cursor:{};
-  const universal=ms.id!=='legacy'||config.workflow.purpose!=='signals';
+  const universal=ms.id!=='legacy'||Boolean(config.workflow.categoryId)||config.workflow.purpose!=='signals';
   const plan=universal?Monitoring.buildPlan(payload,config,cursor):buildMonitoringRunPlan(payload,config,buildMandatorySourceQueries(mandatorySources,signals,profile),cursor);queries=plan.queries;
   await env.DB.prepare('UPDATE market_monitoring_runs SET query_count=?,snapshot_json=? WHERE id=?').bind(queries.length,JSON.stringify({markets:profile.targetMarkets||'',source_types:config.sourceTypes,signal_ids:config.signalIds,config_revision:cursorRevision,strategy_signature:row.strategy_signature,next_query_cursor:plan.nextCursor,queried_websites:queries.filter(query=>query.customSource).map(query=>query.customSource),mandatory_sources:mandatorySources.map(source=>({id:source.id,host:source.host,signal_ids:source.triggerIds}))}),runId).run();
   if(!queries.length)throw failure('no_active_monitoring_queries');
