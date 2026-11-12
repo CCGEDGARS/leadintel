@@ -2,6 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {mountWorkflowDashboard}=require('../conversation-workflow-ui.js');
 async function settled(host){for(let i=0;i<200;i++){await new Promise(r=>setTimeout(r,5));if(!host.querySelector('[data-wf-refresh]').disabled)return;}throw Error('Workflow UI did not settle');}
 test('rendered preset approval → real authenticated API → apply → takeover → resume → delete persists exact approved scripts',async t=>{
+ // Scheduling and the read model must share the scenario's clock. Otherwise
+ // these approved October actions expire as the test runner's real date moves.
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-10-23T08:00:00Z')});
  const {fixture,fetchThread}=await import('../../backend/test/conversation-fixture.mjs'),C=await import('../../backend/src/conversations.js'),{sha256}=await import('../../backend/src/security.js');
  const env=fixture();t.after(()=>env.DB.raw.close());env.DB.raw.exec(fs.readFileSync(require('node:path').join(__dirname,'../../backend/migrations/0063_conversation_workflows.sql'),'utf8'));
  await env.DB.prepare("INSERT INTO sessions VALUES(?,'u1',datetime('now','+1 day'))").bind(await sha256('local-fixture-session')).run();
