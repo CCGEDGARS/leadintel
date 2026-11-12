@@ -1,4 +1,4 @@
-import {websiteFreeResearchComplete,websiteContactRole} from './website-contact-evidence.js';
+import {websiteFreeResearchComplete,websiteContactRole,websiteIdentitySupport,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
 import {lookupAdditionalEmail} from './additional-contact-services.js';
 import {mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {withWorkspaceServiceCredentials,searchWorkspaceApolloPeople} from './service-integrations.js';
@@ -27,7 +27,7 @@ export async function websitePaidScope(env,context,body){
   const {selected:server}=await current(),candidate={company:input.company,domain:input.domain,people:[server]};
   const fresh=Date.now()-Date.parse(server.freeCheckedAt||'');
   const checks=websiteFreeResearchComplete(candidate,server);
-  const supported=server.identityOrigin==='official'&&D.hasFullBuyerName(server.publicName||server.name)&&Boolean(server.title)&&D.canonicalDomain(server.publicNameUrl)===input.domain;
+  const supported=websiteIdentitySupport(candidate,server).eligible;
   const eligible=identity(selected)===original&&server.freeResearchStatus==='complete'&&supported&&checks&&fresh>=0&&fresh<30*86400000;
   return {eligible,reason:'Complete current public identity and mandatory free contact checks before paid research.',code:'WEBSITE_CONTACT_FREE_RESEARCH_REQUIRED'};
  };
@@ -35,7 +35,7 @@ export async function websitePaidScope(env,context,body){
  const resolvePerson=async(runtime,selected)=>{
   const {saved}=await current(),candidate={company:input.company,domain:input.domain},name=String(selected.publicName||selected.name).trim().toLowerCase(),profile=D.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url);
 
-  const matches=raw=>[...new Map(D.traceIdentityBuyers({people:raw.filter(p=>String(p.id||'').trim())},candidate,{collectAllCompanyContacts:true}).people.filter(p=>String(p.publicName||p.name).trim().toLowerCase()===name&&(profile?D.normalizeLinkedInUrl(p.linkedin_url)===profile:websiteContactRole(p.title)===websiteContactRole(selected.title))).map(p=>[String(p.id),p])).values()];
+  const matches=raw=>[...new Map(D.traceIdentityBuyers({people:raw.filter(p=>String(p.id||'').trim())},candidate,{collectAllCompanyContacts:true}).people.filter(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(name)&&(profile?websiteProfileKey(p.linkedin_url)===websiteProfileKey(profile):websiteContactRole(p.title)===websiteContactRole(selected.title))).map(p=>[String(p.id),p])).values()];
   let found=matches(saved.apolloPeople||[]);
   if(found.length!==1){const result=await searchWorkspaceApolloPeople(runtime,context.workspaceId,{domain:input.domain,person_titles:[selected.title]},{userId:context.userId,guard});await guard();found=matches(result.people||[]);}
   if(found.length!==1)throw contactError('Apollo did not supply one exact current company identity. Public results remain saved.',409,'WEBSITE_CONTACT_APOLLO_IDENTITY_REQUIRED');

@@ -33,3 +33,14 @@ test('opening active research wakes saved work without restarting a paused run',
   await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Finance Group',website:'https://finance.example/'}]);assert.deepEqual(posts,[]);assert.match(w.document.body.textContent,/Time limit reached · results saved/);assert.match(w.document.body.textContent,/five-minute/);
  }finally{w.LeadIntelWebsiteContacts.close();w.close();}
 });
+
+test('saved identity review and explicit identity refresh are separate from paid lookup',async()=>{
+ const w=new JSDOM('<div id="website-scanning-workspace"></div>',{url:'https://app.fixture.test/customer/',runScripts:'outside-only'}).window,posts=[];
+ w.LeadIntelWebsiteScanning=require('../website-scanning.js');w.LeadIntelServerBridge={workspace:{id:'w'},session:{authenticated:true,user:{id:'owner'}}};
+ const person={id:'p',name:'Arija Berzina',title:'CFO',identityOrigin:'public_listing',freeResearchStatus:'complete',identitySupport:{eligible:true,kind:'professional_profile'}};
+ const job={id:'j',companyId:'c',company:'Finance Group',domain:'finance.example',status:'incomplete',revision:9,identityReviewVersion:0,phase:'contacts',people:[person],channels:[],routes:[],sources:[],gaps:[],coverage:{},counts:{discovered:1,checked:1,pending:0,reads:1}};
+ w.fetch=async(_url,options)=>{if(options.method==='POST'){const body=JSON.parse(options.body);posts.push(body);if(body.action==='review-identities'){job.identityReviewVersion=1;job.revision++;}}return {ok:true,json:async()=>({job})};};w.eval(fs.readFileSync(require.resolve('../website-contact-ui.js'),'utf8'));
+ try{await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Finance Group',website:'https://finance.example/'}]);assert.deepEqual(posts,[{action:'review-identities',jobId:'j',revision:9}]);assert.equal(w.document.querySelector('[data-contact-action=paid-email]').disabled,false);assert.match(w.document.body.textContent,/Matched professional profile/);
+  w.document.querySelector('[data-contact-action=refresh-identities]').click();await tick();assert.deepEqual(posts[1],{action:'resume',jobId:'j',revision:10,refreshIdentities:true});assert.ok(posts.every(p=>p.action!=='paid'));
+ }finally{w.LeadIntelWebsiteContacts.close();w.close();}
+});
