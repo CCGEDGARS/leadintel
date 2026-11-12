@@ -41,3 +41,8 @@ test('prior manual or provider confirmation does not bypass the new public doubl
  const p={...person(),identitySource:'apollo',linkedin_url:row.url,linkedinConfirmedUrl:row.url,linkedinConfirmationMethod:'manual',publicLinkedinUrl:row.url,contactData:{phone:{number:'+37120000001'}}};
  const review=await reviewWebsiteLinkedIn(candidate,p,{search:async()=>[row]});assert.equal(review.matchStatus,'double_checked');assert.equal(p.contactData.phone.number,'+37120000001');assert.equal(p.linkedinConfirmedUrl,row.url);
 });
+
+test('a fresh LinkedIn conflict blocks older official or provider identity support',async()=>{
+ const {websiteIdentitySupport}=await import('../src/website-contact-evidence.js'),p={...person(),publicLinkedinUrl:row.url,linkedinConfirmedUrl:row.url,linkedinConfirmationMethod:'manual',identitySource:'apollo'};
+ p.linkedinReview=await reviewWebsiteLinkedIn(candidate,p,{search:async()=>[{...row,description:'Current employer: Other Group. Previously Finance Group.'}]});assert.equal(p.linkedinReview.matchStatus,'conflict');assert.equal(websiteIdentitySupport(candidate,p).eligible,false);
+});
