@@ -1,4 +1,5 @@
-import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
+import {websiteSourceChunks as sourceChunks,websiteStaffCards as localStaffCards} from './website-contact-staff.js';
+import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInQueries,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
 import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
 import {reconcileWebsiteContactIdentities} from './website-contact-identity.js';
 import {storageFailure} from './workspace-storage.js';
@@ -21,25 +22,7 @@ const contactPage=url=>/contact|kontakt|team|management|leadership|about|people|
 const companyDescription=page=>page.markdown.split(/\n/).filter(line=>!/^\s*#{1,6}\s/.test(line)).map(line=>clean(line.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[*_]/g,''))).find(line=>line.length>=30&&line.split(/\s+/).length>=5&&!/cookie|privacy|copyright|all rights reserved|^©|^read more|^click here|^learn more/i.test(line))?.slice(0,320)||'';
 const reads=state=>(state.tasks||[]).filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result);
 const candidateFor=(input,people=[])=>({company:input.company,domain:input.domain,website:input.website,people});
-function sourceChunks(page){
- const blocks=String(page.markdown||'').split(/\n(?=#{2,6}\s)/);if(blocks.length<=30)return [page];
- const header=blocks.shift(),chunks=[];for(let i=0;i<blocks.length;i+=30)chunks.push({...page,markdown:header+'\n'+blocks.slice(i,i+30).join('\n')});return chunks;
-}
-function localStaffCards(page,input){
- const found=[],role=/direktør|direktör|koncernchef|bestyrels|afdelingschef|vadītāj|priekšsēdētāj|valdes locekl/i;
- // Neutral website research also accepts local-language staff cards. Require
- // a named company-domain email or an explicit official leadership/team page;
- // a name mentioned on a homepage alone does not establish employment.
- const staffPage=/ledelse|medarbejd|bestyrelse|ledning|management|leadership|team|vadiba|komanda/i.test(page.url)||/^#{1,4}\s*(?:ledelse|medarbejdere|bestyrelse|ledning|management|leadership|team|vadība|komanda)\s*$/imu.test(page.markdown);
- for(const match of page.markdown.matchAll(/^#{2,5}\s+([^\n]+)\n+([^\n]{3,120})/gm)){
-  const name=clean(match[1]),title=clean(match[2]);if(!D.hasFullBuyerName(name)||!role.test(title)||/contact|kontakt|privacy|company|management|leadership|team|group/i.test(name)||/former|previous|retired|tidigare/i.test(title))continue;
-  const person={name,publicName:name,title,organization:input.company,publicNameUrl:page.url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff'};
-  const named=D.sourcedBuyerEmails(person,input.domain,[page],input.company).some(row=>row.email.endsWith('@'+input.domain));
-  if(!named&&!staffPage)continue;
-  found.push(D.matchPublicBuyerDetails([person],[page],input.domain,input.company)[0]);
- }
- return found;
-}
+
 function acquire(state,input){
  const pages=reads(state).filter(p=>p.markdown&&!p.archived),candidate=candidateFor(input),roster=[...(state.people||[])];
  const add=(p,origin)=>{
@@ -64,7 +47,8 @@ function acquire(state,input){
   for(const c of inventory.channels||[])channels.set(c.value,c);for(const r of inventory.routes||[])routes.set(r.kind+'|'+r.value,r);
  }
  for(const p of state.apolloPeople||[])for(const person of D.traceIdentityBuyers({people:[p]},candidate,{companyDomain:input.domain,collectAllCompanyContacts:true}).people)add(person,'apollo');
- for(const task of state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived))for(const person of D.tracePublicBuyers(task.result,input.company,{companyDomain:input.domain,collectAllCompanyContacts:true,includeIndexedCompanyContacts:true}).people)add(person,'public_listing');
+ const namedProfileQueries=new Set(roster.flatMap(p=>[...websiteLinkedInQueries(input,p),...(p.linkedinReview?.queries||[]).map(q=>q.query)]));
+ for(const task of state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived&&!namedProfileQueries.has(t.value)))for(const person of D.tracePublicBuyers(task.result,input.company,{companyDomain:input.domain,collectAllCompanyContacts:true,includeIndexedCompanyContacts:true}).people)add(person,'public_listing');
  const nameCounts=new Map();for(const person of roster)nameCounts.set(person.name.toLocaleLowerCase(),(nameCounts.get(person.name.toLocaleLowerCase())||0)+1);
  for(const person of roster){person.identityConflict=nameCounts.get(person.name.toLocaleLowerCase())>1;if(person.identityConflict&&person.freeResearchStatus==='complete')delete person.freeResearchStatus;}
  const all=roster.sort((a,b)=>leadership(a.title)-leadership(b.title)||a.name.localeCompare(b.name));

@@ -8232,6 +8232,13 @@
       "status": 200,
       "contains": ["border:2px solid #377563", ":focus-visible", "prefers-reduced-motion"]
     }
+    ,{
+      "id": "website-contact-roster-evidence",
+      "type": "text",
+      "url": "/customer/website-contact-ui.js",
+      "status": 200,
+      "contains": ["Published role wording", "Role source", "identityReviewVersion<2"]
+    }
   ],
   "retry": {
     "attempts": 12,
