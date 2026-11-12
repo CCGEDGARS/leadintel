@@ -8191,6 +8191,19 @@
         "categoryId",
         "categoryDefinitionHash"
       ]
+    },
+    {
+      "id": "website-contact-progress-recovery",
+      "type": "text",
+      "url": "/customer/website-contact-ui.js",
+      "status": 200,
+      "contains": [
+        "Research checks finished",
+        "need review",
+        "Paid lookup locked:",
+        "Affected source",
+        "does not confirm email or phone ownership"
+      ]
     }
   ],
   "retry": {

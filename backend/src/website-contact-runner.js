@@ -106,19 +106,27 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   await guard();let saved=state.tasks.find(t=>t.kind===kind&&t.value===value);
   if(saved?.status==='complete'&&!saved.archived)return saved.result;
   if(saved?.attempts>=2)throw Object.assign(Error(saved.reason||'Source unavailable after two attempts'),{code:'SOURCE_UNAVAILABLE'});
+  // Finish a source attempt before the invocation expires. Otherwise a slow
+  // page is interrupted at every slice, refunds its attempt and blocks forever.
+  const remaining=windowMs-(clock()-start),reserve=Math.min(2000,windowMs*.2);
+  if(remaining<Math.min(5000,windowMs*.25))throw Object.assign(Error('Processing slice is ready to checkpoint'),{code:'TIME_BUDGET'});
   if(!saved){if(state.tasks.length>=(state.operationLimit||600))throw Object.assign(Error('This research batch reached its operation limit'),{code:'BATCH_LIMIT'});saved={kind,value,status:'pending',attempts:0};state.tasks.push(saved);}
   saved.attempts++;saved.status='running';delete saved.archived;
-  try{const result=await operation();await guard();saved.result=result;saved.status='complete';saved.checkedAt=new Date().toISOString();compact(state);const checkpoint=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(state),row.id,lease).run();if(!checkpoint.meta.changes){valid=false;throw contactError('Research authority changed before saving its source receipt.');}return result;}
+  const operationMs=Math.max(1,Math.min(30000,remaining-reserve)),operationController=new AbortController();let operationTimer;
+  const canceled=()=>operationController.abort(Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'}));controller.signal.addEventListener('abort',canceled,{once:true});
+  try{const expired=new Promise((_,reject)=>{operationTimer=setTimeout(()=>{const error=Object.assign(Error('Public source operation timed out; other saved checks can continue'),{code:'SOURCE_TIMEOUT'});operationController.abort(error);reject(error);},operationMs);});const result=await Promise.race([Promise.resolve().then(()=>operation(operationController.signal,operationMs)),expired]);if(operationController.signal.aborted)throw operationController.signal.reason;await guard();saved.result=result;saved.status='complete';saved.checkedAt=new Date().toISOString();compact(state);const checkpoint=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(state),row.id,lease).run();if(!checkpoint.meta.changes){valid=false;throw contactError('Research authority changed before saving its source receipt.');}return result;}
   catch(error){saved.status='failed';saved.reason=error.code==='TIME_BUDGET'?'Processing slice ended':clean(error.message).slice(0,180);if(error.code==='TIME_BUDGET'||controller.signal.aborted)saved.attempts--;throw error;}
+  finally{clearTimeout(operationTimer);controller.signal.removeEventListener('abort',canceled);operationController.abort();}
  }
- const search=async query=>task('search',query,async()=>{const raw=await searchSource(query),rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
- const read=async url=>task('read',S.safeUrl(url),async()=>{
-  const raw=await (services.read||((url)=>readPublicBuyerPage(env,row.workspace_id,url,{signal:controller.signal,totalTimeoutMs:18000})))(url,controller.signal),page=raw?.data||raw||{};
+ const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
+ const read=async url=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
+  const raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);if(signal.aborted)throw signal.reason;const page=raw?.data||raw||{};
   const actual=S.safeUrl(page.url||page.metadata?.sourceURL||url),text=String(page.markdown||page.text||page.content||'');
   if(raw?.success===false||page.error||page.metadata?.statusCode>=400||!actual||!text.trim()||!D.buyerSourceReadLocation(candidateFor(input),url,page,{move:true}))throw Error('Page unreadable or source attribution changed');
   for(const entry of raw.researchTrace||page.researchTrace||[])observe(entry);
   return {url:actual,title:clean(page.title||page.metadata?.title||text.match(/^#\s+([^\n]+)/m)?.[1]).slice(0,300),markdown:text.slice(0,60000),textTruncated:text.length>60000,sourceRead:true,evidenceKind:'page_extract',metadata:{sourceURL:actual,statusCode:200},extractedAt:new Date().toISOString(),links:(page.links||[]).map(l=>S.safeUrl(typeof l==='string'?l:l.href)).filter(Boolean).slice(0,160)};
  });
+ const apollo=(key,payload)=>task('apollo',key,signal=>(services.apollo||((payload,options)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,...options})))(payload,{signal}));
  const optional=async operation=>{try{return await operation();}catch(error){if(!valid||controller.signal.aborted||['TIME_BUDGET','BATCH_LIMIT'].includes(error.code))throw error;state.gaps=[...new Set([...(state.gaps||[]),clean(error.message).slice(0,180)])].slice(-30);return null;}};
  try{
   for(let stepInSlice=0;stepInSlice<8&&status==='queued';stepInSlice++){
@@ -131,9 +139,9 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
     const found=new Set(reads(state).map(p=>p.url)),planned=[...new Set([...(state.tasks.filter(t=>t.kind==='search'&&t.status==='complete').flatMap(t=>t.result.map(r=>r.url))),...reads(state).flatMap(p=>p.links||[])])].filter(url=>sameHost(url,input.domain)&&!found.has(url)&&!state.tasks.some(t=>t.kind==='read'&&t.value===url&&t.attempts>=2)).sort((a,b)=>Number(contactPage(b))-Number(contactPage(a)));
     if(planned.length&&reads(state).length<40){state.label='Read company contact and leadership sources';await optional(()=>read(planned[0]));}else{state.coverage.pendingSourceUrls=planned.slice(0,120);state.coverage.sourceLimitReached=planned.length>0;state.discoveryStep++;}
    }else if(step===8){
-    if(!state.apolloLeadershipDone){state.label='Apollo free leadership search · decision-makers first';const leaders=await optional(()=>task('apollo','leadership',()=>(services.apollo||((payload)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,signal:controller.signal})))({domain:input.domain,person_titles:['CEO','Chief Executive Officer','Managing Director','President','Founder','Director','Head']})));state.apolloPeople=[...(state.apolloPeople||[]),...(leaders?.people||[])].slice(0,110);state.apolloLeadershipDone=true;observe({provider:'apollo',operation:'leadership_identity_search',status:leaders?'succeeded':'unavailable',results:leaders?.people?.length||0,paidReveal:false});continue;}
+    if(!state.apolloLeadershipDone){state.label='Apollo free leadership search · decision-makers first';const leaders=await optional(()=>apollo('leadership',{domain:input.domain,person_titles:['CEO','Chief Executive Officer','Managing Director','President','Founder','Director','Head']}));state.apolloPeople=[...(state.apolloPeople||[]),...(leaders?.people||[])].slice(0,110);state.apolloLeadershipDone=true;observe({provider:'apollo',operation:'leadership_identity_search',status:leaders?'succeeded':'unavailable',results:leaders?.people?.length||0,paidReveal:false});continue;}
     const page=state.apolloPage||1;state.label='Apollo free identity search · no email or phone reveal';
-    const result=await optional(()=>task('apollo','company-page-'+page,()=> (services.apollo||((payload)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,signal:controller.signal})))({domain:input.domain,discovery_scope:'company',page})));
+    const result=await optional(()=>apollo('company-page-'+page,{domain:input.domain,discovery_scope:'company',page}));
     state.apolloPeople=[...(state.apolloPeople||[]),...(result?.people||[])].slice(0,110);observe({provider:'apollo',operation:'identity_search',status:result?'succeeded':'unavailable',results:result?.people?.length||0,paidReveal:false});
     if(result?.people?.length===25&&page<4)state.apolloPage=page+1;else{state.coverage.apolloLimitReached=result?.people?.length===25;state.discoveryStep++;}
    }else{
@@ -147,14 +155,17 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
    }
    if(state.identityVerifiedAt)acquire(state,input);
   }else if(state.phase==='contacts'){
-   const person=state.people.find(p=>!p.freeResearchStatus);
-   if(!person||state.people.filter(p=>p.freeResearchStatus).length>=state.batchLimit){status=!person&&!state.people.some(p=>p.freeResearchStatus==='needs_review')?'complete':'incomplete';state.label=person?'Public checks saved. Continue with the next 10 contacts':status==='complete'?'Public research complete for the discovered contacts':'Some public checks need review; completed evidence is saved';}
+   const pending=state.people.filter(p=>!p.freeResearchStatus),finished=state.people.length-pending.length,waiting=pending.slice(0,Math.max(0,state.batchLimit-finished)),last=state.people.findIndex(p=>p.id===state.contactCursor),person=waiting.find(p=>state.people.indexOf(p)>last)||waiting[0];
+   if(!pending.length||finished>=state.batchLimit){status=!pending.length&&!state.people.some(p=>p.freeResearchStatus==='needs_review')?'complete':'incomplete';state.label=pending.length?'Public checks saved. Continue with the next 10 contacts':status==='complete'?'Public research complete for the discovered contacts':'Some public checks need review; completed evidence is saved';}
    else{
+    // Persist rotation before source checkpoints. A person interrupted by the
+    // slice keeps their receipts while the next wake serves another person.
+    state.contactCursor=person.id;
     state.label='Check public email, phone and profiles · '+person.name;
     const candidate=candidateFor(input,[person]);let complete=false;
     if(services.checkPerson){complete=(await services.checkPerson(candidate,person,{search,read,guard,signal:controller.signal})).complete===true;}
     else{
-     const report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),()=>services.independent?services.independent(p):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal:controller.signal}))});
+     const report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
      Object.assign(person,candidate.people[0]);complete=websiteFreeResearchComplete(candidate,person);
      if(!complete&&(report.stopReason==='time_budget'||controller.signal.aborted))throw Object.assign(Error('Public contact checks continue in the next slice'),{code:'TIME_BUDGET'});
     }
