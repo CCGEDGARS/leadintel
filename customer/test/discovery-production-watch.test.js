@@ -26,7 +26,7 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, sessionStatus=401, privateSettingsStatus=401,storageStatus=401, premiumCss }) {
   return async url => {
     const parsed = new URL(String(url));
-    if(parsed.pathname==='/customer/website-contact-ui.js')return response({text:fs.readFileSync(path.join(root,'customer/website-contact-ui.js'),'utf8')});
+    if(['/customer/website-contact-ui.js','/customer/website-scanning.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/customer/monitoring-model.js','/customer/monitoring-inbox.js','/customer/monitoring-inbox.css','/customer/monitoring-manager.js','/customer/monitoring-manager.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/company-search-progress.js')return response({text:fs.readFileSync(path.join(root,'customer/company-search-progress.js'),'utf8')});
     if(['/customer/website-activation.js','/customer/company-materials.js','/customer/delivery-ui.js','/customer/delivery-engine.js','/customer/buyer-research-jobs.js','/customer/buyer-handoff-recovery.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
@@ -379,4 +379,10 @@ test('production proof rejects stale queued-review captions and missing review c
   const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'review-recovery',fetchImpl:productionFetch({customerHtml:shell.replace(stale==='entry'?'buyer-review=20261110-v1':'unchanged-marker',''),discoveryUi:stale==='runtime'?boundedDiscoveryRuntime.replace('Contact checks complete for','Old review counter'):boundedDiscoveryRuntime}),nonce:'stale-review-'+stale});
   assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(check=>check.id===(stale==='runtime'?'buyer-queued-review-coverage':'buyer-review-fresh-assets')).passed,false);
  }
+});
+
+test('production proof rejects missing contact button styles',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:shell,discoveryUi:boundedDiscoveryRuntime});
+ const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'contact-styles',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/website-scanning.css'?response({status:404,text:'missing'}):normal(url),nonce:'missing-contact-styles'});
+ assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(c=>c.id==='website-contact-visible-button-borders').passed,false);
 });

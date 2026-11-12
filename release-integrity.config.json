@@ -8219,6 +8219,19 @@
       "status": 200,
       "contains": ["Refresh identity checks", "Matched professional profile", "review-identities", "Profile match needs review"]
     }
+    ,{
+      "id": "website-linkedin-review-controls",
+      "type": "text",
+      "url": "/customer/website-contact-ui.js",
+      "status": 200,
+      "contains": ["Check LinkedIn", "LinkedIn match evidence", "matched in two public searches", "check-linkedin-person", "No matching profile found in checked sources"]
+    },{
+      "id": "website-contact-visible-button-borders",
+      "type": "text",
+      "url": "/customer/website-scanning.css",
+      "status": 200,
+      "contains": ["border:2px solid #377563", ":focus-visible", "prefers-reduced-motion"]
+    }
   ],
   "retry": {
     "attempts": 12,

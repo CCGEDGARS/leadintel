@@ -1,6 +1,6 @@
 import './website-scanning.js?v=20261111-contacts-v1';
 import './website-scanning-handoff.js?v=20261111-contacts-v1';
-import './website-contact-ui.js?v=20261112-v3-identity';
+import './website-contact-ui.js?v=20261112-v4-linkedin';
 (function(root){
 'use strict';
 if(!root.document||root.LeadIntelWebsiteScanUI)return;
@@ -26,7 +26,7 @@ function mount(){const step=$('step-2');if(!step)return;if(!$('website-scanning-
  const card=$('website-scanning-card'),ref=step.querySelector('[data-reference-intelligence-card]'),home=$('campaign-planning-host');if(ref&&ref.nextElementSibling!==card)ref.after(card);else if(!ref&&home&&card.nextElementSibling!==home)home.before(card);
  const monitoring=$('monitoring-panel');if(monitoring&&monitoring.parentElement!==$('website-scanning-monitor'))$('website-scanning-monitor').append(monitoring);
  root.LeadIntelIntelligenceSources?.mount?.();
- if(!d.querySelector('link[data-website-scanning-css]')){const link=d.createElement('link');link.rel='stylesheet';link.href='website-scanning.css?v=20261112-contacts-v1';link.dataset.websiteScanningCss='true';d.head.append(link);}render();
+ if(!d.querySelector('link[data-website-scanning-css]')){const link=d.createElement('link');link.rel='stylesheet';link.href='website-scanning.css?v=20261112-contacts-v2';link.dataset.websiteScanningCss='true';d.head.append(link);}render();
 }
 function linkDescription(row){return row.description&&S.safeUrl(row.descriptionSourceUrl)?'<a href="'+esc(row.descriptionSourceUrl)+'" target="_blank" rel="noopener noreferrer">Description source ↗</a>':'';}
 function close(){root.LeadIntelWebsiteContacts?.close();$('website-scanning-workspace').hidden=true;$('website-scanning-open').setAttribute('aria-expanded','false');$('website-scanning-open').focus();}
