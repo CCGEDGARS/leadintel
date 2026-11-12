@@ -1,3 +1,4 @@
+import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
 import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
 import {reconcileWebsiteContactIdentities} from './website-contact-identity.js';
 import {storageFailure} from './workspace-storage.js';
@@ -97,6 +98,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  const excluded=(state.people||[]).filter(p=>!websiteContactIdentity(p));
  if(excluded.length){state.excludedIdentities=[...(state.excludedIdentities||[]),...excluded.map(p=>({...p,exclusionReason:'Indexed publication or unsupported professional identity'}))].slice(-300);state.people=state.people.filter(websiteContactIdentity);}
  reconcileWebsiteContactIdentities(state,input);
+ if(!services.checkPerson&&state.linkedinReviewVersion!==WEBSITE_LINKEDIN_REVIEW_VERSION){for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(input,person))delete person.freeResearchStatus;state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;}
  const guard=async()=>{
   if(controller.signal.aborted)throw Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'});
   if(clock()>=row.deadline_at)throw Object.assign(Error('Research pass time limit reached; results are saved. Continue unfinished checks when needed.'),{code:'PASS_LIMIT'});
@@ -158,8 +160,10 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
     const candidate=candidateFor(input,[person]);let complete=false;
     if(services.checkPerson){complete=(await services.checkPerson(candidate,person,{search,read,guard,signal:controller.signal})).complete===true;}
     else{
-     const report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
-     Object.assign(person,candidate.people[0]);complete=websiteFreeResearchComplete(candidate,person);
+     if(!websiteLinkedInReviewCurrent(candidate,person)){person.linkedinReview=await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});if(person.contactResearch?.checks?.linkedin)person.contactResearch.checks.linkedin.profileMatchVersion=0;}
+     const linkedinQuery=D.buyerResearchQueryPlan(candidate,person).linkedin[0],profileRows=websiteLinkedInMatchRows(person,person.linkedinReview.queries.flatMap(q=>q.rows||[]),candidate);
+     const report=await D.runMandatoryBuyerResearch(candidate,{search:query=>query===linkedinQuery?Promise.resolve(profileRows):search(query),readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
+     Object.assign(person,candidate.people[0]);state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;complete=websiteFreeResearchComplete(candidate,person);
      if(!complete&&(report.stopReason==='time_budget'||controller.signal.aborted))throw Object.assign(Error('Public contact checks continue in the next slice'),{code:'TIME_BUDGET'});
     }
     if(person.identityOrigin!=='official'){const pages=reads(state).filter(p=>p.markdown),supported=[...D.discoverCompanyContacts(pages,candidate,[]),...pages.filter(p=>sameHost(p.url,input.domain)).flatMap(p=>localStaffCards(p,input))].find(p=>clean(p.name).toLowerCase()===clean(person.name).toLowerCase()&&websiteContactRole(p.title)===websiteContactRole(person.title));if(supported){person.identityOrigin='official';person.publicNameUrl=supported.publicNameUrl;}}
