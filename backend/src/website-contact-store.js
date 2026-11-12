@@ -1,6 +1,7 @@
 import {cookieValue,sha256} from './security.js';
 import {normalizeDomain} from './crm.js';
-import {websiteContactIdentity} from './website-contact-evidence.js';
+import {websiteContactIdentity,websiteIdentitySupport,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
+import {reconcileWebsiteContactIdentities,WEBSITE_IDENTITY_REVIEW_VERSION} from './website-contact-identity.js';
 
 export const contactSql=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 export const contactParse=(value,fallback={})=>{try{return JSON.parse(value)}catch{return fallback}};
@@ -25,14 +26,18 @@ export async function readWebsiteContacts(env,workspaceId,{id,companyId}={}){
 export function publicWebsiteContacts(row){
  if(!row)return null;
  const input=contactParse(row.input_json),state=contactParse(row.state_json),tasks=state.tasks||[],people=(state.people||[]).filter(websiteContactIdentity),excluded=(state.people||[]).length-people.length;
- return {id:row.id,companyId:row.company_id,company:input.company,domain:input.domain,status:row.status,revision:row.revision,phase:state.phase||'discovery',stopReason:state.stopReason||(row.status==='incomplete'&&/paused after 30 minutes/i.test(state.label||'')?'time_limit':''),performance:state.performance||{},passBudgetMs:state.passBudgetMs||30*60000,label:excluded?'Publication results were excluded from professional identities. Saved sources are retained; continue public research.':state.label||'Public contact research queued',description:state.description||'',descriptionSourceUrl:state.descriptionSourceUrl||'',people,channels:state.channels||[],routes:state.routes||[],sources:tasks.filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result).map(({markdown,links,...source})=>source),tools:state.tools||[],gaps:state.gaps||[],sourceIssues:tasks.filter(t=>t.status==='failed'&&t.attempts>0).slice(-50).map(t=>({kind:t.kind,value:t.value,reason:t.reason||'Source check incomplete',attempts:t.attempts||0})),coverage:{...state.coverage,excludedIndexedResults:excluded+(state.excludedIdentities||[]).length},counts:{discovered:people.length,checked:people.filter(p=>p.freeResearchStatus==='complete').length,review:people.filter(p=>p.freeResearchStatus==='needs_review').length,pending:people.filter(p=>!p.freeResearchStatus).length,reads:tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,completed:tasks.filter(t=>t.status==='complete').length,planned:tasks.length},paidContacts:false,canResume:['incomplete','canceled'].includes(row.status),updatedAt:row.updated_at};
+ return {id:row.id,companyId:row.company_id,company:input.company,domain:input.domain,status:row.status,revision:row.revision,phase:state.phase||'discovery',identityReviewVersion:state.identityReviewVersion||0,stopReason:state.stopReason||(row.status==='incomplete'&&/paused after 30 minutes/i.test(state.label||'')?'time_limit':''),performance:state.performance||{},passBudgetMs:state.passBudgetMs||30*60000,label:excluded?'Publication results were excluded from professional identities. Saved sources are retained; continue public research.':state.label||'Public contact research queued',description:state.description||'',descriptionSourceUrl:state.descriptionSourceUrl||'',people:people.map(p=>({...p,identitySupport:websiteIdentitySupport(input,p)})),channels:state.channels||[],routes:state.routes||[],sources:tasks.filter(t=>t.kind==='read'&&t.status==='complete').map(t=>t.result).map(({markdown,links,...source})=>source),tools:state.tools||[],gaps:state.gaps||[],sourceIssues:tasks.filter(t=>t.status==='failed'&&t.attempts>0).slice(-50).map(t=>({kind:t.kind,value:t.value,reason:t.reason||'Source check incomplete',attempts:t.attempts||0})),coverage:{...state.coverage,excludedIndexedResults:excluded+(state.excludedIdentities||[]).length},counts:{discovered:people.length,checked:people.filter(p=>p.freeResearchStatus==='complete').length,review:people.filter(p=>p.freeResearchStatus==='needs_review').length,pending:people.filter(p=>!p.freeResearchStatus).length,reads:tasks.filter(t=>t.kind==='read'&&t.status==='complete').length,completed:tasks.filter(t=>t.status==='complete').length,planned:tasks.length},paidContacts:false,canResume:['incomplete','canceled'].includes(row.status),updatedAt:row.updated_at};
 }
 export async function websiteContactView(env,row){
  const view=publicWebsiteContacts(row);if(!view)return null;
  const company=await contactSql(env,'SELECT company_name,normalized_domain,lifecycle_status FROM crm_companies WHERE workspace_id=? AND id=? AND deleted_at IS NULL',row.workspace_id,row.company_id).first();
  if(!company||company.company_name!==view.company||company.normalized_domain!==view.domain||['suppressed','archived'].includes(company.lifecycle_status)){view.researchBlocked=true;view.canResume=false;view.label='The company identity or CRM status changed. Review the company before continuing research.';}
  const {results=[]}=await contactSql(env,'SELECT external_person_id,name,title,linkedin_url,work_email,email_status,phone_number,phone_status,source,verification_provider,verified_at,public_email_url FROM crm_contacts WHERE workspace_id=? AND company_id=? AND archived_at IS NULL LIMIT 500',row.workspace_id,row.company_id).all();
- for(const person of view.people){const found=results.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name||'').trim().toLowerCase()===String(person.publicName||person.name||'').trim().toLowerCase()&&(!c.linkedin_url||!person.publicLinkedinUrl&&!person.linkedin_url||c.linkedin_url===(person.publicLinkedinUrl||person.linkedin_url)));if(found.length===1){person.savedContact=found[0];person.savedContactRoleDiffers=String(found[0].title||'').trim().toLowerCase()!==String(person.title||'').trim().toLowerCase();}}
+ for(const person of view.people){
+  const bound=c=>websiteNameKey(c.name)===websiteNameKey(person.publicName||person.name)&&(!c.linkedin_url||!person.publicLinkedinUrl&&!person.linkedin_url||websiteProfileKey(c.linkedin_url)===websiteProfileKey(person.publicLinkedinUrl||person.linkedin_url));
+  const primary=results.filter(c=>String(c.external_person_id)===String(person.id)&&bound(c)),aliases=new Set((person.identitySourceIds||[]).map(String)),found=primary.length?primary:results.filter(c=>aliases.has(String(c.external_person_id))&&bound(c));
+  if(found.length===1){person.savedContact=found[0];person.savedContactRoleDiffers=String(found[0].title||'').trim().toLowerCase()!==String(person.title||'').trim().toLowerCase();}
+ }
  return view;
 }
 export async function startWebsiteContacts(env,context,body){
@@ -62,9 +67,23 @@ export async function commandWebsiteContacts(env,context,body){
  // A wake only accelerates already-authorized work. It never extends a pass,
  // retries exhausted sources, changes authority or restarts a stopped job.
  if(body.action==='wake')return row;
+ if(body.action==='review-identities'&&(contactActive(row.status)||contactParse(row.state_json).identityReviewVersion===WEBSITE_IDENTITY_REVIEW_VERSION))return row;
  if(row.revision!==body.revision)throw contactError('Research progress changed. Refresh its saved results.');
  const state=contactParse(row.state_json);
- if(!['incomplete','canceled'].includes(row.status))return row;
+ if(body.action==='review-identities'){
+  reconcileWebsiteContactIdentities(state,contactParse(row.input_json));state.freeRevision=(state.freeRevision||1)+1;
+  const saved=await contactSql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status NOT IN ('queued','running') AND ${contactCompanyAuthority} AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?)`,JSON.stringify(state),row.id,context.workspaceId,row.revision,context.sessionHash,context.workspaceId,context.userId,context.role).run();
+  if(!saved.meta.changes){const latest=await readWebsiteContacts(env,context.workspaceId,{id:row.id});if(contactParse(latest?.state_json).identityReviewVersion===WEBSITE_IDENTITY_REVIEW_VERSION)return latest;throw contactError('Saved identity evidence or workspace authority changed.');}
+  return readWebsiteContacts(env,context.workspaceId,{id:row.id});
+ }
+ if(!['incomplete','canceled'].includes(row.status)&&!(row.status==='complete'&&body.refreshIdentities===true))return row;
+ if(body.refreshIdentities===true){
+  const input=contactParse(row.input_json),D=globalThis.LeadIntelDiscovery,queries=new Set();
+  for(const person of state.people||[]){for(const query of D.buyerResearchQueryPlan({company:input.company,domain:input.domain},person).linkedin)queries.add(query);if(person.contactResearch?.checks?.linkedin)person.contactResearch.checks.linkedin.profileMatchVersion=0;delete person.freeResearchStatus;}
+  const previous=(state.tasks||[]).filter(t=>t.kind==='search'&&queries.has(t.value)&&!t.archived);
+  state.identitySearchHistory=[...(state.identitySearchHistory||[]),...previous.map(t=>({query:t.value,checkedAt:t.checkedAt,result:t.result}))].slice(-30);
+  for(const task of previous){task.archived=true;task.attempts=0;}
+ }
  {state.operationLimit=(state.tasks||[]).length+600;state.batchLimit=Math.min(300,(state.people||[]).filter(p=>p.freeResearchStatus).length+10);state.freeRevision=(state.freeRevision||1)+1;state.passStartedAt=Date.now();state.passBudgetMs=WEBSITE_CONTACT_PASS_MS;delete state.stopReason;for(const task of state.tasks||[])if(task.status==='failed'){task.attempts=0;task.status='pending';}for(const person of state.people||[])if(person.freeResearchStatus==='needs_review')delete person.freeResearchStatus;state.label='Continuing unfinished public contact checks';}
  const result=await contactSql(env,`UPDATE website_contact_jobs SET status=?,state_json=?,requested_by=?,requested_role=?,session_hash=?,deadline_at=?,revision=revision+1,lease_token=NULL,lease_until=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM workspace_members m JOIN sessions s ON s.user_id=m.user_id WHERE m.workspace_id=? AND m.user_id=? AND m.role=? AND s.token_hash=? AND s.expires_at>datetime('now')) AND EXISTS(SELECT 1 FROM crm_companies c WHERE c.id=website_contact_jobs.company_id AND c.workspace_id=website_contact_jobs.workspace_id AND c.company_name=json_extract(input_json,'$.company') AND c.normalized_domain=json_extract(input_json,'$.domain') AND c.deleted_at IS NULL AND c.lifecycle_status NOT IN ('suppressed','archived'))`,'queued',JSON.stringify(state),context.userId,context.role,context.sessionHash,Date.now()+WEBSITE_CONTACT_PASS_MS,row.id,context.workspaceId,row.revision,context.workspaceId,context.userId,context.role,context.sessionHash).run();
  if(!result.meta.changes)throw contactError('The company or research authority changed.');

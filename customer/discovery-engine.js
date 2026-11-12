@@ -489,12 +489,12 @@
     return person;
   }
   function matchPublicLinkedInProfiles(people=[],results=[],companyName=""){
-    const company=clean(companyName).toLowerCase();
+    const company=clean(companyName).toLowerCase(),nameKey=value=>clean(value).normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase(),profileKey=value=>{const url=normalizeProfessionalLinkedInUrl(value);return url?new URL(url).pathname.toLowerCase():'';};
     if(!company||!Array.isArray(results))return people;
     return people.map(person=>{
       // A stored public URL is a candidate, not an identity-verification receipt.
       // Only provider-owned paid identities bypass public profile reconciliation.
-      if(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url))return person;
+      if(person.identitySource==='apollo'&&person.identityOrigin!=='apollo'&&normalizeLinkedInUrl(person.linkedin_url))return person;
       const approvedProfile=normalizeLinkedInUrl(person.linkedinConfirmedUrl);
       if(approvedProfile&&person.linkedinConfirmationMethod!=='automatic'&&approvedProfile===normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))return person;
       const originalFullName=clean(person.name).split(/\s+/).length>1;
@@ -502,28 +502,28 @@
       const sourcedName=name.split(/\s+/).length>1&&Boolean(person.publicNameUrl);
       const first=name.split(/\s+/)[0].toLowerCase();
       if(!first)return person;
-      const matches=new Map(),conflicts=[];
+      const matches=new Map(),conflicts=[],knownProfile=profileKey(person.publicLinkedinUrl||person.linkedin_url);
       for(const row of results){
         if(row?.evidenceKind==='model_summary')continue;
-        const url=normalizeLinkedInUrl(row?.url||row?.metadata?.sourceURL);
+        const url=normalizeProfessionalLinkedInUrl(row?.url||row?.metadata?.sourceURL);
         if(!url)continue;
         const title=clean(row?.title);
         let candidateName=clean(title.split(/\s+[–—|·-]\s*|\s*\|\s*/u)[0]);
-        if(!candidateName||candidateName.split(/\s+/)[0].toLowerCase()!==first){
+        if(!candidateName||nameKey(candidateName.split(/\s+/)[0])!==nameKey(first)){
           const excerpt=clean(row?.description||row?.markdown||row?.content,600);
           const names=[...excerpt.matchAll(new RegExp(`(?:^|[^\\p{L}])(${first.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s+[\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,'giu'))].map(match=>match[1]);
           if(new Set(names.map(value=>value.toLowerCase())).size!==1)continue;
           candidateName=names[0];
         }
-        if(!hasFullBuyerName(candidateName)||(candidateName.split(/\s+/).length<2||candidateName.split(/\s+/).length>5||!/^[\p{L}'’. -]+$/u.test(candidateName))||candidateName.split(/\s+/)[0].toLowerCase()!==first)continue;
-        const nameMatches=candidateName.toLowerCase()===name.toLowerCase();
+        if(!hasFullBuyerName(candidateName)||(candidateName.split(/\s+/).length<2||candidateName.split(/\s+/).length>5||!/^[\p{L}'’. -]+$/u.test(candidateName))||nameKey(candidateName.split(/\s+/)[0])!==nameKey(first))continue;
+        const nameMatches=nameKey(candidateName)===nameKey(name);
         const extendsTruncatedName=!originalFullName&&sourcedName&&candidateName.toLowerCase().startsWith(name.toLowerCase())&&candidateName.length>name.length;
         if(name.split(/\s+/).length>1&&!nameMatches&&!extendsTruncatedName)continue;
-        const text=[row?.title,row?.description,row?.markdown,row?.content].map(clean).join(' ').toLowerCase();
+        const text=[row?.title,row?.description,row?.markdown,row?.content].map(value=>String(value||'').replace(/[ \t]+/g,' ')).join('\n').toLowerCase();
         if(!text.includes(company))continue;
-        const companyPattern=company.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),description=[row?.description,row?.markdown,row?.content].map(clean).join(' ');
+        const companyPattern=company.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),description=[row?.description,row?.markdown,row?.content].map(value=>String(value||'').replace(/[ \t]+/g,' ')).join('\n');
         const former=new RegExp(`\\b(?:previously|formerly|former|tidigare)\\b[^.!?\\n]{0,160}\\b${companyPattern}(?=$|[^\\p{L}])`,'iu').test(text);
-        const current=description.match(/\bcurrent employer\s*:\s*([^.!?\n]+)|\b(?:currently|now)\s+(?:at|with|employed by|working (?:at|for))\s+([^.!?\n]+)/i),employer=clean(current?.[1]||current?.[2]);
+        const current=description.match(/\bcurrent employer\s*:\s*([^.!?\n]+)|\b(?:currently|now)\s+(?:at|with|employed by|working (?:at|for))\s+([^.!?\n]+)/i),headlineEmployer=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u).slice(1).map(part=>part.match(/\b(?:at|with|hos|på)\s+(.+)$/i)?.[1]).find(Boolean),employer=clean(current?.[1]||current?.[2]||headlineEmployer);
         if(former||employer&&!companyNameMatches(employer,companyName)){conflicts.push({url,reason:former?'Public profile describes previous employment at the target company':'Public profile identifies a different current employer'});continue;}
         if(!sourcedName||extendsTruncatedName){
           const role=clean(person.title).toLowerCase();
@@ -538,12 +538,16 @@
         // Localized LinkedIn hosts expose the same public profile. Keep the
         // original source URL, but count its identity only once.
         const profile=new URL(url),key=profile.pathname.toLowerCase();
-        if(!matches.has(key))matches.set(key,{url,name:candidateName});
+        if(!matches.has(key))matches.set(key,{url,name:nameMatches?(nameKey(person.publicName||person.name)===nameKey(name)?clean(person.publicName||person.name):name):candidateName});
       }
-      if(matches.size>1||conflicts.length)return {...person,...(conflicts.length?{opportunityScope:{status:'review_required',reason:'Public profile employer conflict: '+conflicts[0].reason,url:conflicts[0].url,checkedAt:new Date().toISOString()}}:{}),linkedinIdentityEvidence:null,linkedinProfileReview:{status:'review_required',reason:matches.size>1?'Multiple public profiles match this identity':conflicts[0].reason,urls:[...new Set([...matches.values()].map(row=>row.url).concat(conflicts.map(row=>row.url)))].slice(0,8),checkedAt:new Date().toISOString()}};
+      // A different person's same-name profile at another employer is not a
+      // contradiction on the retained target profile. Same-profile current
+      // employer conflicts remain blocking, including localized URL aliases.
+      const relevant=conflicts.filter(row=>profileKey(row.url)===knownProfile||matches.has(profileKey(row.url)));
+      if(matches.size>1||relevant.length)return {...person,...(relevant.length?{opportunityScope:{status:'review_required',reason:'Public profile employer conflict: '+relevant[0].reason,url:relevant[0].url,checkedAt:new Date().toISOString()}}:{}),linkedinIdentityEvidence:null,linkedinProfileReview:{status:'review_required',reason:matches.size>1?'Multiple public profiles match this identity':relevant[0].reason,urls:[...new Set([...matches.values()].map(row=>row.url).concat(relevant.map(row=>row.url)))].slice(0,8),checkedAt:new Date().toISOString()}};
       if(matches.size!==1)return person;
       const {url,name:matchedName}=[...matches.values()][0];
-      return {...person,...(person.opportunityScope?.reason?.startsWith('Public profile employer conflict: ')?{opportunityScope:null}:{}),organization:person.organization||(!sourcedName?clean(companyName):''),identityStatus:'confirmed',nameVerification:'confirmed',publicName:matchedName,publicNameUrl:sourcedName&&matchedName.toLowerCase()===name.toLowerCase()?person.publicNameUrl:url,publicLinkedinUrl:url,...(person.linkedin_url?{linkedin_url:url}:{}),linkedinProfileReview:null,linkedinIdentityEvidence:{url,name:matchedName,organization:clean(companyName),checkedAt:new Date().toISOString()}};
+      return {...person,...(person.opportunityScope?.reason?.startsWith('Public profile employer conflict: ')?{opportunityScope:null}:{}),organization:person.organization||(!sourcedName?clean(companyName):''),identityStatus:'confirmed',nameVerification:'confirmed',publicName:matchedName,publicNameUrl:sourcedName&&nameKey(matchedName)===nameKey(name)?person.publicNameUrl:url,publicLinkedinUrl:url,...(person.linkedin_url?{linkedin_url:url}:{}),linkedinProfileReview:null,linkedinIdentityEvidence:{url,name:matchedName,organization:clean(companyName),checkedAt:new Date().toISOString()}};
     });
   }
   function canonicalDomain(value){

@@ -16,7 +16,7 @@ export async function handleWebsiteContactRoute(request,env,cors={},ctx){
   let body;try{body=JSON.parse(text);}catch{throw contactError('A contact research request is required.',400);}
   if(!body||typeof body!=='object'||Array.isArray(body))throw contactError('A contact research request is required.',400);
   if(body.action==='paid'){const result=await lookupWebsiteContact(request,env,context,body);return json({result,job:await websiteContactView(env,await readWebsiteContacts(env,workspaceId,{id:body.jobId}))});}
-  if(!['start','resume','cancel','wake'].includes(body.action||'start'))throw contactError('Unknown research action.',400);
+  if(!['start','resume','cancel','wake','review-identities'].includes(body.action||'start'))throw contactError('Unknown research action.',400);
   const row=(body.action||'start')==='start'?await startWebsiteContacts(env,context,body):await commandWebsiteContacts(env,context,body);
   if(ctx?.waitUntil&&['queued','running'].includes(row.status))ctx.waitUntil(runWebsiteContactJobs(env,{jobId:row.id,windowMs:18000}).catch(()=>{}));
   return json({job:await websiteContactView(env,row)});

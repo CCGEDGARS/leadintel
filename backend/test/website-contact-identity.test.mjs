@@ -1,0 +1,61 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {buyerJobsFixture,workspaceId} from './buyer-research-jobs-fixture.mjs';
+import {upsertCrmCompany,upsertCrmContacts} from '../src/crm.js';
+import {startWebsiteContacts,readWebsiteContacts,publicWebsiteContacts,websiteContactView} from '../src/website-contact-store.js';
+import {runWebsiteContactJobs} from '../src/website-contact-runner.js';
+import {handleWebsiteContactRoute} from '../src/website-contact-routes.js';
+import {websitePaidScope} from '../src/website-contact-paid.js';
+import app from '../src/app.js';
+async function fixture(t){const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash},detail=await upsertCrmCompany(f.DB,context,{company_name:'Finance Group',website:'https://finance.example/'}),job=await startWebsiteContacts(f.env,context,{companyId:detail.company.id});return {...f,context,job};}
+async function tick(f,services){const waits=[],noop=async()=>({});await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{runWebsiteContactJobs:(env,o)=>runWebsiteContactJobs(env,{...o,jobId:f.job.id,windowMs:4000,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);return readWebsiteContacts(f.env,workspaceId,{id:f.job.id});}
+const profile='https://lv.linkedin.com/in/arija-berzina',name='Ārija Bērziņa';
+const result={url:profile,title:'Arija Berzina - CFO at Finance Group',description:'Experience: Finance Group · CFO'};
+test('localized directory aliases join the accented official person without a false conflict',async t=>{
+ const f=await fixture(t),services={read:async url=>({url,markdown:'# Finance Group\nFinance Group provides financial services.\n### '+name+'\nChief Financial Officer\n[LinkedIn]('+profile+')',links:[]}),search:async()=>[],apollo:async()=>({people:[{id:'directory',name:'Arija Berzina',title:'CFO',organization:{name:'Finance Group'},linkedin_url:'https://www.linkedin.com/in/arija-berzina/?trk=directory'}]}),checkPerson:async()=>({complete:true})};
+ let row;for(let i=0;i<6;i++)row=await tick(f,services);
+ const view=publicWebsiteContacts(row);assert.equal(view.people.length,1,JSON.stringify(view.people));assert.equal(view.people[0].name,name);assert.equal(view.people[0].identityConflict,false);assert.equal(view.people[0].identityOrigin,'official');
+});
+test('a uniquely sourced professional profile permits optional paid lookup only after complete free checks',async t=>{
+ const f=await fixture(t),state=JSON.parse(f.job.state_json);state.phase='contacts';state.people=[{id:'public-person',name,publicName:name,title:'CFO',organization:'Finance Group',identityOrigin:'public_listing',publicNameUrl:profile}];f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(state),f.job.id);
+ const queries=[],services={search:async q=>{queries.push(q);return q.startsWith('site:linkedin.com/in/')?[result]:[];},read:async url=>({url,markdown:'# Finance Group\nFinance Group provides financial services.',links:[]}),independent:async()=>({status:'not_configured'})};
+ let row;for(let i=0;i<7;i++){row=await tick(f,services);if(!['queued','running'].includes(row.status))break;}
+ const p=publicWebsiteContacts(row).people[0],body={jobId:row.id,revision:row.revision,personId:p.id,provider:'treg',channel:'email',approved:true};
+ assert.equal(p.publicLinkedinUrl,profile);assert.equal(p.freeResearchStatus,'complete');const scoped=await websitePaidScope(f.env,f.context,body);assert.equal((await scoped.scope.readiness({},p)).eligible,true);
+ await assert.rejects(websitePaidScope(f.env,f.context,{...body,approved:false}),/Approve/);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+ const saved=JSON.parse(row.state_json);delete saved.people[0].linkedinIdentityEvidence;f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(saved),row.id);await assert.rejects(websitePaidScope(f.env,f.context,body),/mandatory free|public identity/i,'a bare profile cannot replace verified matching evidence');
+ f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(row.state_json,row.id);queries.length=0;
+ const response=await handleWebsiteContactRoute(new Request('https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({action:'resume',jobId:row.id,revision:row.revision,refreshIdentities:true})}),f.env,{},{});assert.equal(response.status,200,await response.clone().text());
+ row=await tick(f,services);assert.equal(row.status,'complete');assert.equal(queries.length,1,'explicit identity refresh executes the profile search again and reuses completed sibling checks');assert.ok(queries[0].startsWith('site:linkedin.com/in/'));assert.ok(JSON.parse(row.state_json).identitySearchHistory.length>0);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+});
+
+test('saved review remains guarded against company replacement and distinct same-name profiles',async t=>{
+ const f=await fixture(t),state=JSON.parse(f.job.state_json),base={name:'Arija Berzina',publicName:'Arija Berzina',title:'CFO',organization:'Finance Group',identityOrigin:'public_listing',publicNameUrl:profile};
+ state.people=[{...base,id:'a',publicLinkedinUrl:profile},{...base,id:'b',publicLinkedinUrl:profile+'-other'}];state.tasks=[{kind:'search',value:'identity',status:'complete',checkedAt:new Date().toISOString(),result:[result,{...result,url:profile+'-other'}]}];
+ f.DB.raw.prepare("UPDATE website_contact_jobs SET status='incomplete',state_json=? WHERE id=?").run(JSON.stringify(state),f.job.id);
+ const headers={Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},url='https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,send=revision=>handleWebsiteContactRoute(new Request(url,{method:'POST',headers,body:JSON.stringify({action:'review-identities',jobId:f.job.id,revision})}),f.env,{},{});
+ assert.equal((await send(f.job.revision)).status,200);let row=await readWebsiteContacts(f.env,workspaceId,{id:f.job.id});const view=publicWebsiteContacts(row);assert.equal(view.people.length,2);assert.ok(view.people.every(p=>p.identityConflict&&!p.identitySupport.eligible));
+ assert.equal((await send(f.job.revision)).status,200,'replaying an already completed saved repair is idempotent despite an older displayed revision');
+ const previous=JSON.parse(row.state_json);delete previous.identityReviewVersion;f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(previous),row.id);f.DB.raw.prepare("UPDATE crm_companies SET company_name='Replacement Company' WHERE id=?").run(f.job.company_id);
+ assert.equal((await send(row.revision)).status,409);row=await readWebsiteContacts(f.env,workspaceId,{id:row.id});assert.equal(JSON.parse(row.state_json).identityReviewVersion,undefined,'late identity repair cannot write into a changed company');
+});
+test('native saved identity repair coalesces profile aliases, retains receipts and never starts a provider',async t=>{
+ const f=await fixture(t),state=JSON.parse(f.job.state_json),base={name:'Arija Berzina',publicName:'Arija Berzina',title:'CFO',organization:'Finance Group',identityOrigin:'public_listing',publicNameUrl:profile,publicLinkedinUrl:profile,identityConflict:true,freeResearchStatus:'needs_review'};
+ state.people=[{...base,id:'paid-original',contactData:{phone:{number:'+37120000001',status:'provider_listed'}}},{...base,id:'duplicate',publicLinkedinUrl:'https://www.linkedin.com/in/arija-berzina',contactResearch:{retained:'receipt'}}];state.tasks=[{kind:'search',value:'indexed profile',status:'complete',checkedAt:new Date(Date.now()-86400000).toISOString(),attempts:1,result:[result]}];delete state.identityReviewVersion;
+ f.DB.raw.prepare("UPDATE website_contact_jobs SET status='incomplete',state_json=? WHERE id=?").run(JSON.stringify(state),f.job.id);
+ await upsertCrmContacts(f.DB,f.context,f.job.company_id,[{external_person_id:'paid-original',name:'Arija Berzina',title:'CFO',linkedin_url:profile,work_email:'kept@finance.example',source:'treg'},{external_person_id:'duplicate',name:'Arija Berzina',title:'CFO',linkedin_url:'https://www.linkedin.com/in/arija-berzina',work_email:'old-alias@finance.example',source:'treg'}]);
+ const url='https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,headers={Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});globalThis.fetch=()=>assert.fail('Saved identity reconciliation cannot call a provider');
+ const response=await handleWebsiteContactRoute(new Request(url,{method:'POST',headers,body:JSON.stringify({action:'review-identities',jobId:f.job.id,revision:f.job.revision})}),f.env,{},{});assert.equal(response.status,200,await response.clone().text());
+ const row=await readWebsiteContacts(f.env,workspaceId,{id:f.job.id}),saved=JSON.parse(row.state_json),view=publicWebsiteContacts(row);assert.equal(view.people.length,1);assert.equal(view.people[0].id,'paid-original');assert.equal(view.people[0].contactData.phone.number,'+37120000001');assert.equal(view.people[0].identityConflict,false);assert.ok(saved.identityArchive.some(p=>p.id==='duplicate'&&p.contactResearch.retained==='receipt'));assert.equal(row.deadline_at,f.job.deadline_at);assert.equal(row.status,'incomplete');assert.notEqual(view.people[0].freeResearchStatus,'complete','repair cannot invent missing mandatory query receipts');
+ assert.equal((await websiteContactView(f.env,row)).people[0].savedContact?.work_email,'kept@finance.example','the retained CRM identity takes precedence over an archived alias');
+ assert.equal(view.people[0].linkedinIdentityEvidence.checkedAt,state.tasks[0].checkedAt,'saved matching must preserve actual source acquisition freshness');
+});
+
+test('resuming old profile receipts reacquires current evidence instead of resetting their freshness',async t=>{
+ const f=await fixture(t),state=JSON.parse(f.job.state_json),p={id:'dated-person',name:'Arija Berzina',publicName:'Arija Berzina',title:'CFO',organization:'Finance Group',identityOrigin:'public_listing',publicNameUrl:profile,publicLinkedinUrl:profile};
+ const D=globalThis.LeadIntelDiscovery,query=D.buyerResearchQueryPlan({company:'Finance Group',domain:'finance.example'},p).linkedin[0],oldDate=new Date(Date.now()-31*86400000).toISOString();
+ state.phase='contacts';state.people=[p];state.tasks=[{kind:'search',value:query,status:'complete',attempts:1,checkedAt:oldDate,result:[{...result,title:'Arija Berzina - CFO at Finance Group'}]}];f.DB.raw.prepare('UPDATE website_contact_jobs SET state_json=? WHERE id=?').run(JSON.stringify(state),f.job.id);
+ let freshQueries=0;const services={search:async q=>{if(q===query){freshQueries++;return [{url:profile,title:'Arija Berzina - CFO at Other Company',description:'Currently at Other Company. Previously at Finance Group.'}];}return [];},read:async url=>({url,markdown:'# Finance Group\nFinance Group provides financial services.'}),independent:async()=>({status:'not_configured'})};
+ let row;for(let i=0;i<5;i++){row=await tick(f,services);if(!['queued','running'].includes(row.status))break;}
+ const view=publicWebsiteContacts(row);assert.equal(freshQueries,1);assert.equal(view.people[0].identitySupport.eligible,false);assert.equal(view.people[0].linkedinProfileReview.status,'review_required');assert.ok(JSON.parse(row.state_json).expiredSources.some(s=>s.value===query&&s.checkedAt===oldDate));
+});
