@@ -2376,7 +2376,11 @@
         "event-setup-dialog",
         "Your current step and messages stay in place.",
         "Events &amp; Meeting Invitations",
-        "<span class=\"planning-optional\">Optional</span>"
+        "<span class=\"planning-optional\">Optional</span>",
+        "event-website-status",
+        "event-message-template",
+        "activateForCampaign",
+        "M.styles"
       ]
     },
     {
@@ -2388,7 +2392,10 @@
         "function attendance(",
         "function stageDraft(",
         "function restoreBusinessDraft(",
-        "eventStartDate===c.startDate"
+        "eventStartDate===c.startDate",
+        "function researchContext(",
+        "invitationStyle",
+        "Storyselling"
       ]
     },
     {
@@ -2400,7 +2407,9 @@
         "restoreBusinessDraft(currentItem())",
         "savedPreview:campaign=>",
         "eventPurpose:preview.purpose",
-        "currentDraft:{subject:preview.draft.subject,message:preview.draft.message}"
+        "currentDraft:{subject:preview.draft.subject,message:preview.draft.message}",
+        "saveTemplate:async preview=>",
+        "templateStyle:next.messageStudioDraft"
       ]
     },
     {
@@ -2411,7 +2420,10 @@
       "contains": [
         ".feature-focus{",
         ".event-campaign-panel.event-active",
-        "@media(max-width:720px)"
+        "@media(max-width:720px)",
+        ".event-journey",
+        "button:focus-visible",
+        "border:2px solid #377563"
       ]
     },
     {

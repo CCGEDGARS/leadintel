@@ -58,3 +58,13 @@ test('campaign navigation from Profile restores company state before Messages an
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8'),code=source.split('\n').find(line=>line.startsWith('window.LeadIntelCampaignModuleLoader='));
  for(const step of [6,7]){const order=[];let mounted=false;const loader=new Function('window','ensureDiscoveryMounted','loadOutreachModules','document',code+'return window.LeadIntelCampaignModuleLoader;')({},options=>{assert.equal(options.refreshCrm,false);mounted=true;order.push('restore');},async()=>{assert.equal(mounted,true,'company state must exist before Messages reads its pipeline');order.push('load');},{getElementById:()=>({})});await loader(step);assert.deepEqual(order,['restore','load']);}
 });
+
+test('event analysis has nearby live feedback and a loading label, then keeps manual fields available',async()=>{
+ const r=ui();r.field('website').value='https://forum.test/';let release;r.w.fetch=()=>new Promise(resolve=>release=resolve);const button=r.d.querySelector('#event-website-analyze');assert.ok(button.classList.contains('primary-btn'));
+ const pending=button.onclick();assert.match(button.textContent,/Reading/);assert.equal(button.getAttribute('aria-busy'),'true');assert.match(r.d.querySelector('#event-website-status').textContent,/Reading/);
+ release({ok:true,json:async()=>({markdown:'# Forum'})});await pending;assert.match(button.textContent,/Analyze/);assert.match(r.d.querySelector('#event-website-status').textContent,/Review/);assert.equal(r.field('name').disabled,false);assert.equal(r.d.querySelectorAll('.event-journey li').length,4);r.w.close();
+});
+test('research activation restores the requested saved event before the campaign handoff and never crosses workspaces',async()=>{
+ const r=ui();let main=JSON.parse(r.w.localStorage.getItem(KEY));main.eventCampaigns=M.save(M.save({}, {id:'a',name:'Event A',startDate:'2099-01-01',endDate:'2099-01-02',roles:'Engineering Director'}),{id:'b',name:'Event B',startDate:'2099-02-01',endDate:'2099-02-02',roles:'CFO'});main.eventCampaigns=M.activate(main.eventCampaigns,'b');r.w.localStorage.setItem(KEY,JSON.stringify(main));
+ await r.w.LeadIntelEventCampaignUI.activateForCampaign('a');assert.equal(M.active(JSON.parse(r.w.localStorage.getItem(KEY)).eventCampaigns).id,'a');assert.equal(M.active(JSON.parse(r.w.localStorage.getItem(KEY)).eventCampaigns).roles,'Engineering Director');await assert.rejects(r.w.LeadIntelEventCampaignUI.activateForCampaign('missing'),/saved event|unavailable/i);r.w.close();
+});

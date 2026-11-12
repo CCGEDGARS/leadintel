@@ -10,3 +10,26 @@
 
 #event-campaign-form{display:block}.event-basic-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;min-width:0;margin:18px 0;padding:18px;border:1px solid #dce5df;border-radius:12px;background:#fff}.event-basic-fields legend{padding:0 6px;font-size:17px;font-weight:700;color:#164e40}.event-section-hint,.event-website-entry,#event-source-details{grid-column:1/-1}.event-section-hint{margin:0 0 10px;font-size:13px;color:#52625b}.event-website-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;align-items:end}.event-website-entry>button{margin:10px 0;min-height:44px}.event-website-entry>p{grid-column:1/-1;margin:0 0 12px;font-size:13px;line-height:1.5;color:#52625b}.event-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}#event-source-details,#event-research-options{padding:12px 0;border-top:1px solid #e0e9e3}#event-source-details textarea[readonly]{background:#f6f8f7;font-size:12px;color:#52625b}#event-source-details label:last-child{grid-column:1/-1}#event-campaign-form [aria-invalid=true]{border-color:#ae492b;box-shadow:0 0 0 1px #ae492b}#event-campaign-status{min-height:1.5em;line-height:1.6;color:#30483d}#event-campaign-panel .event-actions{align-items:flex-start;margin-top:18px}#event-campaign-panel .event-actions>.primary-btn{min-height:44px}#event-campaign-panel .event-actions>.event-secondary-actions{margin-left:auto}#event-campaign-panel input:disabled,#event-campaign-panel select:disabled,#event-campaign-panel textarea:disabled{opacity:.65}@media(max-width:720px){.event-basic-fields,.event-field-grid,.event-website-entry{grid-template-columns:minmax(0,1fr)}.event-basic-fields{padding:14px}.event-website-entry>button{margin-top:0}.event-website-entry>p{grid-column:auto}#event-campaign-panel .event-actions>.event-secondary-actions{margin-left:0;flex:1 1 100%}}
 #event-campaign-panel[open]>.brand-identity-summary{display:none}#event-campaign-panel [hidden]{display:none!important}#event-campaign-panel .event-field-grid textarea{min-height:72px;resize:vertical}
+
+/* Keep the event flow consistent with contact and message controls. */
+.event-campaign-panel button,.event-campaign-panel .ec-actions button{min-height:44px;border:2px solid #377563;cursor:pointer;transition:background-color .15s,border-color .15s,box-shadow .15s}
+.event-campaign-panel button.secondary-btn{background:#fff;color:#164e40}
+.event-campaign-panel button.primary-btn,#event-planning-open{background:#123e35;color:#fff;border-color:#123e35;box-shadow:0 4px 12px #123e3520}
+.event-campaign-panel button:not(:disabled):hover{border-color:#0d5e4d;background:#e7f3ec;box-shadow:0 3px 10px #123e351c}
+.event-campaign-panel button.primary-btn:not(:disabled):hover,#event-planning-open:hover{background:#0d5e4d;color:#fff}
+.event-campaign-panel button:focus-visible{outline:3px solid #bf8619;outline-offset:3px}
+.event-campaign-panel button:disabled{opacity:1;cursor:not-allowed;border-color:#91a69b;background:#f0f4f1;color:#52665b;box-shadow:none}
+.event-journey{list-style:none;padding:0;margin:20px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.event-journey li{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #dce5df;border-radius:9px;background:#fff;color:#52665b;font-size:13px;line-height:1.4}
+.event-journey li[aria-current=step]{border-color:#377563;background:#e7f3ec;color:#123e35;font-weight:700}
+.event-journey li>span{display:grid;place-items:center;flex:0 0 24px;height:24px;border-radius:50%;background:#eef4f1;color:#175d48;font-weight:700}
+#event-website-status{margin:0;font-size:13px;color:#175d48;min-height:0}
+#event-website-status:empty{display:none}
+#event-campaign-panel>.event-actions{position:sticky;bottom:12px;z-index:3;padding:14px;border:1px solid #b7d8cb;border-radius:12px;background:#fff;box-shadow:0 6px 20px #123e3512;align-items:center}
+.event-next-hint{flex-basis:100%;margin:0 0 4px;color:#52665b;font-size:13px}
+#event-message-preview .event-actions small{flex-basis:100%;font-size:13px;color:#52665b}
+@media(max-width:720px){.event-journey{grid-template-columns:repeat(2,minmax(0,1fr))}#event-campaign-panel>.event-actions{bottom:8px;padding:10px}#event-plan-recipients{flex-basis:100%}}
+@media(prefers-reduced-motion:reduce){.event-campaign-panel button{transition:none}}
+
+#event-planning-open span{color:inherit;font:inherit;margin:0}
+@media(max-width:720px){#event-campaign-panel>.event-actions{position:static;margin-top:18px}#event-campaign-panel{padding-bottom:72px}}
