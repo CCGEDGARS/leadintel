@@ -8204,6 +8204,13 @@
         "Affected source",
         "does not confirm email or phone ownership"
       ]
+    },
+    {
+      "id": "website-contact-speed",
+      "type": "text",
+      "url": "/customer/website-contact-ui.js",
+      "status": 200,
+      "contains": ["Time limit reached · results saved", "five-minute time limit", "up to three at a time", "action:'wake'", "function remember"]
     }
   ],
   "retry": {

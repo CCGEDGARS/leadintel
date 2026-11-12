@@ -1,7 +1,7 @@
 import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {searchWorkspaceWeb} from './ai-routes.js';
 // Public research only. This boundary never invokes paid contact reveal APIs.
-export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal}={}){
+export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000}={}){
  let unavailable=false,connection;
  const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
  return async function search(query,{limit=8,diversify=false,signal:requestSignal}={}){
@@ -11,7 +11,8 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
    if(!connection)try{connection=await credential(env,workspaceId,'firecrawl');}catch{unavailable=true;observe({provider:'firecrawl',operation:'search',status:'skipped',reason:'Workspace Firecrawl credential unavailable'});}
    await check();
    if(connection)try{
-    const response=await fetchImpl('https://api.firecrawl.dev/v2/search',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(connection.apiKey?{Authorization:`Bearer ${connection.apiKey}`}:{})},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown']}}),signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(diversify?12000:25000)]):AbortSignal.timeout(diversify?12000:25000)});
+    const timeout=Math.min(diversify?12000:25000,Math.max(1000,primaryTimeoutMs));
+    const response=await fetchImpl('https://api.firecrawl.dev/v2/search',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(connection.apiKey?{Authorization:`Bearer ${connection.apiKey}`}:{})},body:JSON.stringify({query,limit,...(scrapeResults?{scrapeOptions:{formats:['markdown']}}:{})}),signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout)});
     await check();
     if(!response.ok){if([401,402,403,409,429].includes(response.status))unavailable=true;throw Error(`Public search HTTP ${response.status}`);}
     const payload=await response.json(),rows=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web;
