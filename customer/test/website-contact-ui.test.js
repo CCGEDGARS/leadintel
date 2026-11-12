@@ -21,3 +21,15 @@ test('paused research accounts for every person and explains identity and covera
   assert.ok(card.querySelector('[data-contact-action="paid-email"]').disabled);assert.ok(w.document.querySelector('[data-contact-action="resume"]'));
  }finally{w.LeadIntelWebsiteContacts.close();w.close();}
 });
+
+test('opening active research wakes saved work without restarting a paused run',async()=>{
+ const w=new JSDOM('<div id="website-scanning-workspace"></div>',{url:'https://app.fixture.test/customer/',runScripts:'outside-only'}).window,posts=[];
+ w.LeadIntelWebsiteScanning=require('../website-scanning.js');w.LeadIntelServerBridge={workspace:{id:'w'},session:{authenticated:true,user:{id:'owner'}}};
+ const job={id:'j',companyId:'c',company:'Finance Group',domain:'finance.example',status:'queued',revision:9,phase:'contacts',people:[],channels:[],routes:[],sources:[],gaps:[],coverage:{},counts:{discovered:0,checked:0,pending:0,reads:1}};
+ w.fetch=async(_url,options)=>{if(options.method==='POST')posts.push(JSON.parse(options.body));return {ok:true,json:async()=>({job})};};w.eval(fs.readFileSync(require.resolve('../website-contact-ui.js'),'utf8'));
+ try{
+  await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Finance Group',website:'https://finance.example/'}]);assert.deepEqual(posts,[{action:'wake',jobId:'j'}]);
+  w.LeadIntelWebsiteContacts.close();posts.length=0;job.status='incomplete';job.stopReason='time_limit';job.canResume=true;
+  await w.LeadIntelWebsiteContacts.open([{crmId:'c',name:'Finance Group',website:'https://finance.example/'}]);assert.deepEqual(posts,[]);assert.match(w.document.body.textContent,/Time limit reached · results saved/);assert.match(w.document.body.textContent,/five-minute/);
+ }finally{w.LeadIntelWebsiteContacts.close();w.close();}
+});

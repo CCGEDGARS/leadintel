@@ -64,7 +64,7 @@ function acquire(state,input){
  for(const p of state.apolloPeople||[])for(const person of D.traceIdentityBuyers({people:[p]},candidate,{companyDomain:input.domain,collectAllCompanyContacts:true}).people)add(person,'apollo');
  for(const task of state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived))for(const person of D.tracePublicBuyers(task.result,input.company,{companyDomain:input.domain,collectAllCompanyContacts:true,includeIndexedCompanyContacts:true}).people)add(person,'public_listing');
  const nameCounts=new Map();for(const person of roster)nameCounts.set(person.name.toLocaleLowerCase(),(nameCounts.get(person.name.toLocaleLowerCase())||0)+1);
- for(const person of roster){person.identityConflict=nameCounts.get(person.name.toLocaleLowerCase())>1;if(person.identityConflict)delete person.freeResearchStatus;}
+ for(const person of roster){person.identityConflict=nameCounts.get(person.name.toLocaleLowerCase())>1;if(person.identityConflict&&person.freeResearchStatus==='complete')delete person.freeResearchStatus;}
  const all=roster.sort((a,b)=>leadership(a.title)-leadership(b.title)||a.name.localeCompare(b.name));
  state.coverage.peopleTruncated=all.length>300;state.people=all.slice(0,300);state.coverage.channelLimitReached=channels.size>300||routes.size>300;state.channels=[...channels.values()].slice(0,300);state.routes=[...routes.values()].slice(0,300);
 }
@@ -96,25 +96,37 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  if(excluded.length){state.excludedIdentities=[...(state.excludedIdentities||[]),...excluded.map(p=>({...p,exclusionReason:'Indexed publication or unsupported professional identity'}))].slice(-300);state.people=state.people.filter(websiteContactIdentity);}
  const guard=async()=>{
   if(controller.signal.aborted)throw Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'});
+  if(clock()>=row.deadline_at)throw Object.assign(Error('Research pass time limit reached; results are saved. Continue unfinished checks when needed.'),{code:'PASS_LIMIT'});
   if(budget&&!budget.hasRoom(15))throw Object.assign(Error('Shared processing budget reached'),{code:'TIME_BUDGET'});
   const owned=await sql(env,`SELECT id FROM website_contact_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authority}`,row.id,lease,clock()).first();
   if(!owned){valid=false;throw contactError('Company identity or research authority changed.');}
  };
  const observe=entry=>{state.tools=[...(state.tools||[]),{...entry,at:new Date().toISOString()}].slice(-150);};
- const searchSource=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,signal:controller.signal,observe});
- async function task(kind,value,operation){
+ const searchSource=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,signal:controller.signal,observe,scrapeResults:false,primaryTimeoutMs:6000});
+ const inFlight=new Map();let checkpointTail=Promise.resolve();
+ state.performance={sourceRequests:0,sourceReuses:0,...state.performance,concurrency:3};
+ const checkpoint=()=>{checkpointTail=checkpointTail.then(async()=>{
+  const saved=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(state),row.id,lease).run();
+  if(!saved.meta.changes){valid=false;throw contactError('Research authority changed before saving its source receipt.');}
+ });return checkpointTail;};
+ function task(kind,value,operation){
+  const key=kind+'|'+value;
+  if(inFlight.has(key)){state.performance.sourceReuses++;return inFlight.get(key);}
+  const pending=executeTask(kind,value,operation).finally(()=>inFlight.delete(key));inFlight.set(key,pending);return pending;
+ }
+ async function executeTask(kind,value,operation){
   await guard();let saved=state.tasks.find(t=>t.kind===kind&&t.value===value);
-  if(saved?.status==='complete'&&!saved.archived)return saved.result;
+  if(saved?.status==='complete'&&!saved.archived){state.performance.sourceReuses++;return saved.result;}
   if(saved?.attempts>=2)throw Object.assign(Error(saved.reason||'Source unavailable after two attempts'),{code:'SOURCE_UNAVAILABLE'});
   // Finish a source attempt before the invocation expires. Otherwise a slow
   // page is interrupted at every slice, refunds its attempt and blocks forever.
-  const remaining=windowMs-(clock()-start),reserve=Math.min(2000,windowMs*.2);
+  const remaining=Math.min(windowMs-(clock()-start),row.deadline_at-clock()),reserve=Math.min(2000,windowMs*.2);
   if(remaining<Math.min(5000,windowMs*.25))throw Object.assign(Error('Processing slice is ready to checkpoint'),{code:'TIME_BUDGET'});
   if(!saved){if(state.tasks.length>=(state.operationLimit||600))throw Object.assign(Error('This research batch reached its operation limit'),{code:'BATCH_LIMIT'});saved={kind,value,status:'pending',attempts:0};state.tasks.push(saved);}
-  saved.attempts++;saved.status='running';delete saved.archived;
+  saved.attempts++;saved.status='running';delete saved.archived;state.performance.sourceRequests++;const sourceStart=clock();
   const operationMs=Math.max(1,Math.min(30000,remaining-reserve)),operationController=new AbortController();let operationTimer;
   const canceled=()=>operationController.abort(Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'}));controller.signal.addEventListener('abort',canceled,{once:true});
-  try{const expired=new Promise((_,reject)=>{operationTimer=setTimeout(()=>{const error=Object.assign(Error('Public source operation timed out; other saved checks can continue'),{code:'SOURCE_TIMEOUT'});operationController.abort(error);reject(error);},operationMs);});const result=await Promise.race([Promise.resolve().then(()=>operation(operationController.signal,operationMs)),expired]);if(operationController.signal.aborted)throw operationController.signal.reason;await guard();saved.result=result;saved.status='complete';saved.checkedAt=new Date().toISOString();compact(state);const checkpoint=await sql(env,`UPDATE website_contact_jobs SET state_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(state),row.id,lease).run();if(!checkpoint.meta.changes){valid=false;throw contactError('Research authority changed before saving its source receipt.');}return result;}
+  try{const expired=new Promise((_,reject)=>{operationTimer=setTimeout(()=>{const error=Object.assign(Error('Public source operation timed out; other saved checks can continue'),{code:'SOURCE_TIMEOUT'});operationController.abort(error);reject(error);},operationMs);});const result=await Promise.race([Promise.resolve().then(()=>operation(operationController.signal,operationMs)),expired]);if(operationController.signal.aborted)throw operationController.signal.reason;await guard();saved.result=result;saved.status='complete';saved.checkedAt=new Date().toISOString();compact(state);saved.durationMs=Math.max(0,clock()-sourceStart);state.performance.lastProgressAt=new Date().toISOString();await checkpoint();return result;}
   catch(error){saved.status='failed';saved.reason=error.code==='TIME_BUDGET'?'Processing slice ended':clean(error.message).slice(0,180);if(error.code==='TIME_BUDGET'||controller.signal.aborted)saved.attempts--;throw error;}
   finally{clearTimeout(operationTimer);controller.signal.removeEventListener('abort',canceled);operationController.abort();}
  }
@@ -127,19 +139,65 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   return {url:actual,title:clean(page.title||page.metadata?.title||text.match(/^#\s+([^\n]+)/m)?.[1]).slice(0,300),markdown:text.slice(0,60000),textTruncated:text.length>60000,sourceRead:true,evidenceKind:'page_extract',metadata:{sourceURL:actual,statusCode:200},extractedAt:new Date().toISOString(),links:(page.links||[]).map(l=>S.safeUrl(typeof l==='string'?l:l.href)).filter(Boolean).slice(0,160)};
  });
  const apollo=(key,payload)=>task('apollo',key,signal=>(services.apollo||((payload,options)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,...options})))(payload,{signal}));
- const optional=async operation=>{try{return await operation();}catch(error){if(!valid||controller.signal.aborted||['TIME_BUDGET','BATCH_LIMIT'].includes(error.code))throw error;state.gaps=[...new Set([...(state.gaps||[]),clean(error.message).slice(0,180)])].slice(-30);return null;}};
+ const optional=async operation=>{try{return await operation();}catch(error){if(!valid||controller.signal.aborted||['TIME_BUDGET','BATCH_LIMIT','PASS_LIMIT'].includes(error.code))throw error;state.gaps=[...new Set([...(state.gaps||[]),clean(error.message).slice(0,180)])].slice(-30);return null;}};
+ const waitingPeople=()=>{
+  const pending=state.people.filter(p=>!p.freeResearchStatus),finished=state.people.length-pending.length,allowed=pending.slice(0,Math.max(0,state.batchLimit-finished)),last=state.people.findIndex(p=>p.id===state.contactCursor);
+  return [...allowed.filter(p=>state.people.indexOf(p)>last),...allowed.filter(p=>state.people.indexOf(p)<=last)].slice(0,3);
+ };
+ const checkContacts=async()=>{
+  const selected=waitingPeople();if(!selected.length)return;
+  state.contactCursor=selected.at(-1).id;state.label='Check public email, phone and profiles · '+selected.map(p=>p.name).join(', ');
+  const outcomes=await Promise.allSettled(selected.map(async person=>{
+    const candidate=candidateFor(input,[person]);let complete=false;
+    if(services.checkPerson){complete=(await services.checkPerson(candidate,person,{search,read,guard,signal:controller.signal})).complete===true;}
+    else{
+     const report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
+     Object.assign(person,candidate.people[0]);complete=websiteFreeResearchComplete(candidate,person);
+     if(!complete&&(report.stopReason==='time_budget'||controller.signal.aborted))throw Object.assign(Error('Public contact checks continue in the next slice'),{code:'TIME_BUDGET'});
+    }
+    if(person.identityOrigin!=='official'){const pages=reads(state).filter(p=>p.markdown),supported=[...D.discoverCompanyContacts(pages,candidate,[]),...pages.filter(p=>sameHost(p.url,input.domain)).flatMap(p=>localStaffCards(p,input))].find(p=>clean(p.name).toLowerCase()===clean(person.name).toLowerCase()&&websiteContactRole(p.title)===websiteContactRole(person.title));if(supported){person.identityOrigin='official';person.publicNameUrl=supported.publicNameUrl;}}
+    await guard();complete=complete&&!person.identityConflict;person.freeResearchStatus=complete?'complete':'needs_review';person.freeCheckedAt=new Date().toISOString();state.freeRevision=(state.freeRevision||1)+1;state.performance.firstCheckedAt||=new Date().toISOString();
+  }));
+  await checkpoint();const failed=outcomes.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+ };
+ const leadershipSearch=async()=>{
+  state.label='Apollo free leadership search · decision-makers first';
+  const leaders=await optional(()=>apollo('leadership',{domain:input.domain,person_titles:['CEO','Chief Executive Officer','Managing Director','President','Founder','Director','Head']}));
+  state.apolloPeople=[...(state.apolloPeople||[]),...(leaders?.people||[])].slice(0,110);state.apolloLeadershipDone=true;
+  observe({provider:'apollo',operation:'leadership_identity_search',status:leaders?'succeeded':'unavailable',results:leaders?.people?.length||0,paidReveal:false});
+ };
+ const plannedPages=()=>{
+  const found=new Set(reads(state).map(p=>p.url));
+  return [...new Set([...state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived).flatMap(t=>t.result.map(r=>r.url)),...reads(state).flatMap(p=>p.links||[])])].filter(url=>sameHost(url,input.domain)&&!found.has(url)&&!state.tasks.some(t=>t.kind==='read'&&t.value===url&&t.attempts>=2)).sort((a,b)=>Number(contactPage(b))-Number(contactPage(a)));
+ };
+ const readBatch=async urls=>{
+  const outcomes=await Promise.allSettled(urls.map(url=>optional(()=>read(url))));
+  const failed=outcomes.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+ };
+
  try{
   for(let stepInSlice=0;stepInSlice<8&&status==='queued';stepInSlice++){
-  await guard();if(clock()>row.deadline_at){state.label='Research paused after 30 minutes; completed contacts are saved';status='incomplete';}
+  await guard();if(clock()>row.deadline_at){state.label='Research pass time limit reached; results are saved. Continue unfinished checks when needed.';state.stopReason='time_limit';status='incomplete';}
   else if(state.phase==='discovery'){
+   if(state.people.filter(p=>p.freeResearchStatus).length>=state.batchLimit){
+    state.stopReason='contact_batch';state.label='Public checks saved for this contact batch. Continue for more contacts and deeper company sources';state.coverage.pendingSourceUrls=plannedPages().slice(0,120);state.coverage.discoveryIncomplete=true;status='incomplete';break;
+   }
    const step=state.discoveryStep||0;
+   if(state.identityVerifiedAt&&!state.apolloLeadershipDone){await leadershipSearch();acquire(state,input);continue;}
+   if(state.identityVerifiedAt&&!state.fastSourcesDone){
+    await readBatch(plannedPages().filter(contactPage).slice(0,3));state.fastSourcesDone=true;acquire(state,input);continue;
+   }
+   // Alternate useful contact work with broader source discovery. A large
+   // corporate site must not make its known leaders wait for every page.
+   if(state.apolloLeadershipDone&&state.contactsDue!==false&&waitingPeople().length){state.contactsDue=false;await checkContacts();continue;}
+   state.contactsDue=true;
    if(step===0){state.label='Read the company website';const page=await read(input.website);const identity=S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title});if(!identity.verified)throw Error('The website does not establish this saved company identity. Review its name and website.');state.identityVerifiedAt=new Date().toISOString();state.description=companyDescription(page);state.descriptionSourceUrl=page.url;state.discoveryStep++;}
    else if(step<=6){state.label=step===1?'Find decision-makers and senior management':'Discover staff and published company contact pages';await optional(()=>search(queries(input)[step-1]));state.discoveryStep++;}
    else if(step===7){
-    const found=new Set(reads(state).map(p=>p.url)),planned=[...new Set([...(state.tasks.filter(t=>t.kind==='search'&&t.status==='complete').flatMap(t=>t.result.map(r=>r.url))),...reads(state).flatMap(p=>p.links||[])])].filter(url=>sameHost(url,input.domain)&&!found.has(url)&&!state.tasks.some(t=>t.kind==='read'&&t.value===url&&t.attempts>=2)).sort((a,b)=>Number(contactPage(b))-Number(contactPage(a)));
-    if(planned.length&&reads(state).length<40){state.label='Read company contact and leadership sources';await optional(()=>read(planned[0]));}else{state.coverage.pendingSourceUrls=planned.slice(0,120);state.coverage.sourceLimitReached=planned.length>0;state.discoveryStep++;}
+    const planned=plannedPages();
+    if(planned.length&&reads(state).length<40){state.label='Read company contact and leadership sources';await readBatch(planned.slice(0,Math.min(3,40-reads(state).length)));}else{state.coverage.pendingSourceUrls=planned.slice(0,120);state.coverage.sourceLimitReached=planned.length>0;state.discoveryStep++;}
    }else if(step===8){
-    if(!state.apolloLeadershipDone){state.label='Apollo free leadership search · decision-makers first';const leaders=await optional(()=>apollo('leadership',{domain:input.domain,person_titles:['CEO','Chief Executive Officer','Managing Director','President','Founder','Director','Head']}));state.apolloPeople=[...(state.apolloPeople||[]),...(leaders?.people||[])].slice(0,110);state.apolloLeadershipDone=true;observe({provider:'apollo',operation:'leadership_identity_search',status:leaders?'succeeded':'unavailable',results:leaders?.people?.length||0,paidReveal:false});continue;}
+    if(!state.apolloLeadershipDone){await leadershipSearch();continue;}
     const page=state.apolloPage||1;state.label='Apollo free identity search · no email or phone reveal';
     const result=await optional(()=>apollo('company-page-'+page,{domain:input.domain,discovery_scope:'company',page}));
     state.apolloPeople=[...(state.apolloPeople||[]),...(result?.people||[])].slice(0,110);observe({provider:'apollo',operation:'identity_search',status:result?'succeeded':'unavailable',results:result?.people?.length||0,paidReveal:false});
@@ -151,33 +209,19 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
     const hints=[...new Set((state.apolloPeople||[]).filter(p=>!D.hasFullBuyerName(p.name)&&clean(p.name).length>=2&&clean(p.title)).map(p=>'"'+clean(p.name).replaceAll('"','')+'" "'+input.company.replaceAll('"','')+'" "'+clean(p.title).replaceAll('"','')+'" (LinkedIn OR contact OR team)'))].slice(0,8);
     state.coverage.apolloUnresolved=[...new Set((state.apolloPeople||[]).filter(p=>!D.hasFullBuyerName(p.name)).map(p=>p.id||p.name+'|'+p.title))].length;
     if((state.hintStep||0)<hints.length){state.label='Resolve incomplete directory identities using public sources';await optional(()=>search(hints[state.hintStep||0]));state.hintStep=(state.hintStep||0)+1;}
-    else{acquire(state,input);state.phase='contacts';state.label='Check published contact details · management first';}
+    else{acquire(state,input);state.phase='contacts';state.coverage.discoveryIncomplete=false;state.label='Check published contact details · management first';}
    }
    if(state.identityVerifiedAt)acquire(state,input);
   }else if(state.phase==='contacts'){
-   const pending=state.people.filter(p=>!p.freeResearchStatus),finished=state.people.length-pending.length,waiting=pending.slice(0,Math.max(0,state.batchLimit-finished)),last=state.people.findIndex(p=>p.id===state.contactCursor),person=waiting.find(p=>state.people.indexOf(p)>last)||waiting[0];
-   if(!pending.length||finished>=state.batchLimit){status=!pending.length&&!state.people.some(p=>p.freeResearchStatus==='needs_review')?'complete':'incomplete';state.label=pending.length?'Public checks saved. Continue with the next 10 contacts':status==='complete'?'Public research complete for the discovered contacts':'Some public checks need review; completed evidence is saved';}
-   else{
-    // Persist rotation before source checkpoints. A person interrupted by the
-    // slice keeps their receipts while the next wake serves another person.
-    state.contactCursor=person.id;
-    state.label='Check public email, phone and profiles · '+person.name;
-    const candidate=candidateFor(input,[person]);let complete=false;
-    if(services.checkPerson){complete=(await services.checkPerson(candidate,person,{search,read,guard,signal:controller.signal})).complete===true;}
-    else{
-     const report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows:reads(state),guard,signal:controller.signal,maxDurationMs:Math.max(1000,windowMs-(clock()-start)-1000),observeTools:false,crossCheck:async p=>task('independent',String(p.id),signal=>services.independent?services.independent(p,{signal}):searchWorkspaceBuyerContact(env,row.workspace_id,{company:input.company,domain:input.domain,person:p,signal}))});
-     Object.assign(person,candidate.people[0]);complete=websiteFreeResearchComplete(candidate,person);
-     if(!complete&&(report.stopReason==='time_budget'||controller.signal.aborted))throw Object.assign(Error('Public contact checks continue in the next slice'),{code:'TIME_BUDGET'});
-    }
-    if(person.identityOrigin!=='official'){const pages=reads(state).filter(p=>p.markdown),supported=[...D.discoverCompanyContacts(pages,candidate,[]),...pages.filter(p=>sameHost(p.url,input.domain)).flatMap(p=>localStaffCards(p,input))].find(p=>clean(p.name).toLowerCase()===clean(person.name).toLowerCase()&&websiteContactRole(p.title)===websiteContactRole(person.title));if(supported){person.identityOrigin='official';person.publicNameUrl=supported.publicNameUrl;}}
-    await guard();complete=complete&&!person.identityConflict;person.freeResearchStatus=complete?'complete':'needs_review';person.freeCheckedAt=new Date().toISOString();state.freeRevision=(state.freeRevision||1)+1;
-   }
+   if(!waitingPeople().length){
+    const pending=state.people.filter(p=>!p.freeResearchStatus);status=!pending.length&&!state.people.some(p=>p.freeResearchStatus==='needs_review')?'complete':'incomplete';state.stopReason=pending.length?'contact_batch':status==='complete'?'sources_checked':'needs_review';state.label=pending.length?'Public checks saved. Continue with the next 10 contacts':status==='complete'?'Public research complete for the discovered contacts':'Some public checks need review; completed evidence is saved';
+   }else await checkContacts();
   }
   if(clock()-start>windowMs-Math.min(3000,windowMs*.15))break;
   }
- }catch(error){if(!valid){status='canceled';}else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';}else{status='incomplete';state.label=clean(error.message).slice(0,220);}}
+ }catch(error){if(!valid){status='canceled';}else if(error.code==='PASS_LIMIT'){status='incomplete';state.stopReason='time_limit';state.label=error.message;}else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';}else{status='incomplete';state.stopReason=error.code==='BATCH_LIMIT'?'operation_limit':'source_unavailable';state.label=clean(error.message).slice(0,220);}}
  finally{
-  clearTimeout(timer);controller.abort();compact(state);state.sources=reads(state).map(({markdown,links,...source})=>source);
+  clearTimeout(timer);controller.abort();await Promise.allSettled([...inFlight.values()]);await checkpointTail.catch(()=>{});compact(state);state.sources=reads(state).map(({markdown,links,...source})=>source);
   let updated;try{updated=valid?await sql(env,`UPDATE website_contact_jobs SET status=?,state_json=?,revision=revision+1,lease_token=NULL,lease_until=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,status,JSON.stringify(state),row.id,lease).run():{meta:{changes:0}};}catch(error){if(!storageFailure(error))throw error;status='incomplete';updated=await sql(env,"UPDATE website_contact_jobs SET status='incomplete',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'",row.id,lease).run();}
   if(!updated.meta.changes)await sql(env,"UPDATE website_contact_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1 WHERE id=? AND lease_token=? AND status='running'",row.id,lease).run();
  }
