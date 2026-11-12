@@ -14,15 +14,16 @@ export function websiteIdentitySupport(candidate,person){
  return {eligible:false,kind:'unconfirmed',reason:'Confirm this person and current company from an official source or a unique professional profile match.'};
 }
 export function websiteContactIdentity(person={}){
- if(!D.isIndependentContactPerson(person))return false;
+ if(!D.isIndependentContactPerson(person)||/(?:^|\s)(?:CEO|CFO|COO|CTO|CIO|CRO|CLO|CHRO|CMO)(?:\s|$)/u.test(String(person.publicName||person.name||'')))return false;
  const source=person.publicNameUrl||'';
  if(!source)return person.identityOrigin==='apollo';
  try{const url=new URL(source);if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&!D.normalizeProfessionalLinkedInUrl(source))return false;return ['https:','http:'].includes(url.protocol);}catch{return false;}
 }
 export function websiteContactRole(value){
- const text=String(value||'').toLowerCase();
+ const text=String(value||'').toLowerCase().replace(/^(?:group|global|corporate)\s+/,'');
+ if(/\bchief\s+risk(?:\s|&)/.test(text))return 'cro';
  if(/administrerende\s+direktør|adm\.?\s*direktør|verkställande\s+direktör/.test(text))return 'ceo';
- for(const [code,words] of [['ceo','chief executive officer'],['cfo','chief financial officer'],['coo','chief operating officer'],['cto','chief technology officer'],['cio','chief information officer'],['cmo','chief marketing officer'],['chro','chief human resources officer']])if(new RegExp('\\b'+code+'\\b').test(text)||text.includes(words))return code;
+ for(const [code,words] of [['ceo','chief executive officer'],['cfo','chief financial officer'],['coo','chief operating officer'],['cto','chief technology officer'],['cio','chief information officer'],['cmo','chief marketing officer'],['chro','chief human resources officer'],['cro','chief risk officer'],['clo','chief legal officer']])if(new RegExp('\\b'+code+'\\b').test(text)||text.includes(words))return code;
  return text.trim();
 }
 export function websiteFreeResearchComplete(candidate,person){

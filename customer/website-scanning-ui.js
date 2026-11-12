@@ -1,6 +1,6 @@
 import './website-scanning.js?v=20261111-contacts-v1';
 import './website-scanning-handoff.js?v=20261111-contacts-v1';
-import './website-contact-ui.js?v=20261112-v4-linkedin';
+import './website-contact-ui.js?v=20261112-v5-roster';
 (function(root){
 'use strict';
 if(!root.document||root.LeadIntelWebsiteScanUI)return;
