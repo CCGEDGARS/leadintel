@@ -18,7 +18,7 @@ test('market research preview and the Companies budget line show credits, and mi
   const app=read('app.js'),ui=read('discovery-ui.js');
   assert.match(app,/planApi\.describe\(\{searches:queries\.length,resultsPerSearch:limits\.resultsPerQuery,pages:0\},planStatus\.plan,\{remainingCredits:planStatus\.remainingCredits\}\)/);
   assert.match(app,/\$\("research-preview-scope"\)\.textContent=`\$\{queries\.length\} planned search[^`]*\$\{runCost\?` · \$\{runCost\.text\}`:""\}/);
-  assert.match(ui,/Research budget: up to \$\{boundedDiscoveryCallLimit\(estimate\.cap\)\} Firecrawl calls\$\{cost&&!loadMeta\(\)\.webCallCap\?` \(\$\{cost\.text\}\)`:''\}, billed on your plan/);
+  assert.match(ui,/Research budget: up to \$\{boundedDiscoveryCallLimit\(estimate\.cap\)\} Firecrawl calls for the next run\$\{cost&&!loadMeta\(\)\.webCallCap\?` \(\$\{cost\.text\}\)`:''\}, billed on your plan/);
   assert.match(ui,/planApi\.describe\(\{searches:estimate\.searches,resultsPerSearch:8,pages:estimate\.pages\},status\.plan,\{remainingCredits:status\.remainingCredits\}\)/);
   for(const source of [app,ui])assert.match(source,/globalThis\.LeadIntelAttention\?\.providerStatus\?\.\(\)/,'the plan comes from the cached services status, never from a new paid call');
 });
