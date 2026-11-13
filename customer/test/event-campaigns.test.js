@@ -25,3 +25,19 @@ test('optional website analysis fills empty fields, preserves edits and discards
  let resolve;w.fetch=()=>new Promise(r=>resolve=r);const pending=w.document.querySelector('#event-website-analyze').onclick();field('name').value='Edited while reading';resolve({ok:true,json:async()=>({markdown:'# Late result'})});await pending;
  assert.equal(field('name').value,'Edited while reading');assert.match(w.document.querySelector('#event-campaign-status').textContent,/changed/);w.close();
 });
+
+// Regression: the event CTA shares the overview but keeps high-contrast labels on its dark background.
+test('Prepare event CTA is readable and opens/closes its event editor without altering saved data',()=>{
+ const css=fs.readFileSync(require.resolve('../event-campaigns.css'),'utf8');
+ assert.match(css,/#event-planning-open span\s*\{\s*color:\s*#fff!important/);
+ const w=ui(false),panel=w.document.getElementById('event-campaign-panel'),open=w.document.getElementById('event-planning-open');
+ assert.ok(panel&&open,'event CTA and editor must mount');
+ assert.equal(panel.open,false);
+ open.click();
+ assert.equal(panel.open,true,'Prepare event must reveal its editable fields');
+ assert.ok(panel.querySelector('[data-event-field="name"]'),'event form must be usable');
+ w.document.getElementById('event-planning-close').click();
+ assert.equal(panel.open,false,'Back to overview must close the editor');
+ assert.equal(JSON.parse(w.localStorage.getItem('leadintel_customer_v2_state')).eventCampaigns.campaigns[0].name,'Industry Forum');
+ w.close();
+});
