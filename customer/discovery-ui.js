@@ -1554,20 +1554,22 @@ function companyReviewBatchPlan({domains=null}={}){
   const ordered=pending.map((company,index)=>({key:researchReviewKey(company),index})).filter(row=>!requested||requested.has(row.key)).sort((a,b)=>(Number(attempts[a.key])||0)-(Number(attempts[b.key])||0)||a.index-b.index);
   return {contextKey,fingerprint:currentFingerprint,queue,attempts,interrupted,pendingCount:pending.length,domains:ordered.slice(0,Math.min(selectedDiscoveryTarget(),MAX_DISCOVERY_COMPANY_CHECKS)).map(row=>row.key)};
 }
-let companyReviewBatchSequence=0;
+let companyReviewBatchSequence=0,companyReviewStartFailure=null;
 async function reviewNextCompanyBatch({domains=null}={}){
   if(discovery.status==='running')return false;
   const plan=companyReviewBatchPlan({domains});if(!plan.domains.length){renderCompanyReviewBatch();return false;}
   const stateAtStart=discovery,identity=()=>JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'']),identityAtStart=identity();
   const current=()=>discovery===stateAtStart&&identity()===identityAtStart&&LeadIntelDiscovery.searchContextKey(companyQualificationProfile(mainState()))===plan.contextKey&&sameStrategyFingerprint(plan.fingerprint,fingerprint());
+  companyReviewStartFailure=null;
+  const fail=error=>{if(!current())return;const message='Company review could not start: '+(error?.message||'Please retry.');companyReviewStartFailure={state:stateAtStart,identity:identityAtStart,contextKey:plan.contextKey,message};renderCompanyReviewBatch();showToast(message);};
   const id=`company-review:${Date.now()}:${++companyReviewBatchSequence}`;
   const task=runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomains:plan.domains,reviewBatchId:id});
-  if(!current()||discovery.status!=='running'||loadMeta().lastCompanyRun?.reviewBatchId!==id){await task;return false;}
+  if(!current()||discovery.status!=='running'||loadMeta().lastCompanyRun?.reviewBatchId!==id){try{await task;}catch(error){fail(error);}return false;}
   const sequence=(Number(plan.queue.sequence)||0)+1,priorAttempts=Object.fromEntries(plan.domains.map(key=>[key,Number(plan.attempts[key])||0]));
   const attempts={...plan.attempts};for(const key of plan.domains)attempts[key]=sequence;
   const batch={id,domains:plan.domains,priorAttempts,startedAt:new Date().toISOString()};
   saveMeta({...loadMeta(),companyReviewQueue:{contextKey:plan.contextKey,fingerprint:plan.fingerprint,sequence,attempts,lastBatch:batch}});saveDiscovery();renderCompanyReviewBatch();
-  let result;try{result=await task;}catch(error){showToast('Company review interrupted · '+(error?.message||'try again'));}
+  let result;try{result=await task;}catch(error){fail(error);}
   if(!current()){
     // A changed strategy in this workspace must not leave its old reservation behind.
     // A destination workspace owns its metadata and is never touched by this task.
@@ -1585,10 +1587,20 @@ function renderCompanyReviewBatch(){
   const node=$('company-review-batch');if(!node||!discovery)return;
   const plan=companyReviewBatchPlan(),batch=plan.queue.lastBatch,running=discovery.status==='running',active=Boolean(running&&batch?.id&&batch.id===loadMeta().lastCompanyRun?.reviewBatchId);
   node.hidden=!plan.pendingCount&&!batch;if(node.hidden){node.innerHTML='';return;}
-  const main=mainState(),ready=Boolean(main.website||main.profile?.website)&&Boolean(window.LeadIntelTargeting?.isConfirmed(main));
+  const main=mainState(),strategy=window.LeadIntelStrategyIntegrity?.status(main),ready=Boolean(main.website||main.profile?.website)&&Boolean(window.LeadIntelTargeting?.isConfirmed(main))&&strategy?.current===true;
+  const identity=JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'']);
+  const failure=companyReviewStartFailure?.state===discovery&&companyReviewStartFailure.identity===identity&&companyReviewStartFailure.contextKey===plan.contextKey?companyReviewStartFailure.message:'';
+  const blocker=!strategy?.current?(strategy?.reason||'Review and activate Strategy before reviewing companies.'):!ready?'Confirm your website and targeting in Profile before reviewing companies.':'';
   const count=active?batch.domains.length:plan.domains.length;
   const summary=plan.interrupted?'The previous review was interrupted. Review again to continue with unfinished companies.':batch?.finishedAt?`${batch.canceled?'Review canceled. ':''}Last batch: ${Number(batch.completedCount)||0} finished; ${Number(batch.pendingCount)||0} still need evidence.`:'';
-  node.innerHTML=`<div><h3>${plan.pendingCount?`${plan.pendingCount} ${plan.pendingCount===1?'company':'companies'} awaiting review`:'All saved companies reviewed'}</h3><p>${active?esc(companySearchProgressText()):plan.pendingCount?`Review the next ${count} to update their evidence, scores and shortlist ranking.`:'Review the company results and their evidence below.'}</p>${summary?`<small role="status">${esc(summary)}</small>`:''}</div><button id="review-next-companies" class="primary-btn" type="button"${running||!ready||!count?' disabled':''}>${active?`Reviewing ${count} ${count===1?'company':'companies'}…`:count?`Review next ${count} ${count===1?'company':'companies'}`:'Review complete'}</button>`;
+  const copyHtml=`<h3>${plan.pendingCount?`${plan.pendingCount} ${plan.pendingCount===1?'company':'companies'} awaiting review`:'All saved companies reviewed'}</h3><p>${active?esc(companySearchProgressText()):plan.pendingCount?`Review the next ${count} to update their evidence, scores and shortlist ranking.`:'Review the company results and their evidence below.'}</p>${summary?`<small role="status">${esc(summary)}</small>`:''}${blocker||failure?`<p class="company-review-start-issue" role="status" aria-live="polite">${esc(blocker||failure)}</p>`:''}${!strategy?.current?'<button type="button" class="secondary-btn small" data-company-review-strategy>Review Strategy</button>':''}`;
+  const label=active?`Reviewing ${count} ${count===1?'company':'companies'}…`:count?`Review next ${count} ${count===1?'company':'companies'}`:'Review complete';
+  // Keep the interactive node alive through worker, CRM and save refreshes.
+  // Replacing it between pointer down/up drops clicks and keyboard focus.
+  let copy=node.querySelector?.('[data-company-review-copy]'),button=node.querySelector?.('#review-next-companies');
+  if(!copy||!button){node.innerHTML=`<div data-company-review-copy>${copyHtml}</div><button id="review-next-companies" class="primary-btn" type="button">${esc(label)}</button>`;copy=node.querySelector?.('[data-company-review-copy]');button=node.querySelector?.('#review-next-companies');}
+  if(copy&&copy.innerHTML!==copyHtml)copy.innerHTML=copyHtml;
+  if(button){if(button.textContent!==label)button.textContent=label;button.disabled=running||!ready||!count;}
 }
 function removeResearchReviewCompany(key){
   if(discovery.status==='running'){showToast('Wait until company research finishes before removing results');return false;}
@@ -4280,7 +4292,7 @@ function refreshResearchBriefViews(retryDomain=''){
 }
 function bindDiscovery(){
  document.addEventListener?.('click',event=>{const button=event.target.closest('[data-translate-company-brief]');if(button)refreshResearchBriefViews(button.dataset.translateCompanyBrief);});
-  $("company-review-batch")?.addEventListener("click",event=>{if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();});
+  $("company-review-batch")?.addEventListener("click",event=>{if(event.target.closest("[data-company-review-strategy]")){showStrategyStep();return;}if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();});
   window.addEventListener('leadintel:commercial-context-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
   $("discovery-target-list")?.addEventListener("click",event=>{const button=event.target.closest("[data-select-target-buyers]");if(button)selectTargetForBuyers(button.dataset.selectTargetBuyers);});
   $("cancel-company-discovery")?.addEventListener("click",()=>{void cancelCompanyDiscovery();});

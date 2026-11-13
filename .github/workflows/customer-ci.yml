@@ -317,8 +317,8 @@ jobs:
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
         run: |
-          node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js customer/test/buyer-start-persistence.test.js
+          node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs backend/test/website-contact-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/monitoring-journey.test.mjs
       - name: Preserve focused navigation diagnostics
@@ -329,6 +329,7 @@ jobs:
           path: |
             /tmp/leadintel-profile-strategy/
             /tmp/leadintel-company-search-outcome/
+            /tmp/leadintel-company-review-button/
             /tmp/leadintel-buyer-start/
             /tmp/leadintel-copilot-research/
             /tmp/leadintel-website-contacts/

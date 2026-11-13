@@ -35,3 +35,60 @@ test('authenticated Companies preserves mixed scores, honest shortfall and the p
  }catch(error){const p=context?.pages().at(-1);if(p){await p.screenshot({path:dir+'/failure.png',fullPage:true});const diagnostic=await p.evaluate(()=>({cards:document.getElementById('company-candidates')?.textContent,active:document.querySelector('.step-view.active')?.id,status:discovery?.status,context:companyQualificationProfile(mainState()),candidates:(discovery?.candidates||[]).map(c=>({company:c.company,needsRecheck:c.needsRecheck,current:companyStrategyCurrent(c),assessment:qualificationAssessment(c),fitIssue:c.buyerFitIssue,fitContext:c.buyerFit?.context})),outcome:companySearchOutcome()}));await fs.writeFile(dir+'/failure.json',JSON.stringify(diagnostic,null,2));console.error(JSON.stringify({active:diagnostic.active,status:diagnostic.status,candidates:diagnostic.candidates.map(c=>({company:c.company,needsRecheck:c.needsRecheck,current:c.current,gaps:c.assessment.gaps,score:c.assessment.score}))}));}throw error;
  }finally{await context?.close();await browser.close();await f.close();}
 });
+
+test('the real review button survives a pointer-time refresh, starts bounded saved research and persists its batch',{timeout:90000},async t=>{
+ if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The mandatory Profile/Strategy browser job executes this SQL journey.');return;}
+ const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs');
+ const {ready,settleInitialSave}=await import('../../scripts/verify-step5-journey.mjs');
+ const {chromium}=await loadPlaywright(),f=await journeyFixture(),requests=[];
+ const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context;
+ let expectedMaterial=null;
+ const dir='/tmp/leadintel-company-review-button';await fs.mkdir(dir,{recursive:true});
+ async function open(){
+  context=await browser.newContext({viewport:{width:1440,height:1100}});
+  await context.route('**/*',async route=>{
+   const url=new URL(route.request().url());
+   if(/firecrawl(?:\/|-)search|firecrawl(?:\/|-)scrape/.test(url.pathname)){
+    requests.push(route.request().postDataJSON());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:[]})});
+   }
+   if(url.pathname==='/api/ai/generate')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({text:'{"companies":[]}'})});
+   if(url.pathname==='/api/ai/web-search')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({results:[]})});
+   return url.origin===f.origin?route.continue():route.abort();
+  });
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+  const p=await context.newPage();await p.goto(f.origin+'/customer/');await ready(p);
+  await p.waitForFunction(()=>typeof discovery!=='undefined'&&discovery&&window.LeadIntelDiscoveryUI?.getCompanyOutcome);
+  await p.locator('.steps [data-workflow-stage="4"] strong').click();return p;
+ }
+ try{
+  const initial=await f.getState(),storedMarket=initial.payload.main.market;
+  // Match the app's canonical saved shape before approving this controlled fixture.
+  const main=require('../step2-brief-schema.js').migrateState(require('../profile-engine.js').normalizeSavedState(initial.payload.main));
+  main.profile.companyClassification=require('../company-brain.js').classifyCompany({...main,profile:main.profile});
+  main.profile.customerPainPointsStatus='User confirmed';main.profile.customerPainPointsLanguage='en';
+  main.market=require('../market-engine.js').recoverInterruptedResearch(storedMarket||{});
+  initial.payload.main=main;
+  main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
+  main.market.strategyApproval=require('../strategy-integrity.js').approval(main);
+  initial.payload.meta.discovery={...initial.payload.meta.discovery,activeJourneyStage:4,targetCount:5,webCallCap:20};
+  initial.payload.discovery={...initial.payload.discovery,status:'complete',lastRunAt:'2026-11-10T10:00:00Z',potentialMatches:Array.from({length:31},(_,i)=>({company:`Pending Manufacturer ${i}`,domain:`pending-${i}.example`,website:`https://pending-${i}.example/`,market:'Sweden',evidence:[{url:`https://pending-${i}.example/`,title:`Pending Manufacturer ${i}`,text:`Pending Manufacturer ${i} is mentioned as a manufacturer in Sweden; its operating scope needs verification.`,evidenceKind:'search_excerpt'}],qualificationGaps:['Verify readable operating evidence']}))};
+  await f.replace(initial.payload,initial.version);expectedMaterial=require('../strategy-integrity.js').material((await f.getState()).payload.main);let page=await open();await settleInitialSave(page);
+  const button=page.locator('#review-next-companies');await button.waitFor({state:'visible'});await page.waitForFunction(()=>!document.getElementById('review-next-companies')?.disabled);await button.scrollIntoViewIfNeeded();
+  assert.equal(requests.length,0,'rendering the saved queue never starts research');
+  await button.evaluate(el=>{el.dataset.pressedIdentity='kept';});const box=await button.boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+  await page.evaluate(()=>renderCompanyReviewBatch());
+  assert.equal(await button.getAttribute('data-pressed-identity'),'kept','the same DOM control must survive between pointer down and up');
+  await page.mouse.up();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').companyReviewQueue?.lastBatch?.finishedAt);
+  assert.ok(requests.length>0&&requests.length<=20);assert.match(requests.find(body=>body.query)?.query||'',/Pending Manufacturer|pending-/);
+  await settleInitialSave(page);const saved=(await f.getState()).payload,batch=saved.meta.discovery.companyReviewQueue.lastBatch;
+  assert.equal(batch.domains.length,5);assert.ok(batch.finishedAt);assert.equal(saved.discovery.potentialMatches.length,31);assert.equal(saved.discovery.selectedProspects.length,1);
+  await page.screenshot({path:dir+'/completed.png',fullPage:true});await context.close();page=await open();
+  await page.waitForFunction(()=>document.getElementById('company-review-batch')?.textContent.includes('Last batch:'));
+  assert.match(await page.locator('#company-review-batch').textContent(),/still need evidence/);
+  assert.equal((await f.getState()).payload.meta.discovery.companyReviewQueue.lastBatch.id,batch.id);
+  await fs.writeFile(dir+'/evidence.json',JSON.stringify({realAuth:true,realSql:true,pointerRefresh:true,requests:requests.length,cap:20,reservedCompanies:5,savedQueue:31,reopen:true,paidContactCalls:0,outreachSent:0},null,2));
+ }catch(error){const page=context?.pages().at(-1);if(page){await page.screenshot({path:dir+'/failure.png',fullPage:true});const diagnostic=await page.evaluate(expected=>{const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;const actual=LeadIntelStrategyIntegrity.material(mainState());return {active:document.querySelector('.step-view.active')?.id,status:typeof discovery!=='undefined'?discovery?.status:null,pending:typeof discovery!=='undefined'?discovery?.potentialMatches?.length:null,panel:document.getElementById('company-review-batch')?.textContent,button:document.getElementById('review-next-companies')?.outerHTML,materialChanges:expected?Object.keys(actual).filter(k=>JSON.stringify(stable(actual[k]))!==JSON.stringify(stable(expected[k]))).map(k=>({field:k,before:expected[k],after:actual[k]})):[]};},expectedMaterial);await fs.writeFile(dir+'/failure.json',JSON.stringify(diagnostic,null,2));console.error(JSON.stringify(diagnostic));}throw error;
+ }finally{await context?.close();await browser.close();await f.close();}
+});
