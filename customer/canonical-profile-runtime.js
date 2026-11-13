@@ -49,6 +49,9 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
       if(key==='targetMarkets'&&Object.hasOwn(input,'targetMarkets')&&Profile.normalizeTargetMarkets(input.targetMarkets).join('; ')!==String(record.value).trim()){retainPrevious(key,record);continue;}
       if(key==='commercialObjective'&&Object.hasOwn(input.workspaceGoals||{},'successOutcome')&&String(input.workspaceGoals.successOutcome||'').trim()!==String(record.value).trim()){retainPrevious(key,record);continue;}
       rebuilt.canonical.fields[key]={...record,updatedAt:record.updatedAt||new Date().toISOString()};rebuilt[key]=record.value;
+      if(key==='customerPainPoints')for(const meta of ['customerPainPointsStatus','customerPainPointsLanguage']){
+        if(Object.hasOwn(current,meta))rebuilt[meta]=current[meta];else delete rebuilt[meta];
+      }
     }
     Canonical.finalizeProfileQuality(rebuilt);rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);return rebuilt;
   }

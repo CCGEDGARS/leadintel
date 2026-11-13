@@ -19,3 +19,12 @@ Keep the review button node stable while updating copy and disabled state. Show 
 ## Acceptance
 
 Failing-before tests cover the three reproductions. The authenticated SQL/browser acceptance presses the actual control, refreshes its panel while pressed, releases it, observes bounded saved-company requests, saves its five-company batch and reopens it without losing the 31-company queue or the retained Buyer selection. Sources are controlled fixtures, not new customer research. This runs in the mandatory Profile/Strategy CI job because local Chromium socket creation is restricted. Implementation, exact-release proof and actual customer results remain distinct. Do not claim the owner's exact click was reproduced or five real prospects were obtained without that evidence.
+
+
+## Connected lifecycle cause established by the browser trace
+
+The first browser fixture exposed missing legacy defaults; correcting those alone did not establish acceptance. After the actual pointer click successfully started provider work, a real rebuild defect changed an unchanged confirmed customerPainPointsStatus from User confirmed to AI-inferred. This changed the approved Strategy signature during review and caused the scope guard to abandon its batch reservation. Earlier explanations limited to test setup were incomplete.
+
+Canonical profile rebuilding preserved the confirmed field value and canonical record but replaced its compatibility status/language metadata with model-derived values. The repair preserves the current metadata exactly when the same confirmed canonical field is retained. It does not bless old approvals, infer confirmation, preserve displaced answers, or relax genuine commercial-change invalidation. Industrial and software reload regressions fail before this repair and pass after it, including repeated reloads and subsequent real-offer invalidation. The canonical module and its loader chain are refreshed together. No migration; source revert remains the rollback.
+
+The controlled browser seed applies the same Brief, Profile, Company Brain and Market defaults before approval. Its exact material-diff diagnostics remain in the test to expose future cross-boundary drift instead of repeatedly changing the runtime on a guess. Actual private-workspace click evidence remains unavailable.
