@@ -31,5 +31,5 @@
 @media(max-width:720px){.event-journey{grid-template-columns:repeat(2,minmax(0,1fr))}#event-campaign-panel>.event-actions{bottom:8px;padding:10px}#event-plan-recipients{flex-basis:100%}}
 @media(prefers-reduced-motion:reduce){.event-campaign-panel button{transition:none}}
 
-#event-planning-open span{color:inherit;font:inherit;margin:0}
+#event-planning-open span{color:#fff!important;font:inherit;margin:0}
 @media(max-width:720px){#event-campaign-panel>.event-actions{position:static;margin-top:18px}#event-campaign-panel{padding-bottom:72px}}
