@@ -828,7 +828,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   let followUpVerificationSearches=[];
   let companyMentions=[];
   let expectedSearches=queries.length;
-  let followUpQueries=[];
+  let followUpQueries=[],deferredMarketQueries=[];
   let runCandidates=[],runPotentialMatches=[],buyerFitFailures=[],reviewedSavedCandidates=[];
   const runController=new AbortController();
   const discoveryAtStart=discovery,bridgeAtStart=bridge(),identityAtStart=JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'']);
@@ -1003,6 +1003,16 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         }catch(error){if(runController.signal.aborted)throw error;discovery.providerFallbacks.push({phase:'query-planning',reason:'Local-language planning unavailable; using reference query families'});}
         finally{clearTimeout(planningTimer);}
       }
+      // Acquire a small evidence wave, then finish company checks before
+      // purchasing more discovery. A low cap must not be spent on names alone.
+      if(!targetOnly&&!savingMode&&eventCampaign?.audienceMode!=='participants'){
+        const firstWave=queries.filter(q=>q.kind!=='target-evidence').slice(0,2);
+        const targets=queries.filter(q=>q.kind==='target-evidence');
+        deferredMarketQueries=queries.filter(q=>!firstWave.includes(q)&&!targets.includes(q));
+        queries.splice(0,queries.length,...firstWave,...targets);
+        searches=Array(queries.length).fill(null);expectedSearches-=deferredMarketQueries.length;
+        discovery.queries=queries;discovery.funnel.marketSearchesTotal=queries.length;
+      }
       await runDiscoverySearchBatch(queries,"searching",runController.signal,searches);
       throwIfDiscoveryRunAborted(runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...firstPass);
@@ -1047,6 +1057,24 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         runPotentialMatches=reviewed.filter(c=>!c.qualification.eligible);
         discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);discovery.latestRunCandidateCount=runCandidates.length;
         discovery.funnel.qualifiedCompanies=runCandidates.length;saveDiscovery();renderDiscoverySafely();
+      }
+      // Resume remaining planned queries in small waves only after the preceding
+      // companies have completed their evidence and fit checks. Empty healthy
+      // waves may advance; a wholly unavailable provider does not buy more work.
+      while(deferredMarketQueries.length&&firstPassUsable&&!discoveryBudgetExhausted()&&runGoalCount(mergeWorkflowCompanies(previousCandidates,runCandidates))<targetCount&&companyMentions.length<MAX_DISCOVERY_COMPANY_CHECKS){
+        const wave=deferredMarketQueries.splice(0,2),rows=Array(wave.length).fill(null);
+        queries.push(...wave);expectedSearches+=wave.length;discovery.queries=queries;discovery.funnel.marketSearchesTotal=queries.length;
+        await runDiscoverySearchBatch(wave,'searching',runController.signal,rows);searches.push(...rows);
+        throwIfDiscoveryRunAborted(runController.signal);
+        const evidence=rows.flatMap(row=>row?.results||[]);allMarketEvidence.push(...evidence);
+        discovery.rawResults=retainDiscoveryEvidence(previousRawResults,[...allMarketEvidence,...allResolved,...allVerified]);
+        const remaining=MAX_DISCOVERY_COMPANY_CHECKS-companyMentions.length;
+        const names=await extractCompaniesFromEvidence(evidence,targetMarket,remaining,runController.signal);
+        const known=new Set(companyMentions.map(item=>LeadIntelDiscovery.companyMentionKey(item.company)));rememberMentions(names);
+        const fresh=companyMentions.filter(item=>!known.has(LeadIntelDiscovery.companyMentionKey(item.company)));
+        await collectResolutionAndVerification(fresh,remaining);
+        linkedEvidence=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(allResolved,companyMentions,allMarketEvidence);
+        if(!rows.some(row=>row?.results?.length)&&rows.some(row=>row?.error))break;
       }
       if(!savingMode&&!targetOnly&&firstPassUsable&&eventCampaign?.audienceMode!=='participants'&&runGoalCount(mergeWorkflowCompanies(previousCandidates,runCandidates))<targetCount&&companyMentions.length<MAX_DISCOVERY_COMPANY_CHECKS){
         const remainingLimit=MAX_DISCOVERY_COMPANY_CHECKS-companyMentions.length;

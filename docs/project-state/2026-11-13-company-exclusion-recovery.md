@@ -22,3 +22,13 @@ Current confirmed targeting includes workforce rental/steel manufacturing, Denma
 ## Verification and limits
 
 Failing-before tests reproduce headcount, sector, terminal exclusion, query planning, old-rule accumulation and historical outcome defects. Unit/integration, exact-SHA release and authenticated customer yield must be reported separately. Public evidence may not establish employee count or useful fit for every candidate. This fix cannot guarantee five eligible companies or permanent provider availability. No outreach sending or paid contact reveal is authorized by this repair.
+
+
+## Follow-up: bounded acquisition waves
+
+A separate controlled 20-call regression exposed a remaining acquisition ordering defect: normal discovery executed its complete market-query wave before resolving or checking the first newly discovered companies. This is not evidence of what consumed the historical screenshot's allowance. Normal acquisition now starts with at most two broad queries, completes the existing company resolution/evidence/fit batches, and resumes deferred planned sources in two-query waves only when the goal remains unmet, before the existing bounded adaptive follow-up. Saved-company review still runs first. Explicit target evidence, rechecks, saving samples and participant searches retain their existing semantics and caps. Existing request receipts, cancellation, context guards and persistence remain authoritative; no migration is needed. Rollback is a source revert.
+
+The new regression fails on the preceding source revision and passes after the change: with a saved 20-request cap, resolution starts after at most two broad queries, at least one evidence-checked result is completed and survives saved-state normalization, and total recorded web requests remain within 20. These are controlled provider results, not proof of five real customer matches. Local Chromium acceptance is blocked by the execution environment denying socket creation (Operation not permitted); the authenticated SQL/browser acceptance gate remains open until CI executes it successfully.
+
+
+The follow-up also reproduces and repairs two outstanding review findings from PR #948: equipment described as food processing/pharmaceutical packaging must not establish that its supplier produces food/medicines; an official labeled headcount ending in `+` has no finite upper bound. `50+` cannot prove a workforce below 100. The regression suite keeps true producer exclusions and exact/ranged count behavior alongside these cases. Engine, worker and entry caches are refreshed together. All source changes remain under verification; no post-change authenticated customer yield is claimed.

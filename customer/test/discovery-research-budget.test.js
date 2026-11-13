@@ -319,3 +319,18 @@ test('saved-company review resolves confirmed headcount using targeted evidence 
  await context.__runDiscovery();const d=context.__discoveryState();assert.equal(d.candidates[0]?.domain,'queuedmanufacturing.lv');assert.equal(d.candidates[0].qualification.score,85);assert.ok(calls.queries[0].includes('employees'));assert.ok(calls.search+calls.scrape<20);assert.equal(d.potentialMatches.some(c=>c.domain==='queuedmanufacturing.lv'),false);assert.equal(context.__loadMeta().autonomousDiscovery.goalCount,1);
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));assert.equal(restored.candidates[0].domain,'queuedmanufacturing.lv');assert.ok(restored.candidates[0].evidence.some(e=>e.text.includes('120 people')));
 });
+
+
+test('a twenty-call cap verifies discovered companies before spending the allowance on broad searches',async()=>{
+ const fitResponse=prompt=>JSON.stringify({companies:JSON.parse(prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Manufacturing operations use the confirmed automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions.find(q=>q.quote.includes('Latvia')).quoteId}]}))});
+ const {context,calls}=loadRunner({targetCount:5,fitResponse});
+ const key='leadintel_customer_v2_discovery_meta';context.localStorage.setItem(key,JSON.stringify({...context.__loadMeta(),webCallCap:20}));
+ await context.__runDiscovery();
+ const firstResolution=calls.queries.findIndex(q=>q.startsWith('"'));
+ assert.ok(firstResolution>=0&&firstResolution<=2,'at most two broad queries may precede the first company-resolution batch');
+ const state=context.__discoveryState();
+ assert.ok(state.candidates.some(c=>c.qualification?.eligible),'the small allowance must finish usable checks rather than only collect names');
+ assert.ok(calls.search+calls.scrape<=20);
+ const saved=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.ok(saved.candidates.some(c=>c.qualification?.eligible),'completed checks survive persisted reload');
+});

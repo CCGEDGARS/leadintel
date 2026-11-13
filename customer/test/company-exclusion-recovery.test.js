@@ -26,3 +26,18 @@ test('a verified exclusion is terminal and must not buy another evidence search'
  const plan=D.companyEvidencePlan(company(prose('We employ 12 people.')),{priorityOffers:'steel manufacturing',targetMarkets:'Denmark',exclusions:rule},{},{});
  assert.equal(plan.hardFailure,true);assert.equal(plan.needsWeb,false);assert.ok(plan.assessment.gaps.some(g=>/excluded by approved/i.test(g)));
 });
+
+test('equipment suppliers are not excluded as food or pharmaceutical producers',()=>{
+ for(const text of ['We manufacture food processing equipment.','We manufacture pharmaceutical packaging machinery.']){
+  const c=company(prose(text));assert.equal(D.evaluateExclusions(c,'Food and Pharma industries').status,'clear',text);
+ }
+});
+test('open-ended employee counts cannot prove a company is below the minimum',()=>{
+ const rule='companies with less than 100 people';
+ for(const text of ['Number of employees: 50+','We employ 50+ employees.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'unverified',text);
+ assert.equal(D.evaluateExclusions(company(prose('Number of employees: 150+')),rule).status,'clear');
+});
+
+test('ordinary producer sentence continuations retain the explicit sector exclusion',()=>{
+ for(const text of ['We manufacture food products worldwide.','We produce medicines daily.','We manufacture pharmaceutical products with certified production facilities.'])assert.equal(D.evaluateExclusions(company(prose(text)),'Food and Pharma industries').status,'excluded',text);
+});
