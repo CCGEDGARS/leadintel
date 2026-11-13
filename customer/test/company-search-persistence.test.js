@@ -8,15 +8,16 @@ test('authenticated Companies preserves mixed scores, honest shortfall and the p
  const dir='/tmp/leadintel-company-search-outcome';await fs.mkdir(dir,{recursive:true});
  async function open(){context=await browser.newContext({viewport:{width:1440,height:1100}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const p=await context.newPage();await p.goto(f.origin+'/customer/');await ready(p);return p;}
  try{
-  const initial=await f.getState();initial.payload.meta.discovery.activeJourneyStage=4;await f.replace(initial.payload,initial.version);
+  const initial=await f.getState();initial.payload.meta.discovery.activeJourneyStage=4;const main=initial.payload.main;main.answers.exclusions='companies with less than 30 people';main.profile.exclusions='ISO 9001 certification required';main.targetingConfirmation=require('../targeting-policy.js').confirm(main);main.market.strategyApproval=require('../strategy-integrity.js').approval(main);await f.replace(initial.payload,initial.version);
   let page=await open();await settleInitialSave(page);
   await page.evaluate(()=>{
    const profile=companyQualificationProfile(mainState()),now=new Date().toISOString();
    discovery.candidates=[81,69].map((fit,i)=>{
     const company=i?'Beacon Machinery':'Atlas Machinery',domain=i?'beacon-machinery.example':'atlas-machinery.example';
-    const text=`${company} manufactures industrial equipment in Sweden. Our production facilities use industrial automation to coordinate manufacturing operations and improve production flow. Engineering teams plan and operate the machinery used for our industrial customers.`;
+    const text=`${company} manufactures industrial equipment in Sweden. Our production facilities use industrial automation to coordinate manufacturing operations and improve production flow. Engineering teams plan and operate the machinery used for our industrial customers. We employ 120 people.`;
     const evidence=[{url:`https://${domain}/operations`,title:company+' operations',text,sourceRead:true,verifiedAt:now},{url:`https://industry-journal.example/company-${i}`,title:company+' factory',text:`${company} manufactures industrial equipment in Sweden for business customers.`,sourceRead:true,verifiedAt:now}];
     const c=LeadIntelDiscovery.parseBuyerFit(JSON.stringify({companies:[{domain,fit,relationship:'buyer',offerId:'offer-0',reason:'Production equipment creates a specific inferred application for the approved industrial automation offer.',buyerRole:'industrial manufacturer',evidence:[{sourceId:'source-0',quote:text}]}]}),[{company,domain,website:`https://${domain}/`,market:'Sweden',evidence}],profile)[0];
+    if(profile.exclusions!=='companies with less than 30 people')throw new Error('Superseded generated exclusions leaked into current targeting');
     const q=LeadIntelDiscovery.assessCompanyQualification(c,profile,mainState().market,{researchedAt:now});
     return {...c,strategyFingerprint:fingerprint(),searchContextKey:LeadIntelDiscovery.searchContextKey(profile),researchedAt:now,qualification:q,qualified:q.eligible,marketVerified:q.eligible,buyerVerified:q.eligible,score:{total:q.score,fit:q.buyerFitPoints,signal:q.signalPoints},needsRecheck:false,people:[]};
    });
