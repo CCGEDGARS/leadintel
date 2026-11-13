@@ -1217,6 +1217,7 @@
       for(const [index,pattern] of patterns.entries())for(const m of text.matchAll(pattern)){
         const qualifier=index===0?(m[1]||'').toLowerCase():'',low=Number(m[index===0?2:1].replace(/,/g,'')),high=m[index===0?3:2];
         let min=low,max=high?Number(high.replace(/,/g,'')):low;
+        if(/^\s*\+/.test(text.slice(m.index+m[0].length)))max=Infinity;
         if(/more than|over/.test(qualifier)){min=low+1;max=Infinity;}else if(qualifier==='at least')max=Infinity;
         else if(/fewer than|less than|under/.test(qualifier)){min=0;max=low-1;}
         if(min<=max)rows.push({min,max,url:source.url,quote:m[0]});
@@ -1240,7 +1241,7 @@
       // An explicitly combined industry rule means either industry. A supplier
       // serving these sectors is not itself a food/pharmaceutical producer.
       if(/^(?:(?:exclude|avoid|no)\s+)?food\s+(?:and|or|&)\s+pharma(?:ceutical)?\s+industr(?:y|ies)$/i.test(rule)){
-        const direct=trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain)).some(e=>/\b(?:we|our company)\s+(?:manufacture|manufactures|produce|produces)\s+(?:a range of\s+)?(?:food(?:\s+(?:products|ingredients))?|pharmaceutical(?:\s+products)?|medicines)\b/i.test(evidenceText(e)));
+        const direct=trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain)).some(e=>/\b(?:we|our company)\s+(?:manufacture|manufactures|produce|produces)\s+(?:a range of\s+)?(?:food(?:\s+(?:products|ingredients))?|pharmaceutical(?:\s+products)?|medicines)\b(?=[.,;:!?]|$|\s+(?:and|for|to|in)\b)/i.test(evidenceText(e)));
         if(direct)violations.push(rule);
         continue;
       }

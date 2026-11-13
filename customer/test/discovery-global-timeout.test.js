@@ -1013,8 +1013,8 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   assert.match(failedTask,/provider checks failed or timed out/i);
   assert.match(failedTask,/no no-match conclusion/i);
   assert.equal(completedTask,false);
-  assert.equal(requests,12,'each transient provider failure gets exactly one bounded retry');
-  assert.equal(context.__discoveryState().searchFailures.length,6);
+  assert.equal(requests,4,'each of the two initial requests gets one retry; a wholly unavailable provider must not open the deferred waves');
+  assert.equal(context.__discoveryState().searchFailures.length,2);
   assert.ok(context.__discoveryState().searchFailures.every(item=>item.phase==='searching'&&item.reason==='provider_unavailable'&&item.status===503));
   context.__renderDiscoveryFunnel();
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Market evidence/);
@@ -1610,7 +1610,7 @@ test('a qualified first pass checks purchasing fit before broadening and does no
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:1}));
   await context.__runDiscovery({autoPass:3});
   const result=context.__discoveryState();
-  assert.equal(result.funnel.qualifiedCompanies,1);assert.equal(result.funnel.adaptiveFollowUpSearches,0);assert.equal(fitCalls,1);assert.equal(marketCalls,6);
+  assert.equal(result.funnel.qualifiedCompanies,1);assert.equal(result.funnel.adaptiveFollowUpSearches,0);assert.equal(fitCalls,1);assert.equal(marketCalls,2,'stop after the first small wave satisfies the goal');
   assert.equal(checkpoint.status,'partial');
   assert.equal(checkpoint.latestRunCandidateCount,1);
   assert.equal(checkpoint.candidates[0]?.domain,candidate.domain,'a completed fit batch must survive closing the tab before the run finishes');
@@ -1815,7 +1815,7 @@ test('discovery reuses deferred extracted names before paying for another market
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:1,targetMode:'custom'}));
  await context.__runDiscovery({autoPass:3});
  const fourth=actions.indexOf('resolve:Fourth Buyer');assert.ok(fourth>0,'the retained fourth name is eventually researched');
- assert.equal(actions.slice(0,fourth).filter(x=>x==='market').length,6,'no extra market queries before the deferred name');
+ assert.equal(actions.slice(0,fourth).filter(x=>x==='market').length,2,'all known names are checked before the next market wave');
  assert.equal(actions.filter(x=>x==='resolve:First Buyer').length,1,'earlier identities are not resolved again');
 });
 
