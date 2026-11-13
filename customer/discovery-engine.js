@@ -1241,7 +1241,7 @@
       // An explicitly combined industry rule means either industry. A supplier
       // serving these sectors is not itself a food/pharmaceutical producer.
       if(/^(?:(?:exclude|avoid|no)\s+)?food\s+(?:and|or|&)\s+pharma(?:ceutical)?\s+industr(?:y|ies)$/i.test(rule)){
-        const direct=trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain)).some(e=>/\b(?:we|our company)\s+(?:manufacture|manufactures|produce|produces)\s+(?:a range of\s+)?(?:food(?:\s+(?:products|ingredients))?|pharmaceutical(?:\s+products)?|medicines)\b(?=[.,;:!?]|$|\s+(?:and|for|to|in)\b)/i.test(evidenceText(e)));
+        const direct=trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain)).some(e=>/\b(?:we|our company)\s+(?:manufacture|manufactures|produce|produces)\s+(?:a range of\s+)?(?:food(?:\s+(?:products|ingredients))?|pharmaceutical(?:\s+products)?|medicines)\b(?!\s+(?:(?:processing|packaging|production|manufacturing|handling|industry|product|products)\s+){0,3}(?:equipment|machinery|machines|systems|lines|components|tools)\b)/i.test(evidenceText(e)));
         if(direct)violations.push(rule);
         continue;
       }

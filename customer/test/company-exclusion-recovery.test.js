@@ -37,3 +37,7 @@ test('open-ended employee counts cannot prove a company is below the minimum',()
  for(const text of ['Number of employees: 50+','We employ 50+ employees.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'unverified',text);
  assert.equal(D.evaluateExclusions(company(prose('Number of employees: 150+')),rule).status,'clear');
 });
+
+test('ordinary producer sentence continuations retain the explicit sector exclusion',()=>{
+ for(const text of ['We manufacture food products worldwide.','We produce medicines daily.','We manufacture pharmaceutical products with certified production facilities.'])assert.equal(D.evaluateExclusions(company(prose(text)),'Food and Pharma industries').status,'excluded',text);
+});
