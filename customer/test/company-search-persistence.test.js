@@ -65,6 +65,7 @@ test('the real review button survives a pointer-time refresh, starts bounded sav
   // Match the app's canonical saved shape before approving this controlled fixture.
   const main=require('../step2-brief-schema.js').migrateState(require('../profile-engine.js').normalizeSavedState(initial.payload.main));
   main.profile.companyClassification=require('../company-brain.js').classifyCompany({...main,profile:main.profile});
+  main.profile.customerPainPointsStatus='User confirmed';main.profile.customerPainPointsLanguage='en';
   main.market=require('../market-engine.js').recoverInterruptedResearch(storedMarket||{});
   initial.payload.main=main;
   main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
