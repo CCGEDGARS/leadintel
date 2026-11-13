@@ -989,9 +989,10 @@
       if(requested&&actual&&requested.code!==actual.code)continue;
       const signalTerms=[...new Set(signals.flatMap(signal=>signalEvidenceTerms(signal,item.market)))].slice(0,3);
       const quotedSignals=signalTerms.length?signalTerms.map(term=>`"${term.replace(/"/g,"")}"`).join(" OR "):'"investment" OR "expansion" OR "hiring" OR "project"';
-      const focus=['market','operations','signals'].includes(item.verificationFocus)?item.verificationFocus:profile.discoveryPriority==='signals'?'signals':profile.discoveryFitFirst?'operations':'signals';
+      const focus=['market','operations','signals','exclusions'].includes(item.verificationFocus)?item.verificationFocus:profile.discoveryPriority==='signals'?'signals':profile.discoveryFitFirst?'operations':'signals';
       const country=marketSearchNames(item.market);
-      const operatingQuery=`site:${domain} ${country} (locations OR contact OR operations OR products OR services OR about)`;
+      const missingSize=evaluateExclusions(item,profile.exclusions).unverified.some(rule=>headcountExclusion(rule)!==null);
+      const operatingQuery=focus==='exclusions'&&missingSize?`site:${domain} ${country} (employees OR people OR headcount OR staff) (about OR company OR facts)`:`site:${domain} ${country} (locations OR contact OR operations OR products OR services OR about)`;
       checks.push({
         id:`verify-${slug(domain)}`,domain,company:clean(item.company),sourceUrl:normalizeUrl(item.sourceUrl||""),market:clean(item.market),offer:"",kind:"verification",verificationFocus:focus,
         query:focus==='signals'?`site:${domain} (${quotedSignals}) after:${new Date(Date.now()-365*86400000).toISOString().slice(0,10)} news ${clean(profile.exclusions).replace(/no specific exclusions/i,'').slice(0,300)}`:operatingQuery
@@ -1202,12 +1203,47 @@
     return {fit,terms:terms.slice(0,5),targetMatches,offerMatches};
   }
   function fitScore(candidate,profile){return commercialFit(candidate,profile).fit;}
+  // Only attributed official statements may satisfy a numeric company-size rule.
+  // Ranges crossing the boundary and conflicting statements remain unverified.
+  function headcountExclusion(rule){
+    const match=rule.match(/(?:less than|fewer than|below|under|minimum(?: of)?|at least)\s*(\d[\d,]*)\s*(?:people|employees|staff|workers)\b/i);
+    return match?Number(match[1].replace(/,/g,'')):null;
+  }
+  function officialHeadcounts(candidate){
+    const rows=[];
+    for(const source of trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain))){
+      const text=[source.title,source.description,source.text].filter(Boolean).join('. ');
+      const patterns=[/\b(?:we|our company|our group)\s+(?:currently\s+)?(?:employ|employs|have|has)\s+(?:(more than|over|at least|fewer than|less than|under)\s+)?(\d[\d,]*)(?:\s*[–—-]\s*(\d[\d,]*))?\s+(?:(?:skilled|dedicated|full-time|qualified)\s+)?(?:employees|people|staff|workers)\b/gi,/\b(?:number of employees|employee count|headcount)\s*[:\-]?\s*(\d[\d,]*)(?:\s*[–—-]\s*(\d[\d,]*))?\b/gi];
+      for(const [index,pattern] of patterns.entries())for(const m of text.matchAll(pattern)){
+        const qualifier=index===0?(m[1]||'').toLowerCase():'',low=Number(m[index===0?2:1].replace(/,/g,'')),high=m[index===0?3:2];
+        let min=low,max=high?Number(high.replace(/,/g,'')):low;
+        if(/more than|over/.test(qualifier)){min=low+1;max=Infinity;}else if(qualifier==='at least')max=Infinity;
+        else if(/fewer than|less than|under/.test(qualifier)){min=0;max=low-1;}
+        if(min<=max)rows.push({min,max,url:source.url,quote:m[0]});
+      }
+    }
+    return rows;
+  }
   function evaluateExclusions(candidate={},rules=''){
     const raw=String(rules||'').trim(),violations=[],unverified=[];
     const evidence=(candidate.evidence||[]).map(evidenceText).join(' ').toLowerCase();
     const amount=value=>Number(String(value).replace(/[ ,.]/g,''));
-    for(const rule of raw.split(/[;\n]+/).map(clean).filter(Boolean)){
+    for(const rule of raw.split(/[;\n]+|\.(?=\s+[A-Z])/).map(clean).filter(Boolean)){
       if(/^(none|no specific exclusions|no exclusions|nav)$/i.test(rule))continue;
+      const minimum=headcountExclusion(rule);
+      if(minimum!==null){
+        const counts=officialHeadcounts(candidate),above=counts.filter(c=>c.min>=minimum),below=counts.filter(c=>c.max<minimum);
+        if(below.length&&!above.length&&below.length===counts.length)violations.push(rule);
+        else if(!above.length||below.length||above.length!==counts.length)unverified.push(rule);
+        continue;
+      }
+      // An explicitly combined industry rule means either industry. A supplier
+      // serving these sectors is not itself a food/pharmaceutical producer.
+      if(/^(?:(?:exclude|avoid|no)\s+)?food\s+(?:and|or|&)\s+pharma(?:ceutical)?\s+industr(?:y|ies)$/i.test(rule)){
+        const direct=trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain)).some(e=>/\b(?:we|our company)\s+(?:manufacture|manufactures|produce|produces)\s+(?:a range of\s+)?(?:food(?:\s+(?:products|ingredients))?|pharmaceutical(?:\s+products)?|medicines)\b/i.test(evidenceText(e)));
+        if(direct)violations.push(rule);
+        continue;
+      }
       const domain=rule.match(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.[a-z]{2,})(?:\/|$)/i);
       if(domain){if(candidate.domain===domain[1].toLowerCase())violations.push(rule);continue;}
       const iso=rule.match(/ISO\s*(\d{4,5})/i);
@@ -3107,8 +3143,9 @@
   function companyEvidencePlan(candidate={},profile={},market={},settings={}){
     const sourceStamp=(candidate.evidence||[]).map(e=>e.verifiedAt).filter(value=>Number.isFinite(Date.parse(value))).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]||'';
     const q=assessCompanyQualification(candidate,profile,market,{...settings,researchedAt:settings.researchedAt||candidate.researchedAt||sourceStamp}),fresh=!q.gaps.includes('Refresh company verification'),official=trustedEvidence(candidate).some(e=>EvidencePolicy.firstParty(e.url,candidate.domain)&&companyOperatingEvidence(e.text||e.description).length>=120);
-    const hardFailure=q.gaps.some(g=>/same service|no relevant buyer relationship|seller or reference customer|CRM lifecycle|explicit.*exclusion/i.test(g));
-    return {assessment:q,checked:q.eligible&&!candidate.needsRecheck,strongFit:q.eligible&&q.score>=80&&!candidate.needsRecheck,hardFailure,reassessSaved:!hardFailure&&fresh&&official&&!q.commercial,verificationFocus:q.gaps.some(g=>/target.market|Company market/.test(g))?'market':'operations',needsWeb:!hardFailure&&(candidate.needsRecheck===true||q.gaps.some(g=>!['Verify commercial fit to the confirmed offers','Verify a specific purchasing application for a confirmed offer'].includes(g)))};
+    const exclusions=evaluateExclusions(candidate,profile.exclusions);
+    const hardFailure=exclusions.status==='excluded'||q.gaps.some(g=>/same service|no relevant buyer relationship|seller or reference customer|CRM lifecycle|explicit.*exclusion/i.test(g));
+    return {assessment:q,checked:q.eligible&&!candidate.needsRecheck,strongFit:q.eligible&&q.score>=80&&!candidate.needsRecheck,hardFailure,reassessSaved:!hardFailure&&fresh&&official&&!q.commercial,verificationFocus:exclusions.unverified.some(rule=>headcountExclusion(rule)!==null)?'exclusions':q.gaps.some(g=>/target.market|Company market/.test(g))?'market':'operations',needsWeb:!hardFailure&&(candidate.needsRecheck===true||q.gaps.some(g=>!['Verify commercial fit to the confirmed offers','Verify a specific purchasing application for a confirmed offer'].includes(g)))};
   }
   function normalizeDiscoveryState(value={}){
     const input=value&&typeof value==="object"?value:{};
@@ -3302,7 +3339,8 @@
     if(!evidenceSupportsTargetMarket(candidate))gaps.push('Verify target-market presence');
     if(fit.fit<MINIMUM_DISCOVERY_FIT_SCORE&&!verifiedBuyerFit(candidate,profile))gaps.push('Verify commercial fit to the confirmed offers');
     if(isSameServiceSeller(candidate,profile))gaps.push('Company offers the same service rather than the required buyer profile');
-    if(exclusions.status!=='clear')gaps.push('Resolve exclusion checks');
+    if(exclusions.status==='excluded')gaps.push('Company excluded by approved rules: '+exclusions.violations.join('; '));
+    else if(exclusions.status!=='clear')gaps.push('Resolve exclusion checks');
     if(independent<2)gaps.push('Obtain two independent credible source families');
     if((profile.referenceDomains||[]).map(companyIdentityDomain).includes(domain)||companyIdentityDomain(profile.website)===domain)gaps.push('Seller or reference customer cannot be a new prospect');
     if(candidate.lifecycle_status&&candidate.lifecycle_status!=='prospect')gaps.push('CRM lifecycle blocks automatic prospecting');

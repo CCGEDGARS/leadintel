@@ -56,3 +56,10 @@ test('background display never runs scoring on the UI call stack, while actions 
   assert.equal(shown.pending,true);assert.equal(r.checks(),0);
   assert.equal(r.assess().offer,'Training');assert.equal(r.checks(),1);
 });
+
+test('confirmed exclusion edits replace the generated profile rules instead of accumulating obsolete blockers',()=>{
+ const r=runtime();r.c.LeadIntelTargeting=require('../targeting-policy.js');
+ r.setRaw({website:'https://seller.example',profile:{priorityOffers:'Training',exclusions:'ISO 9001 certification required'},answers:{priority_offers:'Training',exclusions:'companies with less than 30 people'},market:{signals:[]}});
+ const profile=r.c.qualificationContext().profile;
+ assert.equal(profile.exclusions,'companies with less than 30 people');
+});

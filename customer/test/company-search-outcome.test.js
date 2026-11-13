@@ -26,3 +26,10 @@ test('failure and cancellation cannot become a successful target merely because 
   const q=Progress.outcome({targetCount:1,checked:[{qualification:{score:90}}],pendingCount:1,status,run});assert.equal(q.stopReason,reason);assert.notEqual(q.state,'complete');
  }
 });
+
+
+test('a changed strategy does not present a historical budget stop as the current search outcome',()=>{
+ const q=Progress.outcome({goal:'strong_fit',targetCount:5,checked:[],pendingCount:31,status:'complete',run:{contextChanged:true,completedAt:'2026-11-10T00:00:00Z',callsUsed:20,callLimit:20}});
+ assert.equal(q.stopReason,'context_changed');assert.match(q.note,/strategy changed/i);assert.match(q.note,/previous run.*20 of 20/i);assert.equal(q.state,'partial');
+ const m=Progress.model({status:'complete',result:q});assert.match(m.title,/review/i);assert.doesNotMatch(m.title,/Search paused/);
+});
