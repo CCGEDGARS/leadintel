@@ -329,6 +329,7 @@ jobs:
           path: |
             /tmp/leadintel-profile-strategy/
             /tmp/leadintel-company-search-outcome/
+            /tmp/leadintel-company-review-button/
             /tmp/leadintel-buyer-start/
             /tmp/leadintel-copilot-research/
             /tmp/leadintel-website-contacts/

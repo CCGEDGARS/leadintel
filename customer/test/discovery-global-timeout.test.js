@@ -2199,3 +2199,34 @@ test('seller changes during dossier research discard late contact results and cl
  assert.ok(release);const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.profile.priorityOffers='Different confirmed offer';context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));release();await work;
  const candidate=context.__discoveryState().selectedProspects[0];assert.equal(searches,0);assert.equal(candidate.buyerDiscovery?.companyDossier,null);assert.equal(candidate.publicContactStatus,'error');
 });
+
+test('a company-review refresh preserves the pressed control and its bound click',async()=>{
+ const {context,dom,calls,render}=pendingCompanyBatchFixture({count:31});render();context.__bindDiscovery();
+ const button=dom.window.document.querySelector('#review-next-companies');button.focus();
+ button.dispatchEvent(new dom.window.MouseEvent('mousedown',{bubbles:true}));render();
+ assert.equal(dom.window.document.querySelector('#review-next-companies'),button,'background renders must not detach the button between press and release');
+ assert.equal(dom.window.document.activeElement,button,'keyboard focus survives the refresh');
+ button.click();assert.equal(context.__discoveryState().status,'running');
+ for(let i=0;i<200&&context.__discoveryState().status==='running';i++)await new Promise(resolve=>setTimeout(resolve,5));
+ assert.ok(calls.length>0,'the same bound control must start the saved-company research');
+});
+
+test('a blocked saved-company review explains the start failure inside its own panel',async()=>{
+ const {context,dom,calls,render,review}=pendingCompanyBatchFixture();
+ const key='leadintel_customer_v2_state',main=JSON.parse(context.localStorage.getItem(key));
+ main.market.strategyApproval.signature='stale';context.localStorage.setItem(key,JSON.stringify(main));
+ render();await review();
+ assert.equal(calls.length,0,'a stale approval never authorizes new provider requests');
+ assert.match(dom.window.document.getElementById('company-review-batch').textContent,/review strategy|activate.*strategy|strategy.*changed/i,'the blocker must remain beside the clicked control, not only in a transient toast');
+});
+
+test('a storage failure before research starts stays visible and allows another review attempt',async()=>{
+ const {context,dom,calls,render,review}=pendingCompanyBatchFixture();render();
+ const set=context.localStorage.setItem;let fail=true;
+ context.localStorage.setItem=(key,value)=>{if(fail&&key.endsWith('_meta')){fail=false;throw new Error('Storage unavailable during review start');}return set(key,value);};
+ await assert.doesNotReject(()=>review());
+ assert.equal(calls.length,0);assert.notEqual(context.__discoveryState().status,'running');
+ assert.match(dom.window.document.getElementById('company-review-batch').textContent,/Storage unavailable during review start/);
+ assert.equal(dom.window.document.querySelector('#review-next-companies').disabled,false,'retry remains available without reserving the failed batch');
+ await review();assert.ok(calls.length>0);
+});
