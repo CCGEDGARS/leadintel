@@ -60,7 +60,11 @@ test('the real review button survives a pointer-time refresh, starts bounded sav
   await p.locator('.steps [data-workflow-stage="4"] strong').click();return p;
  }
  try{
-  const initial=await f.getState(),main=initial.payload.main;
+  const initial=await f.getState(),storedMarket=initial.payload.main.market;
+  // Match the app's canonical saved shape before approving this controlled fixture.
+  const main=require('../profile-engine.js').normalizeSavedState(initial.payload.main);
+  main.market=require('../market-engine.js').recoverInterruptedResearch(storedMarket||{});
+  initial.payload.main=main;
   main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
   main.market.strategyApproval=require('../strategy-integrity.js').approval(main);
   initial.payload.meta.discovery={...initial.payload.meta.discovery,activeJourneyStage:4,targetCount:5,webCallCap:20};
