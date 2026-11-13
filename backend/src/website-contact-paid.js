@@ -1,4 +1,4 @@
-import {websiteFreeResearchComplete,websiteContactRole,websiteIdentitySupport,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
+import {websiteContactRole,websiteNameKey,websiteProfileKey,websitePaidReadiness} from './website-contact-evidence.js';
 import {lookupAdditionalEmail} from './additional-contact-services.js';
 import {mergeTregContactData,tregLookupAccounting} from './treg-contact-research.js';
 import {withWorkspaceServiceCredentials,searchWorkspaceApolloPeople} from './service-integrations.js';
@@ -17,19 +17,16 @@ export async function websitePaidScope(env,context,body){
  const input=parse(row.input_json),state=parse(row.state_json),people=state.people||[],person=people.find(p=>String(p.id)===String(body.personId));
  if(!person||people.filter(p=>String(p.id)===String(body.personId)).length!==1)throw contactError('Choose one current researched contact.');
  const original=identity(person),freeRevision=state.freeRevision;
- const personSql=`EXISTS(SELECT 1 FROM json_each(website_contact_jobs.state_json,'$.people') p WHERE CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=? AND json_extract(p.value,'$.freeResearchStatus')='complete')`;
- const personArgs=[String(person.id),person.publicName||person.name,person.title||'',person.organization||'',person.publicLinkedinUrl||person.linkedin_url||''];
+ const personSql=`EXISTS(SELECT 1 FROM json_each(website_contact_jobs.state_json,'$.people') p WHERE CAST(json_extract(p.value,'$.id') AS TEXT)=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicName'),''),json_extract(p.value,'$.name'),'')=? AND COALESCE(json_extract(p.value,'$.title'),'')=? AND COALESCE(json_extract(p.value,'$.organization'),'')=? AND COALESCE(NULLIF(json_extract(p.value,'$.publicLinkedinUrl'),''),json_extract(p.value,'$.linkedin_url'),'')=? AND (json_extract(p.value,'$.freeResearchStatus')='complete' OR (json_extract(p.value,'$.identityCheck.status')='confirmed' AND json_extract(p.value,'$.identityCheck.identityKey')=? AND json_extract(p.value,'$.identityCheck.checkedAt')=?)))`;
+ const personArgs=[String(person.id),person.publicName||person.name,person.title||'',person.organization||'',person.publicLinkedinUrl||person.linkedin_url||'',person.identityCheck?.identityKey||'',person.identityCheck?.checkedAt||''];
  const scopeAuthority=()=>({sql:`EXISTS(SELECT 1 FROM website_contact_jobs WHERE id=? AND workspace_id=? AND company_id=? AND status IN ('complete','incomplete') AND json_extract(state_json,'$.freeRevision')=? AND ${personSql} AND ${contactCompanyAuthority}) AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.user_id=? AND m.role=?)`,args:[row.id,context.workspaceId,row.company_id,freeRevision,...personArgs,context.sessionHash,context.workspaceId,context.userId,context.role]});
  const guard=async()=>{const a=scopeAuthority();if(!(await sql(env,`SELECT 1 AS allowed WHERE ${a.sql}`,...a.args).first()))throw contactError('Company, contact evidence or research authority changed.');};guard.writeAuthority=scopeAuthority;
  const current=async()=>{await guard();const fresh=await readWebsiteContacts(env,context.workspaceId,{id:row.id}),saved=parse(fresh.state_json),selected=saved.people.find(p=>String(p.id)===String(person.id));if(identity(selected)!==original)throw contactError('The selected contact changed.');return {fresh,saved,selected};};
  const candidate=async detail=>{const {saved}=await current();if(detail.company.id!==row.company_id||detail.company.company_name!==input.company||detail.company.normalized_domain!==input.domain)throw contactError('The saved company changed.');return {company:input.company,domain:input.domain,people:saved.people,publicResearch:{},lifecycle_status:detail.company.lifecycle_status};};
  const readiness=async(_candidate,selected)=>{
   const {selected:server}=await current(),candidate={company:input.company,domain:input.domain,people:[server]};
-  const fresh=Date.now()-Date.parse(server.freeCheckedAt||'');
-  const checks=websiteFreeResearchComplete(candidate,server);
-  const supported=websiteIdentitySupport(candidate,server).eligible;
-  const eligible=identity(selected)===original&&server.freeResearchStatus==='complete'&&supported&&checks&&fresh>=0&&fresh<30*86400000;
-  return {eligible,reason:'Complete current public identity and mandatory free contact checks before paid research.',code:'WEBSITE_CONTACT_FREE_RESEARCH_REQUIRED'};
+  const ready=websitePaidReadiness(candidate,server);
+  return {...ready,eligible:identity(selected)===original&&ready.eligible};
  };
  const currentData=async()=>{const {selected}=await current();return {saved:selected,data:selected.contactData||null};};
  const resolvePerson=async(runtime,selected)=>{

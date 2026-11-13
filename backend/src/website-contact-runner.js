@@ -1,6 +1,6 @@
 import {websiteSourceChunks as sourceChunks,websiteStaffCards as localStaffCards} from './website-contact-staff.js';
 import {reviewWebsiteLinkedIn,websiteLinkedInMatchRows,websiteLinkedInQueries,websiteLinkedInReviewCurrent,WEBSITE_LINKEDIN_REVIEW_VERSION} from './website-linkedin-review.js';
-import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey} from './website-contact-evidence.js';
+import {websiteFreeResearchComplete,websiteContactRole,websiteContactIdentity,websiteNameKey,websiteProfileKey,websiteIdentitySupport,websiteIdentityCheckKey} from './website-contact-evidence.js';
 import {reconcileWebsiteContactIdentities} from './website-contact-identity.js';
 import {storageFailure} from './workspace-storage.js';
 import {contactSql as sql,contactParse as parse,contactAuthority as authority,contactError,contactActive} from './website-contact-store.js';
@@ -79,10 +79,11 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  const lease=crypto.randomUUID(),start=clock(),claim=await sql(env,`UPDATE website_contact_jobs SET status='running',lease_token=?,lease_until=?,updated_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM website_contact_jobs WHERE status IN ('queued','running') AND lease_until<? ${jobId?'AND id=?':''} ORDER BY updated_at,id LIMIT 1) RETURNING *`,lease,start+Math.max(90000,windowMs+30000),now,...(jobId?[jobId]:[])).first();
  if(!claim)return [];
  const row=claim,input=parse(row.input_json),state=parse(row.state_json),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),windowMs);let status='queued',valid=true;
- const excluded=(state.people||[]).filter(p=>!websiteContactIdentity(p));
+ const focused=state.personCheck;
+ const excluded=focused?[]:(state.people||[]).filter(p=>!websiteContactIdentity(p));
  if(excluded.length){state.excludedIdentities=[...(state.excludedIdentities||[]),...excluded.map(p=>({...p,exclusionReason:'Indexed publication or unsupported professional identity'}))].slice(-300);state.people=state.people.filter(websiteContactIdentity);}
- reconcileWebsiteContactIdentities(state,input);
- if(!services.checkPerson&&state.linkedinReviewVersion!==WEBSITE_LINKEDIN_REVIEW_VERSION){for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(input,person))delete person.freeResearchStatus;state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;}
+ if(!focused)reconcileWebsiteContactIdentities(state,input);
+ if(!focused&&!services.checkPerson&&state.linkedinReviewVersion!==WEBSITE_LINKEDIN_REVIEW_VERSION){for(const person of state.people||[])if(!websiteLinkedInReviewCurrent(input,person))delete person.freeResearchStatus;state.linkedinReviewVersion=WEBSITE_LINKEDIN_REVIEW_VERSION;}
  const guard=async()=>{
   if(controller.signal.aborted)throw Object.assign(Error('Processing slice ended'),{code:'TIME_BUDGET'});
   if(clock()>=row.deadline_at)throw Object.assign(Error('Research pass time limit reached; results are saved. Continue unfinished checks when needed.'),{code:'PASS_LIMIT'});
@@ -155,6 +156,27 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   }));
   await checkpoint();const failed=outcomes.find(result=>result.status==='rejected');if(failed)throw failed.reason;
  };
+ const checkIdentity=async()=>{
+  const person=state.people.find(p=>String(p.id)===focused.personId);
+  if(!person)throw contactError('The selected contact changed.');
+  const candidate=candidateFor(input,[person]);state.label='Checking identity · '+(person.publicName||person.name);
+  const review=await reviewWebsiteLinkedIn(candidate,person,{search,guard,receipt:query=>state.tasks.find(t=>t.kind==='search'&&t.value===query&&!t.archived)});
+  // Fresh matching may clear an older derived profile hold; a namesake/role
+  // conflict in the saved roster remains authoritative and is never overridden.
+  const matched=D.matchPublicLinkedInProfiles([{...person,identitySource:'public',linkedinIdentityEvidence:null,linkedinConfirmedUrl:'',linkedinConfirmationMethod:'automatic'}],websiteLinkedInMatchRows(person,review.queries.flatMap(q=>q.rows||[]),candidate),input.company)[0];
+  Object.assign(person,matched,{linkedinReview:review});
+  let official=false;
+  if(review.matchStatus!=='double_checked'&&person.identityOrigin==='official'&&sameHost(person.publicNameUrl,input.domain)){
+   const page=await optional(()=>read(person.publicNameUrl));
+   official=Boolean(page&&[...D.discoverCompanyContacts([page],candidate,[]),...localStaffCards(page,input)].some(p=>websiteNameKey(p.publicName||p.name)===websiteNameKey(person.publicName||person.name)&&websiteContactRole(p.title)===websiteContactRole(person.title)));
+  }
+  await guard();const confirmed=websiteLinkedInReviewCurrent(candidate,person)&&websiteIdentitySupport(candidate,person).eligible&&(review.matchStatus==='double_checked'||official);
+  person.identityCheck={...person.identityCheck,version:1,status:confirmed?'confirmed':'needs_review',checkedAt:new Date().toISOString(),identityKey:websiteIdentityCheckKey(candidate,person),evidenceKind:official?'official':'professional_profile',...(official?{sourceUrl:person.publicNameUrl,sourceCheckedAt:state.tasks.find(t=>t.kind==='read'&&t.value===person.publicNameUrl&&!t.archived)?.checkedAt}:{})};
+  state.freeRevision=(state.freeRevision||1)+1;delete state.personCheck;
+  status=state.phase==='contacts'&&state.people.every(p=>p.freeResearchStatus==='complete')?'complete':'incomplete';
+  state.stopReason='identity_checked';state.label=confirmed?'Identity confirmed. Paid email and phone research are ready for separate approval.':'Identity check saved. The person or current company still needs review.';
+  await checkpoint();
+ };
  const leadershipSearch=async()=>{
   state.label='Apollo free leadership search · decision-makers first';
   const leaders=await optional(()=>apollo('leadership',{domain:input.domain,person_titles:['CEO','Chief Executive Officer','Managing Director','President','Founder','Director','Head']}));
@@ -173,6 +195,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  try{
   for(let stepInSlice=0;stepInSlice<8&&status==='queued';stepInSlice++){
   await guard();if(clock()>row.deadline_at){state.label='Research pass time limit reached; results are saved. Continue unfinished checks when needed.';state.stopReason='time_limit';status='incomplete';}
+  else if(focused){await checkIdentity();}
   else if(state.phase==='discovery'){
    if(state.people.filter(p=>p.freeResearchStatus).length>=state.batchLimit){
     state.stopReason='contact_batch';state.label='Public checks saved for this contact batch. Continue for more contacts and deeper company sources';state.coverage.pendingSourceUrls=plannedPages().slice(0,120);state.coverage.discoveryIncomplete=true;status='incomplete';break;

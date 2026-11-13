@@ -37,3 +37,16 @@ export function websiteFreeResearchComplete(candidate,person){
  const independent=person.contactResearch?.checks?.independent;
  return !independent||independent.status==='not_needed'||independent.status==='complete'&&independent.queryLog?.length>0&&independent.queryLog.every(row=>row.status==='complete'&&(!row.sourceReads||row.sourceReads.every(r=>['complete','not_needed'].includes(r.status))));
 }
+
+// Explicit per-person identity checks and full contact-search coverage are
+// separate receipts. A missing email search must not invalidate a proved person.
+export const websiteIdentityCheckKey=(candidate,person)=>JSON.stringify([candidate.company,candidate.domain,String(person.id),person.publicName||person.name,person.title,person.organization,websiteProfileKey(person.publicLinkedinUrl||person.linkedin_url),person.publicNameUrl||'']);
+export function websitePaidReadiness(candidate,person,jobStatus){
+ if(jobStatus&&! ['complete','incomplete'].includes(jobStatus))return {eligible:false,reason:jobStatus==='canceled'?'Use Check identity to finish the stopped identity check.':'Public research is still running.',code:'WEBSITE_CONTACT_RESEARCH_ACTIVE'};
+ const support=websiteIdentitySupport(candidate,person),reviewed=websiteLinkedInReviewCurrent(candidate,person),check=person.identityCheck;
+ if(!support.eligible)return {eligible:false,reason:support.reason,code:'WEBSITE_CONTACT_IDENTITY_REQUIRED'};
+ const fresh=value=>{const age=Date.now()-Date.parse(value||'');return age>=0&&age<30*86400000;};
+ const explicit=check?.version===1&&check.status==='confirmed'&&check.identityKey===websiteIdentityCheckKey(candidate,person)&&fresh(check.checkedAt)&&reviewed&&(person.linkedinReview.matchStatus==='double_checked'||check.evidenceKind==='official'&&fresh(check.sourceCheckedAt)&&check.sourceUrl===person.publicNameUrl&&D.canonicalDomain(check.sourceUrl)===candidate.domain);
+ const full=person.freeResearchStatus==='complete'&&fresh(person.freeCheckedAt)&&websiteFreeResearchComplete(candidate,person);
+ return {eligible:Boolean(explicit||full),reason:explicit||full?'': 'Use Check identity to confirm this person before approving paid research.',code:'WEBSITE_CONTACT_FREE_RESEARCH_REQUIRED'};
+}
