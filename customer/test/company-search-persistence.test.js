@@ -60,7 +60,10 @@ test('the real review button survives a pointer-time refresh, starts bounded sav
   await p.locator('.steps [data-workflow-stage="4"] strong').click();return p;
  }
  try{
-  const initial=await f.getState();initial.payload.meta.discovery={...initial.payload.meta.discovery,activeJourneyStage:4,targetCount:5,webCallCap:20};
+  const initial=await f.getState(),main=initial.payload.main;
+  main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
+  main.market.strategyApproval=require('../strategy-integrity.js').approval(main);
+  initial.payload.meta.discovery={...initial.payload.meta.discovery,activeJourneyStage:4,targetCount:5,webCallCap:20};
   initial.payload.discovery={...initial.payload.discovery,status:'complete',lastRunAt:'2026-11-10T10:00:00Z',potentialMatches:Array.from({length:31},(_,i)=>({company:`Pending Manufacturer ${i}`,domain:`pending-${i}.example`,website:`https://pending-${i}.example/`,market:'Sweden',evidence:[{url:`https://pending-${i}.example/`,title:`Pending Manufacturer ${i}`,text:`Pending Manufacturer ${i} is mentioned as a manufacturer in Sweden; its operating scope needs verification.`,evidenceKind:'search_excerpt'}],qualificationGaps:['Verify readable operating evidence']}))};
   await f.replace(initial.payload,initial.version);let page=await open();await settleInitialSave(page);
   const button=page.locator('#review-next-companies');await button.waitFor({state:'visible'});await page.waitForFunction(()=>!document.getElementById('review-next-companies')?.disabled);await button.scrollIntoViewIfNeeded();
