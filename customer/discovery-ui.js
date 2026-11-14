@@ -946,7 +946,8 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
             const completedByDomain=new Map(candidates.map(c=>[canonicalDomain(c.domain),c]));
             preserveResearchPool(pool.map(c=>completedByDomain.get(canonicalDomain(c.domain))||c));
             // Keep successful batches even if the overall run is subsequently cancelled.
-            runCandidates=assessPool([...pool.filter(c=>cachedFit(c)),...candidates]).filter(c=>c.qualification.eligible);
+            const assessed=assessPool([...pool.filter(c=>cachedFit(c)),...candidates]),evaluated=new Set(assessed.map(c=>canonicalDomain(c.domain)));
+            runCandidates=LeadIntelDiscovery.rankQualifiedCompanies(mergeWorkflowCompanies(runCandidates.filter(c=>!evaluated.has(canonicalDomain(c.domain))),assessed.filter(c=>c.qualification.eligible)));
             if(campaignPlan)campaignPlan.results=runCandidates.slice(0,targetCount);
   discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);discovery.latestRunCandidateCount=runCandidates.length;
             discovery.funnel.qualifiedCompanies=runCandidates.length;
@@ -1005,6 +1006,53 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         }
         return linked;
       };
+
+      // Explicit reviews own known domains already. Finish each company's
+      // saved evidence and missing facts before spending on the next company;
+      // rediscovering all target names first can consume the whole small cap.
+      if(recheckOnly){
+        queries.splice(0);searches=[];discovery.queries=[];expectedSearches=0;
+        discovery.funnel.marketSearchesTotal=0;
+        const saved=new Map(mergeWorkflowCompanies(discovery.selectedProspects||[],mergeWorkflowCompanies(previousPotentialMatches,previousCandidates)).map(c=>[canonicalDomain(c.domain),c]));
+        for(const target of researchTargets){
+          throwIfDiscoveryRunAborted(runController.signal);
+          let candidate={...saved.get(canonicalDomain(target.domain)),company:target.companyName,domain:target.domain,website:target.website,market:targetMarket};
+          const savedUrls=new Set((candidate.evidence||[]).map(e=>e.url));
+          const retained=previousRawResults.filter(e=>e.sourceRead===true&&canonicalDomain(e.url)===canonicalDomain(candidate.domain)&&!savedUrls.has(e.url));
+          candidate.evidence=LeadIntelDiscovery.dedupeCompanyEvidence([...(candidate.evidence||[]),...retained]);
+          rememberMentions([{company:candidate.company,market:targetMarket}]);
+          let plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});
+          if(plan.reassessSaved){candidate=(await researchPool([candidate]))[0];plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});}
+          if(buyerFitFailures.length)return;
+          if(plan.needsWeb){
+            const checks=LeadIntelDiscovery.buildCandidateVerificationQueries([{...candidate,verificationFocus:plan.verificationFocus,includeIndependent:plan.assessment.evidenceSources<2}],profile,market,1);
+            queries.push(...checks);discovery.queries=queries;
+            const rows=Array(checks.length).fill(null);expectedSearches+=checks.length;
+            await runDiscoverySearchBatch(checks,'verifying',runController.signal,rows);
+            verificationSearches.push(...rows);
+            const evidence=rows.flatMap(row=>row?.results||[]);allVerified.push(...evidence);
+            discovery.rawResults=retainDiscoveryEvidence(previousRawResults,allVerified);
+            if(evidence.length){
+              candidate={...candidate,needsRecheck:false,evidence:LeadIntelDiscovery.dedupeCompanyEvidence([...(candidate.evidence||[]),...evidence.filter(e=>canonicalDomain(e.domain||e.url)===canonicalDomain(candidate.domain))])};
+              candidate=(await researchPool([candidate]))[0];
+              if(buyerFitFailures.length)return;
+            }
+          }
+          const assessed=assessPool([candidate])[0];
+          // Fresh eligible saved evidence can clear a historical recheck flag;
+          // stale evidence still fails the unchanged qualification assessment.
+          if(assessed.qualification.eligible)assessed.needsRecheck=false;
+          runCandidates=LeadIntelDiscovery.rankQualifiedCompanies(mergeWorkflowCompanies(runCandidates,assessed.qualification.eligible?[assessed]:[]));
+          runPotentialMatches=mergeWorkflowCompanies(runPotentialMatches,assessed.qualification.eligible?[]:[assessed]);
+          discovery.candidates=mergeWorkflowCompanies(previousCandidates,runCandidates);
+          discovery.potentialMatches=mergeWorkflowCompanies(previousPotentialMatches,runPotentialMatches).filter(c=>!runCandidates.some(row=>canonicalDomain(row.domain)===canonicalDomain(c.domain)));
+          discovery.latestRunCandidateCount=runCandidates.length;discovery.funnel.qualifiedCompanies=runCandidates.length;
+          discovery.lastRunAt=new Date().toISOString();
+          saveDiscovery();renderDiscoverySafely();
+        }
+        discovery.extraction={status:'saved',method:'Saved company review',message:'Reviewed saved evidence and completed company checks before moving to the next company.'};
+        return;
+      }
 
       // Finish known evidence gaps before buying another broad search. Every
       // batch shares this request's call cap and scope/cancellation guard.

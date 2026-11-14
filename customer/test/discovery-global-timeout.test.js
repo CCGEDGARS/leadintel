@@ -1245,7 +1245,7 @@ test('paused Lookalike does not call the reference model while known targets rem
  const ctx=loadDiscoveryRunner();let calls=0;
  ctx.LeadIntelReferenceCustomerPortfolio={getCombinedActiveModel(){calls++;return {dna:{referenceProfiles:[]}}}};
  const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state'));main.market.icps=[{id:'icp-core',type:'core',active:true},{id:'icp-lookalike',type:'lookalike',active:false}];main.targetCompanies=[{companyName:'North',domain:'north.example',website:'https://north.example'}];main.market.strategyApproval=StrategyIntegrity.approval(main);ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
- await ctx.__runDiscovery({recheckOnly:true});assert.equal(calls,0);assert.ok(ctx.__discoveryState().queries.some(q=>q.query.includes('North')));
+ await ctx.__runDiscovery({recheckOnly:true});assert.equal(calls,0);assert.ok(ctx.__discoveryState().queries.some(q=>q.company==='North'&&q.query.includes('north.example')));
 });
 
 
@@ -1965,12 +1965,13 @@ test('retaining checked overflow does not add paid reference-similarity comparis
  assert.equal(JSON.parse(similarityRequests[0].prompt.split('. Prospects: ')[1]).length,5);
 });
 
-function pendingCompanyBatchFixture({count=12,amount=5,successful=false,waitFor=null,bridgeImpl=null,onFetch=null,providerStatus=null}={}){
+function pendingCompanyBatchFixture({count=12,amount=5,successful=false,assessmentUnavailable=false,waitFor=null,bridgeImpl=null,onFetch=null,providerStatus=null}={}){
  const calls=[];const at=new Date().toISOString();
  const evidenceFor=(i,independent=false)=>({url:independent?`https://industry.lv/pending${i}`:`https://pending${i}.lv/products`,title:`Pending${i} industrial equipment`,verifiedAt:independent?'':at,text:`Pending${i} manufactures industrial equipment in Latvia and purchases industrial automation from specialist partners for use in its production and assembly facilities. Its engineering team designs and manufactures machines for business customers.`});
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,scaleProductionRunTimeout:100,bridgeImpl,fetchImpl:async(url,options)=>{
   const body=JSON.parse(options.body);calls.push({url,body});onFetch?.(context,url,body);if(waitFor)await waitFor;
   if(providerStatus)return {ok:false,status:providerStatus,json:async()=>({error:'Provider unavailable'})};
+  if(!successful&&!assessmentUnavailable&&body.task==='buyer-fit')return {ok:true,json:async()=>({text:JSON.stringify({companies:JSON.parse(body.prompt.split('. Companies: ')[1]).map(c=>({domain:c.domain,evidenceStatus:'insufficient',reason:'The retained sources do not establish the purchasing application.'}))})})};
   if(!successful)return {ok:true,json:async()=>({data:[]})};
   if(body.task==='buyer-fit'){
    const rows=JSON.parse(body.prompt.split('. Companies: ')[1]);
@@ -2000,7 +2001,7 @@ test('the visible batch-review control explains the pending count and selected b
  context.document.getElementById('discovery-target-count').value='10';render();assert.equal(panel.querySelector('button').textContent,'Review next 10 companies');
 });
 test('a normal company search with pending companies and no previous review batch can render and start providers',async()=>{
- const {context,calls,render,dom}=pendingCompanyBatchFixture();
+ const {context,calls,render,dom}=pendingCompanyBatchFixture({assessmentUnavailable:true});
  context.__setDiscovery({...context.__discoveryState(),status:'running'});
  assert.doesNotThrow(render);
  assert.equal(dom.window.document.querySelector('#company-review-batch button').disabled,true);
@@ -2023,7 +2024,7 @@ test('reviewing a saved batch updates real scores, reranks the shortlist and pre
  assert.deepEqual([...dom.window.document.querySelectorAll('#company-candidates .company-total strong')].map(n=>Number(n.textContent)),[95,84,78,65,53]);
  assert.equal(dom.window.document.querySelector('#company-review-batch button').textContent,'Review next 5 companies');
  assert.match(dom.window.document.getElementById('company-review-batch').textContent,/5.*finished/i);assert.equal(state.selectedProspects[0].domain,'savedbuyer.lv');
- const searched=new Set(calls.filter(c=>c.body.query).flatMap(c=>c.body.query.match(/pending\d+/gi)||[]).map(x=>x.toLowerCase()));assert.deepEqual([...searched].sort(),['pending0','pending1','pending2','pending3','pending4']);
+ const assessed=new Set(calls.filter(c=>c.body.task==='buyer-fit').flatMap(c=>JSON.parse(c.body.prompt.split('. Companies: ')[1].split('\n')[0]).map(row=>row.domain)));assert.deepEqual([...assessed].sort(),['pending0.lv','pending1.lv','pending2.lv','pending3.lv','pending4.lv']);assert.ok(calls.every(c=>!c.body.query),'saved evidence must not be repurchased to update scores');
  assert.ok(calls.every(c=>!c.body.query||/pending\d+/i.test(c.body.query)),'batch review must not open broad market discovery');
 });
 test('batch review prevents overlapping clicks and exposes a running state',async()=>{
@@ -2091,16 +2092,17 @@ test('batch review excludes verified seller identities while retaining uncertain
 });
 
 test('the visible failed-check retry keeps the original saved batch instead of opening broad discovery',async()=>{
- const {context,review,calls}=pendingCompanyBatchFixture({count:7,providerStatus:402});await review();assert.ok(context.__discoveryState().searchFailures.some(f=>f.phase==='searching'));calls.length=0;
+ const {context,review,calls}=pendingCompanyBatchFixture({count:7,providerStatus:402});await review();assert.ok(context.__discoveryState().searchFailures.some(f=>f.phase==='buyer-fit'));calls.length=0;
  await context.__retryFailedDiscoveryChecks();const meta=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta'));
- assert.equal(meta.lastCompanyRun.scope,'recheck');assert.equal(meta.lastCompanyRun.requestedCount,5);assert.ok(calls.some(c=>c.body.query));
- assert.ok(calls.every(c=>!c.body.query||/pending[0-4]/i.test(c.body.query)),'retry must keep the same five saved company identities');
+ assert.equal(meta.lastCompanyRun.scope,'recheck');assert.equal(meta.lastCompanyRun.requestedCount,5);assert.ok(calls.some(c=>c.body.task==='buyer-fit'));
+ assert.ok(calls.every(c=>!c.body.query),'fresh saved evidence must not be repurchased after an AI outage');
+ const assessed=calls.filter(c=>c.body.task==='buyer-fit').flatMap(c=>JSON.parse(c.body.prompt.split('. Companies: ')[1].split('\n')[0]).map(row=>row.domain));assert.ok(assessed.every(domain=>/^pending[0-4]\.lv$/.test(domain)),'retry must keep the same five saved company identities');
 });
 test('batch execution reviews untouched companies before older retries at queue wraparound',async()=>{
  const {context,review,plan,calls}=pendingCompanyBatchFixture();await review();await review();
  const expected=Array.from(plan().domains);assert.deepEqual(expected,['pending10.lv','pending11.lv','pending0.lv','pending1.lv','pending2.lv']);
  assert.deepEqual(Array.from(context.__existingCompanyResearchTargets(undefined,expected),c=>c.domain),expected);
- calls.length=0;await review();const initial=calls.filter(c=>c.body.query?.startsWith('"Pending')).slice(0,5).map(c=>`pending${c.body.query.match(/Pending(\d+)/)[1]}.lv`);assert.deepEqual(initial,expected);
+ calls.length=0;await review();const initial=[...new Set(calls.filter(c=>c.body.task==='buyer-fit').flatMap(c=>JSON.parse(c.body.prompt.split('. Companies: ')[1].split('\n')[0]).map(row=>row.domain)))];assert.deepEqual(initial,expected);assert.ok(calls.every(c=>!c.body.query),'queue rotation reuses its fresh saved pages');
 });
 
 test('manual public contact research confirms sourced work emails in CRM without paid providers',async()=>{
