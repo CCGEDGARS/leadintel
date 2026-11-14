@@ -26,10 +26,10 @@ test('optional website analysis fills empty fields, preserves edits and discards
  assert.equal(field('name').value,'Edited while reading');assert.match(w.document.querySelector('#event-campaign-status').textContent,/changed/);w.close();
 });
 
-// Regression: the event CTA shares the overview but keeps high-contrast labels on its dark background.
+// The event overview CTA uses the same outlined planning-card style as its siblings.
 test('Prepare event CTA is readable and opens/closes its event editor without altering saved data',()=>{
  const css=fs.readFileSync(require.resolve('../event-campaigns.css'),'utf8');
- assert.match(css,/#event-planning-open span\s*\{\s*color:\s*#fff!important/);
+ assert.doesNotMatch(css,/#event-planning-open/,'the overview button must inherit the shared planning-card style');
  const w=ui(false),panel=w.document.getElementById('event-campaign-panel'),open=w.document.getElementById('event-planning-open');
  assert.ok(panel&&open,'event CTA and editor must mount');
  assert.equal(panel.open,false);

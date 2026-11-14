@@ -12,13 +12,13 @@
 #event-campaign-panel[open]>.brand-identity-summary{display:none}#event-campaign-panel [hidden]{display:none!important}#event-campaign-panel .event-field-grid textarea{min-height:72px;resize:vertical}
 
 /* Keep the event flow consistent with contact and message controls. */
-.event-campaign-panel button,.event-campaign-panel .ec-actions button{min-height:44px;border:2px solid #377563;cursor:pointer;transition:background-color .15s,border-color .15s,box-shadow .15s}
-.event-campaign-panel button.secondary-btn{background:#fff;color:#164e40}
-.event-campaign-panel button.primary-btn,#event-planning-open{background:#123e35;color:#fff;border-color:#123e35;box-shadow:0 4px 12px #123e3520}
-.event-campaign-panel button:not(:disabled):hover{border-color:#0d5e4d;background:#e7f3ec;box-shadow:0 3px 10px #123e351c}
-.event-campaign-panel button.primary-btn:not(:disabled):hover,#event-planning-open:hover{background:#0d5e4d;color:#fff}
-.event-campaign-panel button:focus-visible{outline:3px solid #bf8619;outline-offset:3px}
-.event-campaign-panel button:disabled{opacity:1;cursor:not-allowed;border-color:#91a69b;background:#f0f4f1;color:#52665b;box-shadow:none}
+.event-campaign-panel button:not(.planning-card-action),.event-campaign-panel .ec-actions button{min-height:44px;border:2px solid #377563;cursor:pointer;transition:background-color .15s,border-color .15s,box-shadow .15s}
+.event-campaign-panel button:not(.planning-card-action).secondary-btn{background:#fff;color:#164e40}
+.event-campaign-panel button:not(.planning-card-action).primary-btn{background:#123e35;color:#fff;border-color:#123e35;box-shadow:0 4px 12px #123e3520}
+.event-campaign-panel button:not(.planning-card-action):not(:disabled):hover{border-color:#0d5e4d;background:#e7f3ec;box-shadow:0 3px 10px #123e351c}
+.event-campaign-panel button:not(.planning-card-action).primary-btn:not(:disabled):hover{background:#0d5e4d;color:#fff}
+.event-campaign-panel button:not(.planning-card-action):focus-visible{outline:3px solid #bf8619;outline-offset:3px}
+.event-campaign-panel button:not(.planning-card-action):disabled{opacity:1;cursor:not-allowed;border-color:#91a69b;background:#f0f4f1;color:#52665b;box-shadow:none}
 .event-journey{list-style:none;padding:0;margin:20px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .event-journey li{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #dce5df;border-radius:9px;background:#fff;color:#52665b;font-size:13px;line-height:1.4}
 .event-journey li[aria-current=step]{border-color:#377563;background:#e7f3ec;color:#123e35;font-weight:700}
@@ -29,7 +29,6 @@
 .event-next-hint{flex-basis:100%;margin:0 0 4px;color:#52665b;font-size:13px}
 #event-message-preview .event-actions small{flex-basis:100%;font-size:13px;color:#52665b}
 @media(max-width:720px){.event-journey{grid-template-columns:repeat(2,minmax(0,1fr))}#event-campaign-panel>.event-actions{bottom:8px;padding:10px}#event-plan-recipients{flex-basis:100%}}
-@media(prefers-reduced-motion:reduce){.event-campaign-panel button{transition:none}}
+@media(prefers-reduced-motion:reduce){.event-campaign-panel button:not(.planning-card-action){transition:none}}
 
-#event-planning-open span{color:#fff!important;font:inherit;margin:0}
 @media(max-width:720px){#event-campaign-panel>.event-actions{position:static;margin-top:18px}#event-campaign-panel{padding-bottom:72px}}
