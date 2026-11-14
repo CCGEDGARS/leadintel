@@ -18,7 +18,7 @@
   }
 
   function readState(root){try{return JSON.parse(root.localStorage?.getItem(STORAGE_KEY)||"{}");}catch{return {};}}
-  function mode(root){const value=readState(root)?.market?.researchMode;return MODE_META[value]?value:"quick";}
+  function mode(root){const preview=root.document?.getElementById("research-run-preview"),draft=preview&&!preview.hidden?preview.dataset.researchMode:null,value=MODE_META[draft]?draft:readState(root)?.market?.researchMode;return MODE_META[value]?value:"quick";}
   function esc(value){return String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));}
 
   function injectCss(root){

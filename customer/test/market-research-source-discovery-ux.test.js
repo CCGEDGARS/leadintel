@@ -54,8 +54,8 @@ test('idle market research labels contain no Review prefix and each has distinct
     Object.keys(ux.MODE_COPY).map(mode=>engine.RESEARCH_MODES[mode].maxStoredResults)
   );
   assert.match(ux.MODE_COPY.quick.sourceDetail,/selected automatically/i);
-  assert.match(ux.MODE_COPY.deep.sourceDetail,/up to 8 priority websites/i);
-  assert.match(ux.MODE_COPY.intelligence.sourceDetail,/up to 15 priority websites/i);
+  assert.match(ux.MODE_COPY.deep.sourceDetail,/after you start research/i);
+  assert.match(ux.MODE_COPY.intelligence.sourceDetail,/after you start research/i);
   assert.equal(ux.MODE_COPY.quick.action,undefined);
   assert.equal(ux.MODE_COPY.deep.action,undefined);
   assert.equal(ux.MODE_COPY.intelligence.action,undefined);

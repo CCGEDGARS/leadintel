@@ -28,6 +28,9 @@
   const ARCHIVE_MAINTENANCE='leadintel_archive_maintenance_v2';
   const POINTER_FORMATS=new Set(['leadintel-indexed-workspace-snapshot-v1','leadintel-indexed-sync-recovery-v1']);
   const MAX_ARCHIVE_BYTES=64*1024*1024;
+  const MAX_ARCHIVE_INDEX_BYTES=256*1024*1024;
+  const SYNC_RECOVERY_KEY='leadintel_customer_v2_sync_recovery_v1';
+  const referenceProofCache=new Map();
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
   const LEGACY_CLEANUP_KEY='leadintel_customer_v2_legacy_local_cleanup_20260901_v2';
   const storage=root.localStorage,session=root.sessionStorage;
@@ -42,7 +45,7 @@
   const scopedKey=key=>String(key).startsWith('leadintel_')&&key!==CONTEXT_KEY&&key!=='leadintel_auth_provider'&&!String(key).startsWith(ARCHIVE_PREFIX)&&key!==LEGACY_CLEANUP_KEY;
   let ticket=get(storage,CONTEXT_KEY);
   let context=parse(ticket)||{workspaceId:get(storage,WORKSPACE_KEY)||parse(get(storage,'leadintel_customer_v2_workspace_saved_snapshot_v1'))?.workspace_id||'',userId:''};
-  let invalidated=false,verified=false,transitioning=false,databasePromise=null,archiveInitialization=null,archiveInitialized=false,archiveInitializationError=null,compressionCursor=0,compressionCursorLoaded=false;
+  let invalidated=false,verified=false,transitioning=false,databasePromise=null,archiveInitialization=null,archiveInitialized=false,archiveInitializationError=null,compressionCursor=0,recoveryCursor=0,compressionCursorLoaded=false;
   function current(){return !invalidated&&get(storage,CONTEXT_KEY)===ticket;}
   function invalidate(){if(invalidated)return;invalidated=true;root.document?.documentElement?.setAttribute('data-account-check','pending');root.location?.reload?.();}
   function assertCurrent(expected=ticket){if(!current()||expected!==ticket){invalidate();throw Object.assign(new Error('LeadIntel account changed. Refresh to continue.'),{code:'account_context_changed'});}}
@@ -69,7 +72,7 @@
     databasePromise=new Promise((resolve,reject)=>{
       let finished=false,request;const timer=root.setTimeout?.(()=>finish(archiveError({name:'TimeoutError'},'archive_open_timeout')),ARCHIVE_TIMEOUT_MS);
       function finish(cause,db){if(finished){db?.close();return;}finished=true;root.clearTimeout?.(timer);if(cause)reject(cause);else resolve(db);}
-      try{request=root.indexedDB.open(ARCHIVE_DATABASE,2);}catch(cause){finish(archiveError(cause,'archive_open'));return;}
+      try{request=root.indexedDB.open(ARCHIVE_DATABASE,3);}catch(cause){finish(archiveError(cause,'archive_open'));return;}
       request.onupgradeneeded=event=>{try{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE);assertCurrent();if(event.oldVersion>0)updateContext(context.workspaceId||'',context.userId||'',true);}catch(cause){try{request.transaction?.abort();}catch{}finish(cause?.code==='account_context_changed'?cause:archiveError(cause,'archive_upgrade'));}};
       request.onerror=()=>finish(archiveError(request.error,'archive_open'));
       request.onblocked=()=>finish(archiveError(null,'archive_open_blocked'));
@@ -95,11 +98,40 @@
     const bytes=await new root.Blob([String(frame.decodedBytes),'\0',JSON.stringify(index),new Uint8Array(frame.data)]).arrayBuffer();
     return [...new Uint8Array(await root.crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
   }
-  async function verifiedArchiveIndex(frame){
+  function referenceCodecContract(){return ['restoreRecoveryRecord','restoreWorkspaceSnapshot','restoreFromSync','restoreLocalStorageValue'].map(name=>typeof root.LeadIntelStateBudget?.[name]==='function'?'1':'0').join('');}
+  async function verifiedArchiveIndex(frame,allowCached=true){
     const index=frame?.index;
-    if(frame?.format!==ARCHIVE_GZIP_FORMAT||!index||index.version!==1||index.consumer!=='leadintel-account-archive-v2'||typeof index.referencesComplete!=='boolean'||!Array.isArray(index.references)||index.references.length>1000||!index.references.every(key=>typeof key==='string'&&key.length<=2048&&key.startsWith(SNAPSHOT_PREFIX))||byteLength(JSON.stringify(index))>256*1024||!Number.isSafeInteger(frame.decodedBytes)||frame.decodedBytes<0||frame.decodedBytes>MAX_ARCHIVE_BYTES||Object.prototype.toString.call(frame.data)!=='[object ArrayBuffer]')return null;
-    if(index.baseline!==null&&(!index.baseline||typeof index.baseline.workspaceId!=='string'||!Number.isSafeInteger(index.baseline.version)||index.baseline.version<0))return null;
-    return frame.indexHash&&await archiveIndexHash(frame,index)===frame.indexHash?index:null;
+    if(frame?.format!==ARCHIVE_GZIP_FORMAT||!Number.isSafeInteger(frame.decodedBytes)||frame.decodedBytes<0||frame.decodedBytes>MAX_ARCHIVE_BYTES||Object.prototype.toString.call(frame.data)!=='[object ArrayBuffer]'||index&&byteLength(JSON.stringify(index))>256*1024)return null;
+    if(index?.version===3&&index.consumer==='leadintel-account-archive-v3-decoded-references-v3'&&typeof index.referencesComplete==='boolean'&&typeof index.codecContract==='string'&&/^[01]{4}$/.test(index.codecContract)&&(index.referencesComplete||index.codecContract===referenceCodecContract())&&Array.isArray(index.references)&&index.references.length<=1000&&index.references.every(key=>typeof key==='string'&&key.length<=2048&&key.startsWith(SNAPSHOT_PREFIX))&&(index.baseline===null||index.baseline&&typeof index.baseline.workspaceId==='string'&&Number.isSafeInteger(index.baseline.version)&&index.baseline.version>=0)&&frame.indexHash&&await archiveIndexHash(frame,index)===frame.indexHash)return index;
+    if(!allowCached)return null;
+    const identity=await archiveIndexHash(frame,{storedIndex:index||null,storedIndexHash:frame.indexHash||null});
+    const cached=identity?referenceProofCache.get(identity):null;return cached&&(cached.referencesComplete||cached.codecContract===referenceCodecContract())?cached:null;
+  }
+  async function attachArchiveIndex(frame,text,eligibleBaseline){
+    if(root.crypto?.subtle){const record=JSON.parse(text),references=new Set(),referencesComplete=pointerReferences(record,references),baseline=eligibleBaseline?.(record)===true&&typeof record.workspace_id==='string'&&record.workspace_id.length<=512&&Number.isSafeInteger(record.server_version)?{workspaceId:record.workspace_id,version:record.server_version}:null;
+      const bounded=[...references].filter(key=>key.length<=2048).sort().slice(0,1000);
+      frame.index={version:3,consumer:'leadintel-account-archive-v3-decoded-references-v3',codecContract:referenceCodecContract(),referencesComplete:referencesComplete&&bounded.length===references.size,references:bounded,baseline};
+      if(byteLength(JSON.stringify(frame.index))>256*1024){frame.index.references=[];frame.index.referencesComplete=false;}
+      frame.indexHash=await archiveIndexHash(frame,frame.index);
+    }
+    return frame;
+  }
+  function sameArchiveValue(current,previous){
+    if(typeof previous==='string')return current===previous;
+    if(current?.format!==ARCHIVE_GZIP_FORMAT||previous?.format!==ARCHIVE_GZIP_FORMAT||current.decodedBytes!==previous.decodedBytes||current.indexHash!==previous.indexHash||JSON.stringify(current.index)!==JSON.stringify(previous.index)||current.data?.byteLength!==previous.data?.byteLength)return false;
+    const a=new Uint8Array(current.data),b=new Uint8Array(previous.data);return a.every((value,index)=>value===b[index]);
+  }
+  function knownSyncRecovery(stored){
+    try{
+      if(stored?.format==='leadintel-sync-recovery-refs-v1'&&!root.LeadIntelStateBudget?.restoreRecoveryRecord)return null;
+      const record=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(stored)||stored,object=value=>value&&typeof value==='object'&&!Array.isArray(value),keys=['schema_version','workspace_id','created_at','source','conflict','original','local','server'];
+      if(!object(record)||Object.keys(record).length!==keys.length||Object.keys(record).some(key=>!keys.includes(key))||record.schema_version!==1||typeof record.workspace_id!=='string'||!record.workspace_id||!['conflict','safe_merge','local','server'].includes(record.source)||typeof record.created_at!=='string'||!Number.isFinite(Date.parse(record.created_at))||new Date(record.created_at).toISOString()!==record.created_at||record.conflict!==null&&!object(record.conflict))return null;
+      if(record.conflict&&Object.keys(record.conflict).some(key=>!['reason','paths','localVersion','serverVersion','recoveryAvailable'].includes(key)))return null;
+      const bundle=value=>object(value)&&Object.keys(value).every(key=>['main','discovery','outreach','delivery','meta'].includes(key)&&object(value[key]));
+      const state=value=>object(value)&&Object.keys(value).every(key=>['workspace_id','schema_version','version','payload','record_backed','updated_at','state_codec','bundle_codec','compression_codec','record_codec','max_sync_bytes'].includes(key))&&value.workspace_id===record.workspace_id&&value.schema_version===1&&Number.isSafeInteger(value.version)&&value.version>=0&&bundle(value.payload);
+      if(!object(record.original)||Object.keys(record.original).length!==2||!Object.hasOwn(record.original,'local')||!Object.hasOwn(record.original,'server')||!bundle(record.original.local)||!state(record.original.server)||!bundle(record.local)||!state(record.server))return null;
+      return {record,workspaceId:record.workspace_id,createdAt:Date.parse(record.created_at),serverVersion:record.server.version,originalText:JSON.stringify(record.original)};
+    }catch{return null;}
   }
   async function encodeArchiveValue(text,eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline){
     if(!root.CompressionStream||!root.DecompressionStream||!root.Blob||!root.Response||byteLength(text)>MAX_ARCHIVE_BYTES)return text;
@@ -109,13 +141,7 @@
     const decoded=await decodeArchiveValue(frame,true);
     // JSON serialization is the exact record representation written by callers.
     if(decoded!==text)throw archiveError(null,'archive_write');
-    if(root.crypto?.subtle){const record=JSON.parse(text),references=new Set(),referencesComplete=pointerReferences(record,references),baseline=eligibleBaseline?.(record)===true&&typeof record.workspace_id==='string'&&record.workspace_id.length<=512&&Number.isSafeInteger(record.server_version)?{workspaceId:record.workspace_id,version:record.server_version}:null;
-      const bounded=[...references].filter(key=>key.length<=2048).sort().slice(0,1000);
-      frame.index={version:1,consumer:'leadintel-account-archive-v2',referencesComplete:referencesComplete&&bounded.length===references.size,references:bounded,baseline};
-      if(byteLength(JSON.stringify(frame.index))>256*1024){frame.index.references=[];frame.index.referencesComplete=false;}
-      frame.indexHash=await archiveIndexHash(frame,frame.index);
-    }
-    return frame;
+    return attachArchiveIndex(frame,text,eligibleBaseline);
   }
   async function rawArchiveValue(key){let request;await archiveTransaction('readonly',store=>{request=store.get(key);});return request.result;}
   async function archiveTransaction(mode,operation){
@@ -177,12 +203,33 @@
     const record=await storedArchive(key);assertCurrent(started);if(!record)throw archiveError(null,'archive_read');return record;
   }
   function archivePointerChanged(){return Object.assign(new Error('The saved recovery pointer changed. Existing drafts were kept; retry against the current saved version.'),{code:'archive_pointer_changed',phase:'archive_write'});}
-  function pointerReferences(value,refs,depth=0,budget={remaining:250000}){
+  function pointerReferences(value,refs,depth=0,budget={remaining:250000,decodedBytes:0}){
     if(--budget.remaining<0)return false;
-    const serialized=typeof value==='string'&&/^[\s]*[\[{]/.test(value);
+    const localEncoded=typeof value==='string'&&value.startsWith('leadintel-local-section-lzw-v1:'),serialized=localEncoded||typeof value==='string'&&/^[\s]*[\[{]/.test(value);
     if(depth>30)return !serialized&&(!value||typeof value!=='object');
-    if(typeof value==='string'){if(!serialized)return true;const decoded=parse(value);return decoded!==null&&pointerReferences(decoded,refs,depth+1,budget);}
+    if(typeof value==='string'){
+      if(localEncoded){if(typeof root.LeadIntelStateBudget?.restoreLocalStorageValue!=='function')return false;try{const decoded=root.LeadIntelStateBudget.restoreLocalStorageValue(value);if(typeof decoded!=='string'||decoded===value)return false;budget.decodedBytes=(budget.decodedBytes||0)+byteLength(decoded);return budget.decodedBytes<=MAX_ARCHIVE_BYTES&&pointerReferences(decoded,refs,depth+1,budget);}catch{return false;}}
+      if(!serialized)return true;const decoded=parse(value);
+      // Freeform source excerpts often start with Markdown '[' or '{'. A
+      // non-JSON string cannot be an operational JSON pointer; keep a hold only
+      // when it actually contains our literal snapshot-key namespace.
+      if(decoded===null)return !value.includes(SNAPSHOT_PREFIX);
+      budget.decodedBytes=(budget.decodedBytes||0)+byteLength(value);if(budget.decodedBytes>MAX_ARCHIVE_BYTES)return false;
+      return pointerReferences(decoded,refs,depth+1,budget);
+    }
     if(!value||typeof value!=='object')return true;
+    // Packed records encode object keys in dictionaries. Walking their tagged
+    // arrays cannot establish absence of an operational {format,key} pointer.
+    const format=value.format,codec=root.LeadIntelStateBudget;let decode=null;
+    if(format==='leadintel-sync-recovery-refs-v1')decode=codec?.restoreRecoveryRecord&&(()=>codec.restoreRecoveryRecord(value));
+    else if(format==='leadintel-workspace-snapshot-lzw-v1')decode=codec?.restoreWorkspaceSnapshot&&(()=>codec.restoreWorkspaceSnapshot(value));
+    else if(value.main?.format==='leadintel-workspace-bundle-refs-v1')decode=codec?.restoreFromSync&&(()=>codec.restoreFromSync(value));
+    else if(['leadintel-discovery-refs-v1','leadintel-discovery-refs-v2','leadintel-workspace-section-refs-v1','leadintel-workspace-bundle-refs-v1','leadintel-buyer-trace-v1'].includes(format))decode=codec?.restoreFromSync&&(()=>format==='leadintel-workspace-bundle-refs-v1'?codec.restoreFromSync({main:value}):codec.restoreFromSync(value,format==='leadintel-workspace-section-refs-v1'?'main':format==='leadintel-buyer-trace-v1'?'resultDiagnostics':'discovery'));
+    const packed=typeof format==='string'&&format.startsWith('leadintel-')&&(/refs|lzw|gzip|compressed|trace/.test(format)||value.encoding!==undefined)||value.main?.format==='leadintel-workspace-bundle-refs-v1';
+    if(packed){
+      if(typeof decode!=='function')return false;
+      try{const decoded=decode();if(decoded===value)return false;budget.decodedBytes=(budget.decodedBytes||0)+byteLength(decoded);if(budget.decodedBytes>MAX_ARCHIVE_BYTES)return false;return pointerReferences(decoded,refs,depth+1,budget);}catch{return false;}
+    }
     if(POINTER_FORMATS.has(value.format)&&typeof value.key==='string'&&value.key.startsWith(SNAPSHOT_PREFIX))refs.add(value.key);
     if(value.format==='leadintel-archive-pending-v2'&&typeof value.key==='string')refs.add(value.key);
     let complete=true;for(const item of Object.values(value))if(!pointerReferences(item,refs,depth+1,budget))complete=false;return complete;
@@ -198,13 +245,14 @@
     for(const key of ordered){
       if(scanned>=500)break;
       const raw=await rawArchiveValue(key);if(raw===undefined){scanned++;continue;}
-      const size=byteLength(raw);if(totalBytes+size>MAX_ARCHIVE_BYTES){referencesComplete=false;break;}
-      const index=await verifiedArchiveIndex(raw),logical=index?size:raw?.format===ARCHIVE_GZIP_FORMAT?Math.max(size,Number(raw.decodedBytes)||0):size;
+      const size=byteLength(raw);if(totalBytes+size>MAX_ARCHIVE_INDEX_BYTES){referencesComplete=false;break;}
+      const index=await verifiedArchiveIndex(raw),logical=index?0:raw?.format===ARCHIVE_GZIP_FORMAT?Math.max(size,Number(raw.decodedBytes)||0):size;
       if(logicalBytes+logical>MAX_ARCHIVE_BYTES){referencesComplete=false;break;}
       scanned++;totalBytes+=size;logicalBytes+=logical;
       if(typeof raw==='string'){rawCount++;if(rawKeys.length<20&&!String(key).startsWith(SNAPSHOT_PIN_PREFIX)&&byteLength(raw)>=65536)rawKeys.push(key);}else if(raw?.format===ARCHIVE_GZIP_FORMAT)compressedCount++;else unknownCount++;
       if(index){for(const reference of index.references)references.add(reference);if(!index.referencesComplete)referencesComplete=false;if(String(key).startsWith(SNAPSHOT_PREFIX)&&eligibleBaseline&&index.baseline)baselines.push({key,workspaceId:index.baseline.workspaceId,version:index.baseline.version});continue;}
       let record;try{record=await decodeArchiveValue(raw);}catch{unknownCount++;referencesComplete=false;continue;}
+      if(raw?.format===ARCHIVE_GZIP_FORMAT&&root.crypto?.subtle){const proof=await attachArchiveIndex({...raw},JSON.stringify(record),eligibleBaseline),identity=await archiveIndexHash(raw,{storedIndex:raw.index||null,storedIndexHash:raw.indexHash||null});if(identity){if(referenceProofCache.size>=500)referenceProofCache.delete(referenceProofCache.keys().next().value);referenceProofCache.set(identity,proof.index);}}
       // Unknown records are retained, and their embedded pointers (including
       // conflict originals) protect referenced snapshots transitively as well.
       if(!pointerReferences(record,references))referencesComplete=false;
@@ -216,41 +264,72 @@
   async function publishArchiveDiagnostics(inventory,extra={}){
     let estimate={},timer;try{estimate=await Promise.race([Promise.resolve().then(()=>root.navigator?.storage?.estimate?.()||{}),new Promise(resolve=>{timer=root.setTimeout(()=>resolve({}),500);})])||{};}catch{}finally{root.clearTimeout(timer);}
     const collectionSkippedReason=!root.navigator?.locks?.request?'no_lock':!inventory.scanComplete?'partial_scan':!inventory.referencesComplete?'incomplete_refs':'none';
-    const detail={schemaVersion:2,totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
+    const detail={schemaVersion:3,totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
     root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
     if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));return detail;
   }
   async function compactArchivesLocked({eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline}={}){
-    if(!compressionCursorLoaded){const state=parse(await rawArchiveValue(ARCHIVE_MAINTENANCE));if(Number.isSafeInteger(state?.compressionCursor)&&state.compressionCursor>=0)compressionCursor=state.compressionCursor;compressionCursorLoaded=true;}
-    const inventory=await archiveInventory(eligibleBaseline);let compressed=0,reclaimed=0,savedBytes=0,compressionBytes=0,compressionQuotaFailures=0,attempted=0;
+    if(!compressionCursorLoaded){const state=parse(await rawArchiveValue(ARCHIVE_MAINTENANCE));if(Number.isSafeInteger(state?.compressionCursor)&&state.compressionCursor>=0)compressionCursor=state.compressionCursor;if(Number.isSafeInteger(state?.recoveryCursor)&&state.recoveryCursor>=0)recoveryCursor=state.recoveryCursor;compressionCursorLoaded=true;}
+    let inventory=await archiveInventory(eligibleBaseline),compressed=0,reindexed=0,reindexFailures=0,reclaimed=0,recoveryRetired=0,savedBytes=0,compressionBytes=0,compressionQuotaFailures=0,attempted=0;
+    const baselineInventoryReady=inventory.complete;let recoveryVisited=0;
     // Same-key replacement never discards a unique record. Compression and its
     // round-trip verification happen outside the short compare-and-put txn.
     const compressionKeys=inventory.keys.filter(key=>!String(key).startsWith(SNAPSHOT_PIN_PREFIX)&&key!==ARCHIVE_MAINTENANCE);
     for(let visited=0;visited<Math.min(compressionKeys.length,100)&&attempted<20;visited++){
       const key=compressionKeys[compressionCursor++%compressionKeys.length];
-      const previous=await rawArchiveValue(key);if(typeof previous!=='string'||byteLength(previous)<65536||parse(previous)===null)continue;
+      const previous=await rawArchiveValue(key),rawText=typeof previous==='string',needsIndex=previous?.format===ARCHIVE_GZIP_FORMAT&&root.crypto?.subtle&&!await verifiedArchiveIndex(previous,false);
+      if(rawText?(byteLength(previous)<65536||parse(previous)===null):!needsIndex)continue;
       attempted++;
-      compressionBytes+=byteLength(previous);if(compressionBytes>MAX_ARCHIVE_BYTES)break;
-      const encoded=await encodeArchiveValue(previous,eligibleBaseline);if(typeof encoded==='string')continue;
+      const workBytes=rawText?byteLength(previous):Number(previous.decodedBytes);if(!Number.isSafeInteger(workBytes)||workBytes<0||workBytes>MAX_ARCHIVE_BYTES)continue;
+      compressionBytes+=workBytes;if(compressionBytes>MAX_ARCHIVE_BYTES)break;
+      let encoded;try{encoded=rawText?await encodeArchiveValue(previous,eligibleBaseline):await attachArchiveIndex({...previous},await decodeArchiveValue(previous,true),eligibleBaseline);}catch(cause){if(!rawText){reindexFailures++;continue;}throw cause;}if(typeof encoded==='string')continue;
       let changed=false;
-      try{await archiveTransaction('readwrite',(store,fail)=>{const request=store.get(key);request.onsuccess=()=>{if(request.result===previous){try{store.put(encoded,key);changed=true;}catch(cause){fail(cause);}}};});}catch(cause){if(cause?.name==='QuotaExceededError'||cause?.category==='quota'){compressionQuotaFailures++;continue;}throw cause;}
-      if(changed){compressed++;savedBytes+=byteLength(previous)-byteLength(encoded);}
+      try{await archiveTransaction('readwrite',(store,fail)=>{const request=store.get(key);request.onsuccess=()=>{if(sameArchiveValue(request.result,previous)){try{store.put(encoded,key);changed=true;}catch(cause){fail(cause);}}};});}catch(cause){if(cause?.name==='QuotaExceededError'||cause?.category==='quota'){compressionQuotaFailures++;continue;}throw cause;}
+      if(changed){if(rawText)compressed++;else reindexed++;savedBytes+=Math.max(0,byteLength(previous)-byteLength(encoded));}
     }
+    // Failed large proof rewrites must not permanently block migration. A RAM
+    // proof is reused only after hashing the exact immutable frame again. Up to
+    // four further bounded scans can finish legacy references without a write.
+    for(let pass=0;pass<4&&!inventory.complete;pass++){const previousScanned=inventory.scanned,proofs=referenceProofCache.size;inventory=await archiveInventory(eligibleBaseline);if(!inventory.complete&&inventory.scanned<=previousScanned&&referenceProofCache.size<=proofs)break;}
     // Without an origin-wide lock, or with incomplete roots, collection is
     // deliberately disabled. Compression remains a lossless CAS operation.
-    if(root.navigator?.locks?.request&&inventory.complete&&eligibleBaseline&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){
+    if(root.navigator?.locks?.request&&baselineInventoryReady&&inventory.complete&&eligibleBaseline&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){
       let gcDecodedBytes=0;const newer=[];for(const row of inventory.baselines.filter(row=>inventory.references.has(row.key)&&!inventory.pins.has(row.key))){const raw=await rawArchiveValue(row.key),size=raw?.format===ARCHIVE_GZIP_FORMAT?raw.decodedBytes:byteLength(raw);if(gcDecodedBytes+size>MAX_ARCHIVE_BYTES)break;gcDecodedBytes+=size;const record=await decodeArchiveValue(raw);if(eligibleBaseline(record)===true&&record.workspace_id===row.workspaceId&&record.server_version===row.version)newer.push(row);}
       const candidates=inventory.baselines.filter(row=>!inventory.references.has(row.key)&&!inventory.pins.has(row.key)&&newer.some(next=>next.workspaceId===row.workspaceId&&next.version>row.version)).slice(0,20);
       for(const candidate of candidates){
         const raw=await rawArchiveValue(candidate.key),size=raw?.format===ARCHIVE_GZIP_FORMAT?raw.decodedBytes:byteLength(raw);if(gcDecodedBytes+size>MAX_ARCHIVE_BYTES)break;gcDecodedBytes+=size;const record=await decodeArchiveValue(raw);
         if(eligibleBaseline(record)!==true||record.workspace_id!==candidate.workspaceId||record.server_version!==candidate.version)continue;
         let removed=false;
-        await archiveTransaction('readwrite',store=>{const request=store.get(candidate.key);request.onsuccess=()=>{const current=request.result;let same=typeof raw==='string'?current===raw:current?.format===ARCHIVE_GZIP_FORMAT&&current.decodedBytes===raw.decodedBytes&&current.indexHash===raw.indexHash&&JSON.stringify(current.index)===JSON.stringify(raw.index)&&current.data?.byteLength===raw.data?.byteLength;if(same&&typeof raw!=='string'){const a=new Uint8Array(current.data),b=new Uint8Array(raw.data);same=a.every((value,index)=>value===b[index]);}if(same&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){store.delete(candidate.key);removed=true;}};});
+        await archiveTransaction('readwrite',store=>{const request=store.get(candidate.key);request.onsuccess=()=>{if(sameArchiveValue(request.result,raw)&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){store.delete(candidate.key);removed=true;}};});
         if(removed){reclaimed++;savedBytes+=byteLength(raw);}
       }
     }
-    let cursorPersisted=false;if(compressed||reclaimed){try{await archiveTransaction('readwrite',store=>store.put(JSON.stringify({format:'leadintel-archive-maintenance-v2',compressionCursor}),ARCHIVE_MAINTENANCE));cursorPersisted=true;}catch{}}
-    return publishArchiveDiagnostics(await archiveInventory(eligibleBaseline),{compressionAttemptedRecordsThisPass:attempted,compressedRecordsThisPass:compressed,reclaimedRecordsThisPass:reclaimed,savedBytesThisPass:savedBytes,compressionQuotaFailures,cursorPersisted});
+    // Sync recovery is one original + one latest local/server pair. Its inline
+    // owner overwrites the same key; UUID overflow must not invent a history of
+    // every superseded latest pair. All other schemas and lineages stay intact.
+    if(root.navigator?.locks?.request&&inventory.complete&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){
+      const pointerRaw=get(storage,SYNC_RECOVERY_KEY),pointer=parse(pointerRaw);
+      if(pointer?.format==='leadintel-indexed-sync-recovery-v1'&&pointer.workspace_id===context.workspaceId&&typeof pointer.key==='string'&&pointer.key.startsWith(SNAPSHOT_PREFIX)&&!inventory.pins.has(pointer.key)){
+        const authorityRaw=await rawArchiveValue(pointer.key);let authority;try{authority=knownSyncRecovery(await decodeArchiveValue(authorityRaw));}catch{}
+        if(authority&&pointer.workspace_id===authority.workspaceId){
+          let decodedBytes=byteLength(authority.record);const candidates=inventory.keys.filter(key=>String(key).startsWith(SNAPSHOT_PREFIX)&&key!==pointer.key&&!inventory.references.has(key)&&!inventory.pins.has(key));
+          for(let visited=0;visited<Math.min(20,candidates.length);visited++){
+            if(decodedBytes>=MAX_ARCHIVE_BYTES)break;
+            const key=candidates[recoveryCursor++%candidates.length];recoveryVisited++;
+            const candidateRaw=await rawArchiveValue(key);if(candidateRaw===undefined)continue;
+            const storedBytes=candidateRaw?.format===ARCHIVE_GZIP_FORMAT?Number(candidateRaw.decodedBytes):byteLength(candidateRaw);if(!Number.isFinite(storedBytes)||storedBytes<0||decodedBytes+storedBytes>MAX_ARCHIVE_BYTES)break;decodedBytes+=storedBytes;
+            let candidate;try{candidate=knownSyncRecovery(await decodeArchiveValue(candidateRaw));}catch{continue;}if(!candidate)continue;
+            decodedBytes+=Math.max(0,byteLength(candidate.record)-storedBytes);if(decodedBytes>MAX_ARCHIVE_BYTES)break;
+            if(candidate.workspaceId!==authority.workspaceId||candidate.createdAt>=authority.createdAt||candidate.serverVersion>authority.serverVersion||candidate.originalText!==authority.originalText)continue;
+            let removed=false;
+            await archiveTransaction('readwrite',(store,fail)=>{const current=store.get(pointer.key);current.onsuccess=()=>{if(!sameArchiveValue(current.result,authorityRaw))return;const previous=store.get(key);previous.onsuccess=()=>{if(sameArchiveValue(previous.result,candidateRaw)&&get(storage,SYNC_RECOVERY_KEY)===pointerRaw&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){try{store.delete(key);removed=true;}catch(cause){fail(cause);}}};};});
+            if(removed){recoveryRetired++;savedBytes+=byteLength(candidateRaw);}
+          }
+        }
+      }
+    }
+    let cursorPersisted=false;if(compressed||reindexed||reclaimed||recoveryRetired||recoveryVisited){try{await archiveTransaction('readwrite',store=>store.put(JSON.stringify({format:'leadintel-archive-maintenance-v2',compressionCursor,recoveryCursor}),ARCHIVE_MAINTENANCE));cursorPersisted=true;}catch{}}
+    return publishArchiveDiagnostics(await archiveInventory(eligibleBaseline),{compressionAttemptedRecordsThisPass:attempted,compressedRecordsThisPass:compressed,reindexedRecordsThisPass:reindexed,reindexFailures,reclaimedRecordsThisPass:reclaimed,recoveryCandidatesVisited:recoveryVisited,retiredRecoveryEnvelopesThisPass:recoveryRetired,savedBytesThisPass:savedBytes,compressionQuotaFailures,cursorPersisted});
   }
   async function compactRecoveryStorage(options={}){await archiveReady();return archiveLock(()=>compactArchivesLocked(options));}
   async function getRecoveryStorageDiagnostics({eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline}={}){await archiveReady();return archiveLock(async()=>publishArchiveDiagnostics(await archiveInventory(eligibleBaseline)));}
@@ -339,7 +418,7 @@
     // An inline-only workspace does not require IndexedDB. Preserve the native
     // diagnostic, but require successful storage before any actual archive I/O.
     archiveInitializationError=cause;
-    const detail={schemaVersion:2,storageAvailable:false,name:ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',phase:ARCHIVE_PHASES.has(cause?.phase)?cause.phase:'archive',category:ARCHIVE_CATEGORIES.has(cause?.category)?cause.category:'unknown'};
+    const detail={schemaVersion:3,storageAvailable:false,name:ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',phase:ARCHIVE_PHASES.has(cause?.phase)?cause.phase:'archive',category:ARCHIVE_CATEGORIES.has(cause?.category)?cause.category:'unknown'};
     root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
     if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));
   });}
