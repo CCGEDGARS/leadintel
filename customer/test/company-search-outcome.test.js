@@ -1,4 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),Progress=require('../company-search-progress.js');
+test('a spent budget with unfinished saved checks is paused rather than a completed no-match finding',()=>{
+ const result=Progress.outcome({status:'no_results',targetCount:5,checked:[],pendingCount:31,run:{callsUsed:11,callLimit:11}}),view=Progress.model({status:'no_results',result});
+ assert.equal(result.state,'partial');assert.equal(result.stopReason,'budget_limit');assert.match(view.title,/Search paused/);assert.equal(view.percent,null);assert.match(view.note,/11 of 11/);assert.match(view.note,/31 companies await/);assert.equal(view.stats[2][1],0);
+ const completed=Progress.outcome({status:'no_results',targetCount:5,checked:[],pendingCount:0,run:{callsUsed:3,callLimit:11}});assert.equal(completed.state,'no_results');
+});
 
 // These cases reproduce the owner's screenshot: two checked companies are not
 // two strong-fit prospects, and a bounded pass limit is not a spent budget.
@@ -29,7 +34,9 @@ test('failure and cancellation cannot become a successful target merely because 
 
 
 test('a changed strategy does not present a historical budget stop as the current search outcome',()=>{
- const q=Progress.outcome({goal:'strong_fit',targetCount:5,checked:[],pendingCount:31,status:'complete',run:{contextChanged:true,completedAt:'2026-11-10T00:00:00Z',callsUsed:20,callLimit:20}});
+ for(const status of ['complete','partial']){
+ const q=Progress.outcome({goal:'strong_fit',targetCount:5,checked:[],pendingCount:31,status,run:{contextChanged:true,budgetIncomplete:true,completedAt:'2026-11-10T00:00:00Z',callsUsed:20,callLimit:20}});
  assert.equal(q.stopReason,'context_changed');assert.match(q.note,/strategy changed/i);assert.match(q.note,/previous run.*20 of 20/i);assert.equal(q.state,'partial');
- const m=Progress.model({status:'complete',result:q});assert.match(m.title,/review/i);assert.doesNotMatch(m.title,/Search paused/);
+ const m=Progress.model({status,result:q});assert.match(m.title,/review/i);assert.doesNotMatch(m.title,/Search paused/);
+ }
 });

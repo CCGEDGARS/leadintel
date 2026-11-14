@@ -19,3 +19,9 @@ test('legacy failed-save task is restored only for one exact bounded run identit
   const registered=[],ctx={Date,loadMeta:()=>({lastCompanyRun:{runId:7,startedAt,persistence:'failed'}}),window:{LeadIntelTaskCentre:{list:()=>rows}},registerCompanySaveRetry:id=>registered.push(id)};vm.createContext(ctx);vm.runInContext(source.slice(start,end),ctx);ctx.restoreCompanySaveRetry();assert.deepEqual(registered,expected?[expected]:[]);
  }
 });
+test('saving retained evidence starts its own two-ack progress without inheriting a research ETA',async()=>{
+ const f=fixture(),centre=require('../background-task-centre.js').createTaskCentre({now:()=>1000,recoverInterrupted:false});
+ centre.start({id:'company-discovery:1',type:'company-discovery',total:2,completed:1,etaSeconds:2640});centre.fail('company-discovery:1',Error('Previous research failed'));
+ f.ctx.window.LeadIntelTaskCentre=centre;const pending=f.actions.get('company-discovery:1').retry(),running=centre.get('company-discovery:1');
+ assert.equal(running.status,'running');assert.equal(running.stage,'Saving retained company evidence');assert.equal(running.etaSeconds,null);assert.equal(running.total,2);assert.equal(running.completed,0);await pending;
+});

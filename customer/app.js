@@ -1,5 +1,5 @@
 import './monitoring-manager.js?v=20261111-categories-v1';
-import './monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1';
+import './monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1&monitoring-filter=20261114-v2';
 import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
 import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1&confirmed-profile=20261104-v1';

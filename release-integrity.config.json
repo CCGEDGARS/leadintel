@@ -8535,6 +8535,89 @@
         "company-ranked-list=20261019-v1&company-settings=20261114-v8",
         "official-email-linkedin=20261102-v1&company-settings=20261114-v8"
       ]
+    },
+    {
+      "id": "monitoring-filter-clears-stale-rows",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.js",
+      "status": 200,
+      "contains": [
+        "listLoading=true",
+        "rows.replaceChildren()",
+        "if(act==='finding'&&listLoading)return"
+      ]
+    },
+    {
+      "id": "monitoring-filter-current-import",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1&monitoring-filter=20261114-v2"
+      ]
+    },
+    {
+      "id": "company-save-progress-own-work",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "stage:'Saving retained company evidence',total:2,completed:0,etaSeconds:null",
+        "stage:'Confirming saved company evidence',completed:1,total:2"
+      ]
+    },
+    {
+      "id": "monitoring-and-company-save-progress-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "snapshot-owner=20261114-v7&save-ack=20261114-v8&monitoring-filter=20261114-v2",
+        "presentation-fingerprint=20261114-v2&save-ack=20261114-v8&save-progress=20261114-v9"
+      ]
+    },
+    {
+      "id": "company-budget-pause-not-no-match",
+      "type": "text",
+      "url": "/customer/company-search-progress.js",
+      "status": 200,
+      "contains": [
+        "['complete','no_results'].includes(status)&&!targetMet",
+        "state==='partial'&&['budget_limit','budget_reserve','pass_limit','pending_review']",
+        "status==='partial'&&run.budgetIncomplete===true"
+      ]
+    },
+    {
+      "id": "company-budget-pause-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-stop=20261114-v9"
+      ]
+    },
+    {
+      "id": "company-budget-terminal-owner",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(budgetIncomplete)discovery.status='partial'",
+        "canceled,budgetIncomplete",
+        "checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked",
+        "const evidenceOwner=qualified||review",
+        "if(partialCheckedTargets&&!qualified)continue"
+      ]
+    },
+    {
+      "id": "company-budget-terminal-returning-loaders",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "save-progress=20261114-v9&budget-terminal=20261114-v10",
+        "company-stop=20261114-v9&budget-terminal=20261114-v10"
+      ]
     }
   ],
   "retry": {

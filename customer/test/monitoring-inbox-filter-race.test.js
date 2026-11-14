@@ -1,0 +1,22 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+const settle=async()=>{for(let i=0;i<3;i++)await new Promise(resolve=>setImmediate(resolve));};
+function fixture(){
+ const dom=new JSDOM('<header></header>',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.setInterval=()=>1;
+ for(const file of ['monitoring-model.js','monitoring-inbox.js'])w.eval(fs.readFileSync(require.resolve('../'+file),'utf8'));
+ const finding=(id,purpose,reference)=>({id,purpose,title:purpose+' finding',revision:1,status:'new',event:{sourceUrl:'https://public.example/'+purpose,reference,summary:'Controlled saved evidence'},assessment:{gaps:[]}}),hiring=finding('hiring-id','hiring','JOB-5'),court=finding('court-id','court','C-2026-5'),procurement=finding('procurement-id','procurement','T-5');
+ const calls=[],pending=new Map(),rows=items=>({role:'owner',findings:items,unread:items.length,total:items.length,offset:0,templates:[]});
+ const api=async(path,options)=>{calls.push({path,method:options.method||'GET'});if(path.startsWith('/api/market-monitoring/inbox?')){const purpose=new URL('https://example.test'+path).searchParams.get('purpose');if(!purpose)return rows([hiring,court,procurement]);return new Promise((resolve,reject)=>pending.set(purpose,{resolve:()=>resolve(rows([purpose==='court'?court:procurement])),reject}));}const f=path.endsWith('/court-id')?court:hiring;return {finding:f,subjects:[],versions:[],messages:f===court?[{id:'prepared-message',status:'draft',recipient:'controlled@example.test',subject:'Controlled subject',body:'Exact prepared Court message'}]:[]};};
+ w.LeadIntelMonitoringInbox.configure({api,capture:()=>1,current:value=>value===1,settings(){},company(){throw Error('No company intake authorized');}});
+ const select=purpose=>{const el=w.document.querySelector('[data-mi-purpose]');el.value=purpose;el.dispatchEvent(new w.Event('change',{bubbles:true}));};
+ return {w,dom,calls,pending,select};
+}
+test('a filter change immediately prevents clicking old findings and opens only the exact filtered saved message',async()=>{
+ const f=fixture();try{await f.w.LeadIntelMonitoringInbox.open();const old=f.w.document.querySelector('[data-mi="finding"][data-id="hiring-id"]');f.select('court');assert.ok(!old.isConnected||old.disabled,'old default rows must stop accepting clicks before the filtered HTTP response');old.click();await settle();assert.equal(f.calls.some(call=>call.path.endsWith('/inbox/hiring-id')),false);f.pending.get('court').resolve();await settle();
+ const rows=f.w.document.querySelectorAll('[data-mi="finding"]');assert.equal(rows.length,1);assert.equal(rows[0].dataset.id,'court-id');assert.match(rows[0].textContent,/C-2026-5/);rows[0].click();await settle();assert.equal(f.w.document.querySelector('.mi-message pre').textContent,'Exact prepared Court message');assert.ok(f.calls.every(call=>call.method==='GET'),'filtering and reopening a saved preview never sends or prepares a message');}finally{f.dom.window.close();}
+});
+test('out-of-order filter responses cannot replace the latest purpose list',async()=>{
+ const f=fixture();try{await f.w.LeadIntelMonitoringInbox.open();f.select('court');f.select('procurement');f.pending.get('procurement').resolve();await settle();f.pending.get('court').resolve();await settle();assert.equal(f.w.document.querySelector('[data-mi-purpose]').value,'procurement');assert.deepEqual([...f.w.document.querySelectorAll('[data-mi="finding"]')].map(row=>row.dataset.id),['procurement-id']);}finally{f.dom.window.close();}
+});
+test('a failed filter read cannot expose old findings under the newly selected purpose and can be refreshed',async()=>{
+ const f=fixture();try{await f.w.LeadIntelMonitoringInbox.open();f.select('court');f.pending.get('court').reject(Error('Controlled inbox read unavailable'));await settle();assert.equal(f.w.document.querySelector('[data-mi-purpose]').value,'court');assert.equal(f.w.document.querySelectorAll('[data-mi="finding"]').length,0);assert.match(f.w.document.querySelector('[data-monitor-notice]').textContent,/Controlled inbox read unavailable/);f.w.document.querySelector('[data-mi="refresh"]').click();f.pending.get('court').resolve();await settle();assert.equal(f.w.document.querySelector('[data-mi="finding"]').dataset.id,'court-id');}finally{f.dom.window.close();}
+});
