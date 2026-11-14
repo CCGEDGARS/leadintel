@@ -8583,7 +8583,8 @@
       "status": 200,
       "contains": [
         "['complete','no_results'].includes(status)&&!targetMet",
-        "state==='partial'&&['budget_limit','budget_reserve','pass_limit','pending_review']"
+        "state==='partial'&&['budget_limit','budget_reserve','pass_limit','pending_review']",
+        "status==='partial'&&run.budgetIncomplete===true"
       ]
     },
     {
@@ -8593,6 +8594,27 @@
       "status": 200,
       "contains": [
         "company-stop=20261114-v9"
+      ]
+    },
+    {
+      "id": "company-budget-terminal-owner",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(budgetIncomplete)discovery.status='partial'",
+        "canceled,budgetIncomplete",
+        "checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked"
+      ]
+    },
+    {
+      "id": "company-budget-terminal-returning-loaders",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "save-progress=20261114-v9&budget-terminal=20261114-v10",
+        "company-stop=20261114-v9&budget-terminal=20261114-v10"
       ]
     }
   ],

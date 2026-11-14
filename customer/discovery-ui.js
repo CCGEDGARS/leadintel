@@ -1212,8 +1212,10 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   discovery.funnel.qualifiedCompanies=runCandidates.length;
   discovery.funnel.officialDomainsResolved=new Set([...resolutionSearches,...followUpResolutionSearches,...verificationSearches,...followUpVerificationSearches].flatMap(item=>item?.results||[]).map(item=>item.domain).filter(Boolean)).size;
   discovery.funnel.verifiedCompanies=new Set([...verificationSearches,...followUpVerificationSearches].flatMap(item=>item?.results||[]).map(item=>item.domain).filter(Boolean)).size;
+  const budgetIncomplete=['complete','no_results'].includes(discovery.status)&&discoveryBudgetSkips>0&&runGoalCount(runCandidates)<targetCount;
+  if(budgetIncomplete)discovery.status='partial';
   discovery.lastRunAt=new Date().toISOString();
-  saveMeta({...loadMeta(),lastCompanyRun:{...runContext,completedAt:discovery.lastRunAt,status:discovery.status,canceled,qualifiedCount:runCandidates.length,checkedCount:discovery.funnel.companySitesChecked}});
+  saveMeta({...loadMeta(),lastCompanyRun:{...runContext,completedAt:discovery.lastRunAt,status:discovery.status,canceled,budgetIncomplete,qualifiedCount:runCandidates.length,checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked}});
   if(discovery.status==='complete'||discovery.status==='no_results'){
     const meta=loadMeta(),outcomes={...meta.targetResearchByDomain};
     for(const target of researchTargets){const key=canonicalDomain(target.domain||target.website),match=item=>canonicalDomain(item.domain)===key;const qualified=runCandidates.find(match),review=(discovery.potentialMatches||[]).find(match);if(key)outcomes[key]={completedAt:discovery.lastRunAt,qualified:Boolean(qualified),gaps:review?.qualificationGaps||[],evidence:(review?.evidence||qualified?.evidence||[]).slice(0,12)};}
@@ -1265,7 +1267,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   const budgetReached=!campaignPlan&&!savingMode&&!targetOnly&&!recheckOnly&&totalQualified<targetCount&&discoveryBudgetExhausted();
   const exhausted=!savingMode&&!targetOnly&&!recheckOnly&&totalQualified<targetCount&&(autoPass>=MAX_AUTONOMOUS_DISCOVERY_PASSES||!budgetAllowsPass);
   saveMeta({...loadMeta(),autonomousDiscovery:{active:false,pass:autoPass,maxPasses:MAX_AUTONOMOUS_DISCOVERY_PASSES,targetCount,goal:researchGoal,goalCount:totalQualified,qualifiedCount:totalQualified,exhausted,budgetReached,remainingBudgetInsufficient:!budgetAllowsPass&&!budgetReached,reviewedDomains:[...reviewedSavedDomains],callsUsed:discoveryCallsUsed(),callLimit:discoveryCallLimit}});
-  taskCentre?.complete(taskId,{status:discovery.status,stage:exhausted?`${budgetReached?'Research budget reached':!budgetAllowsPass?'Remaining budget cannot cover another check':'Search pass limit reached'} · ${totalQualified} of ${targetCount} ${goalLabel}`:discovery.status==='partial'?'Discovery completed with warnings':discovery.status==='no_results'?'Discovery finished · no newly checked companies':'Company discovery complete',resultCount:totalQualified});
+  taskCentre?.complete(taskId,{status:discovery.status,stage:budgetIncomplete?`Research paused at its budget · ${discoveryCallsUsed()} of ${discoveryCallLimit} calls`:exhausted?`${budgetReached?'Research budget reached':!budgetAllowsPass?'Remaining budget cannot cover another check':'Search pass limit reached'} · ${totalQualified} of ${targetCount} ${goalLabel}`:discovery.status==='partial'?'Discovery completed with warnings':discovery.status==='no_results'?'Discovery finished · no newly checked companies':'Company discovery complete',resultCount:totalQualified});
   if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';
   const targetNote=targetCount?" · target up to "+targetCount:"";
   const issueNote=failures?" · "+failures+" search issue"+(failures===1?"":"s"):"";
