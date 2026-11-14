@@ -30,6 +30,7 @@
   const MAX_ARCHIVE_BYTES=64*1024*1024;
   const MAX_ARCHIVE_INDEX_BYTES=256*1024*1024;
   const SYNC_RECOVERY_KEY='leadintel_customer_v2_sync_recovery_v1';
+  const WORKSPACE_SNAPSHOT_KEY='leadintel_customer_v2_workspace_saved_snapshot_v1';
   const referenceProofCache=new Map();
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
   const LEGACY_CLEANUP_KEY='leadintel_customer_v2_legacy_local_cleanup_20260901_v2';
@@ -72,7 +73,7 @@
     databasePromise=new Promise((resolve,reject)=>{
       let finished=false,request;const timer=root.setTimeout?.(()=>finish(archiveError({name:'TimeoutError'},'archive_open_timeout')),ARCHIVE_TIMEOUT_MS);
       function finish(cause,db){if(finished){db?.close();return;}finished=true;root.clearTimeout?.(timer);if(cause)reject(cause);else resolve(db);}
-      try{request=root.indexedDB.open(ARCHIVE_DATABASE,3);}catch(cause){finish(archiveError(cause,'archive_open'));return;}
+      try{request=root.indexedDB.open(ARCHIVE_DATABASE,4);}catch(cause){finish(archiveError(cause,'archive_open'));return;}
       request.onupgradeneeded=event=>{try{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE);assertCurrent();if(event.oldVersion>0)updateContext(context.workspaceId||'',context.userId||'',true);}catch(cause){try{request.transaction?.abort();}catch{}finish(cause?.code==='account_context_changed'?cause:archiveError(cause,'archive_upgrade'));}};
       request.onerror=()=>finish(archiveError(request.error,'archive_open'));
       request.onblocked=()=>finish(archiveError(null,'archive_open_blocked'));
@@ -132,6 +133,18 @@
       if(!object(record.original)||Object.keys(record.original).length!==2||!Object.hasOwn(record.original,'local')||!Object.hasOwn(record.original,'server')||!bundle(record.original.local)||!state(record.original.server)||!bundle(record.local)||!state(record.server))return null;
       return {record,workspaceId:record.workspace_id,createdAt:Date.parse(record.created_at),serverVersion:record.server.version,originalText:JSON.stringify(record.original)};
     }catch{return null;}
+  }
+  function knownWorkspaceSnapshot(stored){
+    try{
+      if(stored?.format==='leadintel-workspace-snapshot-lzw-v1'&&!root.LeadIntelStateBudget?.restoreWorkspaceSnapshot)return null;
+      const record=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored,object=value=>value&&typeof value==='object'&&!Array.isArray(value),dataKeys=['state','discovery','outreach','delivery','discovery_meta'].map(name=>'leadintel_customer_v2_'+name).concat(['leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1']);
+      if(!object(record)||record.schema_version!==1||record.server_synced!==true||typeof record.workspace_id!=='string'||!record.workspace_id||!Number.isSafeInteger(record.server_version)||record.server_version<0||typeof record.saved_at!=='string'||!Number.isFinite(Date.parse(record.saved_at))||new Date(record.saved_at).toISOString()!==record.saved_at||!object(record.server_payload)||Object.entries(record.server_payload).some(([key,value])=>!['main','discovery','outreach','delivery','meta'].includes(key)||!object(value))||!object(record.data)||Object.keys(record).some(key=>!['schema_version','server_synced','workspace_id','server_version','saved_at','server_payload','data'].includes(key))||Object.entries(record.data).some(([key,value])=>!dataKeys.includes(key)||typeof value!=='string'))return null;
+      for(const raw of Object.values(record.data)){const section=JSON.parse(raw);if(!object(section)||typeof section.format==='string'&&section.format.startsWith('leadintel-'))return null;}
+      return {record,workspaceId:record.workspace_id,version:record.server_version,savedAt:Date.parse(record.saved_at)};
+    }catch{return null;}
+  }
+  function assertWorkspaceSnapshotOrder(previous,next){
+    if(previous&&next&&previous.workspaceId===next.workspaceId&&(previous.version>next.version||previous.version===next.version&&previous.savedAt>next.savedAt))throw archivePointerChanged();
   }
   async function encodeArchiveValue(text,eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline){
     if(!root.CompressionStream||!root.DecompressionStream||!root.Blob||!root.Response||byteLength(text)>MAX_ARCHIVE_BYTES)return text;
@@ -264,7 +277,7 @@
   async function publishArchiveDiagnostics(inventory,extra={}){
     let estimate={},timer;try{estimate=await Promise.race([Promise.resolve().then(()=>root.navigator?.storage?.estimate?.()||{}),new Promise(resolve=>{timer=root.setTimeout(()=>resolve({}),500);})])||{};}catch{}finally{root.clearTimeout(timer);}
     const collectionSkippedReason=!root.navigator?.locks?.request?'no_lock':!inventory.scanComplete?'partial_scan':!inventory.referencesComplete?'incomplete_refs':'none';
-    const detail={schemaVersion:3,totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
+    const detail={schemaVersion:4,totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
     root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
     if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));return detail;
   }
@@ -340,16 +353,43 @@
       if(POINTER_FORMATS.has(pointer?.format)){if(workspaceId&&pointer.workspace_id!==workspaceId)throw archiveError(null,'archive_read');record=await storedArchive(pointer.key);if(!record)throw archiveError(null,'archive_read');if(workspaceId&&record.workspace_id!==workspaceId)throw archiveError(null,'archive_read');}
       assertCurrent(started);if(get(storage,pointerKey)!==raw)throw archivePointerChanged();return {pointer,raw,record};});
   }
+  async function retirePublishedSnapshotPrevious(previousPointer,previousRaw,key,publishedPointer){
+    let reason='unknown_owner',retired=0;
+    if(!root.navigator?.locks?.request)reason='no_lock';
+    else if(previousPointer?.format==='leadintel-indexed-workspace-snapshot-v1'&&typeof previousPointer.key==='string'&&previousPointer.key.startsWith(SNAPSHOT_PREFIX)&&previousPointer.key!==key){
+      const authorityRaw=await rawArchiveValue(key),previous=knownWorkspaceSnapshot(await decodeArchiveValue(previousRaw)),next=knownWorkspaceSnapshot(await decodeArchiveValue(authorityRaw));
+      if(previous&&next&&previous.workspaceId===context.workspaceId&&next.workspaceId===previous.workspaceId&&previousPointer.workspace_id===previous.workspaceId&&next.version>=previous.version&&next.savedAt>=previous.savedAt){
+        const inventory=await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline);
+        if(!inventory.complete)reason='incomplete_refs';
+        else if(inventory.references.has(previousPointer.key)||inventory.pins.has(previousPointer.key)||inventory.pins.has(key))reason='referenced';
+        else{reason='changed';await archiveTransaction('readwrite',(store,fail)=>{const authority=store.get(key);authority.onsuccess=()=>{if(!sameArchiveValue(authority.result,authorityRaw))return;const old=store.get(previousPointer.key);old.onsuccess=()=>{if(sameArchiveValue(old.result,previousRaw)&&get(storage,WORKSPACE_SNAPSHOT_KEY)===publishedPointer&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){try{store.delete(previousPointer.key);retired=1;reason='retired';}catch(cause){fail(cause);}}};};});}
+      }else if(previous&&next)reason='regressed_owner';
+    }
+    await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:retired,ownedSnapshotRetirement:reason});
+  }
   async function publishRecoverySnapshot(record,{pointerKey,encodePointer,expectedPointer,eligibleBaseline}={}){
     await archiveReady();if(typeof pointerKey!=='string'||typeof encodePointer!=='function')throw archiveError(null,'archive_write');
     return archiveLock(async()=>{
       const started=ticket;assertCurrent(started);const previous=get(storage,pointerKey);if(expectedPointer!==undefined&&previous!==expectedPointer)throw archivePointerChanged();
-      const pointer=parse(previous);if(POINTER_FORMATS.has(pointer?.format)){const current=await storedArchive(pointer.key);if(current?.server_synced===true&&record.server_synced===true&&current.workspace_id===record.workspace_id&&Number(current.server_version)>Number(record.server_version))throw archivePointerChanged();}
+      const pointer=parse(previous);if(POINTER_FORMATS.has(pointer?.format)){const current=await storedArchive(pointer.key);if(current?.server_synced===true&&record.server_synced===true&&current.workspace_id===record.workspace_id&&Number(current.server_version)>Number(record.server_version))throw archivePointerChanged();if(pointerKey===WORKSPACE_SNAPSHOT_KEY)assertWorkspaceSnapshotOrder(knownWorkspaceSnapshot(current),knownWorkspaceSnapshot(record));}
+      if(pointerKey===WORKSPACE_SNAPSHOT_KEY&&context.workspaceId&&record.workspace_id!==context.workspaceId)throw archivePointerChanged();
       await compactArchivesLocked({eligibleBaseline});assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();
+      const previousRaw=pointerKey===WORKSPACE_SNAPSHOT_KEY&&pointer?.format==='leadintel-indexed-workspace-snapshot-v1'?await rawArchiveValue(pointer.key):undefined;
+      if(previousRaw!==undefined)assertWorkspaceSnapshotOrder(knownWorkspaceSnapshot(await decodeArchiveValue(previousRaw)),knownWorkspaceSnapshot(record));
       const key=await saveRecoverySnapshotLocked(record,eligibleBaseline),encoded=encodePointer(key);if(typeof encoded!=='string')throw archiveError(null,'archive_write');const next=parse(encoded);
+      if(pointerKey===WORKSPACE_SNAPSHOT_KEY&&next?.format!=='leadintel-indexed-workspace-snapshot-v1')throw archivePointerChanged();
       if(!POINTER_FORMATS.has(next?.format)||next.key!==key||next.workspace_id!==record.workspace_id)throw archiveError(null,'archive_write');
       assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();set(storage,pointerKey,encoded);if(get(storage,pointerKey)!==encoded)throw archivePointerChanged();
-      await archiveTransaction('readwrite',store=>store.delete(SNAPSHOT_PIN_PREFIX+key));assertCurrent(started);return key;
+      await archiveTransaction('readwrite',store=>store.delete(SNAPSHOT_PIN_PREFIX+key));assertCurrent(started);
+      if(pointerKey===WORKSPACE_SNAPSHOT_KEY){try{await retirePublishedSnapshotPrevious(pointer,previousRaw,key,encoded);}catch{
+        root.document?.documentElement?.setAttribute('data-snapshot-retirement','deferred');
+        try{await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:0,ownedSnapshotRetirement:'deferred'});}catch{
+          const detail={schemaVersion:4,measurementComplete:false,retiredOwnedSnapshotsThisPublication:0,ownedSnapshotRetirement:'deferred'};
+          root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
+          if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));
+        }
+      }}
+      return key;
     });
   }
   function hasLegacyArchives(){for(let index=0;index<storage.length;index++)if(String(storage.key(index)).startsWith(ARCHIVE_PREFIX))return true;return false;}
@@ -418,7 +458,7 @@
     // An inline-only workspace does not require IndexedDB. Preserve the native
     // diagnostic, but require successful storage before any actual archive I/O.
     archiveInitializationError=cause;
-    const detail={schemaVersion:3,storageAvailable:false,name:ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',phase:ARCHIVE_PHASES.has(cause?.phase)?cause.phase:'archive',category:ARCHIVE_CATEGORIES.has(cause?.category)?cause.category:'unknown'};
+    const detail={schemaVersion:4,storageAvailable:false,name:ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',phase:ARCHIVE_PHASES.has(cause?.phase)?cause.phase:'archive',category:ARCHIVE_CATEGORIES.has(cause?.category)?cause.category:'unknown'};
     root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
     if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));
   });}
