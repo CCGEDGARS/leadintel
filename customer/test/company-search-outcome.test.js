@@ -1,4 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),Progress=require('../company-search-progress.js');
+test('a spent budget with unfinished saved checks is paused rather than a completed no-match finding',()=>{
+ const result=Progress.outcome({status:'no_results',targetCount:5,checked:[],pendingCount:31,run:{callsUsed:11,callLimit:11}}),view=Progress.model({status:'no_results',result});
+ assert.equal(result.state,'partial');assert.equal(result.stopReason,'budget_limit');assert.match(view.title,/Search paused/);assert.equal(view.percent,null);assert.match(view.note,/11 of 11/);assert.match(view.note,/31 companies await/);assert.equal(view.stats[2][1],0);
+ const completed=Progress.outcome({status:'no_results',targetCount:5,checked:[],pendingCount:0,run:{callsUsed:3,callLimit:11}});assert.equal(completed.state,'no_results');
+});
 
 // These cases reproduce the owner's screenshot: two checked companies are not
 // two strong-fit prospects, and a bounded pass limit is not a spent budget.

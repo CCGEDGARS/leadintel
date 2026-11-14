@@ -8575,6 +8575,25 @@
         "snapshot-owner=20261114-v7&save-ack=20261114-v8&monitoring-filter=20261114-v2",
         "presentation-fingerprint=20261114-v2&save-ack=20261114-v8&save-progress=20261114-v9"
       ]
+    },
+    {
+      "id": "company-budget-pause-not-no-match",
+      "type": "text",
+      "url": "/customer/company-search-progress.js",
+      "status": 200,
+      "contains": [
+        "['complete','no_results'].includes(status)&&!targetMet",
+        "state==='partial'&&['budget_limit','budget_reserve','pass_limit','pending_review']"
+      ]
+    },
+    {
+      "id": "company-budget-pause-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-stop=20261114-v9"
+      ]
     }
   ],
   "retry": {
