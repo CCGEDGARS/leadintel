@@ -93,3 +93,9 @@ test('retrying a saved-only review retains its no-web authorization',async()=>{
  await context.__runDiscovery({recheckOnly:true,savedEvidenceOnly:true,targetDomains:[candidate.domain]});assert.equal(calls.search+calls.scrape,0);
  assert.ok(actions[0]?.retry);await actions[0].retry();assert.equal(calls.search+calls.scrape,0,'a saved-only retry cannot turn into paid web acquisition');assert.equal(context.__loadMeta().lastCompanyRun.savedEvidenceOnly,true);
 });
+for(const entryPoint of ['review','discovery'])test(`a fresh retained read supersedes an old company assessment clock during ${entryPoint}`,async()=>{
+ const now=new Date().toISOString(),candidate={...companies(1)[0],needsRecheck:true,researchedAt:'2020-01-01T00:00:00Z',evidence:[{url:'https://northsteel.lv/',sourceRead:false,text:'North Steel is mentioned in Latvia.'}]}, {context,calls}=helpers.loadRunner({targetCount:1,pendingCompanies:[candidate],fitResponse:goodFit});
+ context.__discoveryState().rawResults=[{url:'https://northsteel.lv/operations',sourceRead:true,verifiedAt:now,text:'North Steel operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.'}];
+ await context.__runDiscovery(entryPoint==='review'?{recheckOnly:true,targetDomains:[candidate.domain]}:{});
+ assert.equal(calls.search+calls.scrape,0,'an old assessment clock cannot force repurchase of an already fresh executed read');assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain);assert.ok(context.__discoveryState().candidates[0].evidence.some(e=>e.verifiedAt===now));
+});

@@ -1017,6 +1017,9 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         let candidate={...input};
         const retained=previousRawResults.filter(e=>e.sourceRead===true&&canonicalDomain(e.url)===canonicalDomain(candidate.domain));
         candidate.evidence=LeadIntelDiscovery.dedupeCompanyEvidence([...(candidate.evidence||[]),...retained]);
+        // Derive freshness from the retained executed read before planning; an
+        // older company assessment clock must not suppress that source.
+        candidate=assessPool([candidate])[0];
         rememberMentions([{company:candidate.company,market:targetMarket}]);
         let plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});
         if(plan.reassessSaved){candidate=(await researchPool([candidate]))[0];plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});}
