@@ -56,7 +56,7 @@
     // provider/browser message, path, serialized value, or original cause.
     const category=phase==='archive_open_blocked'?'blocked':name==='QuotaExceededError'||/quota|disk (?:is )?full|(?:not enough|insufficient) (?:disk )?(?:space|storage)/i.test(detail)?'quota':/too large|exceeds? (?:the )?max|maximum (?:allowed )?(?:size|length)|value size/i.test(detail)?'value_too_large':name==='TimeoutError'||/timed? ?out|timeout/i.test(detail)?'timeout':name==='AbortError'?'aborted':['SecurityError','NotAllowedError'].includes(name)?'security':['InvalidStateError','TransactionInactiveError'].includes(name)?'invalid_state':'unknown';
     const safePhase=ARCHIVE_PHASES.has(phase)?phase:'archive';
-    return Object.assign(new Error('Browser recovery failed ('+name+' / '+safePhase+' / '+category+'). Existing drafts were kept.'),{name,code:'browser_archive_unavailable',phase:safePhase,category});
+    return Object.assign(new Error('Your browser could not safely preserve the workspace ('+name+' / '+safePhase+' / '+category+'). Existing drafts were kept.'),{name,code:'browser_archive_unavailable',phase:safePhase,category});
   }
   function archiveDatabase(){
     if(databasePromise)return databasePromise;
