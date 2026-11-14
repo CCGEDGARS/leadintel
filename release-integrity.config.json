@@ -6047,8 +6047,8 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "strategySignature:window.LeadIntelStrategyIntegrity?.signature(main)",
-        "strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current"
+        "strategySignature:strategyStatus?.signature||window.LeadIntelStrategyIntegrity?.signature(main)",
+        "strategyCurrent:strategyStatus?.current"
       ]
     },
     {
@@ -7833,7 +7833,7 @@
       "status": 200,
       "contains": [
         "function repairCompletedOpportunityResearchContext()",
-        "if(market.researchContextFingerprint!==original)return false;",
+        "if(![original,legacyOriginal].includes(market.researchContextFingerprint))return false;",
         "if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();"
       ]
     },

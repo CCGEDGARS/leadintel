@@ -3,7 +3,7 @@
   const Q=root.LeadIntelPageQuality;if(root.__leadIntelPageQualityUI)return;root.__leadIntelPageQualityUI=true;
   const guarded={
     'to-questionnaire':['setup','advance'], 'analyze-company':['profile','research'], 'confirm-market-research':['profile','research'], 'approve-profile':['profile','approve'],
-    'run-company-discovery':['companies','research'], 'activate-market-strategy':['strategy','approve'], 'confirm-strategy-handoff':['strategy','advance'],
+    'run-company-discovery':['companies','research'], 'activate-market-strategy':['strategy','prepare'], 'confirm-strategy-handoff':['strategy','advance'],
     'message-generate':['messages','generate'], 'approve-outreach':['messages','approve'],
     'mw-add-flow':['messages','flow'], 'mw-mark-default':['messages','library'], 'message-save-as-template':['messages','library'],
     'open-gmail-draft':['delivery','send'], 'send-with-gmail':['delivery','send'], 'send-with-microsoft':['delivery','send']

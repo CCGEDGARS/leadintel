@@ -146,8 +146,8 @@ test('page-quality denied actions can focus Profile after canonical reconstructi
     // Exercise the actual denied() -> focus() -> setStep(3) path, rather than
     // calling a fixture navigation implementation.
     const Q=h.w.LeadIntelPageQuality;
-    Q.register('strategy',{read:()=>({loaded:true,checks:[Q.check('profile-review','Profile reviewed',false,'Review the profile first.',{actions:['approve'],target:{step:3,id:'edit-profile'}})]})});
-    h.w.document.getElementById('activate-market-strategy').click();
+    Q.register('strategy',{read:()=>({loaded:true,checks:[Q.check('profile-review','Profile reviewed',false,'Review the profile first.',{actions:['approve','advance'],target:{step:3,id:'edit-profile'}})]})});
+    h.w.document.getElementById('confirm-strategy-handoff').click();
     assert.equal(h.state().step,3);
     assert.equal(h.w.document.querySelector('.step-view.active').dataset.step,'3');
     assert.equal(h.w.document.activeElement.id,'edit-profile');

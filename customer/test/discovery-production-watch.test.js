@@ -138,7 +138,7 @@ const boundedDiscoveryRuntime = [
  "async function awaitDiscoveryRun( activeDiscoveryTaskId===taskId persistence:'failed'",
  "function companyStrategyCurrent( function retainDiscoveryEvidence( candidate.evidence=retainDiscoveryEvidence(candidate.evidence||[]",
  "function scheduleSavedBuyerPublicChecks(){ Opening retained work only reads their progress",
- "strategySignature:window.LeadIntelStrategyIntegrity?.signature(main) strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current",
+ "strategySignature:strategyStatus?.signature||window.LeadIntelStrategyIntegrity?.signature(main) strategyCurrent:strategyStatus?.current",
  "Array.isArray(main.referenceCustomerPortfolio?.lists)?null",
  "selectedInputKey()===expectedPeopleKey pending.owners",
  "manualContact:!automatic if(!manualContact&&ownerIsCurrent() personId:button.dataset.personId",
