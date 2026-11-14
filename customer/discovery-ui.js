@@ -174,10 +174,12 @@ function registerCompanySaveRetry(taskId,run){
   window.LeadIntelTaskCentre?.registerActions(taskId,{retry:async()=>{
     if(!current())return false;
     try{
+      window.LeadIntelTaskCentre?.start?.({id:taskId,type:'company-discovery',title:'Save retained company evidence',stage:'Saving retained company evidence',total:2,completed:0,etaSeconds:null,canCancel:false,canRetry:true});
       // Retrying a persistence failure must never repeat paid provider work.
       saveDiscovery();
       if(!await window.LeadIntelWorkspacePersistence?.saveWorkspace?.({automatic:true}))throw new Error('Evidence is retained; workspace saving still needs attention.');
       if(!current())return false;
+      window.LeadIntelTaskCentre?.update?.(taskId,{stage:'Confirming saved company evidence',completed:1,total:2});
       saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});
       if(!await window.LeadIntelWorkspacePersistence?.saveWorkspace?.({automatic:true})||!current())throw new Error('Company save acknowledgement is incomplete.');
       window.LeadIntelTaskCentre?.complete(taskId,{status:'partial',stage:'Retained evidence saved · research checks remain incomplete',resultCount:discovery.latestRunCandidateCount||0});
