@@ -992,7 +992,7 @@
       const focus=['market','operations','signals','exclusions'].includes(item.verificationFocus)?item.verificationFocus:profile.discoveryPriority==='signals'?'signals':profile.discoveryFitFirst?'operations':'signals';
       const country=marketSearchNames(item.market);
       const missingSize=evaluateExclusions(item,profile.exclusions).unverified.some(rule=>headcountExclusion(rule)!==null);
-      const operatingQuery=focus==='exclusions'&&missingSize?`site:${domain} ${country} (employees OR people OR headcount OR staff) (about OR company OR facts)`:`site:${domain} ${country} (locations OR contact OR operations OR products OR services OR about)`;
+      const operatingQuery=focus==='exclusions'&&missingSize?`site:${domain} (employees OR people OR headcount OR staff) (about OR company OR facts)`:`site:${domain} ${country} (locations OR contact OR operations OR products OR services OR about)`;
       checks.push({
         id:`verify-${slug(domain)}`,domain,company:clean(item.company),sourceUrl:normalizeUrl(item.sourceUrl||""),market:clean(item.market),offer:"",kind:"verification",verificationFocus:focus,
         query:focus==='signals'?`site:${domain} (${quotedSignals}) after:${new Date(Date.now()-365*86400000).toISOString().slice(0,10)} news ${clean(profile.exclusions).replace(/no specific exclusions/i,'').slice(0,300)}`:operatingQuery
@@ -1211,12 +1211,13 @@
   }
   function officialHeadcounts(candidate){
     const rows=[];
+    const number=String.raw`\d(?:[\d,]|[ \u00a0](?=\d{3}(?:\D|$)))*`,range=String.raw`(${number})(?:\s*[–—-]\s*(${number}))?`,qualifier=String.raw`(?:(more than|over|at least|fewer than|less than|under)\s+)?`;
     for(const source of trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain))){
       const text=[source.title,source.description,source.text].filter(Boolean).join('. ');
-      const patterns=[/\b(?:we|our company|our group)\s+(?:currently\s+)?(?:employ|employs|have|has)\s+(?:(more than|over|at least|fewer than|less than|under)\s+)?(\d[\d,]*)(?:\s*[–—-]\s*(\d[\d,]*))?\s+(?:(?:skilled|dedicated|full-time|qualified)\s+)?(?:employees|people|staff|workers)\b/gi,/\b(?:number of employees|employee count|headcount)\s*[:\-]?\s*(\d[\d,]*)(?:\s*[–—-]\s*(\d[\d,]*))?\b/gi];
+      const patterns=[new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:currently\s+)?(?:employ|employs|have|has)\s+${qualifier}${range}\s+(?:(?:skilled|dedicated|full-time|qualified)\s+)?(?:employees|people|staff|workers)\b`,'gi'),new RegExp(String.raw`\b(?:number of employees|employee count|headcount)\s*[:\-]?\s*${range}\b`,'gi'),new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:are|is)\s+(?:(?:already|currently)\s+)?(?:a\s+)?(?:team|workforce|staff)\s+of\s+${qualifier}${range}\s+(?:employees|people|staff|workers)\b`,'gi')];
       for(const [index,pattern] of patterns.entries())for(const m of text.matchAll(pattern)){
-        const qualifier=index===0?(m[1]||'').toLowerCase():'',low=Number(m[index===0?2:1].replace(/,/g,'')),high=m[index===0?3:2];
-        let min=low,max=high?Number(high.replace(/,/g,'')):low;
+        const attributed=index!==1,qualifier=attributed?(m[1]||'').toLowerCase():'',low=Number(m[attributed?2:1].replace(/[,\s]/g,'')),high=m[attributed?3:2];
+        let min=low,max=high?Number(high.replace(/[,\s]/g,'')):low;
         if(/^\s*\+/.test(text.slice(m.index+m[0].length)))max=Infinity;
         if(/more than|over/.test(qualifier)){min=low+1;max=Infinity;}else if(qualifier==='at least')max=Infinity;
         else if(/fewer than|less than|under/.test(qualifier)){min=0;max=low-1;}

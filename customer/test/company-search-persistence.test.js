@@ -57,6 +57,41 @@ test('authenticated Companies preserves mixed scores, honest shortfall and the p
  }finally{await context?.close();await browser.close();await f.close();}
 });
 
+test('the real review button qualifies retained operating pages without web requests and keeps them after SQL reopen',{timeout:90000},async t=>{
+ if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The mandatory Profile/Strategy browser job executes this SQL journey.');return;}
+ const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs'),{ready,settleInitialSave}=await import('../../scripts/verify-step5-journey.mjs');
+ const {chromium}=await loadPlaywright(),f=await journeyFixture(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context;const web=[],ai=[],dir='/tmp/leadintel-company-review-button/evidence-first';await fs.mkdir(dir,{recursive:true});
+ async function open(){
+  context=await browser.newContext({viewport:{width:1440,height:1100}});await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+  await context.route('**/*',async route=>{
+   const request=route.request(),url=new URL(request.url());
+   if(/firecrawl(?:\/|-)search|firecrawl(?:\/|-)scrape/.test(url.pathname)){web.push(request.url());return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,data:[]})});}
+   if(url.pathname==='/api/ai/generate'){
+    const body=request.postDataJSON();ai.push(body);const companies=JSON.parse(body.prompt.split('. Companies: ')[1]);
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({text:JSON.stringify({companies:companies.map(c=>({domain:c.domain,fit:85,relationship:'buyer',offerId:'offer-0',reason:'Production facilities are a purchasing application for industrial automation.',buyerRole:'industrial manufacturer',evidence:[{sourceId:c.evidence[0].sourceId,quoteId:c.evidence[0].quoteOptions.find(q=>q.quote.includes('Sweden')).quoteId}]}))})})});
+   }
+   return url.origin===f.origin?route.continue():route.abort();
+  });
+  const page=await context.newPage();await page.goto(f.origin+'/customer/');await ready(page);await page.waitForFunction(()=>typeof discovery!=='undefined'&&discovery&&window.LeadIntelDiscoveryUI?.getCompanyOutcome);await page.locator('.steps [data-workflow-stage="4"] strong').click();return page;
+ }
+ try{
+  const initial=await f.getState(),now=new Date().toISOString();
+  const r=companyFixtureProfileRuntime(),main=r.LeadIntelProfile.normalizeSavedState(JSON.parse(JSON.stringify(initial.payload.main)));main.market=r.LeadIntelMarket.recoverInterruptedResearch(initial.payload.main.market);main.profile.companyClassification=r.LeadIntelCompanyBrain.classifyCompany(main);main.profile.customerPainPointsStatus='User confirmed';main.profile.customerPainPointsLanguage='en';r.LeadIntelCanonicalIntelligence.confirmProfileContext(main);main.approved=true;main.targetingConfirmation=require('../targeting-policy.js').confirm(main);main.market.strategyApproval=r.LeadIntelStrategyIntegrity.approval(main);
+  initial.payload.main=main;initial.payload.meta.discovery={...initial.payload.meta.discovery,activeJourneyStage:4,targetCount:5,webCallCap:1};
+  const pending=Array.from({length:5},(_,i)=>({company:`Retained Manufacturer ${i}`,domain:`retainedmanufacturer${i}.example`,website:`https://retainedmanufacturer${i}.example/`,market:'Sweden',evidence:[],qualificationGaps:['Verify readable operating evidence']}));
+  // Saved review rows require an identity-bearing source. The full operating
+  // page lives in rawResults; this unverified mention cannot itself qualify.
+  for(const c of pending)c.evidence=[{url:c.website,title:c.company,text:c.company+' is mentioned as a manufacturer in Sweden; operating evidence needs review.',evidenceKind:'search_excerpt',sourceRead:false}];
+  initial.payload.discovery={...initial.payload.discovery,status:'partial',potentialMatches:pending,rawResults:pending.map(c=>({domain:c.domain,market:'Sweden',url:c.website+'operations',title:c.company+' production operations',sourceRead:true,verifiedAt:now,text:c.company+' operates industrial manufacturing facilities in Sweden. Our engineering teams use industrial automation systems to coordinate machinery and production operations across our manufacturing business facilities.'}))};
+  const engine=require('../discovery-engine.js');assert.equal(engine.normalizeDiscoveryState(initial.payload.discovery).potentialMatches.length,5,'the controlled seed must satisfy the real saved-record shape');assert.ok(pending.every(c=>engine.domainMatchesCompany(c.domain,c.company)),'fixture company names and official domains must satisfy the real identity gate');
+  await f.replace(initial.payload,initial.version);let page=await open();await settleInitialSave(page);await page.locator('#review-next-companies').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').companyReviewQueue?.lastBatch?.finishedAt);await settleInitialSave(page);
+  const saved=(await f.getState()).payload;assert.equal(saved.discovery.candidates.length,5);assert.equal(saved.discovery.potentialMatches.length,0);assert.equal(web.length,0);assert.equal(ai.length,5);assert.equal(saved.discovery.selectedProspects.length,1);assert.ok(saved.discovery.candidates.every(c=>c.evidence.some(e=>e.verifiedAt===now)));
+  await context.close();page=await open();await page.waitForFunction(()=>document.getElementById('company-candidates')?.textContent.includes('5 checked companies'));assert.equal((await f.getState()).payload.discovery.candidates.length,5);assert.equal(web.length,0);assert.equal(ai.length,5,'reopening cannot repeat paid AI assessment');
+ }catch(error){const page=context?.pages().at(-1);if(page){await page.screenshot({path:dir+'/failure.png',fullPage:true});const diagnostic=await page.evaluate(()=>({active:document.querySelector('.step-view.active')?.id,status:typeof discovery!=='undefined'?discovery?.status:null,pending:typeof discovery!=='undefined'?discovery?.potentialMatches?.length:null,checked:typeof discovery!=='undefined'?discovery?.candidates?.length:null,body:document.body.innerText.slice(-10000),panel:document.getElementById('company-review-batch')?.textContent}));await fs.writeFile(dir+'/failure.json',JSON.stringify(diagnostic,null,2));console.error(JSON.stringify(diagnostic));}throw error;
+ }finally{await context?.close();await browser.close();await f.close();}
+});
+
 for(const cap of [20,1])test('the real review button survives a pointer-time refresh and persists its bounded batch · cap '+cap,{timeout:90000},async t=>{
  if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The mandatory Profile/Strategy browser job executes this SQL journey.');return;}
  const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs');
