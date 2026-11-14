@@ -73,3 +73,23 @@ test('a later empty saved-only review retains the current shortlist status and o
  context.__discoveryState().status='no_results';context.__discoveryState().candidates=[];context.renderStatus();assert.equal(nodes['discovery-status'].textContent,'Evidence incomplete');
  context.__discoveryState().potentialMatches=[];context.renderStatus();assert.equal(nodes['discovery-status'].textContent,'No matches');
 });
+
+for(const retainedLocation of ['candidate','raw'])test(`normal discovery shares explicit review's zero-web saved-evidence policy (${retainedLocation})`,async()=>{
+ const candidate={...companies(1)[0],needsRecheck:true,evidence:[{url:'https://northsteel.lv/operations',sourceRead:true,verifiedAt:new Date().toISOString(),text:'North Steel operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.'}]};
+ const {context,calls}=helpers.loadRunner({targetCount:1,pendingCompanies:[candidate],fitResponse:goodFit});
+ if(retainedLocation==='raw'){
+  const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));main.answers.exclusions='companies with less than 30 people';main.profile.exclusions=main.answers.exclusions;main.targetingConfirmation=Targeting.confirm(main);main.market.strategyApproval=StrategyIntegrity.approval(main);context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+  context.__discoveryState().rawResults=[{...candidate.evidence[0],text:candidate.evidence[0].text+' We are proud to employ over 350 dedicated professionals.'}];
+ }
+ await context.__runDiscovery();
+ assert.equal(calls.search+calls.scrape,0,'normal discovery must finish the saved qualification before spending on the same known domain');
+ assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain);
+ assert.equal(calls.other,1,'one current fit assessment is sufficient');
+ assert.equal(context.__discoveryState().candidates[0].evidence[0].verifiedAt,candidate.evidence[0].verifiedAt);
+});
+test('retrying a saved-only review retains its no-web authorization',async()=>{
+ const candidate=companies(1)[0],{context,calls}=helpers.loadRunner({targetCount:1,pendingCompanies:[candidate],fitResponse:goodFit}),actions=[];
+ context.LeadIntelTaskCentre={start(){},registerActions(id,value){actions.push(value);},update(){},complete(){},fail(){},get(){return null;}};
+ await context.__runDiscovery({recheckOnly:true,savedEvidenceOnly:true,targetDomains:[candidate.domain]});assert.equal(calls.search+calls.scrape,0);
+ assert.ok(actions[0]?.retry);await actions[0].retry();assert.equal(calls.search+calls.scrape,0,'a saved-only retry cannot turn into paid web acquisition');assert.equal(context.__loadMeta().lastCompanyRun.savedEvidenceOnly,true);
+});

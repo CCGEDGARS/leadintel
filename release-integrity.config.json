@@ -8718,7 +8718,7 @@
       "contains": [
         "offer-engine=20261114-v13",
         "offer-display=20261114-v13",
-        "offer-review=20261114-v14",
+        "offer-review=20261114-v15",
         "review-budget=20261114-v13"
       ]
     },
@@ -8742,7 +8742,9 @@
         "if(signal?.leadIntelSavedEvidenceOnly)",
         "if(plan.needsWeb&&!savedEvidenceOnly)",
         "data-review-action=\"saved-evidence\"",
-        "savedEvidenceOnly:true,targetDomain:key"
+        "savedEvidenceOnly:true,targetDomain:key",
+        "const reviewSavedCompany=async input=>",
+        "recheckOnly,savedEvidenceOnly,autoPass"
       ]
     },
     {
