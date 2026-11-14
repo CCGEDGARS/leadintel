@@ -9,7 +9,7 @@ const handler=source.slice(source.indexOf('let clearCompanyResultsReturnFocus=')
 function fixture(status='complete'){
  const original={status,candidates:[{company:'Old'}],potentialMatches:[{company:'Rejected'}],selectedProspects:[{company:'Selected'}],rawResults:[{url:'https://old.example'}],pipeline:[{company:'Saved',domain:'saved.example',website:'https://saved.example',stage:'Qualified'}],lastRunAt:'2026-10-03'};
  const c={
-  discovery:original,LeadIntelDiscovery:engine,
+  discovery:original,LeadIntelDiscovery:engine,window:{},
   document:{activeElement:null,body:{classList:{add(){},remove(){}}}},
   $:()=>null,showToast:()=>{},
   loadMeta:()=>({targetCount:5,fingerprint:'keep',lastCompanyRun:{}}),

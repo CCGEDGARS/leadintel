@@ -334,8 +334,8 @@ test('a completed zero-result run renders the search funnel and unqualified matc
 
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Evidence pages/i);
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
-  assert.match(context.__elements.get('company-candidates').innerHTML,/Review Market Research/);
-  assert.match(context.__elements.get('company-candidates').innerHTML,/valid finding/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/saved companies still need evidence review/i);
+  assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/valid finding|No newly qualified opportunities/i);
   assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Research review/i);
   assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Needs more evidence|Not qualified/i);
   assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Verify company identity/);
@@ -1907,9 +1907,9 @@ test('an additional checked company retains its original index when selected for
  const persisted=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(persisted.selectedProspects[0].domain,candidates[0].domain);assert.equal(persisted.candidates.length,7);assert.equal(providerCalls(),0);
 });
-test('Research review starts collapsed even when no company has completed the checks',()=>{
+test('Research review opens when it is the only company list',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[]});render();
- const disclosure=dom.window.document.querySelector('#discovery-potential-matches details');assert.ok(disclosure);assert.equal(disclosure.open,false);
+ const disclosure=dom.window.document.querySelector('#discovery-potential-matches details');assert.ok(disclosure);assert.equal(disclosure.open,true);
  assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,0);assert.match(disclosure.textContent,/Unfinished Research/);
 });
 test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
@@ -2229,4 +2229,37 @@ test('a storage failure before research starts stays visible and allows another 
  assert.match(dom.window.document.getElementById('company-review-batch').textContent,/Storage unavailable during review start/);
  assert.equal(dom.window.document.querySelector('#review-next-companies').disabled,false,'retry remains available without reserving the failed batch');
  await review();assert.ok(calls.length>0);
+});
+
+
+test('Strategy changes never hide retained eligible company records from every results section',()=>{
+ const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});
+ const state=context.__discoveryState();context.__setDiscovery({...state,needsRefresh:true,status:'no_results',latestRunCandidateCount:0,retainedLastSuccessfulResults:true});
+ const before=JSON.stringify(context.__discoveryState());render();
+ const others=dom.window.document.getElementById('discovery-potential-matches');
+ for(const c of candidates)assert.ok(others.textContent.includes(c.company),c.company+' must remain visible for saved review');
+ assert.equal(others.querySelectorAll('.research-check-row').length,3);
+ assert.equal(others.querySelector('details').open,true,'when no current shortlist exists, retained companies must be visible without hunting for a disclosure');
+ assert.match(others.textContent,/Strategy.*review|current Strategy/i);
+ assert.doesNotMatch(dom.window.document.getElementById('company-candidates').textContent,/No newly qualified opportunities|zero-result run can be valid|results? below are/);
+ assert.equal(JSON.stringify(context.__discoveryState()),before,'rendering cannot rewrite saved evidence');assert.equal(providerCalls(),0);
+});
+
+test('stale saved company rows can be explicitly removed without changing other results or Buyers',()=>{
+ const {context,dom,render,providerCalls}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});
+ context.__setDiscovery({...context.__discoveryState(),needsRefresh:true,selectedProspects:[{company:'Selected survivor',domain:'survivor.lv',buyerSearchMode:'user_selected_target',people:[{name:'Retained Person'}]}]});
+ render();context.__bindDiscovery();
+ const remove=dom.window.document.querySelector('[data-review-action="remove"][data-review-key="ranked0.lv"]');assert.ok(remove);remove.click();
+ assert.equal(context.__discoveryState().candidates.length,2);
+ assert.equal(context.__discoveryState().selectedProspects[0].people[0].name,'Retained Person');assert.equal(providerCalls(),0);
+});
+
+
+test('Strategy fingerprint comparison ignores object key order without ignoring commercial edits',()=>{
+ const context=loadDiscoveryRunner();
+ const current=vm.runInNewContext('fingerprint()',context),previous=JSON.parse(current);
+ previous.answers=Object.fromEntries(Object.entries(previous.answers).reverse());
+ const compare=value=>vm.runInNewContext('sameStrategyFingerprint('+JSON.stringify(JSON.stringify(value))+','+JSON.stringify(current)+')',context);
+ assert.equal(compare(previous),true,'save and hydration key order cannot invalidate saved research');
+ previous.answers.priority_offers='A materially different offer';assert.equal(compare(previous),false);
 });

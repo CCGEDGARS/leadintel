@@ -141,7 +141,14 @@
     engine.getReadinessSummary=input=>getReadinessSummary(input,root);
     engine.calculateCompleteness=input=>getReadinessSummary(input,root).score;
     engine.normalizeSavedState=function(value={}){
-      const migrated=Brief?.migrateState?Brief.migrateState(value):value;const normalized=originalProfile.normalizeSavedState(migrated);const rawAnswers=migrated.answers||{};const answers={};
+      const migrated=Brief?.migrateState?Brief.migrateState(value):value;
+      // The Profile editor owns the reviewed textarea text. Migration may clean
+      // derived inputs, but must not change an unchanged approved goal on reopen.
+      const objective=value.profile?.canonical?.fields?.commercialObjective;
+      if(objective?.status==='user_confirmed'&&typeof value.workspaceGoals?.successOutcome==='string'&&value.workspaceGoals.successOutcome===objective.value){
+        migrated.workspaceGoals={...(migrated.workspaceGoals||{}),successOutcome:value.workspaceGoals.successOutcome};
+      }
+      const normalized=originalProfile.normalizeSavedState(migrated);const rawAnswers=migrated.answers||{};const answers={};
       for(const id of QUESTION_IDS)answers[id]=clean(rawAnswers[id]??normalized.answers?.[id]??"");
       normalized.answers=answers;normalized.answerStatus={};
       for(const id of QUESTION_IDS)normalized.answerStatus[id]=explicitStatus(migrated.answerStatus?.[id],answers[id]);
