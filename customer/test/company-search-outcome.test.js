@@ -26,6 +26,10 @@ test('a small remaining allowance is distinct from spent credits and a shortfall
  assert.equal(q.stopReason,'budget_reserve');assert.doesNotMatch(q.note,/used up|exhausted/i);
  const m=Progress.model({status:'complete',result:q});assert.equal(m.state,'partial');assert.equal(m.percent,null);assert.match(m.title,/1 of 5/);assert.match(m.note,/22 companies/);assert.doesNotMatch(Progress.html(m),/aria-valuenow="100"/);
 });
+test('an explicit review with unspent requests does not blame a hypothetical next discovery pass',()=>{
+ const q=Progress.outcome({targetCount:5,checked:[],pendingCount:30,status:'no_results',run:{scope:'recheck',callsUsed:6,callLimit:11,remainingBudgetInsufficient:true}});
+ assert.equal(q.stopReason,'pending_review');assert.doesNotMatch(q.note,/budget cannot|budget was used/);
+});
 test('failure and cancellation cannot become a successful target merely because retained companies exist',()=>{
  for(const [status,run,reason] of [['error',{},'provider_failure'],['partial',{canceled:true},'canceled']]){
   const q=Progress.outcome({targetCount:1,checked:[{qualification:{score:90}}],pendingCount:1,status,run});assert.equal(q.stopReason,reason);assert.notEqual(q.state,'complete');

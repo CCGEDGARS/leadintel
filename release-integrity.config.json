@@ -8651,6 +8651,76 @@
       "contains": [
         "company-review-evidence=20261114-v11"
       ]
+    },
+    {
+      "id": "company-facts-headcount-bounds",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "const facts=[",
+        "max:kind>0||m[1]||m[3]?Infinity:min"
+      ]
+    },
+    {
+      "id": "company-independent-offer-policy",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "assessmentPolicy:'independent-offer-application-v3'",
+        "const alternativeOfferPending=",
+        "independentOfferComponents(commercial.purchase).every",
+        "Assess confirmed offers independently"
+      ]
+    },
+    {
+      "id": "company-facts-worker-engine",
+      "type": "text",
+      "url": "/customer/qualification-worker.js",
+      "status": 200,
+      "contains": [
+        "offer-engine=20261114-v12"
+      ]
+    },
+    {
+      "id": "company-facts-worker-loader",
+      "type": "text",
+      "url": "/customer/qualification-display.js",
+      "status": 200,
+      "contains": [
+        "offer-worker=20261114-v12"
+      ]
+    },
+    {
+      "id": "company-review-pass-budget-owner",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "remainingBudgetInsufficient:!targetOnly&&!recheckOnly"
+      ]
+    },
+    {
+      "id": "company-review-pass-budget-display",
+      "type": "text",
+      "url": "/customer/company-search-progress.js",
+      "status": 200,
+      "contains": [
+        "run.scope!=='recheck'&&run.remainingBudgetInsufficient"
+      ]
+    },
+    {
+      "id": "company-facts-policy-returning-loaders",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "offer-engine=20261114-v12",
+        "offer-display=20261114-v12",
+        "offer-review=20261114-v12",
+        "review-budget=20261114-v12"
+      ]
     }
   ],
   "retry": {
