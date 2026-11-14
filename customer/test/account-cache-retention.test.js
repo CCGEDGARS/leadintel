@@ -348,3 +348,16 @@ test('malformed, opaque, null and array section strings remain protected unknown
 test('the workspace snapshot owner rejects a recovery-family pointer before commit and preserves its previous owner',async()=>{
  const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),before=r.values.get(PTR);await assert.rejects(r.api.publishRecoverySnapshot(ownedSnapshot(2),{pointerKey:PTR,expectedPointer:before,encodePointer:key=>recoveryPointer(key)}),error=>error.code==='archive_pointer_changed');assert.equal(r.values.get(PTR),before);assert.ok(await raw(r.indexedDB,previous));assert.equal((await r.api.getRecoveryStorageDiagnostics()).pendingPins,1);
 });
+
+test('storage diagnostics measure raw localStorage UTF16 quota footprint by bounded public categories without decoding or leaking keys',async()=>{
+ const section='leadintel_customer_v2_discovery',recovery='leadintel_customer_v2_sync_recovery_v1',otherApp='leadintel_customer_v2_private_fixture',other='private-non-app-fixture';
+ const values=new Map([[section,'leadintel-local-section-lzw-v1:'+JSON.stringify({encoding:'private-malformed-codec',data:'opaque-private-value'})],[recovery,JSON.stringify({manual:'exact private recovery ā😀'})],[PTR,'private snapshot pointer'],[otherApp,'private app contents'],[other,'private external contents']]),r=setup({values});await r.api.pending;
+ const before=new Map(values),expected=[...values].reduce((sum,[key,value])=>sum+2*(key.length+value.length),0);
+ r.root.LeadIntelStateBudget={restoreLocalStorageValue(){throw Error('Diagnostics must never decode raw sections');}};
+ const diagnostic=await r.api.getRecoveryStorageDiagnostics(),local=diagnostic.localStorage;
+ assert.equal(local.measurementComplete,true);assert.equal(local.totalRecords,values.size);assert.equal(local.totalUtf16Bytes,expected);
+ for(const [category,key]of [['sections',section],['recovery',recovery],['snapshot',PTR],['other',other]]){assert.equal(local[category].records,1);assert.equal(local[category].utf16Bytes,2*(key.length+values.get(key).length));}
+ assert.ok(local.otherApp.records>=1);assert.equal(Object.values(local).filter(value=>value&&typeof value==='object').reduce((sum,row)=>sum+row.utf16Bytes,0),expected);
+ assert.deepEqual(values,before);assert.doesNotMatch(JSON.stringify(diagnostic),/private|opaque|fixture|exact|leadintel_customer/);
+ assert.deepEqual(JSON.parse(r.attributes.get('data-archive-storage-diagnostics')).localStorage,JSON.parse(JSON.stringify(local)));
+});

@@ -274,10 +274,27 @@
     }
     return {keys,roots,references,baselines,rawKeys,pins,totalBytes,logicalBytes,scanned,rawCount,compressedCount,unknownCount,referencesComplete,scanComplete:scanned===keys.length,complete:referencesComplete&&scanned===keys.length};
   }
+  function localStorageDiagnostics(){
+    // Native localStorage accounts for stored strings, not decoded section JSON.
+    // Publish only aggregate UTF-16 footprint; never expose customer keys or values.
+    const sections=new Set(['state','discovery','outreach','delivery','discovery_meta'].map(name=>'leadintel_customer_v2_'+name));
+    const result={measurementComplete:true,totalRecords:0,totalUtf16Bytes:0,sections:{records:0,utf16Bytes:0},recovery:{records:0,utf16Bytes:0},snapshot:{records:0,utf16Bytes:0},otherApp:{records:0,utf16Bytes:0},other:{records:0,utf16Bytes:0}};
+    try{
+      const length=storage.length;
+      for(let index=0;index<Math.min(length,10000);index++){
+        const key=storage.key(index);if(typeof key!=='string'){result.measurementComplete=false;continue;}
+        const value=rawGet.call(storage,key);if(typeof value!=='string'){result.measurementComplete=false;continue;}
+        const category=sections.has(key)?'sections':key===SYNC_RECOVERY_KEY?'recovery':key===WORKSPACE_SNAPSHOT_KEY?'snapshot':key.startsWith('leadintel_')?'otherApp':'other',size=2*(key.length+value.length);
+        result[category].records++;result[category].utf16Bytes+=size;result.totalRecords++;result.totalUtf16Bytes+=size;
+      }
+      if(length>10000||storage.length!==length)result.measurementComplete=false;
+    }catch{result.measurementComplete=false;}
+    return result;
+  }
   async function publishArchiveDiagnostics(inventory,extra={}){
     let estimate={},timer;try{estimate=await Promise.race([Promise.resolve().then(()=>root.navigator?.storage?.estimate?.()||{}),new Promise(resolve=>{timer=root.setTimeout(()=>resolve({}),500);})])||{};}catch{}finally{root.clearTimeout(timer);}
     const collectionSkippedReason=!root.navigator?.locks?.request?'no_lock':!inventory.scanComplete?'partial_scan':!inventory.referencesComplete?'incomplete_refs':'none';
-    const detail={schemaVersion:4,totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
+    const detail={schemaVersion:4,localStorage:localStorageDiagnostics(),totalRecords:inventory.keys.length,scannedRecords:inventory.scanned,measuredBytes:inventory.totalBytes,scannedLogicalBytes:inventory.logicalBytes,measurementComplete:inventory.complete,rawRecords:inventory.rawCount,compressedRecords:inventory.compressedCount,pendingPins:inventory.pins.size,unknownRecords:inventory.unknownCount,eligibleAcknowledgedBaselines:inventory.baselines.length,referencedSnapshots:inventory.references.size,collectionSkippedReason,originUsageBytes:Number.isFinite(estimate.usage)?estimate.usage:null,originQuotaBytes:Number.isFinite(estimate.quota)?estimate.quota:null,...extra};
     root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
     if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));return detail;
   }

@@ -8443,6 +8443,57 @@
         "previous.server_version===snapshot.server_version",
         "return finish(previous)"
       ]
+    },
+    {
+      "id": "workspace-write-ack-receipt",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "await rememberAcknowledgedWrite(workspaceId,version,next.payload)",
+        "matchesAcknowledgedWrite"
+      ]
+    },
+    {
+      "id": "workspace-ack-conflict-recovery",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "async function recoverAcknowledgedCheckpoint(",
+        "await recoverAcknowledgedCheckpoint(result.current,context.workspaceId)"
+      ]
+    },
+    {
+      "id": "company-persistence-save-only-retry",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function registerCompanySaveRetry(",
+        "Retained evidence saved · research checks remain incomplete"
+      ]
+    },
+    {
+      "id": "local-storage-raw-capacity-diagnostics",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "localStorage:localStorageDiagnostics()",
+        "totalUtf16Bytes"
+      ]
+    },
+    {
+      "id": "company-save-boundary-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "snapshot-owner=20261114-v7&save-ack=20261114-v8",
+        "browser-recovery=20261114-v3&save-ack=20261114-v8",
+        "presentation-fingerprint=20261114-v2&save-ack=20261114-v8"
+      ]
     }
   ],
   "retry": {

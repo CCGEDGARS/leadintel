@@ -1,0 +1,14 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+function fixture({metadataQuota=false}={}){
+ let meta={lastCompanyRun:{runId:1,startedAt:'2026-11-14T12:00:00Z',persistence:'failed'}},writes=0,ack=false,ownerCurrent=true;
+ const discovery={status:'partial',researchAudit:{entries:[{id:'paid-receipt'}]},selectedProspects:[{domain:'buyer.example',people:[{id:'retained'}]}]},actions=new Map(),tasks=[];
+ const ctx={discovery,loadMeta:()=>meta,saveMeta:value=>{if(metadataQuota)throw Object.assign(Error('Metadata quota'),{name:'QuotaExceededError'});meta=value},saveDiscovery:()=>writes++,captureCompanyAction:()=>({}),companyActionCurrent:()=>ownerCurrent,renderDiscoverySafely(){},showToast(){},window:{LeadIntelWorkspacePersistence:{saveWorkspace:async()=>ack},LeadIntelTaskCentre:{registerActions:(id,a)=>actions.set(id,a),complete:(...v)=>tasks.push(v)}},console};
+ vm.createContext(ctx);const start=source.indexOf('function registerCompanySaveRetry('),end=source.indexOf('function ',start+10);assert.ok(start>=0,'Production must provide save-only retry');vm.runInContext(source.slice(start,end),ctx);
+ ctx.registerCompanySaveRetry('company-discovery:1',meta.lastCompanyRun);
+ return {ctx,discovery,actions,tasks,get writes(){return writes},get meta(){return meta},ack:()=>ack=true,changeOwner:()=>ownerCurrent=false};
+}
+test('failed company persistence retries the retained save without research and retains partial outcome',async()=>{const f=fixture(),before=JSON.stringify(f.discovery);f.ack();assert.equal(await f.actions.get('company-discovery:1').retry(),true);assert.equal(JSON.stringify(f.discovery),before);assert.equal(f.meta.lastCompanyRun.persistence,'saved');assert.equal(f.writes,1);assert.equal(f.tasks.length,1);});
+test('unacknowledged save stays failed and retryable',async()=>{const f=fixture();assert.equal(await f.actions.get('company-discovery:1').retry(),false);assert.equal(f.meta.lastCompanyRun.persistence,'failed');assert.equal(f.tasks.length,0);});
+test('changed workspace or later run cannot save the stale retry owner',async()=>{for(const change of [f=>f.changeOwner(),f=>f.ctx.saveMeta({lastCompanyRun:{runId:2,startedAt:'later',persistence:'failed'}})]){const f=fixture();change(f);assert.equal(await f.actions.get('company-discovery:1').retry(),false);assert.equal(f.writes,0);}});
+test('metadata quota cannot leave a provider retry installed or report a successful save',async()=>{const f=fixture({metadataQuota:true});assert.equal(typeof f.actions.get('company-discovery:1').retry,'function');f.ack();assert.equal(await f.actions.get('company-discovery:1').retry(),false);assert.equal(f.tasks.length,0);assert.equal(f.meta.lastCompanyRun.persistence,'failed');assert.equal(f.discovery.researchAudit.entries.length,1);});
