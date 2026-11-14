@@ -7,7 +7,7 @@ function setup({indexedDB=new IDBFactory(),values=new Map([['leadintel_customer_
  const attributes=new Map(),events=[],root={indexedDB,Storage,localStorage:new Storage(values),sessionStorage:new Storage(new Map()),navigator:{locks:sharedLocks,storage:{estimate:async()=>({usage:12345,quota:99999})}},TextEncoder,TextDecoder,ArrayBuffer,Uint8Array,Blob,Response:class extends Response{async arrayBuffer(){const data=await super.arrayBuffer();await onCompress?.();return data;}},CompressionStream:compression?CompressionStream:undefined,DecompressionStream:compression?DecompressionStream:undefined,crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,URL,console,location:{href:'https://example.test/customer/',search:'',reload(){}},document:{documentElement:{setAttribute:(k,v)=>attributes.set(k,v),removeAttribute:k=>attributes.delete(k)},getElementById:()=>null},CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},dispatchEvent:event=>events.push(event)};
  vm.runInNewContext(source,root);return {root,api:root.LeadIntelAccountCache,indexedDB,values,attributes,events};
 }
-async function openDB(indexedDB,version=3){return new Promise((resolve,reject)=>{const request=indexedDB.open(DBNAME,version);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
+async function openDB(indexedDB,version=4){return new Promise((resolve,reject)=>{const request=indexedDB.open(DBNAME,version);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
 async function write(indexedDB,key,value){const db=await openDB(indexedDB);await new Promise((resolve,reject)=>{const tx=db.transaction('archives','readwrite');tx.objectStore('archives').put(value,key);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();}
 async function raw(indexedDB,key){const db=await openDB(indexedDB);const value=await new Promise((resolve,reject)=>{const tx=db.transaction('archives'),r=tx.objectStore('archives').get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});db.close();return value;}
 const baseline=(version,value='business')=>({schema_version:1,workspace_id:'w1',server_version:version,server_synced:true,server_payload:{value},data:{value}});
@@ -61,11 +61,11 @@ test('compression CAS cannot overwrite a record changed while gzip was being pre
  const pending=r.api.compactRecoveryStorage();await ready;const replacement=JSON.stringify({workspace_id:'w1',data:'new unique value'});await write(r.indexedDB,key,replacement);release();await pending;assert.equal(await raw(r.indexedDB,key),replacement);
 });
 
-test('v3 migration preserves drafts but fences a paused v1 writer after its commit',async()=>{
+test('v4 migration preserves drafts but fences a paused v1 writer after its commit',async()=>{
  const indexedDB=new IDBFactory(),values=new Map([['leadintel_customer_v2_workspace','w1'],['leadintel_customer_v2_state','retained draft'],['leadintel_account_context_v1',JSON.stringify({workspaceId:'w1',userId:'u1',epoch:'li2:old'})]]);
  const request=indexedDB.open(DBNAME,1);await new Promise((resolve,reject)=>{request.onupgradeneeded=()=>request.result.createObjectStore('archives');request.onsuccess=resolve;request.onerror=reject;});request.result.onversionchange=()=>request.result.close();const oldTicket=values.get('leadintel_account_context_v1');
  const r=setup({indexedDB,values});await r.api.pending;assert.notEqual(values.get('leadintel_account_context_v1'),oldTicket);assert.equal(values.get('leadintel_customer_v2_state'),'retained draft');assert.ok(JSON.parse(values.get('leadintel_account_context_v1')).epoch.startsWith('li2:'));
- await assert.rejects(openDB(indexedDB,1),{name:'VersionError'});await assert.rejects(openDB(indexedDB,2),{name:'VersionError'});
+ await assert.rejects(openDB(indexedDB,1),{name:'VersionError'});await assert.rejects(openDB(indexedDB,2),{name:'VersionError'});await assert.rejects(openDB(indexedDB,3),{name:'VersionError'});
 });
 
 test('incomplete deep or malformed reference walks disable collection; serialized array references survive',async()=>{
@@ -299,4 +299,52 @@ test('account archives retain object references hidden in raw local-storage sect
 
 test('a deeply nested known local codec remains incomplete at the traversal boundary',async()=>{
  const r=await referenceFixture();let nested=encodedLocalSection({pointer:JSON.parse(pointer(PREFIX+'protected-baseline')),evidence:'Repeated evidence '.repeat(10000)});for(let i=0;i<40;i++)nested={nested};await write(r.indexedDB,PREFIX+'deep-local',JSON.stringify({data:nested}));const result=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.equal(result.measurementComplete,false);assert.ok(await raw(r.indexedDB,PREFIX+'protected-baseline'));
+});
+
+function ownedSnapshot(version,{savedAt,data,workspace='w1',extra}={}){return {schema_version:1,server_synced:true,workspace_id:workspace,server_version:version,saved_at:savedAt||new Date(Date.UTC(2026,10,14,13,0,version)).toISOString(),server_payload:{main:{revision:version},discovery:{},outreach:{},delivery:{},meta:{discovery:{}}},data:data||{leadintel_customer_v2_state:JSON.stringify({revision:version,manual:'Retained local note'}),leadintel_customer_v2_research_meta_v1:JSON.stringify({manualReview:'Local evidence richer than cloud'})},...extra};}
+
+test('twenty advancing acknowledged owner publications replace only the exact previous richer-local snapshot',async()=>{
+ const r=setup();await r.api.pending;let previous;
+ for(let version=1;version<=20;version++){const record=ownedSnapshot(version),key=await publish(r,record);if(previous)assert.equal(await raw(r.indexedDB,previous),undefined);assert.equal((await r.api.getRecoveryStorageDiagnostics()).totalRecords,1);assert.equal(JSON.stringify((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record),JSON.stringify(record));previous=key;}
+});
+
+test('same-version stale async snapshot cannot publish over the newer known owner',async()=>{
+ const r=setup();await r.api.pending;const current=ownedSnapshot(5,{savedAt:'2026-11-14T13:00:20.000Z'}),key=await publish(r,current),before=r.values.get(PTR);await assert.rejects(publish(r,ownedSnapshot(5,{savedAt:'2026-11-14T13:00:10.000Z'})),error=>error.code==='archive_pointer_changed');assert.equal(r.values.get(PTR),before);assert.equal((await r.api.getRecoveryStorageDiagnostics()).totalRecords,1);assert.equal(JSON.stringify(await r.api.readRecoverySnapshot(key)),JSON.stringify(current));
+});
+
+test('higher acknowledged versions may publish after clock regression but never retire that previous owner',async()=>{
+ const r=setup();await r.api.pending;const old=await publish(r,ownedSnapshot(1,{savedAt:'2026-11-14T13:00:20.000Z'}));const next=await publish(r,ownedSnapshot(2,{savedAt:'2026-11-14T13:00:10.000Z'}));assert.ok(await raw(r.indexedDB,old));assert.ok(await raw(r.indexedDB,next));assert.equal((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record.server_version,2);
+});
+
+test('archived references and pending pins keep exact previous owned snapshots available',async()=>{
+ for(const hold of ['archive','pin']){const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1));if(hold==='archive')await write(r.indexedDB,'leadintel_account_cache_v1:held',JSON.stringify({data:{snapshot:pointer(previous)}}));else await write(r.indexedDB,PINS+'held-owner',JSON.stringify({format:'leadintel-archive-pending-v2',key:previous}));const next=await publish(r,ownedSnapshot(2));assert.ok(await raw(r.indexedDB,previous));assert.ok(await raw(r.indexedDB,next));}
+});
+
+test('unknown and noncanonical legacy snapshots are not destructively classified as publication predecessors',async()=>{
+ for(const kind of ['unknown','date']){const r=setup();await r.api.pending;const previous=ownedSnapshot(1);if(kind==='unknown')previous.unknownManualRecovery='Unique legacy work';else previous.saved_at='2026-11-14';const key=PREFIX+'legacy-owner';await write(r.indexedDB,key,JSON.stringify(previous));r.values.set(PTR,pointer(key));const next=await publish(r,ownedSnapshot(2));assert.ok(await raw(r.indexedDB,key));assert.ok(await raw(r.indexedDB,next));}
+});
+
+test('failed owned-snapshot pointer publication keeps its exact prior owner and unpublished newer work pinned',async()=>{
+ let fail=false;const r=setup({onSet(key){if(fail&&key===PTR)throw new DOMException('Quota','QuotaExceededError');}});await r.api.pending;const previous=await publish(r,ownedSnapshot(1));fail=true;await assert.rejects(publish(r,ownedSnapshot(2)),{name:'QuotaExceededError'});assert.equal(r.values.get(PTR),pointer(previous));assert.ok(await raw(r.indexedDB,previous));assert.equal((await r.api.getRecoveryStorageDiagnostics()).pendingPins,1);
+});
+
+test('cleanup failure retains the previous owner without converting a committed new snapshot into a failed save',async()=>{
+ const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),prototype=require('fake-indexeddb').IDBObjectStore.prototype,remove=prototype.delete;let rejected=false;try{prototype.delete=function(key){if(key===previous){rejected=true;throw new DOMException('Controlled cleanup failure','AbortError');}return remove.call(this,key);};const next=await publish(r,ownedSnapshot(2));assert.equal(rejected,true);assert.equal(r.values.get(PTR),pointer(next));assert.ok(await raw(r.indexedDB,previous));assert.ok(await raw(r.indexedDB,next));assert.equal((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record.server_version,2);assert.equal(r.attributes.get('data-snapshot-retirement'),'deferred');const diagnostic=JSON.parse(r.attributes.get('data-archive-storage-diagnostics'));assert.equal(diagnostic.ownedSnapshotRetirement,'deferred');assert.equal(diagnostic.retiredOwnedSnapshotsThisPublication,0);assert.ok(diagnostic.measurementComplete===false||diagnostic.totalRecords===2);}finally{prototype.delete=remove;}
+});
+
+test('post-publication full-frame CAS preserves a predecessor replaced by unique work after its capture',async()=>{
+ let published=false;const r=setup({onSet(key){if(key===PTR&&r.values.has(PTR))published=true;}});await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),prototype=require('fake-indexeddb').IDBDatabase.prototype,transaction=prototype.transaction;let injected=false;
+ try{prototype.transaction=function(...args){const tx=transaction.apply(this,args);if(args[1]==='readwrite'&&published&&!injected){injected=true;tx.objectStore('archives').put(JSON.stringify({manual:'A newer unrelated recovery value'}),previous);}return tx;};const next=await publish(r,ownedSnapshot(2));assert.equal(injected,true);assert.ok(await raw(r.indexedDB,next));assert.equal(JSON.parse(await raw(r.indexedDB,previous)).manual,'A newer unrelated recovery value');}finally{prototype.transaction=transaction;}
+});
+
+test('foreign incoming workspace snapshots cannot overwrite the current owned pointer',async()=>{
+ const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1));await assert.rejects(publish(r,ownedSnapshot(2,{workspace:'w2'})),error=>error.code==='archive_pointer_changed');assert.equal(r.values.get(PTR),pointer(previous));assert.equal((await r.api.getRecoveryStorageDiagnostics()).totalRecords,1);
+});
+
+test('malformed, opaque, null and array section strings remain protected unknown predecessor snapshots',async()=>{
+ for(const value of ['{invalid retained text','null','[]','leadintel-local-section-lzw-v1:opaque',JSON.stringify({format:'leadintel-discovery-refs-v999',data:'unknown'})]){const r=setup();await r.api.pending;const old=ownedSnapshot(1);old.data.leadintel_customer_v2_state=value;const previous=await publish(r,old);await publish(r,ownedSnapshot(2));assert.ok(await raw(r.indexedDB,previous));assert.equal((await r.api.readRecoverySnapshot(previous)).data.leadintel_customer_v2_state,value);}
+});
+
+test('the workspace snapshot owner rejects a recovery-family pointer before commit and preserves its previous owner',async()=>{
+ const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),before=r.values.get(PTR);await assert.rejects(r.api.publishRecoverySnapshot(ownedSnapshot(2),{pointerKey:PTR,expectedPointer:before,encodePointer:key=>recoveryPointer(key)}),error=>error.code==='archive_pointer_changed');assert.equal(r.values.get(PTR),before);assert.ok(await raw(r.indexedDB,previous));assert.equal((await r.api.getRecoveryStorageDiagnostics()).pendingPins,1);
 });

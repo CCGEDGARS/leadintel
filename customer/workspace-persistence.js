@@ -55,6 +55,7 @@
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
+  function knownAcknowledgedSnapshot(value){try{return isObject(value)&&value.schema_version===1&&value.server_synced===true&&typeof value.workspace_id==='string'&&value.workspace_id&&Number.isSafeInteger(value.server_version)&&value.server_version>=0&&typeof value.saved_at==='string'&&Number.isFinite(Date.parse(value.saved_at))&&new Date(value.saved_at).toISOString()===value.saved_at&&isObject(value.server_payload)&&isObject(value.data)&&Object.keys(value).every(key=>['schema_version','server_synced','workspace_id','server_version','saved_at','server_payload','data'].includes(key))&&Object.entries(value.data).every(([key,item])=>{if(!WORKSPACE_DATA_KEYS.includes(key)||typeof item!=='string')return false;const section=JSON.parse(item);return isObject(section)&&!(typeof section.format==='string'&&section.format.startsWith('leadintel-'));});}catch{return false;}}
   function readSnapshot(){const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||"";if(raw===snapshotEncoded)return snapshotDecoded;const stored=safeJson(raw,null),parsed=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored;snapshotDecoded=isObject(parsed)&&isObject(parsed.data)?parsed:null;snapshotEncoded=raw;return snapshotDecoded;}
   const INDEXED_SNAPSHOT_FORMAT='leadintel-indexed-workspace-snapshot-v1';
   async function loadStoredSnapshot(){
@@ -77,6 +78,7 @@
     const activeWorkspace=root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY);
     if(activeWorkspace&&snapshot.workspace_id!==activeWorkspace)throw new Error('Workspace changed during snapshot encoding; local data was preserved');
     const previous=readSnapshot();if(previous?.server_synced&&previous.workspace_id===snapshot.workspace_id&&previous.server_version>snapshot.server_version)return previous;
+    if(knownAcknowledgedSnapshot(previous)&&knownAcknowledgedSnapshot(snapshot)&&previous.workspace_id===snapshot.workspace_id&&previous.server_version===snapshot.server_version&&Date.parse(previous.saved_at)>Date.parse(snapshot.saved_at))throw Object.assign(new Error('A newer snapshot was saved while this copy was being prepared. Existing drafts were kept.'),{code:'archive_pointer_changed',phase:'archive_write'});
     try{const encoded=JSON.stringify(packed);root.localStorage?.setItem(SNAPSHOT_KEY,encoded);snapshotEncoded=encoded;snapshotDecoded=snapshot;return snapshot;}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
@@ -225,7 +227,12 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};const finish=()=>{markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty||!sameWorkspaceData(currentWorkspaceData(),snapshot.data):!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;};const saved=persistSnapshot(snapshot);return saved&&typeof saved.then==='function'?saved.then(value=>value===snapshot?finish():value):finish();
+    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};const finish=(value=snapshot)=>{markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty||!sameWorkspaceData(currentWorkspaceData(),snapshot.data):!sameWorkspaceData(currentWorkspaceData(),data);return value;};
+    // A repeated GET acknowledgement is not a new customer revision. Compare
+    // the complete local copy too: richer local evidence must never be dropped
+    // merely because its acknowledged cloud version is unchanged.
+    if(knownAcknowledgedSnapshot(previous)&&knownAcknowledgedSnapshot(snapshot)&&previous.workspace_id===snapshot.workspace_id&&previous.server_version===snapshot.server_version&&JSON.stringify(Object.keys(previous.data).sort())===JSON.stringify(Object.keys(snapshot.data).sort())&&sameWorkspaceData(previous.data,snapshot.data)&&JSON.stringify(previous.server_payload)===JSON.stringify(snapshot.server_payload))return finish(previous);
+    const saved=persistSnapshot(snapshot);return saved&&typeof saved.then==='function'?saved.then(value=>value===snapshot?finish():value):finish();
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}

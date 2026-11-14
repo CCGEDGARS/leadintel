@@ -8291,7 +8291,7 @@
       "url": "/customer/account-cache.js",
       "status": 200,
       "contains": [
-        "indexedDB.open(ARCHIVE_DATABASE,3)",
+        "indexedDB.open(ARCHIVE_DATABASE,4)",
         "leadintel-archive-gzip-v2",
         "publishRecoverySnapshot",
         "readRecoveryPointer",
@@ -8300,7 +8300,11 @@
         "function knownSyncRecovery(",
         "restoreRecoveryRecord",
         "restoreWorkspaceSnapshot",
-        "retiredRecoveryEnvelopesThisPass"
+        "retiredRecoveryEnvelopesThisPass",
+        "function knownWorkspaceSnapshot(",
+        "retirePublishedSnapshotPrevious",
+        "retiredOwnedSnapshotsThisPublication",
+        "assertWorkspaceSnapshotOrder"
       ]
     },
     {
@@ -8333,7 +8337,9 @@
         "browser-recovery=20261114-v3",
         "archive-reference=20261114-v4",
         "decoded-references=20261114-v6",
-        "decoded-local-references=20261114-v6"
+        "decoded-local-references=20261114-v6",
+        "decoded-references=20261114-v6&snapshot-owner=20261114-v7",
+        "research-preview=20261114-v4&snapshot-owner=20261114-v7"
       ]
     },
     {
@@ -8344,6 +8350,7 @@
       "contains": [
         "pendingResearchDraft={mode:pendingResearchMode",
         "previewDraft:draft",
+        "browser-recovery=20261114-v3&snapshot-owner=20261114-v7",
         "research-preview=20261114-v4",
         "decoded-local-references=20261114-v6"
       ]
@@ -8413,7 +8420,7 @@
       "status": 200,
       "contains": [
         "discovery-engine.js?v=20260930-contact-suppression-v1&buyer-assessment-clock=20261114-v5",
-        "discovery-ui.js?v=20260930-contact-suppression-v1&buyer-assessment-clock=20261114-v5"
+        "discovery-ui.js?v=20260930-contact-suppression-v1&evidence-priority=20261101-v1&buyer-assessment-clock=20261114-v5"
       ]
     },
     {
@@ -8424,6 +8431,17 @@
       "contains": [
         "restoreLocalStorageValue",
         "leadintel-local-section-lzw-v1:"
+      ]
+    },
+    {
+      "id": "workspace-snapshot-unchanged-acknowledgement-owner",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "sameWorkspaceData(previous.data,snapshot.data)",
+        "previous.server_version===snapshot.server_version",
+        "return finish(previous)"
       ]
     }
   ],
