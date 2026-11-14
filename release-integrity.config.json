@@ -8718,7 +8718,7 @@
       "contains": [
         "offer-engine=20261114-v13",
         "offer-display=20261114-v13",
-        "offer-review=20261114-v13",
+        "offer-review=20261114-v14",
         "review-budget=20261114-v13"
       ]
     },
@@ -8743,6 +8743,17 @@
         "if(plan.needsWeb&&!savedEvidenceOnly)",
         "data-review-action=\"saved-evidence\"",
         "savedEvidenceOnly:true,targetDomain:key"
+      ]
+    },
+    {
+      "id": "company-retained-status-owner",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "checkedCount?([\"error\",\"partial\"].includes(discovery.status)",
+        "budgetIncomplete,callsUsed:discoveryCallsUsed(),callLimit:discoveryCallLimit",
+        "Evidence incomplete"
       ]
     }
   ],
