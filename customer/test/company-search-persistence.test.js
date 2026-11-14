@@ -1,5 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises');
 
+// Match the browser's Profile pipeline before signing fixture approval. A saved
+// targeting edit must be confirmed into canonical Profile context first.
+function companyFixtureProfileRuntime(){
+ const vm=require('node:vm'),readFileSync=require('node:fs').readFileSync,r={URL,console,Date,TextEncoder};vm.createContext(r);
+ for(const file of ['step2-brief-schema.js','profile-engine.js','company-brain.js','canonical-intelligence.js','canonical-profile-runtime.js','step2-readiness-engine.js','monitoring-model.js','market-engine.js','strategy-integrity.js'])vm.runInContext('(function(){'+readFileSync(require.resolve('../'+file),'utf8')+'\n})()',r);
+ r.LeadIntelStep2Readiness.patchProfileEngine(r.LeadIntelProfile,r);
+ return r;
+}
+
+
 test('authenticated Companies preserves mixed scores, honest shortfall and the pending queue across SQL save and browser reopen',{timeout:90000},async t=>{
  if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The required Profile/Strategy browser job runs this SQL journey with the WASM loader.');return;}
  const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs');
@@ -8,7 +18,18 @@ test('authenticated Companies preserves mixed scores, honest shortfall and the p
  const dir='/tmp/leadintel-company-search-outcome';await fs.mkdir(dir,{recursive:true});
  async function open(){context=await browser.newContext({viewport:{width:1440,height:1100}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const p=await context.newPage();await p.goto(f.origin+'/customer/');await ready(p);await p.waitForFunction(()=>typeof discovery!=='undefined'&&discovery&&window.LeadIntelDiscoveryUI?.getCompanyOutcome);return p;}
  try{
-  const initial=await f.getState();initial.payload.meta.discovery.activeJourneyStage=4;const main=initial.payload.main;main.answers.exclusions='companies with less than 30 people';main.profile.exclusions='ISO 9001 certification required';main.targetingConfirmation=require('../targeting-policy.js').confirm(main);main.market.strategyApproval=require('../strategy-integrity.js').approval(main);await f.replace(initial.payload,initial.version);
+  const initial=await f.getState();initial.payload.meta.discovery.activeJourneyStage=4;
+  const input=initial.payload.main;input.answers.exclusions='companies with less than 30 people';input.profile.exclusions='ISO 9001 certification required';
+  assert.equal(input.profile.canonical.fields.exclusions.value,'none','the controlled edit starts with superseded canonical exclusions');
+  const r=companyFixtureProfileRuntime(),normalize=saved=>{const restored=r.LeadIntelProfile.normalizeSavedState(JSON.parse(JSON.stringify(saved)));restored.market=r.LeadIntelMarket.recoverInterruptedResearch(saved.market);return restored;};
+  const main=normalize(input);assert.equal(main.approved,false,'changing authoritative exclusions requires fresh Profile confirmation');
+  assert.equal(main.profile.exclusions,'companies with less than 30 people','confirmed targeting replaces superseded generated exclusions');
+  main.profile.companyClassification=r.LeadIntelCompanyBrain.classifyCompany(main);main.profile.customerPainPointsStatus='User confirmed';main.profile.customerPainPointsLanguage='en';
+  r.LeadIntelCanonicalIntelligence.confirmProfileContext(main);main.approved=true;
+  main.targetingConfirmation=require('../targeting-policy.js').confirm(main);main.market.strategyApproval=r.LeadIntelStrategyIntegrity.approval(main);
+  assert.equal(r.LeadIntelStrategyIntegrity.status(main).current,true);
+  let reloaded=main;for(let cycle=0;cycle<2;cycle++){reloaded=normalize(reloaded);assert.equal(reloaded.approved,true,'reviewed Profile remains approved on reload '+cycle);assert.equal(r.LeadIntelStrategyIntegrity.status(reloaded).current,true,'Strategy remains current on reload '+cycle);assert.equal(reloaded.profile.exclusions,'companies with less than 30 people');}
+  initial.payload.main=main;await f.replace(initial.payload,initial.version);
   let page=await open();await settleInitialSave(page);
   await page.evaluate(()=>{
    const profile=companyQualificationProfile(mainState()),now=new Date().toISOString();

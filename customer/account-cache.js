@@ -47,15 +47,25 @@
     try{const result=operation();if(result&&typeof result.then==='function')return result.finally(()=>{transitioning=false;});transitioning=false;return result;}
     catch(cause){transitioning=false;throw cause;}
   }
-  function archiveError(){return Object.assign(new Error('Your browser could not safely preserve the workspace. Existing drafts were kept.'),{code:'browser_archive_unavailable'});}
+  const ARCHIVE_ERROR_NAMES=new Set(['Error','TypeError','AbortError','QuotaExceededError','UnknownError','InvalidStateError','NotFoundError','ConstraintError','DataError','ReadOnlyError','TransactionInactiveError','DataCloneError','VersionError','SecurityError','InvalidAccessError','NotAllowedError','TimeoutError']);
+  const ARCHIVE_PHASES=new Set(['archive','archive_open','archive_open_blocked','archive_open_timeout','archive_upgrade','archive_read','archive_write','archive_read_request','archive_write_request','archive_read_transaction','archive_write_transaction','archive_read_timeout','archive_write_timeout']);
+  const ARCHIVE_CATEGORIES=new Set(['quota','value_too_large','timeout','blocked','aborted','security','invalid_state','unknown']);
+  function archiveError(cause,phase='archive'){
+    const name=ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',detail=String(cause?.message||'').slice(0,2048);
+    // Use native names and bounded pattern classification only. Never retain a
+    // provider/browser message, path, serialized value, or original cause.
+    const category=phase==='archive_open_blocked'?'blocked':name==='QuotaExceededError'||/quota|disk (?:is )?full|(?:not enough|insufficient) (?:disk )?(?:space|storage)/i.test(detail)?'quota':/too large|exceeds? (?:the )?max|maximum (?:allowed )?(?:size|length)|value size/i.test(detail)?'value_too_large':name==='TimeoutError'||/timed? ?out|timeout/i.test(detail)?'timeout':name==='AbortError'?'aborted':['SecurityError','NotAllowedError'].includes(name)?'security':['InvalidStateError','TransactionInactiveError'].includes(name)?'invalid_state':'unknown';
+    return Object.assign(new Error('Your browser could not safely preserve the workspace. Existing drafts were kept.'),{name,code:'browser_archive_unavailable',phase:ARCHIVE_PHASES.has(phase)?phase:'archive',category});
+  }
   function archiveDatabase(){
     if(databasePromise)return databasePromise;
     databasePromise=new Promise((resolve,reject)=>{
-      let finished=false,request;const timer=root.setTimeout?.(()=>finish(archiveError()),ARCHIVE_TIMEOUT_MS);
+      let finished=false,request;const timer=root.setTimeout?.(()=>finish(archiveError({name:'TimeoutError'},'archive_open_timeout')),ARCHIVE_TIMEOUT_MS);
       function finish(cause,db){if(finished){db?.close();return;}finished=true;root.clearTimeout?.(timer);if(cause)reject(cause);else resolve(db);}
-      try{request=root.indexedDB.open(ARCHIVE_DATABASE,1);}catch{finish(archiveError());return;}
-      request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE);};
-      request.onerror=request.onblocked=()=>finish(archiveError());
+      try{request=root.indexedDB.open(ARCHIVE_DATABASE,1);}catch(cause){finish(archiveError(cause,'archive_open'));return;}
+      request.onupgradeneeded=()=>{try{if(!request.result.objectStoreNames.contains(ARCHIVE_STORE))request.result.createObjectStore(ARCHIVE_STORE);}catch(cause){finish(archiveError(cause,'archive_upgrade'));}};
+      request.onerror=()=>finish(archiveError(request.error,'archive_open'));
+      request.onblocked=()=>finish(archiveError(null,'archive_open_blocked'));
       request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();databasePromise=null;};finish(null,db);};
     });
     return databasePromise;
@@ -63,14 +73,17 @@
   async function archiveTransaction(mode,operation){
     const db=await archiveDatabase();assertCurrent();
     return new Promise((resolve,reject)=>{
-      let tx,result,finished=false;const timer=root.setTimeout?.(()=>{try{tx?.abort();}catch{}finish(archiveError());},ARCHIVE_TIMEOUT_MS);
+      const action=mode==='readonly'?'read':'write';
+      let tx,result,finished=false;const timer=root.setTimeout?.(()=>{finish(archiveError({name:'TimeoutError'},'archive_'+action+'_timeout'));try{tx?.abort();}catch{}},ARCHIVE_TIMEOUT_MS);
       function finish(cause){if(finished)return;finished=true;root.clearTimeout?.(timer);if(cause)reject(cause);else resolve(result);}
       try{
         tx=db.transaction(ARCHIVE_STORE,mode);
         // A successful put request is not a committed backup. Wait for oncomplete.
-        tx.oncomplete=()=>finish();tx.onabort=tx.onerror=()=>finish(archiveError());
+        tx.oncomplete=()=>finish();
+        tx.onabort=()=>finish(archiveError(tx.error,'archive_'+action+'_transaction'));
+        tx.onerror=event=>{const request=event?.target&&event.target!==tx?event.target:null;finish(archiveError(request?.error||tx.error,'archive_'+action+(request?'_request':'_transaction')));};
         result=operation(tx.objectStore(ARCHIVE_STORE));
-      }catch(cause){try{tx?.abort();}catch{}finish(cause);}
+      }catch(cause){finish(archiveError(cause,'archive_'+action+'_transaction'));try{tx?.abort();}catch{}}
     });
   }
   function storedArchive(key){
@@ -99,14 +112,14 @@
   const SNAPSHOT_PREFIX='leadintel_workspace_snapshot_v1:';
   async function saveRecoverySnapshot(record){
     const started=ticket;assertCurrent(started);
-    if(!root.indexedDB)throw archiveError();
+    if(!root.indexedDB)throw archiveError(null,'archive_write');
     const key=SNAPSHOT_PREFIX+encodeURIComponent(record.workspace_id||'local')+':'+(record.server_version??'local')+':'+(root.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
     await archiveTransaction('readwrite',store=>store.put(JSON.stringify(record),key));assertCurrent(started);return key;
   }
   async function readRecoverySnapshot(key){
     const started=ticket;assertCurrent(started);
-    if(!String(key).startsWith(SNAPSHOT_PREFIX)||!root.indexedDB)throw archiveError();
-    const record=await storedArchive(key);assertCurrent(started);if(!record)throw archiveError();return record;
+    if(!String(key).startsWith(SNAPSHOT_PREFIX)||!root.indexedDB)throw archiveError(null,'archive_read');
+    const record=await storedArchive(key);assertCurrent(started);if(!record)throw archiveError(null,'archive_read');return record;
   }
   function hasLegacyArchives(){for(let index=0;index<storage.length;index++)if(String(storage.key(index)).startsWith(ARCHIVE_PREFIX))return true;return false;}
   function clearActive(){for(const store of [storage,session])for(const key of Object.keys(entries(store)))remove(store,key);}
@@ -147,7 +160,7 @@
     root.addEventListener?.('leadintel:server-ready',run);run();
   }
   function complete(){root.document?.documentElement?.removeAttribute('data-account-check');}
-  function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');const message=root.document?.getElementById?.('account-recovery-message');if(!message)return;if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){message.textContent='Your browser could not safely preserve the workspace. Keep your browser data and try again.';return;}const failure=root.LeadIntelServerBridge?.startupFailure;const code=String(failure?.code||cause?.code||'startup_failed').slice(0,80);const phase=String(failure?.phase||cause?.phase||'verification').slice(0,80);const path=String(failure?.requestPath||cause?.requestPath||'').slice(0,120);message.textContent='Startup check failed ('+code+' / '+phase+(path?' / '+path:'')+'). Your local data is preserved. Retry without clearing browser storage.';}
+  function failed(cause){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');const message=root.document?.getElementById?.('account-recovery-message');if(!message)return;if(cause?.code==='browser_archive_unavailable'||cause?.name==='QuotaExceededError'){const name=ARCHIVE_ERROR_NAMES.has(cause?.name)?cause.name:'Error',phase=ARCHIVE_PHASES.has(cause?.phase)?cause.phase:'archive',category=ARCHIVE_CATEGORIES.has(cause?.category)?cause.category:'unknown';message.textContent='Your browser could not safely preserve the workspace ('+name+' / '+phase+' / '+category+'). Your local data is preserved. Keep your browser data and retry without clearing storage.';return;}const failure=root.LeadIntelServerBridge?.startupFailure;const code=String(failure?.code||cause?.code||'startup_failed').slice(0,80);const phase=String(failure?.phase||cause?.phase||'verification').slice(0,80);const path=String(failure?.requestPath||cause?.requestPath||'').slice(0,120);message.textContent='Startup check failed ('+code+' / '+phase+(path?' / '+path:'')+'). Your local data is preserved. Retry without clearing browser storage.';}
   const api={localCodecVersion:2,afterVerification,prepareLocalStorageCodec,saveRecoverySnapshot,readRecoverySnapshot,checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
   root.LeadIntelAccountCache=api;
   // Protect delayed work in old tabs, even before a storage event is delivered.
