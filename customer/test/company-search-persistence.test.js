@@ -60,7 +60,7 @@ test('authenticated Companies preserves mixed scores, honest shortfall and the p
 test('the real review button qualifies retained operating pages without web requests and keeps them after SQL reopen',{timeout:90000},async t=>{
  if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The mandatory Profile/Strategy browser job executes this SQL journey.');return;}
  const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs'),{ready,settleInitialSave}=await import('../../scripts/verify-step5-journey.mjs');
- const {chromium}=await loadPlaywright(),f=await journeyFixture(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context;const web=[],ai=[];
+ const {chromium}=await loadPlaywright(),f=await journeyFixture(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let context;const web=[],ai=[],dir='/tmp/leadintel-company-review-button/evidence-first';await fs.mkdir(dir,{recursive:true});
  async function open(){
   context=await browser.newContext({viewport:{width:1440,height:1100}});await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
   await context.route('**/*',async route=>{
@@ -72,7 +72,7 @@ test('the real review button qualifies retained operating pages without web requ
    }
    return url.origin===f.origin?route.continue():route.abort();
   });
-  const page=await context.newPage();await page.goto(f.origin+'/customer/');await ready(page);await page.locator('.steps [data-workflow-stage="4"] strong').click();return page;
+  const page=await context.newPage();await page.goto(f.origin+'/customer/');await ready(page);await page.waitForFunction(()=>typeof discovery!=='undefined'&&discovery&&window.LeadIntelDiscoveryUI?.getCompanyOutcome);await page.locator('.steps [data-workflow-stage="4"] strong').click();return page;
  }
  try{
   const initial=await f.getState(),now=new Date().toISOString();
@@ -84,6 +84,7 @@ test('the real review button qualifies retained operating pages without web requ
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').companyReviewQueue?.lastBatch?.finishedAt);await settleInitialSave(page);
   const saved=(await f.getState()).payload;assert.equal(saved.discovery.candidates.length,5);assert.equal(saved.discovery.potentialMatches.length,0);assert.equal(web.length,0);assert.equal(ai.length,5);assert.equal(saved.discovery.selectedProspects.length,1);assert.ok(saved.discovery.candidates.every(c=>c.evidence.some(e=>e.verifiedAt===now)));
   await context.close();page=await open();await page.waitForFunction(()=>document.getElementById('company-candidates')?.textContent.includes('5 checked companies'));assert.equal((await f.getState()).payload.discovery.candidates.length,5);assert.equal(web.length,0);assert.equal(ai.length,5,'reopening cannot repeat paid AI assessment');
+ }catch(error){const page=context?.pages().at(-1);if(page){await page.screenshot({path:dir+'/failure.png',fullPage:true});const diagnostic=await page.evaluate(()=>({active:document.querySelector('.step-view.active')?.id,status:typeof discovery!=='undefined'?discovery?.status:null,pending:typeof discovery!=='undefined'?discovery?.potentialMatches?.length:null,checked:typeof discovery!=='undefined'?discovery?.candidates?.length:null,body:document.body.innerText.slice(-10000),panel:document.getElementById('company-review-batch')?.textContent}));await fs.writeFile(dir+'/failure.json',JSON.stringify(diagnostic,null,2));console.error(JSON.stringify(diagnostic));}throw error;
  }finally{await context?.close();await browser.close();await f.close();}
 });
 
