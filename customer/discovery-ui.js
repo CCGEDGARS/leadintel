@@ -167,6 +167,38 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
       candidate.people=[...visible,...(candidate.people||[]).filter(person=>!ids.has(String(person.id))&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending')].slice(0,10);
       LeadIntelDiscovery.restoreBuyerResearchReceipts(candidate,retainedReceipts);
     }return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
+function registerCompanySaveRetry(taskId,run){
+  if(!taskId||run?.persistence!=='failed')return;
+  try{saveMeta({...loadMeta(),lastCompanyRun:{...run,saveRetryTaskId:taskId}});}catch{}
+  const owner=captureCompanyAction(),current=()=>companyActionCurrent(owner)&&loadMeta().lastCompanyRun?.runId===run.runId&&loadMeta().lastCompanyRun?.startedAt===run.startedAt;
+  window.LeadIntelTaskCentre?.registerActions(taskId,{retry:async()=>{
+    if(!current())return false;
+    try{
+      // Retrying a persistence failure must never repeat paid provider work.
+      saveDiscovery();
+      if(!await window.LeadIntelWorkspacePersistence?.saveWorkspace?.({automatic:true}))throw new Error('Evidence is retained; workspace saving still needs attention.');
+      if(!current())return false;
+      saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});
+      if(!await window.LeadIntelWorkspacePersistence?.saveWorkspace?.({automatic:true})||!current())throw new Error('Company save acknowledgement is incomplete.');
+      window.LeadIntelTaskCentre?.complete(taskId,{status:'partial',stage:'Retained evidence saved · research checks remain incomplete',resultCount:discovery.latestRunCandidateCount||0});
+      renderDiscoverySafely();return true;
+    }catch(error){if(current()){try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'failed'}});}catch{}window.LeadIntelTaskCentre?.fail?.(taskId,error,{canRetry:true});showToast(error?.message||'Evidence is retained; saving still needs attention.');}return false;}
+  }});
+}
+function restoreCompanySaveRetry(){
+  const run=loadMeta().lastCompanyRun,tasks=window.LeadIntelTaskCentre;
+  if(run?.persistence!=='failed'||!tasks)return;
+  if(run.saveRetryTaskId&&tasks.get?.(run.saveRetryTaskId)){registerCompanySaveRetry(run.saveRetryTaskId,run);return;}
+  // Older releases did not store the action ID. Recover only one task whose
+  // immutable ID agrees with the saved run number and its start-time window.
+  const started=Date.parse(run.startedAt);
+  if(!Number.isFinite(started))return;
+  const matches=(tasks.list?.()||[]).filter(task=>{
+    const id=/^company-discovery:(\d+):(\d+)$/.exec(task.id||'');
+    return task.type==='company-discovery'&&['error','partial','interrupted'].includes(task.status)&&id&&id[2]===String(run.runId)&&Number(id[1])>=started&&Number(id[1])-started<=5000;
+  });
+  if(matches.length===1)registerCompanySaveRetry(matches[0].id,run);
+}
 function saveDiscovery(){
   // CRM hydration on every page load calls this with an unchanged section. Rewriting it
   // re-encodes the whole section on the main thread and raises workspace-dirty, which sends
@@ -846,7 +878,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   try{saveDiscovery();}catch(error){discovery.status="error";if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId="";renderDiscoverySafely();showToast("Discovery could not save its running state. You can try again.");return;}
   if(!renderDiscoverySafely()){discovery.status="error";if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId="";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
   let failures=0;
-  let fatalError=null;
+  let fatalError=null,persistenceFailed=false;
   let searches=Array(queries.length).fill(null);
   let resolutionSearches=[];
   let verificationSearches=[];
@@ -1194,7 +1226,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   discovery.checkedCompanyDomains=[...new Set([...previousCheckedDomains,...discovery.checkedCompanyDomains])];
 
   discoveryProgress={phase:"complete",completed:discoveryProgress.completed,total:discoveryProgress.total};
-  try{saveDiscovery();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});}catch(error){fatalError=new Error('Company evidence could not be saved. Keep this page open and retry saving.');discovery.status='partial';try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,status:'partial',persistence:'failed'}});}catch{}console.error("Companies state could not be saved",error);}
+  try{saveDiscovery();saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,persistence:'saved'}});}catch(error){persistenceFailed=true;fatalError=new Error('Company evidence could not be saved. Keep this page open and retry saving.');discovery.status='partial';try{saveMeta({...loadMeta(),lastCompanyRun:{...loadMeta().lastCompanyRun,status:'partial',persistence:'failed'}});}catch{}console.error("Companies state could not be saved",error);}
   renderDiscoverySafely();
   if(crmAuthenticated()){
     void refreshCrmState({render:false}).then(()=>renderAll()).catch(error=>{
@@ -1203,8 +1235,13 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   }
   if(fatalError){
     if(discovery.researchAudit){discovery.researchAudit.completedAt=new Date().toISOString();try{saveDiscovery();}catch{}}
-    const meta=loadMeta();saveMeta({...meta,autonomousDiscovery:{...meta.autonomousDiscovery,active:false}});
+    const meta=loadMeta();try{saveMeta({...meta,autonomousDiscovery:{...meta.autonomousDiscovery,active:false}});}catch{}
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,fatalError,{canRetry:true,resultCount:discovery.latestRunCandidateCount});
+    if(persistenceFailed){
+      const failedRun={...runContext,...loadMeta().lastCompanyRun,persistence:'failed',saveRetryTaskId:taskId};
+      // Even metadata may be at quota. Replace this tab's paid retry regardless.
+      registerCompanySaveRetry(taskId,failedRun);
+    }
     if(activeDiscoveryTaskId===taskId)activeDiscoveryTaskId='';
     showToast("Discovery stopped safely · "+fatalError.message);
     return;
@@ -4428,7 +4465,7 @@ window.addEventListener?.('leadintel:server-conflict',()=>{if(discoveryMounted){
 window.addEventListener?.('leadintel:server-synced',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:service-settings-changed',()=>{if(discoveryMounted)renderAll();});
 window.addEventListener?.('leadintel:qualification-settings-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
-function ensureDiscoveryMounted({refreshCrm=true}={}){if(discoveryMounted)return;window.LeadIntelStartupTrace?.("discovery restore:start");discovery=loadDiscovery();window.LeadIntelStartupTrace?.("discovery restore:complete");discoveryMounted=true;syncStrategyFingerprint();window.LeadIntelStartupTrace?.("discovery context:complete");renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(refreshCrm&&crmAuthenticated())refreshCrmState();void loadOutreachModules().catch(()=>{});}
+function ensureDiscoveryMounted({refreshCrm=true}={}){if(discoveryMounted)return;window.LeadIntelStartupTrace?.("discovery restore:start");discovery=loadDiscovery();window.LeadIntelStartupTrace?.("discovery restore:complete");discoveryMounted=true;restoreCompanySaveRetry();syncStrategyFingerprint();window.LeadIntelStartupTrace?.("discovery context:complete");renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(refreshCrm&&crmAuthenticated())refreshCrmState();void loadOutreachModules().catch(()=>{});}
 async function openCampaignResearch(companies,{focus='companies'}={}){
  if(!moduleReady())return false;const main=mainState();if(!window.LeadIntelTargeting?.isConfirmed(main)||window.LeadIntelStep2Brief?.confirmationMissing(main,'research').length){window.LeadIntelTargeting?.focusRequired?.(window,main);return false;}
  ensureDiscoveryMounted();if(focus==='buyers')for(const c of companies){const known=(discovery.candidates||[]).find(r=>canonicalDomain(r.domain)===c.domain)||(discovery.potentialMatches||[]).find(r=>canonicalDomain(r.domain)===c.domain);const existing=(discovery.selectedProspects||[]).find(r=>canonicalDomain(r.domain)===c.domain);rememberSelectedProspect(existing||{...known,company:c.company,domain:c.domain,website:c.website||`https://${c.domain}/`,buyerSearchMode:known?.qualification?.eligible?'user_selected_qualified':'user_selected_target',people:known?.people||[],peopleStatus:known?.peopleStatus||'idle',evidence:known?.evidence||[]});}

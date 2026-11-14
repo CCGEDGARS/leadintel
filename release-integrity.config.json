@@ -8443,6 +8443,98 @@
         "previous.server_version===snapshot.server_version",
         "return finish(previous)"
       ]
+    },
+    {
+      "id": "workspace-write-ack-receipt",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "await rememberAcknowledgedWrite(workspaceId,version,next.payload,writeAccount)",
+        "matchesAcknowledgedWrite"
+      ]
+    },
+    {
+      "id": "workspace-ack-conflict-recovery",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "async function recoverAcknowledgedCheckpoint(",
+        "await recoverAcknowledgedCheckpoint(result.current,context.workspaceId)"
+      ]
+    },
+    {
+      "id": "company-persistence-save-only-retry",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function registerCompanySaveRetry(",
+        "Retained evidence saved · research checks remain incomplete"
+      ]
+    },
+    {
+      "id": "local-storage-raw-capacity-diagnostics",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "localStorage:localStorageDiagnostics()",
+        "totalUtf16Bytes"
+      ]
+    },
+    {
+      "id": "company-save-boundary-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "snapshot-owner=20261114-v7&save-ack=20261114-v8",
+        "browser-recovery=20261114-v3&save-ack=20261114-v8",
+        "presentation-fingerprint=20261114-v2&save-ack=20261114-v8"
+      ]
+    },
+    {
+      "id": "company-recovery-reserves-section-headroom",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "const expectedPointer=localStorage.getItem(RECOVERY_KEY),encoded=JSON.stringify(packed)",
+        ">64*1024",
+        "root.indexedDB&&root.LeadIntelAccountCache?.publishRecoverySnapshot"
+      ]
+    },
+    {
+      "id": "companies-settings-use-workspace-owner",
+      "type": "text",
+      "url": "/customer/qualification-settings.js",
+      "status": 200,
+      "contains": [
+        "workflow?.openSettings",
+        "workflow.openSettings()"
+      ]
+    },
+    {
+      "id": "workspace-settings-dialog-owner",
+      "type": "text",
+      "url": "/customer/approved-workflow-ui.js",
+      "status": 200,
+      "contains": [
+        "openSettings:()=>openAutomation()",
+        "function openAutomation(id=null)"
+      ]
+    },
+    {
+      "id": "company-settings-returning-loaders",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-ranked-list=20261019-v1&company-settings=20261114-v8",
+        "official-email-linkedin=20261102-v1&company-settings=20261114-v8"
+      ]
     }
   ],
   "retry": {

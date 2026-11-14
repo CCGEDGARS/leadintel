@@ -11,6 +11,7 @@
   const DIRTY_KEY="leadintel_customer_v2_server_dirty";
   const VERSION_KEY="leadintel_customer_v2_server_versions";
   const CONFLICT_KEY="leadintel_customer_v2_server_conflict";
+  const WRITE_ACK_KEY="leadintel_customer_v2_workspace_write_ack_v1";
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
   const SAVE_REQUEST_TIMEOUT_MS=45000;
   const AUTOSAVE_DEBOUNCE_MS=2200;
@@ -26,6 +27,7 @@
   ]);
 
   let snapshotEncoded=null,snapshotDecoded=null;
+  let acknowledgedWrite=null;
   let nativeFetch=null;
   let dirtySinceSave=false;
   let saveBusy=false;
@@ -55,6 +57,47 @@
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
+  function acknowledgementScope(workspaceId){
+    if(!workspaceId||root.LeadIntelAccountCache?.current?.()===false)return null;
+    const active=root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY);
+    if(active&&active!==workspaceId)return null;
+    return root.localStorage?.getItem('leadintel_account_context_v1')||'';
+  }
+  function acknowledgementText(payload){
+    const restored=root.LeadIntelStateBudget?.restoreFromSync?.(payload)||payload;
+    const ordered=value=>Array.isArray(value)?value.map(ordered):isObject(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
+    return JSON.stringify(ordered(restored));
+  }
+  async function acknowledgementHash(text){
+    if(!root.crypto?.subtle||!root.TextEncoder)return null;
+    const digest=await root.crypto.subtle.digest('SHA-256',new root.TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+  }
+  async function rememberAcknowledgedWrite(workspaceId,version,payload,account){
+    if(account===null||acknowledgementScope(workspaceId)!==account||!Number.isSafeInteger(version)||version<0)return;
+    const text=acknowledgementText(payload),entry={schema_version:1,workspace_id:workspaceId,account_context:account,version,payload_hash:null,payloadText:text};
+    if(acknowledgedWrite?.workspace_id===workspaceId&&acknowledgedWrite.account_context===account&&acknowledgedWrite.version>version)return;
+    acknowledgedWrite=entry;
+    // A small receipt records only a server-acknowledged revision and digest.
+    // Its full recovery snapshot remains separately awaited and can still fail.
+    try{entry.payload_hash=await acknowledgementHash(text);}catch{}
+    if(acknowledgementScope(workspaceId)!==account||acknowledgedWrite!==entry)return;
+    if(entry.payload_hash){delete entry.payloadText;const encoded=JSON.stringify(entry);
+      for(const store of [root.localStorage,root.sessionStorage]){try{const prior=safeJson(store?.getItem(WRITE_ACK_KEY));if(prior?.workspace_id===workspaceId&&prior.account_context===account&&prior.version>version)continue;store?.setItem(WRITE_ACK_KEY,encoded);}catch{}}
+    }
+  }
+  async function matchesAcknowledgedWrite(state,workspaceId){
+    const account=acknowledgementScope(workspaceId),version=Number(state?.version);if(account===null||state?.workspace_id!==undefined&&state.workspace_id!==workspaceId||!Number.isSafeInteger(version)||version<0||!isObject(state?.payload))return false;
+    const receipts=[acknowledgedWrite];for(const store of [root.localStorage,root.sessionStorage]){try{receipts.push(safeJson(store?.getItem(WRITE_ACK_KEY)));}catch{}}
+    const candidates=receipts.filter(value=>value?.schema_version===1&&value.workspace_id===workspaceId&&value.account_context===account&&value.version===version&&(typeof value.payload_hash==='string'&&/^[a-f0-9]{64}$/.test(value.payload_hash)||value===acknowledgedWrite&&typeof value.payloadText==='string'));
+    if(!candidates.length)return false;
+    try{const text=acknowledgementText(state.payload),hash=await acknowledgementHash(text);return acknowledgementScope(workspaceId)===account&&candidates.some(value=>value.payload_hash?value.payload_hash===hash:value.payloadText===text);}catch{return false;}
+  }
+  function clearAcknowledgedWrite(workspaceId,version,account){
+    if(account===null||acknowledgementScope(workspaceId)!==account)return;
+    if(acknowledgedWrite?.workspace_id===workspaceId&&acknowledgedWrite.account_context===account&&acknowledgedWrite.version<=version)acknowledgedWrite=null;
+    for(const store of [root.localStorage,root.sessionStorage]){try{const raw=store?.getItem(WRITE_ACK_KEY),value=safeJson(raw);if(value?.workspace_id===workspaceId&&value.account_context===account&&value.version<=version&&store.getItem(WRITE_ACK_KEY)===raw)store.removeItem(WRITE_ACK_KEY);}catch{}}
+  }
   function knownAcknowledgedSnapshot(value){try{return isObject(value)&&value.schema_version===1&&value.server_synced===true&&typeof value.workspace_id==='string'&&value.workspace_id&&Number.isSafeInteger(value.server_version)&&value.server_version>=0&&typeof value.saved_at==='string'&&Number.isFinite(Date.parse(value.saved_at))&&new Date(value.saved_at).toISOString()===value.saved_at&&isObject(value.server_payload)&&isObject(value.data)&&Object.keys(value).every(key=>['schema_version','server_synced','workspace_id','server_version','saved_at','server_payload','data'].includes(key))&&Object.entries(value.data).every(([key,item])=>{if(!WORKSPACE_DATA_KEYS.includes(key)||typeof item!=='string')return false;const section=JSON.parse(item);return isObject(section)&&!(typeof section.format==='string'&&section.format.startsWith('leadintel-'));});}catch{return false;}}
   function readSnapshot(){const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||"";if(raw===snapshotEncoded)return snapshotDecoded;const stored=safeJson(raw,null),parsed=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored;snapshotDecoded=isObject(parsed)&&isObject(parsed.data)?parsed:null;snapshotEncoded=raw;return snapshotDecoded;}
   const INDEXED_SNAPSHOT_FORMAT='leadintel-indexed-workspace-snapshot-v1';
@@ -290,6 +333,7 @@
       }
       if(method==="PUT"){
         const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=leadintelLocalDataAtSaveStart||currentWorkspaceData();
+        const writeWorkspaceId=url.searchParams.get("workspace_id"),writeAccount=acknowledgementScope(writeWorkspaceId);
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
         if(!leadintelPreparedSync)next.payload=await prepareSyncPayload(next.payload,{explicitSaved:!forceReset&&(explicitSave||isExplicitlySaved())});
@@ -297,7 +341,12 @@
         // The network response and body are complete. Durable browser storage
         // remains awaited, but must not be rejected by the network deadline.
         leadintelNetworkReadComplete?.();const persisted=response.ok&&result?.saved!==false;
-        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
+        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved())){
+          const workspaceId=url.searchParams.get("workspace_id"),version=Number(result.version);
+          await rememberAcknowledgedWrite(workspaceId,version,next.payload,writeAccount);
+          await snapshotFromServerPayload(next.payload,{workspaceId,version,localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});
+          clearAcknowledgedWrite(workspaceId,version,writeAccount);
+        }}
         // The server acknowledgement is already parsed. Snapshot work can
         // outlast the request deadline and invalidate the original stream.
         return jsonResponse(result,response.status);
@@ -360,5 +409,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,matchesAcknowledgedWrite,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);
