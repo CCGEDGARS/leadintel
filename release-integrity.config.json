@@ -8604,7 +8604,9 @@
       "contains": [
         "if(budgetIncomplete)discovery.status='partial'",
         "canceled,budgetIncomplete",
-        "checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked"
+        "checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked",
+        "const evidenceOwner=qualified||review",
+        "if(partialCheckedTargets&&!qualified)continue"
       ]
     },
     {

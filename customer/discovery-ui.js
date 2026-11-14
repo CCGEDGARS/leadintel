@@ -1216,10 +1216,12 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(budgetIncomplete)discovery.status='partial';
   discovery.lastRunAt=new Date().toISOString();
   saveMeta({...loadMeta(),lastCompanyRun:{...runContext,completedAt:discovery.lastRunAt,status:discovery.status,canceled,budgetIncomplete,qualifiedCount:runCandidates.length,checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked}});
-  if(discovery.status==='complete'||discovery.status==='no_results'){
+  const partialCheckedTargets=budgetIncomplete&&discovery.status==='partial'&&runCandidates.length>0;
+  if(discovery.status==='complete'||discovery.status==='no_results'||partialCheckedTargets){
     const meta=loadMeta(),outcomes={...meta.targetResearchByDomain};
-    for(const target of researchTargets){const key=canonicalDomain(target.domain||target.website),match=item=>canonicalDomain(item.domain)===key;const qualified=runCandidates.find(match),review=(discovery.potentialMatches||[]).find(match);if(key)outcomes[key]={completedAt:discovery.lastRunAt,qualified:Boolean(qualified),gaps:review?.qualificationGaps||[],evidence:(review?.evidence||qualified?.evidence||[]).slice(0,12)};}
-    saveMeta({...meta,targetResearchByDomain:outcomes,targetResearchOffset:targetPool.length?(targetOffset+researchTargets.length)%targetPool.length:0,lastTargetResearchNames:researchTargets.map(item=>item.companyName.toLowerCase())});
+    for(const target of researchTargets){const key=canonicalDomain(target.domain||target.website),match=item=>canonicalDomain(item.domain)===key;const qualified=runCandidates.find(match),review=(discovery.potentialMatches||[]).find(match);if(partialCheckedTargets&&!qualified)continue;const evidenceOwner=qualified||review;if(key)outcomes[key]={completedAt:discovery.lastRunAt,qualified:Boolean(qualified),gaps:evidenceOwner?.qualificationGaps||[],evidence:(evidenceOwner?.evidence||[]).slice(0,12)};}
+    const completedCursor=partialCheckedTargets?{}:{targetResearchOffset:targetPool.length?(targetOffset+researchTargets.length)%targetPool.length:0,lastTargetResearchNames:researchTargets.map(item=>item.companyName.toLowerCase())};
+    saveMeta({...meta,targetResearchByDomain:outcomes,...completedCursor});
   }
   Object.assign(discovery,LeadIntelDiscovery.retainLastSuccessfulDiscoveryCandidates({...discovery,candidates:previousCandidates,lastSuccessfulRunAt:previousRunAt},runCandidates,discovery.lastRunAt));
   const updatedDomains=recheckOnly?runPotentialMatches.map(item=>item.domain):[];
