@@ -45,3 +45,20 @@ test('a legacy competitor assessment is reassessed under the current offer-appli
  context.__discoveryState().potentialMatches=[candidate];await context.__runDiscovery({recheckOnly:true,targetDomains:[candidate.domain]});
  assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain,'old policy must not veto a fresh sourced application assessment');assert.equal(calls.search+calls.scrape,0);assert.equal(calls.other,1);
 });
+test('retained complete source reads extend a shortened candidate URL without another web request',async()=>{
+ const {context,calls}=helpers.loadRunner({targetCount:1,fitResponse:goodFit}),main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ main.answers.exclusions='companies with less than 30 people';main.profile.exclusions=main.answers.exclusions;main.targetingConfirmation=Targeting.confirm(main);main.market.strategyApproval=StrategyIntegrity.approval(main);context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ const now=new Date().toISOString(),text='North Steel operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.',candidate={...companies(1)[0],evidence:[{url:'https://northsteel.lv/',sourceRead:true,verifiedAt:now,text}]};
+ context.__discoveryState().potentialMatches=[candidate];context.__discoveryState().rawResults=[{...candidate.evidence[0],text:text+' We are proud to employ over 350 dedicated professionals.'}];
+ await context.__runDiscovery({recheckOnly:true,targetDomains:[candidate.domain]});assert.equal(calls.search+calls.scrape,0);assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain);assert.match(context.__discoveryState().candidates[0].evidence[0].text,/350 dedicated professionals/);assert.equal(context.__discoveryState().candidates[0].evidence[0].verifiedAt,now);
+});
+test('www aliases retain the newest complete read instead of dropping it as a duplicate excerpt',()=>{
+ const text='An official operating source contains detailed company manufacturing operations and serves industrial customers across the target country. '.repeat(3),old={url:'https://northsteel.lv/',sourceRead:true,verifiedAt:'2026-11-13T09:00:00Z',text},fresh={url:'https://www.northsteel.lv/',sourceRead:true,verifiedAt:'2026-11-13T09:00:04Z',text:text+' We employ 350 people.'};
+ const rows=Discovery.dedupeCompanyEvidence([old,fresh]);assert.equal(rows.length,1);assert.equal(rows[0].url,fresh.url);assert.equal(rows[0].text,fresh.text);assert.equal(rows[0].verifiedAt,fresh.verifiedAt);
+});
+test('an explicit saved-evidence review cannot buy missing facts and keeps unresolved records',async()=>{
+ const candidate=companies(1)[0],{context,calls}=helpers.loadRunner({targetCount:1,pendingCompanies:[candidate],fitResponse:goodFit});await context.__runDiscovery({recheckOnly:true,savedEvidenceOnly:true,targetDomains:[candidate.domain]});assert.equal(calls.search+calls.scrape,0);assert.equal(context.__loadMeta().lastCompanyRun.savedEvidenceOnly,true);assert.ok(context.__discoveryState().potentialMatches.some(c=>c.domain===candidate.domain));
+});
+test('the web-operation boundary rejects saved-only review before reserving a provider call',async()=>{
+ const {context,calls}=helpers.loadRunner(),controller=new AbortController();controller.signal.leadIntelSavedEvidenceOnly=true;context.__startBudget(20);await assert.rejects(()=>context.__fetchDiscoveryResource('/api/integrations/services/firecrawl-search',{method:'POST',body:JSON.stringify({query:'missing facts'})},{signal:controller.signal}),{code:'SAVED_EVIDENCE_ONLY'});assert.equal(calls.search+calls.scrape,0);assert.equal(context.__discoveryState().researchAudit.entries.length,0);
+});

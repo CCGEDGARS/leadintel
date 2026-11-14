@@ -55,3 +55,7 @@ test('open-ended employee counts cannot prove a company is below the minimum',()
 test('ordinary producer sentence continuations retain the explicit sector exclusion',()=>{
  for(const text of ['We manufacture food products worldwide.','We produce medicines daily.','We manufacture pharmaceutical products with certified production facilities.'])assert.equal(D.evaluateExclusions(company(prose(text)),'Food and Pharma industries').status,'excluded',text);
 });
+test('an explicit first-party employment statement counts professionals without transferring customer staff',()=>{
+ assert.equal(D.evaluateExclusions(company(prose('We are proud to employ over 350 dedicated professionals.')),rule).status,'clear');
+ for(const text of ['Our customers are proud to employ over 350 dedicated professionals.','We help customers employ 350 professionals.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'unverified');
+});

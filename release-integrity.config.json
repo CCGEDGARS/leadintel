@@ -8680,7 +8680,7 @@
       "url": "/customer/qualification-worker.js",
       "status": 200,
       "contains": [
-        "offer-engine=20261114-v12"
+        "offer-engine=20261114-v13"
       ]
     },
     {
@@ -8689,7 +8689,7 @@
       "url": "/customer/qualification-display.js",
       "status": 200,
       "contains": [
-        "offer-worker=20261114-v12"
+        "offer-worker=20261114-v13"
       ]
     },
     {
@@ -8716,10 +8716,33 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "offer-engine=20261114-v12",
-        "offer-display=20261114-v12",
-        "offer-review=20261114-v12",
-        "review-budget=20261114-v12"
+        "offer-engine=20261114-v13",
+        "offer-display=20261114-v13",
+        "offer-review=20261114-v13",
+        "review-budget=20261114-v13"
+      ]
+    },
+    {
+      "id": "company-complete-read-retention",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "const extendsRead=",
+        "if(!previous||extendsRead||",
+        "professionals"
+      ]
+    },
+    {
+      "id": "company-saved-only-review",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(signal?.leadIntelSavedEvidenceOnly)",
+        "if(plan.needsWeb&&!savedEvidenceOnly)",
+        "data-review-action=\"saved-evidence\"",
+        "savedEvidenceOnly:true,targetDomain:key"
       ]
     }
   ],

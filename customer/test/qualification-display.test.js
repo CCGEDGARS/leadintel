@@ -40,5 +40,5 @@ test('worker evaluates the same evidence policy and result as synchronous action
   c.onmessage({data:batch});
   const expected=require('../discovery-engine.js').assessCompanyQualification(batch.rows[0].candidate,batch.profile,batch.market,{});
   assert.deepEqual(JSON.parse(JSON.stringify(output.results[0].result)),expected);
-  const second=require('../discovery-engine.js').assessCompanyQualification(batch.rows[1].candidate,batch.profile,batch.market,batch.rows[1].settings);assert.deepEqual(JSON.parse(JSON.stringify(output.results[1].result)),second);assert.ok(!second.gaps.includes('Resolve exclusion checks'));assert.ok(imports.find(file=>file.startsWith('./discovery-engine.js?'))?.includes('offer-engine=20261114-v12'));
+  const second=require('../discovery-engine.js').assessCompanyQualification(batch.rows[1].candidate,batch.profile,batch.market,batch.rows[1].settings);assert.deepEqual(JSON.parse(JSON.stringify(output.results[1].result)),second);assert.ok(!second.gaps.includes('Resolve exclusion checks'));assert.ok(imports.find(file=>file.startsWith('./discovery-engine.js?'))?.includes('offer-engine=20261114-v13'));
 });

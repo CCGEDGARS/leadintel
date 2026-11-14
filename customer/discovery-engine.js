@@ -1139,8 +1139,10 @@
     const versions=new Map();
     for(const source of evidence){
       const normalized=normalizeUrl(source.url);if(!normalized)continue;const url=new URL(normalized);url.search='';url.hash='';
+      url.hostname=url.hostname.replace(/^www\./,'');
       const key=url.href.replace(/\/$/,''),previous=versions.get(key);
-      if(!previous||Date.parse(source.verifiedAt)>(Date.parse(previous.verifiedAt)||0))versions.set(key,source);
+      const extendsRead=previous&&source.sourceRead===true&&previous.sourceRead===true&&source.verifiedAt===previous.verifiedAt&&clean(source.text).length>clean(previous.text).length&&clean(source.text).startsWith(clean(previous.text));
+      if(!previous||extendsRead||Date.parse(source.verifiedAt)>(Date.parse(previous.verifiedAt)||0))versions.set(key,source);
     }
     const seen=new Set();return [...versions.values()].filter(source=>{
       const normalized=normalizeUrl(source.url);if(!normalized)return false;const url=new URL(normalized);url.search='';url.hash='';
@@ -1215,7 +1217,7 @@
     const number=String.raw`\d(?:[\d,]|[ \u00a0](?=\d{3}(?:\D|$)))*`,range=String.raw`(${number})(?:\s*[–—-]\s*(${number}))?`,qualifier=String.raw`(?:(more than|over|at least|fewer than|less than|under)\s+)?`;
     for(const source of trustedEvidence(candidate).filter(e=>EvidencePolicy.firstParty(e.url,candidate.domain))){
       const text=[source.title,source.description,source.text].filter(Boolean).join('. ');
-      const patterns=[new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:currently\s+)?(?:employ|employs|have|has)\s+${qualifier}${range}\s+(?:(?:skilled|dedicated|full-time|qualified)\s+)?(?:employees|people|staff|workers)\b`,'gi'),new RegExp(String.raw`\b(?:number of employees|employee count|headcount)\s*[:\-]?\s*${range}\b`,'gi'),new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:are|is)\s+(?:(?:already|currently)\s+)?(?:a\s+)?(?:team|workforce|staff)\s+of\s+${qualifier}${range}\s+(?:employees|people|staff|workers)\b`,'gi')];
+      const patterns=[new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:currently\s+|are\s+proud\s+to\s+)?(?:employ|employs|have|has)\s+${qualifier}${range}\s+(?:(?:skilled|dedicated|full-time|qualified)\s+)?(?:employees|people|staff|workers|professionals)\b`,'gi'),new RegExp(String.raw`\b(?:number of employees|employee count|headcount)\s*[:\-]?\s*${range}\b`,'gi'),new RegExp(String.raw`\b(?:we|our company|our group)\s+(?:are|is)\s+(?:(?:already|currently)\s+)?(?:a\s+)?(?:team|workforce|staff)\s+of\s+${qualifier}${range}\s+(?:employees|people|staff|workers)\b`,'gi')];
       for(const [index,pattern] of patterns.entries())for(const m of text.matchAll(pattern)){
         const attributed=index!==1,qualifier=attributed?(m[1]||'').toLowerCase():'',low=Number(m[attributed?2:1].replace(/[,\s]/g,'')),high=m[attributed?3:2];
         let min=low,max=high?Number(high.replace(/[,\s]/g,'')):low;
