@@ -299,7 +299,7 @@ test('full active local storage hydrates and reopens an exact cloud baseline thr
 
 test('failed durable snapshot commit keeps the prior baseline and active working records behind recovery',async()=>{
  const {IDBFactory}=require('fake-indexeddb'),values=startupSeed(),before=new Map(values),runtime=load(values,{indexedDB:new IDBFactory(),account:'a',workspace:'wa',localQuota:quotaFor(values)+4096,fetchImpl:async input=>new URL(input).pathname==='/api/customer/state'?new Response(JSON.stringify({version:3,payload:{main:{website:'https://ccgroup.lv',notes:'Research '.repeat(12000)}}})):startupBackend()(input)});
- runtime.root.LeadIntelAccountCache.saveRecoverySnapshot=async()=>{throw Error('Durable snapshot unavailable');};await runtime.root.__init();
+ runtime.root.LeadIntelAccountCache.saveRecoverySnapshot=async()=>{throw Error('Durable snapshot unavailable');};runtime.root.LeadIntelAccountCache.publishRecoverySnapshot=async()=>{throw Error('Durable snapshot unavailable');};await runtime.root.__init();
  assert.equal(runtime.root.LeadIntelServerBridge.ready,false);assert.equal(runtime.attrs.get('data-account-check'),'error');
  assert.equal(values.get(SNAP),before.get(SNAP));assert.equal(values.get(MAIN),before.get(MAIN));assert.equal(runtime.requests.some(x=>x.options.method==='PUT'),false);
 });

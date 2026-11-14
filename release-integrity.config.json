@@ -78,7 +78,13 @@
       "type": "text",
       "url": "/customer/website-contact-ui.js",
       "status": 200,
-      "contains": ["Independent website research", "Approve paid email", "Approve paid phone", "Continue public research", "company_id="]
+      "contains": [
+        "Independent website research",
+        "Approve paid email",
+        "Approve paid phone",
+        "Continue public research",
+        "company_id="
+      ]
     },
     {
       "id": "opportunity-research-auto-activation",
@@ -298,7 +304,7 @@
       "status": 200,
       "contains": [
         "Your AI business mentor. Every step of the way.",
-        "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move\u2014with advice tailored to your business.",
+        "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move—with advice tailored to your business.",
         "Explore capabilities",
         "I never change your settings"
       ]
@@ -360,8 +366,8 @@
       "status": 200,
       "contains": [
         "code:\"kz\"",
-        "\u049a\u0430\u0437\u0430\u049b\u0441\u0442\u0430\u043d",
-        "\u041a\u0430\u0437\u0430\u0445\u0441\u0442\u0430\u043d",
+        "Қазақстан",
+        "Казахстан",
         ".xn--80ao21a"
       ]
     },
@@ -604,7 +610,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
+        "LeadIntel — Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -868,7 +874,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message \u00b7 draft only"
+        "LinkedIn direct message · draft only"
       ]
     },
     {
@@ -1030,7 +1036,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates \u00b7 ",
+        "My LinkedIn Templates · ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -1242,7 +1248,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit \u00b7 local changes preserved"
+        "Workspace exceeds sync limit · local changes preserved"
       ]
     },
     {
@@ -1251,7 +1257,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new checked companies \u00b7 saved companies retained",
+        "No new checked companies · saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -1292,7 +1298,7 @@
         "discovery.lastSuccessfulRunAt=discovery.lastRunAt;",
         "company-ranked-list=20261019-v1",
         "function restoreCheckedCompanyResearch()",
-        "Checked \u00b7 Manual review"
+        "Checked · Manual review"
       ]
     },
     {
@@ -1362,7 +1368,7 @@
         "Content Library",
         "Save as template",
         "Set as default",
-        "Continue to Delivery \u2192",
+        "Continue to Delivery →",
         "mw-browse-templates",
         "Restore selected template",
         "mw-subject-choices",
@@ -1527,7 +1533,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active \u00b7 ",
+        "active · ",
         "saved"
       ]
     },
@@ -1670,12 +1676,12 @@
         "styleSection.after(launcher)",
         "editorActions.append(q('mw-cancel-edit'),q('mw-restore-original')",
         "editor.busyAction==='shorten'",
-        "Shortening\u2026",
+        "Shortening…",
         "editorActions.prepend"
       ],
       "notContains": [
         "mw-message-length",
-        "Very short \u00b7 about 50%",
+        "Very short · about 50%",
         "Message editor</h3>"
       ]
     },
@@ -1856,7 +1862,7 @@
       ],
       "notContains": [
         "edgars-7go",
-        "Edgars Unt\u0101ls"
+        "Edgars Untāls"
       ]
     },
     {
@@ -1869,7 +1875,7 @@
         "sharing-privacy=20261011-v1"
       ],
       "notContains": [
-        "Edgars Unt\u0101ls",
+        "Edgars Untāls",
         "edgars-7go"
       ]
     },
@@ -2625,7 +2631,7 @@
       "status": 200,
       "contains": [
         "mw-draft-provenance",
-        "Working copy \u00b7 originals preserved"
+        "Working copy · originals preserved"
       ]
     },
     {
@@ -3102,7 +3108,7 @@
       "url": "/customer/app.js",
       "status": 200,
       "contains": [
-        "This profile won\u2019t be used",
+        "This profile won’t be used",
         "Setup required",
         "icp-edit-fields",
         "monitoring-enabled\").addEventListener(\"change\""
@@ -3171,7 +3177,7 @@
       "url": "/customer/channel-scripts.js",
       "status": 200,
       "contains": [
-        "Make a call \u00b7 Coming soon",
+        "Make a call · Coming soon",
         "Script Library",
         "Set as primary",
         "Awaiting approved script",
@@ -3259,7 +3265,7 @@
       "url": "/customer/linkedin-inmail-ui.js",
       "status": 200,
       "contains": [
-        "InMail \u00b7 paid account",
+        "InMail · paid account",
         "inmail-stage-tabs",
         "Save as my InMail template",
         "inmail-primary",
@@ -3277,7 +3283,7 @@
         "FRIENDLY_LINKEDIN.docx",
         "BRUTAL_HONESTY_LINKEDIN.docx",
         "{{milestoneWork}} in {{projectShortName}} is under way.",
-        "For {{experienceDuration}} we\u2019ve done the less glamorous part"
+        "For {{experienceDuration}} we’ve done the less glamorous part"
       ]
     },
     {
@@ -3780,7 +3786,7 @@
         "function rankedCheckedCompanies(){",
         "function companyCandidateCardHtml(",
         "company-other-results",
-        "Show other companies \u00b7",
+        "Show other companies ·",
         "shortlist-display=20261020-v1"
       ]
     },
@@ -3849,7 +3855,7 @@
       "contains": [
         "sync.equal(sync.project(base.payload)",
         "base.version===Number(readDirtyLocalState()?.base_version??bridge.stateVersion)",
-        "Research running \u00b7 changes preserved for sync retry"
+        "Research running · changes preserved for sync retry"
       ]
     },
     {
@@ -4174,7 +4180,7 @@
       "url": "/customer/additional-contact-policy.js",
       "status": 200,
       "contains": [
-        "this buyer\u2019s mandatory public research"
+        "this buyer’s mandatory public research"
       ]
     },
     {
@@ -4232,9 +4238,9 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "Possible match \u00b7 Unconfirmed",
+        "Possible match · Unconfirmed",
         "Name-based Gmail patterns",
-        "Gmail research \u00b7"
+        "Gmail research ·"
       ]
     },
     {
@@ -4246,7 +4252,7 @@
         "function saveSelectedBuyerCompany(",
         "function removeSelectedBuyerCompany(",
         "b.deleteCrmCompany(company.id)",
-        "Saved \u2713",
+        "Saved ✓",
         "data-remove-buyer-company=",
         "Remove completely"
       ]
@@ -4279,7 +4285,7 @@
       "contains": [
         "alternativeAction:'Save to CRM'",
         "choice==='alternative'",
-        "Company saved to CRM \u00b7 removed from the Buyers list",
+        "Company saved to CRM · removed from the Buyers list",
         "Research changed during saving."
       ]
     },
@@ -4479,9 +4485,9 @@
       "contains": [
         "data-paid-search-toggle",
         "data-paid-phone-toggle",
-        "\u20ac0.30/contact",
-        "\u20ac0.20 extra",
-        "\u20ac0.50/contact",
+        "€0.30/contact",
+        "€0.20 extra",
+        "€0.50/contact",
         "provider:'treg'"
       ]
     },
@@ -4532,7 +4538,7 @@
       "contains": [
         "buyer-public-summary",
         "data-contact-channel=",
-        "View profile \u2197",
+        "View profile ↗",
         "officialPageReads",
         "buyer-polish=20261021-v2"
       ],
@@ -4772,7 +4778,7 @@
       "contains": [
         "Message brief",
         "Selected buyer:",
-        "Commercial relevance \u00b7 Hypothesis:",
+        "Commercial relevance · Hypothesis:",
         "Evidence gaps"
       ]
     },
@@ -4850,7 +4856,7 @@
         "mw-flow-readiness",
         "mw-flow-resolve",
         "mw-message-footer",
-        "Continue to Delivery \u2192",
+        "Continue to Delivery →",
         "This button does not send anything.",
         "mw-footer-main",
         "q('mw-add-flow').hidden=linkedin||Boolean(flowIssue?.target)"
@@ -7067,7 +7073,7 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "Official company email \u00b7 Accepted",
+        "Official company email · Accepted",
         "progress(detail?.profilesReady===true||detail?.sourceRead===true)"
       ]
     },
@@ -7532,7 +7538,7 @@
       "contains": [
         "const emailConfirmed=verified,linkedinConfirmed=",
         "const ready=verified&&crmAuthenticated()",
-        "Confirm this person\u2019s email to continue",
+        "Confirm this person’s email to continue",
         "official pages read in this run"
       ]
     },
@@ -7625,7 +7631,7 @@
         "data-buyer-contact-progress",
         "Time estimate not available yet",
         "buyerRecheckOutcomes",
-        "Recheck finished \u00b7",
+        "Recheck finished ·",
         "aria-live=\"polite\""
       ]
     },
@@ -7746,7 +7752,7 @@
       "status": 200,
       "contains": [
         "window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)}",
-        "Saving targeting\u2026",
+        "Saving targeting…",
         "Workspace save was not confirmed.",
         "targetingSaveOwner===operation"
       ]
@@ -7782,8 +7788,8 @@
       "url": "/customer/company-research-ui.js",
       "contains": [
         "Source collection and synthesis are independently bounded stages.",
-        "Preparing your AI profile\u2026",
-        "Usually takes 1\u20132 minutes."
+        "Preparing your AI profile…",
+        "Usually takes 1–2 minutes."
       ]
     },
     {
@@ -7801,7 +7807,7 @@
       "url": "/customer/ai-settings.js",
       "status": 200,
       "contains": [
-        "People discovery \u00b7 0 API credits",
+        "People discovery · 0 API credits",
         "data-integration=\"apollo\""
       ]
     },
@@ -7966,7 +7972,7 @@
       "status": 200,
       "contains": [
         "Saved:",
-        "Unsaved changes \u2014 save settings before running.",
+        "Unsaved changes — save settings before running.",
         "monitoring-review-strategy",
         "Save your settings now. Review and activate Strategy in Step 3"
       ]
@@ -8166,7 +8172,7 @@
       "url": "/customer/monitoring-manager.js",
       "status": 200,
       "contains": [
-        "Add category\u2026",
+        "Add category…",
         "Test on a page",
         "Save paused draft",
         "/previews",
@@ -8222,34 +8228,105 @@
       "type": "text",
       "url": "/customer/website-contact-ui.js",
       "status": 200,
-      "contains": ["Time limit reached · results saved", "five-minute time limit", "up to three at a time", "action:'wake'", "function remember"]
+      "contains": [
+        "Time limit reached · results saved",
+        "five-minute time limit",
+        "up to three at a time",
+        "action:'wake'",
+        "function remember"
+      ]
     },
     {
       "id": "website-contact-identity-evidence",
       "type": "text",
       "url": "/customer/website-contact-ui.js",
       "status": 200,
-      "contains": ["Refresh identity checks", "Matched professional profile", "review-identities", "Profile match needs review"]
-    }
-    ,{
+      "contains": [
+        "Refresh identity checks",
+        "Matched professional profile",
+        "review-identities",
+        "Profile match needs review"
+      ]
+    },
+    {
       "id": "website-linkedin-review-controls",
       "type": "text",
       "url": "/customer/website-contact-ui.js",
       "status": 200,
-      "contains": ["Check identity", "LinkedIn match evidence", "matched in two public searches", "check-identity", "paidReadiness", "Identity confirmed · paid searches available on approval", "No matching profile found in checked sources"]
-    },{
+      "contains": [
+        "Check identity",
+        "LinkedIn match evidence",
+        "matched in two public searches",
+        "check-identity",
+        "paidReadiness",
+        "Identity confirmed · paid searches available on approval",
+        "No matching profile found in checked sources"
+      ]
+    },
+    {
       "id": "website-contact-visible-button-borders",
       "type": "text",
       "url": "/customer/website-scanning.css",
       "status": 200,
-      "contains": ["border:2px solid #377563", ":focus-visible", "prefers-reduced-motion"]
-    }
-    ,{
+      "contains": [
+        "border:2px solid #377563",
+        ":focus-visible",
+        "prefers-reduced-motion"
+      ]
+    },
+    {
       "id": "website-contact-roster-evidence",
       "type": "text",
       "url": "/customer/website-contact-ui.js",
       "status": 200,
-      "contains": ["Published role wording", "Role source", "identityReviewVersion<2"]
+      "contains": [
+        "Published role wording",
+        "Role source",
+        "identityReviewVersion<2"
+      ]
+    },
+    {
+      "id": "browser-recovery-v2-runtime",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "indexedDB.open(ARCHIVE_DATABASE,2)",
+        "leadintel-archive-gzip-v2",
+        "publishRecoverySnapshot",
+        "readRecoveryPointer",
+        "data-archive-storage-diagnostics"
+      ]
+    },
+    {
+      "id": "browser-recovery-v2-baseline-owner",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "archive.readRecoveryPointer(SNAPSHOT_KEY",
+        "archive.publishRecoverySnapshot(snapshot",
+        "function isAcknowledgedBaseline("
+      ]
+    },
+    {
+      "id": "browser-recovery-v2-conflict-owner",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "readRecoveryPointer(RECOVERY_KEY",
+        "publishRecoverySnapshot(packed"
+      ]
+    },
+    {
+      "id": "browser-recovery-v2-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "browser-recovery=20261114-v3"
+      ]
     }
   ],
   "retry": {

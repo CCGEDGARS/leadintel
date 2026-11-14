@@ -284,11 +284,12 @@
     return true;
   }
   async function readSyncRecovery(workspaceId){
-    let stored=null;try{stored=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
+    const loaded=root.LeadIntelAccountCache?.readRecoveryPointer?await root.LeadIntelAccountCache.readRecoveryPointer(RECOVERY_KEY,{workspaceId}):null;
+    let stored=loaded?.pointer||null;if(!loaded)try{stored=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
     if(!stored||stored.workspace_id!==workspaceId)return null;
     if(stored.format===INDEXED_RECOVERY_FORMAT){
       if(!root.LeadIntelAccountCache?.readRecoverySnapshot)throw new Error('Durable recovery storage is unavailable');
-      stored=await root.LeadIntelAccountCache.readRecoverySnapshot(stored.key);
+      stored=loaded?loaded.record:await root.LeadIntelAccountCache.readRecoverySnapshot(stored.key);
       if(stored?.workspace_id!==workspaceId)throw new Error('Recovery backup belongs to another workspace');
     }
     const record=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(stored)||stored;
@@ -303,9 +304,15 @@
     const original=previous?.original,local=bundle(),record={schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local,server:state},local,server:state};
     const packed=root.LeadIntelWorkspacePersistence?.encodeRecoveryRecord?await root.LeadIntelWorkspacePersistence.encodeRecoveryRecord(record):root.LeadIntelStateBudget?.packRecoveryRecord?.(record)||record;
     if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
+    const expectedPointer=localStorage.getItem(RECOVERY_KEY);
     try{localStorage.setItem(RECOVERY_KEY,JSON.stringify(packed));}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
+      if(root.LeadIntelAccountCache.publishRecoverySnapshot){
+        await root.LeadIntelAccountCache.publishRecoverySnapshot(packed,{pointerKey:RECOVERY_KEY,expectedPointer,eligibleBaseline:root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline,encodePointer:key=>JSON.stringify({format:INDEXED_RECOVERY_FORMAT,workspace_id:workspaceId,key})});
+        if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
+        renderConflictActions();return;
+      }
       const key=await root.LeadIntelAccountCache.saveRecoverySnapshot(packed);
       if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
       localStorage.setItem(RECOVERY_KEY,JSON.stringify({format:INDEXED_RECOVERY_FORMAT,workspace_id:workspaceId,key}));

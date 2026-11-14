@@ -386,3 +386,8 @@ test('production proof rejects missing contact button styles',async()=>{
  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'contact-styles',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/website-scanning.css'?response({status:404,text:'missing'}):normal(url),nonce:'missing-contact-styles'});
  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(c=>c.id==='website-contact-visible-button-borders').passed,false);
 });
+
+
+test('production proof rejects returning browsers without recovery storage v2 loader',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore();const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'archive-v2-cache',fetchImpl:productionFetch({customerHtml:shell.replaceAll('browser-recovery=20261114-v3','browser-recovery=old'),discoveryUi:boundedDiscoveryRuntime}),nonce:'stale-archive-v2'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('browser-recovery-v2-returning-entry')));
+});
