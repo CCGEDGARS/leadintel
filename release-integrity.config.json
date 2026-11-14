@@ -8291,12 +8291,16 @@
       "url": "/customer/account-cache.js",
       "status": 200,
       "contains": [
-        "indexedDB.open(ARCHIVE_DATABASE,2)",
+        "indexedDB.open(ARCHIVE_DATABASE,3)",
         "leadintel-archive-gzip-v2",
         "publishRecoverySnapshot",
         "readRecoveryPointer",
         "data-archive-storage-diagnostics",
-        "leadintel-account-archive-v2-pointer-json-v2"
+        "leadintel-account-archive-v3-decoded-references-v3",
+        "function knownSyncRecovery(",
+        "restoreRecoveryRecord",
+        "restoreWorkspaceSnapshot",
+        "retiredRecoveryEnvelopesThisPass"
       ]
     },
     {
@@ -8327,7 +8331,98 @@
       "status": 200,
       "contains": [
         "browser-recovery=20261114-v3",
-        "archive-reference=20261114-v4"
+        "archive-reference=20261114-v4",
+        "decoded-references=20261114-v6",
+        "decoded-local-references=20261114-v6"
+      ]
+    },
+    {
+      "id": "research-preview-draft-authority",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "pendingResearchDraft={mode:pendingResearchMode",
+        "previewDraft:draft",
+        "research-preview=20261114-v4"
+      ]
+    },
+    {
+      "id": "research-preview-confirmed-provider-start",
+      "type": "text",
+      "url": "/customer/market-research-ux.js",
+      "status": 200,
+      "contains": [
+        "Sites will be discovered when research starts."
+      ]
+    },
+    {
+      "id": "research-preview-returning-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "research-preview=20261114-v4"
+      ]
+    },
+    {
+      "id": "research-preview-observer-loaders",
+      "type": "text",
+      "url": "/customer/evidence-view.js",
+      "status": 200,
+      "contains": [
+        "market-research-ux.js",
+        "market-research-review-ux.js",
+        "research-preview=20261114-v4"
+      ]
+    },
+    {
+      "id": "retained-buyer-assessment-clock-owner",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function retainedBuyerQualification(",
+        "retain its clock only when the entire result agrees"
+      ]
+    },
+    {
+      "id": "retained-buyer-assessment-clock-hydration",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelDiscovery.retainedBuyerQualification(person,"
+      ]
+    },
+    {
+      "id": "recovery-and-buyer-retention-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "recovery-retention=20261114-v5",
+        "buyer-assessment-clock=20261114-v5"
+      ]
+    },
+    {
+      "id": "retained-buyer-assessment-returning-loader-chain",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "discovery-engine.js?v=20260930-contact-suppression-v1&buyer-assessment-clock=20261114-v5",
+        "discovery-ui.js?v=20260930-contact-suppression-v1&buyer-assessment-clock=20261114-v5"
+      ]
+    },
+    {
+      "id": "browser-recovery-local-section-decoder",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "restoreLocalStorageValue",
+        "leadintel-local-section-lzw-v1:"
       ]
     }
   ],

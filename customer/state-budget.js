@@ -311,11 +311,23 @@
   function compactMainStorageValue(value){
     try{const parsed=JSON.parse(String(value||"{}"));return JSON.stringify(compactMain(parsed));}catch{return value;}
   }
+  const LOCAL_STORAGE_PREFIX='leadintel-local-section-lzw-v1:';
+  // Decode without accessing storage or changing account/workspace ownership.
+  // Reference inspection has no section owner, so it uses the largest section
+  // bound; normal reads retain their existing per-section limits.
+  function restoreLocalStorageValue(raw,key){
+    if(typeof raw!=='string'||!raw.startsWith(LOCAL_STORAGE_PREFIX))return raw;
+    const section=typeof key==='string'?key.replace(/^leadintel_customer_v2_/,''):'';
+    const limit=key===undefined?MAX_RESTORED_DISCOVERY_BYTES:sectionRestoreLimit(section);
+    const frame=JSON.parse(raw.slice(LOCAL_STORAGE_PREFIX.length));
+    const decoded=decompressText(frame,limit,limit);
+    return frame.encoding===LOCAL_TEXT_ENCODING?JSON.stringify(restoreNestedDiscovery(JSON.parse(decoded),limit)):decoded;
+  }
   function installStorageGuard(){
     if(!root||typeof root.Storage==="undefined"||!root.localStorage||root.Storage.prototype.__leadintelStateBudgetPatched)return;
     const originalSet=root.Storage.prototype.setItem,originalGet=root.Storage.prototype.getItem;
     const sectionKeys=new Set(['state','discovery','outreach','delivery','discovery_meta'].map(name=>'leadintel_customer_v2_'+name));
-    const prefix='leadintel-local-section-lzw-v1:',cache=new Map();
+    const prefix=LOCAL_STORAGE_PREFIX,cache=new Map();
     function encodeLocal(value,key){
       if(typeof value!=='string'||value.length<65536)return value;
       // Compress the original string, not parsed JSON: whitespace, approved
@@ -352,9 +364,7 @@
       if(raw===null){cache.delete(key);return null;}
       const previous=cache.get(key);if(previous?.raw===raw)return previous.value;
       if(!raw.startsWith(prefix)){cache.delete(key);return raw;}
-      const frame=JSON.parse(raw.slice(prefix.length)),limit=sectionRestoreLimit(key.slice('leadintel_customer_v2_'.length));
-      const decoded=decompressText(frame,limit,limit);
-      const value=frame.encoding===LOCAL_TEXT_ENCODING?JSON.stringify(restoreNestedDiscovery(JSON.parse(decoded),limit)):decoded;
+      const value=restoreLocalStorageValue(raw,key);
       cache.set(key,{raw,value});return value;
     };
     root.Storage.prototype.setItem=function(key,value){
@@ -376,5 +386,5 @@
   root?.LeadIntelStartupTrace?.('storage codec:start');
   installStorageGuard();
   root?.LeadIntelStartupTrace?.('storage codec:complete');
-  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,MAX_RECORD_SYNC_BYTES,MAX_RESTORED_DISCOVERY_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,restoreLocalStorageValue,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,MAX_RECORD_SYNC_BYTES,MAX_RESTORED_DISCOVERY_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });

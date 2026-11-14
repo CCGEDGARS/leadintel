@@ -157,6 +157,12 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
       const retainedReceipts=candidate.people||[];
       const profile={decisionMakers:roles||candidate.buyerRoles},saved=LeadIntelDiscovery.mergeBuyerPool([...(candidate.people||[]),...(candidate.buyerDiscovery?.pool||[])],candidate.buyerDiscovery?.companyContacts||[],profile);
       if(candidate.buyerRolesChanged&&LeadIntelDiscovery.canReassessSavedBuyerRoles(candidate,saved,profile))candidate.buyerRolesChanged=false;
+      // Sparse pool checkpoints may omit this derived assessment. Reconcile it
+      // only against the exact retained owner, never another person or company.
+      for(const person of saved){
+        const previous=retainedReceipts.filter(row=>String(row.id)===String(person.id)&&LeadIntelDiscovery.buyerResearchIdentityKey(candidate,row)===LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person)&&String(row.publicNameUrl||'')===String(person.publicNameUrl||''));
+        if(previous.length===1)person.buyerQualification=LeadIntelDiscovery.retainedBuyerQualification({...person,buyerQualification:previous[0].buyerQualification},profile,candidate);
+      }
       const visible=LeadIntelDiscovery.retainBuyerIdentities(saved,profile,candidate),ids=new Set(visible.map(person=>String(person.id)));
       candidate.people=[...visible,...(candidate.people||[]).filter(person=>!ids.has(String(person.id))&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending')].slice(0,10);
       LeadIntelDiscovery.restoreBuyerResearchReceipts(candidate,retainedReceipts);
@@ -489,7 +495,7 @@ async function refreshCrmState({render=true}={}){
       for(const person of candidate.people){const contact=buyerHydrationContact(candidate,person,detail);if(!contact)continue;
         if(!person.linkedin_url&&LeadIntelDiscovery.normalizeLinkedInUrl(contact.linkedin_url)){person.linkedin_url=LeadIntelDiscovery.normalizeLinkedInUrl(contact.linkedin_url);recoveredProfiles=true;}
         if(!person.publicLinkedinUrl&&LeadIntelDiscovery.normalizeLinkedInUrl(contact.public_linkedin_url)){person.publicLinkedinUrl=LeadIntelDiscovery.normalizeLinkedInUrl(contact.public_linkedin_url);recoveredProfiles=true;}
-        person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles},candidate);
+        person.buyerQualification=LeadIntelDiscovery.retainedBuyerQualification(person,{decisionMakers:LeadIntelDiscovery.effectiveBuyerRoles(candidate)},candidate);
         enrichmentResults.set(personKey(candidate,person),{contact,request:{status:LeadIntelDiscovery.phoneLookupState?.(contact,detail.phoneRequests||[],person.id)||"not_requested"}});
       }
       if(typeof hydratePublishedCompanyEmails==='function'&&hydratePublishedCompanyEmails(candidate,(candidate.buyerDiscovery?.companyContacts||[]).map(person=>buyerHydrationContact(candidate,person,detail)).filter(Boolean)))recoveredProfiles=true;

@@ -61,7 +61,8 @@ test('research mode buttons open a review step before any network research start
   assert.match(app,/openResearchPreview\("quick"\)/);
   assert.match(app,/openResearchPreview\("deep"\)/);
   assert.match(app,/openResearchPreview\("intelligence"\)/);
-  assert.match(app,/runMarketResearch\(pendingResearchMode\)/);
+  assert.match(app,/function confirmResearchPreview\(/);
+  assert.match(app,/runMarketResearch\(draft.mode,\{previewDraft:draft\}\)/);
   assert.doesNotMatch(app,/\$\("run-market-research"\)\.addEventListener\("click",\(\)=>runMarketResearch/);
 });
 

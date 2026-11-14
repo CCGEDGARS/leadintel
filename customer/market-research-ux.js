@@ -21,7 +21,7 @@
       estimate:"Usually 2–4 minutes",
       description:"Deeper research across companies, market activity, news, hiring, expansion and other relevant sources.",
       evidenceLimit:80,
-      sourceDetail:"LeadIntel can recommend up to 8 priority websites before research.",
+      sourceDetail:"Relevant websites are discovered after you start research.",
       badge:"Recommended"
     }),
     intelligence:Object.freeze({
@@ -29,7 +29,7 @@
       estimate:"Usually 5–10 minutes",
       description:"Strategic analysis across market trends, segments, competitors, risks, funding and hidden opportunities.",
       evidenceLimit:200,
-      sourceDetail:"LeadIntel can recommend up to 15 priority websites before research.",
+      sourceDetail:"Source discovery and the intelligence map begin after you start research.",
       badge:""
     })
   });
@@ -202,9 +202,13 @@
     }catch{}
   }
 
+  function selectedPreviewMode(root){
+    const preview=root.document?.getElementById("research-run-preview"),draft=preview&&!preview.hidden?preview.dataset.researchMode:null;
+    return MODE_COPY[draft]?draft:normalizeMode(readState(root)?.market?.researchMode);
+  }
   function ensureModeChoices(root){
     const parent=root.document.querySelector(".research-actions");if(!parent)return;
-    const selected=normalizeMode(readState(root)?.market?.researchMode);
+    const selected=selectedPreviewMode(root);
     for(const [mode,id] of Object.entries(BUTTONS)){
       const button=root.document.getElementById(id);if(!button)continue;
       const view=MODE_COPY[mode];
@@ -285,24 +289,19 @@
     return {items:normalizeDiscoveredSources(payloads,mode),unavailable:false};
   }
 
-  let discoveryGeneration=0;
-  async function updatePreviewSources(root){
+  function updatePreviewSources(root){
     const preview=root.document.getElementById("research-run-preview");if(!preview||preview.hidden)return;
-    const state=readState(root),mode=normalizeMode(state.market?.researchMode);const policy=sourceDiscoveryPolicy(mode);
+    const state=readState(root),mode=selectedPreviewMode(root);
     const block=preview.querySelector(".research-suggested-block");if(!block)return;
-    const list=root.document.getElementById("research-suggested-sources"),add=root.document.getElementById("add-suggested-sources");
-    const heading=block.querySelector("div>span"),help=block.querySelector("div>small");
-    if(mode==="quick"){
-      block.hidden=false;if(heading)heading.textContent="Sources selected automatically";if(help)help.textContent="Quick Overview chooses the strongest available source categories and sites automatically. No specific sites are pre-recommended.";
-      if(list)list.innerHTML='<div class="source-discovery-status">Automatic source selection · no site-selection step is required for Quick Overview.</div>';if(add)add.hidden=true;return;
-    }
-    block.hidden=false;if(add)add.hidden=false;
-    if(heading)heading.textContent=policy.grouped?"Source Intelligence Map":"Live source discovery";
-    if(help)help.textContent=policy.grouped?"LeadIntel is identifying and grouping the most relevant source sites for this market before the full investigation starts.":"LeadIntel is identifying relevant source sites for this market before the full research starts.";
-    if(list)list.innerHTML='<div class="source-discovery-status">Discovering relevant market sources…</div>';
-    const generation=++discoveryGeneration;const result=await discoverSources(root,mode);if(generation!==discoveryGeneration||preview.hidden)return;
-    if(result.unavailable){if(list)list.innerHTML=`<div class="source-discovery-status">Source discovery unavailable. ${esc(result.reason||"")} LeadIntel will use the selected source categories; no specific sites have been pre-recommended.</div>`;if(add)add.hidden=true;return;}
-    if(list)list.innerHTML=renderDiscoveredSources(result.items,mode);if(add)add.hidden=!result.items.length;
+    const list=root.document.getElementById("research-suggested-sources"),add=root.document.getElementById("add-suggested-sources"),heading=block.querySelector("div>span"),help=block.querySelector("div>small");
+    // Reviewing a plan never starts provider work. Only explicit saved URLs are
+    // available here; the confirmed research run owns live source discovery.
+    const saved=[...new Set((state.market?.researchCustomSources||[]).filter(value=>{try{return ['http:','https:'].includes(new URL(value).protocol);}catch{return false;}}))].slice(0,20);
+    block.hidden=false;if(add)add.hidden=true;
+    if(heading)heading.textContent=saved.length?"Saved source pages":mode==='quick'?"Sources selected automatically":"Source discovery starts with research";
+    if(help)help.textContent="No provider requests run while you review this plan. New sites are discovered when research starts.";
+    const markup=saved.length?`<div class="saved-preview-sources">${saved.map(url=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`).join('')}</div><div class="source-discovery-status">Your saved URLs remain selected for the confirmed research run.</div>`:'<div class="source-discovery-status">Sites will be discovered when research starts. No new sites have been checked for this preview.</div>';
+    if(list&&list.innerHTML!==markup)list.innerHTML=markup;
   }
 
   function install(root){
