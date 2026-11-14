@@ -137,6 +137,9 @@
 
   function confirmProfileContext(state={}){
     const profile=state.profile;if(!profile?.canonical?.fields)return state;
+    // Fresh page reads may have no ID. Bind the same positional identity used
+    // by canonical citations and saved-state hydration before approval is signed.
+    if(Array.isArray(state.scrapedSources))state.scrapedSources=state.scrapedSources.map((source,index)=>source&&typeof source==='object'&&!clean(source.id)?{...source,id:`S${index+1}`}:source);
     finalizeProfileQuality(profile,state);
     state.answers={...(state.answers||{})};state.answerStatus={...(state.answerStatus||{})};
     for(const key of DIAGNOSTIC_FIELDS){
@@ -146,7 +149,7 @@
       }
       const answerKey=FIELD_MAP[key];
       if(key==='commercialObjective')state.workspaceGoals={...(state.workspaceGoals||{}),successOutcome:record.value};
-      else if(answerKey){state.answers[answerKey]=record.value;state.answerStatus[answerKey]='user';}
+      else if(answerKey){state.answers[answerKey]=record.value;state.answerStatus[answerKey]='user';if(key==='customerPainPoints')profile.buyingOutcomes=record.value;}
     }
     delete profile.canonical.buyerRoleRepair;
     finalizeProfileQuality(profile,state);return state;
