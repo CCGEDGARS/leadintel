@@ -68,3 +68,15 @@ test('Messages recipient review opens Buyers focus rather than the Companies vie
  assert.equal(opened?.focus,'buyers');assert.equal(genericNavigation,0);
  }finally{h.close();}
 });
+
+test('stale Strategy permits opening review and recovery while still blocking final approval',()=>{
+ const h=harness(),d=h.w.document;try{
+  h.w.LeadIntelPageProcedures.strategyBlockers=()=>['Saved research no longer matches the current company context.'];
+  const review=d.createElement('button');review.id='activate-market-strategy';review.textContent='Review Strategy';
+  const confirm=d.createElement('button');confirm.id='confirm-strategy-handoff';confirm.textContent='Approve';d.body.append(review,confirm);
+  let reviews=0,approvals=0;review.addEventListener('click',()=>reviews++);confirm.addEventListener('click',()=>approvals++);
+  review.click();assert.equal(reviews,1,'opening the review must reach the handler that routes to Profile recovery');
+  confirm.click();assert.equal(approvals,0,'opening review cannot authorize stale Strategy or start research');
+  assert.equal(h.api.require('strategy','advance'),false);
+ }finally{h.close();}
+});

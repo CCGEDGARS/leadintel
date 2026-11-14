@@ -13,7 +13,7 @@ import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overvi
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './strategy-integrity.js?strategy-audit=20261030-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&local-storage=20261016-v1&startup-cleanup=20261016-v1&research-recovery=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1';
-import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&finish-core=20261024-v1&sender-identity-save=20261025-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1';
+import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1&snapshot-body=20261016-v1&sync-budget=20261019-v1&company-save=20261019-v1&research-recovery=20261020-v1&workspace-save=20261020-v1&finish-core=20261024-v1&sender-identity-save=20261025-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1&strategy-recovery=20261114-v2';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
@@ -926,10 +926,12 @@ function readResearchSettings(sourceTypesChanged=false){
   saveState();return state.market;
 }
 function researchContextFingerprint(){
+  let [material=null,legacy=false]=arguments;
   const integrity=strategyIntegrity();
   if(!integrity?.material)throw Error("Strategy integrity is unavailable");
-  const material=integrity.material(state);delete material.evidence;delete material.opportunities;
-  return `${integrity.VERSION}:research:${integrity.digest(JSON.stringify(material))}`;
+  material=material||integrity.material(state);delete material.evidence;delete material.opportunities;
+  const serialized=legacy?JSON.stringify(material):JSON.stringify(material,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value);
+  return `${integrity.VERSION}:research:${legacy?'':'v2:'}${integrity.digest(serialized)}`;
 }
 function repairCompletedOpportunityResearchContext(){
   const market=state?.market,execution=market?.researchExecution||{},integrity=strategyIntegrity();
@@ -943,8 +945,8 @@ function repairCompletedOpportunityResearchContext(){
   // restored to Off. Any other edit must retain the normal stale-research gate.
   const material=integrity.material(state);delete material.evidence;delete material.opportunities;
   const prior=material.icps.find(item=>item.id===opportunity[0].id);if(!prior)return false;prior.active=false;
-  const original=`${integrity.VERSION}:research:${integrity.digest(JSON.stringify(material))}`;
-  if(market.researchContextFingerprint!==original)return false;
+  const original=researchContextFingerprint(material),legacyOriginal=researchContextFingerprint(material,true);
+  if(![original,legacyOriginal].includes(market.researchContextFingerprint))return false;
   market.researchContextFingerprint=researchContextFingerprint();return true;
 }
 // Staleness is a live comparison, not a latch: it clears as soon as the saved research context matches again.
@@ -953,6 +955,10 @@ function syncResearchContextStale(){
   const market=state.market;if(!market)return false;
   const hasResults=(market.researchResults||[]).length>0;
   const currentFingerprint=market.researchContextFingerprint?researchContextFingerprint():'';
+  // A legacy digest may migrate only when its exact current serialization is
+  // reproduced. An unknown historical digest remains stale; key order alone
+  // cannot establish what commercial context originally produced it.
+  if(hasResults&&market.researchContextFingerprint!==currentFingerprint&&market.researchContextFingerprint===researchContextFingerprint(null,true))market.researchContextFingerprint=currentFingerprint;
   if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();
   const unrelated=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile,market.signals)||[];
   const contextChanged=Boolean(market.researchContextFingerprint)&&market.researchContextFingerprint!==currentFingerprint;

@@ -6,6 +6,45 @@ function opportunityRecovery(){
  const state={website:'https://seller.example',profile:{companyName:'Seller',priorityOffers:'Clinical software',targetMarkets:'Finland'},market:{icps:[{id:'core',active:true},{id:'icp-opportunity-led',type:'opportunity-led',active:false,description:'Evidence-backed opportunities'}],signals:[{id:'expansion',name:'Clinic expansion',keywords:'new clinic',active:true,weight:5}],researchResults:[{url:'https://source.example/clinic',text:'A new clinic opens.'}],opportunities:[{active:true,evidence:[{url:'https://source.example/clinic'}]}],researchStatus:'complete',researchExecution:{runId:'completed-run',status:'complete',completedAt:1794201278178},researchHistory:[{id:'completed-run',sourceCount:1,status:'complete'}],researchQuality:{passed:true}}};
  const ctx={state,LeadIntelStrategyIntegrity:Integrity,LeadIntelCompanyBrain:{unrelatedSignals:()=>[]}};vm.createContext(ctx);vm.runInContext(fn('strategyIntegrity','function captureStrategyContext')+fn('researchContextFingerprint','function returnToProfileResearch'),ctx);state.market.researchContextFingerprint=ctx.researchContextFingerprint();state.market.icps[1].active=true;state.market.researchContextStale=true;return {state,ctx};
 }
+test('research fingerprints ignore object property order while retaining material edits',()=>{
+ const {state,ctx}=opportunityRecovery();
+ state.answers={priority_offers:'Clinical software',buyer_roles:'Operations Director'};
+ state.workspaceGoals={successOutcome:'Find opportunities',measurement:'Qualified buyers'};
+ const before=ctx.researchContextFingerprint(),legacy=ctx.researchContextFingerprint(null,true),strategy=Integrity.signature(state);
+ state.answers={buyer_roles:'Operations Director',priority_offers:'Clinical software'};
+ state.workspaceGoals={measurement:'Qualified buyers',successOutcome:'Find opportunities'};
+ assert.equal(Integrity.signature(state),strategy);
+ assert.equal(ctx.researchContextFingerprint(),before);
+ assert.notEqual(ctx.researchContextFingerprint(null,true),legacy,'the old digest was order-sensitive');
+ state.answers.priority_offers='Payroll software';assert.notEqual(ctx.researchContextFingerprint(),before);
+});
+test('only an exactly reproduced legacy research digest migrates without new provider calls',()=>{
+ const {state,ctx}=opportunityRecovery(),evidence=JSON.stringify(state.market.researchResults);
+ state.market.researchContextFingerprint=ctx.researchContextFingerprint(null,true);
+ state.market.strategyApproved=false;
+ assert.equal(ctx.syncResearchContextStale(),false);
+ assert.equal(state.market.researchContextFingerprint,ctx.researchContextFingerprint());
+ assert.match(state.market.researchContextFingerprint,/:research:v2:/);
+ assert.equal(state.market.strategyApproved,false);
+ assert.equal(JSON.stringify(state.market.researchResults),evidence);
+ state.answers={a:'one',b:'two'};state.market.researchContextFingerprint=ctx.researchContextFingerprint();
+ const saved=JSON.parse(JSON.stringify(state));saved.answers={b:'two',a:'one'};Object.assign(state,saved);
+ assert.equal(ctx.syncResearchContextStale(),false,'canonical digests survive rehydration property order changes');
+});
+test('an unmatched legacy digest remains stale even when current Strategy inputs are valid',()=>{
+ const {state,ctx}=opportunityRecovery();state.answers={a:'one',b:'two'};
+ const original=ctx.researchContextFingerprint(null,true);state.market.researchContextFingerprint=original;
+ state.answers={b:'two',a:'one'};
+ assert.equal(ctx.syncResearchContextStale(),true);
+ assert.equal(state.market.researchContextFingerprint,original,'do not bless an unreproduced historical preimage');
+});
+test('completed Opportunity-led recovery also requires exact matching of the legacy original scope',()=>{
+ const {state,ctx}=opportunityRecovery();state.market.icps[1].active=false;
+ state.market.researchContextFingerprint=ctx.researchContextFingerprint(null,true);
+ state.market.icps[1].active=true;
+ assert.equal(ctx.syncResearchContextStale(),false);
+ assert.equal(state.market.researchContextFingerprint,ctx.researchContextFingerprint());
+});
 test('completed research is reusable when its only input mismatch is enabling the evidence-backed Opportunity-led profile',()=>{
  const {state,ctx}=opportunityRecovery(),evidence=JSON.stringify(state.market.researchResults);assert.equal(ctx.syncResearchContextStale(),false);assert.equal(state.market.researchContextFingerprint,ctx.researchContextFingerprint());assert.equal(state.market.icps[1].active,true);assert.equal(JSON.stringify(state.market.researchResults),evidence);assert.notEqual(state.market.strategyApproved,true,'Research compatibility does not approve Strategy');assert.equal(ctx.syncResearchContextStale(),false);
 });

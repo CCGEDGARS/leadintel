@@ -38,3 +38,21 @@ New regressions were run failing before repair and passing after. Browser accept
 Private inspection is currently blocked: originating Browser connection is unavailable; shared browser reaches LeadIntel sign-in; secure method choice selected Google, but automatic approval review rejected continuing that authentication flow. Do not bypass the rejection. Explicit authorization is needed before resuming Google sign-in. No private approval reactivation, new private company research, paid contacts or outreach has been executed in this audit. Customer acceptance remains open until the signed-in saved state and original companies are inspected.
 
 No data migration is needed. Existing records remain authoritative; old stale approvals are not automatically approved. Rollback is a source revert with its own exact-release verification. Do not delete/rebuild private work or start another broad research run to test deterministic fixes.
+
+
+## Authenticated customer observation and second connected boundary
+
+Google sign-in completed after a fresh OAuth session; an earlier expired state was rejected rather than bypassed. The existing Companies -> Buyers control reopened the retained selected company with ten buyers and its accepted contact evidence. Updating to fb74957 preserved those records. The saved-review list contained 31 unique domain records; the 12 candidate records overlap that review set, so counts must not be added to claim 43 companies. The misleading zero-result conclusion is gone in the updated page. No company research or paid-contact action was pressed during this inspection.
+
+The real Strategy recovery click revealed another boundary missed by isolated click tests: page-quality-ui intercepted the button that merely OPENS review as if it performed APPROVAL, then focused the same blocked control. Route the review opening as safe preparation; final confirm/advance and all approval/research blockers remain enforced. A capture-phase DOM regression fails before repair and verifies recovery can open while final approval remains blocked.
+
+Research used a second raw-JSON digest, independent from Companies and Strategy's canonical content digest. New research fingerprints now sort object keys. Historical research hashes migrate only after reproducing their exact legacy serialization or the already governed completed Opportunity-led derived-switch proof. Unknown hashes remain stale; no private historical approval is silently blessed.
+
+A real save failure subsequently became visible in the customer workspace. Existing persistence UI discarded all status/code/name detail, preventing diagnosis. Add bounded DOM-readable structured error metadata (HTTP status, enum-shaped code and known error name); never render raw messages, URLs, payloads or causes. The diagnostic is not itself a repair of the underlying failed request. Customer save/reopen acceptance and any unresolved stale research remain open until verified after this release.
+
+
+## Measured rendering hotspot
+
+The actual signed-in browser exposed multi-second control delays. A separate controlled fixture (31 companies, 40 research pages and eight source pages, 1.44 MB main state) reproduced a lower-bound 6.28–6.56 second synchronous hotspot for three company-currentness sweeps: 186 full evidence digests. Presentation-scoped fingerprint reuse and status.signature reuse reduced the same controlled operation to 41–43 ms and one digest. This measurement does not identify every private-browser delay.
+
+Cache lifetime is only an outer synchronous qualification presentation frame, cleared in finally. Raw main content, relevant rules, event search context and function dependencies invalidate the entry within a frame. Actions and async continuations recompute. Eleven behavior regressions cover reuse and invalidation; freshness tests remain independent of timing thresholds.

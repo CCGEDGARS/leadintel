@@ -198,7 +198,25 @@ function clearCompanySearchResults(){
 }
 function moduleReady(){const main=mainState();return Boolean(main?.profile?.website||main?.website);}
 function showToast(message){const toast=$("toast");if(!toast)return;toast.textContent=message;toast.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove("show"),3000);}
-function fingerprint(){const main=mainState();const market=main.market||{};return JSON.stringify({strategySignature:window.LeadIntelStrategyIntegrity?.signature(main)||null,strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current||false,eventCampaign:window.LeadIntelEventCampaigns?.researchContext?.(window.LeadIntelEventCampaigns?.active(main.eventCampaigns))||null,eventSearchContext:window.LeadIntelEventCampaignUI?.searchContext?.()||null,qualification:((r)=>({researchPriority:r?.researchPriority||'balanced',minimumScore:r?.minimumScore||80,maxEvidenceAgeDays:r?.maxEvidenceAgeDays||90}))(window.LeadIntelQualificationSettings?.get?.()),answers:main.answers||{},company:main.profile?.companyName||"",website:canonicalDomain(main.website||main.profile?.website||""),approved:market.strategyApprovedAt||"",opportunityMap:main.referenceCustomers?.opportunityMap?.updatedAt||"",referenceModels:(main.referenceCustomerPortfolio?.lists||[]).filter(list=>list.active&&list.reference?.publishedModel?.active).map(list=>[list.id,list.reference.publishedModel.fingerprint,list.reference.publishedModel.updatedAt]),icps:(market.icps||[]).filter(x=>x.active!==false).map(x=>[x.id,x.description,x.targetMarkets,x.buyerRoles,x.offers,x.value,x.exclusions]),signals:(market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.weight,x.keywords]),opps:(market.opportunities||[]).filter(x=>x.active!==false).map(x=>[x.id,x.market,x.score?.total])});}
+function fingerprint(){
+  const presenting=typeof qualificationPresentationDepth==='number'&&qualificationPresentationDepth>0;
+  const rules=window.LeadIntelQualificationSettings?.get?.();
+  const qualification={researchPriority:rules?.researchPriority||'balanced',minimumScore:rules?.minimumScore||80,maxEvidenceAgeDays:rules?.maxEvidenceAgeDays||90};
+  const eventSearchContext=window.LeadIntelEventCampaignUI?.searchContext?.()||null;
+  let raw,cacheKey,dependencies;
+  if(presenting){
+    try{raw=localStorage.getItem(MAIN_STORAGE_KEY)||"{}";}catch{raw="{}";}
+    cacheKey=JSON.stringify([qualification,eventSearchContext]);
+    dependencies=[window.LeadIntelStrategyIntegrity?.status,window.LeadIntelStrategyIntegrity?.signature,window.LeadIntelEventCampaigns?.researchContext,window.LeadIntelEventCampaigns?.active,window.LeadIntelQualificationSettings?.get,window.LeadIntelEventCampaignUI?.searchContext];
+    const cached=qualificationPresentationFingerprint;
+    if(cached&&cached.raw===raw&&cached.key===cacheKey&&dependencies.every((fn,i)=>fn===cached.dependencies[i]))return cached.value;
+  }
+  let main;if(presenting){try{main=JSON.parse(raw);}catch{main={};}}else main=mainState();
+  const market=main.market||{},strategyStatus=window.LeadIntelStrategyIntegrity?.status(main);
+  const value=JSON.stringify({strategySignature:strategyStatus?.signature||window.LeadIntelStrategyIntegrity?.signature(main)||null,strategyCurrent:strategyStatus?.current||false,eventCampaign:window.LeadIntelEventCampaigns?.researchContext?.(window.LeadIntelEventCampaigns?.active(main.eventCampaigns))||null,eventSearchContext:eventSearchContext,qualification:qualification,answers:main.answers||{},company:main.profile?.companyName||"",website:canonicalDomain(main.website||main.profile?.website||""),approved:market.strategyApprovedAt||"",opportunityMap:main.referenceCustomers?.opportunityMap?.updatedAt||"",referenceModels:(main.referenceCustomerPortfolio?.lists||[]).filter(list=>list.active&&list.reference?.publishedModel?.active).map(list=>[list.id,list.reference.publishedModel.fingerprint,list.reference.publishedModel.updatedAt]),icps:(market.icps||[]).filter(x=>x.active!==false).map(x=>[x.id,x.description,x.targetMarkets,x.buyerRoles,x.offers,x.value,x.exclusions]),signals:(market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.weight,x.keywords]),opps:(market.opportunities||[]).filter(x=>x.active!==false).map(x=>[x.id,x.market,x.score?.total])});
+  if(presenting)qualificationPresentationFingerprint={raw,key:cacheKey,dependencies,value};
+  return value;
+}
 function currentStrategyApproval(main=mainState()){const status=window.LeadIntelStrategyIntegrity?.status(main);if(status?.current)return true;showToast(status?.reason||'Review and activate the current Strategy before researching companies.');return false;}
 function discoveryAccountContext(){return JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated||false,localStorage.getItem('leadintel_account_context_v1')||'',window.LeadIntelAccountCache?.current?.()??null]);}
 function discoveryOperationContext(){return JSON.stringify([discoveryAccountContext(),fingerprint()]);}
@@ -4260,13 +4278,14 @@ const qualificationDisplay=window.LeadIntelQualificationDisplay?.create({onUpdat
   renderDiscoverySafely();window.LeadIntelJourney?.refresh?.();
 }})||null;
 let qualificationPresentationDepth=0,qualificationPresentationTimer=null;
-let qualificationPresentationContext=null,qualificationPresentationResults=new Map();
+let qualificationPresentationContext=null,qualificationPresentationResults=new Map(),qualificationPresentationFingerprint=null;
 function withQualificationPresentation(operation){
+  const outermost=qualificationPresentationDepth===0;if(outermost)qualificationPresentationFingerprint=null;
   if(qualificationPresentationTimer===null)qualificationPresentationTimer=setTimeout(()=>{
     qualificationPresentationTimer=null;qualificationPresentationContext=null;qualificationPresentationResults.clear();
   },0);
   qualificationPresentationDepth++;
-  try{return operation();}finally{qualificationPresentationDepth--;}
+  try{return operation();}finally{qualificationPresentationDepth--;if(outermost)qualificationPresentationFingerprint=null;}
 }
 function qualificationAssessment(candidate,options={}){
   const context=qualificationContext(),{profile,market}=context,rules=window.LeadIntelQualificationSettings?.get?.()||{};

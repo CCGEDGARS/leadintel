@@ -7833,7 +7833,7 @@
       "status": 200,
       "contains": [
         "function repairCompletedOpportunityResearchContext()",
-        "if(market.researchContextFingerprint!==original)return false;",
+        "if(![original,legacyOriginal].includes(market.researchContextFingerprint))return false;",
         "if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();"
       ]
     },
