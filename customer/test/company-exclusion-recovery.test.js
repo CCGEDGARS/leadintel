@@ -7,6 +7,11 @@ test('official first-person team counts and grouped thousands resolve the same h
  for(const text of ['We are a team of 12 employees.','We employ 2 400 people. Our company is a team of 12 people.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,text.includes('2 400')?'unverified':'excluded',text);
  for(const text of ['Our customers are a team of 2800 employees.','We are hiring a team of 2800 employees.','We are a team of 11–50 employees.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'unverified',text);
 });
+test('official company-facts layouts and attributed team lower bounds resolve company size',()=>{
+ for(const text of ['Key Figures\n787\nemployees worldwide','Key Figures\n+440\nemployees worldwide','450 Employees across our facilities','Our team of 70 employees operates our Danish production facility.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'clear',text);
+ assert.equal(D.evaluateExclusions(company(prose('Company facts: 12 employees worldwide')),rule).status,'excluded');
+ for(const text of ['Our team of 12 employees supports one department.','Our customers report key figures: 787 employees worldwide.','Our client has 450 employees across our facilities.','A department has 70 employees.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'unverified',text);
+});
 test('the owner headcount rule is resolved from attributed official operating evidence',()=>{
  for(const text of ['We employ 120 people.','Our company has 30 employees.','Number of employees: 51–200.','We have more than 100 employees.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'clear',text);
  for(const text of ['We employ 12 people.','Number of employees: 11–20.'])assert.equal(D.evaluateExclusions(company(prose(text)),rule).status,'excluded',text);

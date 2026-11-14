@@ -38,3 +38,10 @@ test('rechecking a company retained only in Buyers still reuses its saved operat
  const {context,calls}=helpers.loadRunner({targetCount:1,fitResponse:goodFit});context.__discoveryState().selectedProspects=[candidate];await context.__runDiscovery({recheckOnly:true,targetDomains:[candidate.domain]});
  assert.equal(calls.search+calls.scrape,0);assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain);assert.equal(context.__discoveryState().selectedProspects[0].people[0].id,'retained-buyer');
 });
+test('a legacy competitor assessment is reassessed under the current offer-application policy',async()=>{
+ const {context,calls}=helpers.loadRunner({targetCount:1,fitResponse:goodFit}),main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ const profile=Discovery.effectiveTargetingProfile({...main.profile,...Targeting.profileFields(main)},main.market),legacy=JSON.parse(Discovery.buyerFitContext(profile));delete legacy.assessmentPolicy;
+ const candidate={...companies(1)[0],evidence:[{url:'https://northsteel.lv/operations',text:'North Steel operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.',sourceRead:true,verifiedAt:new Date().toISOString()}],buyerFit:{version:2,context:JSON.stringify(legacy),fit:15,relationship:'competitor',purchase:profile.priorityOffers,reason:'Earlier policy treated the overlapping service as the whole relationship.',buyerRole:'competitor',evidence:[{url:'https://northsteel.lv/operations',quote:'North Steel operates industrial manufacturing facilities in Latvia.'}]}};
+ context.__discoveryState().potentialMatches=[candidate];await context.__runDiscovery({recheckOnly:true,targetDomains:[candidate.domain]});
+ assert.equal(context.__discoveryState().candidates[0]?.domain,candidate.domain,'old policy must not veto a fresh sourced application assessment');assert.equal(calls.search+calls.scrape,0);assert.equal(calls.other,1);
+});

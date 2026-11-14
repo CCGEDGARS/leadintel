@@ -33,11 +33,12 @@ test('late results cannot cross contexts; changed evidence, rules and expired di
 test('worker evaluates the same evidence policy and result as synchronous action validation',()=>{
   const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
   const c={URL};c.self=c;vm.createContext(c);
-  c.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file.split('?')[0]),'utf8'),c));
+  const imports=[];c.importScripts=(...files)=>files.forEach(file=>{imports.push(file);vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file.split('?')[0]),'utf8'),c);});
   let output;c.postMessage=value=>{output=value;};
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../qualification-worker.js'),'utf8'),c);
-  const batch={profile:{priorityOffers:'Training'},market:{},rows:[{id:1,candidate:{domain:'buyer.example',company:'Buyer',evidence:[]},settings:{}}]};
+  const at=new Date().toISOString(),batch={profile:{priorityOffers:'Training',exclusions:'companies with less than 30 people'},market:{},rows:[{id:1,candidate:{domain:'buyer.example',company:'Buyer',evidence:[]},settings:{}},{id:2,candidate:{domain:'buyer.example',company:'Buyer',evidence:[{url:'https://buyer.example/company',sourceRead:true,verifiedAt:at,text:'Buyer operates production and distribution facilities for business customers. Company facts: 787 employees worldwide. Our manufacturing teams coordinate production, quality and transport across our operating facilities.'}]},settings:{researchedAt:at}}]};
   c.onmessage({data:batch});
   const expected=require('../discovery-engine.js').assessCompanyQualification(batch.rows[0].candidate,batch.profile,batch.market,{});
   assert.deepEqual(JSON.parse(JSON.stringify(output.results[0].result)),expected);
+  const second=require('../discovery-engine.js').assessCompanyQualification(batch.rows[1].candidate,batch.profile,batch.market,batch.rows[1].settings);assert.deepEqual(JSON.parse(JSON.stringify(output.results[1].result)),second);assert.ok(!second.gaps.includes('Resolve exclusion checks'));assert.ok(imports.find(file=>file.startsWith('./discovery-engine.js?'))?.includes('offer-engine=20261114-v12'));
 });
