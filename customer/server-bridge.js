@@ -314,8 +314,15 @@
     const original=previous?.original,local=bundle(),record={schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local,server:state},local,server:state};
     const packed=root.LeadIntelWorkspacePersistence?.encodeRecoveryRecord?await root.LeadIntelWorkspacePersistence.encodeRecoveryRecord(record):root.LeadIntelStateBudget?.packRecoveryRecord?.(record)||record;
     if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
-    const expectedPointer=localStorage.getItem(RECOVERY_KEY);
-    try{localStorage.setItem(RECOVERY_KEY,JSON.stringify(packed));}
+    const expectedPointer=localStorage.getItem(RECOVERY_KEY),encoded=JSON.stringify(packed);
+    // A large inline backup can fit now yet consume the headroom needed for
+    // the next evidence checkpoint. Publish it durably before filling storage.
+    if(root.indexedDB&&root.LeadIntelAccountCache?.publishRecoverySnapshot&&(root.TextEncoder?new root.TextEncoder().encode(encoded).byteLength:encoded.length*2)>64*1024){
+      await root.LeadIntelAccountCache.publishRecoverySnapshot(packed,{pointerKey:RECOVERY_KEY,expectedPointer,eligibleBaseline:root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline,encodePointer:key=>JSON.stringify({format:INDEXED_RECOVERY_FORMAT,workspace_id:workspaceId,key})});
+      if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed during recovery');
+      renderConflictActions();return;
+    }
+    try{localStorage.setItem(RECOVERY_KEY,encoded);}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
       if(root.LeadIntelAccountCache.publishRecoverySnapshot){
