@@ -60,3 +60,9 @@ test('a transaction timeout is reported before synchronous abort events',async()
  const pending=r.api.saveRecoverySnapshot({workspace_id:'w1'});await new Promise(resolve=>setImmediate(resolve));r.fireTimeout();
  await assert.rejects(pending,error=>error.name==='TimeoutError'&&error.phase==='archive_write_timeout'&&error.category==='timeout');assert.equal(aborted,true);
 });
+
+test('recovery UI accepts only known archive metadata fields',()=>{
+ const r=runtime(null);r.api.failed({code:'browser_archive_unavailable',name:'PRIVATE name',phase:'PRIVATE phase',category:'PRIVATE category',message:'PRIVATE value',requestPath:'https://private.example/secret'});
+ assert.match(r.message.textContent,/Error \/ archive \/ unknown/);
+ assert.doesNotMatch(r.message.textContent,/PRIVATE|private\.example/);
+});
