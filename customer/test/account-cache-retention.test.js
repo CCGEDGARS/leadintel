@@ -135,3 +135,15 @@ test('a corrupt or oversized gzip reference index is not trusted as a complete r
  let reference=JSON.parse(pointer(PREFIX+'old'));for(let i=0;i<40;i++)reference={nested:reference};const unknown={schema_version:1,workspace_id:'w1',data:{reference,text:'evidence '.repeat(10000)}};const key=await r.api.saveRecoverySnapshot(unknown),frame=await raw(r.indexedDB,key);frame.index.referencesComplete=true;frame.index.references=[];await write(r.indexedDB,key,frame);
  const result=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.ok(await raw(r.indexedDB,PREFIX+'old'));assert.equal(result.measurementComplete,false);
 });
+
+test('an indexed acknowledged-shaped record outside the owned snapshot namespace is compressed but never collected',async()=>{
+ const r=setup();await r.api.pending;
+ const unknownKey='foreign-owner:retained-acknowledged-shape',record=baseline(1,'Retained unknown-namespace business evidence. '.repeat(3000)),currentKey=PREFIX+'newer-owned-baseline';
+ await write(r.indexedDB,unknownKey,JSON.stringify(record));await write(r.indexedDB,currentKey,JSON.stringify(baseline(2)));r.values.set(PTR,pointer(currentKey));
+ await r.api.compactRecoveryStorage({eligibleBaseline:eligible});
+ const indexed=await raw(r.indexedDB,unknownKey);assert.equal(indexed.format,'leadintel-archive-gzip-v2');assert.equal(indexed.index.baseline.version,1,'the frame has a vetted acknowledgement index but no snapshot-key ownership');assert.ok(indexed.indexHash);
+ const second=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.equal(second.reclaimedRecordsThisPass,0,'a newer referenced baseline grants no ownership of foreign keys');
+ const retained=await raw(r.indexedDB,unknownKey);assert.ok(retained,'unknown-namespace data must survive indexed collection');
+ const text=await new Response(new Blob([retained.data]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+ const digest=value=>require('node:crypto').createHash('sha256').update(value).digest('hex');assert.equal(digest(text),digest(JSON.stringify(record)),'retained foreign data stays byte-exact');assert.ok(await raw(r.indexedDB,currentKey));
+});

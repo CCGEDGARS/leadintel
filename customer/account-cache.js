@@ -203,7 +203,7 @@
       if(logicalBytes+logical>MAX_ARCHIVE_BYTES){referencesComplete=false;break;}
       scanned++;totalBytes+=size;logicalBytes+=logical;
       if(typeof raw==='string'){rawCount++;if(rawKeys.length<20&&!String(key).startsWith(SNAPSHOT_PIN_PREFIX)&&byteLength(raw)>=65536)rawKeys.push(key);}else if(raw?.format===ARCHIVE_GZIP_FORMAT)compressedCount++;else unknownCount++;
-      if(index){for(const reference of index.references)references.add(reference);if(!index.referencesComplete)referencesComplete=false;if(eligibleBaseline&&index.baseline)baselines.push({key,workspaceId:index.baseline.workspaceId,version:index.baseline.version});continue;}
+      if(index){for(const reference of index.references)references.add(reference);if(!index.referencesComplete)referencesComplete=false;if(String(key).startsWith(SNAPSHOT_PREFIX)&&eligibleBaseline&&index.baseline)baselines.push({key,workspaceId:index.baseline.workspaceId,version:index.baseline.version});continue;}
       let record;try{record=await decodeArchiveValue(raw);}catch{unknownCount++;referencesComplete=false;continue;}
       // Unknown records are retained, and their embedded pointers (including
       // conflict originals) protect referenced snapshots transitively as well.
