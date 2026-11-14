@@ -1024,6 +1024,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
           let plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});
           if(plan.reassessSaved){candidate=(await researchPool([candidate]))[0];plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});}
           if(buyerFitFailures.length)return;
+          if(plan.assessment.eligible){candidate.needsRecheck=false;plan=LeadIntelDiscovery.companyEvidencePlan(candidate,profile,market,{researchedAt:candidate.researchedAt||discovery.lastRunAt});}
           if(plan.needsWeb){
             const checks=LeadIntelDiscovery.buildCandidateVerificationQueries([{...candidate,verificationFocus:plan.verificationFocus,includeIndependent:plan.assessment.evidenceSources<2}],profile,market,1);
             queries.push(...checks);discovery.queries=queries;
