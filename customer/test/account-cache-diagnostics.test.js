@@ -66,3 +66,9 @@ test('recovery UI accepts only known archive metadata fields',()=>{
  assert.match(r.message.textContent,/Error \/ archive \/ unknown/);
  assert.doesNotMatch(r.message.textContent,/PRIVATE|private\.example/);
 });
+
+
+test('generic recovery consumers retain safe actionable metadata in Error.message',async()=>{
+ const r=runtime(failingTransaction({name:'QuotaExceededError',message:'PRIVATE account payload'}));
+ await assert.rejects(r.api.saveRecoverySnapshot({workspace_id:'w1'}),error=>{assert.match(error.message,/QuotaExceededError \/ archive_write_transaction \/ quota/);assert.doesNotMatch(error.message,/PRIVATE/);return true;});
+});
