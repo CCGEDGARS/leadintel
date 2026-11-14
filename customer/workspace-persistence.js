@@ -58,9 +58,11 @@
   function readSnapshot(){const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||"";if(raw===snapshotEncoded)return snapshotDecoded;const stored=safeJson(raw,null),parsed=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored;snapshotDecoded=isObject(parsed)&&isObject(parsed.data)?parsed:null;snapshotEncoded=raw;return snapshotDecoded;}
   const INDEXED_SNAPSHOT_FORMAT='leadintel-indexed-workspace-snapshot-v1';
   async function loadStoredSnapshot(){
-    const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||'',pointer=safeJson(raw,null);
+    const archive=root.LeadIntelAccountCache;
+    const loaded=archive?.readRecoveryPointer?await archive.readRecoveryPointer(SNAPSHOT_KEY,{workspaceId:root.localStorage?.getItem(WORKSPACE_KEY)||''}):null;
+    const raw=loaded?loaded.raw:(root.localStorage?.getItem(SNAPSHOT_KEY)||''),pointer=loaded?loaded.pointer:safeJson(raw,null);
     if(pointer?.format!==INDEXED_SNAPSHOT_FORMAT)return;
-    const snapshot=await root.LeadIntelAccountCache?.readRecoverySnapshot(pointer.key);
+    const snapshot=loaded?loaded.record:await archive?.readRecoverySnapshot(pointer.key);
     if(!snapshot?.data||(snapshot.workspace_id||'')!==pointer.workspace_id)throw new Error('Recovery snapshot is unavailable for this workspace.');
     if(root.localStorage?.getItem(SNAPSHOT_KEY)===raw){snapshotEncoded=raw;snapshotDecoded=snapshot;}
   }
@@ -78,6 +80,15 @@
     try{const encoded=JSON.stringify(packed);root.localStorage?.setItem(SNAPSHOT_KEY,encoded);snapshotEncoded=encoded;snapshotDecoded=snapshot;return snapshot;}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
+      const archive=root.LeadIntelAccountCache;
+      if(archive.publishRecoverySnapshot){
+        const expectedPointer=root.localStorage.getItem(SNAPSHOT_KEY);
+        return archive.publishRecoverySnapshot(snapshot,{pointerKey:SNAPSHOT_KEY,expectedPointer,eligibleBaseline:isAcknowledgedBaseline,encodePointer:key=>JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key})}).then(key=>{
+          const pointer=JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key});
+          if(root.localStorage.getItem(SNAPSHOT_KEY)!==pointer)throw new Error('Recovery pointer changed while saving; local data was preserved');
+          snapshotEncoded=pointer;snapshotDecoded=snapshot;return snapshot;
+        });
+      }
       return root.LeadIntelAccountCache.saveRecoverySnapshot(snapshot).then(key=>{
         const current=readSnapshot();if(current?.server_synced&&current.workspace_id===snapshot.workspace_id&&current.server_version>snapshot.server_version)return current;
         const pointer=JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key});
@@ -168,6 +179,40 @@
     const activation=isObject(main.websiteActivation)?main.websiteActivation:{};const sources=Array.isArray(main.scrapedSources)?main.scrapedSources:[];const source=sources.find(item=>item?.type==="website"&&String(item?.text||"").trim());
     if(activation.status!=="active"||!activation.url||!source)return null;
     return {status:"active",url:activation.url,title:activation.title||source.title||"",description:activation.description||"",activatedAt:activation.activatedAt||"",contentChars:Number(activation.contentChars)||String(source.text||"").length,source:{type:"website",url:activation.url,title:activation.title||source.title||"",text:String(source.text||""),status:"ready"}};
+  }
+  function isAcknowledgedBaseline(record){
+    // This predicate permits retirement only of an exact acknowledged baseline,
+    // never a browser draft or a richer local copy of a compact cloud payload.
+    try{
+      const snapshot=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(record)||record;
+      if(!isObject(snapshot)||snapshot.schema_version!==1||snapshot.server_synced!==true||typeof snapshot.workspace_id!=="string"||!snapshot.workspace_id||!Number.isSafeInteger(snapshot.server_version)||snapshot.server_version<0||!isObject(snapshot.server_payload)||!isObject(snapshot.data))return false;
+      const payload=root.LeadIntelStateBudget?.restoreFromSync?.(snapshot.server_payload)||snapshot.server_payload;
+      if(!isObject(payload))return false;
+      const empty=value=>value===undefined||value===null||value===""||Array.isArray(value)&&value.length===0||isObject(value)&&Object.keys(value).length===0;
+      const knownSections=['main','discovery','outreach','delivery','meta'];
+      if(Object.entries(payload).some(([key,value])=>!knownSections.includes(key)&&!empty(value)))return false;
+      for(const key of knownSections)if(payload[key]!==undefined&&!isObject(payload[key]))return false;
+      if(Object.entries(payload.meta||{}).some(([key,value])=>!['discovery','persistence'].includes(key)&&!empty(value)))return false;
+      if(payload.meta?.discovery!==undefined&&!isObject(payload.meta.discovery))return false;
+      if(payload.meta?.persistence!==undefined&&(!isObject(payload.meta.persistence)||Object.keys(payload.meta.persistence).some(key=>key!=='explicit_saved')||payload.meta.persistence.explicit_saved!==undefined&&typeof payload.meta.persistence.explicit_saved!=='boolean'))return false;
+      const canonical=value=>{
+        if(value===null||typeof value==='string'||typeof value==='boolean')return value;
+        if(typeof value==='number'&&Number.isFinite(value))return value;
+        if(Array.isArray(value))return value.map(canonical);
+        if(!isObject(value)||Object.prototype.toString.call(value)!=='[object Object]'||typeof value.format==='string'&&value.format.startsWith('leadintel-'))throw new Error('Unrecognized baseline value');
+        return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));
+      };
+      const expected={leadintel_customer_v2_state:payload.main,leadintel_customer_v2_discovery:payload.discovery,leadintel_customer_v2_outreach:payload.outreach,leadintel_customer_v2_delivery:payload.delivery,leadintel_customer_v2_discovery_meta:payload.meta?.discovery,leadintel_customer_v2_website_activation_v1:buildActivationRecord(payload.main||{})};
+      for(const key of new Set([...Object.keys(expected),...Object.keys(snapshot.data)])){
+        const raw=snapshot.data[key];if(raw!==undefined&&typeof raw!=='string')return false;
+        const local=raw===undefined||raw===""?undefined:JSON.parse(raw);
+        if(!Object.hasOwn(expected,key)){if(!empty(local))return false;continue;}
+        const acknowledged=expected[key];
+        if(empty(local)&&empty(acknowledged))continue;
+        if(JSON.stringify(canonical(local))!==JSON.stringify(canonical(acknowledged)))return false;
+      }
+      return true;
+    }catch{return false;}
   }
   function snapshotFromServerPayload(payload={},options={}){
     if(!isObject(payload))return null;
@@ -308,5 +353,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);
