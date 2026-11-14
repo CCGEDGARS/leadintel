@@ -391,3 +391,8 @@ test('production proof rejects missing contact button styles',async()=>{
 test('production proof rejects returning browsers without recovery storage v2 loader',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore();const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'archive-v2-cache',fetchImpl:productionFetch({customerHtml:shell.replaceAll('browser-recovery=20261114-v3','browser-recovery=old'),discoveryUi:boundedDiscoveryRuntime}),nonce:'stale-archive-v2'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('browser-recovery-v2-returning-entry')));
 });
+
+
+test('production proof rejects a stale archive reference proof reader',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore();const normal=productionFetch({customerHtml:shell,discoveryUi:boundedDiscoveryRuntime});const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'archive-reference-v2',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/account-cache.js'?response({text:fs.readFileSync(path.join(root,'customer/account-cache.js'),'utf8').replaceAll('leadintel-account-archive-v2-pointer-json-v2','old-reference-proof')}):normal(url),nonce:'stale-archive-reference-proof'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('browser-recovery-v2-runtime')));
+});

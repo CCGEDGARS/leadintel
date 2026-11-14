@@ -8295,7 +8295,8 @@
         "leadintel-archive-gzip-v2",
         "publishRecoverySnapshot",
         "readRecoveryPointer",
-        "data-archive-storage-diagnostics"
+        "data-archive-storage-diagnostics",
+        "leadintel-account-archive-v2-pointer-json-v2"
       ]
     },
     {
@@ -8325,7 +8326,8 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "browser-recovery=20261114-v3"
+        "browser-recovery=20261114-v3",
+        "archive-reference=20261114-v4"
       ]
     }
   ],

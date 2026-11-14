@@ -97,9 +97,23 @@
   }
   async function verifiedArchiveIndex(frame){
     const index=frame?.index;
-    if(frame?.format!==ARCHIVE_GZIP_FORMAT||!index||index.version!==1||index.consumer!=='leadintel-account-archive-v2'||typeof index.referencesComplete!=='boolean'||!Array.isArray(index.references)||index.references.length>1000||!index.references.every(key=>typeof key==='string'&&key.length<=2048&&key.startsWith(SNAPSHOT_PREFIX))||byteLength(JSON.stringify(index))>256*1024||!Number.isSafeInteger(frame.decodedBytes)||frame.decodedBytes<0||frame.decodedBytes>MAX_ARCHIVE_BYTES||Object.prototype.toString.call(frame.data)!=='[object ArrayBuffer]')return null;
+    if(frame?.format!==ARCHIVE_GZIP_FORMAT||!index||index.version!==2||index.consumer!=='leadintel-account-archive-v2-pointer-json-v2'||typeof index.referencesComplete!=='boolean'||!Array.isArray(index.references)||index.references.length>1000||!index.references.every(key=>typeof key==='string'&&key.length<=2048&&key.startsWith(SNAPSHOT_PREFIX))||byteLength(JSON.stringify(index))>256*1024||!Number.isSafeInteger(frame.decodedBytes)||frame.decodedBytes<0||frame.decodedBytes>MAX_ARCHIVE_BYTES||Object.prototype.toString.call(frame.data)!=='[object ArrayBuffer]')return null;
     if(index.baseline!==null&&(!index.baseline||typeof index.baseline.workspaceId!=='string'||!Number.isSafeInteger(index.baseline.version)||index.baseline.version<0))return null;
     return frame.indexHash&&await archiveIndexHash(frame,index)===frame.indexHash?index:null;
+  }
+  async function attachArchiveIndex(frame,text,eligibleBaseline){
+    if(root.crypto?.subtle){const record=JSON.parse(text),references=new Set(),referencesComplete=pointerReferences(record,references),baseline=eligibleBaseline?.(record)===true&&typeof record.workspace_id==='string'&&record.workspace_id.length<=512&&Number.isSafeInteger(record.server_version)?{workspaceId:record.workspace_id,version:record.server_version}:null;
+      const bounded=[...references].filter(key=>key.length<=2048).sort().slice(0,1000);
+      frame.index={version:2,consumer:'leadintel-account-archive-v2-pointer-json-v2',referencesComplete:referencesComplete&&bounded.length===references.size,references:bounded,baseline};
+      if(byteLength(JSON.stringify(frame.index))>256*1024){frame.index.references=[];frame.index.referencesComplete=false;}
+      frame.indexHash=await archiveIndexHash(frame,frame.index);
+    }
+    return frame;
+  }
+  function sameArchiveValue(current,previous){
+    if(typeof previous==='string')return current===previous;
+    if(current?.format!==ARCHIVE_GZIP_FORMAT||previous?.format!==ARCHIVE_GZIP_FORMAT||current.decodedBytes!==previous.decodedBytes||current.indexHash!==previous.indexHash||JSON.stringify(current.index)!==JSON.stringify(previous.index)||current.data?.byteLength!==previous.data?.byteLength)return false;
+    const a=new Uint8Array(current.data),b=new Uint8Array(previous.data);return a.every((value,index)=>value===b[index]);
   }
   async function encodeArchiveValue(text,eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline){
     if(!root.CompressionStream||!root.DecompressionStream||!root.Blob||!root.Response||byteLength(text)>MAX_ARCHIVE_BYTES)return text;
@@ -109,13 +123,7 @@
     const decoded=await decodeArchiveValue(frame,true);
     // JSON serialization is the exact record representation written by callers.
     if(decoded!==text)throw archiveError(null,'archive_write');
-    if(root.crypto?.subtle){const record=JSON.parse(text),references=new Set(),referencesComplete=pointerReferences(record,references),baseline=eligibleBaseline?.(record)===true&&typeof record.workspace_id==='string'&&record.workspace_id.length<=512&&Number.isSafeInteger(record.server_version)?{workspaceId:record.workspace_id,version:record.server_version}:null;
-      const bounded=[...references].filter(key=>key.length<=2048).sort().slice(0,1000);
-      frame.index={version:1,consumer:'leadintel-account-archive-v2',referencesComplete:referencesComplete&&bounded.length===references.size,references:bounded,baseline};
-      if(byteLength(JSON.stringify(frame.index))>256*1024){frame.index.references=[];frame.index.referencesComplete=false;}
-      frame.indexHash=await archiveIndexHash(frame,frame.index);
-    }
-    return frame;
+    return attachArchiveIndex(frame,text,eligibleBaseline);
   }
   async function rawArchiveValue(key){let request;await archiveTransaction('readonly',store=>{request=store.get(key);});return request.result;}
   async function archiveTransaction(mode,operation){
@@ -181,7 +189,12 @@
     if(--budget.remaining<0)return false;
     const serialized=typeof value==='string'&&/^[\s]*[\[{]/.test(value);
     if(depth>30)return !serialized&&(!value||typeof value!=='object');
-    if(typeof value==='string'){if(!serialized)return true;const decoded=parse(value);return decoded!==null&&pointerReferences(decoded,refs,depth+1,budget);}
+    if(typeof value==='string'){if(!serialized)return true;const decoded=parse(value);
+      // Freeform source excerpts often start with Markdown '[' or '{'. A
+      // non-JSON string cannot be an operational JSON pointer; keep a hold only
+      // when it actually contains our literal snapshot-key namespace.
+      return decoded===null?!value.includes(SNAPSHOT_PREFIX):pointerReferences(decoded,refs,depth+1,budget);
+    }
     if(!value||typeof value!=='object')return true;
     if(POINTER_FORMATS.has(value.format)&&typeof value.key==='string'&&value.key.startsWith(SNAPSHOT_PREFIX))refs.add(value.key);
     if(value.format==='leadintel-archive-pending-v2'&&typeof value.key==='string')refs.add(value.key);
@@ -222,19 +235,21 @@
   }
   async function compactArchivesLocked({eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline}={}){
     if(!compressionCursorLoaded){const state=parse(await rawArchiveValue(ARCHIVE_MAINTENANCE));if(Number.isSafeInteger(state?.compressionCursor)&&state.compressionCursor>=0)compressionCursor=state.compressionCursor;compressionCursorLoaded=true;}
-    const inventory=await archiveInventory(eligibleBaseline);let compressed=0,reclaimed=0,savedBytes=0,compressionBytes=0,compressionQuotaFailures=0,attempted=0;
+    const inventory=await archiveInventory(eligibleBaseline);let compressed=0,reindexed=0,reindexFailures=0,reclaimed=0,savedBytes=0,compressionBytes=0,compressionQuotaFailures=0,attempted=0;
     // Same-key replacement never discards a unique record. Compression and its
     // round-trip verification happen outside the short compare-and-put txn.
     const compressionKeys=inventory.keys.filter(key=>!String(key).startsWith(SNAPSHOT_PIN_PREFIX)&&key!==ARCHIVE_MAINTENANCE);
     for(let visited=0;visited<Math.min(compressionKeys.length,100)&&attempted<20;visited++){
       const key=compressionKeys[compressionCursor++%compressionKeys.length];
-      const previous=await rawArchiveValue(key);if(typeof previous!=='string'||byteLength(previous)<65536||parse(previous)===null)continue;
+      const previous=await rawArchiveValue(key),rawText=typeof previous==='string',needsIndex=previous?.format===ARCHIVE_GZIP_FORMAT&&root.crypto?.subtle&&!await verifiedArchiveIndex(previous);
+      if(rawText?(byteLength(previous)<65536||parse(previous)===null):!needsIndex)continue;
       attempted++;
-      compressionBytes+=byteLength(previous);if(compressionBytes>MAX_ARCHIVE_BYTES)break;
-      const encoded=await encodeArchiveValue(previous,eligibleBaseline);if(typeof encoded==='string')continue;
+      const workBytes=rawText?byteLength(previous):Number(previous.decodedBytes);if(!Number.isSafeInteger(workBytes)||workBytes<0||workBytes>MAX_ARCHIVE_BYTES)continue;
+      compressionBytes+=workBytes;if(compressionBytes>MAX_ARCHIVE_BYTES)break;
+      let encoded;try{encoded=rawText?await encodeArchiveValue(previous,eligibleBaseline):await attachArchiveIndex({...previous},await decodeArchiveValue(previous,true),eligibleBaseline);}catch(cause){if(!rawText){reindexFailures++;continue;}throw cause;}if(typeof encoded==='string')continue;
       let changed=false;
-      try{await archiveTransaction('readwrite',(store,fail)=>{const request=store.get(key);request.onsuccess=()=>{if(request.result===previous){try{store.put(encoded,key);changed=true;}catch(cause){fail(cause);}}};});}catch(cause){if(cause?.name==='QuotaExceededError'||cause?.category==='quota'){compressionQuotaFailures++;continue;}throw cause;}
-      if(changed){compressed++;savedBytes+=byteLength(previous)-byteLength(encoded);}
+      try{await archiveTransaction('readwrite',(store,fail)=>{const request=store.get(key);request.onsuccess=()=>{if(sameArchiveValue(request.result,previous)){try{store.put(encoded,key);changed=true;}catch(cause){fail(cause);}}};});}catch(cause){if(cause?.name==='QuotaExceededError'||cause?.category==='quota'){compressionQuotaFailures++;continue;}throw cause;}
+      if(changed){if(rawText)compressed++;else reindexed++;savedBytes+=Math.max(0,byteLength(previous)-byteLength(encoded));}
     }
     // Without an origin-wide lock, or with incomplete roots, collection is
     // deliberately disabled. Compression remains a lossless CAS operation.
@@ -245,12 +260,12 @@
         const raw=await rawArchiveValue(candidate.key),size=raw?.format===ARCHIVE_GZIP_FORMAT?raw.decodedBytes:byteLength(raw);if(gcDecodedBytes+size>MAX_ARCHIVE_BYTES)break;gcDecodedBytes+=size;const record=await decodeArchiveValue(raw);
         if(eligibleBaseline(record)!==true||record.workspace_id!==candidate.workspaceId||record.server_version!==candidate.version)continue;
         let removed=false;
-        await archiveTransaction('readwrite',store=>{const request=store.get(candidate.key);request.onsuccess=()=>{const current=request.result;let same=typeof raw==='string'?current===raw:current?.format===ARCHIVE_GZIP_FORMAT&&current.decodedBytes===raw.decodedBytes&&current.indexHash===raw.indexHash&&JSON.stringify(current.index)===JSON.stringify(raw.index)&&current.data?.byteLength===raw.data?.byteLength;if(same&&typeof raw!=='string'){const a=new Uint8Array(current.data),b=new Uint8Array(raw.data);same=a.every((value,index)=>value===b[index]);}if(same&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){store.delete(candidate.key);removed=true;}};});
+        await archiveTransaction('readwrite',store=>{const request=store.get(candidate.key);request.onsuccess=()=>{if(sameArchiveValue(request.result,raw)&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){store.delete(candidate.key);removed=true;}};});
         if(removed){reclaimed++;savedBytes+=byteLength(raw);}
       }
     }
-    let cursorPersisted=false;if(compressed||reclaimed){try{await archiveTransaction('readwrite',store=>store.put(JSON.stringify({format:'leadintel-archive-maintenance-v2',compressionCursor}),ARCHIVE_MAINTENANCE));cursorPersisted=true;}catch{}}
-    return publishArchiveDiagnostics(await archiveInventory(eligibleBaseline),{compressionAttemptedRecordsThisPass:attempted,compressedRecordsThisPass:compressed,reclaimedRecordsThisPass:reclaimed,savedBytesThisPass:savedBytes,compressionQuotaFailures,cursorPersisted});
+    let cursorPersisted=false;if(compressed||reindexed||reclaimed){try{await archiveTransaction('readwrite',store=>store.put(JSON.stringify({format:'leadintel-archive-maintenance-v2',compressionCursor}),ARCHIVE_MAINTENANCE));cursorPersisted=true;}catch{}}
+    return publishArchiveDiagnostics(await archiveInventory(eligibleBaseline),{compressionAttemptedRecordsThisPass:attempted,compressedRecordsThisPass:compressed,reindexedRecordsThisPass:reindexed,reindexFailures,reclaimedRecordsThisPass:reclaimed,savedBytesThisPass:savedBytes,compressionQuotaFailures,cursorPersisted});
   }
   async function compactRecoveryStorage(options={}){await archiveReady();return archiveLock(()=>compactArchivesLocked(options));}
   async function getRecoveryStorageDiagnostics({eligibleBaseline=root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline}={}){await archiveReady();return archiveLock(async()=>publishArchiveDiagnostics(await archiveInventory(eligibleBaseline)));}

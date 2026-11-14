@@ -76,3 +76,12 @@ Recovery snapshots previously allocated a new UUID record on every overflow save
 Migration: open archive schema v2, rotate the same-account context ticket before collection to fence paused older readers/writers, keep all active keys and existing records, and support legacy raw and new compressed values. Existing connections close on versionchange. No server or customer-record migration is needed. Rollback must retain the v2-compatible archive reader and fencing; reverting to a cached v1-only reader is not a safe rollback. Disable collection/publication optimization while keeping the compatible reader if recovery is needed. Missing reliable locking means collection is skipped.
 
 Acceptance still requires the exact new release proof plus actual authenticated save, reload, retained company/buyer evidence and downstream use. Unit/controlled persistence success alone cannot establish that the native browser quota recovered.
+
+
+## Native recovery and corrected quota interpretation
+
+On 7413d677 the real browser completed conflict recovery and showed Saved automatically to LeadIntel / Synced to LeadIntel. Companies -> Buyers reopened the retained company with all ten saved buyers; a further reload retained them and the saved status. This does not establish completion of their unfinished contact research. No paid contact control was used.
+
+Correct an earlier interpretation: the native rejection was QuotaExceededError on the archive write, but after compression the origin estimate reported about 27 MB used against 10.76 GB capacity. Whole-origin exhaustion is therefore unproven. The demonstrated repair is successful smaller lossless backup writes; the exact browser rejection boundary is not known. Native diagnostic inventory had 14 records, including 13 gzip values, zero pending pins and no unknown records.
+
+Native retention remained disabled by incomplete_refs. Offline inspection of the app-exported recovery showed only freeform source text that begins with a bracket/brace and is not valid JSON: 584 parse failures, no snapshot-key prefix, no traversal-depth or node-budget failure. Such non-parsable text without an archive key is not an operational JSON pointer. Keep malformed text containing an archive-key prefix conservative, and retain valid serialized/deep references. Version and retrofit the proof index under the existing bounded cursor; old incomplete proof metadata must not remain permanently authoritative after this correction. Preserve compressed content exactly during same-key reindexing.

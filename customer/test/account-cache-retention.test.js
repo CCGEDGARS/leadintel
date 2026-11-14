@@ -71,7 +71,7 @@ test('v2 migration preserves drafts but fences a paused v1 writer after its comm
 test('incomplete deep or malformed reference walks disable collection; serialized array references survive',async()=>{
  for(const kind of ['deep','array','malformed']){
   const r=setup({compression:false});await r.api.pending;await write(r.indexedDB,PREFIX+'old',JSON.stringify(baseline(1)));await write(r.indexedDB,PREFIX+'current',JSON.stringify(baseline(2)));r.values.set(PTR,pointer(PREFIX+'current'));
-  let ref=JSON.parse(pointer(PREFIX+'old'));if(kind==='deep')for(let i=0;i<40;i++)ref={nested:ref};if(kind==='array')ref=JSON.stringify([ref]);if(kind==='malformed')ref='[{unknown serialized recovery';
+  let ref=JSON.parse(pointer(PREFIX+'old'));if(kind==='deep')for(let i=0;i<40;i++)ref={nested:ref};if(kind==='array')ref=JSON.stringify([ref]);if(kind==='malformed')ref='[{"key":"'+PREFIX+'old"';
   await write(r.indexedDB,PREFIX+'unknown',JSON.stringify({data:ref}));const diagnostic=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});
   assert.ok(await raw(r.indexedDB,PREFIX+'old'),kind);assert.equal(diagnostic.reclaimedRecordsThisPass,0);if(kind!=='array')assert.equal(diagnostic.measurementComplete,false);
  }
@@ -146,4 +146,45 @@ test('an indexed acknowledged-shaped record outside the owned snapshot namespace
  const retained=await raw(r.indexedDB,unknownKey);assert.ok(retained,'unknown-namespace data must survive indexed collection');
  const text=await new Response(new Blob([retained.data]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
  const digest=value=>require('node:crypto').createHash('sha256').update(value).digest('hex');assert.equal(digest(text),digest(JSON.stringify(record)),'retained foreign data stays byte-exact');assert.ok(await raw(r.indexedDB,currentKey));
+});
+
+function legacyReferenceFrame(record){
+ const text=JSON.stringify(record),compressed=require('node:zlib').gzipSync(text),frame={format:'leadintel-archive-gzip-v2',decodedBytes:Buffer.byteLength(text),data:Uint8Array.from(compressed).buffer,index:{version:1,consumer:'leadintel-account-archive-v2',referencesComplete:false,references:[],baseline:eligible(record)?{workspaceId:record.workspace_id,version:record.server_version}:null}};
+ frame.indexHash=require('node:crypto').createHash('sha256').update(String(frame.decodedBytes)+'\0'+JSON.stringify(frame.index)).update(compressed).digest('hex');return frame;
+}
+
+test('freeform Markdown and JSON-like source text cannot hold acknowledged-history collection without a literal snapshot namespace',async()=>{
+ const r=setup({compression:false});await r.api.pending;
+ const sources={markdown:'[Official source](https://source.example/report)',fragment:'{Published announcement: planned expansion',arrayTitle:'[Research report] opening this year'};
+ await write(r.indexedDB,PREFIX+'old',JSON.stringify(baseline(1,sources)));await write(r.indexedDB,PREFIX+'new',JSON.stringify(baseline(2,sources)));r.values.set(PTR,pointer(PREFIX+'new'));
+ const result=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.equal(result.measurementComplete,true);assert.equal(result.reclaimedRecordsThisPass,1);assert.equal(await raw(r.indexedDB,PREFIX+'old'),undefined);
+});
+
+test('legacy gzip reference proofs are retrofitted in place with identical gzip bytes and exact decoded content',async()=>{
+ const r=setup();await r.api.pending;const record=baseline(1,{source:'[Official report](https://source.example/report)',text:'Source-backed evidence ā😀 '.repeat(5000)}),key=PREFIX+'legacy-proof',frame=legacyReferenceFrame(record);
+ await write(r.indexedDB,key,frame);r.values.set(PTR,pointer(key));
+ const result=await r.api.compactRecoveryStorage({eligibleBaseline:eligible}),updated=await raw(r.indexedDB,key);assert.equal(result.reindexedRecordsThisPass,1);assert.equal(updated.index.version,2);assert.equal(updated.index.consumer,'leadintel-account-archive-v2-pointer-json-v2');assert.equal(updated.index.referencesComplete,true);
+ assert.deepEqual(Buffer.from(updated.data),Buffer.from(frame.data));assert.equal(updated.decodedBytes,frame.decodedBytes);assert.equal(JSON.stringify(await r.api.readRecoverySnapshot(key)),JSON.stringify(record));
+ await publish(r,baseline(2,record.data.value));await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.equal(await raw(r.indexedDB,key),undefined);
+});
+
+test('retrofit preserves incomplete malformed operational-pointer and deep-reference holds',async()=>{
+ const r=setup();await r.api.pending;await write(r.indexedDB,PREFIX+'old',JSON.stringify(baseline(1)));await write(r.indexedDB,PREFIX+'new',JSON.stringify(baseline(2)));r.values.set(PTR,pointer(PREFIX+'new'));
+ const record={schema_version:1,workspace_id:'w1',server_synced:false,data:{brokenPointer:'[{"key":"'+PREFIX+'old"',bulk:'Preserved data '.repeat(10000)}};const key=PREFIX+'legacy-broken';await write(r.indexedDB,key,legacyReferenceFrame(record));
+ const result=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.equal(result.reindexedRecordsThisPass,1);assert.equal((await raw(r.indexedDB,key)).index.referencesComplete,false);assert.equal(result.measurementComplete,false);assert.ok(await raw(r.indexedDB,PREFIX+'old'));assert.equal(JSON.stringify(await r.api.readRecoverySnapshot(key)),JSON.stringify(record));
+});
+
+test('retrofit CAS cannot replace a different record published while the old gzip was decoding',async()=>{
+ const r=setup();await r.api.pending;const key=PREFIX+'legacy-race',record={workspace_id:'w1',data:{text:'[Official](https://source.example) '+ 'safe '.repeat(20000)}};await write(r.indexedDB,key,legacyReferenceFrame(record));let calls=0,release,started;const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>started=resolve),NativeBlob=r.root.Blob;
+ r.root.Blob=class extends NativeBlob{async text(){const value=await super.text();if(++calls===2){started();await gate;}return value;}};
+ const pending=r.api.compactRecoveryStorage();await ready;const replacement=JSON.stringify({workspace_id:'w1',data:{draft:'A newer unique manual edit'}});await write(r.indexedDB,key,replacement);release();await pending;assert.equal(await raw(r.indexedDB,key),replacement);
+});
+
+test('bounded retrofit resumes beyond a 64 MB legacy-gzip prefix and eventually restores normal collection',async()=>{
+ const r=setup();await r.api.pending;const value={source:'[Official report](https://source.example)',bulk:'Evidence '.repeat(500000)};
+ for(let version=1;version<=10;version++)await write(r.indexedDB,PREFIX+'legacy-'+String(version).padStart(2,'0'),legacyReferenceFrame(baseline(version,value)));
+ r.values.set(PTR,pointer(PREFIX+'legacy-10'));const first=await r.api.compactRecoveryStorage({eligibleBaseline:eligible});assert.ok(first.reindexedRecordsThisPass>0);assert.ok(first.reindexedRecordsThisPass<10);assert.equal(first.cursorPersisted,true);
+ const reopened=setup({indexedDB:r.indexedDB,values:r.values,sharedLocks:r.root.navigator.locks});await reopened.api.pending;let reclaimed=first.reclaimedRecordsThisPass;
+ for(let pass=0;pass<4;pass++){const result=await reopened.api.compactRecoveryStorage({eligibleBaseline:eligible});reclaimed+=result.reclaimedRecordsThisPass;assert.ok(result.compressionAttemptedRecordsThisPass<=20);}
+ assert.equal(reclaimed,9);const current=await raw(r.indexedDB,PREFIX+'legacy-10');assert.equal(current.index.version,2);assert.equal(current.index.referencesComplete,true);assert.equal((await reopened.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record.server_version,10);assert.equal((await reopened.api.getRecoveryStorageDiagnostics()).measurementComplete,true);
 });
