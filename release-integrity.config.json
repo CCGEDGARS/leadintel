@@ -6047,8 +6047,8 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "strategySignature:window.LeadIntelStrategyIntegrity?.signature(main)",
-        "strategyCurrent:window.LeadIntelStrategyIntegrity?.status(main)?.current"
+        "strategySignature:strategyStatus?.signature||window.LeadIntelStrategyIntegrity?.signature(main)",
+        "strategyCurrent:strategyStatus?.current"
       ]
     },
     {
