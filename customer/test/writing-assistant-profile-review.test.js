@@ -68,3 +68,12 @@ test('invalid writing and unavailable current context cannot clear the profile r
  }
 });
 
+test('explicit Continue can prepare an unchanged legacy branded approval for the new rendering policy',async()=>{
+ const h=fixture();h.item().contextNeedsRefresh=false;h.item().reapprovalRequired=false;h.item().approved=true;h.item().brandSnapshot={status:'ready'};
+ assert.equal(h.run.isSaved(h.draft,'original',h.assistant),false,'Continue must record an explicit new review rather than retain an older rendering approval');
+ await h.run.use(h.draft,'original',h.assistant);
+ assert.equal(h.saved().approved,false);assert.equal(h.saved().drafts.emailBody,h.draft.message);assert.deepEqual(h.saved().messageStudioDraft.writingAssistant,h.assistant);assert.deepEqual(h.saved().messageStudioDraft.eventWritingDrafts,[h.event]);
+ const current=fixture();current.item().contextNeedsRefresh=false;current.item().reapprovalRequired=false;current.item().approved=true;current.item().brandSnapshot={emailRenderVersion:2};
+ assert.equal(current.run.isSaved(current.draft,'original',current.assistant),true,'the current rendering approval is preserved');
+});
+

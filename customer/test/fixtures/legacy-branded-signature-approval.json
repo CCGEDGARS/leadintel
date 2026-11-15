@@ -1,0 +1,152 @@
+{
+  "description": "Synthetic legacy approval with the former appended identity footer; rendering must remain byte-identical after upgrades.",
+  "item": {
+    "domain": "buyer.example",
+    "selectedPersonId": "buyer",
+    "company": "Buyer AB",
+    "dossier": {
+      "company": "Buyer AB",
+      "domain": "buyer.example",
+      "people": [
+        {
+          "id": "buyer",
+          "name": "Buyer Person",
+          "email": "buyer@example.com"
+        }
+      ],
+      "evidence": [],
+      "hypotheses": []
+    },
+    "drafts": {
+      "commercialContext": {},
+      "emailSubject": "A grounded subject",
+      "emailBody": "Hi Alex,\n\nCould we discuss the supplied drawings?\n\nBest regards,\nAnna Seller\nSellerCo",
+      "linkedinMessage": "A grounded LinkedIn message",
+      "callOpener": "Call opener",
+      "followUp": "Follow-up",
+      "objectionReply": "Reply",
+      "tone": "consultative"
+    },
+    "approved": true,
+    "campaignScenario": {
+      "id": "core",
+      "summary": "Default campaign",
+      "language": "en",
+      "resolvedLanguage": "en",
+      "languageSource": "manual"
+    },
+    "localizationStatus": "native",
+    "localizationApprovalBlocked": false,
+    "localizationProvenance": {
+      "provider": "built-in",
+      "model": "LeadIntel native templates",
+      "language": "en",
+      "selectionSource": "manual"
+    },
+    "approvedEventSnapshot": null,
+    "approvedSource": {
+      "commercialContext": {},
+      "emailSubject": "A grounded subject",
+      "emailBody": "Hi Alex,\n\nCould we discuss the supplied drawings?\n\nBest regards,\nAnna Seller\nSellerCo",
+      "linkedinMessage": "A grounded LinkedIn message",
+      "callOpener": "Call opener",
+      "followUp": "Follow-up",
+      "objectionReply": "Reply",
+      "tone": "consultative"
+    },
+    "brandSnapshot": {
+      "schemaVersion": 1,
+      "status": "ready",
+      "revision": 7,
+      "companyDisplayName": "SellerCo",
+      "senderName": "Anna Seller",
+      "senderTitle": "",
+      "website": "https://seller.example/",
+      "phone": "+371 20000000",
+      "email": "",
+      "linkedinUrl": "https://www.linkedin.com/in/anna-seller",
+      "meetingPlatform": "zoom",
+      "primaryColor": "#0b5d4b",
+      "signatureText": "",
+      "legalFooter": "Confidential commercial communication.",
+      "postalAddress": "Riga, Latvia",
+      "options": {
+        "includeLogo": true,
+        "includeHeadshot": false,
+        "includeBanner": false
+      },
+      "assets": {
+        "logo": {
+          "id": "lllllllllllllllllllllllllllllllllllllllllll",
+          "url": "https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/lllllllllllllllllllllllllllllllllllllllllll",
+          "mimeType": "image/png",
+          "width": 320,
+          "height": 80,
+          "altText": "SellerCo logo",
+          "updatedAt": "2026-09-15T20:00:00.000Z"
+        },
+        "headshot": null,
+        "banner": null
+      },
+      "updatedAt": "2026-09-15T20:00:00.000Z"
+    },
+    "campaignSnapshot": {
+      "id": "core",
+      "segment": "",
+      "offer": "",
+      "buyerRole": "",
+      "trigger": "",
+      "valueProposition": "",
+      "objective": "",
+      "cta": "",
+      "tone": "consultative",
+      "language": "en",
+      "status": "draft",
+      "resolvedLanguage": "en",
+      "languageSource": "manual",
+      "summary": "Default campaign",
+      "profileFingerprint": "",
+      "version": 1,
+      "updatedAt": ""
+    },
+    "localizationSnapshot": {
+      "provider": "built-in",
+      "model": "LeadIntel native templates",
+      "language": "en",
+      "selectionSource": "manual"
+    },
+    "approvedEmail": {
+      "subject": "A grounded subject",
+      "textBody": "Hi Alex,\n\nCould we discuss the supplied drawings?\n\nBest regards,\nAnna Seller\nSellerCo\n\nAnna Seller\nSellerCo\n+371 20000000\nhttps://seller.example/\nLinkedIn: https://www.linkedin.com/in/anna-seller\nRiga, Latvia\n\nConfidential commercial communication.",
+      "htmlBody": "<!doctype html><html><body style=\"margin:0;padding:0;background:#ffffff;color:#1f2933;font-family:Arial,Helvetica,sans-serif;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;background:#ffffff;\"><tr><td align=\"center\"><table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;max-width:600px;\"><tr><td style=\"padding:24px;\"><img src=\"https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/lllllllllllllllllllllllllllllllllllllllllll\" alt=\"SellerCo logo\" style=\"display:block;width:140px;height:35px;max-width:140px;max-height:48px;border:0;margin:0 0 20px 0;\"><div style=\"font-size:16px;line-height:1.55;color:#1f2933;\">Hi Alex,<br><br>Could we discuss the supplied drawings?<br><br>Best regards,<br>Anna Seller<br>SellerCo</div><div style=\"margin-top:24px;padding-top:16px;border-top:2px solid #0b5d4b;font-size:14px;line-height:1.45;color:#364152;\"><div><strong style=\"color:#1f2933;\">Anna Seller</strong></div><div>SellerCo</div><div><a href=\"tel:+37120000000\" style=\"color:#0b5d4b;text-decoration:underline;\">+371 20000000</a></div><div><a href=\"https://seller.example/\" style=\"color:#0b5d4b;text-decoration:underline;\">https://seller.example/</a></div><div><a href=\"https://www.linkedin.com/in/anna-seller\" style=\"color:#0b5d4b;text-decoration:underline;\">LinkedIn: https://www.linkedin.com/in/anna-seller</a></div><div>Riga, Latvia</div></div><div style=\"margin-top:20px;font-size:11px;line-height:1.4;color:#667085;\">Confidential commercial communication.</div></td></tr></table></td></tr></table></body></html>"
+    },
+    "approvalSchemaVersion": 2,
+    "approvalBrandMode": "branded",
+    "brandRevision": 7,
+    "approvedAt": "2026-09-15T21:00:00.000Z",
+    "reapprovalRequired": false,
+    "error": "",
+    "approvalAuthority": {
+      "version": 2,
+      "recipient": {
+        "id": "buyer",
+        "name": "Buyer Person",
+        "publicName": "Buyer Person",
+        "suppliedName": "Buyer Person",
+        "title": "",
+        "email": "buyer@example.com",
+        "linkedin": "",
+        "company": "",
+        "companyDomain": "",
+        "contactId": "",
+        "identityKey": "scope-2a1mlux7n48"
+      },
+      "contextKey": "scope-oxaznidjw6"
+    }
+  },
+  "email": {
+    "subject": "A grounded subject",
+    "textBody": "Hi Alex,\n\nCould we discuss the supplied drawings?\n\nBest regards,\nAnna Seller\nSellerCo\n\nAnna Seller\nSellerCo\n+371 20000000\nhttps://seller.example/\nLinkedIn: https://www.linkedin.com/in/anna-seller\nRiga, Latvia\n\nConfidential commercial communication.",
+    "htmlBody": "<!doctype html><html><body style=\"margin:0;padding:0;background:#ffffff;color:#1f2933;font-family:Arial,Helvetica,sans-serif;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;background:#ffffff;\"><tr><td align=\"center\"><table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;max-width:600px;\"><tr><td style=\"padding:24px;\"><img src=\"https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/lllllllllllllllllllllllllllllllllllllllllll\" alt=\"SellerCo logo\" style=\"display:block;width:140px;height:35px;max-width:140px;max-height:48px;border:0;margin:0 0 20px 0;\"><div style=\"font-size:16px;line-height:1.55;color:#1f2933;\">Hi Alex,<br><br>Could we discuss the supplied drawings?<br><br>Best regards,<br>Anna Seller<br>SellerCo</div><div style=\"margin-top:24px;padding-top:16px;border-top:2px solid #0b5d4b;font-size:14px;line-height:1.45;color:#364152;\"><div><strong style=\"color:#1f2933;\">Anna Seller</strong></div><div>SellerCo</div><div><a href=\"tel:+37120000000\" style=\"color:#0b5d4b;text-decoration:underline;\">+371 20000000</a></div><div><a href=\"https://seller.example/\" style=\"color:#0b5d4b;text-decoration:underline;\">https://seller.example/</a></div><div><a href=\"https://www.linkedin.com/in/anna-seller\" style=\"color:#0b5d4b;text-decoration:underline;\">LinkedIn: https://www.linkedin.com/in/anna-seller</a></div><div>Riga, Latvia</div></div><div style=\"margin-top:20px;font-size:11px;line-height:1.4;color:#667085;\">Confidential commercial communication.</div></td></tr></table></td></tr></table></body></html>"
+  }
+}
