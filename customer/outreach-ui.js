@@ -12,7 +12,7 @@ import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=
 import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261107-v10&template-research=20261107-v1&character-contract=20261107-v1&messages-controls=20261108-v1&event-flow-ux=20261112-v1&recipient-refresh=20261115-v1';
 import './writing-workspace.js?v=20261023-v1&book-skills=20261027-v1&messages-reliability=20261031-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&storyselling=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
-import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1&character-contract=20261107-v1';
+import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1&character-contract=20261107-v1&event-booking=20261115-v1';
 import './writing-assistant-ui.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&assistant-contract=20261015-v2&startup-render=20261016-v2&app-dialogs=20261017-v1&writing-layout=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&writing-mentors=20261017-v1&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&manual-edit=20261024-v1&rich-text=20261025-v1&simple-writing=20261025-v1&storyselling=20261026-v1&story-style=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&main-action=20261030-v1&messages-reliability=20261031-v1';
 import './follow-up-assistant.js?v=20261013-v1&messages-reliability=20261031-v1';
 import './follow-up-assistant-ui.js?message-quality=20261027-v1&v=20261013-v1&messages-reliability=20261031-v1';
@@ -966,8 +966,8 @@ function installEventMessages(){
   generate:async(preview,instruction,{signal})=>{
    const captured=captureWritingAssistantContext(),workspace=crmBridge()?.workspace?.id;
    if(!captured.usable)throw Error('Confirm a buyer, load writing sources and finish pending operations first.');
-   const context={...captured.context,style:'original',appliedStyle:'event',language:'en',eventCampaign:preview.campaign,eventPurpose:preview.purpose,attendance:LeadIntelEventCampaigns.attendance(preview.campaign,preview.source.buyer,preview.attendance),seller:{...captured.context.seller,meetingPlatform:'',calendly:preview.campaign.bookingUrl||captured.context.seller.calendly},currentDraft:{subject:preview.draft.subject,message:preview.draft.message}};
-   const response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/writing-assistant/reply?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({instruction:'Create a complete event invitation draft. This is an in-person event meeting, not a remote call. Preserve the exact event name, dates, venue, stand/meeting point, sender, recipient and approved booking URL in the supplied invitation. Keep attendance conditional unless the supplied evidence confirms this person for this exact edition. A company listing does not confirm the person. Do not invent event facts, familiarity or claims. User request: '+instruction,history:[],context,sourceRefs:captured.sourceRefs}),signal});
+   const context={...captured.context,style:'original',appliedStyle:'event',language:'en',eventCampaign:preview.campaign,eventPurpose:preview.purpose,attendance:LeadIntelEventCampaigns.attendance(preview.campaign,preview.source.buyer,preview.attendance),seller:{...captured.context.seller,meetingPlatform:'',calendly:preview.campaign.bookingUrl||''},currentDraft:{subject:preview.draft.subject,message:preview.draft.message}};
+   const response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/writing-assistant/reply?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({instruction:'Create a complete event invitation draft. This is an in-person event meeting, not a remote call. Preserve the exact event name, dates, venue, stand/meeting point, sender, recipient and approved booking URL in the supplied invitation. When the event has no booking URL, ask the recipient to reply with availability; do not add a business web-call booking link. Keep attendance conditional unless the supplied evidence confirms this person for this exact edition. A company listing does not confirm the person. Do not invent event facts, familiarity or claims. User request: '+instruction,history:[],context,sourceRefs:captured.sourceRefs}),signal});
    const result=await response.json();if(!response.ok)throw Error(result.error||'Event writer unavailable');
    if(workspace!==crmBridge()?.workspace?.id)throw Error('Workspace changed. Your normal draft is preserved.');
    await globalThis.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:workspace}).assertGenerationCurrent(result.provenance);return result;
@@ -1083,6 +1083,7 @@ function captureWritingAssistantContext(){
  const item=currentItem(),studio=studioState(),state=messageEditor?.state();
  const facts=studioMessageContext(item,selectedCandidate()),base=globalThis.LeadIntelWritingAssistantContext.captureWritingContext({workspace:identity.workspaceId,item,candidate:selectedCandidate(),person:selectedContact(item),studio,facts,currentDraft:editorDraft(),refs:references,language:globalThis.LeadIntelMessageTranslations?.book?.(item||{})?.activeLanguage,usable:captureMessageAuthority().current()&&messageWorkspaceUsable()&&!buyerHandoffPending&&!state?.editing&&!state?.saving&&!state?.busy&&!state?.preview&&!subjectEditing&&!subjectBusy&&!studioGenerationBusy&&!messageTranslationBusy&&!messageFactResearchBusy&&!messageFlowBusy&&!originalScriptBusy&&!crmBridge()?.conflict});
  base.messageScope=globalThis.LeadIntelMessageEditor?.scope?.(identity.workspaceId,item,studio,{...facts,eventCampaign:null});
+ if(item?.contextNeedsRefresh||item?.reapprovalRequired)base.sourceAuthority=globalThis.LeadIntelOutreach.messageSourceAuthority(mainState(),outreach.messageStudio||{});
  base.context.writingContext='customer';base.scope=JSON.stringify([captureMessageAuthority().key,identity.userId,base.scope]);base.fingerprint=JSON.stringify(base.context);
  const channelContext=globalThis.LeadIntelChannelWorkspace?.capture(base)||base;return globalThis.LeadIntelInMail?.capture(channelContext)||channelContext;
 }
@@ -1116,7 +1117,10 @@ async function useAssistantDraft(draft,style,assistant=null){
  const context={...captured.context,maximumWords:null,currentDraft:draft};
  globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(draft,context);
  const item=currentItem(),studio=studioState();if(item.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,draft,studio.essentials,item.channel);
- let next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ if((item.contextNeedsRefresh||item.reapprovalRequired)&&(!captured.messageScope||!captured.sourceAuthority?.profileApproved||!captured.sourceAuthority?.strategyApproved))throw Error('Review and approve the current Profile and Strategy before accepting this working copy.');
+ // Continue accepts this exact copy in the current captured context. Retire the
+ // invalid approval package; ordinary Save/reopen must keep stale copies blocked.
+ let next=globalThis.LeadIntelOutreach.invalidateOutreachApproval(LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0}));
  // Continue explicitly accepts this validated working copy in the captured context.
  // An earlier template proposal must not keep it bound to superseded settings.
  delete next.messageStudioDraft.pendingTemplateUpdate;
@@ -1144,7 +1148,7 @@ function isAssistantDraftSaved(draft,style,assistant=null){
  const captured=item?.channel==='email'?captureWritingAssistantContext():null;
  const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captured.messageScope);
  const languageCurrent=captured?.context?.language!=='en'||info?.eventSnapshot||Boolean(item.campaignScenario?.language==='en'&&item.localizationProvenance?.language==='en'&&item.localizationProvenance.provider&&item.localizationProvenance.model&&item.localizationProvenance.selectionSource==='manual'&&['native','complete'].includes(item.localizationStatus));
- return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
+ return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!item?.contextNeedsRefresh&&!item?.reapprovalRequired&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
@@ -1584,19 +1588,19 @@ async function openMessageChannel(channel){
  try{const opened=await openBuyerScripts(choice);if(opened&&current()&&globalThis.LeadIntelChannelWorkspace?.phoneActive())await globalThis.LeadIntelChannelWorkspace.openChannel(channel);if(!opened&&current()){rollback();toast('This saved recipient needs confirmation in Buyers.');backToDiscovery();}return opened;}
  catch(error){if(current()){rollback();toast('Unable to reopen the saved message. Your drafts are preserved.');}return false;}finally{if(navigationRequest===messageChannelNavigationRequest)messageChannelNavigationBaseline=null;}
 }
-async function openBuyerScripts(choice){
+async function openBuyerScripts(choice,{navigate=true}={}){
  const editor=typeof messageEditor==='undefined'?null:messageEditor?.state();if(editor&&(editor.editing||editor.saving||editor.preview||editor.busy)){q('message-generation-status').textContent='Save or cancel the current edit before reopening a recipient. Your working text is preserved.';return false;}
  const operation=++buyerHandoffOperation;buyerHandoffRequest++;let timer;buyerHandoffPending=true;buyerHandoffError='';
  try{
   if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();
   const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{if(operation===buyerHandoffOperation)buyerHandoffRequest++;reject(Object.assign(Error('Recipient verification timed out. Your draft is preserved. Retry recipient check.'),{name:'TimeoutError'}));},30000);});
-  const opened=await Promise.race([openVerifiedBuyerScripts(choice),deadline]);
+  const opened=await Promise.race([openVerifiedBuyerScripts(choice,{navigate}),deadline]);
   if(operation===buyerHandoffOperation&&!opened)buyerHandoffError='The saved recipient could not be verified. Your draft is preserved. Retry the check or review the recipient in Buyers.';
   return opened;
  }catch(error){if(operation===buyerHandoffOperation)buyerHandoffError=error.message||'Recipient verification failed. Your draft is preserved.';if(error.name==='TimeoutError')return false;throw error;}
  finally{clearTimeout(timer);if(operation===buyerHandoffOperation){buyerHandoffPending=false;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();window.LeadIntelPageQuality?.refresh('messages');}}
 }
-async function openVerifiedBuyerScripts(choice){
+async function openVerifiedBuyerScripts(choice,{navigate=true}={}){
  if(!choice||!['email','linkedin'].includes(choice.channel)||choice.workspaceId!==crmBridge()?.workspace?.id)return false;
  const editorAtStart=typeof messageEditor==='undefined'?null:messageEditor?.state();if(editorAtStart&&(editorAtStart.editing||editorAtStart.saving||editorAtStart.preview||editorAtStart.busy))return false;
  const displayedDraft=typeof editorDraft==='function'?JSON.stringify(editorDraft()):null;
@@ -1651,7 +1655,7 @@ async function openVerifiedBuyerScripts(choice){
    if(!active()||!bufferCurrent())return false;
    cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
    handoffContact={domain:choice.domain,personId:choice.personId,channel:'linkedin',current:active,draftMatchesIdentity,contact:{...(linkedContact||{}),name:person.publicName||person.name,linkedin_url:choice.linkedinUrl}};
-   if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();
+   if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);if(navigate)showOutreachStep();else renderAll();
    if(!currentItem()?.drafts?.linkedinMessage?.trim())await generateStudioMessage();
    if(!active())return false;
    q('outreach-linkedin')?.scrollIntoView?.({block:'center',behavior:'smooth'});q('outreach-linkedin')?.focus?.();return true;
@@ -1674,7 +1678,7 @@ async function openVerifiedBuyerScripts(choice){
    if(stamp===JSON.stringify(latestLocal)&&LeadIntelOutreach.preferNewerSavedBuyerDraft(local,remote))saved=remote;
  }
  if(!active()||!bufferCurrent())return false;cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
- handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',current:active,draftMatchesIdentity,contact};if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();prepareMessageOnOpen();return true;
+ handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',current:active,draftMatchesIdentity,contact};if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);if(navigate)showOutreachStep();else renderAll();if(navigate||mainState().step===6)prepareMessageOnOpen();return true;
 }
 window.LeadIntelOutreachUI={openBuyerScripts};window.LeadIntelOutreachUI.openMessageChannel=openMessageChannel;
 window.addEventListener('leadintel:buyer-for-scripts',event=>{messageChannelNavigationRequest++;messageChannelNavigationBaseline=null;void openBuyerScripts(event.detail).then(opened=>{if(!opened)toast('The selected recipient could not be opened. Check email confirmation and workspace synchronization, then retry.');}).catch(()=>toast('Unable to load the selected CRM contact.'));});
@@ -1691,7 +1695,8 @@ function restoreSavedMessageRecipient(){
  // Repeated autosave events must not become an unbounded CRM retry loop.
  if(recipientRecoveryAttempts>=2)return;
  recipientRecoveryAttempts++;
- recipientRecoveryTask=openBuyerScripts(choice).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
+ const navigate=mainState().step===5&&meta.activeJourneyStage===6&&meta.visibleStep===6;
+ recipientRecoveryTask=openBuyerScripts(choice,{navigate}).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
  return recipientRecoveryTask;
 }
 void restoreSavedMessageRecipient();
@@ -1699,6 +1704,11 @@ window.addEventListener('leadintel:server-ready',()=>{void restoreSavedMessageRe
 for(const event of ['leadintel:server-conflict','leadintel:sync-resolving'])window.addEventListener(event,()=>{cancelPendingScriptGeneration();renderMessageWorkspace();});
 window.addEventListener('leadintel:sync-settled',()=>{recipientRecoveryAttempts=0;renderMessageWorkspace();void restoreSavedMessageRecipient();});
 window.addEventListener('leadintel:server-synced',()=>{if(!crmBridge()?.resolvingSync){renderMessageWorkspace();void restoreSavedMessageRecipient();}});
+window.addEventListener('leadintel:crm-refreshed',event=>{
+ if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;
+ // Let an earlier verification release its owner before using hydrated aliases.
+ void Promise.resolve(recipientRecoveryTask).then(()=>{renderMessageWorkspace();void restoreSavedMessageRecipient();});
+});
 
 
 window.addEventListener('leadintel:language-pack-updated',()=>{if(q('message-translation-panel'))renderMessageWorkspace();});

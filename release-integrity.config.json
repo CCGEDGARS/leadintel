@@ -1172,7 +1172,8 @@
         "function prepareMessageOnOpen()",
         "automaticallySelectBuyingTrigger({refresh:true});",
         "person.publicName||person.name||saved.name",
-        "showOutreachStep();prepareMessageOnOpen();return true;",
+        "if(navigate)showOutreachStep();else renderAll();",
+        "if(navigate||mainState().step===6)prepareMessageOnOpen();return true;",
         "async function prepareSubjectEvidence",
         "Five mandatory subjects prepared",
         "Selected subject within 60 characters",
@@ -8884,6 +8885,79 @@
       "status": 200,
       "contains": [
         "recipient-source-review=20261115-v1"
+      ]
+    },
+    {
+      "id": "writing-assistant-current-profile-review",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "!captured.sourceAuthority?.profileApproved||!captured.sourceAuthority?.strategyApproved",
+        "globalThis.LeadIntelOutreach.invalidateOutreachApproval(LeadIntelMessageEditor.apply",
+        "!item?.contextNeedsRefresh&&!item?.reapprovalRequired"
+      ]
+    },
+    {
+      "id": "messages-crm-hydration-recovery",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "window.addEventListener('leadintel:crm-refreshed'",
+        "const navigate=mainState().step===5&&meta.activeJourneyStage===6&&meta.visibleStep===6;",
+        "recipientRecoveryTask=openBuyerScripts(choice,{navigate})",
+        "Promise.resolve(recipientRecoveryTask).then(()=>{renderMessageWorkspace();void restoreSavedMessageRecipient();})"
+      ]
+    },
+    {
+      "id": "crm-hydration-completion-receipt",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "recoverRuntime?.();refreshed=true;return true;",
+        "if(refreshed)window.dispatchEvent(new CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId}}))"
+      ]
+    },
+    {
+      "id": "writing-assistant-profile-review-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "assistant-profile-review=20261115-v3",
+        "event-booking=20261115-v1"
+      ]
+    },
+    {
+      "id": "event-meeting-booking-scope",
+      "type": "text",
+      "url": "/customer/event-campaigns.js",
+      "status": 200,
+      "contains": [
+        "const link=url(c.bookingUrl),action=",
+        "Reply with your availability."
+      ]
+    },
+    {
+      "id": "event-writer-booking-scope",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "calendly:preview.campaign.bookingUrl||''",
+        "do not add a business web-call booking link"
+      ]
+    },
+    {
+      "id": "event-writing-context-booking-scope",
+      "type": "text",
+      "url": "/customer/writing-assistant-context.js",
+      "status": 200,
+      "contains": [
+        "const eventCampaign=facts.eventCampaign||item?.messageStudioDraft?.eventSnapshot||null;",
+        "calendly:eventCampaign.bookingUrl||'',meetingPlatform:''"
       ]
     }
   ],

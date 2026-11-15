@@ -4,7 +4,7 @@ const refreshSource=source.slice(source.indexOf('function registerCrmRecoveryRet
 function timeout(){return Object.assign(new Error('LeadIntel server request timed out for /api/crm/companies.'),{code:'request_timeout',requestPath:'/api/crm/companies',phase:'request',transient:true});}
 function runtime({list=async()=>{throw timeout();},hydrate=()=>{},tasks=createTaskCentre()}={}){
  const bridge={workspace:{id:'w1'},listCrmCompanies:list};
- const ctx={window:{LeadIntelTaskCentre:tasks},discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'cached-company'}],crmPipeline:[{id:'cached-pipeline'}],discovery:{pipeline:[{domain:'buyer.example',people:[{id:'kept',kept:true,publicEmailUrl:'https://buyer.example/team'}]}],selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>bridge,hydrateLocalPipelineFromCrm:hydrate,renderAll(){ctx.renders++;},scheduleSavedBuyerPublicChecks(){ctx.checks++;},renders:0,checks:0};
+ const ctx={CustomEvent,window:{LeadIntelTaskCentre:tasks,dispatchEvent:()=>true},discoveryMounted:true,crmRefreshing:false,crmRefreshRevision:0,crmAvailable:true,crmCompanies:[{id:'cached-company'}],crmPipeline:[{id:'cached-pipeline'}],discovery:{pipeline:[{domain:'buyer.example',people:[{id:'kept',kept:true,publicEmailUrl:'https://buyer.example/team'}]}],selectedProspects:[]},crmAuthenticated:()=>true,bridge:()=>bridge,hydrateLocalPipelineFromCrm:hydrate,renderAll(){ctx.renders++;},scheduleSavedBuyerPublicChecks(){ctx.checks++;},renders:0,checks:0};
  vm.createContext(ctx);vm.runInContext(refreshSource,ctx);return {ctx,bridge,tasks};
 }
 test('a CRM read started before permanent removal cannot reintroduce its deleted company',async()=>{
