@@ -19,7 +19,8 @@ async function expandBuyer(control){const details=control.locator('xpath=ancesto
 async function handoff(page,personId){
  if(await page.locator('#back-to-discovery').isVisible())await page.locator('#back-to-discovery').click();
  const button=page.locator('[data-keep-buyer][data-person-id="'+personId+'"]').first();await expandBuyer(button);await button.click();
- await page.waitForFunction(personId=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').selectedEmailBuyer?.personId===personId,personId,{timeout:10000});
+ try{await page.waitForFunction(personId=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').selectedEmailBuyer?.personId===personId,personId,{timeout:10000});}
+ catch(error){console.error('Buyer handoff identity',JSON.stringify(await page.evaluate(()=>window.lastBuyerHandoff)));throw error;}
  await page.locator('#continue-to-outreach').click();
  await page.waitForFunction(personId=>{const choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').scriptBuyer;return choice?.personId===personId&&document.querySelector('#step-6.active #message-studio')&&document.getElementById('message-recipient')?.textContent.includes(personId==='robert'?'Robert':'Alice');},personId,{timeout:20000});
 }
@@ -38,7 +39,7 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
  const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  let f;try{f=await step6Fixture();}catch(error){await browser.close();throw error;}
  const contexts=[],errors=[],screenshots=[],blocked=[];let page,providerGate;
- async function open(){const context=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(context);await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():(blocked.push(new URL(route.request().url()).origin),route.abort()));await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const next=await context.newPage();next.setDefaultTimeout(10000);next.on('pageerror',error=>errors.push(error.message));await next.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(next);return next;}
+ async function open(){const context=await browser.newContext({viewport:{width:1440,height:1100}});contexts.push(context);await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():(blocked.push(new URL(route.request().url()).origin),route.abort()));await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const next=await context.newPage();next.setDefaultTimeout(10000);await next.addInitScript(()=>document.addEventListener('click',event=>{const button=event.target.closest('[data-keep-buyer]');if(!button)return;const candidate=discovery.selectedProspects.find(row=>row.domain===button.dataset.keepBuyer),person=candidate?.people.find(row=>String(row.id)===button.dataset.personId);window.lastBuyerHandoff={personId:button.dataset.personId,rendered:button.dataset.personIdentity,current:buyerActionIdentity(candidate,person,true),crmRefreshing,scoringPending:qualificationDisplay?.isPending()};},true));next.on('pageerror',error=>errors.push(error.message));await next.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(next);return next;}
  async function shot(name){const file=path.join(artifactDir,name);await page.screenshot({path:file,fullPage:true});screenshots.push(file);}
  try{
   await fs.mkdir(artifactDir,{recursive:true});page=await open();await handoff(page,'robert');

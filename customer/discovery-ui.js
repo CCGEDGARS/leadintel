@@ -4409,6 +4409,9 @@ function renderAll(){if(!discoveryMounted)return;if(!qualificationPresentationDe
   const cards=$('company-candidates');if(cards)cards.innerHTML='<div class="market-empty" role="status">Checking saved company evidence… You can continue using the sidebar.</div>';
   const review=$('discovery-potential-matches');if(review)review.hidden=true;
   const next=$('review-next-companies');if(next)next.disabled=true;
+  // Company scoring must not freeze the separately owned Buyers view. CRM
+  // hydration can update an exact person's fields while that worker is pending.
+  renderPipeline();refreshResearchBriefViews();
   return;
 }const review=$('discovery-potential-matches');if(review)review.hidden=false;renderTargetList();renderSearchPreferences();renderDiscoveryFunnel();renderCandidates();renderPotentialMatches();renderPipeline();refreshResearchBriefViews();}
 function renderDiscoverySafely(){try{renderAll();return true;}catch(error){console.error("Companies page render failed",error);const run=$("run-company-discovery");if(run){run.disabled=discovery?.status==="running";run.innerHTML=discovery?.status==="running"?"Finding companies…":discovery?.status==="error"?"Retry company search <span>↻</span>":discovery?.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}return false;}}
