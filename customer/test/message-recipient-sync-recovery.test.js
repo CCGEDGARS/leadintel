@@ -85,12 +85,21 @@ test('CRM hydration notification keeps workspace and changed-person gates',async
   h.w.dispatchEvent(new h.w.CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId:'w1'}}));await settle();assert.equal(h.w.recipientReady(),false);assert.deepEqual(h.item().drafts,before);
  }finally{h.w.close();}
 });
-test('automatic recipient revalidation preserves Delivery navigation',async()=>{
+test('automatic recipient revalidation preserves Setup, Profile and Delivery navigation',async()=>{
+ for(const step of [1,2,7]){const {h,choice}=fixture();try{
+  assert.equal(await h.w.openBuyerScripts(choice),true);h.w.retireRecipientReceipt();
+  const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.step=step;h.w.localStorage.setItem(key,JSON.stringify(main));
+  h.w.document.querySelector('.step-view.active')?.classList.remove('active');let view=h.w.document.getElementById('step-'+step);if(!view){view=h.w.document.createElement('section');view.id='step-'+step;view.className='step-view';h.w.document.body.append(view);}view.classList.add('active');
+  h.w.dispatchEvent(new h.w.CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId:'w1'}}));await settle();
+  assert.equal(h.w.recipientReady(),true);assert.equal(JSON.parse(h.w.localStorage.getItem(key)).step,step);assert.equal(h.w.document.querySelector('.step-view.active')?.id,'step-'+step);
+ }finally{h.w.close();}}
+});
+test('recipient recovery fulfills the saved explicit Buyers to Messages destination',async()=>{
  const {h,choice}=fixture();try{
   assert.equal(await h.w.openBuyerScripts(choice),true);h.w.retireRecipientReceipt();
-  const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.step=7;h.w.localStorage.setItem(key,JSON.stringify(main));
-  h.w.document.querySelector('.step-view.active')?.classList.remove('active');let view=h.w.document.getElementById('step-7');if(!view){view=h.w.document.createElement('section');view.id='step-7';view.className='step-view';h.w.document.body.append(view);}view.classList.add('active');
+  const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.step=5;h.w.localStorage.setItem(key,JSON.stringify(main));
+  const metaKey='leadintel_customer_v2_discovery_meta',meta=JSON.parse(h.w.localStorage.getItem(metaKey));meta.activeJourneyStage=6;meta.visibleStep=6;h.w.localStorage.setItem(metaKey,JSON.stringify(meta));
   h.w.dispatchEvent(new h.w.CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId:'w1'}}));await settle();
-  assert.equal(h.w.recipientReady(),true);assert.equal(JSON.parse(h.w.localStorage.getItem(key)).step,7);assert.equal(h.w.document.querySelector('.step-view.active')?.id,'step-7');
+  assert.equal(h.w.recipientReady(),true);assert.equal(JSON.parse(h.w.localStorage.getItem(key)).step,6);assert.equal(h.w.document.querySelector('.step-view.active')?.id,'step-6');
  }finally{h.w.close();}
 });

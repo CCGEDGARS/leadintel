@@ -8905,7 +8905,8 @@
       "status": 200,
       "contains": [
         "window.addEventListener('leadintel:crm-refreshed'",
-        "recipientRecoveryTask=openBuyerScripts(choice,{navigate:false})",
+        "const navigate=mainState().step===5&&meta.activeJourneyStage===6&&meta.visibleStep===6;",
+        "recipientRecoveryTask=openBuyerScripts(choice,{navigate})",
         "Promise.resolve(recipientRecoveryTask).then(()=>{renderMessageWorkspace();void restoreSavedMessageRecipient();})"
       ]
     },
@@ -8925,7 +8926,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "assistant-profile-review=20261115-v1"
+        "assistant-profile-review=20261115-v2"
       ]
     }
   ],

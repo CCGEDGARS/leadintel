@@ -1695,7 +1695,8 @@ function restoreSavedMessageRecipient(){
  // Repeated autosave events must not become an unbounded CRM retry loop.
  if(recipientRecoveryAttempts>=2)return;
  recipientRecoveryAttempts++;
- recipientRecoveryTask=openBuyerScripts(choice,{navigate:false}).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
+ const navigate=mainState().step===5&&meta.activeJourneyStage===6&&meta.visibleStep===6;
+ recipientRecoveryTask=openBuyerScripts(choice,{navigate}).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
  return recipientRecoveryTask;
 }
 void restoreSavedMessageRecipient();
