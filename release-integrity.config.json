@@ -8959,6 +8959,56 @@
         "const eventCampaign=facts.eventCampaign||item?.messageStudioDraft?.eventSnapshot||null;",
         "calendly:eventCampaign.bookingUrl||'',meetingPlatform:''"
       ]
+    },
+    {
+      "id": "versioned-brand-signature-footer",
+      "type": "text",
+      "url": "/customer/brand-identity.js",
+      "status": 200,
+      "contains": [
+        "emailRenderVersion === 2",
+        "function footerIdentity(bodyText, identity)",
+        "identity.emailRenderVersion !== 2",
+        "senderName: '', companyDisplayName: ''"
+      ]
+    },
+    {
+      "id": "explicit-approval-signature-render-version",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "snapshot(options.brandIdentity,{emailRenderVersion:2})"
+      ]
+    },
+    {
+      "id": "brand-signature-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "brand-signature=20261115-v1",
+        "outreach-signature=20261115-v1"
+      ]
+    },
+    {
+      "id": "brand-signature-outreach-runtime",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "assistant-profile-review=20261115-v3&outreach-signature=20261115-v1"
+      ]
+    },
+    {
+      "id": "explicit-existing-signature-review",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "const renderingCurrent=!item?.approved||!item.brandSnapshot||item.brandSnapshot.emailRenderVersion===2;",
+        "contextCurrent&&languageCurrent&&renderingCurrent"
+      ]
     }
   ],
   "retry": {

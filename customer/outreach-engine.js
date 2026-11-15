@@ -328,7 +328,7 @@
     if(!sourceScenario||!sourceProvenance||!clean(sourceProvenance.provider)||!clean(sourceProvenance.model)||!clean(sourceProvenance.selectionSource)||!sourceProvenance.language||campaignLanguage(sourceProvenance.language)==='auto')return {...item,drafts,approved:false,error:"Complete campaign language provider provenance is required before approval."};
     let brandSnapshot=null;
     if(options.brandIdentity?.status==="ready"){
-      try{brandSnapshot=BrandIdentity?.snapshot(options.brandIdentity)||null;}
+      try{brandSnapshot=BrandIdentity?.snapshot(options.brandIdentity,{emailRenderVersion:2})||null;}
       catch{return {...item,drafts,approved:false,error:"Brand identity is marked Ready but is not valid. Review it in Setup before approval."};}
     }
     const generatedBodies=[item?.drafts?.emailBody,item?.contentVariants?.drafts?.en?.emailBody,item?.contentVariants?.drafts?.lv?.emailBody].map(value=>String(value??"")).filter(Boolean);

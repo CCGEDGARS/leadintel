@@ -73,6 +73,7 @@
       schemaVersion: 1,
       status: input.status === 'ready' ? 'ready' : 'draft',
       revision: positiveInteger(input.revision, 1),
+      ...(input.emailRenderVersion === 2 ? {emailRenderVersion: 2} : {}),
       companyDisplayName: stringValue(input.companyDisplayName, FIELD_LIMITS.companyDisplayName),
       senderName: stringValue(input.senderName, FIELD_LIMITS.senderName),
       senderTitle: stringValue(input.senderTitle, FIELD_LIMITS.senderTitle),
@@ -103,6 +104,7 @@
     const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const identity = normalize(input);
     const errors = {};
+    if (input.emailRenderVersion !== undefined && input.emailRenderVersion !== 2) errors.emailRenderVersion = 'Unsupported email rendering version.';
 
     for (const [field, maximum] of Object.entries(FIELD_LIMITS)) {
       const raw = stringValue(input[field]);
@@ -144,9 +146,10 @@
     return {valid: Object.keys(errors).length === 0, errors};
   }
 
-  function snapshot(value) {
-    const identity = normalize(value);
-    const result = validate(value);
+  function snapshot(value, options = {}) {
+    const source = options.emailRenderVersion === 2 ? {...value, emailRenderVersion: 2} : value;
+    const identity = normalize(source);
+    const result = validate(source);
     if (identity.status !== 'ready' || !result.valid) {
       throw new TypeError('Cannot snapshot without a valid ready brand identity.');
     }
@@ -168,16 +171,17 @@
       throw new TypeError('Cannot render a present invalid ready brand identity.');
     }
 
+    const signature = footerIdentity(bodyText, identity);
     const signatureLines = [
-      identity.signatureText,
-      identity.senderName,
-      identity.senderTitle,
-      identity.companyDisplayName,
-      identity.email,
-      identity.phone,
-      identity.website,
-      identity.linkedinUrl ? 'LinkedIn: ' + identity.linkedinUrl : '',
-      identity.postalAddress
+      signature.signatureText,
+      signature.senderName,
+      signature.senderTitle,
+      signature.companyDisplayName,
+      signature.email,
+      signature.phone,
+      signature.website,
+      signature.linkedinUrl ? 'LinkedIn: ' + signature.linkedinUrl : '',
+      signature.postalAddress
     ].filter(Boolean);
     const textBody = appendSection(bodyText, signatureLines.join('\n'));
     const finalTextBody = appendSection(textBody, identity.legalFooter);
@@ -185,18 +189,43 @@
     return {
       subject,
       textBody: finalTextBody,
-      htmlBody: renderHtml(bodyText, identity, bodyHtml)
+      htmlBody: renderHtml(bodyText, identity, bodyHtml, signature)
     };
   }
 
-  function renderHtml(bodyText, identity, bodyHtml) {
+  function footerIdentity(bodyText, identity) {
+    // Versioned approval snapshots preserve older approved bytes. Only an
+    // exact closing identity can suppress generated footer lines; mentions
+    // elsewhere and the authored body/HTML are never edited.
+    if (identity.emailRenderVersion !== 2) return identity;
+    const lines = bodyText.trimEnd().split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const start = lines.lastIndexOf(identity.senderName);
+    if (start < 0) return identity;
+    const withTitle = Boolean(identity.senderTitle && lines[start + 1] === identity.senderTitle);
+    const companyIndex = start + (withTitle ? 2 : 1);
+    if (lines[companyIndex] !== identity.companyDisplayName) return identity;
+    const contacts = ['email', 'phone', 'website', 'linkedinUrl', 'postalAddress'];
+    const fieldLines = key => (key === 'linkedinUrl' ? 'LinkedIn: ' + identity[key] : identity[key]).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const known = new Set(contacts.filter(key => identity[key]).flatMap(fieldLines));
+    if (identity.linkedinUrl) known.add(identity.linkedinUrl);
+    const tail = lines.slice(companyIndex + 1);
+    if (tail.some(line => !known.has(line))) return identity;
+    const signature = {...identity, senderName: '', companyDisplayName: '', senderTitle: withTitle ? '' : identity.senderTitle};
+    for (const key of contacts.filter(key => identity[key])) {
+      const values = fieldLines(key);
+      if (tail.some((_, i) => values.every((line, j) => line === tail[i + j])) || key === 'linkedinUrl' && tail.includes(identity.linkedinUrl)) signature[key] = '';
+    }
+    return signature;
+  }
+
+  function renderHtml(bodyText, identity, bodyHtml, signature) {
     const logo = identity.options.includeLogo ? identity.assets.logo : null;
     const headshot = identity.options.includeHeadshot ? identity.assets.headshot : null;
     const banner = identity.options.includeBanner ? identity.assets.banner : null;
-    const website = safeHttpsUrl(identity.website);
-    const linkedin = safeLinkedInUrl(identity.linkedinUrl);
-    const phoneHref = identity.phone && validPhone(identity.phone)
-      ? 'tel:' + identity.phone.replace(/[^+\d]/g, '')
+    const website = safeHttpsUrl(signature.website);
+    const linkedin = safeLinkedInUrl(signature.linkedinUrl);
+    const phoneHref = signature.phone && validPhone(signature.phone)
+      ? 'tel:' + signature.phone.replace(/[^+\d]/g, '')
       : '';
     const parts = [];
 
@@ -215,30 +244,33 @@
       parts.push(imageHtml(banner, identity.companyDisplayName + ' promotional banner', imageStyle(banner, 552, 320, 'border:0;margin:20px 0 0 0;')));
     }
 
-    parts.push('<div style="margin-top:24px;padding-top:16px;border-top:2px solid ' + escapeHtml(identity.primaryColor) + ';font-size:14px;line-height:1.45;color:#364152;">');
-    if (identity.signatureText) {
-      parts.push('<div style="margin-bottom:10px;">' + multilineHtml(identity.signatureText) + '</div>');
+    const hasSignature = headshot || ['signatureText', 'senderName', 'senderTitle', 'companyDisplayName', 'email', 'phone', 'website', 'linkedinUrl', 'postalAddress'].some(key => signature[key]);
+    if (hasSignature) {
+      parts.push('<div style="margin-top:24px;padding-top:16px;border-top:2px solid ' + escapeHtml(identity.primaryColor) + ';font-size:14px;line-height:1.45;color:#364152;">');
+      if (signature.signatureText) {
+        parts.push('<div style="margin-bottom:10px;">' + multilineHtml(signature.signatureText) + '</div>');
+      }
+      if (headshot) {
+        parts.push(imageHtml(headshot, identity.senderName + ' headshot', imageStyle(headshot, 64, 64, 'border:0;border-radius:32px;margin:0 0 10px 0;')));
+      }
+      if (signature.senderName) parts.push('<div><strong style="color:#1f2933;">' + escapeHtml(signature.senderName) + '</strong></div>');
+      if (signature.senderTitle) parts.push('<div>' + escapeHtml(signature.senderTitle) + '</div>');
+      if (signature.companyDisplayName) parts.push('<div>' + escapeHtml(signature.companyDisplayName) + '</div>');
+      if (signature.email) {
+        parts.push('<div><a href="mailto:' + escapeHtml(signature.email) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(signature.email) + '</a></div>');
+      }
+      if (signature.phone) {
+        parts.push('<div><a href="' + escapeHtml(phoneHref) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(signature.phone) + '</a></div>');
+      }
+      if (website) {
+        parts.push('<div><a href="' + escapeHtml(website) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(signature.website) + '</a></div>');
+      }
+      if (linkedin) {
+        parts.push('<div><a href="' + escapeHtml(linkedin) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">LinkedIn: ' + escapeHtml(signature.linkedinUrl) + '</a></div>');
+      }
+      if (signature.postalAddress) parts.push('<div>' + multilineHtml(signature.postalAddress) + '</div>');
+      parts.push('</div>');
     }
-    if (headshot) {
-      parts.push(imageHtml(headshot, identity.senderName + ' headshot', imageStyle(headshot, 64, 64, 'border:0;border-radius:32px;margin:0 0 10px 0;')));
-    }
-    parts.push('<div><strong style="color:#1f2933;">' + escapeHtml(identity.senderName) + '</strong></div>');
-    if (identity.senderTitle) parts.push('<div>' + escapeHtml(identity.senderTitle) + '</div>');
-    parts.push('<div>' + escapeHtml(identity.companyDisplayName) + '</div>');
-    if (identity.email) {
-      parts.push('<div><a href="mailto:' + escapeHtml(identity.email) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(identity.email) + '</a></div>');
-    }
-    if (identity.phone) {
-      parts.push('<div><a href="' + escapeHtml(phoneHref) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(identity.phone) + '</a></div>');
-    }
-    if (website) {
-      parts.push('<div><a href="' + escapeHtml(website) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(identity.website) + '</a></div>');
-    }
-    if (linkedin) {
-      parts.push('<div><a href="' + escapeHtml(linkedin) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">LinkedIn: ' + escapeHtml(identity.linkedinUrl) + '</a></div>');
-    }
-    if (identity.postalAddress) parts.push('<div>' + multilineHtml(identity.postalAddress) + '</div>');
-    parts.push('</div>');
 
     if (identity.legalFooter) {
       parts.push('<div style="margin-top:20px;font-size:11px;line-height:1.4;color:#667085;">' + multilineHtml(identity.legalFooter) + '</div>');

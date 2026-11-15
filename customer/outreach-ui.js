@@ -1148,7 +1148,8 @@ function isAssistantDraftSaved(draft,style,assistant=null){
  const captured=item?.channel==='email'?captureWritingAssistantContext():null;
  const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captured.messageScope);
  const languageCurrent=captured?.context?.language!=='en'||info?.eventSnapshot||Boolean(item.campaignScenario?.language==='en'&&item.localizationProvenance?.language==='en'&&item.localizationProvenance.provider&&item.localizationProvenance.model&&item.localizationProvenance.selectionSource==='manual'&&['native','complete'].includes(item.localizationStatus));
- return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!item?.contextNeedsRefresh&&!item?.reapprovalRequired&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
+ const renderingCurrent=!item?.approved||!item.brandSnapshot||item.brandSnapshot.emailRenderVersion===2;
+ return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!item?.contextNeedsRefresh&&!item?.reapprovalRequired&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&renderingCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
