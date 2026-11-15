@@ -155,6 +155,9 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   assert.deepEqual(await fields(page),personalized);assert.equal(await page.locator('#mw-edit-message').isEnabled(),true);assert.equal(await page.locator('#mw-save-message').isEnabled(),true);await save(page,personalized);
   const phoneMaster={id:'phone:professional',channel:'phone',style:'professional',name:'Professional',subject:'',body:'Hello [First name], [Your name] from [Company].\nThem: [Answers]\nYou: [their words]. [certifications]. [result]',builtin:false,creatorSource:{id:'fixture-call',revision:1}};
   f.DB.raw.prepare('INSERT OR REPLACE INTO core_script_registry(id,payload_json,revision,updated_by) VALUES(?,?,?,?)').run(phoneMaster.id,JSON.stringify(phoneMaster),1,f.DB.raw.prepare('SELECT id FROM users LIMIT 1').get().id);
+  // A normal post-save CRM refresh must revalidate an already-ready recipient,
+  // without relying on another unrelated workspace synchronization event.
+  await page.evaluate(()=>{const b=LeadIntelServerBridge,choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')).scriptBuyer;dispatchEvent(new CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:b.workspace.id,domain:choice.domain}}));});
   await page.locator('#sc-channel-picker').getByRole('button',{name:'Phone call',exact:true}).click();
   const callEditor=page.locator('#sc-phone-editor'),callField=callEditor.getByRole('textbox',{name:'Phone script',exact:true});
   await page.locator('.sc-phone-styles').getByRole('button',{name:'Professional',exact:true}).click();

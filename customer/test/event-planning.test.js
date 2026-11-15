@@ -1,5 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict');const M=require('../event-campaigns.js');
 const event={id:'e',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B2',visitValue:'Discuss custom equipment.',audienceMode:'both',attendValue:'See new manufacturing equipment.',registrationUrl:'https://forum.test/register'};
+test('an exhibitor can prepare an honest invitation before its stand number is known',()=>{
+ const input={...event,role:'exhibitor',stand:''},saved=M.normalize(JSON.parse(JSON.stringify(M.save({},input)))).campaigns[0];
+ assert.equal(saved.stand,'');
+ for(const style of Object.keys(M.styles)){
+  const draft=M.draft(saved,{sender:'Alex',company:'Seller'},{name:'Robin'},style);
+  assert.match(draft.message,/our stand\./);assert.doesNotMatch(draft.message,/B2|undefined|To be confirmed/);
+  M.validateDraft(saved,draft,{sender:'Alex'});
+ }
+});
 test('unfinished events save as drafts, preserve planning settings on reload, but cannot activate',()=>{const s=M.save({}, {name:'Future fair',sourceChoice:'discover',targetCount:30,contactsPerCompany:2,researchDepth:'quick'});assert.equal(s.campaigns[0].targetCount,30);assert.equal(M.normalize(JSON.parse(JSON.stringify(s))).campaigns[0].researchDepth,'quick');assert.throws(()=>M.activate(s,s.campaigns[0].id));});
 test('event participant and outside audiences produce different source query families',()=>{const inside=M.queries({...event,audienceMode:'participants'},{idealCustomer:'manufacturers'}),outside=M.queries({...event,audienceMode:'outside'},{idealCustomer:'manufacturers',targetMarkets:'Germany'});assert.ok(inside.every(q=>q.audience==='participants'));assert.ok(outside.every(q=>q.audience==='outside'));assert.ok(outside.some(q=>q.query.includes('Germany')));assert.equal(M.queries(event,{}).some(q=>q.audience==='outside'),true);});
 test('public company evidence is edition-bound and never confirms a person',()=>{const evidence=[{url:'https://forum.test/2099/exhibitors',text:'Industry Forum 2099-10-10 exhibitors: Buyer Tools',verified:true,checkedAt:'2099-01-01'}];const a=M.deriveAttendance(event,{company:'Buyer Tools',id:'p1'},evidence);assert.equal(a.status,'company');assert.equal(M.deriveAttendance({...event,startDate:'2100-10-10'},{company:'Buyer Tools'},evidence).status,'unknown');assert.equal(M.deriveAttendance(event,{company:'Other'},evidence).status,'unknown');});
