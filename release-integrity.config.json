@@ -8855,6 +8855,36 @@
         "Company scoring must not freeze the separately owned Buyers view.",
         "renderPipeline();refreshResearchBriefViews();\n  return;"
       ]
+    },
+    {
+      "id": "saved-recipient-source-review-core",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function sameSavedRecipientIdentity(left,right)",
+        "A reselected, currently verified recipient can cite a newer source page.",
+        "!sameSavedRecipientIdentity(localIdentity,remoteIdentity)"
+      ]
+    },
+    {
+      "id": "saved-recipient-source-review-runtime",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "savedIdentity&&!LeadIntelOutreach.sameSavedRecipientIdentity(savedIdentity,identity)",
+        "identity.researchKey!==window.LeadIntelDiscovery?.buyerResearchIdentityKey?.(candidate,person)"
+      ]
+    },
+    {
+      "id": "saved-recipient-source-review-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "recipient-source-review=20261115-v1"
+      ]
     }
   ],
   "retry": {
