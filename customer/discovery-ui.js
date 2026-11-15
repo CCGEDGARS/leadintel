@@ -4465,6 +4465,10 @@ let outreachLoading=null;
 function loadOutreachModules(){
   if(window.LeadIntelOutreachUI?.openBuyerScripts)return Promise.resolve();
   if(outreachLoading)return outreachLoading;
+  // Messages reads the selected-company API during module evaluation. A fresh
+  // Setup session has not mounted Companies yet; hydrate its normal owner
+  // before importing Messages, without starting research or recursive preload.
+  if(!discoveryMounted)ensureDiscoveryMounted({refreshCrm:false,preloadMessages:false});
   const load=(marker,path,module=false)=>new Promise((resolve,reject)=>{
     let script=document.querySelector(`script[data-${marker}]`);
     if(script?.dataset.loaded==='true'){resolve();return;}
@@ -4522,7 +4526,7 @@ window.addEventListener?.('leadintel:server-conflict',()=>{if(discoveryMounted){
 window.addEventListener?.('leadintel:server-synced',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:service-settings-changed',()=>{if(discoveryMounted)renderAll();});
 window.addEventListener?.('leadintel:qualification-settings-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
-function ensureDiscoveryMounted({refreshCrm=true}={}){if(discoveryMounted)return;window.LeadIntelStartupTrace?.("discovery restore:start");discovery=loadDiscovery();window.LeadIntelStartupTrace?.("discovery restore:complete");discoveryMounted=true;restoreCompanySaveRetry();syncStrategyFingerprint();window.LeadIntelStartupTrace?.("discovery context:complete");renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(refreshCrm&&crmAuthenticated())refreshCrmState();void loadOutreachModules().catch(()=>{});}
+function ensureDiscoveryMounted({refreshCrm=true,preloadMessages=true}={}){if(discoveryMounted)return;window.LeadIntelStartupTrace?.("discovery restore:start");discovery=loadDiscovery();window.LeadIntelStartupTrace?.("discovery restore:complete");discoveryMounted=true;restoreCompanySaveRetry();syncStrategyFingerprint();window.LeadIntelStartupTrace?.("discovery context:complete");renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(refreshCrm&&crmAuthenticated())refreshCrmState();if(preloadMessages)void loadOutreachModules().catch(()=>{});}
 async function openCampaignResearch(companies,{focus='companies'}={}){
  if(!moduleReady())return false;const main=mainState();if(!window.LeadIntelTargeting?.isConfirmed(main)||window.LeadIntelStep2Brief?.confirmationMissing(main,'research').length){window.LeadIntelTargeting?.focusRequired?.(window,main);return false;}
  ensureDiscoveryMounted();if(focus==='buyers')for(const c of companies){const known=(discovery.candidates||[]).find(r=>canonicalDomain(r.domain)===c.domain)||(discovery.potentialMatches||[]).find(r=>canonicalDomain(r.domain)===c.domain);const existing=(discovery.selectedProspects||[]).find(r=>canonicalDomain(r.domain)===c.domain);rememberSelectedProspect(existing||{...known,company:c.company,domain:c.domain,website:c.website||`https://${c.domain}/`,buyerSearchMode:known?.qualification?.eligible?'user_selected_qualified':'user_selected_target',people:known?.people||[],peopleStatus:known?.peopleStatus||'idle',evidence:known?.evidence||[]});}

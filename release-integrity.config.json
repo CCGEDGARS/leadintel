@@ -74,6 +74,55 @@
   },
   "smokeChecks": [
     {
+      "id": "messages-cold-company-owner",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(!discoveryMounted)ensureDiscoveryMounted({refreshCrm:false,preloadMessages:false})",
+        "if(preloadMessages)void loadOutreachModules()"
+      ]
+    },
+    {
+      "id": "messages-cold-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "messages-startup=20261115-v1"
+      ]
+    },
+    {
+      "id": "reference-refresh-preserves-strategy-module",
+      "type": "text",
+      "url": "/customer/lookalike-discovery.js",
+      "status": 200,
+      "contains": [
+        "Number(navigation.currentStep())",
+        "if(current!==4)return;",
+        "navigation.setStep(4)"
+      ]
+    },
+    {
+      "id": "reference-refresh-returning-importer",
+      "type": "text",
+      "url": "/customer/evidence-view.js",
+      "status": 200,
+      "contains": [
+        "lookalike-discovery.js",
+        "strategy-refresh=20261115-v1"
+      ]
+    },
+    {
+      "id": "reference-refresh-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "strategy-refresh=20261115-v1"
+      ]
+    },
+    {
       "id": "independent-website-contacts",
       "type": "text",
       "url": "/customer/website-contact-ui.js",

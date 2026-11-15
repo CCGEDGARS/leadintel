@@ -137,7 +137,16 @@
     Market.__referenceLookalikeStrategyInstalled=true;return Market;
   }
   function refreshCurrentStep4(){
-    if(typeof document==='undefined')return;setTimeout(()=>{const context=workspaceContext();if(Number(context.state?.step)!==4)return;const processButton=document.querySelector('[data-process-step="4"]');if(processButton){processButton.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));return;}document.querySelector('[data-step-marker="4"]')?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));},0);
+    if(typeof document==='undefined')return;
+    setTimeout(()=>{
+      const navigation=root.LeadIntelCustomerNavigation,context=workspaceContext();
+      const current=typeof navigation?.currentStep==='function'?Number(navigation.currentStep()):Number(context.state?.step);
+      if(current!==4)return;
+      // Process stage 4 is Companies; module 4 is Strategy. Refresh through
+      // the module owner and respect any navigation made before this timer ran.
+      if(typeof navigation?.setStep==='function'){navigation.setStep(4);return;}
+      document.querySelector('[data-module-step="4"],[data-step-marker="4"]:not([data-module-step])')?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+    },0);
   }
   function install(Discovery){
     if(!Discovery||Discovery.__lookalikeInstalled)return Discovery;const originalQueries=Discovery.buildDiscoveryQueries?.bind(Discovery);const originalMerge=Discovery.mergeCompanyCandidates?.bind(Discovery);const originalPotential=Discovery.buildPotentialCompanyCandidates?.bind(Discovery);
