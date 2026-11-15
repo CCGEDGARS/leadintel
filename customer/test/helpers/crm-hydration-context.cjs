@@ -6,6 +6,8 @@ const installStrategyContext=require('./strategy-discovery-context.cjs');
 // hydration tests, with one stable authenticated workspace bridge.
 module.exports=function install(context){
  context.window||=context;
+ context.CustomEvent||=globalThis.CustomEvent;
+ context.window.dispatchEvent||=()=>true;
  context.window.LeadIntelCrm=Crm;
  context.LeadIntelCompanyDossier=Dossier;
  const bridge={workspace:{id:'hydration-workspace'},session:{authenticated:true,user:{id:'hydration-user'}}};

@@ -1083,6 +1083,7 @@ function captureWritingAssistantContext(){
  const item=currentItem(),studio=studioState(),state=messageEditor?.state();
  const facts=studioMessageContext(item,selectedCandidate()),base=globalThis.LeadIntelWritingAssistantContext.captureWritingContext({workspace:identity.workspaceId,item,candidate:selectedCandidate(),person:selectedContact(item),studio,facts,currentDraft:editorDraft(),refs:references,language:globalThis.LeadIntelMessageTranslations?.book?.(item||{})?.activeLanguage,usable:captureMessageAuthority().current()&&messageWorkspaceUsable()&&!buyerHandoffPending&&!state?.editing&&!state?.saving&&!state?.busy&&!state?.preview&&!subjectEditing&&!subjectBusy&&!studioGenerationBusy&&!messageTranslationBusy&&!messageFactResearchBusy&&!messageFlowBusy&&!originalScriptBusy&&!crmBridge()?.conflict});
  base.messageScope=globalThis.LeadIntelMessageEditor?.scope?.(identity.workspaceId,item,studio,{...facts,eventCampaign:null});
+ if(item?.contextNeedsRefresh||item?.reapprovalRequired)base.sourceAuthority=globalThis.LeadIntelOutreach.messageSourceAuthority(mainState(),outreach.messageStudio||{});
  base.context.writingContext='customer';base.scope=JSON.stringify([captureMessageAuthority().key,identity.userId,base.scope]);base.fingerprint=JSON.stringify(base.context);
  const channelContext=globalThis.LeadIntelChannelWorkspace?.capture(base)||base;return globalThis.LeadIntelInMail?.capture(channelContext)||channelContext;
 }
@@ -1116,7 +1117,10 @@ async function useAssistantDraft(draft,style,assistant=null){
  const context={...captured.context,maximumWords:null,currentDraft:draft};
  globalThis.LeadIntelWritingAssistantContext.validateWritingDraft(draft,context);
  const item=currentItem(),studio=studioState();if(item.messageStudioDraft?.eventSnapshot)LeadIntelEventCampaigns.validateDraft(item.messageStudioDraft.eventSnapshot,draft,studio.essentials,item.channel);
- let next=LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ if((item.contextNeedsRefresh||item.reapprovalRequired)&&(!captured.messageScope||!captured.sourceAuthority?.profileApproved||!captured.sourceAuthority?.strategyApproved))throw Error('Review and approve the current Profile and Strategy before accepting this working copy.');
+ // Continue accepts this exact copy in the current captured context. Retire the
+ // invalid approval package; ordinary Save/reopen must keep stale copies blocked.
+ let next=globalThis.LeadIntelOutreach.invalidateOutreachApproval(LeadIntelMessageEditor.apply(item,draft,{origin:'manual',templateUpdate:true,style:item.channel==='linkedin'?studio.linkedinMode:studio.mode,essentials:studio.essentials,...(item.messageStudioDraft?.eventSnapshot?{}:{triggerUrl:item.dossier?.selectedTrigger?.url||''}),blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0}));
  // Continue explicitly accepts this validated working copy in the captured context.
  // An earlier template proposal must not keep it bound to superseded settings.
  delete next.messageStudioDraft.pendingTemplateUpdate;
@@ -1144,7 +1148,7 @@ function isAssistantDraftSaved(draft,style,assistant=null){
  const captured=item?.channel==='email'?captureWritingAssistantContext():null;
  const contextCurrent=item?.channel!=='email'||info?.eventSnapshot||Boolean(info?.reviewedMessageScope&&info.reviewedMessageScope===captured.messageScope);
  const languageCurrent=captured?.context?.language!=='en'||info?.eventSnapshot||Boolean(item.campaignScenario?.language==='en'&&item.localizationProvenance?.language==='en'&&item.localizationProvenance.provider&&item.localizationProvenance.model&&item.localizationProvenance.selectionSource==='manual'&&['native','complete'].includes(item.localizationStatus));
- return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
+ return Boolean(LeadIntelMessageEditor.savedDraft(item,draft)&&!item?.contextNeedsRefresh&&!item?.reapprovalRequired&&!info?.pendingTemplateUpdate&&JSON.stringify(info?.essentials||{})===JSON.stringify(studioState().essentials)&&contextCurrent&&languageCurrent&&JSON.stringify(info?.writingAssistant||null)===JSON.stringify(assistant||null));
 }
 function setAssistantDraftLength(value){if(!['short','standard','detailed'].includes(value))return false;const studio=readStudio();studio.aiLength=value;persistStudio(studio);return true;}
 function installWritingAssistant(){
@@ -1584,19 +1588,19 @@ async function openMessageChannel(channel){
  try{const opened=await openBuyerScripts(choice);if(opened&&current()&&globalThis.LeadIntelChannelWorkspace?.phoneActive())await globalThis.LeadIntelChannelWorkspace.openChannel(channel);if(!opened&&current()){rollback();toast('This saved recipient needs confirmation in Buyers.');backToDiscovery();}return opened;}
  catch(error){if(current()){rollback();toast('Unable to reopen the saved message. Your drafts are preserved.');}return false;}finally{if(navigationRequest===messageChannelNavigationRequest)messageChannelNavigationBaseline=null;}
 }
-async function openBuyerScripts(choice){
+async function openBuyerScripts(choice,{navigate=true}={}){
  const editor=typeof messageEditor==='undefined'?null:messageEditor?.state();if(editor&&(editor.editing||editor.saving||editor.preview||editor.busy)){q('message-generation-status').textContent='Save or cancel the current edit before reopening a recipient. Your working text is preserved.';return false;}
  const operation=++buyerHandoffOperation;buyerHandoffRequest++;let timer;buyerHandoffPending=true;buyerHandoffError='';
  try{
   if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();
   const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{if(operation===buyerHandoffOperation)buyerHandoffRequest++;reject(Object.assign(Error('Recipient verification timed out. Your draft is preserved. Retry recipient check.'),{name:'TimeoutError'}));},30000);});
-  const opened=await Promise.race([openVerifiedBuyerScripts(choice),deadline]);
+  const opened=await Promise.race([openVerifiedBuyerScripts(choice,{navigate}),deadline]);
   if(operation===buyerHandoffOperation&&!opened)buyerHandoffError='The saved recipient could not be verified. Your draft is preserved. Retry the check or review the recipient in Buyers.';
   return opened;
  }catch(error){if(operation===buyerHandoffOperation)buyerHandoffError=error.message||'Recipient verification failed. Your draft is preserved.';if(error.name==='TimeoutError')return false;throw error;}
  finally{clearTimeout(timer);if(operation===buyerHandoffOperation){buyerHandoffPending=false;if(typeof renderMessageWorkspace==='function')renderMessageWorkspace();window.LeadIntelPageQuality?.refresh('messages');}}
 }
-async function openVerifiedBuyerScripts(choice){
+async function openVerifiedBuyerScripts(choice,{navigate=true}={}){
  if(!choice||!['email','linkedin'].includes(choice.channel)||choice.workspaceId!==crmBridge()?.workspace?.id)return false;
  const editorAtStart=typeof messageEditor==='undefined'?null:messageEditor?.state();if(editorAtStart&&(editorAtStart.editing||editorAtStart.saving||editorAtStart.preview||editorAtStart.busy))return false;
  const displayedDraft=typeof editorDraft==='function'?JSON.stringify(editorDraft()):null;
@@ -1651,7 +1655,7 @@ async function openVerifiedBuyerScripts(choice){
    if(!active()||!bufferCurrent())return false;
    cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
    handoffContact={domain:choice.domain,personId:choice.personId,channel:'linkedin',current:active,draftMatchesIdentity,contact:{...(linkedContact||{}),name:person.publicName||person.name,linkedin_url:choice.linkedinUrl}};
-   if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();
+   if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);if(navigate)showOutreachStep();else renderAll();
    if(!currentItem()?.drafts?.linkedinMessage?.trim())await generateStudioMessage();
    if(!active())return false;
    q('outreach-linkedin')?.scrollIntoView?.({block:'center',behavior:'smooth'});q('outreach-linkedin')?.focus?.();return true;
@@ -1674,7 +1678,7 @@ async function openVerifiedBuyerScripts(choice){
    if(stamp===JSON.stringify(latestLocal)&&LeadIntelOutreach.preferNewerSavedBuyerDraft(local,remote))saved=remote;
  }
  if(!active()||!bufferCurrent())return false;cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
- handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',current:active,draftMatchesIdentity,contact};if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();prepareMessageOnOpen();return true;
+ handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',current:active,draftMatchesIdentity,contact};if(saved)upsertItem(saved);saveOutreach();prepareStudioBuyer(candidate,person);if(navigate)showOutreachStep();else renderAll();if(navigate||mainState().step===6)prepareMessageOnOpen();return true;
 }
 window.LeadIntelOutreachUI={openBuyerScripts};window.LeadIntelOutreachUI.openMessageChannel=openMessageChannel;
 window.addEventListener('leadintel:buyer-for-scripts',event=>{messageChannelNavigationRequest++;messageChannelNavigationBaseline=null;void openBuyerScripts(event.detail).then(opened=>{if(!opened)toast('The selected recipient could not be opened. Check email confirmation and workspace synchronization, then retry.');}).catch(()=>toast('Unable to load the selected CRM contact.'));});
@@ -1691,7 +1695,7 @@ function restoreSavedMessageRecipient(){
  // Repeated autosave events must not become an unbounded CRM retry loop.
  if(recipientRecoveryAttempts>=2)return;
  recipientRecoveryAttempts++;
- recipientRecoveryTask=openBuyerScripts(choice).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
+ recipientRecoveryTask=openBuyerScripts(choice,{navigate:false}).catch(()=>false).finally(()=>{recipientRecoveryTask=null;});
  return recipientRecoveryTask;
 }
 void restoreSavedMessageRecipient();
@@ -1699,6 +1703,11 @@ window.addEventListener('leadintel:server-ready',()=>{void restoreSavedMessageRe
 for(const event of ['leadintel:server-conflict','leadintel:sync-resolving'])window.addEventListener(event,()=>{cancelPendingScriptGeneration();renderMessageWorkspace();});
 window.addEventListener('leadintel:sync-settled',()=>{recipientRecoveryAttempts=0;renderMessageWorkspace();void restoreSavedMessageRecipient();});
 window.addEventListener('leadintel:server-synced',()=>{if(!crmBridge()?.resolvingSync){renderMessageWorkspace();void restoreSavedMessageRecipient();}});
+window.addEventListener('leadintel:crm-refreshed',event=>{
+ if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;
+ // Let an earlier verification release its owner before using hydrated aliases.
+ void Promise.resolve(recipientRecoveryTask).then(()=>{renderMessageWorkspace();void restoreSavedMessageRecipient();});
+});
 
 
 window.addEventListener('leadintel:language-pack-updated',()=>{if(q('message-translation-panel'))renderMessageWorkspace();});
