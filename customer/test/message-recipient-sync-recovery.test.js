@@ -40,6 +40,23 @@ test('company records changing during recipient validation release pending state
  assert.doesNotMatch(h.w.document.body.textContent,/Checking your selected recipient/);
  }finally{release?.();h.w.close();}
 });
+test('a company refresh after successful validation restores the saved recipient without another sync event',async()=>{
+ const {h,choice,reads}=fixture();try{
+  assert.equal(await h.w.openBuyerScripts(choice),true);assert.equal(h.w.recipientReady(),true);
+  const before=h.item().drafts,count=reads();
+  h.w.dispatchEvent(new h.w.CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:'w1',domain:'buyer.example'}}));
+  assert.equal(h.w.recipientReady(),false);await settle();
+  assert.equal(h.w.recipientReady(),true);assert.equal(reads(),count+1);assert.deepEqual(h.item().drafts,before);
+ }finally{h.w.close();}
+});
+test('company refresh revalidation still rejects a changed contact and preserves the saved draft',async()=>{
+ const {h,b,choice}=fixture();try{
+  assert.equal(await h.w.openBuyerScripts(choice),true);const before=h.item().drafts;
+  b.getCrmCompany=async()=>({ok:true,company:{id:'crm1',normalized_domain:'buyer.example'},contacts:[{id:'c1',company_id:'crm1',name:'Different Person',work_email:'alex@buyer.example',email_status:'verified',verification_provider:'Apollo'}],activities:[]});
+  h.w.dispatchEvent(new h.w.CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:'w1',domain:'buyer.example'}}));await settle();
+  assert.equal(h.w.recipientReady(),false);assert.deepEqual(h.item().drafts,before);
+ }finally{h.w.close();}
+});
 test('recipient verification deadline clears pending, exposes retry and rejects the late response',async()=>{
  const {h,b,choice}=fixture();let release,expire;try{
  const get=b.getCrmCompany,originalTimer=h.w.setTimeout;

@@ -9,7 +9,7 @@ import './approved-linkedin-inmail.js?v=20261015-v1&mandatory-frames=20261016-v2
 import './linkedin-inmail-engine.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&native-storyselling=20261026-v4';
 import './linkedin-inmail-ui.js?v=20261015-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&startup-render=20261016-v2&app-dialogs=20261017-v1&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&native-storyselling=20261026-v4&character-contract=20261107-v1';
 import './test-email-ui.js?v=20261015-v1&app-dialogs=20261017-v1&recipient-gate=20261019-v1&rich-text=20261025-v1';
-import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261107-v10&template-research=20261107-v1&character-contract=20261107-v1&messages-controls=20261108-v1&event-flow-ux=20261112-v1';
+import './channel-scripts.js?v=20261015-v3&startup-render=20261016-v2&app-dialogs=20261017-v1&phone-masters=20261017-v1&fact-autofill=20261017-v2&quick-template=20261017-v1&retry-toolbar=20261017-v1&saved-banner=20261017-v1&professional-master=20261017-v2&messages-audit=20261021-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&story-style=20261026-v1&native-storyselling=20261026-v4&creator-library=20261101-v1&style-masters=20261107-v10&template-research=20261107-v1&character-contract=20261107-v1&messages-controls=20261108-v1&event-flow-ux=20261112-v1&recipient-refresh=20261115-v1';
 import './writing-workspace.js?v=20261023-v1&book-skills=20261027-v1&messages-reliability=20261031-v1';
 import './writing-assistant.js?v=20261012-v1&assistant-books=20261016-v4&step6-rescue=20261013-v11&assistant-window=20261015-v3&messages-audit=20261021-v1&writing-workspace=20261023-v1&single-writing-assistant=20261024-v1&rich-text=20261025-v1&storyselling=20261026-v1&native-storyselling=20261026-v4&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1';
 import './writing-assistant-context.js?v=20261012-v1&rescue=20261013-v1&assistant-contract=20261015-v2&inmail=20261015-v1&email-import=20261016-v2&email-voice=20261016-v2&core-atoms=20261016-v1&mandatory-frames=20261016-v2&assistant-books=20261016-v4&fact-autofill=20261017-v2&messages-audit=20261021-v1&writing-workspace=20261023-v1&rich-text=20261025-v1&storyselling=20261026-v1&book-skills=20261027-v1&skills-writing=20261028-v1&delivery-toolbar=20261029-v2&messages-reliability=20261031-v1&character-contract=20261107-v1';
@@ -78,13 +78,13 @@ function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.st
 function loadOutreach({recoverInterrupted=false}={}){const state=LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));if(recoverInterrupted)for(const item of state.items){if(['running','checking'].includes(item.localizationStatus)){item.localizationStatus='error';item.localizationApprovalBlocked=true;item.localizationMessage='Generation was interrupted by a reload. Regenerate this package before approval.';}if(item.researchStatus==='running')item.researchStatus='error';if(item.messageStudioDraft?.savePending)item.messageStudioDraft={...item.messageStudioDraft,savePending:false};}return state;}
 function reloadCompanyRecords(event){
   if(event.detail?.workspaceId!==crmBridge()?.workspace?.id)return;
-  const affected=outreach.selectedDomain===event.detail.domain,interrupted=buyerHandoffPending;
+  const affected=outreach.selectedDomain===event.detail.domain;
   outreach=loadOutreach();
   if(affected){buyerHandoffRequest++;buyerHandoffPending=false;messageChannelNavigationRequest++;scriptRestoreRequest++;handoffContact=null;messageTranslationController?.abort();messageTranslationOwner++;messageTranslationBusy=false;cancelPendingScriptGeneration();}
   renderAll();
   // A records refresh invalidates the old validation, not the saved selection.
   // Wait for any recovery owner to release its slot before validating fresh CRM data.
-  if(affected&&interrupted)queueMicrotask(()=>{void Promise.resolve(recipientRecoveryTask).then(()=>{recipientRecoveryAttempts=0;return restoreSavedMessageRecipient();});});
+  if(affected)queueMicrotask(()=>{void Promise.resolve(recipientRecoveryTask).then(()=>{recipientRecoveryAttempts=0;return restoreSavedMessageRecipient();});});
 }
 window.addEventListener('leadintel:company-records-changed',reloadCompanyRecords);
 function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
