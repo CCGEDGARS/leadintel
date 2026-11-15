@@ -8845,6 +8845,16 @@
         "budgetIncomplete,callsUsed:discoveryCallsUsed(),callLimit:discoveryCallLimit",
         "Evidence incomplete"
       ]
+    },
+    {
+      "id": "buyer-cards-refresh-during-company-scoring",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Company scoring must not freeze the separately owned Buyers view.",
+        "renderPipeline();refreshResearchBriefViews();\n  return;"
+      ]
     }
   ],
   "retry": {
