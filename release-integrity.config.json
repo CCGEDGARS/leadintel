@@ -8926,7 +8926,38 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "assistant-profile-review=20261115-v2"
+        "assistant-profile-review=20261115-v3",
+        "event-booking=20261115-v1"
+      ]
+    },
+    {
+      "id": "event-meeting-booking-scope",
+      "type": "text",
+      "url": "/customer/event-campaigns.js",
+      "status": 200,
+      "contains": [
+        "const link=url(c.bookingUrl),action=",
+        "Reply with your availability."
+      ]
+    },
+    {
+      "id": "event-writer-booking-scope",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "calendly:preview.campaign.bookingUrl||''",
+        "do not add a business web-call booking link"
+      ]
+    },
+    {
+      "id": "event-writing-context-booking-scope",
+      "type": "text",
+      "url": "/customer/writing-assistant-context.js",
+      "status": 200,
+      "contains": [
+        "const eventCampaign=facts.eventCampaign||item?.messageStudioDraft?.eventSnapshot||null;",
+        "calendly:eventCampaign.bookingUrl||'',meetingPlatform:''"
       ]
     }
   ],
