@@ -17,7 +17,9 @@ export async function step6Fixture(){
   if(url.hostname==='seller.example'){researchReads.push(url.href);return new Response('<html><body><h1>Fixture Industrial</h1><p>Our team manufactures industrial automation equipment and supplies custom machinery.</p></body></html>',{headers:{'Content-Type':'text/html'}});}
   if(url.hostname!=='api.openai.com')return;
   const body=JSON.parse(options.body),data=JSON.parse(body.input||'{}');
-  const request={kind:body.tools?'research':data.sources?'fields':data.context?.channel==='linkedin'?'linkedin':'other',style:data.style||data.mode||null,status:'pending'};
+  // Brief display inputs in this controlled fixture are already English.
+  const englishReview=String(body.instructions||'').includes('Translate every supplied value')&&Object.keys(data).length>0&&Object.values(data).every(value=>typeof value==='string');
+  const request={kind:body.tools?'research':data.sources?'fields':data.context?.channel==='linkedin'?'linkedin':englishReview?'translation':'other',style:data.style||data.mode||null,status:'pending'};
   providerRequests.push(request);
   if(request.kind==='fields'&&nextGate){const gate=nextGate;nextGate=null;gate.started();await gate.wait;}
   if(request.kind==='fields'&&nextFailure){const failure=nextFailure;nextFailure=null;request.status=failure;
@@ -26,7 +28,7 @@ export async function step6Fixture(){
   }
   request.status='complete';
   // Echo already valid English factual slots exactly, never supply whole copy.
-  const output=request.kind==='linkedin'?{message:'Hello '+data.context.firstName+',\n\nI’m '+data.essentials.sender+' from '+data.essentials.company+'. Would you be open to a 20-minute Zoom conversation?\n\n'+data.essentials.calendly}:body.tools?{results:[]}:data.sources||{};
+  const output=request.kind==='linkedin'?{message:'Hello '+data.context.firstName+',\n\nI’m '+data.essentials.sender+' from '+data.essentials.company+'. Would you be open to a 20-minute Zoom conversation?\n\n'+data.essentials.calendly}:body.tools?{results:[]}:englishReview?data:data.sources||{};
   return Response.json({output_text:JSON.stringify(output),...(body.tools?{output:[{type:'web_search_call',status:'completed',action:{sources:[]}}]}:{}),usage:{input_tokens:10,output_tokens:20}});
  }});
  try{

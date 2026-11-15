@@ -507,6 +507,19 @@
     return emptyBuyerDraft(item)&&!info.savedDraft&&!info.scriptSavedAt&&!['manual','rewrite'].includes(info.editorOrigin);
   }
   function buyerDraftLanguage(item){const info=item?.messageStudioDraft||{};return clean(info.languageVersions?.activeLanguage||item?.localizationProvenance?.language||item?.campaignScenario?.resolvedLanguage||item?.campaignScenario?.language||info.essentials?.language||'en').toLowerCase();}
+  function sameSavedRecipientIdentity(left,right){
+    if(!left||!right||typeof left!=='object'||typeof right!=='object'||Array.isArray(left)||Array.isArray(right))return false;
+    if(JSON.stringify(stable(left))===JSON.stringify(stable(right)))return true;
+    // A reselected, currently verified recipient can cite a newer source page.
+    // Keep the saved citation; every other identity field must remain exact.
+    if(left.version!==1||right.version!==1)return false;
+    const required=['personId','companyDomain','companyId','companyName','name','title','organization','researchKey'];
+    if(required.some(key=>typeof left[key]!=='string'||!left[key].trim()||typeof right[key]!=='string'||!right[key].trim())||typeof left.linkedinUrl!=='string'||typeof right.linkedinUrl!=='string')return false;
+    const validSource=value=>{try{if(typeof value!=='string'||!value.trim())return false;const source=new URL(value);return source.protocol==='https:'&&!source.username&&!source.password;}catch{return false;}};
+    if(!validSource(left.identitySourceUrl)||!validSource(right.identitySourceUrl))return false;
+    const {identitySourceUrl:olderSource,...savedIdentity}=left,{identitySourceUrl:currentSource,...currentIdentity}=right;
+    return JSON.stringify(stable(savedIdentity))===JSON.stringify(stable(currentIdentity));
+  }
   function preferNewerSavedBuyerDraft(local,remote){
     if(!remote||!canReconcileSavedBuyerDraft(local)||!['email','linkedin'].includes(remote.channel)||!clean(remote.domain)||!clean(remote.selectedPersonId)||!buyerDraftCopy(remote).message.trim())return false;
     const remoteTime=savedBuyerDraftTime(remote);if(remoteTime===null)return false;
@@ -518,7 +531,7 @@
     const localIdentity=local?.messageStudioDraft?.recipientIdentity,remoteIdentity=remote.messageStudioDraft?.recipientIdentity;
     const validIdentity=(identity,item)=>identity&&identity.version===1&&clean(identity.personId)===clean(item.selectedPersonId)&&domain(identity.companyDomain)===domain(item.domain);
     if(remoteIdentity&&!validIdentity(remoteIdentity,remote)||localIdentity&&!validIdentity(localIdentity,local))return false;
-    if(localIdentity&&(!remoteIdentity||JSON.stringify(stable(localIdentity))!==JSON.stringify(stable(remoteIdentity)))||knownLocal&&Boolean(localIdentity)!==Boolean(remoteIdentity))return false;
+    if(localIdentity&&(!remoteIdentity||!sameSavedRecipientIdentity(localIdentity,remoteIdentity))||knownLocal&&Boolean(localIdentity)!==Boolean(remoteIdentity))return false;
     const workspaces=[local,remote].flatMap(item=>[item?.workspaceId,item?.workspace_id,item?.messageStudioDraft?.workspaceId,item?.messageStudioDraft?.workspace_id,item?.messageStudioDraft?.recipientIdentity?.workspaceId,item?.messageStudioDraft?.recipientIdentity?.workspace_id]).map(clean).filter(Boolean);
     if(new Set(workspaces).size>1)return false;
     const localTime=savedBuyerDraftTime(local);
@@ -532,5 +545,5 @@
     const buyerDrafts=Object.fromEntries(Object.entries(input.buyerDrafts||{}).filter(([key,item])=>item&&key===buyerDraftKey(item.domain,item.selectedPersonId,item.channel)).slice(-100).map(([key,item])=>[key,normalizeItem(item)]).filter(([key,item])=>active.get(key)!==JSON.stringify(item)));
     return {buyerDrafts,...(input.messageStudio&&typeof input.messageStudio==='object'?{messageStudio:JSON.parse(JSON.stringify(input.messageStudio))}:{}),selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items};}
 
-  return {messageSourceAuthority,sourceAuthorityCurrent,approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,canReconcileSavedBuyerDraft,preferNewerSavedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
+  return {messageSourceAuthority,sourceAuthorityCurrent,approvalCurrent,approvedRecipient,attachResearchBrief,buildResearchBrief,researchBriefEvidence,buyerDraftKey,rememberBuyerDraft,savedBuyerDraft,canReconcileSavedBuyerDraft,sameSavedRecipientIdentity,preferNewerSavedBuyerDraft,specificEventEvidence,linkedInDraftPrompt,parseLinkedInDraft,normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
 });
