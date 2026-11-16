@@ -128,7 +128,7 @@
       const archive=root.LeadIntelAccountCache;
       if(archive.publishRecoverySnapshot){
         const expectedPointer=root.localStorage.getItem(SNAPSHOT_KEY);
-        return archive.publishRecoverySnapshot(snapshot,{pointerKey:SNAPSHOT_KEY,expectedPointer,eligibleBaseline:isAcknowledgedBaseline,encodePointer:key=>JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key})}).then(key=>{
+        return archive.publishRecoverySnapshot(snapshot,{pointerKey:SNAPSHOT_KEY,expectedPointer,eligibleBaseline:isAcknowledgedBaseline,deferMaintenance:true,encodePointer:key=>JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key})}).then(key=>{
           const pointer=JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key});
           if(root.localStorage.getItem(SNAPSHOT_KEY)!==pointer)throw new Error('Recovery pointer changed while saving; local data was preserved');
           snapshotEncoded=pointer;snapshotDecoded=snapshot;return snapshot;

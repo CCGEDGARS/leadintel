@@ -188,6 +188,18 @@ jobs:
             --config release-integrity.config.json \
             --proof release-proof.json
 
+      - name: Record structured release proof
+        if: always()
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          if (fs.existsSync('release-proof.json')) {
+            console.log('LEADINTEL_RELEASE_PROOF_BEGIN');
+            console.log(fs.readFileSync('release-proof.json', 'utf8'));
+            console.log('LEADINTEL_RELEASE_PROOF_END');
+          }
+          JS
+
       - name: Upload release proof
         if: always()
         uses: actions/upload-artifact@v4
