@@ -2371,6 +2371,61 @@
     if(value==='Executive leadership'||isExecutiveBuyer({title:value}))return 'Executive';
     return /procure|purchas|sourc|inköp|inkop|buyer/i.test(value)?'Procurement / sourcing':/engineer|technical|tekn|ingenjör/i.test(value)?'Engineering':/operations|plant|production|maintenance|drift|anlägg|produktion|underhåll/i.test(value)?'Operations':/project|projekt|capex|investment/i.test(value)?'Projects':/ceo|chief executive|managing director|verkställande/i.test(value)?'Executive':value;
   }
+  function buyerEntityScopeReason(person={},candidate={}){
+    if(!clean(candidate.market)||!clean(candidate.company))return '';
+    const title=clean(person.title),separator=/[,–—|]|\s+(?:at|of|for)\s+/i.exec(title);
+    if(separator&&companyNameMatches(title.slice(separator.index+separator[0].length),candidate.company))return '';
+    const words=value=>clean(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    const anchors=[words(candidate.company).replace(/\s+(?:group|inc|ltd|limited|plc|gmbh|ab|oy|llc)$/,''),words(domainBrand(candidate.domain))].filter(Boolean);
+    const entity=title.split(/\s*[,–—|]\s*|\s+(?:at|of|for)\s+/i).slice(1).find(part=>{
+      if(companyNameMatches(part,candidate.company))return false;
+      if(/^(?:gmbh|inc\.?|incorporated|ltd\.?|limited|llc|plc|aps|sarl|srl|oy)$/i.test(part))return false;
+      const value=words(part),named=anchors.some(anchor=>value===anchor||value.startsWith(anchor+' '));
+      return named||/\b(?:gmbh|inc\.?|incorporated|ltd\.?|limited|llc|plc|aps|sarl|srl|oy)\s*$/i.test(part);
+    });
+    return entity?'Published role names a different company entity: '+entity+'. Responsibility for '+clean(candidate.market)+' requires review.':'';
+  }
+  let buyerCountryNames=null;
+  function buyerCountryCode(value){
+    const key=value=>clean(value).toLowerCase().replace(/[.]/g,'');
+    if(!buyerCountryNames){
+      buyerCountryNames=new Map();
+      if(typeof Intl?.DisplayNames==='function'){
+        const names=new Intl.DisplayNames(['en'],{type:'region'});
+        const codes='AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW';
+        for(const code of codes.split(' ')){
+          const name=names.of(code);if(name&&name!==code){buyerCountryNames.set(key(name),code.toLowerCase());buyerCountryNames.set(key(code),code.toLowerCase());}
+        }
+      }
+      for(const rule of MARKET_RULES)for(const name of [rule.code,...rule.aliases,...rule.searchNames])buyerCountryNames.set(key(name),rule.code);
+      buyerCountryNames.set('usa','us');buyerCountryNames.set('uk','gb');
+    }
+    return buyerCountryNames.get(key(value))||'';
+  }
+  function namedBuyerSourceCountry(quote,person){
+    const text=String(quote||''),headings=[...text.matchAll(/(?:^|\s)(#{1,6})\s+/g)],parents=[];
+    for(let i=0;i<headings.length;i++){
+      const match=headings[i],level=match[1].length,label=clean(text.slice(match.index+match[0].length,headings[i+1]?.index??text.length).split(/\r?\n/)[0]);
+      while(parents.length&&parents.at(-1).level>=level)parents.pop();
+      const lower=label.toLowerCase(),name=clean(person.publicName||person.name).toLowerCase(),tail=lower.slice(name.length).replace(/^[\s\p{P}]+/u,''),role=clean(person.title).toLowerCase();
+      if(name&&lower.startsWith(name)&&(!lower[name.length]||!/[\p{L}\p{N}]/u.test(lower[name.length]))&&(!tail||role&&tail.startsWith(role)&&(!tail[role.length]||!/[\p{L}\p{N}]/u.test(tail[role.length]))))return [...parents].reverse().find(row=>row.country)?.country||'';
+      const heading=label.split(/\b(?:office address|address|street|telephone|phone|e-mail|email)\s*:/i)[0].replace(/\s*\([^)]*\).*$/,'').trim(),country=parents.some(row=>row.country)||heading.length<=2?'':buyerCountryCode(heading);
+      parents.push({level,country});
+    }
+    return '';
+  }
+  function buyerSourceMarketReason(person={},candidate={}){
+    const market=buyerCountryCode(candidate.market);if(!market)return '';
+    const records=[['publicEmailEvidence','publicEmailUrl'],['publicPhoneEvidence','publicPhoneUrl']],countries=new Set();
+    for(const [field,urlField]of records){
+      const proof=person[field];if(proof?.version!==2||proof.sourceRead!==true||proof.sourceKind!=='official'||normalizeUrl(proof.url)!==normalizeUrl(person[urlField])||!EvidencePolicy.firstParty(proof.url,candidate.domain))continue;
+      const country=namedBuyerSourceCountry(proof.quote,person);if(!country)continue;
+      const age=Date.now()-Date.parse(proof.checkedAt||'');if(!Number.isFinite(age)||age<0||age>=30*86400000)return 'Named official contact location requires a fresh source review';
+      countries.add(country);
+    }
+    if(countries.size>1)return 'Named official contact sources have conflicting location evidence; review target-market responsibility';
+    return countries.size&&!countries.has(market)?'Named official contact card is listed in another country; responsibility for '+clean(candidate.market)+' requires review.':'';
+  }
   function qualifyBuyer(person={},profile={},candidate={},options={}){
     const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company)||companyBrandMatches(person.organization,candidate.domain),directory=person.identitySource==='apollo';
     const blocked=[];
@@ -2381,6 +2436,8 @@
     if(/^(?:Close|Menu|Management|Leadership|Read more|Stäng|Läs mer|Koncernledning)\s/iu.test(clean(person.publicName||person.name)))blocked.push('Identity contains a website control label; research again');
     if(!full||person.identityStatus==='pending'||person.nameVerification==='pending')blocked.push('Full identity unresolved');
     if(person.opportunityScope?.status==='review_required')blocked.push(person.opportunityScope.reason||'Opportunity responsibility requires review');
+    const entityScope=buyerEntityScopeReason(person,candidate);if(entityScope)blocked.push(entityScope);
+    const sourceMarket=buyerSourceMarketReason(person,candidate);if(sourceMarket)blocked.push(sourceMarket);
     if(['recruitment_contact','conflict'].includes(person.roleReview?.status)||person.roleReview?.status==='unconfirmed'&&isExecutiveBuyer(person))blocked.push(person.roleReview.reason||'Current buying role requires confirmation');
     const normalizeMarket=value=>{const normalized=clean(value).toLowerCase().replace(/^(?:uk|great britain|england|scotland|wales)$/,'united kingdom').replace(/^sverige$/,'sweden');return marketRule(normalized)?.code||normalized;};
     const market=normalizeMarket(candidate.market),country=normalizeMarket(person.country||(/^UK\b/i.test(clean(person.title))?'United Kingdom':''));
