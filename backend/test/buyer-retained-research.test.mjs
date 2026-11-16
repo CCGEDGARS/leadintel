@@ -31,8 +31,9 @@ test('a completed bounded two-provider dossier attempt does not strand contact a
 });
 test('history from a changed seller context or another workspace cannot restore source proof',async t=>{
  const f=await history(t),input=JSON.parse(f.old.input_json);input.workspaceContext='another-seller-context';f.DB.raw.prepare('UPDATE buyer_research_jobs SET input_json=? WHERE id=?').run(JSON.stringify(input),f.old.id);
- const view=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.equal(D.confirmedBuyerShortlist(view.candidate.people,{decisionMakers:f.c.buyerRoles},view.candidate).priorityIds.length,0);
- f.DB.raw.prepare('UPDATE buyer_research_jobs SET workspace_id=?,input_json=? WHERE id=?').run('storage-w2',f.old.input_json,f.old.id);const foreign=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.equal(D.confirmedBuyerShortlist(foreign.candidate.people,{decisionMakers:f.c.buyerRoles},foreign.candidate).priorityIds.length,0);
+ const current=JSON.parse(f.current.result_json),proofs=current.people.map(person=>person.publicEmailEvidence||null);
+ const view=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.deepEqual(view.candidate.people.map(person=>person.publicEmailEvidence||null),proofs);assert.ok(view.candidate.people.every(person=>!D.acceptedOfficialBuyerEmail(view.candidate,person)),'existing named listings cannot inherit another seller’s read proof');
+ f.DB.raw.prepare('UPDATE buyer_research_jobs SET workspace_id=?,input_json=? WHERE id=?').run('storage-w2',f.old.input_json,f.old.id);const foreign=await publicBuyerJob(f.env,f.current,{recoverRetained:true});assert.deepEqual(foreign.candidate.people.map(person=>person.publicEmailEvidence||null),proofs);assert.ok(foreign.candidate.people.every(person=>!D.acceptedOfficialBuyerEmail(foreign.candidate,person)),'existing named listings cannot inherit another workspace’s read proof');
 });
 test('a fresh durable job acquires four Viscaria contacts from recorded public sources without seeded confirmations',async t=>{
  const {default:replay}=await import('../../customer/test/fixtures/viscaria-contact-replay.cjs'),{c,pages,searches}=replay(),f=await buyerJobsFixture(t);

@@ -37,7 +37,7 @@ for(const ageDays of [0,31])test(`actual scheduler preserves the original timest
  const pending=[],noop=async()=>({completed:0});await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>pending.push(p)},{runBuyerResearchJobs:(env,options)=>runBuyerResearchJobs(env,{...options,jobId:job.id,maxJobs:1,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(pending);
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),result=JSON.parse(saved.result_json),value=result.people.find(p=>p.id===person.id);
  assert.equal(providerCalls,0);assert.equal(value.publicEmailUrl,E1);assert.equal(value.publicEmailEvidence.url,E1);assert.equal(value.publicEmailEvidence.sourceRead,true);
- assert.equal(D.acceptedOfficialBuyerEmail(result,value),ageDays?'':email);assert.equal(D.confirmedBuyerContactData(result,value).email,ageDays?'':email,'A fresh source-check pointer cannot renew a 31-day-old source body');
+ assert.equal(D.acceptedOfficialBuyerEmail(result,value),ageDays?'':email);assert.equal(D.confirmedBuyerContactData(result,value).email,email,'The retained listing remains manually usable without renewing its original source read');
  assert.equal(value.publicEmailEvidence.checkedAt,checkedAt,'The persisted person proof must retain the actual read time, even through the extract wrapper');
  const receipt=f.DB.raw.prepare('SELECT status,attempts,result_json FROM buyer_research_tasks WHERE job_id=? AND task_key=?').get(job.id,key);assert.equal(receipt.status,'complete');assert.equal(receipt.attempts,1);assert.equal(receipt.result_json,JSON.stringify(page));
 });
