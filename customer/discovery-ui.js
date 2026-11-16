@@ -1494,7 +1494,16 @@ function buyerContactRows(person={},candidate={},result={}){
   const savedData=LeadIntelDiscovery.safeContactData?.(person.contactData,person,canonicalDomain(candidate.domain));
   const savedPhone=savedData?.phone?.status==='provider_listed'&&/^\+[1-9]\d{6,14}$/.test(savedData.phone.number||'')?savedData.phone.number:'';
   const state=channel=>{
-    const row=channel==='gmail'?person.contactResearch?.checks?.gmail||{status:'not_searched'}:person.contactResearch?.channels?.[channel]||person.contactResearch?.checks?.[channel]||{status:channel==='company'?person.emailResearch?.status||'not_searched':'not_searched'};
+    let row=channel==='gmail'?person.contactResearch?.checks?.gmail||{status:'not_searched'}:person.contactResearch?.channels?.[channel]||person.contactResearch?.checks?.[channel]||{status:channel==='company'?person.emailResearch?.status||'not_searched':'not_searched'};
+    if(row.status==='not_searched'){
+      const keys=channel==='company'?['official','public','direct_email','deep']:[channel],checks=keys.map(key=>person.contactResearch?.checks?.[key]).filter(Boolean);
+      const records=checks.flatMap(check=>check.queryLog||[]).filter(receipt=>['complete','partial','failed','error','unavailable','canceled','running'].includes(receipt.status)&&Number.isFinite(Date.parse(receipt.checkedAt||receipt.startedAt||'')));
+      if(checks.some(check=>check.status==='running'))row={...row,status:'running'};
+      else if(records.length){
+        const complete=channel!=='company'&&LeadIntelDiscovery.buyerResearchCheckPassed?.(candidate,person,channel);
+        row={...row,status:complete?'complete':'partial',reason:`${records.length} saved ${channel==='company'?'work-email':channel} searches recorded. Contact and source checks remain unfinished; use Recheck to continue.`};
+      }
+    }
     if(channel==='phone'&&['pending_phone','processing','failed','not_found'].includes(result?.request?.status)){
       const paid=result.request.status,publicNote=row.status==='complete'?' Public-source searches completed without a direct phone.':'';
       return {status:['pending_phone','processing'].includes(paid)?'running':paid==='failed'?'partial':'complete',reason:(paid==='not_found'?'Apollo completed without a usable direct phone.':paid==='failed'?'Phone lookup failed; checks incomplete.':'Apollo phone lookup pending; refresh to check the saved result.')+publicNote,paid:true};
@@ -3668,7 +3677,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     let patternResearch=null;
     // Known identities get person-first contact evidence before broad company
     // scraping can consume the request budget. Pending names still resolve first.
-    if(candidate.people.length&&candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name))){
+    if(candidate.people.length&&candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.name)&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name))){
       patternResearch=await mandatory();
       if(!canContinue())return false;
       research.patternSearches=patternResearch.searches;research.checkedAt=new Date().toISOString();commit();saveDiscovery();renderPipeline();
@@ -3711,8 +3720,8 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
       }
     }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.issues.push('Official homepage unavailable');}
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain,candidate.company);
-    if(!patternResearch&&candidate.people.length&&candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)))patternResearch=await mandatory();
-    const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
+    // Resolve truncated identities and their profiles before binding mandatory receipts.
+    const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>LeadIntelDiscovery.hasFullBuyerName(person.name)?person.publicNameUrl?person.publicName:person.name:String(person.name||person.publicName||'').trim().split(/\s+/)[0]).filter(Boolean).slice(0,4);
     let profileIssue='';
     if(profileNames.length){
       onProgress?.({label:'Cross-checking direct buyer profiles'});

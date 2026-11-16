@@ -2235,7 +2235,8 @@
       }
       return receipts;
     };
-    const reusableQueryCheck=(previous,key,queries)=>!options.force&&(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(Date.parse(previous.checkedAt))&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000);
+    const queryCheckPassed=(previous,key,queries)=>(key!=='linkedin'||previous?.profileMatchVersion===2)&&previous?.status==='complete'&&Number.isFinite(Date.parse(previous.checkedAt))&&Date.now()-Date.parse(previous.checkedAt)>=0&&Date.now()-Date.parse(previous.checkedAt)<30*86400000&&previous.queryLog?.length===queries.length&&previous.queryLog.every((entry,index)=>entry.query===queries[index]&&buyerResearchQueryReceiptPassed(entry)&&Number.isFinite(Date.parse(entry.checkedAt))&&Date.now()-Date.parse(entry.checkedAt)>=0&&Date.now()-Date.parse(entry.checkedAt)<30*86400000);
+    const reusableQueryCheck=(previous,key,queries)=>!options.force&&queryCheckPassed(previous,key,queries);
     const currentChecks=person=>equivalentBuyerResearchIdentity(person.contactResearch?.identityKey,buyerResearchIdentityKey(candidate,person))?person.contactResearch.checks||{}:{};
     const completedWork=person=>{
       const checks=currentChecks(person),plan=buyerResearchQueryPlan(candidate,person);
@@ -2244,14 +2245,28 @@
     // Resume unfinished work before spending a slice reconciling its completed
     // prefix. These are scheduling choices, never new completion/identity proof.
     const publicWork=[...people].sort((a,b)=>Number(completedWork(a))-Number(completedWork(b))||Number(priorities.includes(b))-Number(priorities.includes(a)));
-    const profileWaveDone=new Set(),initialProfiles=new Map(people.map(person=>[person,normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)]));
-    const profileWork=publicWork.filter(person=>{if(reusableQueryCheck(currentChecks(person).linkedin,'linkedin',buyerResearchQueryPlan(candidate,person).linkedin)){profileWaveDone.add(person);report.reusedChecks++;return false;}return true;});
-    const researchPerson=async(person,{profilesOnly=false}={})=>{
+    const profileWaveDone=new Set(),profileWaveIdentity=new Map(),initialProfiles=new Map(people.map(person=>[person,normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)]));
+    const profileWork=publicWork.filter(person=>{if(reusableQueryCheck(currentChecks(person).linkedin,'linkedin',buyerResearchQueryPlan(candidate,person).linkedin)){profileWaveDone.add(person);profileWaveIdentity.set(person,buyerResearchIdentityKey(candidate,person));report.reusedChecks++;return false;}return true;});
+    const coreKeys=policy.requiredChecks.filter(key=>key!=='linkedin'&&key!=='gmail'),coreWaveDone=new Set(),coreWaveStats=new Map(),coreWaveIdentity=new Map(),sourceHandled=new Set();
+    const syncContactChannels=person=>{
+      const research=person.contactResearch;if(!research||!equivalentBuyerResearchIdentity(research.identityKey,buyerResearchIdentityKey(candidate,person)))return;const checks=research.checks||{},plan=buyerResearchQueryPlan(candidate,person),started=['official','public','direct_email','deep'].some(key=>checks[key]&&checks[key].status!=='not_searched');
+      const complete=key=>queryCheckPassed(checks[key],key,plan[key]),channel=key=>{const row=checks[key];if(!row)return {status:'not_searched'};const summary=key==='gmail'?{...row}:{status:row.status,reason:row.reason||''};return row.status==='complete'&&!complete(key)?{...summary,status:'partial',reason:'Saved searches need current query and source checks; use Recheck to continue.'}:summary;};
+      research.channels={...research.channels,company:{status:!started?'not_searched':['official','public','direct_email'].every(complete)&&(!priorities.includes(person)||attributable(person)||complete('deep'))?'complete':'partial'},phone:channel('phone'),linkedin:channel('linkedin'),gmail:channel('gmail')};
+    };
+    const coreWork=publicWork.filter(person=>{
+      const checks=currentChecks(person),plan=buyerResearchQueryPlan(candidate,person);
+      if(coreKeys.every(key=>reusableQueryCheck(checks[key],key,plan[key]))){coreWaveDone.add(person);coreWaveIdentity.set(person,buyerResearchIdentityKey(candidate,person));report.reusedChecks+=coreKeys.length;return false;}
+      return true;
+    });
+    const researchPerson=async(person,{profilesOnly=false,coreOnly=false}={})=>{
       await guard();const name=clean(person.publicName||person.name),identityKey=buyerResearchIdentityKey(candidate,person);
       if(!hasFullBuyerName(name)||person.identityStatus==='pending'||person.nameVerification==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
+      if(coreWaveDone.has(person)&&!equivalentBuyerResearchIdentity(coreWaveIdentity.get(person),identityKey)){coreWaveDone.delete(person);coreWaveStats.delete(person);sourceHandled.delete(person);}
+      if(profileWaveDone.has(person)&&!equivalentBuyerResearchIdentity(profileWaveIdentity.get(person),identityKey))profileWaveDone.delete(person);
       const prior=person.contactResearch;
       const research=equivalentBuyerResearchIdentity(prior?.identityKey,identityKey)?prior:{version:1,evidenceVersion:2,identityKey,checks:{},channels:{}};research.identityKey=identityKey;person.contactResearch=research;person.gmailCandidates=gmailGuessCandidates(person);
-      collect(person,sourceRows.slice());let failed=profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0,searches=0,successfulSearches=0;const failedPages=new Set();
+      const coreStats=coreWaveStats.get(person);
+      collect(person,sourceRows.slice());let failed=coreStats?.failed??(profileWaveDone.has(person)?(research.checks.linkedin?.queryLog||[]).filter(row=>row.status==='partial').length:0),searches=0,successfulSearches=coreStats?.successfulSearches||0;const failedPages=coreStats?.failedPages||new Set();
       const run=async(key,queries,execute=search)=>{
         const previous=research.checks[key];
         if(reusableQueryCheck(previous,key,queries)){report.reusedChecks++;return;}
@@ -2280,22 +2295,28 @@
       const queries=buyerResearchQueryPlan(candidate,person);
       // Revalidate the known named source before broad fallback searches can
       // consume this slice. Attribution does not imply completed research.
-      if(!profilesOnly){
+      if(!profilesOnly&&!sourceHandled.has(person)){
         const confirmedSource=person.publicEmailSourceCheck?.status==='confirmed'&&clean(person.publicEmailSourceCheck.email).toLowerCase()===clean(person.publicEmail).toLowerCase()?person.publicEmailSourceCheck.url:'';
         const savedSource=(acceptedOfficialBuyerEmail(candidate,person)?person.publicEmailUrl:confirmedSource)||person.publicEmailUrl||person.publicPhoneUrl||person.publicNameUrl;
         if(savedSource&&readPage)for(const receipt of await extract(person,[{url:savedSource}]))if(receipt.status==='partial')failedPages.add(receipt.url);
+        sourceHandled.add(person);
       }
-      if(!profilesOnly&&options.recheckPlans?.[String(person.id)])await run('gmail',queries.gmail);
-      if(!profilesOnly&&options.recheckPlans?.[String(person.id)]?.queries?.length)await run('followup',options.recheckPlans[String(person.id)].queries);
       if(!profileWaveDone.has(person)){
         await run('linkedin',queries.linkedin);
         const matched=matchPublicLinkedInProfiles([person],sourceRows,candidate.company)[0];Object.assign(person,matched,matchBuyerScopeEvidence(matched,sourceRows,candidate));
-        research.identityKey=buyerResearchIdentityKey(candidate,person);research.channels.linkedin={status:research.checks.linkedin?.status||'not_searched'};profileWaveDone.add(person);
+        research.identityKey=buyerResearchIdentityKey(candidate,person);research.channels.linkedin={status:research.checks.linkedin?.status||'not_searched'};profileWaveDone.add(person);profileWaveIdentity.set(person,buyerResearchIdentityKey(candidate,person));
         onProgress?.({label:`LinkedIn profiles · ${people.filter(p=>p.publicLinkedinUrl||p.linkedin_url).length}/${people.length} found`,profilesReady:true});
       }
       if(profilesOnly){person.emailResearch={...(person.emailResearch||{}),status:'partial',searches:(person.emailResearch?.searches||0)+searches,failed,checkedAt:''};return;}
       const company=clean(candidate.company);
-      for(const key of policy.requiredChecks.filter(key=>key!=='linkedin'&&!(key==='gmail'&&options.recheckPlans?.[String(person.id)])))await run(key,queries[key]);
+      if(!coreWaveDone.has(person))for(const key of coreKeys)await run(key,queries[key]);
+      if(coreOnly){
+        coreWaveDone.add(person);coreWaveIdentity.set(person,research.identityKey);coreWaveStats.set(person,{failed,successfulSearches,failedPages});syncContactChannels(person);
+        person.emailResearch={...(person.emailResearch||{}),status:'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
+        return;
+      }
+      await run('gmail',queries.gmail);
+      if(options.recheckPlans?.[String(person.id)]?.queries?.length)await run('followup',options.recheckPlans[String(person.id)].queries);
       if(options.crossCheck&&(!attributable(person)||!person.publicPhone))await run('independent',[`Independent grounded check: ${name} | ${company} | ${person.title}`],async()=>{
         let result;try{result=await options.crossCheck(person);}catch(error){error.researchTrace=[{provider:'gemini',status:'failed',reason:'Independent grounded check failed'}];throw error;}await guard();
         const rows=(result?.results||[]).map(row=>({...row,searchProvider:'gemini'}));
@@ -2308,7 +2329,7 @@
       if(priorities.includes(person)&&!attributable(person)){report.deepPeople++;await run('deep',buyerDeepContactQueries(candidate,person));}
       else if(!research.checks.deep||research.checks.deep.status!=='complete')research.checks.deep={status:'not_needed',reason:attributable(person)?'Published company email already found':'Outside the four priority escalation places',attempts:0,checkedAt:new Date().toISOString()};
       research.policyVersion=policy.version;
-      research.channels={...research.channels,company:{status:research.checks.official?.status==='complete'&&research.checks.public?.status==='complete'&&(!priorities.includes(person)||attributable(person)||research.checks.deep?.status==='complete')?'complete':'partial'},phone:{status:research.checks.phone?.status||'not_searched'},linkedin:{status:research.checks.linkedin?.status||'not_searched'},gmail:research.checks.gmail?{...research.checks.gmail}:{status:'not_searched'}};
+      syncContactChannels(person);
       const checks=[...policy.requiredChecks.map(key=>research.checks[key]),...(research.checks.independent&&research.checks.independent.status!=='not_needed'?[research.checks.independent]:[]),...(priorities.includes(person)&&!attributable(person)?[research.checks.deep]:[])];
       person.emailResearch={...(person.emailResearch||{}),status:!failed&&!failedPages.size&&checks.every(row=>row?.status==='complete')?'complete':!successfulSearches&&failed?'unavailable':'partial',searches:(person.emailResearch?.searches||0)+searches,failed:failed+failedPages.size,checkedAt:new Date().toISOString()};
       onProgress?.({label:`Verifying public contact evidence · ${people.filter(p=>p.emailResearch?.status==='complete').length}/${people.length} people checked`});
@@ -2321,7 +2342,13 @@
       if(readPage&&people.length&&!sourceRows.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain))&&!people.some(person=>companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain))){
         try{await extract(people[0],[{url:`https://${companyIdentityDomain(candidate.domain)}/`}]);}catch(error){if(error.code||signal?.aborted)throw error;}
       }
-      for(let i=0;i<publicWork.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(publicWork.slice(i,i+policy.concurrency).map(researchPerson));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}}
+      // Give every selected identity its core work-email and phone checks before
+      // Gmail or alternative expansion can consume the shared contact window.
+      for(const cohort of [publicWork.filter(person=>!completedWork(person)&&priorities.includes(person)),publicWork.filter(person=>!completedWork(person)&&!priorities.includes(person)),publicWork.filter(person=>completedWork(person)&&priorities.includes(person)),publicWork.filter(person=>completedWork(person)&&!priorities.includes(person))]){
+        const core=cohort.filter(person=>coreWork.includes(person)||!equivalentBuyerResearchIdentity(coreWaveIdentity.get(person),buyerResearchIdentityKey(candidate,person)));
+        for(let i=0;i<core.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(core.slice(i,i+policy.concurrency).map(person=>researchPerson(person,{coreOnly:true})));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}
+        for(let i=0;i<cohort.length;i+=policy.concurrency){await guard();const outcomes=await Promise.allSettled(cohort.slice(i,i+policy.concurrency).map(person=>researchPerson(person)));const stopped=outcomes.find(row=>row.status==='rejected');if(stopped)throw stopped.reason;}
+      }}
     catch(error){report.stopReason=signal?.aborted||error.code==='CANCELED'?'canceled':error.code==='TIME_BUDGET'?'time_budget':'provider_unavailable';report.gaps.push(clean(error.message).slice(0,220));}
     // A returned checkpoint has no active provider. Retain completed receipts
     // and mark interrupted work partial so a stopped run never says Searching.
@@ -2329,6 +2356,7 @@
       if(check.status==='running'){check.status='partial';check.reason=report.gaps.at(-1)||'Research pass interrupted';check.checkedAt=new Date().toISOString();}
       for(const entry of check.queryLog||[]){if(entry.status==='running')entry.status='partial';if(entry.searchStatus==='running')entry.searchStatus='partial';}
     }
+    for(const person of people)syncContactChannels(person);
     // Resolve profiles against all returned evidence together: attaching the
     // first match early would hide a distinct same-name result found later.
     for(const person of people){const before=buyerResearchIdentityKey(candidate,person),matched=matchPublicLinkedInProfiles([person],sourceRows,candidate.company)[0];if(matched.linkedinProfileReview&&!initialProfiles.get(person)){delete person.publicLinkedinUrl;delete matched.publicLinkedinUrl;}Object.assign(person,matched,matchBuyerScopeEvidence(matched,sourceRows,candidate));if(person.contactResearch?.identityKey===before)person.contactResearch.identityKey=buyerResearchIdentityKey(candidate,person);}

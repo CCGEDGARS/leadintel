@@ -11,6 +11,26 @@ function runtime(){
 }
 function documentFor(html){return new JSDOM(html).window.document;}
 function visibleText(element){const copy=element.cloneNode(true);copy.querySelectorAll('details:not([open])').forEach(details=>{const summary=details.querySelector('summary');details.replaceChildren(summary);});return copy.textContent;}
+test('saved email and partial phone receipts cannot be hidden by a stale not-searched channel summary',()=>{
+ const {ctx,person,candidate}=runtime(),stamp=new Date().toISOString();
+ const check=(count,status='complete')=>({status,checkedAt:stamp,attempts:count,queryLog:Array.from({length:count},(_,i)=>({query:'Recorded query '+i,status,searchStatus:status,checkedAt:stamp,sourceReads:[]}))});
+ person.contactResearch={checks:{linkedin:check(1),official:check(1),public:check(1),direct_email:check(2),phone:check(1,'partial')},channels:{company:{status:'not_searched'},phone:{status:'not_searched'},gmail:{status:'not_searched'}}};
+ const doc=documentFor(ctx.buyerContactRows(person,candidate));
+ for(const channel of ['company','phone']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'incomplete');assert.match(visibleText(field),/Checks incomplete/);assert.doesNotMatch(visibleText(field),/Not checked|Not found/);}
+ assert.match(doc.querySelector('[data-contact-channel="company"] details').textContent,/4 .*searches recorded/);
+ assert.equal(doc.querySelector('[data-contact-channel="gmail"]').dataset.contactStatus,'not_searched','LinkedIn and work-email queries never impersonate Gmail execution');
+});
+test('LinkedIn-only research leaves genuinely unstarted email and phone fields unchecked',()=>{
+ const {ctx,person,candidate}=runtime();person.contactResearch={checks:{linkedin:{status:'complete',queryLog:[{status:'complete',query:'LinkedIn match'}]}},channels:{company:{status:'not_searched'},phone:{status:'not_searched'}}};
+ const doc=documentFor(ctx.buyerContactRows(person,candidate));
+ for(const channel of ['company','phone','gmail']){const field=doc.querySelector(`[data-contact-channel="${channel}"]`);assert.equal(field.dataset.contactStatus,'not_searched');assert.match(visibleText(field),/Not checked/);}
+});
+test('a completed current phone receipt repairs its summary while a different identity remains incomplete',()=>{
+ const {ctx,person,candidate}=runtime(),stamp=new Date().toISOString(),query=D.buyerResearchQueryPlan(candidate,person).phone[0];
+ person.contactResearch={policyVersion:D.BUYER_CONTACT_RESEARCH_POLICY.version,identityKey:D.buyerResearchIdentityKey(candidate,person),checks:{phone:{status:'complete',checkedAt:stamp,queryLog:[{query,status:'complete',searchStatus:'complete',resultCount:0,sourceReads:[],checkedAt:stamp}]}},channels:{phone:{status:'not_searched'}}};
+ let doc=documentFor(ctx.buyerContactRows(person,candidate));assert.equal(doc.querySelector('[data-contact-channel="phone"]').dataset.contactStatus,'not_found');
+ person.contactResearch.identityKey='different-identity';doc=documentFor(ctx.buyerContactRows(person,candidate));assert.equal(doc.querySelector('[data-contact-channel="phone"]').dataset.contactStatus,'incomplete');
+});
 test('contact fields expose concise found, not-found and incomplete states with source reasons available on demand',()=>{
  const {ctx,person,candidate}=runtime(),doc=documentFor(ctx.buyerContactRows(person,candidate));
  const linkedin=doc.querySelector('[data-contact-channel="linkedin"]');assert.ok(linkedin,'LinkedIn is a labelled channel');assert.equal(linkedin.dataset.contactStatus,'found');

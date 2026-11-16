@@ -1,5 +1,11 @@
 # Mandatory Buyers research standard
 
+## Core contact scheduling — 16 November 2026
+
+After the existing LinkedIn identity wave, attempt unfinished core official/public work-email, direct-email and phone checks across the priority cohort before its Gmail and alternative-query expansion. Finish that unfinished priority cohort before hidden contacts; defer wholly completed prefixes behind unfinished continuations. Reuse matching fresh completed receipts without renewing their original dates. An already completed core prefix must not consume another slice before an unfinished independent or expansion check. Explicit force may refresh the core once per run; the later expansion must not replay that same core work.
+
+All three Gmail queries, supported alternative queries, independent/Buyer Agent work and required deeper checks remain part of the existing bounded research plan. The 120-second targeted contact budget, source attribution and paid-contact gates remain unchanged. Exhaustion remains partial. A returned partial checkpoint derives each channel summary from its own actual checks, and the UI retains recorded-search progress when older summaries still say not searched. A LinkedIn match may qualify a priority contact without claiming email/phone coverage or an email recipient.
+
 ## Treg paid-search amendment — 21 October 2026
 
 The owner-approved Activate paid search control in Setup selects Treg for buyer work-email finding and verification. Company evaluation remains with the existing research providers. A single qualified buyer with fresh mandatory individual checks and shared official-page receipts can be enriched; unrelated unfinished buyers do not veto that person's lookup. Automatic selection also requires the selected person's completed AI review, company qualification 80+, and the existing independent workflow/delivery approval. Do not mark aggregate research complete merely because this scoped gate passed. Keep legacy Apollo/Hunter approvals separate. See `docs/project-state/2026-10-21-treg-paid-search.md` for credential isolation, limits, cost assumptions and retry receipts.
