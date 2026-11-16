@@ -18,6 +18,12 @@
   // These fields remember the page a tab is viewing, not commercial progress.
   // Concurrent navigation should keep this tab's view and merge business data.
   const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage','outreach.selectedDomain','outreach.messageStudio.mode','outreach.messageStudio.linkedinMode']);
+  function contentEqual(a,b,path=''){
+    if(NAVIGATION_PATHS.has(path)||a===b)return true;
+    if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((value,index)=>contentEqual(value,b[index],path+'['+index+']'));
+    if(!object(a)||!object(b))return false;
+    return [...new Set([...Object.keys(a),...Object.keys(b)])].every(key=>contentEqual(a[key],b[key],path?path+'.'+key:key));
+  }
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
     if(!RECORD_LISTS.has(path.split('.').at(-1)))return null;
@@ -86,5 +92,5 @@
     const payload=visit(project(options.localBase||base),project(local),project(base),project(server),'');
     return {safe:conflicts.length===0||Boolean(preference),payload,conflicts};
   }
-  return {equal,project,merge};
+  return {equal,project,merge,contentEqual};
 });

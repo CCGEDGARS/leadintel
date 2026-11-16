@@ -321,6 +321,7 @@ jobs:
           node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs backend/test/website-contact-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/monitoring-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/workspace-save-journey.test.mjs
       - name: Preserve focused navigation diagnostics
         if: always()
         uses: actions/upload-artifact@v4

@@ -31,6 +31,7 @@
   let nativeFetch=null;
   let dirtySinceSave=false;
   let saveBusy=false;
+  let saveOperation=null;
   let autoSaveTimer=null;
   let saveError="";
   let saveDiagnostic="";
@@ -114,17 +115,24 @@
     // Large snapshots contain both the local draft and the acknowledged cloud
     // baseline. Encoding them synchronously freezes the page during autosave.
     const large=Object.values(snapshot.data||{}).some(value=>typeof value==='string'&&value.length>=65536);
+    const pointer=safeJson(root.localStorage?.getItem(SNAPSHOT_KEY));
+    if(large&&pointer?.format===INDEXED_SNAPSHOT_FORMAT&&pointer.workspace_id===snapshot.workspace_id&&typeof root.LeadIntelAccountCache?.publishRecoverySnapshot==='function')return storeSnapshot(snapshot,snapshot,true);
     const packed=large?runCodec('packWorkspaceSnapshot',snapshot):root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot;
     return packed&&typeof packed.then==='function'?packed.then(value=>storeSnapshot(snapshot,value)):storeSnapshot(snapshot,packed);
   }
-  function storeSnapshot(snapshot,packed){
+  function storeSnapshot(snapshot,packed,useIndexed=false){
     const activeWorkspace=root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY);
     if(activeWorkspace&&snapshot.workspace_id!==activeWorkspace)throw new Error('Workspace changed during snapshot encoding; local data was preserved');
     const previous=readSnapshot();if(previous?.server_synced&&previous.workspace_id===snapshot.workspace_id&&previous.server_version>snapshot.server_version)return previous;
     if(knownAcknowledgedSnapshot(previous)&&knownAcknowledgedSnapshot(snapshot)&&previous.workspace_id===snapshot.workspace_id&&previous.server_version===snapshot.server_version&&Date.parse(previous.saved_at)>Date.parse(snapshot.saved_at))throw Object.assign(new Error('A newer snapshot was saved while this copy was being prepared. Existing drafts were kept.'),{code:'archive_pointer_changed',phase:'archive_write'});
+    if(useIndexed)return storeArchivedSnapshot(snapshot);
     try{const encoded=JSON.stringify(packed);root.localStorage?.setItem(SNAPSHOT_KEY,encoded);snapshotEncoded=encoded;snapshotDecoded=snapshot;return snapshot;}
     catch(cause){
       if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
+      return storeArchivedSnapshot(snapshot);
+    }
+  }
+  function storeArchivedSnapshot(snapshot){
       const archive=root.LeadIntelAccountCache;
       if(archive.publishRecoverySnapshot){
         const expectedPointer=root.localStorage.getItem(SNAPSHOT_KEY);
@@ -139,7 +147,6 @@
         const pointer=JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key});
         root.localStorage.setItem(SNAPSHOT_KEY,pointer);snapshotEncoded=pointer;snapshotDecoded=snapshot;return snapshot;
       });
-    }
   }
   function isBrowserOnlySnapshot(){return readSnapshot()?.server_synced===false;}
   function isExplicitlySaved(){return root.localStorage?.getItem(EXPLICIT_SAVE_KEY)==="1"&&Boolean(readSnapshot());}
@@ -173,7 +180,29 @@
   }
   function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,workspace_id:root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||'',saved_at:new Date().toISOString(),data:currentWorkspaceData()};return persistSnapshot(snapshot);}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
-  function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();return Boolean(snapshot&&!sameWorkspaceData(currentWorkspaceData(),snapshot.data));}
+  function sameWorkspaceContent(a,b){
+    const paths={leadintel_customer_v2_state:'main',leadintel_customer_v2_discovery:'discovery',leadintel_customer_v2_outreach:'outreach',leadintel_customer_v2_delivery:'delivery',leadintel_customer_v2_discovery_meta:'meta.discovery'};
+    const left=isObject(a)?a:{},right=isObject(b)?b:{},compare=root.LeadIntelWorkspaceSync?.contentEqual;
+    return [...new Set([...Object.keys(left),...Object.keys(right)])].every(key=>{
+      if(String(left[key]??'')===String(right[key]??''))return true;
+      if(!paths[key]||typeof compare!=='function')return false;
+      try{return compare(JSON.parse(left[key]),JSON.parse(right[key]),paths[key]);}catch{return false;}
+    });
+  }
+  function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();return Boolean(snapshot&&!sameWorkspaceContent(currentWorkspaceData(),snapshot.data));}
+  function clearUnchangedDirtyMarker(){
+    if(saveError||saveInFlight()||root.localStorage?.getItem(RESET_PENDING_KEY))return;
+    const snapshot=readSnapshot(),marker=safeJson(root.localStorage?.getItem(DIRTY_KEY));
+    if(snapshot?.server_synced&&marker?.workspace_id===snapshot.workspace_id&&Number(marker.base_version)===snapshot.server_version&&sameWorkspaceContent(currentWorkspaceData(),snapshot.data))root.localStorage?.removeItem(DIRTY_KEY);
+  }
+  function reuseAcknowledgedSave(workspaceId=root.LeadIntelServerBridge?.workspace?.id,version=root.LeadIntelServerBridge?.stateVersion,allowControllerBusy=false){
+    const bridge=root.LeadIntelServerBridge,snapshot=readSnapshot();
+    if(saveError||(saveBusy&&!allowControllerBusy)||bridge?.isWorkspaceSaving?.()===true||!bridge?.ready||!bridge.session?.authenticated||bridge.conflict||bridge.resolvingSync||bridge.workspace?.id!==workspaceId||acknowledgementScope(workspaceId)===null||!isExplicitlySaved()||!knownAcknowledgedSnapshot(snapshot)||snapshot.workspace_id!==workspaceId||snapshot.server_version!==Number(version)||root.localStorage?.getItem(RESET_PENDING_KEY)||root.sessionStorage?.getItem(FORCE_RESET_KEY)||acknowledgedWrite||root.localStorage?.getItem(WRITE_ACK_KEY)||root.sessionStorage?.getItem(WRITE_ACK_KEY)||!sameWorkspaceContent(currentWorkspaceData(),snapshot.data))return false;
+    const rawMarker=root.localStorage?.getItem(DIRTY_KEY),marker=safeJson(rawMarker);
+    if(rawMarker&&(!isObject(marker)||marker.workspace_id!==workspaceId||Number(marker.base_version)!==snapshot.server_version))return false;
+    dirtySinceSave=false;clearUnchangedDirtyMarker();return true;
+  }
+  function saveInFlight(){return saveBusy||root.LeadIntelServerBridge?.isWorkspaceSaving?.()===true;}
   function protectLocalChanges(){
     const workspaceId=String(root.localStorage?.getItem(WORKSPACE_KEY)||"");
     if(!workspaceId||root.localStorage?.getItem(DIRTY_KEY))return;
@@ -270,12 +299,12 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};const finish=(value=snapshot)=>{markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty||!sameWorkspaceData(currentWorkspaceData(),snapshot.data):!sameWorkspaceData(currentWorkspaceData(),data);return value;};
+    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};const finish=(value=snapshot)=>{markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty||!sameWorkspaceContent(currentWorkspaceData(),snapshot.data):!sameWorkspaceContent(currentWorkspaceData(),data);return value;};
     // A repeated GET acknowledgement is not a new customer revision. Compare
     // the complete local copy too: richer local evidence must never be dropped
     // merely because its acknowledged cloud version is unchanged.
     if(knownAcknowledgedSnapshot(previous)&&knownAcknowledgedSnapshot(snapshot)&&previous.workspace_id===snapshot.workspace_id&&previous.server_version===snapshot.server_version&&JSON.stringify(Object.keys(previous.data).sort())===JSON.stringify(Object.keys(snapshot.data).sort())&&sameWorkspaceData(previous.data,snapshot.data)&&JSON.stringify(previous.server_payload)===JSON.stringify(snapshot.server_payload))return finish(previous);
-    const saved=persistSnapshot(snapshot);return saved&&typeof saved.then==='function'?saved.then(value=>value===snapshot?finish():value):finish();
+    const saved=persistSnapshot(snapshot),completed=value=>value===snapshot?finish():value;return saved&&typeof saved.then==='function'?saved.then(completed):completed(saved);
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -344,7 +373,7 @@
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved())){
           const workspaceId=url.searchParams.get("workspace_id"),version=Number(result.version);
           await rememberAcknowledgedWrite(workspaceId,version,next.payload,writeAccount);
-          await snapshotFromServerPayload(next.payload,{workspaceId,version,localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});
+          await snapshotFromServerPayload(next.payload,{workspaceId,version,localData:localDataAtPutStart,dirty:!sameWorkspaceContent(currentWorkspaceData(),localDataAtPutStart)});
           clearAcknowledgedWrite(workspaceId,version,writeAccount);
         }}
         // The server acknowledgement is already parsed. Snapshot work can
@@ -365,8 +394,8 @@
     const name=typeof error?.name==='string'&&/^(?:Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError|AbortError|TimeoutError|QuotaExceededError|InvalidStateError|DataError|SecurityError|NetworkError|UnknownError)$/.test(error.name)?error.name:'Error';
     return [status,code,name].filter(Boolean).join(' · ');
   }
-  function persistenceLabel(){if(root.LeadIntelServerBridge?.conflict)return "Sync conflict · local and server versions preserved";if(saveBusy)return "Saving workspace…";if(saveError)return `${saveError} · changes kept in this browser${saveDiagnostic?` · Details: ${saveDiagnostic}`:""}`;if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · saving shortly";if(hasUnsavedChanges())return "Unsaved changes · saving shortly";return isBrowserOnlySnapshot()?"Saved in this browser · cloud sync pending":"Saved automatically to LeadIntel";}
-  function renderPersistenceStatus(){if(!saveError)saveDiagnostic="";const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus){visibleStatus.textContent=label;visibleStatus.title=saveError?saveDiagnostic:"";}const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=saveError?"error":saveBusy?"saving":hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=saveBusy?"Saving…":root.LeadIntelServerBridge?.conflict?"Keep my local changes":saveError?"Retry save":"Save now";button.disabled=saveBusy;}}
+  function persistenceLabel(){if(root.LeadIntelServerBridge?.conflict)return "Sync conflict · local and server versions preserved";if(saveInFlight())return "Saving workspace…";if(saveError)return `${saveError} · changes kept in this browser${saveDiagnostic?` · Details: ${saveDiagnostic}`:""}`;if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · saving shortly";if(hasUnsavedChanges())return "Unsaved changes · saving shortly";return isBrowserOnlySnapshot()?"Saved in this browser · cloud sync pending":"Saved automatically to LeadIntel";}
+  function renderPersistenceStatus(){if(!saveError)saveDiagnostic="";const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus){visibleStatus.textContent=label;visibleStatus.title=saveError?saveDiagnostic:"";}const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=saveError?"error":saveInFlight()?"saving":hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=saveInFlight()?"Saving…":root.LeadIntelServerBridge?.conflict?"Keep my local changes":saveError?"Retry save":"Save now";button.disabled=saveInFlight();}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.ready===true||(root.LeadIntelServerBridge?.ready===undefined&&root.LeadIntelServerBridge?.session!=null))return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-synced",()=>{saveError="";dirtySinceSave=hasLocalChangesSinceSnapshot();renderPersistenceStatus();});root.addEventListener?.("leadintel:server-conflict",()=>{root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
 
@@ -380,24 +409,68 @@
     });
   }
 
-  async function saveWorkspace({automatic=false}={}){
+  function workspaceSaveScope(){try{return JSON.stringify([root.localStorage?.getItem('leadintel_account_context_v1')||'',root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||'']);}catch{return null;}}
+  async function saveWorkspace(options={}){
+    const scope=workspaceSaveScope();if(scope===null)return false;
+    if(saveOperation){const saved=await saveOperation;if(!saved||workspaceSaveScope()!==scope)return false;return saveWorkspace(options);}
+    const operation=performWorkspaceSave(options,scope),tracked=operation.finally(()=>{if(saveOperation===tracked)saveOperation=null;});saveOperation=tracked;return tracked;
+  }
+  async function performWorkspaceSave({automatic=false}={},scope){
+    if(!saveBusy&&reuseAcknowledgedSave()){renderPersistenceStatus();if(!automatic)toast("Workspace already saved");return true;}
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
-    try{const bridge=await waitForBridge();if(bridge?.ready===false)throw new Error("Workspace is still loading; retry save");if(automatic&&bridge?.conflict)throw new Error("conflict");if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(result?.retryable){dirtySinceSave=true;saveError="";if(!automatic)toast("Changes kept locally · sync is retrying");return false;}if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{await captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
+    try{const bridge=await waitForBridge();if(workspaceSaveScope()!==scope)throw new Error('Workspace changed while saving; local data was preserved');if(bridge?.ready===false)throw new Error("Workspace is still loading; retry save");if(automatic&&bridge?.conflict)throw new Error("conflict");if(bridge?.session?.authenticated&&bridge?.workspace){
+      if(bridge.pendingWorkspaceSave?.()){
+        const joined=await withTimeout(async()=>{let result,pending;while((pending=bridge.pendingWorkspaceSave?.())){result=await pending;if(workspaceSaveScope()!==scope)throw new Error('Workspace changed while saving; local data was preserved');if(result?.saved===false)return result;}return result;},SAVE_REQUEST_TIMEOUT_MS);
+        if(joined?.saved===false){if(joined.retryable){dirtySinceSave=true;saveError='';return false;}throw new Error(joined.conflict?'conflict':'Workspace could not be saved to LeadIntel');}
+        if(workspaceSaveScope()!==scope)throw new Error('Workspace changed while saving; local data was preserved');
+        if(reuseAcknowledgedSave(bridge.workspace.id,bridge.stateVersion,true)){if(!automatic)toast('Workspace already saved');return true;}
+      }
+      const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(result?.retryable){dirtySinceSave=true;saveError="";if(!automatic)toast("Changes kept locally · sync is retrying");return false;}if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{await captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
     catch(error){dirtySinceSave=true;const detail=String(error?.message||"");saveError=root.LeadIntelServerBridge?.conflict||detail==="conflict"?"Sync conflict · keep your local changes":/timed out|timeout/i.test(detail)?"Sync timed out · retry save":/500 KB|sync limit|transfer limit/i.test(detail)?"Workspace exceeds sync limit · data preserved":/failed to fetch|network/i.test(detail)?"Could not reach LeadIntel · retry save":"Sync failed · retry save";saveDiagnostic=persistenceDiagnostic(error);if(!automatic)toast(saveError);return false;}
     finally{saveBusy=false;renderPersistenceStatus();if(!saveError&&hasUnsavedChanges())scheduleAutoSave();}
   }
-  function scheduleAutoSave(){if(root.LeadIntelServerBridge?.conflict){renderPersistenceStatus();return;}if(root.localStorage?.getItem(RESET_PENDING_KEY)||!hasMeaningfulWorkspaceData())return;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=root.setTimeout?.(()=>{autoSaveTimer=null;if(saveBusy){scheduleAutoSave();return;}if(hasUnsavedChanges()||(isBrowserOnlySnapshot()&&root.LeadIntelServerBridge?.session?.authenticated&&root.LeadIntelServerBridge?.workspace))void saveWorkspace({automatic:true});},AUTOSAVE_DEBOUNCE_MS);renderPersistenceStatus();}
+  function scheduleAutoSave(){if(root.LeadIntelServerBridge?.conflict){renderPersistenceStatus();return;}if(root.localStorage?.getItem(RESET_PENDING_KEY)||!hasMeaningfulWorkspaceData())return;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=root.setTimeout?.(()=>{autoSaveTimer=null;if(saveInFlight()){scheduleAutoSave();return;}if(hasUnsavedChanges()||(isBrowserOnlySnapshot()&&root.LeadIntelServerBridge?.session?.authenticated&&root.LeadIntelServerBridge?.workspace))void saveWorkspace({automatic:true});},AUTOSAVE_DEBOUNCE_MS);renderPersistenceStatus();}
   function ensureSaveButton(){let button=root.document?.getElementById?.("save-workspace");if(!button){const actions=root.document?.querySelector?.(".top-actions");if(!actions)return false;button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";actions.insertBefore(button,root.document.getElementById("reset-workspace")||null);}if(button.dataset.workspaceSaveBound==="1")return false;button.dataset.workspaceSaveBound="1";button.addEventListener("click",()=>{root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;void saveWorkspace();});renderPersistenceStatus();return true;}
-  function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();}
+  function noteStoredWorkspaceEdit(){
+    if(isExplicitlySaved()&&!hasLocalChangesSinceSnapshot()){
+      if(saveInFlight()){dirtySinceSave=true;protectLocalChanges();scheduleAutoSave();return;}
+      if(!saveError){dirtySinceSave=false;clearUnchangedDirtyMarker();}
+      renderPersistenceStatus();return;
+    }
+    dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();
+  }
+  function bridgeSaveSettled(event){
+    const currentWorkspace=root.LeadIntelServerBridge?.workspace?.id,detail=event?.detail;
+    if(!detail?.workspaceId||detail.workspaceId!==currentWorkspace||root.LeadIntelAccountCache?.current?.()===false)return;
+    if(detail.outcome==='failed'){dirtySinceSave=true;if(!saveError)saveError='Sync failed · retry save';renderPersistenceStatus();return;}
+    if(detail.outcome==='retry'){dirtySinceSave=true;scheduleAutoSave();return;}
+    if(detail.outcome==='saved')saveError='';
+    dirtySinceSave=hasLocalChangesSinceSnapshot();
+    if(dirtySinceSave)scheduleAutoSave();else{clearUnchangedDirtyMarker();renderPersistenceStatus();}
+  }
+  function bridgeSaveStarted(event){if(event?.detail?.workspaceId===root.LeadIntelServerBridge?.workspace?.id&&root.LeadIntelAccountCache?.current?.()!==false)renderPersistenceStatus();}
+  function noteWorkspaceEdit(event){
+    const target=event?.target;if(target?.closest&&!target.closest('.workspace'))return;if(target?.closest?.('#save-workspace,#reset-workspace,#ai-settings-drawer'))return;
+    let account,workspace;
+    try{account=root.localStorage?.getItem('leadintel_account_context_v1')||'';workspace=root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||'';}catch{return;}
+    // Native event callbacks may run a microtask checkpoint before the target
+    // handler. A task observes storage after dispatch, under the same owner.
+    root.setTimeout(()=>{
+      try{if(root.LeadIntelAccountCache?.current?.()===false||(root.localStorage?.getItem('leadintel_account_context_v1')||'')!==account||(root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||'')!==workspace)return;}catch{return;}
+      noteStoredWorkspaceEdit();
+    },0);
+  }
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");if(!button||button.dataset.resetArmed!=="true")return false;
     root.sessionStorage?.setItem(FORCE_RESET_KEY,"1");recordResetIntent();clearExplicitSave();root.setTimeout?.(()=>root.sessionStorage?.removeItem(FORCE_RESET_KEY),5000);root.setTimeout?.(renderPersistenceStatus,0);return true;
   }
   function installUi(){
+    root.addEventListener?.('leadintel:workspace-save-settled',bridgeSaveSettled);
+    root.addEventListener?.('leadintel:workspace-save-started',bridgeSaveStarted);
     ensureSaveButton();root.document?.addEventListener?.("input",noteWorkspaceEdit,true);root.document?.addEventListener?.("change",noteWorkspaceEdit,true);
     root.document?.addEventListener?.("click",event=>{if(event.target?.closest?.("[data-target-market],[data-remove-target-market],[data-remove-doc],[data-remove-signal],[data-opportunity-active],#add-target-market,#clear-target-markets,#add-custom-signal"))noteWorkspaceEdit(event);},true);
     root.document?.addEventListener?.("click",handleResetClick,true);
-    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();});root.addEventListener?.("leadintel:sender-identity-changed",()=>{dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();});root.addEventListener?.("leadintel:server-synced",()=>{saveError="";dirtySinceSave=hasLocalChangesSinceSnapshot();renderPersistenceStatus();});root.addEventListener?.("leadintel:server-conflict",()=>{root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>{if(hasUnsavedChanges()||isBrowserOnlySnapshot())scheduleAutoSave();else renderPersistenceStatus();});renderPersistenceStatus();
+    root.addEventListener?.("leadintel:website-activated",noteStoredWorkspaceEdit);root.addEventListener?.("leadintel:workspace-dirty",noteStoredWorkspaceEdit);root.addEventListener?.("leadintel:sender-identity-changed",noteStoredWorkspaceEdit);root.addEventListener?.("leadintel:server-synced",()=>{saveError="";dirtySinceSave=hasLocalChangesSinceSnapshot();renderPersistenceStatus();});root.addEventListener?.("leadintel:server-conflict",()=>{root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>{if(hasUnsavedChanges()||isBrowserOnlySnapshot())scheduleAutoSave();else renderPersistenceStatus();});renderPersistenceStatus();
   }
 
   disableServerAutosave();installFetchBoundary();
@@ -409,5 +482,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,matchesAcknowledgedWrite,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,matchesAcknowledgedWrite,reuseAcknowledgedSave,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);
