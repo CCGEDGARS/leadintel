@@ -9009,6 +9009,57 @@
         "const renderingCurrent=!item?.approved||!item.brandSnapshot||item.brandSnapshot.emailRenderVersion===2;",
         "contextCurrent&&languageCurrent&&renderingCurrent"
       ]
+    },
+    {
+      "id": "workspace-save-foreground-maintenance",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "const foreground=deferMaintenance===true&&pointerKey===WORKSPACE_SNAPSHOT_KEY;",
+        "scheduleRecoveryMaintenance(encoded,eligibleBaseline);",
+        "deferDiagnostics:foreground"
+      ]
+    },
+    {
+      "id": "workspace-save-durable-publication",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "await archiveTransaction('readwrite',store=>store.delete(SNAPSHOT_PIN_PREFIX+key));assertCurrent(started);",
+        "expectedTicket=ticket",
+        "cause?.category==='quota'"
+      ]
+    },
+    {
+      "id": "workspace-save-foreground-client",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "eligibleBaseline:isAcknowledgedBaseline,deferMaintenance:true,encodePointer",
+        "await rememberAcknowledgedWrite",
+        "await snapshotFromServerPayload"
+      ]
+    },
+    {
+      "id": "workspace-save-foreground-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "save-latency=20261116-v1"
+      ]
+    },
+    {
+      "id": "workspace-save-foreground-cache-import",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "save-ack=20261114-v8&save-latency=20261116-v1"
+      ]
     }
   ],
   "retry": {

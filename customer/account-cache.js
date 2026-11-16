@@ -46,7 +46,7 @@
   const scopedKey=key=>String(key).startsWith('leadintel_')&&key!==CONTEXT_KEY&&key!=='leadintel_auth_provider'&&!String(key).startsWith(ARCHIVE_PREFIX)&&key!==LEGACY_CLEANUP_KEY;
   let ticket=get(storage,CONTEXT_KEY);
   let context=parse(ticket)||{workspaceId:get(storage,WORKSPACE_KEY)||parse(get(storage,'leadintel_customer_v2_workspace_saved_snapshot_v1'))?.workspace_id||'',userId:''};
-  let invalidated=false,verified=false,transitioning=false,databasePromise=null,archiveInitialization=null,archiveInitialized=false,archiveInitializationError=null,compressionCursor=0,recoveryCursor=0,compressionCursorLoaded=false;
+  let invalidated=false,verified=false,transitioning=false,databasePromise=null,archiveInitialization=null,archiveInitialized=false,archiveInitializationError=null,compressionCursor=0,recoveryCursor=0,compressionCursorLoaded=false,recoveryMaintenanceTimer=null;
   function current(){return !invalidated&&get(storage,CONTEXT_KEY)===ticket;}
   function invalidate(){if(invalidated)return;invalidated=true;root.document?.documentElement?.setAttribute('data-account-check','pending');root.location?.reload?.();}
   function assertCurrent(expected=ticket){if(!current()||expected!==ticket){invalidate();throw Object.assign(new Error('LeadIntel account changed. Refresh to continue.'),{code:'account_context_changed'});}}
@@ -370,7 +370,7 @@
       if(POINTER_FORMATS.has(pointer?.format)){if(workspaceId&&pointer.workspace_id!==workspaceId)throw archiveError(null,'archive_read');record=await storedArchive(pointer.key);if(!record)throw archiveError(null,'archive_read');if(workspaceId&&record.workspace_id!==workspaceId)throw archiveError(null,'archive_read');}
       assertCurrent(started);if(get(storage,pointerKey)!==raw)throw archivePointerChanged();return {pointer,raw,record};});
   }
-  async function retirePublishedSnapshotPrevious(previousPointer,previousRaw,key,publishedPointer){
+  async function retirePublishedSnapshotPrevious(previousPointer,previousRaw,key,publishedPointer,{deferDiagnostics=false}={}){
     let reason='unknown_owner',retired=0;
     if(!root.navigator?.locks?.request)reason='no_lock';
     else if(previousPointer?.format==='leadintel-indexed-workspace-snapshot-v1'&&typeof previousPointer.key==='string'&&previousPointer.key.startsWith(SNAPSHOT_PREFIX)&&previousPointer.key!==key){
@@ -382,30 +382,66 @@
         else{reason='changed';await archiveTransaction('readwrite',(store,fail)=>{const authority=store.get(key);authority.onsuccess=()=>{if(!sameArchiveValue(authority.result,authorityRaw))return;const old=store.get(previousPointer.key);old.onsuccess=()=>{if(sameArchiveValue(old.result,previousRaw)&&get(storage,WORKSPACE_SNAPSHOT_KEY)===publishedPointer&&JSON.stringify(inventory.roots)===JSON.stringify(localReferenceState())){try{store.delete(previousPointer.key);retired=1;reason='retired';}catch(cause){fail(cause);}}};};});}
       }else if(previous&&next)reason='regressed_owner';
     }
-    await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:retired,ownedSnapshotRetirement:reason});
+    if(!deferDiagnostics)await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:retired,ownedSnapshotRetirement:reason});
   }
-  async function publishRecoverySnapshot(record,{pointerKey,encodePointer,expectedPointer,eligibleBaseline}={}){
+  function scheduleRecoveryMaintenance(encoded,eligibleBaseline){
+    const expectedTicket=ticket;
+    if(recoveryMaintenanceTimer!==null)root.clearTimeout?.(recoveryMaintenanceTimer);
+    recoveryMaintenanceTimer=root.setTimeout?.(()=>{
+      recoveryMaintenanceTimer=null;
+      if(!current()||ticket!==expectedTicket||get(storage,WORKSPACE_SNAPSHOT_KEY)!==encoded)return;
+      void archiveLock(async()=>{
+        assertCurrent(expectedTicket);
+        if(get(storage,WORKSPACE_SNAPSHOT_KEY)!==encoded)return;
+        await compactArchivesLocked({eligibleBaseline});assertCurrent(expectedTicket);
+      }).catch(()=>{
+        if(current()&&ticket===expectedTicket)root.document?.documentElement?.setAttribute('data-archive-maintenance','deferred');
+      });
+    },10000);
+    recoveryMaintenanceTimer?.unref?.();
+  }
+  async function publishRecoverySnapshot(record,{pointerKey,encodePointer,expectedPointer,eligibleBaseline,deferMaintenance=false}={}){
     await archiveReady();if(typeof pointerKey!=='string'||typeof encodePointer!=='function')throw archiveError(null,'archive_write');
     return archiveLock(async()=>{
       const started=ticket;assertCurrent(started);const previous=get(storage,pointerKey);if(expectedPointer!==undefined&&previous!==expectedPointer)throw archivePointerChanged();
       const pointer=parse(previous);if(POINTER_FORMATS.has(pointer?.format)){const current=await storedArchive(pointer.key);if(current?.server_synced===true&&record.server_synced===true&&current.workspace_id===record.workspace_id&&Number(current.server_version)>Number(record.server_version))throw archivePointerChanged();if(pointerKey===WORKSPACE_SNAPSHOT_KEY)assertWorkspaceSnapshotOrder(knownWorkspaceSnapshot(current),knownWorkspaceSnapshot(record));}
       if(pointerKey===WORKSPACE_SNAPSHOT_KEY&&context.workspaceId&&record.workspace_id!==context.workspaceId)throw archivePointerChanged();
-      await compactArchivesLocked({eligibleBaseline});assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();
-      const previousRaw=pointerKey===WORKSPACE_SNAPSHOT_KEY&&pointer?.format==='leadintel-indexed-workspace-snapshot-v1'?await rawArchiveValue(pointer.key):undefined;
+      // Foreground saves still await the durable record, pointer CAS and pin release.
+      // Historical archive maintenance is optional work; run it after publication
+      // unless a real quota failure requires reclaiming space before retrying.
+      const foreground=deferMaintenance===true&&pointerKey===WORKSPACE_SNAPSHOT_KEY;
+      if(!foreground||(await archiveInventory(eligibleBaseline)).complete!==true)await compactArchivesLocked({eligibleBaseline});assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();
+      let previousRaw=pointerKey===WORKSPACE_SNAPSHOT_KEY&&pointer?.format==='leadintel-indexed-workspace-snapshot-v1'?await rawArchiveValue(pointer.key):undefined;
       if(previousRaw!==undefined)assertWorkspaceSnapshotOrder(knownWorkspaceSnapshot(await decodeArchiveValue(previousRaw)),knownWorkspaceSnapshot(record));
-      const key=await saveRecoverySnapshotLocked(record,eligibleBaseline),encoded=encodePointer(key);if(typeof encoded!=='string')throw archiveError(null,'archive_write');const next=parse(encoded);
+      let key;
+      try{key=await saveRecoverySnapshotLocked(record,eligibleBaseline);}catch(cause){
+        if(!foreground||!(cause?.name==='QuotaExceededError'||cause?.category==='quota'))throw cause;
+        await compactArchivesLocked({eligibleBaseline});assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();
+        if(previousRaw!==undefined){
+          const refreshed=await rawArchiveValue(pointer.key),oldRecord=await decodeArchiveValue(previousRaw),currentRecord=await decodeArchiveValue(refreshed);
+          assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();
+          assertWorkspaceSnapshotOrder(knownWorkspaceSnapshot(currentRecord),knownWorkspaceSnapshot(record));
+          // Compaction may only refresh the captured frame after proving that
+          // its complete decoded contents are identical. A concurrent unique
+          // edit must still fail the retirement CAS and remain recoverable.
+          if(JSON.stringify(oldRecord)===JSON.stringify(currentRecord))previousRaw=refreshed;
+        }
+        key=await saveRecoverySnapshotLocked(record,eligibleBaseline);
+      }
+      const encoded=encodePointer(key);if(typeof encoded!=='string')throw archiveError(null,'archive_write');const next=parse(encoded);
       if(pointerKey===WORKSPACE_SNAPSHOT_KEY&&next?.format!=='leadintel-indexed-workspace-snapshot-v1')throw archivePointerChanged();
       if(!POINTER_FORMATS.has(next?.format)||next.key!==key||next.workspace_id!==record.workspace_id)throw archiveError(null,'archive_write');
       assertCurrent(started);if(get(storage,pointerKey)!==previous)throw archivePointerChanged();set(storage,pointerKey,encoded);if(get(storage,pointerKey)!==encoded)throw archivePointerChanged();
       await archiveTransaction('readwrite',store=>store.delete(SNAPSHOT_PIN_PREFIX+key));assertCurrent(started);
-      if(pointerKey===WORKSPACE_SNAPSHOT_KEY){try{await retirePublishedSnapshotPrevious(pointer,previousRaw,key,encoded);}catch{
+      if(pointerKey===WORKSPACE_SNAPSHOT_KEY){try{await retirePublishedSnapshotPrevious(pointer,previousRaw,key,encoded,{deferDiagnostics:foreground});}catch{
         root.document?.documentElement?.setAttribute('data-snapshot-retirement','deferred');
-        try{await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:0,ownedSnapshotRetirement:'deferred'});}catch{
+        if(!foreground)try{await publishArchiveDiagnostics(await archiveInventory(root.LeadIntelWorkspacePersistence?.isAcknowledgedBaseline),{retiredOwnedSnapshotsThisPublication:0,ownedSnapshotRetirement:'deferred'});}catch{
           const detail={schemaVersion:4,measurementComplete:false,retiredOwnedSnapshotsThisPublication:0,ownedSnapshotRetirement:'deferred'};
           root.document?.documentElement?.setAttribute('data-archive-storage-diagnostics',JSON.stringify(detail));
           if(root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('leadintel:archive-storage-diagnostics',{detail}));
         }
       }}
+      if(foreground)scheduleRecoveryMaintenance(encoded,eligibleBaseline);
       return key;
     });
   }

@@ -4,7 +4,7 @@ const source=fs.readFileSync(require.resolve('../account-cache.js'),'utf8'),DBNA
 function locks(){let tail=Promise.resolve();return {request(_key,_options,operation){const result=tail.then(operation);tail=result.catch(()=>{});return result;}};}
 function setup({indexedDB=new IDBFactory(),values=new Map([['leadintel_customer_v2_workspace','w1']]),sharedLocks=locks(),compression=true,onSet,onCompress}={}){
  class Storage{constructor(map){this.map=map;}get length(){return this.map.size;}key(i){return [...this.map.keys()][i]??null;}getItem(k){return this.map.get(k)??null;}setItem(k,v){onSet?.(k,v);this.map.set(k,String(v));}removeItem(k){this.map.delete(k);}}
- const attributes=new Map(),events=[],root={indexedDB,Storage,localStorage:new Storage(values),sessionStorage:new Storage(new Map()),navigator:{locks:sharedLocks,storage:{estimate:async()=>({usage:12345,quota:99999})}},TextEncoder,TextDecoder,ArrayBuffer,Uint8Array,Blob,Response:class extends Response{async arrayBuffer(){const data=await super.arrayBuffer();await onCompress?.();return data;}},CompressionStream:compression?CompressionStream:undefined,DecompressionStream:compression?DecompressionStream:undefined,crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,URL,console,location:{href:'https://example.test/customer/',search:'',reload(){}},document:{documentElement:{setAttribute:(k,v)=>attributes.set(k,v),removeAttribute:k=>attributes.delete(k)},getElementById:()=>null},CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},dispatchEvent:event=>events.push(event)};
+ const attributes=new Map(),events=[],root={indexedDB,Storage,localStorage:new Storage(values),sessionStorage:new Storage(new Map()),navigator:{locks:sharedLocks,storage:{estimate:async()=>({usage:12345,quota:99999})}},TextEncoder,TextDecoder,ArrayBuffer,Uint8Array,Blob,Response:class extends Response{async arrayBuffer(){const data=await super.arrayBuffer();await onCompress?.(data);return data;}},CompressionStream:compression?CompressionStream:undefined,DecompressionStream:compression?DecompressionStream:undefined,crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,URL,console,location:{href:'https://example.test/customer/',search:'',reload(){}},document:{documentElement:{setAttribute:(k,v)=>attributes.set(k,v),removeAttribute:k=>attributes.delete(k)},getElementById:()=>null},CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},dispatchEvent:event=>events.push(event)};
  vm.runInNewContext(source,root);return {root,api:root.LeadIntelAccountCache,indexedDB,values,attributes,events};
 }
 async function openDB(indexedDB,version=4){return new Promise((resolve,reject)=>{const request=indexedDB.open(DBNAME,version);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
@@ -14,6 +14,89 @@ const baseline=(version,value='business')=>({schema_version:1,workspace_id:'w1',
 const eligible=record=>record?.schema_version===1&&record.server_synced===true&&JSON.stringify(record.data)===JSON.stringify(record.server_payload);
 const pointer=key=>JSON.stringify({format:'leadintel-indexed-workspace-snapshot-v1',workspace_id:'w1',key});
 const publish=(r,record,expected=r.values.get(PTR)??null)=>r.api.publishRecoverySnapshot(record,{pointerKey:PTR,encodePointer:pointer,expectedPointer:expected,eligibleBaseline:eligible});
+
+test('foreground publication durably commits without waiting for unrelated archive maintenance',async()=>{
+ let releaseHistory,historyStarted;
+ const started=new Promise(resolve=>historyStarted=resolve),gate=new Promise(resolve=>releaseHistory=resolve);
+ const r=setup({onCompress:async function(data){if(data&&require('node:zlib').gunzipSync(Buffer.from(data)).toString().includes('slow-legacy-history')){historyStarted();await gate;}}});
+ await r.api.pending;
+ const timers=[];r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);
+ const old=PREFIX+'legacy-slow';await write(r.indexedDB,old,JSON.stringify({workspace_id:'w1',manual:'slow-legacy-history '+('preserve exact old manual data '.repeat(3000))}));
+ const record=baseline(2,'Newest acknowledged work');
+ const saving=r.api.publishRecoverySnapshot(record,{pointerKey:PTR,encodePointer:pointer,expectedPointer:null,eligibleBaseline:eligible,deferMaintenance:true});
+ try{
+  const first=await Promise.race([saving.then(key=>({key})),started.then(()=>({blocked:true}))]);
+  assert.equal(first.blocked,undefined,'housekeeping must not delay a committed foreground save');
+  const reopened=await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'});
+  assert.equal(JSON.stringify(reopened.record),JSON.stringify(record));
+  assert.equal(await raw(r.indexedDB,PINS+first.key),undefined,'Saved still waits for durable publication and pin release');
+  assert.equal(typeof await raw(r.indexedDB,old),'string','older data is retained until maintenance');
+  assert.equal(timers.length,1,'safe maintenance is deferred, not discarded');
+  timers.shift()();await started;releaseHistory();await r.api.compactRecoveryStorage({eligibleBaseline:eligible});
+  assert.equal((await raw(r.indexedDB,old)).format,'leadintel-archive-gzip-v2');
+ }finally{releaseHistory();await saving.catch(()=>{});}
+});
+
+test('foreground publication reclaims space and retries once after a real archive quota failure',async()=>{
+ const r=setup();await r.api.pending;const timers=[];
+ r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);
+ const legacy=PREFIX+'quota-legacy';await write(r.indexedDB,legacy,JSON.stringify({workspace_id:'w1',manual:'Keep this unique draft '.repeat(4000)}));
+ const prototype=require('fake-indexeddb').IDBObjectStore.prototype,put=prototype.put;let failures=0;
+ try{
+  prototype.put=function(value,key){if(String(key).startsWith(PREFIX)&&failures===0){failures++;throw new DOMException('Controlled archive capacity','QuotaExceededError');}return put.call(this,value,key);};
+  const record=baseline(3,'New acknowledged revision'),key=await r.api.publishRecoverySnapshot(record,{pointerKey:PTR,encodePointer:pointer,expectedPointer:null,eligibleBaseline:eligible,deferMaintenance:true});
+  assert.equal(failures,1);assert.equal((await raw(r.indexedDB,legacy)).format,'leadintel-archive-gzip-v2','quota retry performs safe maintenance first');
+  assert.equal(JSON.stringify((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record),JSON.stringify(record));
+  assert.equal(await raw(r.indexedDB,PINS+key),undefined);assert.equal(timers.length,1);
+ }finally{prototype.put=put;}
+});
+
+test('deferred foreground maintenance cannot cross an account or publication-pointer change',async()=>{
+ for(const change of ['account','pointer']){
+  const r=setup();await r.api.pending;const timers=[];
+  r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);
+  const legacy=PREFIX+'protected-'+change,original=JSON.stringify({workspace_id:'w1',manual:'Retain uncommitted manual evidence '.repeat(3000)});await write(r.indexedDB,legacy,original);
+  await r.api.publishRecoverySnapshot(baseline(2),{pointerKey:PTR,encodePointer:pointer,expectedPointer:null,eligibleBaseline:eligible,deferMaintenance:true});
+  if(change==='account')r.values.set('leadintel_account_context_v1','different-account');else r.values.set(PTR,pointer(PREFIX+'different-owner'));
+  const pointerBefore=r.values.get(PTR);timers.shift()();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(await raw(r.indexedDB,legacy),original);assert.equal(r.values.get(PTR),pointerBefore);
+ }
+});
+
+test('foreground owner retirement preserves bounded history without waiting for storage diagnostics',async()=>{
+ const r=setup({compression:false});await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),timers=[];
+ r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);
+ let startEstimate,finishEstimate;const started=new Promise(resolve=>startEstimate=resolve),gate=new Promise(resolve=>finishEstimate=resolve);
+ r.root.navigator.storage.estimate=()=>{startEstimate();return gate;};
+ const saving=r.api.publishRecoverySnapshot(ownedSnapshot(2),{pointerKey:PTR,encodePointer:pointer,expectedPointer:r.values.get(PTR),eligibleBaseline:eligible,deferMaintenance:true});
+ try{
+  const first=await Promise.race([saving.then(key=>({key})),started.then(()=>({blocked:true}))]);
+  assert.equal(first.blocked,undefined,'diagnostic quota estimates must not delay Saved');
+  assert.equal(await raw(r.indexedDB,previous),undefined,'the exact superseded owner is still retired before returning');
+  assert.ok(await raw(r.indexedDB,first.key));assert.equal(timers.length,1);
+ }finally{finishEstimate({usage:12345,quota:99999});await saving.catch(()=>{});}
+});
+
+test('foreground publication compacts incomplete history before exact owner retirement',async()=>{
+ const r=setup();await r.api.pending;const previous=await publish(r,ownedSnapshot(1)),timers=[];
+ r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);
+ const history=JSON.stringify({text:'x'.repeat(8*1024*1024)});for(let i=0;i<9;i++)await write(r.indexedDB,'history:'+i,history);
+ assert.equal((await r.api.getRecoveryStorageDiagnostics({eligibleBaseline:eligible})).measurementComplete,false);
+ const record=ownedSnapshot(2);await r.api.publishRecoverySnapshot(record,{pointerKey:PTR,encodePointer:pointer,expectedPointer:r.values.get(PTR),eligibleBaseline:eligible,deferMaintenance:true});
+ assert.equal(await raw(r.indexedDB,previous),undefined);for(let i=0;i<9;i++)assert.ok(await raw(r.indexedDB,'history:'+i));
+ assert.equal(JSON.stringify((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record),JSON.stringify(record));
+});
+
+test('foreground quota retry retires an exact predecessor rewritten losslessly by compaction',async()=>{
+ const r=setup({compression:false});await r.api.pending;const previous=await publish(r,ownedSnapshot(1,{data:{leadintel_customer_v2_state:JSON.stringify({manual:'Retained richer local evidence '.repeat(4000)})}})),timers=[];
+ r.root.setTimeout=(fn,ms)=>ms===10000?(timers.push(fn),timers.length):setTimeout(fn,ms);r.root.CompressionStream=CompressionStream;r.root.DecompressionStream=DecompressionStream;
+ const prototype=require('fake-indexeddb').IDBObjectStore.prototype,put=prototype.put;let failures=0;
+ try{prototype.put=function(value,key){if(String(key).startsWith(PREFIX+'w1:2:')&&failures===0){failures++;throw new DOMException('Controlled archive capacity','QuotaExceededError');}return put.call(this,value,key);};
+  const record=ownedSnapshot(2);await r.api.publishRecoverySnapshot(record,{pointerKey:PTR,encodePointer:pointer,expectedPointer:r.values.get(PTR),eligibleBaseline:eligible,deferMaintenance:true});
+  assert.equal(failures,1);assert.equal(await raw(r.indexedDB,previous),undefined,'lossless compaction must not orphan the exact prior owner');
+  assert.equal(JSON.stringify((await r.api.readRecoveryPointer(PTR,{workspaceId:'w1'})).record),JSON.stringify(record));
+ }finally{prototype.put=put;}
+});
 
 test('a 9 MB acknowledged baseline publishes losslessly, reopens, and reports only aggregate storage metadata',async()=>{
  const r=setup();await r.api.pending;const record=baseline(2,'Evidence ā😀 '.repeat(350000));assert.ok(Buffer.byteLength(JSON.stringify(record))>9000000);

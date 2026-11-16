@@ -1,0 +1,11 @@
+# Workspace save foreground maintenance
+
+The save boundary awaited general recovery-archive compression, collection and a second diagnostic inventory even after the new browser recovery record and cloud revision were committed. Slow unrelated history or quota estimation therefore delayed the return from Save and Proceed.
+
+Workspace snapshot publication now requests foreground mode. It still awaits the durable record transaction, exact publication-pointer compare-and-swap, pending-pin release and retirement of the exact superseded owner. A complete inventory permits general archive compaction and diagnostic refresh after a quiet interval; an incomplete legacy inventory retains synchronous compaction before publication so exact owner retirement remains reliable. The deferred task rechecks its account ticket and exact published pointer before taking the existing archive lock. Default callers retain the original maintenance behavior.
+
+A real browser quota failure still invokes the existing bounded safe compaction before one retry. If compaction losslessly re-encodes the captured predecessor, retirement refreshes its frame only after proving complete decoded equality; a concurrent unique edit remains protected by the existing frame comparison. Other failures retain their existing error and acknowledgement behavior. No cloud acknowledgement, exact-content receipt, workspace/account guard, conflict guard, source-evidence rule or storage allowance is relaxed. No data format or backend route changes.
+
+Regression coverage gates unrelated-history compression and quota estimation to prove that they cannot delay a committed foreground save. It also exercises quota recovery, account/pointer changes, durable reopening, pending-pin release and the existing twenty-write richer-local snapshot-retention contract. Customer cache entries refresh the archive owner, application entry and imported persistence owner together. Release verification includes those exact runtime boundaries.
+
+Release jobs record the generated structured release proof in their native job log as well as the artifact. The proof contains public release verification metadata, never customer workspace contents or credentials.
