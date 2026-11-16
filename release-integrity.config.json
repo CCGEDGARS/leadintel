@@ -4290,7 +4290,7 @@
       "status": 200,
       "contains": [
         "requiredChecks:Object.freeze(['official','public','direct_email','phone','linkedin','gmail'])",
-        "gmail:research.checks.gmail?{...research.checks.gmail}"
+        "gmail:channel('gmail')"
       ]
     },
     {
@@ -9231,6 +9231,38 @@
       "status": 200,
       "contains": [
         "listed-company-email=20261116-v1"
+      ]
+    },
+    {
+      "id": "buyer-core-contact-wave",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "coreWaveDone=new Set()",
+        "const coreWork=publicWork.filter",
+        "researchPerson(person,{coreOnly:true})",
+        "for(const person of people)syncContactChannels(person)"
+      ]
+    },
+    {
+      "id": "buyer-channel-receipt-recovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "if(row.status==='not_searched')",
+        "const records=checks.flatMap",
+        "Contact and source checks remain unfinished; use Recheck to continue."
+      ]
+    },
+    {
+      "id": "buyer-core-contact-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "core-contact-wave=20261116-v1"
       ]
     }
   ],

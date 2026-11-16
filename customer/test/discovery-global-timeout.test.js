@@ -705,6 +705,8 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   const candidate=context.__discoveryState().selectedProspects[0],person=candidate.people[0];
   assert.equal(person.publicName,'Lotta Lyrå');
   assert.equal(person.publicLinkedinUrl,'https://se.linkedin.com/in/lottalyra');
+  assert.equal(context.LeadIntelDiscovery.buyerResearchCheckPassed(candidate,person,'phone'),true,JSON.stringify({identity:person.contactResearch?.identityKey,wanted:context.LeadIntelDiscovery.buyerResearchIdentityKey(candidate,person),policy:person.contactResearch?.policyVersion,phone:person.contactResearch?.checks?.phone}));
+  assert.deepEqual(Array.from(person.contactResearch.checks.phone.queryLog,row=>row.query),Array.from(context.LeadIntelDiscovery.buyerResearchQueryPlan(candidate,person).phone));
   assert.equal(person.publicEmail,'');
   assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
