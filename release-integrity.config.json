@@ -9264,6 +9264,52 @@
       "contains": [
         "core-contact-wave=20261116-v1"
       ]
+    },
+    {
+      "id": "cumulative-company-ranking-model",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function rankCompanyResults(",
+        "rows.slice(0,10)",
+        "scoreState",
+        "currentScore??previous"
+      ]
+    },
+    {
+      "id": "cumulative-company-ranking-view",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function rankedCompanyResults()",
+        "data-company-total",
+        "view.visible.map(companyRankedCardHtml)",
+        "handleCompanyReviewClick(event)",
+        "company-ranking-css=20261116-v1"
+      ]
+    },
+    {
+      "id": "cumulative-company-ranking-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-ranking-engine=20261116-v1",
+        "company-ranking-ui=20261116-v1"
+      ]
+    },
+    {
+      "id": "cumulative-company-ranking-style",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".company-review-score",
+        "[data-score-state=\"previous\"]",
+        "@media(max-width:700px)"
+      ]
     }
   ],
   "retry": {

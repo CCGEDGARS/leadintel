@@ -334,12 +334,12 @@ test('a completed zero-result run renders the search funnel and unqualified matc
 
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Evidence pages/i);
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
-  assert.match(context.__elements.get('company-candidates').innerHTML,/saved companies still need evidence review/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/saved companies still need evidence/i);
   assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/valid finding|No newly qualified opportunities/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Research review/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Needs more evidence|Not qualified/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Verify company identity/);
-  assert.doesNotMatch(context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/Review actions and score status/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML+context.__elements.get('discovery-potential-matches').innerHTML,/Needs more evidence|Not qualified/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML+context.__elements.get('discovery-potential-matches').innerHTML,/Verify company identity/);
+  assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML+context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
 });
 
 test('unqualified research checks do not expose automatic buyer actions',()=>{
@@ -352,7 +352,7 @@ test('unqualified research checks do not expose automatic buyer actions',()=>{
     ]
   });
   context.__renderPotentialMatches();
-  const html=context.__elements.get('discovery-potential-matches').innerHTML;
+  context.__renderCandidates();const html=context.__elements.get('company-candidates').innerHTML+context.__elements.get('discovery-potential-matches').innerHTML;
   assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,0);
   assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,0);
   assert.match(html,/Needs more evidence|Not qualified/);
@@ -1622,7 +1622,7 @@ test('a qualified first pass checks purchasing fit before broadening and does no
   assert.equal(restored.candidates[0].domain,candidate.domain);assert.ok(Discovery.verifiedBuyerFit(restored.candidates[0],{...JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')).profile,...Targeting.profileFields(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')))}));
 });
 
-test('five requested companies keep their different checked scores through rendering and reload',async()=>{
+test('a five-company search retains and ranks all six checked scores through rendering and reload',async()=>{
  const scores=[94,82,79,68,55,44],at=new Date().toISOString();
  const pool=scores.map((score,i)=>({company:`North${i}`,domain:`north${i}.lv`,market:'Latvia',evidence:[{url:`https://north${i}.lv/products`,verifiedAt:at,text:`North${i} manufactures industrial equipment in Latvia and purchases industrial automation for its production lines. Specialist partners provide engineering equipment for this manufacturing process.`},{url:`https://journal.lv/north${i}`,text:`North${i} operates industrial manufacturing facilities in Latvia and supplies business customers.`}]}));
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(_,options)=>{
@@ -1647,9 +1647,9 @@ test('five requested companies keep their different checked scores through rende
  context.__setDiscovery(state);
  context.__renderCandidates();
  const html=context.__elements.get('company-candidates').innerHTML;
- assert.equal((html.match(/<h4>/g)||[]).length,5,'the requested amount caps the visible ranked list while retaining other research');
+ assert.equal((html.match(/<h4>/g)||[]).length,6,'all six assessed companies fit within the ten-row visible ranking');
  assert.match(html,/Manual review/);assert.match(html,/80\+ company score/);
- context.__renderPotentialMatches();assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/<strong>44<\/strong>/,'completed overflow remains available behind the disclosure');
+ context.__renderPotentialMatches();assert.match(html,/<strong>44<\/strong>/,'the sixth assessed company remains visible below the higher scores');assert.equal(context.__elements.get('discovery-potential-matches').hidden,true);
 });
 test('saved checked low-score research returns to the ranked list without another provider call',()=>{
  let calls=0;const context=loadDiscoveryRunner({fetchImpl:()=>{calls++;throw new Error('No new research authorized by reopening');}});
@@ -1876,24 +1876,24 @@ function companyShortlistDisplayFixture({amount=5,scores=[55,94,44,79,90,68,82],
  const render=()=>{context.__renderCandidates();context.__renderPotentialMatches();};
  return {context,dom,candidates,control,render,providerCalls:()=>providerCalls};
 }
-test('five requested companies show the highest five scores while all other research is collapsed and retained',()=>{
- const {context,dom,render,providerCalls}=companyShortlistDisplayFixture();
+test('a five-company search goal shows the cumulative top ten scores while all other research is collapsed and retained',()=>{
+ const {context,dom,render,providerCalls}=companyShortlistDisplayFixture({scores:[44,94,90,86,82,79,75,68,64,60,55,22]});
  const before=JSON.stringify(context.__discoveryState());render();
  const primary=dom.window.document.getElementById('company-candidates'),others=dom.window.document.getElementById('discovery-potential-matches');
- assert.deepEqual([...primary.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[94,90,82,79,68]);
- assert.equal(primary.querySelectorAll('[data-action="select-qualified-buyers"]:not([disabled])').length,5);
+ assert.deepEqual([...primary.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[94,90,86,82,79,75,68,64,60,55]);
+ assert.equal(primary.querySelectorAll('[data-action="select-qualified-buyers"]:not([disabled])').length,10);
  const disclosure=others.querySelector('details.company-other-results');assert.ok(disclosure,'additional checked companies must remain accessible');
  assert.equal(disclosure.open,false);assert.match(disclosure.querySelector('summary').textContent,/Show other companies.*3/);
- assert.deepEqual([...others.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[55,44]);
+ assert.deepEqual([...others.querySelectorAll('.company-total strong')].map(n=>Number(n.textContent)),[44,22]);
  assert.match(others.textContent,/Unfinished Research/);assert.equal(others.querySelector('[data-review-action="buyers"]').textContent,'Move to Buyers');
  disclosure.querySelector('summary').click();assert.equal(disclosure.open,true);render();
  assert.equal(others.querySelector('details.company-other-results').open,true,'rerendering must not close an opened disclosure');
  others.querySelector('details.company-other-results > summary').click();assert.equal(others.querySelector('details.company-other-results').open,false);
  assert.equal(JSON.stringify(context.__discoveryState()),before,'hiding and showing results must preserve all evidence, scores and selections');assert.equal(providerCalls(),0);
  const saved=Discovery.normalizeDiscoveryState(JSON.parse(before));context.__setDiscovery(saved);render();
- assert.equal(primary.querySelectorAll('.company-card').length,5);assert.equal(others.querySelectorAll('.company-card').length,2);
+ assert.equal(primary.querySelectorAll('.company-card').length,10);assert.equal(others.querySelectorAll('.company-card').length,2);
 });
-test('changing the requested amount repartitions saved companies immediately without a new search',()=>{
+test('changing the search goal preserves the top ten display without a new search',()=>{
  const {context,dom,control,render,providerCalls}=companyShortlistDisplayFixture({scores:[94,90,86,82,79,75,68,64,60,55,49,44],review:false});render();context.__bindDiscovery();
  control.value='10';control.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
  assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,10);
@@ -1901,18 +1901,17 @@ test('changing the requested amount repartitions saved companies immediately wit
  assert.equal(context.__discoveryState().candidates.length,12);assert.equal(providerCalls(),0);
 });
 test('an additional checked company retains its original index when selected for Buyers',async()=>{
- const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture();render();context.__bindDiscovery();
+ const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture({scores:[44,94,90,86,82,79,75,68,64,60,55,22]});render();context.__bindDiscovery();
  const disclosure=dom.window.document.querySelector('details.company-other-results');assert.ok(disclosure);disclosure.querySelector('summary').click();
  const button=disclosure.querySelector('[data-action="select-qualified-buyers"]');assert.ok(button);
- assert.equal(button.dataset.companyIndex,'0','the sixth ranked company is the first stored company');button.click();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(button.dataset.companyIndex,'0','the eleventh ranked company is the first stored company');button.click();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(context.__discoveryState().selectedProspects.length,1);assert.equal(context.__discoveryState().selectedProspects[0].domain,candidates[0].domain);
  const persisted=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
- assert.equal(persisted.selectedProspects[0].domain,candidates[0].domain);assert.equal(persisted.candidates.length,7);assert.equal(providerCalls(),0);
+ assert.equal(persisted.selectedProspects[0].domain,candidates[0].domain);assert.equal(persisted.candidates.length,12);assert.equal(providerCalls(),0);
 });
-test('Research review opens when it is the only company list',()=>{
+test('unscored review companies remain visible in the top ten with an honest pending score',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[]});render();
- const disclosure=dom.window.document.querySelector('#discovery-potential-matches details');assert.ok(disclosure);assert.equal(disclosure.open,true);
- assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,0);assert.match(disclosure.textContent,/Unfinished Research/);
+ const main=dom.window.document.getElementById('company-candidates');assert.match(main.textContent,/Unfinished Research/);assert.match(main.textContent,/Awaiting score/);assert.equal(main.querySelectorAll('[data-company-rank]').length,1);assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
 });
 test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});render();
@@ -1924,20 +1923,20 @@ test('additional results deduplicate checked identities and retain companies awa
  const pending={...state.candidates[2],needsRecheck:true};
  context.__setDiscovery({...state,candidates:state.candidates.map((row,i)=>i===2?pending:row),potentialMatches:[...state.potentialMatches,{...state.candidates[1],qualificationGaps:['Earlier incomplete check']}]});render();
  const primary=dom.window.document.getElementById('company-candidates'),others=dom.window.document.getElementById('discovery-potential-matches');
- assert.equal(primary.querySelectorAll('.company-card').length,5);assert.equal(others.querySelectorAll('.company-card').length,1);
- const pendingRow=[...others.querySelectorAll('.research-check-row')].find(n=>n.textContent.includes(pending.company));assert.ok(pendingRow,'retained stale evidence must remain available for recheck');
- assert.match(pendingRow.textContent,/recheck/i);assert.equal(others.querySelectorAll('.research-check-row').length,2,'an already checked company must not appear a second time in review');
+ assert.equal(primary.querySelectorAll('.company-card').length,6);assert.equal(others.querySelectorAll('.company-card').length,0);
+ const pendingRow=[...primary.querySelectorAll('.research-check-row')].find(n=>n.textContent.includes(pending.company));assert.ok(pendingRow,'retained stale evidence must remain available for recheck');
+ assert.match(pendingRow.textContent,/recheck/i);assert.equal(primary.querySelectorAll('.research-check-row').length,2,'an already checked company must not appear a second time in review');
  assert.equal(context.__discoveryState().candidates.length,7);
 });
 test('Remove and Clear review work for retained recheck rows while preserving checked cards and Buyers',()=>{
  const {context,dom,render,providerCalls}=companyShortlistDisplayFixture();const state=context.__discoveryState();
  context.__setDiscovery({...state,candidates:state.candidates.map((row,i)=>i===2?{...row,needsRecheck:true}:row),selectedProspects:[{company:'Saved',domain:'saved.lv',buyerSearchMode:'user_selected_target'}]});render();context.__bindDiscovery();
- let disclosure=dom.window.document.querySelector('details.company-other-results');disclosure.querySelector('summary').click();
- const remove=disclosure.querySelector('[data-review-action="remove"][data-review-key="ranked2.lv"]');assert.ok(remove);remove.click();
+ const primary=dom.window.document.getElementById('company-candidates');
+ const remove=primary.querySelector('[data-review-action="remove"][data-review-key="ranked2.lv"]');assert.ok(remove);remove.click();
  assert.equal(context.__discoveryState().candidates.length,6,'Remove must remove the stale review row from current research');
  assert.ok(!context.__discoveryState().candidates.some(c=>c.domain==='ranked2.lv'));
  const retained=context.__discoveryState();context.__setDiscovery({...retained,candidates:retained.candidates.map((row,i)=>i===0?{...row,needsRecheck:true}:row)});render();
- disclosure=dom.window.document.querySelector('details.company-other-results');if(!disclosure.open)disclosure.querySelector('summary').click();disclosure.querySelector('[data-review-action="clear"]').click();
+ primary.querySelector('[data-review-action="clear"]').click();
  assert.equal(context.__discoveryState().candidates.length,5);assert.equal(context.__discoveryState().potentialMatches.length,0);assert.equal(context.__discoveryState().selectedProspects[0].domain,'saved.lv');assert.equal(providerCalls(),0);
 });
 async function runCheckedOverflowResearch({campaign=false,compareReferences=false}={}){
@@ -2240,10 +2239,10 @@ test('Strategy changes never hide retained eligible company records from every r
  const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});
  const state=context.__discoveryState();context.__setDiscovery({...state,needsRefresh:true,status:'no_results',latestRunCandidateCount:0,retainedLastSuccessfulResults:true});
  const before=JSON.stringify(context.__discoveryState());render();
- const others=dom.window.document.getElementById('discovery-potential-matches');
+ const others=dom.window.document.getElementById('company-candidates');
  for(const c of candidates)assert.ok(others.textContent.includes(c.company),c.company+' must remain visible for saved review');
  assert.equal(others.querySelectorAll('.research-check-row').length,3);
- assert.equal(others.querySelector('details').open,true,'when no current shortlist exists, retained companies must be visible without hunting for a disclosure');
+ assert.equal(others.querySelectorAll('[data-score-state="previous"]').length,3,'stale retained scores remain visible and labelled as previous');
  assert.match(others.textContent,/Strategy.*review|current Strategy/i);
  assert.doesNotMatch(dom.window.document.getElementById('company-candidates').textContent,/No newly qualified opportunities|zero-result run can be valid|results? below are/);
  assert.equal(JSON.stringify(context.__discoveryState()),before,'rendering cannot rewrite saved evidence');assert.equal(providerCalls(),0);
@@ -2266,4 +2265,43 @@ test('Strategy fingerprint comparison ignores object key order without ignoring 
  const compare=value=>vm.runInNewContext('sameStrategyFingerprint('+JSON.stringify(JSON.stringify(value))+','+JSON.stringify(current)+')',context);
  assert.equal(compare(previous),true,'save and hydration key order cannot invalidate saved research');
  previous.answers.priority_offers='A materially different offer';assert.equal(compare(previous),false);
+});
+
+ test('a completed new search batch joins the saved ranking by score and retains all previous companies',()=>{
+ const f=companyShortlistDisplayFixture({scores:[44,94,90,86,82,79,75,68,64,60,55,22,99],review:true}),{context,dom,render,candidates}=f;
+ const state=context.__discoveryState();context.__setDiscovery({...state,candidates:candidates.slice(0,12)});render();
+ assert.equal(Number(dom.window.document.querySelector('#company-candidates [data-company-score]').dataset.companyScore),94);
+ const before=context.__discoveryState();context.__setDiscovery({...before,candidates:context.__mergeWorkflowCompanies(before.candidates,[candidates[12]])});render();
+ assert.equal(Number(dom.window.document.querySelector('#company-candidates [data-company-score]').dataset.companyScore),99);assert.equal(dom.window.document.querySelectorAll('#company-candidates [data-company-rank]').length,10);
+ assert.equal(dom.window.document.querySelector('[data-company-total]').dataset.companyTotal,'14');assert.equal(context.__discoveryState().candidates.length,13);
+ const persisted=Discovery.normalizeDiscoveryState(JSON.parse(JSON.stringify(context.__discoveryState())));context.__setDiscovery(persisted);render();
+ assert.equal(Number(dom.window.document.querySelector('#company-candidates [data-company-score]').dataset.companyScore),99);assert.equal(dom.window.document.querySelector('[data-company-total]').dataset.companyTotal,'14');assert.equal(f.providerCalls(),0);
+});
+test('a displayed lower reassessment selects its exact newer company record after ranking without changing stored order',async()=>{
+ const f=companyShortlistDisplayFixture({scores:[95],review:false}),old={...f.candidates[0],researchedAt:'2026-11-01T00:00:00Z',qualification:{...f.candidates[0].qualification,researchedAt:'2026-11-01T00:00:00Z'}},fresh={...f.candidates[0],buyerFit:{...f.candidates[0].buyerFit,fit:60},qualification:{...f.candidates[0].qualification,score:60,researchedAt:new Date().toISOString()}};
+ f.context.__setDiscovery({...f.context.__discoveryState(),candidates:[old,fresh]});f.render();f.context.__bindDiscovery();
+ const button=f.dom.window.document.querySelector('[data-action="select-qualified-buyers"]');assert.equal(button.dataset.companyIndex,'1');assert.equal(f.dom.window.document.querySelector('[data-company-score]').dataset.companyScore,'60');
+ button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.context.__discoveryState().selectedProspects[0].buyerFit.fit,60);assert.equal(f.providerCalls(),0);
+});
+test('a stale displayed company control cannot select a record that overtook its assessment',async()=>{
+ const f=companyShortlistDisplayFixture({scores:[60],review:false});f.render();f.context.__bindDiscovery();const button=f.dom.window.document.querySelector('[data-action="select-qualified-buyers"]'),old=f.context.__discoveryState().candidates[0];
+ f.context.__discoveryState().candidates.push({...old,buyerFit:{...old.buyerFit,fit:70},qualification:{...old.qualification,score:70,researchedAt:new Date(Date.now()+1000).toISOString()},researchedAt:new Date(Date.now()+1000).toISOString()});button.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.context.__discoveryState().selectedProspects.length,0);assert.equal(f.providerCalls(),0);
+});
+test('Move to Buyers on a reviewed duplicate uses the displayed newer assessment',async()=>{
+ const f=companyShortlistDisplayFixture({scores:[95],review:false}),old={...f.candidates[0],needsRecheck:true,researchedAt:'2026-11-01T00:00:00Z',qualification:{...f.candidates[0].qualification,researchedAt:'2026-11-01T00:00:00Z'}},fresh={...f.candidates[0],needsRecheck:true,qualificationGaps:['Earlier check incomplete'],buyerFit:{...f.candidates[0].buyerFit,fit:60},qualification:{...f.candidates[0].qualification,score:60,researchedAt:new Date().toISOString()}};
+ f.context.__setDiscovery({...f.context.__discoveryState(),candidates:[old],potentialMatches:[fresh]});f.render();f.context.__bindDiscovery();
+ const row=f.dom.window.document.querySelector('[data-review-action="buyers"]');assert.match(row.closest('[data-company-rank]').textContent,/60\/100/,JSON.stringify({pot:f.context.__discoveryState().potentialMatches.map(c=>({fit:c.buyerFit?.fit,qAt:c.qualification?.researchedAt})),rows:f.context.rankedCompanyResults().rows.map(r=>({score:r.score,source:r.source,at:r.candidate.researchedAt,qAt:r.candidate.qualification?.researchedAt,fit:r.candidate.buyerFit?.fit}))}));row.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.context.__discoveryState().selectedProspects[0].buyerFit.fit,60);
+});
+test('review selection cannot commit an overtaken assessment after its CRM acknowledgement',async()=>{
+ const f=companyShortlistDisplayFixture({scores:[60],review:false});f.context.__setDiscovery({...f.context.__discoveryState(),candidates:f.candidates.map(c=>({...c,needsRecheck:true}))});f.render();f.context.__bindDiscovery();
+ let finish;f.context.crmAuthenticated=()=>true;f.context.ensureCrmCompany=()=>new Promise(resolve=>{finish=resolve;});const row=f.dom.window.document.querySelector('[data-review-action="buyers"]');row.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(typeof finish,'function');
+ const state=f.context.__discoveryState(),old=state.candidates[0];state.candidates.push({...old,buyerFit:{...old.buyerFit,fit:70},qualification:{...old.qualification,score:70,researchedAt:new Date(Date.now()+1000).toISOString()}});finish({id:'acknowledged-company'});await new Promise(resolve=>setImmediate(resolve));assert.equal(state.selectedProspects.length,0);
+});
+test('saved-evidence review preserves the newer rejected assessment and its assessment date',async()=>{
+ const f=companyShortlistDisplayFixture({scores:[95],review:false}),{context,render}=f,old=JSON.parse(JSON.stringify(context.__discoveryState().candidates[0])),fresh=JSON.parse(JSON.stringify(old));
+ old.needsRecheck=true;old.qualification.researchedAt='2026-11-15T12:00:00Z';fresh.buyerFit.fit=10;fresh.buyerFit.relationship='competitor';fresh.qualification.score=10;fresh.qualification.researchedAt=new Date().toISOString();fresh.qualificationGaps=['No relevant buyer relationship established'];
+ for(const c of [old,fresh]){c.researchedAt='2026-11-01T12:00:00Z';for(const source of c.evidence)source.verifiedAt=c.researchedAt;}
+ context.__setDiscovery({...context.__discoveryState(),candidates:[old],potentialMatches:[fresh],selectedProspects:[]});render();assert.equal(context.rankedCompanyResults().rows[0].score,10);
+ assert.equal(await context.__runDiscovery({recheckOnly:true,savedEvidenceOnly:true,targetDomain:'ranked0.lv'}),true);render();
+ const winner=context.rankedCompanyResults().rows[0];assert.equal(winner.score,10);assert.equal(winner.candidate.buyerFit.relationship,'competitor');assert.equal(winner.actionable,false);assert.equal(winner.candidate.qualification.researchedAt,fresh.qualification.researchedAt);assert.equal(f.providerCalls(),0);
 });
