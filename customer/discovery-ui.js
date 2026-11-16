@@ -3721,7 +3721,7 @@ async function runPublicProspectContacts(domain,{signal,personIds,force=false,on
     }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.issues.push('Official homepage unavailable');}
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain,candidate.company);
     // Resolve truncated identities and their profiles before binding mandatory receipts.
-    const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
+    const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>LeadIntelDiscovery.hasFullBuyerName(person.name)?person.publicNameUrl?person.publicName:person.name:String(person.name||person.publicName||'').trim().split(/\s+/)[0]).filter(Boolean).slice(0,4);
     let profileIssue='';
     if(profileNames.length){
       onProgress?.({label:'Cross-checking direct buyer profiles'});
