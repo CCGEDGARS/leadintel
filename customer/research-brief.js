@@ -30,6 +30,21 @@ function signalPriority(row={},profile={},person=null,now=Date.now()){
 }
 function fact(row,target){const url=D.url(row.url||row.sourceUrl),quote=clean(row.quote||row.text);if(!url||D.domain(url)!==target||quote.length<12||quote.length>1800||unsafe(quote)||row.extracted===false||row.evidenceKind==='model_summary'||/failed|error|pending/i.test(row.status||''))return null;const text=conciseQuote(row.quote||row.text);if(!text||boilerplate(text)||navigation(text)||/^Together with\b.*\b[A-Z]\.$/.test(text))return null;return {text,quote,url,date:/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')?row.date:'',checkedAt:clean(row.checkedAt||row.extractedAt||''),verification:'source_verified',origin:row.origin==='dossier'?'dossier':'extracted',kind:development(quote)?'development':'company'};}
 function safe(prior,target){if(prior?.version!==VERSION||D.domain(prior.domain)!==D.domain(target))return null;return {...prior,facts:(prior.facts||[]).filter(row=>row.verification==='source_verified').map(row=>fact(row,D.domain(target))).filter(Boolean).slice(0,16)};}
+function namedOfficialRole(person,target){
+ const evidence=person?.publicEmailEvidence,url=D.url(evidence?.url),host=D.domain(url),age=Date.now()-Date.parse(evidence?.checkedAt||'');
+ if(evidence?.version!==2||evidence.sourceRead!==true||evidence.sourceKind!=='official'||url!==D.url(person.publicEmailUrl)||!target||!(host===target||host.endsWith('.'+target))||!Number.isFinite(age)||age<0||age>=30*86400000)return null;
+ const name=clean(person.publicName||person.name),title=clean(person.title),quote=clean(evidence.quote),escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ if(!name||!title||unsafe(quote))return null;
+ const pattern=new RegExp('(?:^|[^\\p{L}\\p{N}])'+escape(name)+'[\\s\\p{P}]*'+escape(title)+'(?=$|[\\s\\p{P}])','iu'),match=pattern.exec(quote);
+ if(!match)return null;
+ const tail=quote.slice(match.index+match[0].length);
+ if(tail.trim()&&!/^[\s]*[\p{P}]|^\s*(?:email|e-mail|phone|tel|contact)\b/iu.test(tail))return null;
+ const before=quote.slice(0,match.index),cardEnd=tail.search(/\s#{1,6}\s/),context=before.split(/(?:\s#{1,6}\s|[;\n])/).at(-1)+' '+quote.slice(match.index,match.index+match[0].length)+(cardEnd<0?tail:tail.slice(0,cardEnd));
+ if(/\b(?:former|formerly|previous|retired|departed|resigned|no longer|incoming)\b|\b(?:not|never)\s+(?:(?:the|a|an|currently|our)\s+)*(?:current|chief|officer|employ\w*|working|part of|head of|director)\b|\b(?:will|may|might|could)\s+(?:join|become|be)\b|\b(?:employment|contract|role|tenure)\b[^.!?]{0,40}\b(?:ended|terminated|ceased|concluded)\b|\bleft\s+(?:(?:the|this)\s+)?(?:company|business|organization|role)\b/i.test(context))return null;
+ const today=new Date().toISOString().slice(0,10),year=Number(today.slice(0,4));
+ if([...context.matchAll(/\b(20\d{2})\b/g)].some(row=>Number(row[1])>year)||[...context.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)].some(row=>row[1]>today))return null;
+ return {sourceUrl:url,quote};
+}
 function build(candidate={},profile={},person=null,prior=null){
  const target=D.domain(candidate.domain||candidate.website),d=D.safe(candidate.buyerDiscovery?.companyDossier,target),previous=safe(prior,target),facts=[];
  // An explicit read outcome owns its URL; a legacy extraction label cannot
@@ -50,10 +65,11 @@ function build(candidate={},profile={},person=null,prior=null){
  if(!d&&!facts.length)facts.push(...(previous?.facts||[]));
  const unique=[...new Map(facts.map(row=>[row.url+'|'+row.quote,row])).values()],priorities=new Map(unique.map(row=>[row,signalPriority(row,profile,person)]));
  unique.sort((a,b)=>Number(priorities.get(b).usable)-Number(priorities.get(a).usable)||priorities.get(b).score-priorities.get(a).score||a.url.localeCompare(b.url));unique.splice(16);
- const sourcePerson=provenPeople.find(row=>clean(row.name).toLowerCase()===clean(person?.publicName||person?.name).toLowerCase()&&clean(row.title).toLowerCase()===clean(person?.title).toLowerCase()),hold=person&&d?D.holdReason(person,d):'',verified=Boolean(sourcePerson&&sourcePerson.status==='current'&&!sourcePerson.roleConflict&&!hold&&reads.has(sourcePerson.sourceUrl)),gaps=[...(d?.gaps||[])];
+ const roleProof=namedOfficialRole(person,target),initials=clean(person?.title).split(/[^\p{L}]+/u).filter(Boolean).map(word=>word[0]).join('').toUpperCase();
+ const sourcePerson=provenPeople.find(row=>clean(row.name).toLowerCase()===clean(person?.publicName||person?.name).toLowerCase()&&(D.roleKey(row.title)===D.roleKey(person?.title)||roleProof&&/^[A-Z]{2,5}$/.test(clean(row.title))&&clean(row.title)===initials)),hold=person&&d?D.holdReason(person,d):'',verified=Boolean(sourcePerson&&sourcePerson.status==='current'&&!sourcePerson.roleConflict&&!hold&&!['pending'].includes(person?.identityStatus)&&person?.nameVerification!=='pending'&&reads.has(sourcePerson.sourceUrl)),gaps=[...(d?.gaps||[])];
  if(!unique.length)gaps.push('No extracted official company fact available for personalization.');if(person&&!verified)gaps.push(hold||'Selected buyer role requires source verification.');if(d?.conflicts.length)gaps.push('Research conflicts need review.');if(d?.lastAttempt)gaps.push('Latest company research attempt needs attention.');
  const offer=clean(profile.priorityOffers),hypotheses=offer&&unique.length?[{text:offer+' may be relevant to this company context; confirm the need in conversation.',status:'hypothesis'}]:[];
- const buyer=person?{id:clean(person.id),name:clean(person.publicName||person.name),title:clean(person.title),verified,url:verified?sourcePerson.sourceUrl:'',quote:verified?sourcePerson.quote:''}:null;
+ const buyer=person?{id:clean(person.id),name:clean(person.publicName||person.name),title:clean(person.title),verified,url:verified?(roleProof||sourcePerson).sourceUrl:'',quote:verified?(roleProof||sourcePerson).quote:''}:null;
  const first=unique.find(row=>priorities.get(row).usable),signalSelection=first?{url:first.url,quote:first.quote,...priorities.get(first)}:null;
  const body={version:VERSION,domain:target,company:clean(candidate.company),facts:unique,signalSelection,authoritativeUrls:[...new Set([...reads,...newer.keys()])].slice(0,40),developments:unique.filter(row=>row.kind==='development').slice(0,4),companyContext:unique.find(row=>row.kind==='company')||null,buyer,hypotheses,gaps:[...new Set(gaps)].slice(0,10),checkedAt:clean(d?.checkedAt||previous?.checkedAt||''),researchStatus:d?.status||'unavailable'};
  return {...body,key:VERSION+':'+fingerprint([SIGNAL_POLICY,target,[profile.companyName,profile.priorityOffers,profile.valueProposition,profile.differentiation,profile.commercialObjective],unique,signalSelection,buyer,body.gaps])};
