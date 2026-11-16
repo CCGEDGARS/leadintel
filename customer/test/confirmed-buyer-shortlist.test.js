@@ -22,13 +22,13 @@ test('a ready contact remains in the four while unrelated deep checks are unfini
  const result=D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c,{confirmedContact:p=>ready.has(p.id)});
  assert.equal(result.priorityIds.length,4);assert.ok(result.priorityIds.every(id=>ready.has(id)));
 });
-test('default confirmation requires a current named official email source, not a pattern or stale listing',()=>{
+test('named listed company emails count in the shortlist while employment holds stay authoritative',()=>{
  const c=fixture(),rows=[{url:'https://example.com/team',sourceRead:true,extractedAt:new Date().toISOString(),markdown:c.people.slice(0,4).map((person,i)=>'### '+person.name+'\n'+person.title+'\n'+['alex','bella','carl','diana'][i]+'@example.com\nExample').join('\n\n')}];
  c.people=D.discoverCompanyContacts(rows,c);assert.equal(D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds.length,4);
  c.people[0].publicEmailEvidence.checkedAt='2020-01-01';delete c.people[1].publicEmailEvidence;c.people[2].opportunityScope={status:'review_required',reason:'Employer conflict'};
- const result=D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c);assert.equal(result.priorityIds.length,1);assert.equal(result.shortfall,3);
+ const result=D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c);assert.equal(result.priorityIds.length,3);assert.equal(result.shortfall,1);
  c.publicResearch={aiReview:{conflicts:[{person_id:c.people[3].id,reason:'Conflicting current employer'}]}};
- assert.equal(D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds.length,0,'an official email cannot override a retained employment conflict');
+ assert.equal(D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds.length,2,'a listed or official email cannot override a retained employment conflict');
 });
 test('retained research and AI identity conflicts exclude a contact even when its channel is confirmed',()=>{
  for(const field of ['conflicts','aiReview']){

@@ -93,7 +93,7 @@ async function executeCrmWrites(db,context,statements,primaryStatementIndex=0){
 }
 export async function writeCrmRecord(db,context,sql,args=[]){return (await executeCrmWrites(db,context,[crmWrite(db,sql).bind(...args)]))[0];}
 function activityInsertStatement(db,values,guardSql='',guardArgs=[]){const columns='id,workspace_id,company_id,contact_id,activity_type,channel,direction,subject,summary,metadata_json,occurred_at,created_at,actor_user_id';const placeholders=values.map(()=>'?').join(',');const sql=guardSql?`INSERT OR IGNORE INTO crm_activities(${columns}) SELECT ${placeholders} WHERE ${guardSql}`:`INSERT OR IGNORE INTO crm_activities(${columns}) VALUES(${placeholders})`;return crmWrite(db,sql).bind(...values,...guardArgs);}
-async function writeWithActivity(db,context,activity,statements=[],primaryStatementIndex=0){const values=activityValues(context,activity);const [id,workspaceId,companyId,contactId]=values;const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);let validContactId=contactId;if(validContactId){const contact=await db.prepare(`SELECT id FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL`).bind(validContactId,workspaceId,companyId).first();if(!contact)values[3]=null;}const result=await executeCrmWrites(db,context,[...statements,activityInsertStatement(db,values)],primaryStatementIndex);const activityResult=result?.at?.(-1);return {id,inserted:Number(activityResult?.meta?.changes||0)>0};}
+async function writeWithActivity(db,context,activity,statements=[],primaryStatementIndex=0){const values=activityValues(context,activity);const [id,workspaceId,companyId,contactId]=values;const company=await companyRow(db,workspaceId,companyId);if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);let validContactId=contactId;if(validContactId){const contact=await db.prepare(`SELECT id FROM crm_contacts WHERE id=? AND workspace_id=? AND company_id=? AND archived_at IS NULL`).bind(validContactId,workspaceId,companyId).first();if(!contact)values[3]=null;}const result=await executeCrmWrites(db,context,[...statements,activityInsertStatement(db,values,activity.onlyIfChanged?'changes()>0':'')],primaryStatementIndex);const activityResult=result?.at?.(-1);return {id,inserted:Number(activityResult?.meta?.changes||0)>0,...(activity.onlyIfChanged?{changed:Number(result?.[primaryStatementIndex]?.meta?.changes||0)>0}:{})};}
 function guardedActivityStatement(db,context,activity,guardSql,guardArgs=[]){const values=activityValues(context,activity);return activityInsertStatement(db,values,guardSql,guardArgs);}
 
 export async function appendCrmActivity(db,context,activity={}){return writeWithActivity(db,context,activity);}
@@ -110,7 +110,8 @@ async function findContactIdentity(db,workspaceId,companyId,{email,source,extern
 
 export async function upsertCrmContacts(db,context,companyId,contacts=[]){
   const workspaceId=clean(context?.workspaceId,160);
-  if(!await companyRow(db,workspaceId,companyId))throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);
+  const company=await companyRow(db,workspaceId,companyId);
+  if(!company)throw crmError('CRM_COMPANY_NOT_FOUND','CRM company not found',404);
   const saved=[];
   for(const input of (Array.isArray(contacts)?contacts:[]).slice(0,50)){
     const email=normalizeEmail(input?.work_email||input?.email);
@@ -125,6 +126,7 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
     const publicNameUrl=clean(input?.public_name_url,2000)||null;
     const publicEmailUrl=clean(input?.public_email_url,2000)||null;
     const publicLinkedinUrl=clean(input?.public_linkedin_url,2000)||null;
+    if(emailStatus==='public_listed'&&(source!=='public_listing'||!ContactPolicy.listedSource(email,name,publicEmailUrl,company.normalized_domain)))throw crmError('CRM_LISTED_EMAIL_INVALID','A listed company email needs the exact buyer name, company domain and public source.',400);
     let existing=await findContactIdentity(db,workspaceId,companyId,identity);
     if(!existing){
       const id=uuid();
@@ -141,10 +143,17 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
       if(!existing)throw crmError('CRM_CONTACT_SAVE_CONFLICT','Contact changed while it was being saved',409);
     }
     const stamp=now();
-    const verified=['verified','public_confirmed'].includes(String(existing.email_status||'').toLowerCase())&&emailStatus==='public_unverified';
-    const update=crmWrite(db,`UPDATE crm_contacts SET name=?,title=?,work_email=?,normalized_email=?,external_person_id=?,email_status=?,linkedin_url=?,source=?,public_name_url=?,public_email_url=?,public_linkedin_url=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(verified?existing.name:name||existing.name,title||existing.title,verified?existing.work_email:workEmail||existing.work_email,verified?existing.normalized_email:email||existing.normalized_email,externalId||existing.external_person_id,verified?existing.email_status:emailStatus||existing.email_status,linkedin||existing.linkedin_url,source||existing.source,publicNameUrl||existing.public_name_url,publicEmailUrl||existing.public_email_url,publicLinkedinUrl||existing.public_linkedin_url,stamp,existing.id,workspaceId);
+    if(emailStatus==='public_listed'&&['invalid','undeliverable','bounced','rejected','suppressed'].includes(String(existing.email_status||'').toLowerCase()))throw crmError('CRM_EMAIL_REJECTED','This email was rejected or marked invalid. Review it before proceeding.',409);
+    const text=value=>clean(value).toLowerCase(),profile=value=>text(value).replace(/^https?:\/\/(?:[a-z0-9-]+\.)*linkedin\.com/i,'https://linkedin.com').replace(/\/$/,'');
+    if(emailStatus==='public_listed'&&((name&&existing.name&&text(name)!==text(existing.name))||(externalId&&existing.external_person_id&&externalId!==existing.external_person_id)||new Set([linkedin,publicLinkedinUrl,existing.linkedin_url,existing.public_linkedin_url].filter(Boolean).map(profile)).size>1))throw crmError('CRM_LISTED_IDENTITY_CHANGED','The saved person differs from this listing. Review the exact buyer before proceeding.',409);
+    const verified=['verified','public_confirmed','public_listed'].includes(String(existing.email_status||'').toLowerCase())&&(emailStatus==='public_unverified'||emailStatus==='public_listed'&&ContactPolicy.accepted(existing,company.normalized_domain))||['invalid','undeliverable','bounced','rejected','suppressed'].includes(String(existing.email_status||'').toLowerCase())&&emailStatus==='public_unverified';
+    const resetProof=emailStatus==='public_listed'&&!verified?',verification_provider=NULL,verified_at=NULL':'';
+    const guardFields=['name','title','normalized_email','work_email','external_person_id','email_status','source','public_name_url','public_email_url','linkedin_url','public_linkedin_url','verification_provider','verified_at','updated_at','archived_at'].filter(field=>Object.hasOwn(existing,field));
+    const contactGuard=guardFields.map(field=>` AND ${field} IS ?`).join('');
+    const update=crmWrite(db,`UPDATE crm_contacts SET name=?,title=?,work_email=?,normalized_email=?,external_person_id=?,email_status=?,linkedin_url=?,source=?,public_name_url=?,public_email_url=?,public_linkedin_url=?,updated_at=?${resetProof} WHERE id=? AND workspace_id=?${contactGuard}`).bind(verified?existing.name:name||existing.name,title||existing.title,verified?existing.work_email:workEmail||existing.work_email,verified?existing.normalized_email:email||existing.normalized_email,verified?existing.external_person_id:externalId||existing.external_person_id,verified?existing.email_status:emailStatus||existing.email_status,verified?existing.linkedin_url:linkedin||existing.linkedin_url,verified?existing.source:source||existing.source,verified?existing.public_name_url:publicNameUrl||existing.public_name_url,verified?existing.public_email_url:publicEmailUrl||existing.public_email_url,verified?existing.public_linkedin_url:publicLinkedinUrl||existing.public_linkedin_url,stamp,existing.id,workspaceId,...guardFields.map(field=>existing[field]??null));
     try{
-      await writeWithActivity(db,context,{companyId,contactId:existing.id,type:'contact.updated',summary:name||email||'Contact updated',metadata:{source}},[update]);
+      const written=await writeWithActivity(db,context,{companyId,contactId:existing.id,type:'contact.updated',summary:name||email||'Contact updated',metadata:{source},onlyIfChanged:true},[update]);
+      if(!written.changed)throw crmError('CRM_CONTACT_SAVE_CONFLICT','Contact evidence changed while saving. Refresh and review this exact buyer.',409);
     }catch(error){
       if(isContactUniqueConstraint(error))throw crmError('CRM_CONTACT_CONFLICT','This contact email or external identity already exists',409);
       throw error;

@@ -23,10 +23,11 @@ export const exactDrafts={
 // Real sessions, all migrations, workspace CAS, CRM contact confirmation and
 // production domain approval. Only outbound HTTP providers are controlled.
 // These synthetic drafts are explicit manual review fixtures, not AI claims.
-export async function step7Fixture({connected=true,activated=false}={}){
+export async function step7Fixture({connected=true,activated=false,additionalFetch}={}){
  const providerRequests=[];let nextMode='accepted',nextGate=null;
  const f=await journeyFixture({externalFetch:async(input,options={})=>{
   const url=new URL(typeof input==='string'?input:input.url);
+  const additional=await additionalFetch?.(input,options);if(additional)return additional;
   if(url.hostname==='oauth2.googleapis.com'&&url.pathname==='/token')return Response.json({access_token:'controlled-access',expires_in:3600});
   if(url.hostname==='gmail.googleapis.com'||url.hostname==='www.googleapis.com'){
    if(url.pathname.endsWith('/messages/send')){
