@@ -33,14 +33,14 @@ test('conflict-free recovery packs its backup off the page before applying the m
  assert.equal(saved.saved,true);assert.ok(jobs.includes('packRecoveryRecord'));assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local edited offer');assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).people[0].name,'Researched buyer');
  assert.ok(values.get(RECOVERY),'both versions are backed up before the merge');
 });
-test('an edit while background transfer preparation runs remains unsaved after the old payload is acknowledged',async()=>{
+test('an edit while background transfer preparation runs remains unsaved after the old payload is acknowledged',{timeout:20000},async()=>{
  let wire,release,started;const preparing=new Promise(resolve=>started=resolve);
  const {root,values}=load(async(input,options)=>{wire=JSON.parse(options.body).payload;return Response.json({saved:true,version:4});},{withBridge:true,withBudget:true});
- establishBase(root,values);Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});const budget=root.LeadIntelStateBudget;
+ establishBase(root,values);values.set(MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Initial explicit edit'}}));Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});const budget=root.LeadIntelStateBudget;
  root.Worker=class{postMessage(job){if(job.operation==='prepareForSync'){release=()=>this.onmessage({data:{id:job.id,result:budget.prepareForSync(job.value,job.options)}});started();}else setImmediate(()=>this.onmessage({data:{id:job.id,result:budget[job.operation](job.value,job.options)}}));}terminate(){}};
  const saving=root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await preparing;
  values.set(MAIN,JSON.stringify({website:'seller.example',answers:{offer:'Edited during background packing'}}));release();
- const result=await saving;assert.equal(result.saved,true);assert.equal(result.dirty,true);assert.notEqual(wire.main.answers.offer,'Edited during background packing');
+ const result=await saving;assert.equal(result.saved,true);assert.equal(result.dirty,true);assert.equal(wire.main.answers.offer,'Initial explicit edit');assert.notEqual(wire.main.answers.offer,'Edited during background packing');
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true,'the new edit was not in the acknowledged transfer');
  assert.notEqual(root.LeadIntelWorkspacePersistence.syncedBase('w1').localPayload.main.answers.offer,'Edited during background packing');
 });

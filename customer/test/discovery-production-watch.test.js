@@ -9,6 +9,7 @@ const config = JSON.parse(fs.readFileSync(path.join(root, 'release-integrity.con
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/release-integrity.yml'), 'utf8');
 const corePath = path.join(root, 'scripts/release-integrity-core.mjs');
 const SHA = '0123456789abcdef0123456789abcdef01234567';
+const saveOwnerEntries = fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/<script[^>]+src="(?:workspace-sync|server-bridge|app|process-map)\.js\?[^"]+"[^>]*><\/script>/g).join('\n');
 
 test('production proof rejects either stale signature loader independently',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore(),entry=fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),ui=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');
@@ -228,7 +229,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
+      customerHtml: `${shell}${saveOwnerEntries}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'

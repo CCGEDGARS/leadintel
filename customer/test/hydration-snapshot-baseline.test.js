@@ -14,7 +14,7 @@ function hydrationBranch(){
 
 test('hydration records the applied server state as the local baseline before reloading',()=>{
   const branch=hydrationBranch();
-  const apply=branch.indexOf('applyPayload(state.payload)'),snapshot=branch.indexOf('snapshotFromServerPayload'),reload=branch.indexOf('location.reload()');
+  const apply=branch.indexOf('applyPayload(hydrationPayload(state.payload,base))'),snapshot=branch.indexOf('snapshotFromServerPayload'),reload=branch.indexOf('location.reload()');
   assert.ok(apply>=0&&snapshot>apply&&reload>snapshot,'apply, then snapshot, then reload');
   assert.match(branch,/await root\.LeadIntelWorkspacePersistence\?\.snapshotFromServerPayload\?\.\(state\.payload,\{workspaceId:bridge\.workspace\.id,version:Number\(state\.version\),localData:root\.LeadIntelWorkspacePersistence\.currentWorkspaceData\(\),dirty:false\}\)/);
 });
