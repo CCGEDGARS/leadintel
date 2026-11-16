@@ -83,13 +83,14 @@ function loadState(){
 }
 function saveState(){
   if(!state||(window.LeadIntelAccountCache&&window.LeadIntelServerBridge?.ready!==true))return;
-  // The customer modal and the main journey edit the same storage key independently.
-  // Keep the modal's latest lists and activation when an older in-memory app state saves.
+  // The customer modal, Messages and the main journey share this storage key.
+  // Preserve independently owned fields when an older in-memory app state saves.
   try{
     const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
     if(!current||typeof current!=="object"||Array.isArray(current))return false;
     if(current.websiteScans&&typeof current.websiteScans==="object")state.websiteScans=current.websiteScans;
     if(current.eventCampaigns&&typeof current.eventCampaigns==="object")state.eventCampaigns=current.eventCampaigns;
+    if(current.campaignStudio&&typeof current.campaignStudio==="object"&&!Array.isArray(current.campaignStudio))state.campaignStudio=current.campaignStudio;
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;

@@ -12,6 +12,16 @@ test('async main-app results notify the shared autosave owner and unchanged save
  assert.equal(JSON.parse(values.get('state')).market.researchResults.length,1);
  vm.runInContext('saveState()',context);assert.equal(events.length,1);
 });
+test('a main-form edit retains the latest campaign settings owned by Messages',()=>{
+ for(const stale of [undefined,{schemaVersion:1,coreScenario:{summary:'Old summary'},presets:[],selectedPresetId:''}]){
+  const campaignStudio={schemaVersion:1,coreScenario:{summary:'Reviewed summary',status:'approved'},presets:[{id:'export-preset',segment:'Export buyers',language:'de'}],selectedPresetId:'export-preset'};
+  const events=[],values=new Map([['state',JSON.stringify({website:'https://seller.example/',campaignStudio})]]);
+  const context={state:{website:'https://seller.example/',setupWebsiteDraft:'https://seller.example/proposed',...(stale?{campaignStudio:stale}:{})},STORAGE_KEY:'state',localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},window:{dispatchEvent:event=>events.push(event.type)},CustomEvent:class{constructor(type){this.type=type;}},profileApprovalContext:()=> 'workspace-a',updateCompleteness(){},updateNavigationAvailability(){}};
+  vm.createContext(context);vm.runInContext(body+';saveState()',context);
+  const saved=JSON.parse(values.get('state'));assert.deepEqual(saved.campaignStudio,campaignStudio);assert.equal(saved.setupWebsiteDraft,'https://seller.example/proposed');
+  vm.runInContext('saveState()',context);assert.deepEqual(events,['leadintel:workspace-dirty']);
+ }
+});
 test('an active research run does not import an extra snapshot before its final report is captured',()=>{
  const start=app.indexOf('function renderResearchReports(){'),end=app.indexOf('\nfunction setActivationFeedback',start);
  const state={market:{researchResults:[{url:'https://manufacturer.example/news'}],researchStatus:'complete',researchReports:[]}};
