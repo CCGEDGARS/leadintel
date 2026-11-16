@@ -399,4 +399,4 @@ jobs:
       - name: Verify saved buyer scope, current role and exact draft handoff through reopening
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/buyer-entity-role-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 backend/test/buyer-entity-role-journey.test.mjs backend/test/listed-email-journey.test.mjs

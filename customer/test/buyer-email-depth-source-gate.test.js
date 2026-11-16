@@ -10,7 +10,7 @@ for(const sourceState of ['unread','failed','confirmed'])test(`mandatory email e
  assert.equal(queries.length,baseCount+(confirmed?0:2));
  for(const query of deep)assert.equal(queries.filter(value=>value===query).length,confirmed?0:1,'Only an accepted named read source can suppress mandatory deeper email discovery');
  assert.equal(person.contactResearch.checks.deep.status,confirmed?'not_needed':'complete');assert.equal(report.deepPeople,confirmed?0:1);
- assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),confirmed?email:'');assert.equal(D.confirmedBuyerContactData(candidate,person).email,confirmed?email:'','Completed searches cannot confirm an unread or rejected email candidate');
+ assert.equal(D.acceptedOfficialBuyerEmail(candidate,person),confirmed?email:'');assert.equal(D.confirmedBuyerContactData(candidate,person).email,sourceState==='failed'?'':email,'A named listing is manually usable while rejection remains a hold and automatic research depth stays separate');
  const legacy=structuredClone(candidate);legacy.people[0].contactResearch.checks.deep={status:'not_needed',checkedAt:new Date().toISOString(),attempts:0,queryLog:[],reason:'Published company email already found'};legacy.people[0].emailResearch.searches=baseCount;
  assert.equal(D.buyerResearchCoveragePassed(legacy),confirmed,'A saved no-deep checkpoint is complete only when its email source is actually accepted');
 });

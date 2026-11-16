@@ -108,11 +108,12 @@ test('proceed keeps its label through ready, selecting and selected states with 
  }
 });
 
-test('unconfirmed public listing cannot unlock proceed even under public confirmation policy',()=>{
+test('a named company email listing unlocks Proceed without mailbox verification',()=>{
  const {context,person,candidate}=runtime();context.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');
  vm.runInContext("buyerConfirmationLevel='public_confirmed';confirmationPolicyWorkspace='w1';",context);
  person.publicEmail='anna@example.com';person.publicEmailUrl='https://example.com/team';
- assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+ assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+ assert.match(context.prospectContactControls(candidate,person),/Listed company email accepted/);
 });
 
 test('Recheck opens review even for an already verified buyer and waits for Proceed',async()=>{
@@ -139,8 +140,8 @@ test('confirmed email keeps green eligibility while E-mail remains available',()
   assert.equal(dom.window.document.querySelector('[data-keep-buyer]').disabled,false);dom.window.close();
  }
 });
-test('an unconfirmed public address or another person’s saved email never paints this buyer green',()=>{
- const {context,person,candidate}=runtime();person.publicEmail='anna@example.com';person.publicEmailUrl='https://example.com/team';
+test('an unsourced address or another person’s saved email never paints this buyer green',()=>{
+ const {context,person,candidate}=runtime();person.publicEmail='anna@example.com';person.publicEmailUrl='';
  context.enrichmentResults.set('different-person',{contact:{work_email:'other@example.com',email_status:'verified'}});
  const html=context.prospectContactControls(candidate,person);
  assert.match(html,/data-prospect-enrich-email[^>]*>E-mail<\/button>/);

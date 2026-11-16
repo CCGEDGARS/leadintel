@@ -10,6 +10,48 @@ import {verifyAutomaticEmail} from '../src/automatic-email-verification.js';
 import {sha256} from '../src/security.js';
 import {normalizeWorkflowConfig} from '../src/approved-workflow-engine.js';
 const P=globalThis.LeadIntelContactPolicy;
+test('listed company email persists as listing acceptance without manufacturing verification',async()=>{
+ const {env,company}=await fixture(),listing={name:input.name,title:input.title,external_person_id:'anna',work_email:input.email,email_status:'public_listed',source:'public_listing',public_email_url:'https://directory.example/anna'};
+ const [contact]=await upsertCrmContacts(env.DB,context,company.id,[listing]);
+ assert.equal(P.accepted(contact,'example.com'),true);assert.equal(contact.verification_provider,null);assert.equal(contact.verified_at,null);
+ const [reopened]= (await getCrmCompany(env.DB,context,company.id)).contacts;assert.equal(reopened.id,contact.id);assert.equal(reopened.public_email_url,listing.public_email_url);
+ await assert.rejects(upsertCrmContacts(env.DB,context,company.id,[{...listing,work_email:'sales@example.com'}]),/exact buyer name/);
+ env.DB.raw.prepare("UPDATE crm_contacts SET email_status='invalid' WHERE id=?").run(contact.id);
+ await upsertCrmContacts(env.DB,context,company.id,[{...listing,email_status:'public_unverified',source:'public_research'}]);
+ assert.equal((await getCrmCompany(env.DB,context,company.id)).contacts[0].email_status,'invalid','weak research cannot erase a known rejection');
+ await assert.rejects(upsertCrmContacts(env.DB,context,company.id,[listing]),error=>error.code==='CRM_EMAIL_REJECTED');
+});
+test('a weaker listing or research refresh preserves the accepted address and original source binding',async()=>{
+ const {env,company}=await fixture(),confirmed=await confirmPublicWorkEmail(env,context,company.id,input,{loadPage:page});
+ for(const status of ['public_listed','public_unverified']){
+  const [saved]=await upsertCrmContacts(env.DB,context,company.id,[{name:input.name,work_email:input.email,email_status:status,source:'public_listing',public_email_url:'https://directory.example/anna'}]);
+  assert.equal(saved.id,confirmed.id);assert.equal(saved.email_status,confirmed.email_status);assert.equal(saved.public_email_url,confirmed.public_email_url);assert.equal(saved.source,confirmed.source);assert.equal(saved.verification_provider,confirmed.verification_provider);assert.equal(saved.verified_at,confirmed.verified_at);assert.equal(P.accepted(saved,'example.com'),true);
+ }
+});
+test('expired official and unsupported legacy verified contacts can become honestly accepted listings',async()=>{
+ for(const legacy of [{email_status:'public_confirmed',verification_provider:'Public source',verified_at:'2020-01-01'},{email_status:'verified',verification_provider:'Unsupported provider',verified_at:null}]){
+  const {env,company}=await fixture(),[old]=await upsertCrmContacts(env.DB,context,company.id,[{name:input.name,work_email:input.email,source:'public_research'}]);
+  env.DB.raw.prepare('UPDATE crm_contacts SET email_status=?,verification_provider=?,verified_at=? WHERE id=?').run(legacy.email_status,legacy.verification_provider,legacy.verified_at,old.id);
+  const [listed]=await upsertCrmContacts(env.DB,context,company.id,[{name:input.name,work_email:input.email,email_status:'public_listed',source:'public_listing',public_email_url:'https://directory.example/anna'}]);
+  assert.equal(listed.id,old.id);assert.equal(listed.email_status,'public_listed');assert.equal(listed.verification_provider,null);assert.equal(listed.verified_at,null);assert.equal(P.accepted(listed,'example.com'),true);
+ }
+});
+test('a listing cannot overwrite an accepted contact with a conflicting full identity or profile',async()=>{
+ const {env,company}=await fixture(),confirmed=await confirmPublicWorkEmail(env,context,company.id,input,{loadPage:page});
+ env.DB.raw.prepare("UPDATE crm_contacts SET external_person_id='anna',linkedin_url='https://linkedin.com/in/anna' WHERE id=?").run(confirmed.id);
+ const listing={name:input.name,external_person_id:'anna',work_email:input.email,email_status:'public_listed',source:'public_listing',public_email_url:'https://directory.example/anna'};
+ for(const changes of [{name:'Bob Jones'},{external_person_id:'bob'},{linkedin_url:'https://linkedin.com/in/bob'},{public_linkedin_url:'https://linkedin.com/in/bob'}])await assert.rejects(upsertCrmContacts(env.DB,context,company.id,[{...listing,...changes}]),error=>error.code==='CRM_LISTED_IDENTITY_CHANGED');
+ const saved=(await getCrmCompany(env.DB,context,company.id)).contacts[0];assert.equal(saved.name,input.name);assert.equal(saved.external_person_id,'anna');assert.equal(saved.linkedin_url,'https://linkedin.com/in/anna');assert.equal(saved.public_email_url,confirmed.public_email_url);assert.equal(P.accepted(saved,'example.com'),true);
+});
+for(const incoming of ['public_listed','public_unverified'])test('a '+incoming+' write cannot erase provider proof acquired after its contact read',async()=>{
+ const {env,company}=await fixture(),[old]=await upsertCrmContacts(env.DB,context,company.id,[{name:input.name,external_person_id:'anna',work_email:input.email,email_status:'public_unverified',source:'public_research'}]);
+ const batch=env.DB.batch.bind(env.DB);let injected=false;
+ env.DB.batch=rows=>{if(!injected){injected=true;env.DB.raw.prepare("UPDATE crm_contacts SET email_status='verified',source='apollo',verification_provider='Apollo',verified_at=?,public_email_url='https://example.com/team' WHERE id=?").run(new Date().toISOString(),old.id);}return batch(rows);};
+ const activityCount=env.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='contact.updated'").get().n;
+ await assert.rejects(upsertCrmContacts(env.DB,context,company.id,[{name:input.name,external_person_id:'anna',work_email:input.email,email_status:incoming,source:'public_listing',public_email_url:'https://directory.example/anna'}]),error=>error.status===409);
+ const saved=env.DB.raw.prepare('SELECT * FROM crm_contacts WHERE id=?').get(old.id);assert.equal(saved.email_status,'verified');assert.equal(saved.source,'apollo');assert.equal(saved.verification_provider,'Apollo');assert.equal(saved.public_email_url,'https://example.com/team');assert.equal(P.accepted(saved,'example.com'),true);
+ assert.equal(env.DB.raw.prepare("SELECT count(*) n FROM crm_activities WHERE activity_type='contact.updated'").get().n,activityCount,'a rejected stale write does not record a successful update');
+});
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...a){this.args=a;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const r=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(r.changes)}};}}
 class DB{constructor(){this.raw=new DatabaseSync(':memory:');for(const file of ['0001_initial.sql','0009_customer_saas.sql','0011_master_crm.sql','0012_crm_contact_enrichment.sql','0013_workspace_service_integrations.sql','0023_hunter_service_integration.sql','0022_crm_public_contact_sources.sql','0015_outreach_automation.sql','0027_approved_workflow.sql'])this.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));this.raw.exec("CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,daily_credit_limit INTEGER DEFAULT 3,monthly_credit_limit INTEGER DEFAULT 30,retry_after_days INTEGER DEFAULT 30,allow_personal_email INTEGER DEFAULT 0,phone_lookup_mode TEXT DEFAULT 'on_request')");}prepare(sql){return new Statement(this.raw,sql);}async batch(rows){return Promise.all(rows.map(s=>s.run()));}}
 const context={workspaceId:'w1',userId:'u1',role:'owner'},input={name:'Anna Andersson',email:'anna.andersson@example.com',source_url:'https://example.com/team',title:'Procurement Director'};

@@ -1,6 +1,13 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.LeadIntelContactPolicy=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
   const domain=value=>{try{return new URL(/^https?:\/\//i.test(value)?value:'https://'+value).hostname.toLowerCase().replace(/^www\./,'');}catch{return '';}};
   function level(value='public_confirmed'){return value==='public_confirmed'?'public_confirmed':'provider_verified';}
+  function listedSource(email,name,url,companyDomain){
+    try{const source=new URL(url),local=String(email).toLowerCase().split('@')[0];return source.protocol==='https:'&&!source.username&&!source.password&&String(name||'').trim().split(/\s+/).length>=2&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&local.length<=64&&String(email).length<=254&&Boolean(domain(companyDomain))&&String(email).toLowerCase().endsWith('@'+domain(companyDomain))&&!/^(?:info|sales|contact|support|office|admin|hello|team|no[._-]?reply|hr|press|ir|investor[._-]?relations|recruitment|careers|jobs|privacy|procurement|purchasing|accounts|billing|reception)(?:[._+-]|$)/i.test(local);}catch{return false;}
+  }
+  function rejectedListing(email,url,person={}){
+    const address=String(email||'').trim().toLowerCase(),mailbox=person.hunterChecks?.[address],check=person.publicEmailSourceCheck;
+    return ['invalid','undeliverable'].includes(mailbox?.status)||mailbox?.deliverability==='undeliverable'||Boolean(check?.status==='failed'&&String(check.email||'').trim().toLowerCase()===address&&String(check.url||'')===String(url||''));
+  }
   function publicSource(email,name,url,companyDomain){
     try{const source=new URL(url);return source.protocol==='https:'&&!source.username&&!source.password&&Boolean(domain(companyDomain)&&(domain(source.href)===domain(companyDomain)||domain(source.href).endsWith('.'+domain(companyDomain))))&&String(name||'').trim().split(/\s+/).length>=2&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)&&String(email).toLowerCase().endsWith('@'+domain(companyDomain))&&!/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email);}catch{return false;}
   }
@@ -11,9 +18,12 @@
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||String(contact.name||'').trim().split(/\s+/).length<2||/^(info|sales|contact|support|office|admin|team|noreply|hr|press)@/i.test(email)||contact.archived_at)return false;
     const personal=contact.email_type==='personal'&&Boolean(contact.external_person_id);
     if(!email.endsWith('@'+domain(companyDomain))&&!personal)return false;
+    // Owner policy, 16 November: a named published work address is usable.
+    // This records a listing, never a mailbox/deliverability verification.
+    if(contact.email_status==='public_listed')return contact.source==='public_listing'&&listedSource(email,contact.name,contact.public_email_url,companyDomain);
     if(String(contact.email_status).toLowerCase()==='verified')return [contact.verification_provider,contact.source].some(value=>['apollo','hunter','treg'].includes(String(value||'').toLowerCase()));
     const stamp=String(contact.verified_at||''),age=now-Date.parse(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(stamp)?stamp.replace(' ','T')+'Z':stamp);
     return ['public_confirmed','provider_verified'].includes(confirmationLevel)&&contact.email_status==='public_confirmed'&&contact.verification_provider==='Public source'&&publicSource(email,contact.name,contact.public_email_url,companyDomain)&&age>=0&&age<30*86400000;
   }
-  return {level,publicSource,accepted};
+  return {level,publicSource,listedSource,rejectedListing,accepted};
 });

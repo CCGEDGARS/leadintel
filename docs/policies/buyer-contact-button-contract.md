@@ -1,5 +1,13 @@
 # Buyer contact buttons — owner-approved contract, 31 October 2026
 
+## Listed company email amendment — 16 November 2026
+
+The owner explicitly instructed that a company email listed for the named buyer must count and permit progression. This supersedes the official-source-only/provider-confirmation restriction for manual email acceptance. A retained named public listing, including a third-party business directory, is sufficient without a paid reveal, mailbox verification, another source read or completion of unrelated research. The address must match the selected company's domain and the same qualified full identity. Shared inboxes, generated patterns, Gmail guesses, wrong-person evidence, conflicting addresses, explicit source rejection and known invalid emails remain held.
+
+Use the honest `public_listed` classification with `public_listing` provenance and the exact source URL. Show “Listed company email · Accepted · mailbox unverified.” Acceptance does not certify deliverability, research completion or buying authority. E-mail reuses this address without a paid purchase; Proceed persists and selects the same exact CRM recipient for Messages. Preserve stronger provider/official proof and its original source binding during weaker listing/research refreshes. Existing workspace, company, identity, lifecycle, synchronization and operation guards remain authoritative.
+
+Delivery still requires explicit approval of the exact message and recipient; sending is a separate authorized action. This amendment does not activate automation or change its research, review, spending or send permissions. Verify the actual Buyers → CRM → Messages → approval → unsent Delivery → fresh-browser reopen journey.
+
 ## Manual lookup amendment — 4 November 2026
 
 The owner requested that an explicitly approved paid E-mail/Phone action for a selected verified buyer work while the company's specific purchasing-application assessment is pending. Manual lookup may proceed when that is the **only** current company verification gap. Keep the actual company assessment unchanged; this exception does not qualify the company, approve automation or sending. The confirmation explains the pending purchasing-fit review. Automatic lookup retains full qualification and score/review requirements.
