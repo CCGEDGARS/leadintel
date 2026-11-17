@@ -9744,6 +9744,31 @@
         "Working copy \u00b7 approved ",
         "canCompleteEvidence()"
       ]
+    },
+    {
+      "id": "event-invitation-collapsed-summary",
+      "type": "text",
+      "url": "/customer/event-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "function renderMessageSummary(",
+        "if(id==='event-discovery-panel')panel.open=Boolean(c)",
+        "el('message-studio')?.querySelector('.mw-editor')",
+        "event-message-badge",
+        "How it works"
+      ]
+    },
+    {
+      "id": "event-invitation-editor-alignment",
+      "type": "text",
+      "url": "/customer/event-campaigns.css",
+      "status": 200,
+      "contains": [
+        "#message-studio #event-message-panel{width:100%",
+        "#message-studio #event-message-panel>summary:focus-visible",
+        "#message-studio #event-message-badge[data-state=saved]",
+        "@media(max-width:600px)"
+      ]
     }
   ],
   "retry": {
