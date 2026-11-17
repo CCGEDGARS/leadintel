@@ -30,7 +30,7 @@ export async function providerCreditIssue(env,workspaceId,provider){
 }
 
 export function verifiedCreditBalance(provider,metadata={}){
-  const keys=provider==='hunter'?['remaining_credits','remaining_searches','remaining_verifications']:provider==='firecrawl'?['remaining_credits']:[];
+  const keys=provider==='hunter'?['remaining_credits','remaining_searches','remaining_verifications']:provider==='firecrawl'?['remaining_credits']:provider==='treg'?['balance_usd']:[];
   const balances=keys.map(key=>metadata[key]).filter(value=>value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))).map(Number);
   if(!balances.length)return null;
   return balances.some(value=>value<=0)?'failed':'recovered';

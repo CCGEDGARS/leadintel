@@ -88,3 +88,9 @@
 .workspace-sync-actions .attention-action{white-space:normal;max-width:100%}
 [data-sync-review][hidden],.workspace-sync-actions [hidden],.topbar-save[hidden]{display:none!important}
 .topbar-save:disabled,.workspace-sync-actions button:disabled{opacity:.6;cursor:wait}
+
+/* Confirmed credit/billing failures take priority over ordinary yellow warnings. */
+.topbar-ws[data-health-status="error"]{border-color:#c2413b;background:#fff8f7;color:#a02b26}
+.topbar-ws[data-health-status="error"] .topbar-badge{background:#c2413b;color:#fff}
+.topbar-ws [data-topbar-credit-alert]{font-weight:800}
+.topbar-ws [data-topbar-credit-alert][hidden]{display:none}

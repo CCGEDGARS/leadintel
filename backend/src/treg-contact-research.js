@@ -1,3 +1,4 @@
+import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {upsertCrmContacts,appendCrmActivity,getCrmCompany,writeCrmRecord} from './crm.js';
 import {sha256} from './security.js';
@@ -100,6 +101,9 @@ export async function findTregWorkEmail(env,context,candidate,person,companyId,{
   // A replay has no new charge; retain the original settled charge for this operation.
   const costMicro=Math.max(0,Number(original??cost)||0),callId=response.headers.get('X-Treg-Call-Id');
   await receipt({phase,callId,costMicro,body:{...(response.ok&&readable?payload:{}),_leadintel:{credentialHash,status:response.ok&&readable?'settled':'uncertain',httpStatus:response.status}}});
+  const creditKind=!response.ok&&creditFailure(response.status,JSON.stringify(payload).slice(0,800))?'failed':response.ok&&readable&&!poll?'recovered':'';
+  // Health reporting is best effort and cannot replace the original lookup outcome.
+  if(creditKind)try{const active=await resolveCredential(env,context.workspaceId,'treg');if(active.source==='customer'&&(active.row?.encrypted_api_key||active.apiKey)===revision)await recordProviderCredit(env,{workspaceId:context.workspaceId,userId:context.userId,provider:'treg',kind:creditKind,source:'customer'});}catch{}
   if(!response.ok)throw fail(response.status===402?'Treg credit balance or per-call limit needs attention.':response.status===401||response.status===403?'Treg rejected the saved team token.':response.status===429?'Treg usage limit reached. Try this saved lookup later.':'Treg could not complete this lookup. Retry the saved lookup.',response.status>=400&&response.status<500?response.status:503,'TREG_RETRY_SAME_LOOKUP');
   if(!readable)throw fail('Treg returned an unreadable result. Retry the saved lookup.',503,'TREG_RETRY_SAME_LOOKUP');
   total+=Math.max(costMicro,Number(saved?.cost_micro)||0);if(callId||saved?.call_id)callIds.push(callId||saved.call_id);await guard();return payload;

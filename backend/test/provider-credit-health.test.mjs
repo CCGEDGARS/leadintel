@@ -73,3 +73,9 @@ test('credit health records transitions only: repeated healthy or exhausted resu
   assert.equal(events.length,5,'providers are tracked independently');
   assert.equal(await providerCreditIssue(env,'w1','openai'),null);
 });
+
+test('verified Treg prepaid balance reports zero, recovery and unknown distinctly',()=>{
+ assert.equal(verifiedCreditBalance('treg',{balance_usd:0}),'failed');
+ assert.equal(verifiedCreditBalance('treg',{balance_usd:12.50}),'recovered');
+ for(const value of [null,undefined,'',NaN])assert.equal(verifiedCreditBalance('treg',{balance_usd:value}),null);
+});

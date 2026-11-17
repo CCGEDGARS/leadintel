@@ -258,7 +258,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false,operationId
       catch(cause){
         if((await integrationRow(env,workspaceId,provider))?.encrypted_api_key!==row.encrypted_api_key){await trace('service.provider_check_superseded');return providerStatus(env,workspaceId,provider);}
         await trace('service.provider_check_failed',verificationDiagnostic(provider,cause));
-        if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});
+        if(creditFailure(cause?.httpStatus,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});
         state='bad';label='Connection error';metadata={...metadata,error:verificationMessage(provider,cause),...verificationDiagnostic(provider,cause)};
       }
     }
