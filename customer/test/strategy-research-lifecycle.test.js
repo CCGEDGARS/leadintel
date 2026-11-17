@@ -5,7 +5,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function runtime({fetchImpl,timeout=1000}={}){
  const state={approved:true,website:'https://seller.example',profile:{priorityOffers:'Clinical software',targetMarkets:'Finland'},market:Engine.normalizeMarketState({icps:[{id:'core',active:true,targetMarkets:'Finland'}],signals:[{id:'growth',name:'Expansion',keywords:'hospital expansion',weight:8,active:true}],researchSourceTypes:['news'],researchResults:[{url:'https://old.example/evidence',title:'Accepted evidence',text:'Saved source'}]})};
  const buttons=new Map(),calls=[],saved=[],bridge={ready:true,session:{authenticated:true,user:{id:'u1'}},workspace:{id:'w1'}},w={LeadIntelServerBridge:bridge,LeadIntelStrategyIntegrity:Integrity,LeadIntelAccountCache:{current:()=>true}},c={state,window:w,LeadIntelMarket:{...Engine,researchRuntimePolicy:()=>({requestTimeoutMs:timeout,openAiTimeoutMs:timeout,overallTimeoutMs:timeout,concurrency:2}),buildResearchPlan:()=>[{id:'one',query:'hospital expansion Finland',sourceType:'news'}]},LeadIntelProfile:{expandTargetMarkets:x=>[x]},LeadIntelStrategyIntegrity:Integrity,TextEncoder,AbortController,URL,Date,JSON,Promise,setTimeout,clearTimeout,setInterval,clearInterval,console,activeMarketResearchRun:null,researchElapsedTimer:null,openAiCountdownTimer:null,researchReportUi:{capture(){}},LEADINTEL_API:'https://api.example',FIRECRAWL_PROXY:'https://proxy.example',STORAGE_KEY:'state',MARKET_RESEARCH_RESUME_KEY:'resume',sessionStorage:{removeItem(){},setItem(){}},localStorage:{getItem:()=>null},$:id=>{if(!buttons.has(id))buttons.set(id,{value:'quick',disabled:false,textContent:''});return buttons.get(id);},contentLanguage:()=> 'en',ensureMarketStrategySeeded(){},readMarketEdits(){},readResearchSettings(){},closeResearchPreview(){},renderMarketStrategy(){},renderResearchStatus(){},showToast(){},saveState(){saved.push(JSON.parse(JSON.stringify(state)));},cleanOpenAiResearchQuery:x=>x,withOpenAiRetry:async operation=>operation(1),fetch:async(...args)=>{calls.push(args);if(fetchImpl)return fetchImpl(...args);return new Response(JSON.stringify({results:[]}));}};
- c.globalThis=c;Object.assign(c,{LeadIntelMarketConditions:{buildAdaptivePlan:()=>({queries:[]}),selectDiverseEvidence:x=>x,buildQualityGate:()=>({passed:true})},LeadIntelResearchVerification:{}});vm.createContext(c);
+ c.globalThis=c;Object.assign(c,{LeadIntelMarketConditions:{...require('../market-conditions-engine.js'),buildAdaptivePlan:()=>({queries:[]}),selectDiverseEvidence:x=>x,buildQualityGate:()=>({passed:true})},LeadIntelResearchVerification:{}});vm.createContext(c);
  for(const name of ['profileApprovalContext','profileApprovalCurrent','strategyIntegrity','captureStrategyContext','strategyContextCurrent','assertStrategyContext','researchContextFingerprint','researchProfile','normalizeResearchMode','researchModeUi','waitForMarketServerBridge','ensureMarketResearchWorkspace','marketResearchAbortError','marketResearchScopeCurrent','assertMarketResearchRun','beginMarketResearchRun','finishMarketResearchRun','marketResearchRequest','recordMarketResearchReceipt','mergeRetainedResearchEvidence','searchOpenAiWeb','searchMarket','searchCustomSource','researchExtractionTimeoutMs','extractResearchPages','verifyResearchWithGemini','runMarketResearch','stopOpenAiCountdown','startOpenAiCountdown','retryOpenAiDiscovery']){const code=extract(name);if(code)vm.runInContext(code,c);}
  return {c,state,bridge,calls,saved,run:(mode='quick')=>c.runMarketResearch(mode)};
 }
@@ -30,8 +30,36 @@ test('an empty interrupted run records its stop reason instead of only a Gemini 
  r.c.setTimeout=callback=>{deadline??=callback;return callback;};r.c.clearTimeout=()=>{};
  const pending=r.run('deep');await tick();deadline();await pending;
  assert.equal(r.state.market.researchStatus,'error');assert.equal(r.state.market.researchResults.length,0);
- assert.match(r.state.market.researchErrors[0].message,/overall time limit/);assert.equal(r.state.market.researchVerification.reason,'Research stopped before verification completed');
+ assert.match(r.state.market.researchErrors[0].message,/overall time limit/);assert.match(r.state.market.researchVerification.reason,/Verification not started:.*overall time limit/);assert.match(Engine.normalizeMarketState(r.state.market).researchExecution.stopReason,/overall time limit/);
  assert.ok(r.saved.at(-1).market.researchErrors.some(e=>/overall time limit/.test(e.message)));
+});
+
+for(const mode of ['quick','deep','intelligence'])test(`${mode} interrupted evidence still reaches opportunities and the saved report`,async()=>{
+ let deadline,report;const r=runtime({timeout:60000,fetchImpl:async url=>url.includes('web-search')?new Promise(()=>{}):Response.json({results:[{url:'https://hospital.example/news/expansion',title:'Finland hospital expansion',text:'A hospital in Finland announces a new clinical software investment and hospital expansion.',date:new Date().toISOString(),dateSource:'published'}]})});
+ r.c.LeadIntelMarket.buildResearchPlan=()=>[{id:'one',market:'Finland',query:'hospital expansion Finland',sourceType:'news'}];
+ r.state.market.researchResults=[];r.c.researchReportUi.capture=()=>{report=structuredClone(r.state.market);};
+ r.c.setTimeout=callback=>{deadline??=callback;return callback;};r.c.clearTimeout=()=>{};
+ const pending=r.run(mode);await tick();await tick();deadline();await pending;
+ assert.equal(r.state.market.researchStatus,'partial');assert.equal(r.state.market.researchResults.length,1);
+ assert.ok(r.state.market.opportunities.some(o=>o.evidence.some(e=>e.url==='https://hospital.example/news/expansion')),'acquired evidence must reach the downstream opportunity context: '+JSON.stringify({results:r.state.market.researchResults,opportunities:r.state.market.opportunities,errors:r.state.market.researchErrors}));
+ assert.ok(report.opportunities.some(o=>o.evidence.length),'saved report must contain the derived opportunities');
+ assert.equal(r.state.market.researchSourceStatus.gemini,mode==='quick'?'idle':'unavailable');
+ assert.ok(r.state.market.opportunities.every(o=>o.confidence!=='High'),'unverified evidence cannot gain high confidence');
+});
+
+test('partial verification retains rejected sources for audit but excludes them from downstream conditions and quality',async()=>{
+ const r=runtime({timeout:2000,fetchImpl:async url=>{
+  if(url.includes('research-verification'))return Response.json({status:'partial',verdicts:[{evidence_id:'evidence-1',relevance:'reject',commercial_fit:'weak',contradiction:true}]});
+  if(url.includes('scrape'))return Response.json({data:{markdown:'Finland hospital expansion for clinical software is contradicted by this controlled source.'}});
+  return Response.json({results:[{url:'https://hospital.example/news',title:'Finland hospital expansion',text:'Finland hospital expansion for clinical software',date:new Date().toISOString(),dateSource:'published'}]});
+ }});
+ r.c.LeadIntelMarket.buildResearchPlan=()=>[{id:'one',market:'Finland',query:'hospital expansion Finland',sourceType:'news',researchCategory:'commercial'}];
+ r.c.LeadIntelResearchVerification=require('../market-research-verification.js');r.c.LeadIntelMarketConditions=require('../market-conditions-engine.js');r.state.market.researchResults=[];
+ await r.run('deep');
+ assert.equal(r.state.market.researchResults[0].verification.relevance,'reject');
+ assert.ok(r.state.market.opportunities.every(o=>o.evidence.length===0));
+ assert.equal(r.state.market.marketConditions.demand.evidence.length,0);
+ assert.equal(r.state.market.researchQuality.sourceCount,0);
 });
 test('each completed page extraction is retained when a sibling read reaches the deadline',async()=>{
  let deadline;const r=runtime({timeout:60000,fetchImpl:async(url,options)=>{
