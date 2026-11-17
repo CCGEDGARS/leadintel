@@ -61,3 +61,27 @@ test('the screen context sent with a message includes the trail',async()=>{
     assert.equal('activity' in mod.currentCopilotScreenContext(),false,'without a collector nothing is added');
   }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });
+
+test('button clicks are observations, distinct controls are retained, and account changes erase the trail',async()=>{
+ const {dom,restore}=await mountLoader();
+ try{
+  dom.window.LeadIntelServerBridge={workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};
+  for(const id of ['research-start','research-stop']){const button=dom.window.document.createElement('button');button.id=id;button.textContent='PRIVATE BUTTON BODY';dom.window.document.documentElement.append(button);button.click();}
+  const trail=dom.window.LeadIntelCopilotActivity.snapshot();assert.deepEqual(trail.map(r=>r.controlId),['research-start','research-stop']);assert.ok(trail.every(r=>r.kind==='control'));assert.doesNotMatch(JSON.stringify(trail),/PRIVATE BUTTON BODY/);
+  dom.window.LeadIntelServerBridge.workspace.id='w2';assert.deepEqual(dom.window.LeadIntelCopilotActivity.snapshot(),[]);
+ }finally{restore();}
+});
+
+test('visible controls and same-workspace operation receipts enter context without hidden content or form values',async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div class="step-view active" data-step="5"><button id="research" disabled>Research</button><button id="contact">Email person@example.com password=hidden</button><div hidden><button>HIDDEN CONTROL</button></div><textarea>PRIVATE DRAFT</textarea><input value="PRIVATE FORM"></div>');
+ const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  dom.window.HTMLElement.prototype.getClientRects=function(){return [{}];};
+  dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};
+  dom.window.LeadIntelReliabilityTrace={snapshot:()=>[{workspaceId:'w1',action:'buyer_research',phase:'provider',outcome:'timeout',operationId:'buyers-local',raw:'PRIVATE ERROR'},{workspaceId:'w2',action:'delivery_send',phase:'complete',outcome:'fail'}]};
+  const mod=await import(`data:text/javascript;base64,${Buffer.from(context+'\n//controls-'+Math.random()).toString('base64')}`);const screen=mod.currentCopilotScreenContext();
+  assert.equal(screen.controls.items.length,2);assert.equal(screen.controls.items[0].disabled,true);assert.equal(screen.operations.length,1);assert.equal(screen.operations[0].phase,'provider');assert.doesNotMatch(JSON.stringify(screen),/PRIVATE|HIDDEN|person@example|password=hidden|delivery_send/);
+  for(let i=0;i<45;i++){const button=dom.window.document.createElement('button');button.textContent='Navigation '+i;dom.window.document.documentElement.prepend(button);}
+  const bounded=mod.currentCopilotScreenContext();assert.equal(bounded.controls.items.length,40);assert.equal(bounded.controls.omitted,7);assert.equal(bounded.controls.items[0].id,'research','active view controls must precede navigation when the inventory is bounded');
+ }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
+});

@@ -8,7 +8,8 @@ const MAX_ENTITY_ID=180;
 const MAX_EXTERNAL_QUERY=1000;
 // B2 (2026-10-25): what the person just did — event kinds, step numbers and entity ids only, never page or form contents.
 const MAX_ACTIVITY=20;
-const ACTIVITY_KINDS=new Set(['step','module','edit','save','research','crm','website','outreach','discovery','settings','sync']);
+const ACTIVITY_KINDS=new Set(['step','module','edit','save','research','crm','website','outreach','discovery','settings','sync','control']);
+const OBSERVED_ACTIONS=new Set(['website_activation','material_upload','material_change','service_settings','ai_settings','paid_preferences','profile_research','profile_synthesis','profile_approval','profile_edit','strategy_activation','strategy_research','strategy_edit','strategy_monitoring','company_selection','company_save','company_discovery','buyer_selection','buyer_contact','buyer_research','buyer_review','buyer_save','message_save','message_delivery','message_generation','message_translation','message_reopen','message_approval','delivery_send','delivery_manual','delivery_queue','delivery_recovery','delivery_pause']);
 function sanitizeActivity(value){
   if(!Array.isArray(value))return null;
   const out=[];
@@ -20,6 +21,7 @@ function sanitizeActivity(value){
     const label=cleanText(item.label,80);if(label)entry.label=label;
     const entityType=cleanText(item.entityType??item.entity_type,MAX_ENTITY_TYPE);if(entityType)entry.entityType=entityType;
     const entityId=cleanText(item.entityId??item.entity_id,MAX_ENTITY_ID);if(entityId)entry.entityId=entityId;
+    if(kind==='control'&&/^[a-z][a-z0-9_-]{0,79}$/i.test(item.controlId||''))entry.controlId=item.controlId;
     out.push(entry);
   }
   return out.slice(-MAX_ACTIVITY);
@@ -74,6 +76,8 @@ export function sanitizeClientScreenContext(input){
   if(entityId)out.entityId=entityId;
   const activity=sanitizeActivity(source.activity);
   if(activity)out.activity=activity;
+  if(source.controls&&Array.isArray(source.controls.items))out.controls={items:source.controls.items.slice(0,40).map(item=>({label:redactSecretLikeText(cleanText(item?.label,100)).replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[redacted]'),id:/^[a-z][a-z0-9_-]{0,79}$/i.test(item?.id||'')?item.id:'',disabled:item?.disabled===true})),omitted:Math.max(0,Math.min(10000,Number(source.controls.omitted)||0)),coverage:'Untrusted visible control labels; not proof of execution or exhaustive app coverage.'};
+  if(Array.isArray(source.operations))out.operations=source.operations.slice(-12).filter(row=>OBSERVED_ACTIONS.has(row?.action)).map(row=>({action:row.action,stage:Number.isInteger(row.stage)&&row.stage>=1&&row.stage<=7?row.stage:null,phase:['start','request','response','provider','persistence','complete','context'].includes(row.phase)?row.phase:'unknown',outcome:['started','pending','pass','fail','blocked','canceled','stale','partial','uncertain','timeout','retry','resumed','duplicate_hold'].includes(row.outcome)?row.outcome:'unknown',operationId:/^(?:setup|profile|strategy|companies|buyers|messages|delivery)-[a-z0-9-]{1,60}$/i.test(row.operationId||'')?row.operationId:'',at:/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(row.at||'')?row.at:''}));
   return out;
 }
 

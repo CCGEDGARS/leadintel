@@ -1,6 +1,8 @@
 import {providerCreditIssue} from './provider-credit-health.js';
 import {getCustomerState} from './customer-state.js';
 import {assertModelSafe,redactProtectedData,sanitizeClientScreenContext} from './copilot-security.js';
+import {savedReferenceScope} from './copilot-research-scope.js';
+import {copilotOperationContext} from './copilot-operation-context.js';
 
 const MAX_TEXT=4000;
 const MAX_PROFILE_TEXT=8000;
@@ -54,13 +56,13 @@ async function crmSummary(env,workspaceId){
 async function integrationStatus(env,workspaceId){
   const [gmail,ai,service]=await Promise.all([
     firstSafe(env,`SELECT 'gmail' AS provider,status,connected_at,updated_at FROM gmail_connections WHERE workspace_id=? LIMIT 1`,workspaceId),
-    firstSafe(env,`SELECT provider,active,verified_at,last_used_at,updated_at FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`,workspaceId),
-    firstSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 1`,workspaceId)
+    allSafe(env,`SELECT provider,active,verified_at,last_used_at,updated_at FROM workspace_ai_integrations WHERE workspace_id=? ORDER BY active DESC,updated_at DESC LIMIT 10`,workspaceId),
+    allSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 10`,workspaceId)
   ]);
   const items=[];
   if(gmail)items.push({provider:'gmail',state:clean(gmail.status||'connected',80),connectedAt:clean(gmail.connected_at,80),updatedAt:clean(gmail.updated_at,80)});
-  if(ai)items.push({provider:clean(ai.provider,80),state:ai.active===0?'inactive':'connected',verifiedAt:clean(ai.verified_at,80),lastUsedAt:clean(ai.last_used_at,80),updatedAt:clean(ai.updated_at,80)});
-  if(service)items.push({provider:clean(service.provider,80),state:'connected',verifiedAt:clean(service.verified_at,80),lastUsedAt:clean(service.last_used_at,80),updatedAt:clean(service.updated_at,80)});
+  for(const item of ai)items.push({provider:clean(item.provider,80),state:item.active===0?'inactive':item.verified_at?'connected':'configured',verifiedAt:clean(item.verified_at,80),lastUsedAt:clean(item.last_used_at,80),updatedAt:clean(item.updated_at,80)});
+  for(const item of service)items.push({provider:clean(item.provider,80),state:item.verified_at?'connected':'configured',verifiedAt:clean(item.verified_at,80),lastUsedAt:clean(item.last_used_at,80),updatedAt:clean(item.updated_at,80)});
   return items;
 }
 
@@ -95,7 +97,7 @@ function safeUser(user){const name=clean(user?.name||user?.display_name,120);if(
 function intakeAnswers(main){const answers=object(main.answers);const out={};for(const [key,value] of Object.entries(answers)){if(Object.keys(out).length>=12)break;const text=clean(value,MAX_INTAKE_TEXT);if(text&&!/(^|_)(email|phone|password|token|secret)/i.test(key))out[key]=text;}return out;}
 function brandSummary(main){const brand=object(main.brandIdentity);const out={};for(const key of ['companyDisplayName','senderName','senderTitle','meetingPlatform']){const text=clean(brand[key],160);if(text)out[key]=text;}return out;}
 function goalsSummary(main){const goals=object(main.workspaceGoals);const out={};for(const [key,value] of Object.entries(goals)){if(Object.keys(out).length>=6)break;const text=clean(value,400);if(text)out[key]=text;}return out;}
-function referencesSummary(main){const refs=object(main.referenceCustomers);const rows=array(refs.rows,50);return {count:rows.length,companies:rows.slice(0,10).map(row=>clean(object(row).company||object(row).name||object(row).domain,160)).filter(Boolean),segments:array(refs.segments,10).map(item=>clean(object(item).name||item,120)).filter(Boolean),activated:refs.activated===true};}
+function referencesSummary(main){const refs=object(main.referenceCustomers);const scope=savedReferenceScope(main);return {count:scope.total,companies:scope.targets.map(row=>row.name),targets:scope.targets,omitted:scope.omitted,segments:array(refs.segments,10).map(item=>clean(object(item).name||item,120)).filter(Boolean),activated:refs.activated===true};}
 function factText(item){if(typeof item==='string')return clean(item,200);const value=object(item);return clean(value.text||value.claim||value.statement||value.summary||value.fact,200);}
 async function dossierSummary(env,workspaceId){
   const rows=await allSafe(env,`SELECT domain,payload_json,updated_at FROM workspace_company_dossiers WHERE workspace_id=? ORDER BY updated_at DESC LIMIT ${MAX_DOSSIERS}`,workspaceId);
@@ -114,7 +116,7 @@ async function deliveryActivity(env,workspaceId){
 export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role,user}={}){
   const id=clean(workspaceId,160);if(!id)throw new Error('workspaceId is required');
   // Speed burst step 3 (2026-10-26): the workspace state and the six summaries do not depend on each other; they load together.
-  const [state,crm,integrations,usage,dossiers,activities,delivery]=await Promise.all([getCustomerState(env,id),crmSummary(env,id),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id)]);
+  const [state,crm,integrations,usage,dossiers,activities,delivery,operations]=await Promise.all([getCustomerState(env,id),crmSummary(env,id),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id),copilotOperationContext(env,id)]);
   const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
   const markets=array(main.targetMarkets||main.profile?.targetMarkets,20).map(item=>clean(item,300)).filter(Boolean);
   const icps=array(market.icps||main.icps,MAX_ICP).map(safeIcp);
@@ -138,6 +140,7 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     outreachSummary:outreachSummary(payload),
     integrationStatus:integrations,
     supportUsage:usage,
+    operations,
     readiness:readiness(main,{icps,signals,markets}),
     intake:intakeAnswers(main),
     brand:brandSummary(main),

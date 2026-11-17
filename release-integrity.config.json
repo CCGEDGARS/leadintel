@@ -43,7 +43,7 @@
       "writing_assistant_outcome_version": "outcome-first-v1",
       "company_materials_version": "company-materials-v1",
       "source_ingestion_version": "20261102-v1",
-      "copilot_mentor_version": "20261027-mentor-v1",
+      "copilot_mentor_version": "20261117-mentor-v2",
       "workspace_skills_version": "20261027-book-skills-v1",
       "workspace_skills_limit": 30,
       "workspace_skills_resilience_version": "20261027-v2",
@@ -66,7 +66,7 @@
       "operational_diagnostics_version": "20261031-operations-v1",
       "research_storage_version": "20261101-v1",
       "research_expanded_limit_bytes": 33554432,
-      "copilot_research_version": "public-research-20261110-v1",
+      "copilot_research_version": "public-research-20261117-v2",
       "website_contact_research_version": "20261111-independent-v1",
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
       "website_monitoring_version": "20261110-source-rotation-v1"
@@ -5242,7 +5242,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261027-v2&activity=20261026-v1&memory=20261026-v1&attention=20261026-v1&streaming=20261026-v1"
+        "copilot-loader.js?v=20261011-business-research-v2&sidebar-flows=20261011-v1&classic-button=20261026-v4&history=20261027-v2&activity=20261117-v1&memory=20261026-v1&attention=20261026-v1&streaming=20261026-v1"
       ]
     },
     {
@@ -5274,7 +5274,8 @@
       "contains": [
         "LeadIntelCopilotActivity",
         "leadintel:module-opened",
-        "copilot-context.js?v=20260924-friendly-workflow-labels-v1&activity=20261026-v1"
+        "copilot-context.js?v=20260924-friendly-workflow-labels-v1&activity=20261117-v1",
+        "function resetActivityScope("
       ]
     },
     {
@@ -5283,7 +5284,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "history=20261027-v2&activity=20261026-v1"
+        "history=20261027-v2&activity=20261117-v1"
       ]
     },
     {
@@ -5304,7 +5305,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "activity=20261026-v1&memory=20261026-v1"
+        "activity=20261117-v1&memory=20261026-v1"
       ]
     },
     {
@@ -8035,7 +8036,9 @@
       "contains": [
         "function watchResearch(",
         "Paid contact reveals and verification are off.",
-        "function attachResearch("
+        "function attachResearch(",
+        "reference websites read",
+        "job.scope?.mode==='references'"
       ]
     },
     {
@@ -8044,7 +8047,8 @@
       "url": "/customer/copilot-loader.js",
       "status": 200,
       "contains": [
-        "public-research=20261110-v1"
+        "public-research=20261110-v1",
+        "reference-research=20261117-v1"
       ]
     },
     {
@@ -9625,6 +9629,17 @@
       "contains": [
         "market-checkpoints=20261117-v1",
         "company-save-scope=20261117-v1"
+      ]
+    },
+    {
+      "id": "copilot-visible-control-context",
+      "type": "text",
+      "url": "/customer/copilot-context.js",
+      "status": 200,
+      "contains": [
+        "function currentCopilotControls(",
+        "LeadIntelReliabilityTrace",
+        "row.workspaceId===workspace"
       ]
     }
   ],

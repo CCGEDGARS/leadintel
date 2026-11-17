@@ -5,6 +5,7 @@ import {buildCopilotWorkspaceContext} from './copilot-context.js';
 import {runDeterministicDiagnostics,persistDiagnosticSnapshot} from './copilot-diagnostics.js';
 import {listCopilotMemories,saveCopilotMemory,archiveCopilotMemory,dueReminders} from './copilot-memory.js';
 import {runCopilotTurn} from './copilot-service.js';
+import {referenceResearchRequested} from './copilot-research-scope.js';
 
 const OPERATING_ROLES=new Set(['owner','researcher','sales']);
 const uuid=()=>crypto.randomUUID();
@@ -80,7 +81,7 @@ export async function handleCopilotRoute(request,env,cors={},ctx){
     if(Number(recent?.count)>=30)return error('Support request limit reached. Wait a few minutes; official billing links remain available.',429,cors,{code:'SUPPORT_RATE_LIMIT'});
     let conversationId=requestedConversation;let convo=existing;if(conversationId){if(!convo)return error('Copilot conversation not found',404,cors);}else{conversationId=uuid();await env.DB.prepare(`INSERT INTO copilot_conversations(id,workspace_id,created_by,title) VALUES(?,?,?,?)`).bind(conversationId,workspaceId,access.user.id,clean(redactProtectedData(message),120)).run();convo=await conversation(env,workspaceId,conversationId);}
     const prior=requestedConversation?priorMessages:[];await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'user',?, '{}')`).bind(uuid(),workspaceId,conversationId,access.user.id,clean(redactProtectedData(message),8000)).run();
-    if(body.research_mode==='thorough'&&needsDeepCopilotResearch(message,prior)){
+    if((body.research_mode==='thorough'||referenceResearchRequested(message,prior))&&needsDeepCopilotResearch(message,prior)){
       const job=await createCopilotResearchJob(env,{workspaceId,conversationId,userId:access.user.id,sessionHash:await sha256(cookieValue(request,'leadintel_session')),question:message,conversation:prior,screen});
       if(ctx?.waitUntil)ctx.waitUntil(runCopilotResearchJobs(env,{jobId:job.id,windowMs:18000}).catch(()=>{}));
       return json({conversation_id:conversationId,answer:'Public research is queued. Completed checks are saved as the research continues.',sources:[],research_used:false,research_status:'running',research_job:job},202,cors);
