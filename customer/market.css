@@ -432,3 +432,40 @@
 @media(max-width:760px){#market-research-workbench .research-actions{grid-template-columns:1fr!important}#market-research-workbench .research-mode-choice{grid-template-rows:100px 1fr}#market-research-workbench .research-mode-choice>button{height:100px!important;min-height:100px!important}}
 
 #market-research-workbench .research-mode-choice.research-mode-selected .research-mode-badge{color:#e8d494!important}
+
+/* Monitoring: compact setup, explicit freshness, readable recovery. */
+#monitoring-settings{color:#173d34}
+#monitoring-settings .market-research-head{gap:24px;margin-bottom:20px}
+#monitoring-settings .section-title h3{font-size:24px;margin:6px 0}
+#monitoring-settings .section-title p{max-width:760px;line-height:1.6}
+#monitoring-settings .monitoring-workflow-grid,#monitoring-settings .monitoring-grid{gap:16px}
+#monitoring-settings label,#monitoring-settings label>span{font-family:inherit;font-weight:600;font-size:14px;line-height:1.5;letter-spacing:normal;text-transform:none}
+#monitoring-settings label{min-width:0}
+#monitoring-settings label>span{font-family:inherit;font-size:14px;letter-spacing:normal;text-transform:none}
+#monitoring-settings input:not([type=checkbox]),#monitoring-settings select,#monitoring-settings textarea{font-family:inherit;font-weight:400;font-size:15px;line-height:1.5;color:#173d34;background:#fff;border:1px solid #cdded8;border-radius:10px;box-sizing:border-box;min-width:0}
+#monitoring-settings input:focus-visible,#monitoring-settings select:focus-visible,#monitoring-settings textarea:focus-visible,#monitoring-settings button:focus-visible,#monitoring-settings summary:focus-visible{outline:3px solid #b68a28;outline-offset:3px}
+#monitoring-settings .monitoring-master{white-space:nowrap;align-self:flex-start;padding:12px 16px;background:#fff;border:1px solid #cdded8;border-radius:12px}
+#monitoring-settings .monitoring-workflow-help{font-size:14px;line-height:1.6;margin:12px 0}
+#monitoring-settings .monitoring-message-options{border:1px solid #d4e3df;background:#fff;border-radius:12px;padding:14px 18px;margin:16px 0}
+#monitoring-settings .monitoring-message-options summary{cursor:pointer;font-size:14px;font-weight:650}
+#monitoring-settings .monitoring-message-options p{font-size:14px;color:#526f62;line-height:1.6}
+#monitoring-settings .monitoring-navigation{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 24px}
+#monitoring-settings .monitoring-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;padding:20px;background:#fff;border:1px solid #d4e3df;border-radius:12px;margin-top:20px}
+#monitoring-settings .monitoring-grid label{display:grid;gap:8px}
+#monitoring-settings .monitoring-grid small{font-size:12px;font-weight:400;line-height:1.5;color:#526f62}
+#monitoring-settings .monitoring-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:10px;padding:4px 0 18px}
+#monitoring-settings .monitoring-actions button{min-height:44px}
+#monitoring-settings #monitoring-status{flex-basis:100%;font-family:inherit;font-weight:400;font-size:14px;line-height:1.6;margin:6px 0 0;padding:12px 16px;background:#edf5f0;border-radius:10px;text-align:left}
+#monitoring-settings .monitoring-results{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:24px;border-top:1px solid #d4e3df;padding-top:20px}
+#monitoring-settings .monitoring-history-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+#monitoring-settings .monitoring-history-head h4{margin:0 0 4px}
+#monitoring-refreshed-at{font-size:12px;color:#526f62}
+#monitoring-settings .monitor-run{font-family:Arial,sans-serif;display:block;padding:16px;border:1px solid #d4e3df;border-radius:12px;background:#fff}
+#monitoring-settings .monitor-run-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#monitoring-settings .monitor-run-heading strong{font-family:inherit;font-weight:650;font-size:14px;line-height:1.5;color:#173d34}
+#monitoring-settings .monitor-run-heading span{font-family:inherit;font-weight:400;font-size:12px;line-height:1.5;color:#526f62}
+#monitoring-settings .monitor-run p{font-family:inherit;font-weight:400;font-size:13px;line-height:1.6;margin:6px 0 0;color:#526f62}
+#monitoring-settings .monitor-run[data-run-status=failed],#monitoring-settings .monitor-run[data-run-status=partial]{border-left:4px solid #b38c28;background:#fffcf2}
+#monitoring-settings .monitor-run .monitor-run-issue{color:#77571b}
+#monitoring-settings .market-empty{padding:24px;line-height:1.7;border:1px dashed #cdded8;background:#fff;border-radius:12px}
+@media(max-width:700px){#monitoring-settings .monitoring-grid,#monitoring-settings .monitoring-results{grid-template-columns:1fr}#monitoring-settings .monitoring-navigation button{flex:1 1 100%}#monitoring-settings .monitoring-actions button{flex:1 1 auto}#monitoring-settings .monitoring-history-head{align-items:flex-start}}

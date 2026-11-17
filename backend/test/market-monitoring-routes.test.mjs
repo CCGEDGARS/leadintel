@@ -273,3 +273,12 @@ sqliteTest('enabling accepts a supplied UI Strategy binding matching the current
  const f=await fixture(),main=approvedMain();saveMain(f.db,main);
  const binding=integrity.digest(integrity.signature(main));const response=await configure(f,{strategy_signature:binding});assert.equal(response.status,200);const row=f.db.raw.prepare('SELECT enabled,strategy_signature FROM market_monitoring_configs').get();assert.equal(row.enabled,1);assert.equal(row.strategy_signature,binding);
 });
+
+for(const [status,detail,code] of [[402,'Insufficient credits','provider_credits_exhausted'],[401,'Invalid API key','provider_auth_failed'],[429,'Too many requests','provider_rate_limited']])sqliteTest('monitoring stops immediately and persists the confirmed '+code+' reason',async()=>{
+ const f=await connectedFixture(),oldFetch=globalThis.fetch;let calls=0;
+ globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify({success:false,error:detail}),{status});};
+ try{const response=await run(f),body=await response.json();assert.equal(response.status,200);assert.equal(body.run.status,'failed');assert.equal(body.run.reason,code);assert.equal(calls,1,'do not spend the remaining query budget retrying account failures');
+ const saved=f.db.raw.prepare('SELECT status,error_message,source_count FROM market_monitoring_runs').get();assert.equal(saved.error_message,code);assert.equal(saved.source_count,0);assert.equal(f.db.raw.prepare('SELECT lease_id FROM market_monitoring_configs').get().lease_id,null);
+ const credit=f.db.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='provider.credit_exhausted'").get().n;assert.equal(credit,status===402?1:0,'a rate limit must not be labelled as exhausted credits');
+ }finally{globalThis.fetch=oldFetch;}
+});

@@ -9641,6 +9641,65 @@
         "LeadIntelReliabilityTrace",
         "row.workspaceId===workspace"
       ]
+    },
+    {
+      "id": "monitoring-status-refresh-and-deadline",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "monitoring-ux=20261117-v1",
+        "const timeoutMs=/\\/run(?:\\?|$)/.test(path)?330000:45000;",
+        "Refresh status before retrying",
+        "monitoringRefreshing",
+        "if(monitoringBusy||(!force&&monitoringContextCurrent(monitoringLoaded)))return;"
+      ]
+    },
+    {
+      "id": "monitoring-inbox-filter-clear-and-close-recovery",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.js",
+      "status": 200,
+      "contains": [
+        "?.value??inbox?.purpose??",
+        "actionSerial++",
+        "Clear filters"
+      ]
+    },
+    {
+      "id": "monitoring-friendly-provider-diagnostics",
+      "type": "text",
+      "url": "/customer/monitoring-model.js",
+      "status": 200,
+      "contains": [
+        "provider_credits_exhausted",
+        "provider_auth_failed",
+        "provider_rate_limited",
+        "Strategy changed. Review and activate it"
+      ]
+    },
+    {
+      "id": "monitoring-readable-settings-and-history",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "monitoring-ux=20261117-v1",
+        "id=\"refresh-monitoring\"",
+        "id=\"monitoring-refreshed-at\"",
+        "Next actions &amp; message preferences"
+      ]
+    },
+    {
+      "id": "monitoring-messages-library-owner",
+      "type": "text",
+      "url": "/customer/monitoring-model.js",
+      "status": 200,
+      "contains": [
+        "function messageStudio(payload={})",
+        "payload.outreach?.messageStudio",
+        "renderMessage,messageStudio,runIssue"
+      ]
     }
   ],
   "retry": {
