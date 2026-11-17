@@ -1,5 +1,11 @@
 # Buyer contact buttons — owner-approved contract, 31 October 2026
 
+## Proceed navigation amendment — 17 November 2026
+
+The owner clarified that the per-buyer **Proceed** action must open the next step. One click persists the exact accepted recipient and opens **Messages (Step 6)** through the existing guarded handoff. It must not merely add a checkmark and require another click on the footer. Clicking an already-selected buyer opens that same recipient again. Keep the footer as an alternate entry point.
+
+Incomplete aggregate research does not block an otherwise accepted manual recipient. Preserve current qualification, exact reviewed address, CRM identity, workspace, synchronization and race guards. Missing/changed email or failed save must not navigate. If Messages cannot load, retain the saved selection, show an actionable error and allow Proceed to retry. Navigation does not purchase research, generate or approve a message, or send outreach by itself.
+
 ## Top-four and explicit paid action amendment — 17 November 2026
 
 Owner instruction: “first make sure that the 4 chosen ones are there for a reason, then make a full free research on each, then i want to be able to press paid buttons and get results without any questions.”

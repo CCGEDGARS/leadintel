@@ -32,7 +32,19 @@ test('listed named work email travels through real Buyers, CRM, approval and uns
   assert.match(await proceed.locator('..').locator('..').textContent(),/Listed company email accepted/);
   await proceed.click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').selectedEmailBuyer?.personId==='robert');
   const contact=f.DB.raw.prepare("SELECT * FROM crm_contacts WHERE external_person_id='robert' AND archived_at IS NULL").get();assert.equal(contact.email_status,'public_listed');assert.equal(contact.public_email_url,url);assert.equal(contact.verification_provider,null);assert.equal(contact.verified_at,null);
-  await page.locator('#continue-to-outreach').click();await page.locator('#step-6.active').waitFor();
+  await page.locator('#step-6.active').waitFor();
+  await page.waitForFunction(()=>document.getElementById('message-recipient')?.textContent==='Robert Lund');
+  assert.equal(await page.locator('.step-view.active').count(),1);
+  await page.screenshot({path:'/tmp/proceed-messages-desktop.png',fullPage:true});
+  assert.equal(await page.evaluate(()=>LeadIntelWorkspacePersistence.saveWorkspace()),true);
+  await page.context().close();page=await open();await page.locator('#step-6.active').waitFor();
+  await page.waitForFunction(()=>document.getElementById('message-recipient')?.textContent==='Robert Lund');
+  await page.setViewportSize({width:390,height:844});await page.locator('#back-to-discovery').click();await page.locator('#step-5.active').waitFor();
+  const selected=page.locator('[data-keep-buyer][data-person-id="robert"]');assert.equal(await selected.getAttribute('aria-pressed'),'true');await selected.click();await page.locator('#step-6.active').waitFor();
+  await page.waitForFunction(()=>document.getElementById('message-recipient')?.textContent==='Robert Lund');
+  await page.screenshot({path:'/tmp/proceed-messages-mobile.png',fullPage:true});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1),false);
+  await page.setViewportSize({width:1440,height:1100});
   await page.locator('[data-writing-style="professional"]').click();
   await page.waitForFunction(()=>document.getElementById('outreach-email-body')?.value?.trim()&&document.getElementById('mw-edit-message')?.disabled===false&&document.getElementById('mw-preparing-editor')?.hidden,null,{timeout:25000});
   await page.locator('#mw-edit-message').click();await page.locator('#outreach-email-subject').fill(reviewedDraft.subject);await page.locator('#outreach-email-body-rich').fill(reviewedDraft.message);await page.locator('#mw-save-message').click();await page.waitForFunction(()=>document.getElementById('mw-draft-badge')?.textContent==='Saved');
@@ -44,6 +56,6 @@ test('listed named work email travels through real Buyers, CRM, approval and uns
   const restored=await f.getState(),buyer=restored.payload.discovery.selectedProspects[0].people.find(p=>p.id==='robert');assert.equal(buyer.publicEmailUrl,url);assert.equal(buyer.emailResearch.status,'partial');
   for(const table of ['gmail_messages','crm_enrichment_requests','outreach_automation_queue'])assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM '+table).get().n,0);assert.equal(f.providerRequests.length,0);assert.deepEqual(errors,[]);
   assert.ok(!f.calls.slice(callsBefore).some(call=>call.path.includes('/confirm-public-email')),'no source reread or paid confirmation is needed during the handoff');
-  t.diagnostic(JSON.stringify({listedEmailAccepted:true,mailboxVerificationClaim:false,crmAcknowledged:true,messageApprovalRequired:true,exactRecipientAndDraft:true,unsentDelivery:true,freshBrowserReopen:true,partialResearchRetained:true,paidLookups:0,outboundMessages:0}));
+  t.diagnostic(JSON.stringify({listedEmailAccepted:true,oneClickProceed:true,repeatedSelectedProceed:true,messagesFreshReopen:true,mailboxVerificationClaim:false,crmAcknowledged:true,messageApprovalRequired:true,exactRecipientAndDraft:true,unsentDelivery:true,freshBrowserReopen:true,partialResearchRetained:true,paidLookups:0,outboundMessages:0}));
  }catch(error){if(page&&!page.isClosed())t.diagnostic(JSON.stringify({active:await page.locator('.step-view.active').getAttribute('id').catch(()=>''),toast:await page.locator('#toast').textContent().catch(()=>''),approval:await page.evaluate(()=>{const main=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}'),outreach=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}'),item=outreach.items?.find(i=>i.selectedPersonId==='robert');return {approved:item?.approved,packages:window.LeadIntelDelivery?.approvedDeliveryPackages?.(outreach,main)?.length,source:item&&LeadIntelOutreach.sourceAuthorityCurrent(item,main,outreach.messageStudio),currentSource:LeadIntelOutreach.messageSourceAuthority(main,outreach.messageStudio),authority:item?.approvalAuthority};}).catch(()=>null),errors,requests:f.calls.slice(-12).map(({path,method,status})=>({path,method,status}))}));throw error;}finally{await browser.close();await f.close();}
 });
