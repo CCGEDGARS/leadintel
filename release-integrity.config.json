@@ -74,6 +74,27 @@
   },
   "smokeChecks": [
     {
+      "id": "company-strategy-derived-priority",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "sameSignedStrategy",
+        "row.slice(0,2)",
+        "function recoverUnchangedCompanyResearch",
+        "retained.every(candidate=>candidate?.strategyFingerprint"
+      ]
+    },
+    {
+      "id": "company-strategy-reopen-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-strategy-reopen=20261117-v1"
+      ]
+    },
+    {
       "id": "recipient-refresh-completed-validation-recovery",
       "type": "text",
       "url": "/customer/outreach-ui.js",
@@ -9551,6 +9572,59 @@
       "status": 200,
       "contains": [
         "root-proof=20261117-v1"
+      ]
+    },
+    {
+      "id": "research-evidence-checkpoints",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "run.acceptResults=rows=>{addResults(rows);publish();};",
+        "run.acceptResults(found.results)",
+        "run.acceptResults(rows)",
+        "run?.acceptResults?.([page])",
+        "message:run.stopReason||\"Market research cancelled\""
+      ]
+    },
+    {
+      "id": "research-extracted-evidence-preservation",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "currentExtracted=Boolean(current.extractedAt&&current.text.trim())",
+        "nextExtracted&&!currentExtracted",
+        "current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;"
+      ]
+    },
+    {
+      "id": "research-failure-report-status",
+      "type": "text",
+      "url": "/customer/research-report.js",
+      "status": 200,
+      "contains": [
+        "r.status==='error'?'Research failed'",
+        "Research failed \u00b7 no usable evidence was saved."
+      ]
+    },
+    {
+      "id": "company-only-save-bridge",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "payload?.intelligence_scope==='company'?'/companies/company-research':'/companies'"
+      ]
+    },
+    {
+      "id": "research-company-save-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "market-checkpoints=20261117-v1",
+        "company-save-scope=20261117-v1"
       ]
     }
   ],

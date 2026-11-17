@@ -148,6 +148,14 @@ function opportunityHypothesisQueries(main,market){
 function bridge(){return window.LeadIntelServerBridge||null;}
 function crmAuthenticated(){const b=bridge();return Boolean(b?.session?.authenticated&&b?.workspace);}
 function persistMainStep(step){if(window.LeadIntelCustomerNavigation?.setStep){window.LeadIntelCustomerNavigation.setStep(step,{review:step===5});return;}const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
+function recoverUnchangedCompanyResearch(value,meta,current,main){
+  const retained=Array.isArray(value?.candidates)?value.candidates:[];
+  if(value?.needsRefresh!==true||value.status==='running'||!retained.length)return false;
+  meta??=loadMeta();current??=fingerprint();main??=mainState();
+  if(!meta?.lastCompanyRun?.fingerprint||!sameStrategyFingerprint(meta.lastCompanyRun.fingerprint,current)||!retained.every(candidate=>candidate?.strategyFingerprint&&sameStrategyFingerprint(candidate.strategyFingerprint,current))||window.LeadIntelStrategyIntegrity?.status(main)?.current!==true)return false;
+  value.needsRefresh=false;
+  return true;
+}
 function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscoveryState(JSON.parse(localStorage.getItem(DISCOVERY_STORAGE_KEY)||"{}"));const recovered=LeadIntelDiscovery.recoverInterruptedDiscoveryState?LeadIntelDiscovery.recoverInterruptedDiscoveryState(normalized):normalized;recoveredInterruptedRun=normalized.status==="running"&&recovered.status!=="running";for(const candidate of recovered.selectedProspects||[]){
       if(candidate.publicContactStatus==="loading")candidate.publicContactStatus="idle";
       // A buyer search persisted as "loading" with no run in flight (page reload or a crash) must not block the stage forever.
@@ -261,7 +269,7 @@ function fingerprint(){
 function currentStrategyApproval(main=mainState()){const status=window.LeadIntelStrategyIntegrity?.status(main);if(status?.current)return true;showToast(status?.reason||'Review and activate the current Strategy before researching companies.');return false;}
 function discoveryAccountContext(){return JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated||false,localStorage.getItem('leadintel_account_context_v1')||'',window.LeadIntelAccountCache?.current?.()??null]);}
 function discoveryOperationContext(){return JSON.stringify([discoveryAccountContext(),fingerprint()]);}
-function sameStrategyFingerprint(previous,current){try{const a=JSON.parse(previous),b=JSON.parse(current);a.website=canonicalDomain(a.website);b.website=canonicalDomain(b.website);delete a.approved;delete b.approved;const event=typeof window==='object'&&window.LeadIntelEventCampaigns;if(event?.researchContext){a.eventCampaign=event.researchContext(a.eventCampaign);b.eventCampaign=event.researchContext(b.eventCampaign);}const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;return JSON.stringify(ordered(a))===JSON.stringify(ordered(b));}catch{return false;}}
+function sameStrategyFingerprint(previous,current){try{const a=JSON.parse(previous),b=JSON.parse(current);a.website=canonicalDomain(a.website);b.website=canonicalDomain(b.website);delete a.approved;delete b.approved;const sameSignedStrategy=typeof a.strategySignature==='string'&&/^20261030-strategy-v1:[a-f0-9]{64}$/.test(a.strategySignature)&&a.strategySignature===b.strategySignature;if(sameSignedStrategy)for(const value of [a,b])if(Array.isArray(value.opps))value.opps=value.opps.map(row=>Array.isArray(row)&&row.length===3?row.slice(0,2):row);const event=typeof window==='object'&&window.LeadIntelEventCampaigns;if(event?.researchContext){a.eventCampaign=event.researchContext(a.eventCampaign);b.eventCampaign=event.researchContext(b.eventCampaign);}const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;return JSON.stringify(ordered(a))===JSON.stringify(ordered(b));}catch{return false;}}
 function loadMeta(){try{return JSON.parse(localStorage.getItem(`${DISCOVERY_STORAGE_KEY}_meta`)||"{}" );}catch{return {};}}
 function saveMeta(meta){localStorage.setItem(`${DISCOVERY_STORAGE_KEY}_meta`,JSON.stringify(meta));}
 const DEFAULT_DISCOVERY_TARGET=5;
@@ -300,6 +308,10 @@ function syncStrategyFingerprint(){
     saveDiscovery();
     showToast("Strategy changed · previous company research kept for review");
   }
+  // Older comparisons included a derived opportunity score that changes as
+  // evidence ages. Recover only stamped research still owned by the same
+  // approved Strategy; missing scopes and actual edits keep their review hold.
+  if(recoverUnchangedCompanyResearch(discovery,meta,current,main))saveDiscovery();
   saveMeta({...loadMeta(),fingerprint:current,website:currentWebsite,pipelineWebsite:currentWebsite});
   restoreCheckedCompanyResearch();
 }
@@ -1689,7 +1701,7 @@ function companyReviewBatchPlan({domains=null}={}){
   const contextKey=LeadIntelDiscovery.searchContextKey(companyQualificationProfile(mainState())),currentFingerprint=fingerprint(),meta=loadMeta();
   const saved=meta.companyReviewQueue;
   const queue=saved?.contextKey===contextKey&&sameStrategyFingerprint(saved.fingerprint,currentFingerprint)?saved:{};
-  const checked=new Set(discovery.candidates.filter(c=>!c.needsRecheck&&qualificationAssessment(c).eligible).map(researchReviewKey));
+  const checked=new Set(discovery.candidates.filter(c=>!c.needsRecheck&&companyStrategyCurrent(c)&&qualificationAssessment(c).eligible).map(researchReviewKey));
   const pending=researchReviewRows().filter(c=>!checked.has(researchReviewKey(c))&&researchReviewStatus(c).status==='needs-evidence');
   const attempts=Object.fromEntries(pending.map(c=>{const key=researchReviewKey(c);return [key,Number(queue.attempts?.[key])||0];}));
   const interrupted=Boolean(queue.lastBatch&&!queue.lastBatch.finishedAt&&meta.lastCompanyRun?.reviewBatchId===queue.lastBatch.id&&!meta.lastCompanyRun.completedAt&&discovery.status!=='running');
@@ -1769,7 +1781,7 @@ async function selectResearchReviewForBuyers(key,expectedOwner){
     if(existing&&(existing.peopleStatus==='loading'||existing.publicContactStatus==='loading')){focusBuyerCompany(existing);showToast('Buyer research is already running for this company.');return true;}
     const merged=mergeWorkflowCompanies(existing?[existing]:[],[candidate])[0];
     const copy={...existing,...merged,peopleStatus:existing?.peopleStatus||merged.peopleStatus,buyerDiscovery:existing?.buyerDiscovery||merged.buyerDiscovery,buyerSearchMode:"user_selected_target",qualified:false};
-    if(crmAuthenticated()){const company=await ensureCrmCompany(copy);if(!company)return false;copy.crmId=company.id;}
+    if(crmAuthenticated()){const company=await ensureCrmCompany(copy,{companyOnly:true});if(!company)return false;copy.crmId=company.id;}
     if(!companyActionCurrent(owner)||researchReviewRows().find(row=>researchReviewKey(row)===key)!==candidate)return false;
     discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain||item.website)!==domain),copy];
     saveDiscovery();renderAll();showToast(`${candidate.company} selected for Buyers · qualification still unverified`);owner.outcome='pass';void startSelectedBuyerResearch(copy);return true;
@@ -1961,38 +1973,68 @@ async function findPotentialDecisionMakers(domain,{refreshDossier=false,explicit
   if(candidate.__leadIntelBuyerStart||observing===true||observing===undefined&&(candidate.peopleStatus==="loading"||candidate.publicContactStatus==="loading"))return false;
   if((window.LeadIntelBuyerResearchJobs||explicitSelection)&&!crmAuthenticated())return fail('Sign in before finding buyers.');
   if(bridge()?.conflict||bridge()?.resolvingSync)return fail('Resolve workspace synchronization before finding buyers. Your saved research is retained.');
-  const roles=String(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"").trim();
-  if(!roles)return fail("Add buyer roles to your company profile before searching");
   // A deliberate click on a current saved target may re-research it without
   // upgrading stale qualification or admitting CRM/history-only companies.
   if(explicitSavedSelection&&!authoritativeQualifiedHandoff&&!candidateIsActionable(candidate))candidate.buyerSearchMode="user_selected_target";
   if(candidate.buyerSearchMode!=="user_selected_target"&&candidate.buyerSearchMode!=="user_selected_qualified")candidate.buyerSearchMode="user_selected_without_signal";
-  const owner=discovery,b=bridge(),workspace=b?.workspace?.id,user=b?.session?.user?.id,token={};
+  const owner=discovery,b=bridge(),workspace=b?.workspace?.id,user=b?.session?.user?.id,startScope=discoveryOperationContext(),token={};
   Object.defineProperty(candidate,'__leadIntelBuyerStart',{value:token,writable:true,configurable:true});
   delete candidate.__leadIntelBuyerStartMessage;renderAll();
-  const current=()=>discovery===owner&&bridge()===b&&b?.workspace?.id===workspace&&b?.session?.user?.id===user&&crmAuthenticated()&&(discovery.selectedProspects||[]).includes(candidate);
-  try{return await searchDecisionMakers(candidate,{refreshDossier,forceResearch,resumeExisting,allowCrmSync:Boolean(crmCompanyByDomain(domain)),retry:()=>findPotentialDecisionMakers(domain,{explicitSelection}),onError:message=>{if(current())fail(message);}});}
+  const current=()=>discovery===owner&&bridge()===b&&b?.workspace?.id===workspace&&b?.session?.user?.id===user&&crmAuthenticated()&&discoveryOperationContext()===startScope&&(discovery.selectedProspects||[]).includes(candidate);
+  try{
+    const hadResearch=Boolean(candidate.people?.length||candidate.buyerDiscovery?.checkedAt);
+    if(!await restoreCompanyBeforeBuyerStart(candidate,current))return false;
+    if(!hadResearch&&(candidate.people?.length||candidate.buyerDiscovery?.checkedAt)&&!refreshDossier&&!forceResearch&&!(resumeExisting&&candidate.buyerResearchJob?.id)){saveDiscovery();renderAll();return true;}
+    const roles=String(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"").trim();
+    if(!roles)return fail("Add buyer roles to your company profile before searching");
+    return await searchDecisionMakers(candidate,{refreshDossier,forceResearch,resumeExisting,allowCrmSync:Boolean(crmCompanyByDomain(domain)),retry:()=>findPotentialDecisionMakers(domain,{explicitSelection}),onError:message=>{if(current())fail(message);}});
+  }
   catch(error){if(current())return fail(error.message||'Buyer research could not start. Please retry.');return false;}
   finally{if(candidate.__leadIntelBuyerStart===token)delete candidate.__leadIntelBuyerStart;if(current())renderAll();}
 }
+async function restoreCompanyBeforeBuyerStart(candidate,isCurrent){
+  if(!crmAuthenticated())return true;
+  const existing=crmCompanyByDomain(candidate.domain||candidate.website);
+  // Public review of an unsaved potential match does not promote it to CRM.
+  if(!candidate.crmId&&!existing&&!(discovery.selectedProspects||[]).includes(candidate))return true;
+  const b=bridge();
+  if(typeof b?.getCrmCompany!=='function')throw Object.assign(new Error('Saved buyer research could not be loaded. Retry before starting new research.'),{phase:'crm_restore'});
+  const company=candidate.crmId?{id:candidate.crmId}:existing||await ensureCrmCompany(candidate,{companyOnly:true});
+  if(!isCurrent())return false;
+  if(!company?.id)throw Object.assign(new Error('Save this company before starting buyer research.'),{phase:'crm_restore'});
+  let detail,saved;
+  try{detail=await b.getCrmCompany(company.id);if(!isCurrent())return false;saved=validateCompanySave(candidate,detail);if(!buyerHydrationScope({...candidate,crmId:company.id},detail))throw new Error('Saved company identity changed. Reload before starting buyer research.');}
+  catch(error){throw Object.assign(error,{phase:'crm_restore'});}
+  candidate.crmId=saved.id;
+  const previousReadError=candidate.buyerDiscovery?.lastError?.phase==='crm_restore';
+  if(previousReadError)delete candidate.buyerDiscovery.lastError;
+  delete candidate.__leadIntelBuyerStartMessage;
+  if(restoreNewerBuyerResearch(candidate,detail)||previousReadError){saveDiscovery();renderAll();}
+  return true;
+}
 async function startSelectedBuyerResearch(candidate){
-  if(!candidate||(discovery.selectedProspects||[]).includes(candidate)===false||candidate.people?.length||candidate.buyerDiscovery?.checkedAt||candidate.publicContactStatus==='loading'||candidate.peopleStatus&&candidate.peopleStatus!=='idle')return false;
-  const restoreWorkspace=bridge()?.workspace?.id;
+  if(!candidate||(discovery.selectedProspects||[]).includes(candidate)===false||candidate.__leadIntelBuyerStart||candidate.people?.length||candidate.buyerDiscovery?.checkedAt||candidate.publicContactStatus==='loading'||candidate.peopleStatus&&candidate.peopleStatus!=='idle')return false;
+  const restoreOwner=captureCompanyAction(),token={};
+  const current=()=>companyActionCurrent(restoreOwner)&&(discovery.selectedProspects||[]).includes(candidate);
+  Object.defineProperty(candidate,'__leadIntelBuyerStart',{value:token,writable:true,configurable:true});
   try{
     setJourneyFocus('buyers',{scroll:false});
     if(bridge()?.conflict)throw new Error('Resolve the workspace synchronization conflict, then press Find buyers to start buyer research.');
     if(!crmAuthenticated())throw new Error('Sign in, then press Find buyers to start buyer research.');
+    if(!await restoreCompanyBeforeBuyerStart(candidate,current))return false;
+    if(candidate.people?.length||candidate.buyerDiscovery?.checkedAt)return true;
     await runDurableBuyerResearch(candidate,{restore:true});
-    if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
+    if(!current())return false;
     if(candidate.people?.length)return true;
+    if(candidate.__leadIntelBuyerStart===token)delete candidate.__leadIntelBuyerStart;
     const result=await findPotentialDecisionMakers(candidate.domain);
     if(result===false&&(!candidate.peopleStatus||candidate.peopleStatus==='idle'))throw new Error(candidate.__leadIntelBuyerStartMessage||'Buyer research status could not be confirmed. Reopen this company to check saved progress.');
     return result;
   }catch(error){
-    if(bridge()?.workspace?.id!==restoreWorkspace||!(discovery.selectedProspects||[]).includes(candidate))return false;
-    candidate.peopleStatus='error';candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),researchIncomplete:true,lastError:{message:String(error?.message||'Buyer research could not start').slice(0,300),phase:'start'}};
+    if(!current())return false;
+    candidate.peopleStatus='error';candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),researchIncomplete:true,lastError:{message:String(error?.message||'Buyer research could not start').slice(0,300),phase:error.phase||'start'}};
     saveDiscovery();renderAll();showToast(candidate.buyerDiscovery.lastError.message);return false;
-  }
+  }finally{if(candidate.__leadIntelBuyerStart===token)delete candidate.__leadIntelBuyerStart;if(current())renderAll();}
 }
 async function selectTargetForBuyers(domain){
   const key=canonicalDomain(domain),item=selectedTargets().find(target=>canonicalDomain(target.domain||target.website)===key);
@@ -2003,7 +2045,7 @@ async function selectTargetForBuyers(domain){
     let candidate=existing||{company:item.companyName,domain:item.domain,website:item.website||`https://${item.domain}/`,market:(mainState().targetMarkets||[]).join(" · "),qualified:false,marketVerified:false,fitVerified:false,buyerVerified:false,evidence:[],qualificationGaps:["Customer fit and buying signal are unverified"],buyerSearchMode:"user_selected_target",people:[],peopleStatus:"idle"};
     const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate),selectionKey=value=>LeadIntelDiscovery.buyerSelectionRoles({decisionMakers:value}).map(role=>role.toLowerCase()).sort().join(';');
     if(roles&&selectionKey(roles)!==selectionKey(candidate.buyerRoles)){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
-    if(crmAuthenticated()){const company=await ensureCrmCompany(candidate);if(!company)return false;candidate.crmId=company.id;}
+    if(crmAuthenticated()){const company=await ensureCrmCompany(candidate,{companyOnly:true});if(!company)return false;candidate.crmId=company.id;}
     if(!companyActionCurrent(owner))return false;
     candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===key)||candidate;
     discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(row=>canonicalDomain(row.domain)!==key),candidate];
@@ -2037,7 +2079,7 @@ async function savePotentialProspect(domain){
   try{
     const existing=crmCompanyByDomain(candidate.domain);
     if(existing)validateCompanySave(candidate,{ok:true,company:existing});
-    if(!existing){const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm({...candidate,source:"user_selected_discovery",opportunity_hypothesis:"Customer fit and target market verified. No public buying signal confirmed; selected by the workspace user."});
+    if(!existing){const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm({...candidate,source:"user_selected_discovery",opportunity_hypothesis:"Customer fit and target market verified. No public buying signal confirmed; selected by the workspace user."},{companyOnly:true});
       if(!mapped){showToast("CRM mapping is unavailable");return false;}
       const saved=await owner.bridge.saveCrmCompany(mapped);if(!companyActionCurrent(owner))return false;
       if(!saved.ok){showToast(saved.error||"Unable to save this prospect to CRM");return false;}
@@ -2416,11 +2458,11 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   }
 }
 function saveLocalPipeline(candidate){discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);candidate.saved=true;saveDiscovery();}
-async function ensureCrmCompany(candidate){
+async function ensureCrmCompany(candidate,{companyOnly=false}={}){
   const owner=captureCompanyAction();let company=crmCompanyByDomain(candidate.domain||candidate.website);
   if(['suppressed','archived'].includes(company?.lifecycle_status))throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});
   if(company)return company;
-  const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");
+  const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate,{companyOnly});if(!mapped)throw new Error("CRM mapping is unavailable");
   const saved=await owner.bridge.saveCrmCompany(mapped);if(!companyActionCurrent(owner))return null;
   if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=validateCompanySave(candidate,saved);
   await refreshCrmState({render:false});return companyActionCurrent(owner)?company:null;
@@ -2699,7 +2741,7 @@ async function saveCandidate(reference,{pipeline=false}={}){
   if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
   if(!crmAuthenticated()){if(pipeline){saveLocalPipeline(candidate);renderAll();showToast(`${candidate.company} saved to local Pipeline · sign in for durable CRM`);return true;}showToast("Sign in with Google to save this company to Master CRM");return false;}
   const existing=crmCompanyByDomain(candidate.domain||candidate.website);if(existing)validateCompanySave(candidate,{ok:true,company:existing});
-  const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),saved=await owner.bridge.saveCrmCompany(mapped);
+  const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate,{companyOnly:true}),saved=await owner.bridge.saveCrmCompany(mapped);
   if(!companyActionCurrent(owner)||companyActionCandidate(reference)!==stored)return false;
   if(!saved.ok){showToast(saved.error||"CRM save failed");return false;}
   const company=validateCompanySave(candidate,saved);
@@ -4305,6 +4347,7 @@ function changeBuyerCompanyPage(value){
 }
 function buyerCompanyResearchAction(candidate){
   const job=candidate.buyerResearchJob,people=candidate.people||[];
+  if(!people.length&&candidate.buyerDiscovery?.lastError?.phase==='crm_restore')return {action:'find',label:'Retry loading saved buyers'};
   if(job?.id&&candidate.buyerResearchProgress?.connection==='unavailable')return {action:'check',label:'Check research status'};
   if(candidate.buyerDiscovery?.lastError?.name==='BUYER_JOB_ROLES_MISMATCH')return {action:'refresh',label:'Research current buyer roles'};
   if(candidate.buyerRolesChanged)return {action:'refresh',label:'Refresh buyers'};

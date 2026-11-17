@@ -39,3 +39,12 @@ test('unavailable indexed publication fails closed without attempting a large in
 test('small recovery and browsers without IndexedDB retain inline compatibility',async()=>{
  for(const large of [false,true]){const {r,values,cloud}=await capacityFixture(large);if(large)delete r.root.indexedDB;await r.root.__preserve(cloud,'inline_compatibility');assert.notEqual(JSON.parse(values.get(RECOVERY)).format,'leadintel-indexed-sync-recovery-v1');assert.equal(r.root.__recoveryWrites.length,1);assert.ok((await r.root.__read('w')).original);}
 });
+const committeeCrm=require('../crm-engine.js');
+for(const local of [{buyerRoles:'',buyerRolesSource:'',buyerRolesChanged:false},{buyerRoles:'Generated roles',buyerRolesSource:'profile',buyerRolesChanged:false}])test('CRM-only saved manual committee survives empty or generated local compatibility fields: '+local.buyerRolesSource,()=>{
+ const detail={company:{id:'saved',workspace_id:'w',normalized_domain:'buyer.example'},intelligence:{research_snapshot:{companyResearch:{version:1,domain:'buyer.example',buyerRoles:'Head of Procurement',buyerRolesSource:'manual',buyerRolesChanged:true}}}};
+ const restored=committeeCrm.restoreCompanyResearch({domain:'buyer.example',...local},detail,{workspaceId:'w'});assert.equal(restored.buyerRoles,'Head of Procurement');assert.equal(restored.buyerRolesSource,'manual');assert.equal(restored.buyerRolesChanged,true);
+});
+test('an explicit local manual committee edit remains authoritative over its older saved copy',()=>{
+ const detail={company:{id:'saved',workspace_id:'w',normalized_domain:'buyer.example'},intelligence:{research_snapshot:{companyResearch:{version:1,domain:'buyer.example',buyerRoles:'Head of Procurement',buyerRolesSource:'manual',buyerRolesChanged:false}}}};
+ const restored=committeeCrm.restoreCompanyResearch({domain:'buyer.example',buyerRoles:'Operations Director',buyerRolesSource:'manual',buyerRolesChanged:true},detail,{workspaceId:'w'});assert.equal(restored.buyerRoles,'Operations Director');assert.equal(restored.buyerRolesChanged,true);
+});

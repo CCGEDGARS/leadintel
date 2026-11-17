@@ -1,5 +1,6 @@
 import EvidencePolicy from '../../customer/evidence-policy.js';
 import ContactPolicy from '../../customer/contact-confirmation-policy.js';
+import Crm from '../../customer/crm-engine.js';
 const uuid=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
 
@@ -163,18 +164,21 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
   return saved;
 }
 
-export async function upsertCrmIntelligence(db,context,companyId,intelligence={}){
+export async function upsertCrmIntelligence(db,context,companyId,intelligence={}, {companyOnly=false}={}){
   const workspaceId=clean(context?.workspaceId,160),stamp=now();
-  const fields=[jsonString(intelligence.matched_signals,[]),jsonString(intelligence.evidence,[]),clean(intelligence.opportunity_hypothesis,4000)||null,jsonString(intelligence.score_breakdown,{}),clean(intelligence.confidence,40)||null,jsonString(intelligence.research_snapshot,{})];
+  const snapshot=companyOnly?Crm.companyResearchPatch(intelligence.research_snapshot):intelligence.research_snapshot;
+  const fields=[jsonString(intelligence.matched_signals,[]),jsonString(intelligence.evidence,[]),clean(intelligence.opportunity_hypothesis,4000)||null,jsonString(intelligence.score_breakdown,{}),clean(intelligence.confidence,40)||null,jsonString(snapshot,{})];
   // Capture the actual previous row inside the same transaction as replacement.
   // This is immutable history, never a fallback approval for current research.
   const archive=crmWrite(db,`INSERT INTO crm_activities(id,workspace_id,company_id,contact_id,activity_type,channel,direction,subject,summary,metadata_json,occurred_at,created_at,actor_user_id)
     SELECT ?,workspace_id,company_id,NULL,'intelligence.snapshot',NULL,NULL,NULL,'Previous commercial intelligence retained',
       json_object('version',1,'intelligence',json_object('matched_signals',json(matched_signals_json),'evidence',json(evidence_json),'opportunity_hypothesis',opportunity_hypothesis,'score_breakdown',json(score_breakdown_json),'confidence',confidence,'research_snapshot',json(research_snapshot_json),'intelligence_updated_at',intelligence_updated_at)),
       intelligence_updated_at,?,? FROM crm_intelligence WHERE company_id=? AND workspace_id=?
-      AND NOT (matched_signals_json IS ? AND evidence_json IS ? AND opportunity_hypothesis IS ? AND score_breakdown_json IS ? AND confidence IS ? AND research_snapshot_json IS ?)`)
+      AND NOT (matched_signals_json IS ? AND evidence_json IS ? AND opportunity_hypothesis IS ? AND score_breakdown_json IS ? AND confidence IS ? AND research_snapshot_json IS ${companyOnly?'json_patch(research_snapshot_json,?)':'?'})`)
     .bind(uuid(),stamp,clean(context?.userId,160)||null,companyId,workspaceId,...fields);
-  const upsert=crmWrite(db,`INSERT INTO crm_intelligence(company_id,workspace_id,matched_signals_json,evidence_json,opportunity_hypothesis,score_breakdown_json,confidence,research_snapshot_json,intelligence_updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET workspace_id=excluded.workspace_id,matched_signals_json=excluded.matched_signals_json,evidence_json=excluded.evidence_json,opportunity_hypothesis=excluded.opportunity_hypothesis,score_breakdown_json=excluded.score_breakdown_json,confidence=excluded.confidence,research_snapshot_json=excluded.research_snapshot_json,intelligence_updated_at=excluded.intelligence_updated_at`)
+  // Patch against the current row inside SQLite, so a newer Buyer commit can
+  // never be replaced by a Companies card's older or empty local copy.
+  const upsert=crmWrite(db,`INSERT INTO crm_intelligence(company_id,workspace_id,matched_signals_json,evidence_json,opportunity_hypothesis,score_breakdown_json,confidence,research_snapshot_json,intelligence_updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET workspace_id=excluded.workspace_id,matched_signals_json=excluded.matched_signals_json,evidence_json=excluded.evidence_json,opportunity_hypothesis=excluded.opportunity_hypothesis,score_breakdown_json=excluded.score_breakdown_json,confidence=excluded.confidence,research_snapshot_json=${companyOnly?'json_patch(crm_intelligence.research_snapshot_json,excluded.research_snapshot_json)':'excluded.research_snapshot_json'},intelligence_updated_at=excluded.intelligence_updated_at`)
     .bind(companyId,workspaceId,...fields,stamp);
   await writeWithActivity(db,context,{companyId,type:'intelligence.updated',summary:'Commercial intelligence updated',metadata:{confidence:fields[4]}},[archive,upsert],1);
   return parseIntelligence(await db.prepare(`SELECT * FROM crm_intelligence WHERE company_id=? AND workspace_id=?`).bind(companyId,workspaceId).first());
@@ -232,6 +236,8 @@ export async function listCrmCompanies(db,context,filters={}){const workspaceId=
 export async function upsertCrmCompany(db,context,input={}){
   const workspaceId=clean(context?.workspaceId,160);
   if(!workspaceId)throw crmError('CRM_WORKSPACE_REQUIRED','Workspace is required');
+  const companyOnly=input.intelligence_scope==='company';
+  if(input.intelligence_scope!==undefined&&!companyOnly)throw crmError('CRM_INTELLIGENCE_SCOPE_INVALID','Unsupported intelligence save scope');
   const companyInput=input.company&&typeof input.company==='object'?input.company:input;
   const domain=normalizeDomain(companyInput.domain||companyInput.website);
   const requestedId=clean(companyInput.crmId||(input.company&&typeof input.company==='object'?companyInput.id:''),160);
@@ -282,8 +288,8 @@ export async function upsertCrmCompany(db,context,input={}){
     }
   }
 
-  if(input.intelligence&&typeof input.intelligence==='object')await upsertCrmIntelligence(db,context,id,input.intelligence);
-  if(Array.isArray(input.contacts)&&input.contacts.length)await upsertCrmContacts(db,context,id,input.contacts);
+  if(input.intelligence&&typeof input.intelligence==='object')await upsertCrmIntelligence(db,context,id,input.intelligence,{companyOnly});
+  if(!companyOnly&&Array.isArray(input.contacts)&&input.contacts.length)await upsertCrmContacts(db,context,id,input.contacts);
   return {created,company:(await getCrmCompany(db,context,id)).company};
 }
 

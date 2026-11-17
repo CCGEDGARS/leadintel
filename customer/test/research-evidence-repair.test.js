@@ -9,6 +9,17 @@ test('richer extracted article replaces search snippet, including metadata',()=>
  const [preserved]=Market.mergeResearchResults([result],[{url,text:'Short',extractedAt:'2026-10-02',extractedBy:'other'}]);
  assert.equal(preserved.text,result.text);assert.equal(preserved.extractedAt,'2026-10-01');
 });
+test('a completed page replaces a longer search snippet and survives later search results',()=>{
+ const url='https://example.com/project',snippet={url,text:'Search summary '.repeat(30),sourceProviders:['openai']};
+ const page={url,title:'Official update',text:'The factory opens in December.',extractedBy:'firecrawl',extractedAt:'2026-11-17T11:00:00Z',sourceProviders:['firecrawl']};
+ for(const groups of [[snippet,page],[page,snippet]]){
+  const [result]=Market.mergeResearchResults(...groups.map(row=>[row]));
+  assert.equal(result.text,page.text);assert.equal(result.extractedAt,page.extractedAt);assert.equal(result.extractedBy,'firecrawl');assert.equal(result.title,page.title);
+ }
+ for(const groups of [[snippet,{...page,text:''}],[{...page,text:''},snippet]]){
+  const [retained]=Market.mergeResearchResults(...groups.map(row=>[row]));assert.equal(retained.text,snippet.text);assert.equal(retained.extractedAt,'');assert.equal(retained.extractedBy,'');
+ }
+});
 test('quick automatic plan balances markets and priorities without overriding explicit sources',()=>{
  const profile={targetMarkets:'Sweden; Finland',priorityOffers:'Drawing development; steel fabrication; installation',idealCustomer:'Machinery manufacturers; construction contractors'};
  const signals=[{id:'growth',name:'Expansion',keywords:'new factory',weight:8,active:true}];

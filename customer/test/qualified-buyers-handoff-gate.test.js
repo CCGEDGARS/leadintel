@@ -2,6 +2,8 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
+const D=require('../discovery-engine.js');
 const ui=fs.readFileSync(path.join(__dirname,'../discovery-ui.js'),'utf8');
 
 test('Buyer research trusts the current qualified Companies handoff',()=>{
@@ -14,13 +16,14 @@ test('Buyer research trusts the current qualified Companies handoff',()=>{
  assert.match(block,/candidate\.buyerSearchMode="user_selected_qualified"/);
 });
 
-test('Buyer research does not let stale CRM membership bypass the current handoff',()=>{
+test('Buyer research does not let stale CRM membership bypass the current handoff',async()=>{
  const start=ui.indexOf('async function findPotentialDecisionMakers');
- const end=ui.indexOf('async function selectTargetForBuyers',start);
- const block=ui.slice(start,end);
- assert.doesNotMatch(block.slice(0,block.indexOf('try{return await searchDecisionMakers')),/crmCompanyByDomain/);
- assert.match(block,/allowCrmSync:Boolean\(crmCompanyByDomain\(domain\)\)/);
- assert.match(block,/Buyer search needs a company selected in the current Companies step/);
+ const end=ui.indexOf('async function restoreCompanyBeforeBuyerStart',start),candidate={company:'Old company',domain:'old.example'},calls=[];
+ const c={discovery:{selectedProspects:[],candidates:[],potentialMatches:[candidate]},canonicalDomain:D.canonicalDomain,buyerSelectionRows:()=>[],candidateIsActionable:()=>false,LeadIntelDiscovery:D,crmCompanyByDomain:()=>{calls.push('crm');return {id:'old-crm',normalized_domain:'old.example'};},restoreCompanyBeforeBuyerStart:async()=>{calls.push('restore');return true;},searchDecisionMakers:async()=>{calls.push('research');return true;},renderAll(){},showToast:message=>calls.push(message)};
+ vm.createContext(c);vm.runInContext(ui.slice(start,end),c);
+ assert.equal(await c.findPotentialDecisionMakers(candidate.domain),false);
+ assert.deepEqual(calls,['Buyer search needs a company selected in the current Companies step']);
+ assert.equal(candidate.people,undefined);
 });
 
 test('manual current targets remain allowed without pretending they are qualified',()=>{

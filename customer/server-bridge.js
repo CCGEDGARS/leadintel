@@ -583,7 +583,7 @@
   async function getCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`);}
   async function getCrmRecipient(id,{contactId='',personId='',channel='email'}={}){const params=new URLSearchParams({view:'recipient',contact_id:contactId,person_id:personId,channel});return crmRequest(`/companies/${encodeURIComponent(id)}?${params}`);}
   async function getCrmActivities(id,filters={}){const params=new URLSearchParams();if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);if(filters.personId){params.set('person_id',filters.personId);params.set('channel',filters.channel||'email');}const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies/${encodeURIComponent(id)}/activities${suffix}`);}
-  async function saveCrmCompany(payload){return crmRequest('/companies',{method:'POST',body:JSON.stringify(payload||{})});}
+  async function saveCrmCompany(payload){return crmRequest(payload?.intelligence_scope==='company'?'/companies/company-research':'/companies',{method:'POST',body:JSON.stringify(payload||{})});}
   async function addCrmToPipeline(id,stage='Discovered'){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'POST',body:JSON.stringify({stage})});}
   async function removeCrmFromPipeline(id){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'DELETE'});}
   async function archiveCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}/archive`,{method:'POST'});}
