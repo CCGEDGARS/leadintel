@@ -60,8 +60,8 @@ export function validateScript(input,{core=false}={}){
  }
  return {...out,channel:input.channel,style:styles.includes(input.style)?input.style:'original'};
 }
-export async function coreScripts(db){
- const result=await db.prepare('SELECT id,payload_json,revision FROM core_script_registry').all(),rows=new Map([...StorysellingNative.seeds,StorysellingNative.inmail,...coreScriptSeeds,...inmailScriptSeeds,...phoneScriptSeeds].map(r=>[r.id,r]));
+export async function coreScripts(db,selectedId=''){
+ const result=await (selectedId?db.prepare('SELECT id,payload_json,revision FROM core_script_registry WHERE id=?').bind(selectedId):db.prepare('SELECT id,payload_json,revision FROM core_script_registry')).all(),rows=new Map([...StorysellingNative.seeds,StorysellingNative.inmail,...coreScriptSeeds,...inmailScriptSeeds,...phoneScriptSeeds].filter(r=>!selectedId||r.id===selectedId).map(r=>[r.id,r]));
  for(const row of result.results||[]){
   const saved=JSON.parse(row.payload_json),master=rows.get(row.id);
   // Upgrade obsolete built-in copies, never an owner's separately edited master
@@ -94,6 +94,14 @@ export async function handleScriptLibraryRoute(request,env,cors={}){
  const canManage=platformScriptOwner(env,user),write=request.method!=='GET';if(write&&!['owner','researcher','sales'].includes(member.role))fail('Write access required',403);
  if(path==='/api/script-library/creator'||path.startsWith('/api/script-library/creator/'))return await handleCreatorLibrary(request,env,cors,{user,session:token,canManage});
  if(path==='/api/script-library'&&request.method==='GET'){
+  const selected=url.searchParams.get('core');
+  if(selected){
+   if(!/^(?:email|linkedin|phone):(professional|curiosity|friendly|brutal|storyselling)$/.test(selected))fail('Choose an approved script',400);
+   const row=(await coreScripts(env.DB,selected))[0];
+   if(!row||row.deleted)return json({error:'This approved script is unavailable'},404,cors);
+   const {history,original,...script}={...row,...ScriptContract.contract(row)};
+   return json({script},200,cors);
+  }
   const personal=await env.DB.prepare('SELECT id,payload_json,revision FROM personal_script_library WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   const preferences=await env.DB.prepare('SELECT channel,template_id,revision FROM primary_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all();
   return json({canManage,core:(await coreScripts(env.DB)).map(row=>({...row,...ScriptContract.contract(row)})).map(row=>row.creatorSource?((({original,history,...safe})=>safe)(row)):row),inmailPrimary:(await env.DB.prepare('SELECT template_id,revision FROM inmail_script_preferences WHERE workspace_id=? AND user_id=?').bind(workspace,user.id).all()).results||[],personal:(personal.results||[]).map(r=>({...JSON.parse(r.payload_json),...ScriptContract.contract({...JSON.parse(r.payload_json),id:r.id}),id:r.id,revision:r.revision})),primary:preferences.results||[]},200,cors);

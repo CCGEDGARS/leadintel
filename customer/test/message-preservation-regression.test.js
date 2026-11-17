@@ -35,7 +35,7 @@ test('edited Professional drafts show working-copy provenance without claiming a
  const h=mounted({selected:'professional'});try{
   const item=E.apply(h.item(),{subject:h.before.subject,message:'My deliberately edited Professional copy'},{origin:'rewrite',style:'professional'});
   h.w.upsertItem(item);h.w.renderAll();
-  assert.equal(h.q('mw-applied-style').textContent,'Style: Professional');
+  assert.equal(h.q('mw-applied-style').textContent,'Working copy · approved Professional not applied');
   assert.equal(h.q('mw-draft-provenance').hidden,false);
   assert.equal(h.q('mw-draft-provenance').textContent,'Working copy · approved template available');
   h.w.document.querySelector('[data-writing-style="professional"]').click();

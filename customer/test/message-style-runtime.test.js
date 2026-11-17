@@ -85,3 +85,14 @@ test('Update message leaves a visible completion receipt beside the button',asyn
 test('Update reuses completed evidence research instead of restarting a disabled-button wait',()=>{
  const h=mounted({selected:'professional'});try{const item=h.item();item.messageStudioDraft.subjectResearch={key:S.subjectResearchKey(h.w.studioState(),h.w.studioMessageContext()),sources:[]};h.w.upsertItem(item);h.w.renderAll();h.q('message-generate').click();assert.equal(h.requests.length,0);assert.equal(h.q('message-generate').disabled,false);assert.match(h.q('mw-update-help').textContent,/Professional updated/);}finally{h.w.close();}
 });
+
+test('a saved generic copy is not labelled as the applied mandatory style and an explicit click restores the real master',()=>{
+ const h=mounted({selected:'professional'});try{
+  const legacy='Hi Alex,\n\nI represent North Works. Could you point me to the person who evaluates suppliers?\n\nBest regards,\nRobin Lane';
+  const item=h.item();item.drafts.emailBody=legacy;item.messageStudioDraft.editorOrigin='manual';item.messageStudioDraft.savedDraft=E.workingDraft(item);h.w.upsertItem(item);h.w.renderAll();
+  assert.match(h.q('mw-applied-style').textContent,/approved Professional not applied/);assert.equal(h.w.document.querySelector('[data-writing-style="professional"]').getAttribute('aria-pressed'),'false');
+  h.w.document.querySelector('[data-writing-style="professional"]').click();
+  const after=h.item();assert.equal(after.drafts.emailBody,E.tailor(h.w.studioState(),h.w.studioMessageContext()).message);assert.notEqual(after.drafts.emailBody,legacy);assert.equal(E.updateUndo(after).message,legacy);assert.equal(after.messageStudioDraft.tailoredOriginal.draft.message,after.drafts.emailBody);
+  const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(after),'buyer.example');assert.equal(restored.drafts.emailBody,after.drafts.emailBody);assert.equal(E.updateUndo(restored).message,legacy);
+ }finally{h.w.close();}
+});

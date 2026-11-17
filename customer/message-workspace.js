@@ -242,7 +242,7 @@
   if(context.generationError&&!context.busy&&context.selectedStyle===context.appliedStyle)q('mw-style-help').textContent='Update failed. Your previous message is preserved. Click Retry to retry the selected style.';
   if(context.selectedStyle==='original'&&!context.busy)q('mw-style-help').textContent='Your saved AI draft is preserved. Open Writing Assistant to create or edit a message, or choose a protected template.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=true;
-  const editor=context.editorState||{},blocked=!context.ready||!context.authenticated||context.syncConflict||context.busy||context.styleFeedback?.state==='applying'||context.assistantBusy||context.pending||context.factResearchBusy;
+  const editor=context.editorState||{},blocked=!context.ready||!context.authenticated||context.syncConflict||context.busy||context.styleFeedback?.state==='applying'||context.assistantBusy||context.pending||context.factResearchBusy&&!context.backgroundResearch;
   // Explicit Edit owns the working fields, including drafts previously locked by approval in renderDossier.
   for(const id of ['outreach-email-subject','outreach-email-body','outreach-linkedin']){const field=q(id);field.readOnly=!editor.editing||blocked||editor.saving;if(!field.readOnly)field.disabled=false;}
   q('mw-save-message').textContent=editor.saving?'Saving…':'Save draft';q('mw-save-message').disabled=blocked||!context.hasDraft||editor.busy||editor.saving||Boolean(editor.preview)||context.savedDraft===true&&!editor.editing;
