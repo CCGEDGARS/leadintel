@@ -219,6 +219,10 @@ jobs:
             /tmp/manual-paid-browser-evidence.json
             /tmp/leadintel-step5-test-*/*.png
             /tmp/leadintel-step6-test-*/evidence.json
+            /tmp/leadintel-step6-test-*/failure.json
+            /tmp/leadintel-profile-review-*/evidence.json
+            /tmp/leadintel-profile-review-*/failure.json
+            /tmp/leadintel-profile-review-*/*.png
             /tmp/leadintel-step6-test-*/*.png
             /tmp/leadintel-message-interaction-*/*.png
             /tmp/leadintel-message-interaction-*/evidence.json
