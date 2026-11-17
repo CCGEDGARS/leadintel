@@ -1,7 +1,8 @@
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
 import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
-import {runBuyerPaidResearch} from './buyer-paid-research.js';
+import {runBuyerPaidResearch,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
+import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
@@ -32,11 +33,12 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   if(!row&&await recoverInterruptedContactJob(env,{jobId}))row=await claim();
   if(!row)break;
   const input=parse(row.input_json),originalCandidate=parse(row.result_json,input.candidate),reconciledCandidate=D.reconcileBuyerEvidence(originalCandidate,{trustedAgentSources:true});
+  const {contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},reconciledCandidate);
   // A stale legacy paid slice first settles through the existing paid evidence
   // gate. Keep it eligible for terminal recovery, which captures its original
   // own-CRM scope before a fresh review changes that scope.
   const officialPlan=reconciledCandidate.buyerDiscovery?.officialContactInventory?.research,sourceScopeChanged=row.phase!=='official'&&officialPlan&&officialPlan.status!=='complete'&&officialPlan.discoveryScope!==D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
-  const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate)));
+  const deferSemanticStamp=row.phase==='paid'&&(sourceScopeChanged||Number(input.executionContinuationVersion||0)<4&&(originalCandidate.publicResearch?.aiReview?.inputSignature!==D.buyerReviewSignature(reconciledCandidate)||!D.buyerResearchCoveragePassed(reconciledCandidate,{contactOptions})));
   const candidate=deferSemanticStamp?originalCandidate:reconciledCandidate,controller=new AbortController();let invocationExhausted=false,activeTaskReservations=0,accepting=true,phase=row.phase,phaseMs=row.phase_ms,phaseRuns=row.phase_runs,changed=0,contextVersion=-1;
   const rescopeOfficial=sourceScopeChanged&&!deferSemanticStamp&&!input.recheck;
   if(rescopeOfficial){phase=row.phase='official';phaseMs=0;phaseRuns=0;}
@@ -54,7 +56,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   const writeGuard=`EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`;
   const current=async(checkpoint=false)=>{await guard({checkpoint});return [row.id,lease,clock(),contextVersion];};
-  let scheduledContactWork=false,apolloIdentityChecked=Number(input.apolloIdentityVersion||0)>=1;
+  let scheduledContactWork=false,paidContinuation=null,apolloIdentityChecked=Number(input.apolloIdentityVersion||0)>=1;
   input.apolloIdentityReceipts=Array.isArray(input.apolloIdentityReceipts)?input.apolloIdentityReceipts.slice(0,4):[];
   let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
@@ -139,7 +141,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   const diagnostics=parse(row.diagnostic_json,[]);
   if(rescopeOfficial)diagnostics.push({phase:'official',reason:'Resuming the contact-source objective after a legacy financial-archive limit; completed source tasks retained',at:new Date().toISOString()});
   const settleQuality=async()=>{
-   const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)});
+   const quality=input.paidResearch?(await publicBuyerJob(env,{...row,result_json:JSON.stringify(candidate)})).quality:D.buyerQualityAssessment(candidate,{contactOptions});
    const scopedComplete=input.scope==='selected_buyers'&&quality.researchPassed&&quality.aiReviewStatus==='complete'&&!(candidate.publicResearch.conflicts||[]).length;
    status=(quality.passed||scopedComplete)&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))?'complete':'needs_review';
    if(status==='needs_review')diagnostics.push({phase:'quality',reason:quality.gaps.join(' · ').slice(0,600),at:new Date().toISOString()});
@@ -177,7 +179,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const trace=D.tracePublicBuyers(await allRows(),candidate.company,input.profile);candidate.people=D.retainBuyerIdentities(D.mergeBuyerPool(candidate.people||[],trace.people,input.profile),input.profile,candidate).slice(0,10);acquirePeople();phase=nextPhase[phase];}
    }else if(phase==='contacts'){
     if(candidate.people?.length){
-     scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
+     scheduledContactWork=true;report=await D.runMandatoryBuyerResearch(candidate,{search,readPage:read,rows,guard,signal:controller.signal,contactOptions,recheckPlans:input.recheck?.plans,maxDurationMs:Math.min(remaining,input.recheck?Math.max(1,input.recheck.maxActiveMs-phaseMs):180000),observeTools:false,buyerAgentContext:D.buyerAgentContext(candidate,input.profile),accountability:report,crossCheck:async person=>task('independent',JSON.stringify([person.id,person.name,person.title,...(services.independent?[]:['grounded-low-v1'])]),async()=>{let result;try{result=await (services.independent?services.independent(person,controller.signal):searchWorkspaceBuyerContact(env,row.workspace_id,{company:candidate.company,domain:row.domain,person,signal:controller.signal}));}catch(error){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw error;}if(result.status==='not_configured'||result.status==='unavailable'&&/not configured/i.test(result.reason||'')){observe({provider:'gemini',operation:'search',status:'skipped',reason:'Independent provider not configured'});return {...result,status:'not_configured'};}if(result.status!=='complete'||result.web_search===false){observe({provider:'gemini',operation:'search',status:'failed',reason:'Independent research unavailable'});throw Error('Independent research unavailable');}observe({provider:result.provider||'gemini',operation:'search',status:'succeeded',results:result.results?.length||0});return result;})});
      confirmNamed();
      const retryable=report.status!=='complete'&&!changed&&report.stopReason!=='time_budget'?(await stmt(env,"SELECT task_key FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status<>'complete' AND (status='running' OR attempts<2)",row.id).all()).results.filter(task=>contactTasks.has(task.task_key)).length:0;
      if(report.status==='complete'||!changed&&report.stopReason!=='time_budget'&&!retryable)phase=nextPhase[phase];
@@ -199,8 +201,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }else{
     const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',row.workspace_id,row.requested_by).first();
     const paidGuard=async()=>guard();paidGuard.writeAuthority=()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]});
-    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup});
-    if(finished)phase='done';
+    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup,onContinuation:scope=>{paidContinuation=scope;}});
+    if(!finished&&candidate.publicResearch.paidResearch.code===PAID_PRIORITY_RESEARCH_REQUIRED){phase='contacts';diagnostics.push({phase,reason:'Completing the newly displayed buyer’s deeper public checks before resuming the saved paid attempt',at:new Date().toISOString()});}
+    else if(finished)phase='done';
     }
    }
    if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
@@ -231,7 +234,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}

@@ -12,7 +12,7 @@ assert.match(
 );
 assert.match(
   index,
-  /<script defer src="website-activation\.js\?v=[^"\s]+&setup-audit=20261030-v1"/,
+  /<script defer src="website-activation\.js\?v=[^"\s]+&setup-audit=20261030-v1(?:&[^"\s]+)?"/,
   "website activation must load directly without waiting on optional modules"
 );
 

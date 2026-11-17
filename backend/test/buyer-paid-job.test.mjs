@@ -47,7 +47,9 @@ test('a newer paid permission cannot upgrade an earlier explicitly free-only req
  const f=await paidFixture(t,{intent:false});f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='review' WHERE id=?").run(f.job.id);await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{review:async()=>({provider:'controlled',supervisor:{status:'complete',reviewedPersonIds:f.c.people.map(p=>p.id),findings:[]},conflicts:[]}),paidLookup:async()=>assert.fail('Free-only intent cannot adopt paid settings')}});assert.equal((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).phase,'done');
 });
 test('paid outcomes and company binding survive normalized workspace serialization',async t=>{
- const f=await paidFixture(t),calls=[],paidLookup=await controlledLookup(f,calls);await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});const c=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:f.job.id})).result_json),saved=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(saved.publicResearch.paidResearch.companyId,f.c.crmId);assert.equal(saved.publicResearch.paidResearch.outcomes.length,1);assert.equal(saved.publicResearch.paidResearch.outcomes[0].personId,'buyer-0');
+ const f=await paidFixture(t),calls=[],paidLookup=await controlledLookup(f,calls);let row;
+ for(let pass=0;pass<4;pass++){await runBuyerResearchJobs(f.env,{jobId:f.job.id,maxJobs:1,windowMs:3000,services:{paidLookup}});row=await readBuyerJob(f.env,workspaceId,{id:f.job.id});if(JSON.parse(row.result_json).publicResearch?.paidResearch?.outcomes?.length)break;}
+ const c=JSON.parse(row.result_json),saved=D.normalizeDiscoveryState({selectedProspects:[c]}).selectedProspects[0];assert.equal(saved.publicResearch.paidResearch.companyId,f.c.crmId);assert.equal(saved.publicResearch.paidResearch.outcomes.length,1,JSON.stringify({status:row.status,phase:row.phase,paid:saved.publicResearch.paidResearch,calls:calls.length}));assert.equal(saved.publicResearch.paidResearch.outcomes[0].personId,'buyer-0');
 });
 
 test('automatic workflow checks only the primary buyer before selecting a message recipient',async t=>{

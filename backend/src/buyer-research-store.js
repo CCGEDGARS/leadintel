@@ -1,7 +1,7 @@
 import {buyerRunWindow} from './buyer-research-window.js';
 import {prepareBuyerRecheck} from './buyer-recheck-plan.js';
 import {sha256} from './security.js';
-import {getCrmCompany} from './crm.js';
+import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {buyerPaidIntent,paidBuyerScope,paidSnapshotCandidate,paidContinuationScopeHash} from './buyer-paid-research.js';
 import {readOwnedPayload} from './workspace-record-store.js';
 import '../../customer/discovery-engine.js';
@@ -59,7 +59,7 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status IN ('needs_review','complete') AND phase='done' AND COALESCE(json_extract(diagnostic_json,'$[#-1].code'),'')<>'run_window' AND COALESCE(json_extract(input_json,'$.recheck.version'),0)=0 AND updated_at>datetime('now','-30 days') AND ((COALESCE(json_extract(input_json,'$.contactSourceScope'),'')<>? AND json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.status') IN ('partial','error') AND COALESCE(json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.discoveryScope'),'')<>?) OR (json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1) OR (COALESCE(json_extract(input_json,'$.contactSchedulingVersion'),0)<1 AND COALESCE(json_extract(input_json,'$.contactSchedulingRecoveryVersion'),0)<1 AND json_extract(result_json,'$.publicResearch.accountability.status')='partial' AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget') OR (COALESCE(json_extract(input_json,'$.executionContinuationVersion'),0)<4 AND (json_extract(result_json,'$.publicResearch.buyerAgent.status')='needs_review' OR json_extract(result_json,'$.publicResearch.aiReview.status')='complete' OR EXISTS(SELECT 1 FROM buyer_research_tasks t WHERE t.job_id=buyer_research_jobs.id AND t.status='running')))) AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,...(jobId?[jobId]:[])).all();
  for(const row of rows.results||[]){
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]),executionRepair=Number(input.contactContinuationVersion||0)>=1;
-  const candidate=parse(row.result_json,input.candidate),phase=resumePhase(candidate,input);
+  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate),phase=resumePhase(candidate,input,contactOptions);
   let paidScope=null,continuationScopeHash='';
   if(matches&&input.paidResearch?.companyId){
    const value=await stmt(env,'SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?',row.workspace_id,input.paidResearch.companyId).first(),snapshot=parse(value?.research_snapshot_json),candidate=parse(row.result_json,input.candidate);
@@ -80,7 +80,7 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  }
  return null;
 }
-function resumePhase(saved,input={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview);return input.recheck?(!D.buyerResearchCoveragePassed(candidate)?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!D.buyerResearchCoveragePassed(candidate)?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
+function resumePhase(saved,input={},contactOptions={}){const candidate=D.reconcileBuyerEvidence(saved,{trustedAgentSources:true}),review=D.safeBuyerAiReview(candidate.publicResearch?.aiReview),coverage=D.buyerResearchCoveragePassed(candidate,{contactOptions});return input.recheck?(!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':'done'):!D.officialContactCoveragePassed(candidate)?'official':candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'dossier':!candidate.people?.length?'identities':!coverage?'contacts':review?.status!=='complete'||review.inputSignature!==D.buyerReviewSignature(candidate)?'review':input.paidResearch&&!['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status)?'paid':'done';}
 async function retainedJobCandidate(env,row,input,current){
  // Only server-owned results in this workspace and seller context can restore
  // source facts. Current roster, rejections and execution receipts remain authoritative.
@@ -138,9 +138,9 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const activeTask=input.recheck&&row.status==='running'?await stmt(env,"SELECT kind,request_value FROM buyer_research_tasks WHERE job_id=? AND status='running' ORDER BY updated_at DESC LIMIT 1",row.id).first():null;
  const activity=activeTask?.kind==='read'?'Reading public contact evidence':activeTask?.kind==='independent'?'Cross-checking contact evidence':activeTask?.kind==='search'?(/gmail|googlemail/i.test(activeTask.request_value)?'Searching public Gmail business-contact listings':/linkedin/i.test(activeTask.request_value)?'Checking LinkedIn identity':'Searching public contact sources'):'';
 
- let crm=null;if(candidate.publicResearch?.paidResearch?.companyId){try{const detail=await getCrmCompany(env.DB,{workspaceId:row.workspace_id},candidate.publicResearch.paidResearch.companyId);if(D.canonicalDomain(detail.company?.normalized_domain)===row.domain)crm={company:detail.company,contacts:detail.contacts,contactData:detail.contactData,phoneRequests:detail.phoneRequests};}catch{}}
- const contact=p=>(crm?.contacts||[]).find(c=>String(c.external_person_id)===String(p.id)&&String(c.name).trim().toLowerCase()===String(p.publicName||p.name).trim().toLowerCase())||{};
- const quality=D.buyerQualityAssessment(candidate,{contactForPerson:contact,workspaceId:row.workspace_id,companyId:crm?.company?.id,confirmedEmail:p=>D.acceptedOfficialBuyerEmail(candidate,p)||(globalThis.LeadIntelContactPolicy.accepted(contact(p),row.domain,'provider_verified')?contact(p).normalized_email||contact(p).work_email:'')});
+ const {detail,contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate);
+ const crm=detail?{company:detail.company,contacts:detail.contacts,contactData:detail.contactData,phoneRequests:detail.phoneRequests}:null;
+ const quality=D.buyerQualityAssessment(candidate,{contactOptions});
  const completed=(totals.results||[]).find(r=>r.status==='complete')?.n||0,total=(totals.results||[]).reduce((n,r)=>n+Number(r.n),0);
  const iso=value=>{const date=new Date(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(String(value))?value.replace(' ','T')+'Z':value);return Number.isFinite(date.getTime())?date.toISOString():'';};
  const updatedAt=iso(row.updated_at),createdAt=iso(row.created_at),lastActivityAt=[updatedAt,...(totals.results||[]).map(r=>iso(r.last_activity_at))].filter(Boolean).sort().at(-1)||updatedAt;
@@ -159,10 +159,10 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const lastResultAt=(totals.results||[]).filter(item=>item.status==='complete').map(item=>iso(item.last_activity_at)).filter(Boolean).sort().at(-1)||null;
  const runWindow=buyerRunWindow(row,input);
  const timing={estimate,lastResultAt,runWindow,nextAttemptAt:row.status==='queued'&&Number(row.next_at)>0?new Date(Number(row.next_at)).toISOString():null};
- const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities:Boolean(candidate.people?.length),contacts:D.buyerResearchCoveragePassed(candidate),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
+ const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities:Boolean(candidate.people?.length),contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const paused=parse(row.diagnostic_json,[]).at(-1);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:row.status==='needs_review'&&paused?.code==='run_window'?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:row.status==='needs_review'&&paused?.code==='run_window'?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 export async function startBuyerJob(env,workspaceId,user,body){
  const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload);
@@ -192,13 +192,14 @@ export async function startBuyerJob(env,workspaceId,user,body){
   const prior=await stmt(env,`SELECT result_json FROM buyer_research_jobs WHERE workspace_id=? AND domain=? AND updated_at>datetime('now','-30 days') AND json_extract(input_json,'$.workspaceContext')=? AND COALESCE(json_extract(input_json,'$.scope'),'all_buyers')!='selected_buyers' AND COALESCE(json_extract(input_json,'$.roles'),'[]')=? ORDER BY rowid DESC LIMIT 1`,workspaceId,input.candidate.domain,stored.hash,JSON.stringify(input.roles||[])).first();
   if(prior){
    input.candidate=D.reconcileBuyerEvidence(D.mergeRetainedBuyerResearch(parse(prior.result_json,{}),input.candidate,{retainPeople:!input.candidate.people.length}),{trustedAgentSources:true});
-   initialPhase=resumePhase(input.candidate,input);
+   const {contactOptions}=await loadBuyerContactContext(env,{workspaceId},input.candidate);initialPhase=resumePhase(input.candidate,input,contactOptions);
   }
  }
 
  if(current&&input.paidResearch&&parse(current.input_json).workspaceContext===stored.hash){
   const prior=parse(current.result_json,{}),priorInput=parse(current.input_json),identity=p=>JSON.stringify([p.id,p.publicName||p.name,p.title,p.organization]);
-  if(JSON.stringify(priorInput.profile)===JSON.stringify(input.profile)&&JSON.stringify((prior.people||[]).map(identity).sort())===JSON.stringify(input.candidate.people.map(identity).sort())&&D.buyerResearchCoveragePassed(prior)&&D.safeBuyerAiReview(prior.publicResearch?.aiReview)?.inputSignature===D.buyerReviewSignature(prior)){
+  const {contactOptions}=await loadBuyerContactContext(env,{workspaceId},prior);
+  if(JSON.stringify(priorInput.profile)===JSON.stringify(input.profile)&&JSON.stringify((prior.people||[]).map(identity).sort())===JSON.stringify(input.candidate.people.map(identity).sort())&&D.buyerResearchCoveragePassed(prior,{contactOptions})&&D.safeBuyerAiReview(prior.publicResearch?.aiReview)?.inputSignature===D.buyerReviewSignature(prior)){
    input.candidate=prior;delete input.candidate.publicResearch.paidResearch;initialPhase='paid';
   }
  }
@@ -217,7 +218,7 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   if(activeBuyerJob(row.status))return row;
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
-  const candidate=parse(row.result_json,input.candidate),paused=parse(row.diagnostic_json,[]).at(-1)?.code==='run_window',phase=paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input);
+  const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),paused=parse(row.diagnostic_json,[]).at(-1)?.code==='run_window',phase=paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET phase=?,input_json=json_set(input_json,'$.executionWindowStartedAt',?),last_error='',status='queued',requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,next_at=0,phase_ms=0,phase_runs=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,phase,new Date().toISOString(),user.id,user.sessionTokenHash,row.id,row.revision,...callerArgs(workspaceId,user)).run();
   if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});

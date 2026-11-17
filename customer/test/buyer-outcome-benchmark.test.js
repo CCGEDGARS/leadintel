@@ -118,8 +118,10 @@ test('accepted buyer counts expose distinct addresses separately rather than imp
 });
 test('mandatory execution escalates the same ranked priority identities used for coverage',async()=>{
  const c=unsortedRoster();for(const p of c.people){delete p.contactResearch;p.emailResearch={status:'not_searched'};}
- await D.runMandatoryBuyerResearch(c,{search:async()=>[],readPage:async()=>({markdown:'Factory Example company contact page.'})});
+ const page={url:'https://factory.example/team',sourceRead:true,extractedAt:now,markdown:c.people.map(p=>p.name+' — '+p.title+' — Factory Example').join('\n\n')};
+ await D.runMandatoryBuyerResearch(c,{rows:[page],search:async()=>[],readPage:async()=>page});
  for(const p of c.people)assert.equal(p.contactResearch.checks.deep.status,p.id.startsWith('extra')?'not_needed':'complete',p.id);
+ assert.equal(D.buyerResearchCoveragePassed(c),true);
 });
 test('a public pool without supported executive priority still receives four research escalation places',async()=>{
  const c=fixture();c.buyerRoles=['COO'];c.people=Array.from({length:10},(_,i)=>({id:'pool'+i,name:'Pool Buyer'+i,publicName:'Pool Buyer'+i,title:'COO',organization:c.company,publicNameUrl:'https://linkedin.com/in/pool-'+i,publicLinkedinUrl:'https://linkedin.com/in/pool-'+i}));

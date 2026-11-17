@@ -1,7 +1,8 @@
 import {recordOperationalStage} from './operational-observability.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
-import {buyerPaidIntent,runWorkflowPaidResearch,paidBuyerScope,paidSnapshotCandidate} from './buyer-paid-research.js';
+import {buyerPaidIntent,runWorkflowPaidResearch,paidBuyerScope,paidSnapshotCandidate,paidContinuationScopeHash,PAID_PRIORITY_RESEARCH_REQUIRED,PAID_PRIORITY_RESEARCH_INCOMPLETE} from './buyer-paid-research.js';
+import {loadBuyerContactContext} from './buyer-contact-context.js';
 import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import '../../customer/company-dossier-ui.js';
@@ -60,9 +61,34 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,account
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={},options={}){
+export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={},options={},context){
+  await guard();const contactOptions=context?(await loadBuyerContactContext(context.env,{workspaceId:context.workspaceId},candidate)).contactOptions:options.contactOptions;await guard();
   await discovery.runOfficialContactResearch(candidate,{search,guard,rows,readPage:async(...args)=>{const page=await readPage(...args);for(const entry of page?.researchTrace||[])discovery.recordBuyerResearchTool(candidate.publicResearch?.accountability,entry);return page;}});
-  return discovery.runMandatoryBuyerResearch(candidate,{...options,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+  return discovery.runMandatoryBuyerResearch(candidate,{...options,contactOptions,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+}
+
+export async function resumePaidBuyerPublicResearch(env,context,candidate,{intent,jobId,guard,profile={},services={}}={}){
+ const report=candidate.publicResearch.paidResearch,hold=(code,reason)=>{Object.assign(report,{status:'blocked',code,reason,completedAt:new Date().toISOString()});return false;};
+ await guard();const row=await env.DB.prepare('SELECT research_snapshot_json,evidence_json FROM crm_intelligence WHERE workspace_id=? AND company_id=?').bind(context.workspaceId,intent.companyId).first();
+ const snapshot=JSON.parse(row?.research_snapshot_json||'{}');
+ if(snapshot.buyerResearch?.jobId!==jobId||!intent.continuationScopeHash||await paidContinuationScopeHash(row)!==intent.continuationScopeHash)return hold('PAID_SCOPE_CHANGED','Saved company research changed before free continuation. Its paid receipt is retained.');
+ if(Number(report.publicResearchAttempts)>=2)return hold(PAID_PRIORITY_RESEARCH_INCOMPLETE,'The bounded public continuation is incomplete. Review the saved gaps before retrying.');
+ report.publicResearchAttempts=(Number(report.publicResearchAttempts)||0)+1;
+ const {contactOptions}=await loadBuyerContactContext(env,context,candidate);await guard();
+ const rows=globalThis.LeadIntelCompanyDossierUi.evidenceRows(candidate.buyerDiscovery?.companyDossier||{}),search=services.search||createBuyerSourceSearch(env,context.workspaceId,{guard});
+ const readPage=services.read||(async url=>{const result=await readPublicBuyerPage(env,context.workspaceId,url);return {...result.data,researchTrace:result.researchTrace};});
+ await discovery.runMandatoryBuyerResearch(candidate,{search,readPage,rows,guard,contactOptions,accountability:candidate.publicResearch.accountability,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),crossCheck:person=>services.independent?services.independent(person):searchWorkspaceBuyerContact(env,context.workspaceId,{company:candidate.company,domain:candidate.domain,person})});
+ if(!discovery.buyerResearchCoveragePassed(candidate,{contactOptions})){
+  report.reason='Missing public checks remain saved for the next bounded workflow continuation.';
+  return report.publicResearchAttempts>=2?hold(PAID_PRIORITY_RESEARCH_INCOMPLETE,'The bounded public continuation is incomplete. Review the saved gaps before retrying.'):false;
+ }
+ await guard();const supplied=discovery.safeBuyerReviewEvidence(discovery.buyerSupervisorEvidence(candidate.people,rows));candidate.publicResearch.reviewEvidence=supplied;
+ candidate.publicResearch.buyerAgent=discovery.assessBuyerAgent(candidate,rows,discovery.buyerAgentContext(candidate,profile));
+ const signature=discovery.buyerReviewSignature(candidate),body={company:candidate.company,buyerAgent:candidate.publicResearch.buyerAgent,people:candidate.people.map(p=>({id:p.id,name:p.publicName||p.name,role:p.title,employer:p.organization,email:p.publicEmail,email_source:p.publicEmailUrl,linkedin:p.publicLinkedinUrl||p.linkedin_url,checks:p.contactResearch?.checks})),evidence:supplied,quality:{depth:discovery.BUYER_CONTACT_RESEARCH_POLICY.version,research_status:candidate.publicResearch.accountability.status,checked_people:candidate.publicResearch.accountability.checkedPeople,official_pages:candidate.publicResearch.accountability.officialPages}};
+ let review;try{review=await (services.review||reviewWorkspaceBuyerEvidence)(env,context.workspaceId,body,{userId:context.userId});}catch(error){await guard();report.reason='Current AI evidence review is unavailable; saved paid phases are retained.';return report.publicResearchAttempts>=2?hold(PAID_PRIORITY_RESEARCH_INCOMPLETE,report.reason):false;}
+ await guard();candidate.publicResearch.aiReview=discovery.safeBuyerAiReview({status:review.supervisor?.status||'unavailable',provider:review.provider||'none',checkedAt:new Date().toISOString(),inputSignature:signature,reviewedPersonIds:review.supervisor?.reviewedPersonIds,findings:review.supervisor?.findings,conflicts:review.conflicts,summary:review.summary,reason:review.reason});candidate.publicResearch.conflicts=review.conflicts||[];
+ if(candidate.publicResearch.aiReview.status!=='complete'||candidate.publicResearch.aiReview.findings.length||candidate.publicResearch.aiReview.conflicts.length||candidate.people.some(p=>!candidate.publicResearch.aiReview.reviewedPersonIds.includes(String(p.id))))return hold(PAID_PRIORITY_RESEARCH_INCOMPLETE,'Current AI review is incomplete or has evidence gaps. Review the saved evidence before paid research continues.');
+ report.code='';report.reason='Required public checks and current review completed; resuming the saved paid attempt.';return true;
 }
 
 export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
@@ -87,10 +113,11 @@ export async function persistWorkflowBuyerResearch(env,context,candidate,guard=a
   await upsertCrmIntelligence(env.DB,context,company.id,{...(detail.intelligence||{}),evidence:Array.isArray(candidate.evidence)?mapped.evidence:detail.intelligence?.evidence||[],research_snapshot:{...(detail.intelligence?.research_snapshot||{}),fitDescription:signatureContext.fitDescription,buyerRoles:signatureContext.buyerRoles,buyerRolesChanged:signatureContext.buyerRolesChanged,...(candidate.qualification?{qualification:candidate.qualification}:{}),...(candidate.buyerFit?{buyerFit:candidate.buyerFit}:{}),buyerResearch:research}});await guard();return true;
 }
 
-async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier,runId=''){
+async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},researchDossier=researchWorkspaceDossier,runId='',services={}){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
   if(company&&company.lifecycle_status!=='prospect')return null;
-  const resumingPaid=Boolean(runId&&candidate.buyerDiscovery?.paidRunId===runId&&candidate.publicResearch?.paidResearch?.status==='running');
+  const paidRun=runId||candidate.buyerDiscovery?.paidRunId||crypto.randomUUID();
+  const resumingPaid=Boolean(candidate.buyerDiscovery?.paidRunId===paidRun&&candidate.publicResearch?.paidResearch?.status==='running');
   let paidIntent=resumingPaid?candidate.buyerDiscovery.paidIntent:company?await buyerPaidIntent(env,workspaceId,true,candidate):null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
   const saved=((await readOwnedPayload(env,workspaceId,state)).payload).discovery||{};
@@ -133,7 +160,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile,{crossCheck:async person=>{await guard();const result=await searchWorkspaceBuyerContact(env,workspaceId,{company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}});await guard();return result;}});
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile,{crossCheck:async person=>{await guard();const result=await searchWorkspaceBuyerContact(env,workspaceId,{company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}});await guard();return result;}},{env,workspaceId});
   candidate.publicResearch={...candidate.publicResearch,checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.publicResearch.accountability?.status!=='complete'||candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
   await guard();
@@ -154,10 +181,11 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
       await upsertCrmIntelligence(env.DB,crmContext,created.id,{research_snapshot:{qualification:candidate.qualification}});
       paidIntent=await buyerPaidIntent(env,workspaceId,true,candidate);
     }
-    candidate.buyerDiscovery.paidIntent=paidIntent;candidate.buyerDiscovery.paidRunId=runId;
-    const report=await runWorkflowPaidResearch(env,crmContext,candidate,{intent:paidIntent,runId:runId||crypto.randomUUID(),guard});
+    candidate.buyerDiscovery.paidIntent=paidIntent;candidate.buyerDiscovery.paidRunId=paidRun;
+    const report=await runWorkflowPaidResearch(env,crmContext,candidate,{intent:paidIntent,runId:paidRun,guard,lookup:services.paidLookup,resumePublic:()=>resumePaidBuyerPublicResearch(env,crmContext,candidate,{intent:paidIntent,jobId:'workflow:'+paidRun,guard,profile:seller,services})});
     if(report.status==='running')return null;
     if(report.code==='PAID_SCOPE_CHANGED')return null;
+    if(report.code===PAID_PRIORITY_RESEARCH_INCOMPLETE)return null;
     if(report.status==='blocked')candidate.buyerDiscovery.issues.push(report.reason);
   }
   const paidCompany=company||await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
@@ -296,7 +324,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
 
   return null;
 }
-export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch,researchDossier=researchWorkspaceDossier}){
+export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch,researchDossier=researchWorkspaceDossier,buyerServices={}}){
   await guard();const market={icps:context.icps,signals:context.signals},profile={...discovery.effectiveTargetingProfile({...context.profile,website:context.website||context.profile?.website},market),discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
@@ -362,7 +390,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     for(const candidate of discovery.rankQualifiedCompanies(result.candidates||[])){
       await guard();
       if(result.buyerResearchPending&&candidate.contact){candidates.push(candidate);continue;}
-      let contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,profile,researchDossier,run?.id);
+      let contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by,profile,researchDossier,run?.id,buyerServices);
       if(candidate.publicResearch?.paidResearch?.status==='running'){buyerResearchPending=true;candidates.push(candidate);continue;}
       if(candidate.buyerDiscovery&&!await persistWorkflowBuyerResearch(env,{workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'},candidate,guard))contact=null;
       if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});
