@@ -1,0 +1,25 @@
+# Responsive Messages and approved-reference restoration
+
+The owner supplied a 28.55-second screen recording: Messages stays at “Checking your selected recipient…”, the workspace reports Unsynced changes, clicks on writing styles and Save now produce no visible progress, and an old short Professional working copy is flagged as not verified against the approved original.
+
+Goal: restore useful, responsive interaction and make explicit core-style selection/restoration reliably use the owner-approved source. Diagnose recipient waiting, synchronous browser work and actual save ownership separately before changing runtime behavior. The existing 30-second recipient deadline is an observed control lock, not proof of the entire freeze's cause.
+
+Acceptance: visible feedback for explicit actions on the next rendered frame; normal navigation and local review remain responsive during slow/failed CRM or saves; no duplicate saves or research on read-only clicks; recipient checks finish or expose a bounded retry and stale results cannot change another recipient/workspace. Measure browser long tasks and click latency with representative large data and delayed requests, including refresh/reopen and failed saves. Explicit style/restore actions must reproduce the canonical source frame, change only supported factual slots, preserve the previous working text/Undo, and survive save and reopen. Verify all four core styles and the unsent Delivery boundary.
+
+Preserve the canonical approved-reference text, saved/manual/approved drafts, references, contacts, synchronization conflict guards, exact recipient identity and separate approval/send permissions. No contact research or paid actions in this task; another window is handling Laura/Scott. Keep implementation isolated in its own checkout. Use controlled local HTTP/SQL/browser reproductions without external provider calls; private recovery content stays outside tracked artifacts. Publish only after applicable CI and exact-revision production proof, and distinguish that proof from authenticated customer acceptance.
+
+Rollback is a source revert; no destructive migration or deletion is authorized.
+
+## Observed causes and implementation
+
+A Messages refresh repeatedly parsed the entire workspace and recomputed the editor context. Presentation reads now share a synchronous, invalidating snapshot; async operations retain fresh reads. Style buttons retain their DOM identity and focus. Exact-recipient reopening reads only the selected CRM contact and filtered saved-script history, with workspace and identity checks preserved and an eight-second retry boundary.
+
+After a CRM save, an initially absent candidate compatibility ID is populated with the company ID already bound to the selected recipient. Comparing the raw optional ID retired the valid handoff, disabled a button under the pointer, and reset an active edit. Message ownership now compares that missing alias against its bound canonical ID. A different nonempty company ID, changed person, account, source or workspace still invalidates the operation. Generic CRM guards retain their original strict behavior outside this explicit message binding.
+
+Save traces separately found repeated decompression of the acknowledged workspace for Profile field status. The acknowledged decode is cached by its snapshot owner, version, cloud reference and exact local data strings. Merge/conflict callers receive detached copies; field status receives only its answer/status strings. Recovery reference proofs reuse only exact immutable stored roots and the active codec contract, within bounded memory. Every inventory, account guard, pointer CAS, pin release and retirement check still runs. The shared LZW decoder copies validated byte chunks into a bounded byte buffer directly, retaining the encoding format, dictionary rules, expansion limits and fatal UTF-8 validation.
+
+## Acceptance evidence and limits
+
+Controlled browser acceptance uses real authenticated HTTP/SQL fixtures, retained multi-megabyte research, a deliberately held CRM response, fourfold CPU slowdown, all four approved styles, exact Save/reopen, previous-draft recovery, desktop/mobile layouts, and zero additional workspace writes from read-only navigation. Canonical reference masters are unchanged. Existing saved/manual text is never silently replaced on opening; explicit style selection restores its approved frame and keeps the previous text recoverable.
+
+A separate local recovery-shaped stress profile measured a dirty save at about 101 seconds before persistence optimization and about 20 seconds after it under fourfold CPU slowdown, including a preceding autosave. The final normal-speed run acknowledged the save in about five seconds and rendered the next frame in about 54 ms. These are controlled diagnostic measurements, not authenticated production acceptance. The synthetic native journey separately acknowledged its saves in under a second, retained every approved frame and saved draft through a fresh browser, and produced no send activity. Exact-release proof and customer-workspace acceptance remain separate gates.

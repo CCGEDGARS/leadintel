@@ -248,10 +248,24 @@
     let complete=true;for(const item of Object.values(value))if(!pointerReferences(item,refs,depth+1,budget))complete=false;return complete;
   }
   function localReferenceState(){const rows=[];for(const store of [storage,session])if(store)for(let index=0;index<store.length;index++){const key=store.key(index);rows.push([store===storage?'local':'session',key,get(store,key)]);}return rows;}
+  const rootReferenceProofs=new Map();
+  function scanRootReferences(roots,references){
+    const codec=root.LeadIntelStateBudget,contract=referenceCodecContract(),seen=new Set();let complete=true,retainedChars=0;
+    for(const [store,key,raw] of roots){
+      const id=store+'\0'+key;seen.add(id);let proof=rootReferenceProofs.get(id);
+      if(!proof||proof.raw!==raw||proof.codec!==codec||proof.contract!==contract){const refs=new Set();proof={raw,codec,contract,complete:pointerReferences(raw,refs),refs:[...refs]};}
+      for(const reference of proof.refs)references.add(reference);if(!proof.complete)complete=false;
+      // Cache only exact immutable root strings. Inventory, account and pointer
+      // publication checks still run afresh. Bound retained roots and memory.
+      if(typeof raw==='string'&&raw.length<=4*1024*1024&&retainedChars+raw.length<=8*1024*1024&&(rootReferenceProofs.has(id)||rootReferenceProofs.size<128)&&proof.refs.length<=1000){rootReferenceProofs.set(id,proof);retainedChars+=raw.length;}else rootReferenceProofs.delete(id);
+    }
+    for(const id of rootReferenceProofs.keys())if(!seen.has(id))rootReferenceProofs.delete(id);
+    return complete;
+  }
   async function archiveKeys(){const keys=[];await archiveTransaction('readonly',store=>{const request=store.openKeyCursor();request.onsuccess=()=>{const cursor=request.result;if(cursor){keys.push(cursor.key);cursor.continue();}};});return keys;}
   async function archiveInventory(eligibleBaseline){
     const keys=await archiveKeys(),roots=localReferenceState(),references=new Set(),baselines=[],rawKeys=[],pins=new Set();let totalBytes=0,logicalBytes=0,scanned=0,rawCount=0,compressedCount=0,unknownCount=0,referencesComplete=true;
-    for(const row of roots)if(!pointerReferences(row[2],references))referencesComplete=false;
+    if(!scanRootReferences(roots,references))referencesComplete=false;
     // Enumerate account roots even when a large legacy snapshot set exceeds the
     // bounded scan. A partial inventory may compress, but can never collect.
     const ordered=[...keys.filter(key=>String(key).startsWith(ARCHIVE_PREFIX)||String(key).startsWith(SNAPSHOT_PIN_PREFIX)),...keys.filter(key=>!String(key).startsWith(ARCHIVE_PREFIX)&&!String(key).startsWith(SNAPSHOT_PIN_PREFIX))];

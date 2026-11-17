@@ -11,7 +11,7 @@ import {manualCrmDeliveryAssertions} from './manual-delivery-reconciliation.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail,normalizeDomain} from './enrichment.js';
 import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
-  listCrmCompanies,listCrmActivities,getCrmCompany,upsertCrmCompany,updateCrmCompany,
+  listCrmCompanies,listCrmActivities,getCrmCompany,getCrmRecipient,upsertCrmCompany,updateCrmCompany,
   setCrmPipelineStage,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,
   suppressCrmCompany,markCrmCustomer,deleteCrmCompany,upsertCrmContacts,
   patchCrmContact,archiveCrmContact,appendCrmActivity,writeCrmRecord
@@ -207,6 +207,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
       const isDelete=request.method==='DELETE'&&!company.action;const roles=isDelete?['owner']:WRITER_ROLES;const readOnly=request.method==='GET';const access=await requireMember(request,env,workspaceId,readOnly?[]:roles);if(access.error)return error(access.error,access.status,cors);
       if(!company.action){
         if(request.method==='GET'){
+          if(url.searchParams.get('view')==='recipient')return json(await getCrmRecipient(env.DB,access.context,company.id,{contactId:url.searchParams.get('contact_id')||'',personId:url.searchParams.get('person_id')||'',channel:url.searchParams.get('channel')||''}),200,cors);
           const detail=await getCrmCompany(env.DB,access.context,company.id);
           let inbox=[];try{inbox=(await env.DB.prepare("SELECT * FROM crm_enrichment_requests WHERE workspace_id=? AND company_id=? AND provider='apollo' AND phone_requested=1 AND webhook_received_at IS NOT NULL AND COALESCE(json_extract(response_summary_json,'$.projection_applied'),0)=0 ORDER BY created_at DESC LIMIT 50").bind(workspaceId,company.id).all()).results||[];}catch(error){if(!/no such table/i.test(String(error.message)))throw error;}
           for(const row of inbox)await applyApolloCrmPhoneResult(env.DB,row);
@@ -235,7 +236,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
         return error('Method not allowed',405,cors);
       }
       if(company.action==='activities'){
-        if(request.method==='GET')return json(await listCrmActivities(env.DB,access.context,company.id,{limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
+        if(request.method==='GET')return json(await listCrmActivities(env.DB,access.context,company.id,{limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||'',personId:url.searchParams.get('person_id')||'',channel:url.searchParams.get('channel')||''}),200,cors);
         if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');access.context.guard=await contactRequestGuard(request,env,access.context);access.context.writeAuthority=access.context.guard.writeAuthority;await access.context.guard();access.context.messageAssertions=[...await validateCrmScriptPackage(env,access.context,company.id,body),...await manualCrmDeliveryAssertions(env,access.context,company.id,body)];const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});await access.context.guard();return json(result,200,cors);}
         return error('Method not allowed',405,cors);
       }

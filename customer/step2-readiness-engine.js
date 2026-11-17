@@ -260,9 +260,9 @@
     if(bridge?.conflict)return {text:"Saved locally · resolve sync conflict",className:"problem"};
     if(!bridge?.session?.authenticated){pendingAnswerSaves.delete(id);return {text:"Saved in this browser",className:"local"};}
     // A field's receipt is independent of navigation or other unsaved workspace sections.
-    const acknowledged=root.LeadIntelWorkspacePersistence?.syncedBase?.(bridge?.workspace?.id)?.payload?.main;
+    const persistence=root.LeadIntelWorkspacePersistence,receipt=typeof persistence?.syncedProfileAnswer==='function'?persistence.syncedProfileAnswer(bridge?.workspace?.id,id):null,acknowledged=typeof persistence?.syncedProfileAnswer==='function'?null:persistence?.syncedBase?.(bridge?.workspace?.id)?.payload?.main;
     const local=readJson(root.localStorage,STORAGE_KEY,{}),reviewState=status=>["accepted","user"].includes(status)?"reviewed":status||"missing";
-    if(acknowledged&&clean(acknowledged.answers?.[id])===value&&reviewState(acknowledged.answerStatus?.[id])===reviewState(local.answerStatus?.[id])){pendingAnswerSaves.delete(id);return {text:"Saved to LeadIntel ✓",className:"synced"};}
+    if((receipt||acknowledged)&&clean(receipt?receipt.answer:acknowledged.answers?.[id])===value&&reviewState(receipt?receipt.status:acknowledged.answerStatus?.[id])===reviewState(local.answerStatus?.[id])){pendingAnswerSaves.delete(id);return {text:"Saved to LeadIntel ✓",className:"synced"};}
     if(root.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.())return {text:"Unsaved changes",className:"saving"};
     if(pendingAnswerSaves.has(id))return {text:"Saving…",className:"saving"};
     if(status.includes("synced to leadintel"))return {text:"Saved to LeadIntel ✓",className:"synced"};

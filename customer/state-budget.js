@@ -73,7 +73,10 @@
     if(raw.length%2||base64Encode(raw)!==value.data)invalid();
     const dictionary=Array.from({length:256},(_,i)=>String.fromCharCode(i));let next=256,previous='',size=0;const chunks=[];
     for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>maxDecodedBytes)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
-    try{return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(chunks.join(''),char=>char.charCodeAt(0)));}catch{invalid();}
+    // Copy byte chunks directly. Iterating a multi-megabyte joined string through
+    // Uint8Array.from repeatedly blocks save, recovery and reference checks.
+    const decoded=new Uint8Array(size);let offset=0;for(const chunk of chunks)for(let index=0;index<chunk.length;index++)decoded[offset++]=chunk.charCodeAt(index);
+    try{return new TextDecoder('utf-8',{fatal:true}).decode(decoded);}catch{invalid();}
   }
   function restoreCompressedWorkspace(value,maxEncodedBytes=MAX_RECORD_SYNC_BYTES){
     const decoded=decompressText(value,maxEncodedBytes,MAX_RESTORED_BUNDLE_BYTES);

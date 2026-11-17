@@ -9,6 +9,32 @@ function fixture(){
  return {h,b,choice:meta.scriptBuyer,reads:()=>reads};
 }
 const settle=async()=>{for(let n=0;n<15;n++)await new Promise(r=>setImmediate(r));};
+test('recipient verification uses the exact-contact lightweight CRM read when available',async()=>{
+ const {h,b,choice}=fixture();try{const before=h.item().drafts;let selected;b.getCrmCompany=async()=>{throw Error('Full company history must not be loaded');};b.getCrmRecipient=async(id,selection)=>{selected={id,...selection};return {ok:true,recipient_view:true,company:{id:'crm1',normalized_domain:'buyer.example',lifecycle_status:'prospect'},contacts:[{id:'c1',company_id:'crm1',external_person_id:'p1',name:'Alex Buyer',title:'Operations Director',work_email:'alex@buyer.example',email_status:'verified',verification_provider:'Apollo'}],activities:[]};};assert.equal(await h.w.openBuyerScripts(choice),true);assert.equal(JSON.stringify(selected),JSON.stringify({id:'crm1',contactId:'c1',personId:'p1',channel:'email'}));assert.equal(h.w.recipientReady(),true);assert.deepEqual(h.item().drafts,before);}finally{h.w.close();}
+});
+test('hydrating the already-bound company id keeps the recipient ready without another CRM read',async()=>{
+ const {h,choice,reads}=fixture();try{
+  assert.equal(await h.w.openBuyerScripts(choice),true);const count=reads(),before=h.item().drafts;
+  const key='leadintel_customer_v2_discovery',state=JSON.parse(h.w.localStorage.getItem(key));state.pipeline[0].crmId='crm1';h.w.localStorage.setItem(key,JSON.stringify(state));
+  h.w.dispatchEvent(new h.w.CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId:'w1'}}));
+  assert.equal(h.w.recipientReady(),true,'expected CRM id hydration must not retire the validated recipient');await settle();
+  assert.equal(reads(),count);assert.deepEqual(h.item().drafts,before);assert.equal(h.w.document.querySelector('[data-writing-style="curiosity"]').disabled,false);
+ }finally{h.w.close();}
+});
+test('hydrating a different company id rejects the recipient and preserves the saved draft',async()=>{
+ const {h,choice}=fixture();try{
+  assert.equal(await h.w.openBuyerScripts(choice),true);const before=h.item().drafts,key='leadintel_customer_v2_discovery',state=JSON.parse(h.w.localStorage.getItem(key));state.pipeline[0].crmId='another-company';h.w.localStorage.setItem(key,JSON.stringify(state));
+  h.w.dispatchEvent(new h.w.CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId:'w1'}}));await settle();
+  assert.equal(h.w.recipientReady(),false);assert.deepEqual(h.item().drafts,before);
+ }finally{h.w.close();}
+});
+test('expected company-id hydration retains the active message edit and ownership',()=>{
+ const h=mounted({selected:'professional',runtimeSetup:'window.reviewRender=renderAll;window.reviewEdit=()=>messageEditor.edit();window.reviewState=()=>messageEditor.state();'});try{
+  h.w.reviewEdit();h.q('outreach-email-body').value='Keep later manual text';h.q('outreach-email-body').dispatchEvent(new h.w.Event('input',{bubbles:true}));
+  const key='leadintel_customer_v2_discovery',state=JSON.parse(h.w.localStorage.getItem(key));state.pipeline[0].crmId='crm1';h.w.localStorage.setItem(key,JSON.stringify(state));h.w.reviewRender();
+  assert.equal(h.q('outreach-email-body').value,'Keep later manual text');assert.equal(h.w.reviewState().editing,true);
+ }finally{h.w.close();}
+});
 test('saved recipient recovers when workspace synchronization settles',async()=>{
  const {h,b,choice}=fixture();try{const before=h.item().drafts;b.resolvingSync=true;assert.equal(await h.w.openBuyerScripts(choice),false);assert.equal(h.w.recipientReady(),false);b.resolvingSync=false;h.w.dispatchEvent(new h.w.Event('leadintel:sync-settled'));await settle();assert.equal(h.w.recipientReady(),true);assert.deepEqual(h.item().drafts,before);}finally{h.w.close();}
 });
@@ -60,7 +86,7 @@ test('company refresh revalidation still rejects a changed contact and preserves
 test('recipient verification deadline clears pending, exposes retry and rejects the late response',async()=>{
  const {h,b,choice}=fixture();let release,expire;try{
  const get=b.getCrmCompany,originalTimer=h.w.setTimeout;
- h.w.setTimeout=(callback,ms,...args)=>ms===30000?(expire=callback,987654):originalTimer(callback,ms,...args);
+ h.w.setTimeout=(callback,ms,...args)=>ms===8000?(expire=callback,987654):originalTimer(callback,ms,...args);
  b.getCrmCompany=async()=>{await new Promise(r=>release=r);return get();};
  const pending=h.w.openBuyerScripts(choice);await settle();assert.equal(h.q('mw-updating-notice').dataset.state,'busy');assert.equal(h.q('mw-missing-facts').hidden,true);assert.equal(h.q('mw-editor-status').hidden,true);assert.equal(typeof expire,'function');expire();await pending;
  assert.doesNotMatch(h.q('mw-readiness-text').textContent,/Checking your selected recipient/);
