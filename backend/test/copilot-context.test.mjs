@@ -30,6 +30,8 @@ class FakeDB{
     return null;
   }
   all(sql){
+    if(/SELECT provider,active,verified_at/.test(sql))return [this.first(sql)];
+    if(/SELECT provider,verified_at,last_used_at/.test(sql))return [this.first(sql),{provider:'firecrawl',verified_at:'2026-11-17T00:00:00Z',encrypted_api_key:'FIRECRAWL-PRIVATE'}];
     if(/GROUP BY pipeline_stage/i.test(sql))return [{pipeline_stage:'Qualified',count:4},{pipeline_stage:'Contacted',count:3}];
     if(/FROM crm_companies/i.test(sql))return Array.from({length:40},(_,i)=>({id:`c${i}`,company_name:`Company ${i}`,website:`https://company${i}.example`,pipeline_stage:'Qualified',opportunity_score:90-i,updated_at:'2026-09-08T09:00:00Z'}));
     return [];
@@ -42,7 +44,7 @@ test('context uses authoritative server workspace state and ignores injected cli
   assert.equal(context.company.website,'https://safe.example');
   assert.notEqual(context.profile.company,'Injected Co');
   assert.equal(context.screen.step,4);assert.equal(context.screen.label,'Market Strategy');
-  assert.deepEqual(Object.keys(context).sort(),['activity','brand','company','crmActivities','crmSummary','deliveryActivity','discoverySummary','dossiers','goals','icps','intake','integrationStatus','markets','outreachSummary','profile','readiness','references','research','screen','signals','supportUsage','workspace'].sort(),'B2 (2026-10-25) adds the trail and more of the company; user appears only when the route supplies one');
+  assert.deepEqual(Object.keys(context).sort(),['activity','brand','company','crmActivities','crmSummary','deliveryActivity','discoverySummary','dossiers','goals','icps','intake','integrationStatus','markets','operations','outreachSummary','profile','readiness','references','research','screen','signals','supportUsage','workspace'].sort(),'B2 (2026-10-25) adds the trail and more of the company; user appears only when the route supplies one');
 });
 
 test('context summarizes CRM/discovery/outreach instead of dumping contact or message bodies',async()=>{
@@ -60,7 +62,7 @@ test('integration context exposes safe provider state and timestamps without key
   const context=await buildCopilotWorkspaceContext({DB:new FakeDB()},{workspaceId:'w1',role:'owner',currentScreen:{step:1,label:'Company & Market'}});
   const serialized=JSON.stringify(context.integrationStatus);
   for(const sentinel of ['REFRESH-SHOULD-NOT-LEAK','AI-SHOULD-NOT-LEAK','APOLLO-SHOULD-NOT-LEAK','••••1234','••••9999'])assert.equal(serialized.includes(sentinel),false,sentinel);
-  assert.match(serialized,/openai/i);assert.match(serialized,/apollo/i);assert.match(serialized,/gmail/i);
+  assert.match(serialized,/openai/i);assert.match(serialized,/apollo/i);assert.match(serialized,/gmail/i);assert.match(serialized,/firecrawl/i);assert.doesNotMatch(serialized,/FIRECRAWL-PRIVATE/);
 });
 
 test('context is bounded before model use by truncating large arrays and text',async()=>{

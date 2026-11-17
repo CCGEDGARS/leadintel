@@ -53,7 +53,7 @@ test('the context carries the person, their trail and more of the company, bound
   assert.deepEqual(context.intake,{priority_offers:'Retrofit automation for food plants',ideal_customer:'Food producers with 50-500 staff',exclusions:'No retail',buying_triggers:'New production line',value_proposition:'x'.repeat(600)},'only answered intake questions, each bounded');
   assert.deepEqual(context.brand,{companyDisplayName:'Acme Industrial SIA',senderName:'Jonathan Collins',senderTitle:'Founder',meetingPlatform:'zoom'},'no phone, e-mail or links');
   assert.deepEqual(context.goals,{successOutcome:'Ten qualified meetings a month'});
-  assert.deepEqual(context.references,{count:2,companies:['Latvijas Piens','Food Union'],segments:['Dairy processors','Bakeries'],activated:true});
+  assert.deepEqual(context.references,{count:2,companies:['Latvijas Piens','Food Union'],targets:[{name:'Latvijas Piens',url:'https://lpiens.lv/',country:''},{name:'Food Union',url:'https://foodunion.com/',country:''}],omitted:0,segments:['Dairy processors','Bakeries'],activated:true});
   assert.equal(context.dossiers.length,1);assert.deepEqual(context.dossiers[0],{domain:'lpiens.lv',company:'Latvijas Piens',status:'ready',checkedAt:'2026-10-24T09:00:00Z',facts:['Opened a new dairy line in Riga (2026)','Hiring maintenance engineers','Revenue 120 MEUR','4','5'],gaps:1});
   assert.equal(context.crmActivities.length,15);assert.deepEqual(Object.keys(context.crmActivities[0]).sort(),['channel','company','occurredAt','subject','type']);
   assert.deepEqual(context.deliveryActivity,{period:'last 30 days',sent:4,replies:1});

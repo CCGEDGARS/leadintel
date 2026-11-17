@@ -28,6 +28,9 @@ export function runDeterministicDiagnostics(context={}){
   if(step>=5&&!researchCount)diagnostics.push(issue('evidence','improve','discovery_without_research','Discovery has insufficient market evidence','Run or review market research before treating Discovery companies as evidence-backed opportunities.'));
   if(step>=5){const apollo=integration(context,'apollo');if(apollo&&text(apollo.state).toLowerCase()!=='connected')diagnostics.push(issue('readiness','improve','apollo_disconnected','Apollo is not connected','Decision-maker/contact enrichment may be limited until Apollo is connected.'));}
   if(step>=7){const gmail=integration(context,'gmail');if(!gmail||text(gmail.state).toLowerCase()!=='connected')diagnostics.push(issue('readiness','improve','gmail_disconnected','Gmail is not connected','Connect Gmail before using email delivery and reply-learning features.'));}
+  const latest=new Map();
+  for(const receipt of array(context.operations?.stages?.records)){const key=receipt.action||receipt.stage;if(!latest.has(key))latest.set(key,receipt);}
+  for(const receipt of latest.values())if(['failed','blocked','timed_out','partial','duplicate_hold'].includes(receipt.outcome))diagnostics.push(issue('execution','important',receipt.reference||String(receipt.stage),'A recent operation needs attention',`The recorded ${receipt.action||'workspace'} outcome is ${receipt.outcome}. This establishes an execution problem, not its root cause. Review the dedicated control and preserve saved work.`,{reference:receipt.reference,stage:receipt.stage,outcome:receipt.outcome,at:receipt.at}));
   return diagnostics;
 }
 

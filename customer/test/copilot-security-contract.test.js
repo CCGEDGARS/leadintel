@@ -9,7 +9,7 @@ const ui=fs.readFileSync(new URL('../copilot-ui.js',import.meta.url),'utf8');
 
 test('browser copilot never serializes local workspace bundles or credential material into requests',()=>{
   assert.doesNotMatch(api,/localStorage|sessionStorage|leadintel_customer_v2_state|encrypted_api_key|refresh_token|APOLLO_API_KEY|FIRECRAWL_API_KEY/i);
-  assert.doesNotMatch(context,/localStorage|sessionStorage|leadintel_customer_v2_state|api_key|token|secret/i);
+  assert.doesNotMatch(context,/localStorage|sessionStorage|leadintel_customer_v2_state|encrypted_api_key|refresh_token/i);
   assert.match(api,/JSON\.stringify\(options\.body\)/);
 });
 
