@@ -38,11 +38,12 @@
   let lastSyncBudget=null;
   let codecWorker=null,codecJobId=0;
   const codecJobs=new Map();
+  let decodedAcknowledgedBase=null;
 
   function runCodec(operation,value,options){
     if(typeof root.Worker!=='function')return root.LeadIntelStateBudget?.[operation]?.(value,options)||value;
     if(!codecWorker){
-      codecWorker=new root.Worker(new URL('workspace-codec-worker.js?v=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1',root.location.href));
+      codecWorker=new root.Worker(new URL('workspace-codec-worker.js?v=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1&byte-decode=20261117-v1',root.location.href));
       codecWorker.onmessage=event=>{const job=codecJobs.get(event.data?.id);if(!job)return;codecJobs.delete(event.data.id);root.clearTimeout(job.timer);if(event.data.error)job.reject(new Error(event.data.error));else job.resolve(event.data.result);};
       codecWorker.onerror=()=>failCodec(new Error('Workspace encoding failed; your local data was preserved'));
       codecWorker.onmessageerror=()=>failCodec(new Error('Workspace encoding response could not be read'));
@@ -239,15 +240,31 @@
       meta:{discovery:parseKey("leadintel_customer_v2_discovery_meta"),persistence:{explicit_saved:true}}
     };
   }
-  function syncedBase(workspaceId){
+  function decodedSyncedBase(workspaceId){
     const snapshot=readSnapshot();
     if(!snapshot?.server_synced||snapshot.workspace_id!==workspaceId||!Number.isSafeInteger(snapshot.server_version))return null;
-    const localPayload=payloadFromSnapshot();
+    const cached=decodedAcknowledgedBase,entries=Object.entries(snapshot.data||{});
     // Older snapshots kept only the browser representation. Reconstruct the
-    // same deterministic cloud encoding once, then keep exact acknowledgements.
-    try{const cloud=snapshot.server_payload||root.LeadIntelStateBudget?.prepareForSync?.(localPayload)?.payload||localPayload;
-      return {workspaceId,version:snapshot.server_version,payload:root.LeadIntelStateBudget?.restoreFromSync?.(cloud)||cloud,localPayload};
+    // same deterministic cloud encoding once. Readiness refreshes must not
+    // decompress the full acknowledged workspace again for every Profile field.
+    try{
+      if(!cached||cached.snapshot!==snapshot||cached.version!==snapshot.server_version||cached.cloud!==snapshot.server_payload||entries.length!==cached.entries.length||entries.some(([key,value],index)=>key!==cached.entries[index][0]||value!==cached.entries[index][1])){
+        const localPayload=payloadFromSnapshot(),cloud=snapshot.server_payload||root.LeadIntelStateBudget?.prepareForSync?.(localPayload)?.payload||localPayload;
+        decodedAcknowledgedBase={snapshot,version:snapshot.server_version,cloud:snapshot.server_payload,entries,value:{workspaceId,version:snapshot.server_version,payload:root.LeadIntelStateBudget?.restoreFromSync?.(cloud)||cloud,localPayload}};
+      }
+      return decodedAcknowledgedBase.value;
     }catch{return null;}
+  }
+  function syncedBase(workspaceId){
+    // A comparison or merge must never mutate the cached acknowledgement used
+    // by a later conflict check. Read-only field receipts use the narrow view.
+    const value=decodedSyncedBase(workspaceId);if(!value)return null;
+    return typeof root.structuredClone==='function'?root.structuredClone(value):JSON.parse(JSON.stringify(value));
+  }
+  function syncedProfileAnswer(workspaceId,id){
+    const main=decodedSyncedBase(workspaceId)?.payload?.main;if(!main)return null;
+    const answer=main.answers?.[id],status=main.answerStatus?.[id];
+    return {answer:typeof answer==='string'?answer:'',status:typeof status==='string'?status:''};
   }
   function buildActivationRecord(main={}){
     const activation=isObject(main.websiteActivation)?main.websiteActivation:{};const sources=Array.isArray(main.scrapedSources)?main.scrapedSources:[];const source=sources.find(item=>item?.type==="website"&&String(item?.text||"").trim());
@@ -482,5 +499,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,matchesAcknowledgedWrite,reuseAcknowledgedSave,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,syncedProfileAnswer,matchesAcknowledgedWrite,reuseAcknowledgedSave,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);

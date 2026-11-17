@@ -172,9 +172,9 @@ jobs:
 
   buyers-journey:
     runs-on: ubuntu-24.04
-    # The serial journey suite takes ~451s before setup/artifact overhead.
+    # The serial journeys plus large-workspace Messages acceptance take ~505s before setup/artifact overhead.
     # Keep every assertion and individual test deadline; allow the job to finish.
-    timeout-minutes: 10
+    timeout-minutes: 13
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -201,7 +201,7 @@ jobs:
         # while avoiding four competing browser processes on the same runner.
         # Quick Overview cases run in the mandatory profile-strategy-journey job;
         # avoid repeating those isolated research cases in the combined Buyers suite.
-        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 --test-skip-pattern='^Quick Overview' backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/manual-paid-lookup.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 --test-skip-pattern='^Quick Overview' backend/test/step1-journey.test.mjs backend/test/step5-journey.test.mjs backend/test/manual-paid-lookup.test.mjs backend/test/step6-journey.test.mjs backend/test/step7-journey.test.mjs customer/test/message-interaction-persistence.test.js
       - name: Upload controlled journey evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -220,6 +220,8 @@ jobs:
             /tmp/leadintel-step5-test-*/*.png
             /tmp/leadintel-step6-test-*/evidence.json
             /tmp/leadintel-step6-test-*/*.png
+            /tmp/leadintel-message-interaction-*/*.png
+            /tmp/leadintel-message-interaction-*/evidence.json
             /tmp/leadintel-step7-test-*/evidence.json
             /tmp/leadintel-step7-test-*/*.png
           if-no-files-found: warn

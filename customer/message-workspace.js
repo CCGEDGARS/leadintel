@@ -6,7 +6,7 @@
   const required=missing.filter(k=>k!=='calendly');
   if(syncConflict)return {kind:'blocked',canGenerate:false,text:'We found two versions of your workspace.',detail:'Choose which version to keep to continue.',action:'sync'};
   if(busy)return {kind:'busy',canGenerate:false,text:'Writing your message…'};
-  if(pending)return {kind:'loading',canGenerate:false,text:'Checking your selected recipient…'};
+  if(pending)return {kind:'loading',canGenerate:false,text:'Checking your selected recipient…',detail:'Your draft is preserved. You can keep navigating while the saved CRM contact is checked.'};
   if(!authenticated)return {kind:'blocked',canGenerate:false,text:'Sign in to load your saved recipient and message.',action:'buyer'};
   if(!ready&&recipientError)return {kind:'blocked',canGenerate:false,text:recipientError,action:'recipient-retry'};
   if(!ready)return {kind:'blocked',canGenerate:false,text:'Confirm a recipient in Buyers to start.',action:'buyer'};
@@ -160,7 +160,20 @@
   if(Observer){let width;const observer=new Observer(entries=>{const next=entries[0]?.contentRect.width;if(next!==width){width=next;resize();}});observer.observe(document.querySelector('.mw-editor'));}
   document.fonts?.ready.then(resize);resize();
  }
- function paintStyles(document){const select=document.getElementById('message-mode'),host=document.getElementById('mw-style-options');if(!select||!host)return;host.replaceChildren();for(const option of new Map([...select.options].map(option=>[option.value,option])).values()){const info=option.value==='storyselling'?['storyselling','Storyselling','A clear, relevant scene']:styles.find(s=>s[0]===option.value);if(!info)continue;const button=document.createElement('button');button.type='button';button.className='mw-style';button.dataset.writingStyle=option.value;button.setAttribute('aria-pressed',String(select.value===option.value));const title=document.createElement('strong'),description=document.createElement('span');title.textContent=info[1];description.textContent=info[2];button.append(title,description);host.append(button);}}
+ function paintStyles(document){
+  const select=document.getElementById('message-mode'),host=document.getElementById('mw-style-options');if(!select||!host)return;
+  const kept=new Set();let index=0;
+  for(const option of new Map([...select.options].map(option=>[option.value,option])).values()){
+   const info=option.value==='storyselling'?['storyselling','Storyselling','A clear, relevant scene']:styles.find(s=>s[0]===option.value);if(!info)continue;
+   let button=[...host.children].find(node=>node.dataset.writingStyle===option.value);
+   if(!button){button=document.createElement('button');button.type='button';button.className='mw-style';button.dataset.writingStyle=option.value;button.append(document.createElement('strong'),document.createElement('span'));}
+   if(button.getAttribute('aria-pressed')!==String(select.value===option.value))button.setAttribute('aria-pressed',String(select.value===option.value));
+   if(button.firstElementChild.textContent!==info[1])button.firstElementChild.textContent=info[1];if(button.lastElementChild.textContent!==info[2])button.lastElementChild.textContent=info[2];
+   if(host.children[index]!==button)host.insertBefore(button,host.children[index]||null);kept.add(button);index++;
+  }
+  for(const button of [...host.children])if(!kept.has(button))button.remove();
+ }
+
  function renderMandatoryScripts(document,context={}){
   const host=document.getElementById('mw-approved-library-items');if(!host)return;
   if(context.channel==='linkedin'){document.getElementById('mw-approved-library').hidden=true;return;}
@@ -224,7 +237,7 @@
   q('mw-trigger-summary').textContent=context.factPreparation?.opening==='verified-summary'?'Verified company context used. Unsupported milestone and date details omitted.':context.factPreparation?.opening==='approved-omission'?'Research context retained. No unverified project opening was added.':context.trigger?(context.appliedTriggerUrl===context.trigger.url?'Applied in the email.':'Selected for the next personalization.'):'';
     const userStyle=context.personalStyle,stylePanel=q('mw-personal-style');
   if(stylePanel){stylePanel.hidden=linkedin||!['professional','curiosity','friendly','brutal'].includes(context.selectedStyle);q('mw-use-my-style').checked=Boolean(userStyle?.active);q('mw-use-my-style').disabled=!userStyle||context.busy;q('mw-personal-style-status').textContent=userStyle?'My revision '+userStyle.revision+(userStyle.active?' · Active':' · Inactive'):'No personal version saved yet';}
-  q('mw-style-help').textContent=linkedin?'Choose a style for your LinkedIn message.':'Choose a template to personalise for this recipient. Originals stay protected.';
+  q('mw-style-help').textContent=context.pending?'Checking your saved recipient before applying an approved template.':linkedin?'Choose a style for your LinkedIn message.':'Choose a template to personalise for this recipient. Originals stay protected.';
   if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent=context.busy?'Preparing '+selectedName+'. Displayed email: '+appliedName+'.':selectedName+' has not been applied. Displayed email: '+appliedName+'. '+(context.generationError?'Preparation failed; your text is preserved. Click Retry to retry.':context.automaticUpdate?'Use Restore selected template in Tools.':'Your current text is preserved.');
   if(context.generationError&&!context.busy&&context.selectedStyle===context.appliedStyle)q('mw-style-help').textContent='Update failed. Your previous message is preserved. Click Retry to retry the selected style.';
   if(context.selectedStyle==='original'&&!context.busy)q('mw-style-help').textContent='Your saved AI draft is preserved. Open Writing Assistant to create or edit a message, or choose a protected template.';

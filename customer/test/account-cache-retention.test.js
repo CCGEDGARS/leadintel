@@ -36,6 +36,16 @@ test('foreground publication durably commits without waiting for unrelated archi
   assert.equal((await raw(r.indexedDB,old)).format,'leadintel-archive-gzip-v2');
  }finally{releaseHistory();await saving.catch(()=>{});}
 });
+test('unchanged encoded roots reuse their reference proof and changed roots retain the newly referenced snapshot',async()=>{
+ const r=setup();await r.api.pending;Object.assign(r.root,{btoa,atob});vm.runInNewContext(fs.readFileSync(require.resolve('../state-budget.js'),'utf8'),r.root);
+ const key='leadintel_customer_v2_discovery',a=PREFIX+'proof-a',b=PREFIX+'proof-b',current=PREFIX+'proof-current';
+ await write(r.indexedDB,a,JSON.stringify(baseline(1)));await write(r.indexedDB,current,JSON.stringify(baseline(3)));r.values.set(PTR,pointer(current));
+ const setRoot=target=>r.root.localStorage.setItem(key,JSON.stringify({saved:JSON.parse(pointer(target)),evidence:'Retained evidence ā😀. '.repeat(4000)}));setRoot(a);
+ const codec=r.root.LeadIntelStateBudget,decode=codec.restoreLocalStorageValue;let reads=0;codec.restoreLocalStorageValue=(...args)=>{reads++;return decode(...args);};
+ await r.api.getRecoveryStorageDiagnostics({eligibleBaseline:eligible});const first=reads;assert.ok(first>0);await r.api.getRecoveryStorageDiagnostics({eligibleBaseline:eligible});assert.equal(reads,first,'unchanged roots must not be repeatedly decompressed');
+ await write(r.indexedDB,b,JSON.stringify(baseline(1)));setRoot(b);await r.api.compactRecoveryStorage({eligibleBaseline:eligible});
+ assert.ok(reads>first,'changed encoded bytes invalidate the proof');assert.equal(await raw(r.indexedDB,a),undefined);assert.ok(await raw(r.indexedDB,b),'the new reference remains protected from collection');assert.ok(await raw(r.indexedDB,current));
+});
 
 test('foreground publication reclaims space and retries once after a real archive quota failure',async()=>{
  const r=setup();await r.api.pending;const timers=[];
