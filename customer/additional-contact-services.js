@@ -141,7 +141,8 @@
       const d=data,p=d.profile||{},phone=d.phone||{},summary=[p.status==='provider_reported'?['Profile · provider reported',p.title,p.company,p.seniority,p.city,p.country,p.linkedinUrl,p.source?'Source: '+p.source:''].filter(Boolean).join(' · '):'Profile · '+String(p.status||'not_requested').replaceAll('_',' '),phone.number?phone.number+' · provider listing · reachability and ownership unconfirmed':'Saved phone check · '+String(phone.status||'not_requested').replaceAll('_',' ')+(phone.reason?' · '+phone.reason:'')];
       const acceptedEmail=Boolean(adapter?.email?.(candidate,person));
       const success=acceptedEmail?'<p class="additional-contact-note" style="color:#0b6b57;font-weight:600" role="status">Email confirmed · ready to proceed.</p>':'';
-      return success+'<details class="additional-contact-details"'+(!acceptedEmail&&d.status==='partial'?' open':'')+'><summary>Paid lookup details'+(p.status==='conflict'?' · separate profile needs review':d.status==='partial'?' · checks incomplete':'')+'</summary><p class="additional-contact-note">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Saved checks need review':'No new data')+' · '+esc(d.checkedAt)+esc(help)+esc(latest)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>'+(acceptedEmail?'Email remains confirmed. Separate profile or phone checks need review.':'Latest check needs review; previously found details retained.'):'')+'</p></details>';
+      const phoneResult=phone.number?'<p class="additional-contact-note" role="status">Phone found · '+esc(phone.number)+' · Provider listing; ownership and reachability unconfirmed.</p>':phone.status==='not_found'?'<p class="additional-contact-note" role="status">Phone lookup finished · No number found.</p>':'';
+      return success+phoneResult+'<details class="additional-contact-details"'+(!acceptedEmail&&d.status==='partial'?' open':'')+'><summary>Paid lookup details'+(p.status==='conflict'?' · separate profile needs review':d.status==='partial'?' · checks incomplete':'')+'</summary><p class="additional-contact-note">'+summary.map(esc).join('<br>')+'<br>'+esc(d.status==='updated'?'Data updated':d.status==='partial'?'Saved checks need review':'No new data')+' · '+esc(d.checkedAt)+esc(help)+esc(latest)+(Number.isFinite(d.costMicro)?' · Treg lookup total $'+(d.costMicro/1000000).toFixed(4):'')+(d.lastAttempt?.status==='partial'?'<br>'+(acceptedEmail?'Email remains confirmed. Separate profile or phone checks need review.':'Latest check needs review; previously found details retained.'):'')+'</p></details>';
     }
     if(adapter?.baseEmail?.(candidate,person)&&!adapter?.email?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return '<p class="additional-contact-note">Company email found. Complete the enabled Hunter verification before using the flow.</p>';
     const result=outcomes.get(key(candidate,person))||person.contactVerification?.issues?.join(' · ');
@@ -172,7 +173,7 @@
       person=candidate.people.find(p=>String(p.id)===personId);
       if(!phoneOnly&&!dataLookup&&adapter?.email?.(candidate,person))return true;
       if(!phoneOnly&&!dataLookup&&adapter?.baseEmail?.(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
-      return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly});
+      return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly,paidOnly});
     }catch(error){if(current()){record(candidate,person,error.message||'Public contact checks need attention.',{status:'error'});adapter?.toast?.(error.message);}return false;}})();
     task.intent=intent;task.current=current;publicChecking.set(identity,task);try{return await task;}finally{if(publicChecking.get(identity)===task)publicChecking.delete(identity);}
   }
@@ -193,9 +194,9 @@
     })();task.current=current;task.automatic=false;running.set(identity,task);try{return await task;}finally{if(running.get(identity)===task)running.delete(identity);}
   }
   function savedPhone(candidate,person){return Boolean(adapter?.phone?.(candidate,person)||safeData(candidate,person)?.phone?.status==='provider_listed'&&safeData(candidate,person).phone.number);}
-  async function run(candidate,person,{automatic=false,dataLookup=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
-    const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly}),existing=running.get(identity);
-    if(existing?.current?.()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly});}
+  async function run(candidate,person,{automatic=false,dataLookup=false,paidOnly=false,channel,phoneOnly=channel==='phone',emailOnly=channel==='email'}={}){
+    const identity=key(candidate,person),current=buyerOperation(candidate,person),intent=requestIntent({automatic,dataLookup,phoneOnly,emailOnly,paidOnly}),existing=running.get(identity);
+    if(existing?.current?.()){if(existing.intent===intent)return existing;await existing;if(!current())return false;return run(candidate,person,{automatic,dataLookup,phoneOnly,emailOnly,paidOnly});}
     const pendingToken={};const pendingPerson=person;let progressTimer;
     const report=label=>{paidProgress.set(identity,{label,startedAt:paidProgress.get(identity)?.startedAt||Date.now(),current});adapter.render();};
     const execute=(async()=>{
@@ -221,12 +222,12 @@
           const includePhone=!emailOnly&&service==='treg'&&policy.phoneEnabled===true&&(!automatic||!savedPhone(candidate,person)),includeEmail=!phoneOnly&&(service!=='treg'||policy.enabled===true)&&(!automatic||!adapter.email(candidate,person));
           if(!includeEmail&&!includePhone)return true;
           const lookupData=automatic?includePhone:dataLookup||includePhone;
-          if(dataLookup&&!automatic){
+          if(dataLookup&&!automatic&&!paidOnly){
             if(service!=='treg')throw Error('Data confirmation requires Treg.');
             const choice=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${check().manualFitPending?'Purchasing-fit review is still pending. This is a manual contact lookup only. ':''}${includeEmail?'research work email and professional profile':'phone only; no paid email or profile lookup'}${includePhone?'; find a phone number':''}. Estimated ${includeEmail&&includePhone?'€0.50/contact':includeEmail?'€0.30/contact':'€0.20 per number found'}. Actual research costs vary. Treg request ceilings: ${includeEmail?'$0.125 for email + profile':''}${includeEmail&&includePhone?' plus ':''}${includePhone?'$0.25 for phone':''}. Saved phases are reused. Phone results remain provider-listed unless separately confirmed. This action does not send messages.`,{title:phoneOnly?'Confirm phone':'Confirm data',action:includeEmail&&includePhone?'Confirm email + phone':includePhone?'Confirm phone':'Confirm email'})??false);
             if(!choice||!current())return false;
           }
-          if(!dataLookup&&!automatic){
+          if(!dataLookup&&!automatic&&(!paidOnly||service!==policy.provider)){
             const description=service==='treg'?'Treg work-email finding and delivery verification':service==='apollo'?'Apollo email enrichment':'Hunter email finding and, if needed, one delivery verification';
             const approved=await (root.LeadIntelDialogs?.confirm(`${person.publicName||person.name} at ${candidate.company}: ${check().manualFitPending?'Purchasing-fit review is still pending. This is a manual contact lookup only. ':''}use ${description} with your provider credits. ${service==='treg'?'Estimated €0.30/contact for research and AI; Treg finding and verification are capped at $0.075 combined. Costs vary, and this action does not send messages. ':''}${receipts.length?'Apollo has not confirmed an email. ':''}Limits: ${policy.dailyLimit} provider lookups per day, ${policy.monthlyLimit} per month. A lookup can return no confirmed email.`,{title:'Find email with additional services',action:service==='hunter'?'Find with Hunter':'Find work email'})??false);
             if(!current())return false;
@@ -268,19 +269,21 @@
             if(mismatches.length)throw Object.assign(Error('Contact result identity does not match the selected buyer ('+[...new Set(mismatches)].join(', ')+'); result was not applied.'),{code:'CONTACT_IDENTITY_MISMATCH'});
             if(result.contactData){result.contactData=safeData(candidate,person,result.contactData);person.contactData=result.contactData;adapter?.saveOutcome?.(candidate,person);}
             const cost=result.research?.costMicro;
-            const outcome=result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
-            receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${result.reason?': '+result.reason:''}`);
+            const outcome=phoneOnly?(data?.lastAttempt?.phone||data?.phone?.status||contact?.phone_status||result.request?.status||result.research?.status||'not_found'):result.research?.status||result.request?.status||(result.contact?'verified':'not_found');
+            const reason=phoneOnly?(data?.lastAttempt?.phoneReason||data?.phone?.reason||(!data?result.reason:'')):result.reason;
+            receipts.push(`${name} · ${outcome}${Number.isFinite(cost)?' · Treg cost $'+(cost/1000000).toFixed(4):''}${result.cached?' (saved result; no new lookup)':''}${reason?': '+reason:''}`);
             if(result.contact){
               report('Saving checked contact result');
               await adapter.accept(candidate,person,result);
               if(!current())return false;person=candidate.people.find(p=>String(p.id)===String(personId));
-              record(candidate,person,receipts.join(' · '),{status:adapter.email(candidate,person)?'verified':'not_verified'});
+              record(candidate,person,receipts.join(' · '),{status:(phoneOnly?adapter.confirmedPhone?.(candidate,person):adapter.email(candidate,person))?'verified':'not_verified'});
               if(service==='hunter'&&result.verification)await adapter.saveHunter?.(candidate,person,result.contact.work_email,result.verification);
               if(!dataLookup&&adapter.baseEmail?.(candidate,person)&&!adapter.email(candidate,person)&&root.LeadIntelServiceSettings?.hunterEnabled?.())return automatic?false:verifyHunter(candidate,person);
-              return Boolean(adapter.email(candidate,person));
+              return phoneOnly?savedPhone(candidate,person):Boolean(adapter.email(candidate,person));
             }
             if(outcome==='processing'){record(candidate,person,receipts.join(' · ')+' · A lookup is in progress; retry after it completes.');return false;}
             record(candidate,person,receipts.join(' · '));
+            if(phoneOnly&&savedPhone(candidate,person))return true;
           }catch(error){
             if(!current())return false;
             receipts.push(`${/^ADDITIONAL_CONTACT_(?:DAILY|MONTHLY|COMPANY)_LIMIT$/.test(error.code||'')?'LeadIntel · blocked':name+' · error'}: ${error.message}`);record(candidate,person,receipts.join(' · '),{status:'error',lookup:{provider:service,phone:includePhone,email:includeEmail,code:error.code||'PROVIDER_ERROR'}});
