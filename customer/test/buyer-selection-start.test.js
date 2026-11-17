@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),{JSDOM}=require('jsdom');
 const D=require('../discovery-engine.js'),source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function runtime(){
- const candidate={company:'Example',domain:'example.com',people:[],peopleStatus:'idle'},calls=[],data=new Map();
- const b={workspace:{id:'one'},session:{authenticated:true,user:{id:'owner'}},conflict:false};
+ const candidate={company:'Example',domain:'example.com',crmId:'crm',people:[],peopleStatus:'idle'},calls=[],data=new Map();
+ const b={workspace:{id:'one'},session:{authenticated:true,user:{id:'owner'}},conflict:false,getCrmCompany:async id=>({ok:true,company:{id,workspace_id:'one',normalized_domain:'example.com',lifecycle_status:'prospect'}})};
  const ctx={console,URL,URLSearchParams,AbortController,DOMException,CustomEvent:class{},setTimeout,clearTimeout,LeadIntelDiscovery:D,LeadIntelServerBridge:b,localStorage:{getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,String(value)),removeItem:key=>data.delete(key)},document:{getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[]},navigator:{languages:[]},addEventListener(){},removeEventListener(){},dispatchEvent(){}};
  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(source.replace(/\ninitDiscoveryWhenReady\(\);\s*$/,''),ctx);
  vm.runInContext('discovery={candidates:[],selectedProspects:[]}',ctx);
@@ -80,14 +80,14 @@ test('rapid clicks launch once, explain errors in the card and release the contr
  const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);
  const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});assert.ok(r.candidate.__leadIntelBuyerStart);
  assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),false);
- reject(Error('Research service unavailable'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStart,undefined);assert.equal(r.candidate.__leadIntelBuyerStartMessage,'Research service unavailable');assert.equal(JSON.stringify(r.candidate).includes('__leadIntel'),false,'ephemeral button state is never saved');
+ await new Promise(setImmediate);reject(Error('Research service unavailable'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStart,undefined);assert.equal(r.candidate.__leadIntelBuyerStartMessage,'Research service unavailable');assert.equal(JSON.stringify(r.candidate).includes('__leadIntel'),false,'ephemeral button state is never saved');
  r.ctx.searchDecisionMakers=async()=>true;assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),true);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
 });
 test('manual retry cannot bypass current selection, authentication or synchronization',async()=>{
  for(const reason of ['removed','signed-out','conflict']){const r=manualResearchRuntime();if(reason==='removed')r.ctx.buyerSelectionRows=()=>[];if(reason==='signed-out')r.b.session.authenticated=false;if(reason==='conflict')r.b.conflict=true;assert.equal(await r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true}),false);assert.equal(r.calls.length,0);assert.ok(r.candidate.__leadIntelBuyerStartMessage);}
 });
 test('late research failure cannot write feedback into a replacement workspace',async()=>{
- const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});r.b.workspace.id='two';reject(Error('Old workspace failure'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
+ const r=manualResearchRuntime();let reject;r.ctx.searchDecisionMakers=()=>new Promise((resolve,no)=>reject=no);const first=r.ctx.findPotentialDecisionMakers('example.com',{explicitSelection:true});await new Promise(setImmediate);r.b.workspace.id='two';reject(Error('Old workspace failure'));assert.equal(await first,false);assert.equal(r.candidate.__leadIntelBuyerStartMessage,undefined);
 });
 
 test('a failed first selection keeps the specific readiness reason instead of replacing it with a roles hint',async()=>{
@@ -95,7 +95,7 @@ test('a failed first selection keeps the specific readiness reason instead of re
 });
 
 test('a fresh qualified selection captures the acknowledged CRM identity before starting its job',async()=>{
- const {ctx,candidate,calls}=runtime();ctx.discovery={candidates:[candidate],selectedProspects:[]};Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),saveCandidate:async()=>{await Promise.resolve();candidate.crmId='acknowledged-company';return true;}});ctx.startSelectedBuyerResearch=async selected=>{calls.push(selected.crmId);return true;};
+ const {ctx,candidate,calls}=runtime();delete candidate.crmId;ctx.discovery={candidates:[candidate],selectedProspects:[]};Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),saveCandidate:async()=>{await Promise.resolve();candidate.crmId='acknowledged-company';return true;}});ctx.startSelectedBuyerResearch=async selected=>{calls.push(selected.crmId);return true;};
  assert.equal(await ctx.selectQualifiedForBuyers(0),true);assert.equal(ctx.discovery.selectedProspects[0].crmId,'acknowledged-company');assert.deepEqual(calls,['acknowledged-company']);
 });
 

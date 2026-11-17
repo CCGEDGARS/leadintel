@@ -902,7 +902,7 @@ async function extractResearchPages(results,mode,signal,{previouslyExtracted=[],
       };
       // The batch signal also cancels individual requests if its extraction deadline is reached.
       const cancelChild=()=>{if(run&&!run.controller.signal.aborted){run.stopReason="Evidence extraction cancelled";run.controller.abort();}};signal?.addEventListener("abort",cancelChild,{once:true});
-      try{return run?await marketResearchRequest(run,scrape,35000,"Page extraction",receipt):await scrape(signal);}finally{signal?.removeEventListener("abort",cancelChild);}
+      try{const page=run?await marketResearchRequest(run,scrape,35000,"Page extraction",receipt):await scrape(signal);run?.acceptResults?.([page]);return page;}finally{signal?.removeEventListener("abort",cancelChild);}
     }catch(error){assertMarketResearchRun(run,signal);run?.recordError?.("Firecrawl extraction",item.url,error);return item;}
   },{concurrency:2});
 }
@@ -1065,6 +1065,9 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
   const publish=()=>{assertMarketResearchRun(run);state.market.researchExecution=JSON.parse(JSON.stringify(run.execution));if(saveState()===false)throw Error("Research evidence could not be saved; resolve workspace synchronization before retrying");assertMarketResearchRun(run);renderResearchStatus();};
   const recordResearchError=(provider,query,error)=>{assertMarketResearchRun(run);if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};run.recordError=recordResearchError;
   const addResults=rows=>{assertMarketResearchRun(run);results=LeadIntelMarket.mergeResearchResults(results,rows||[]).slice(0,limits.maxStoredResults*10);state.market.researchResults=mergeRetainedResearchEvidence(previous.results,results);};
+  // Each completed provider/page owns a checkpoint. A pending sibling must
+  // never make already acquired evidence disappear at cancellation or timeout.
+  run.acceptResults=rows=>{addResults(rows);publish();};
   const updateProgress=()=>{assertMarketResearchRun(run);if(retryOnly)state.market.openAiRetryProgress={...state.market.openAiRetryProgress,completed:completedJobs,total:totalJobs};state.market.researchProgress={completed:completedJobs,total:totalJobs};taskCentre?.update(taskId,{completed:completedJobs,total:totalJobs,stage:'Checking market evidence',resultCount:results.length});publish();};
   try{
     const ready=await marketResearchRequest(run,signal=>ensureMarketResearchWorkspace(mode,run.context,signal),2000,"Workspace check");if(!ready)return;assertMarketResearchRun(run);
@@ -1093,11 +1096,11 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
         try{
           const found=await withOpenAiRetry(attempt=>{assertMarketResearchRun(run);if(retryOnly)state.market.openAiRetryProgress={...state.market.openAiRetryProgress,attempt,deadlineAt:Math.min(run.deadlineAt,Date.now()+runtime.openAiTimeoutMs)};return marketResearchRequest(run,signal=>searchOpenAiWeb(attempt===1?query:{...query,query:cleanOpenAiResearchQuery(query.query).slice(0,120)},limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search",job.openai);},{retryTimeouts:true,sleep:delay=>marketResearchRequest(run,signal=>new Promise((resolve,reject)=>{const timer=setTimeout(resolve,delay);signal.addEventListener("abort",()=>{clearTimeout(timer);reject(marketResearchAbortError());},{once:true});}),Math.max(1,delay+100),"Retry delay")});
           assertMarketResearchRun(run);if(!found.available){openAiAvailable=false;recordResearchError("OpenAI",query.query,found.reason);return [];}
-          openAiSuccesses++;if(found.warning)recordResearchError("OpenAI",query.query,found.warning);return found.results;
+          openAiSuccesses++;if(found.warning)recordResearchError("OpenAI",query.query,found.warning);run.acceptResults(found.results);return found.results;
         }catch(error){assertMarketResearchRun(run);openAiFailures++;recordResearchError("OpenAI",query.query,error);return [];}
       };
-      const firecrawlJob=async()=>{if(!job.firecrawl)return [];try{const rows=await marketResearchRequest(run,signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl search",job.firecrawl);assertMarketResearchRun(run);firecrawlSuccesses++;return rows;}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Firecrawl",query.query,error);return [];}};
-      const found=await Promise.all([openAiJob(),firecrawlJob()]);assertMarketResearchRun(run);addResults(LeadIntelMarket.mergeResearchResults(...found));completedJobs++;updateProgress();return found;
+      const firecrawlJob=async()=>{if(!job.firecrawl)return [];try{const rows=await marketResearchRequest(run,signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl search",job.firecrawl);assertMarketResearchRun(run);firecrawlSuccesses++;run.acceptResults(rows);return rows;}catch(error){assertMarketResearchRun(run);firecrawlFailures++;recordResearchError("Firecrawl",query.query,error);return [];}};
+      const found=await Promise.all([openAiJob(),firecrawlJob()]);assertMarketResearchRun(run);completedJobs++;updateProgress();return found;
     };
     const verificationReceipt=requestsGemini&&!retryOnly?recordMarketResearchReceipt(run,"gemini","verification","Collected evidence"):null;
     const customJobs=customSources.map((url,index)=>({url,index,receipt:recordMarketResearchReceipt(run,"firecrawl","custom_source",url)}));
@@ -1137,8 +1140,11 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
     try{if(marketResearchScopeCurrent(run)&&started){
       if(researchElapsedTimer===elapsedTimer)researchElapsedTimer=null;
       const cancelled=run.controller.signal.aborted;for(const receipt of run.execution.receipts)if(["planned","running"].includes(receipt.status)){receipt.status=receipt.status==="planned"?"not_run":"cancelled";receipt.completedAt=Date.now();}
-      if(cancelled)run.execution.status="cancelled";run.execution.completedAt=Date.now();
-      for(const provider of ["openai","firecrawl","gemini"])if(state.market.researchSourceStatus[provider]==="running")state.market.researchSourceStatus[provider]="unavailable";
+      if(cancelled){run.execution.status="cancelled";state.market.researchErrors=[{provider:"LeadIntel",query:"Research run",message:run.stopReason||"Market research cancelled"},...state.market.researchErrors].slice(0,12);}run.execution.completedAt=Date.now();
+      for(const provider of ["openai","firecrawl","gemini"])if(state.market.researchSourceStatus[provider]==="running"){
+        const receipts=run.execution.receipts.filter(row=>row.provider===provider),completed=receipts.some(row=>["complete","zero_results"].includes(row.status));
+        state.market.researchSourceStatus[provider]=completed?(receipts.every(row=>["complete","zero_results"].includes(row.status))?"complete":"partial"):"unavailable";
+      }
       if(state.market.researchVerification?.status==="running")state.market.researchVerification={...state.market.researchVerification,status:"unavailable",reason:"Research stopped before verification completed"};
       if(!results.length&&previous.results.length){state.market.researchQuality=previous.quality;state.market.researchContextFingerprint=previous.fingerprint||"stale:rerun-failed";state.market.researchContextStale=true;}
       state.market.researchResults=mergeRetainedResearchEvidence(previous.results,state.market.researchResults);
@@ -1366,7 +1372,7 @@ function renderResearchStatus(){
   if(feedback){
     const errors=[...(state.market.researchErrors||[]),...(state.market.researchQuality?.gaps||[]).map(gap=>({provider:"Evidence coverage",message:gap})),...(sources.gemini==="unavailable"?[{provider:"Gemini",message:state.market.researchVerification?.reason||"Verification unavailable"}]:[])];const show=status==="error"||status==="partial";
     feedback.hidden=!show;feedback.dataset.status=status;
-    if(show)feedback.innerHTML=`<div><span class="eyebrow">Research quality</span><h4>${status==="partial"?"Research coverage gaps":"Research run failed"}</h4><p>${status==="partial"?"Saved evidence is available. Incomplete checks remain clearly marked.":"No public evidence was saved. Review the scope and try again."}</p></div>${errors.length?`<details class="research-check-details"><summary>View incomplete checks (${errors.length})</summary><ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul></details>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the research settings to change sources or add specific URLs.</p>`}`;
+    if(show)feedback.innerHTML=`<div><span class="eyebrow">Research quality</span><h4>${status==="partial"?"Research coverage gaps":"Research run failed"}</h4><p>${status==="partial"?"Saved evidence is available. Incomplete checks remain clearly marked.":"No public evidence was saved. Review the scope and try again."}</p></div>${errors.length?`<details class="research-check-details" ${status==="error"?"open":""}><summary>View incomplete checks (${errors.length})</summary><ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul></details>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the research settings to change sources or add specific URLs.</p>`}`;
     else feedback.innerHTML="";
   }
   const actions=[["run-market-research","Quick Overview","Retry Quick Overview"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Deep Analysis","Retry Deep Analysis"]];

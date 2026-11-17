@@ -193,10 +193,12 @@ export async function handleCrmRoute(request,env,corsOverride={}){
   if(!path.startsWith('/api/crm/'))return null;
   const workspaceId=workspace(url);if(!workspaceId)return error('workspace_id is required',400,cors,'CRM_WORKSPACE_REQUIRED');
   try{
-    if(path==='/api/crm/companies'){
+    if(path==='/api/crm/companies'||path==='/api/crm/companies/company-research'){
+      const companyOnly=path==='/api/crm/companies/company-research';
       const access=await requireMember(request,env,workspaceId,request.method==='POST'?WRITER_ROLES:[]);if(access.error)return error(access.error,access.status,cors);
+      if(companyOnly&&request.method!=='POST')return error('Method not allowed',405,cors);
       if(request.method==='GET')return json(await listCrmCompanies(env.DB,access.context,{q:url.searchParams.get('q')||'',lifecycle:url.searchParams.get('lifecycle')||'',pipeline_stage:url.searchParams.get('pipeline_stage')||'',limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
-      if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body)return error('CRM company payload is required',400,cors,'CRM_PAYLOAD_REQUIRED');const result=await upsertCrmCompany(env.DB,access.context,{...body,...(Array.isArray(body.contacts)?{contacts:body.contacts.map(untrustedContact)}:{})});return json(result,result.created?201:200,cors);}
+      if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body)return error('CRM company payload is required',400,cors,'CRM_PAYLOAD_REQUIRED');const result=await upsertCrmCompany(env.DB,access.context,{...body,...(companyOnly?{intelligence_scope:'company'}:{}),...(Array.isArray(body.contacts)?{contacts:body.contacts.map(untrustedContact)}:{})});return json(result,result.created?201:200,cors);}
       return error('Method not allowed',405,cors);
     }
 

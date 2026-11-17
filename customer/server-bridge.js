@@ -582,7 +582,7 @@
   async function listCrmCompanies(filters={}){const params=new URLSearchParams();if(filters.q)params.set('q',filters.q);if(filters.lifecycle)params.set('lifecycle',filters.lifecycle);if(filters.pipeline_stage||filters.pipelineStage)params.set('pipeline_stage',filters.pipeline_stage||filters.pipelineStage);if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies${suffix}`);}
   async function getCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`);}
   async function getCrmActivities(id,filters={}){const params=new URLSearchParams();if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies/${encodeURIComponent(id)}/activities${suffix}`);}
-  async function saveCrmCompany(payload){return crmRequest('/companies',{method:'POST',body:JSON.stringify(payload||{})});}
+  async function saveCrmCompany(payload){return crmRequest(payload?.intelligence_scope==='company'?'/companies/company-research':'/companies',{method:'POST',body:JSON.stringify(payload||{})});}
   async function addCrmToPipeline(id,stage='Discovered'){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'POST',body:JSON.stringify({stage})});}
   async function removeCrmFromPipeline(id){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'DELETE'});}
   async function archiveCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}/archive`,{method:'POST'});}

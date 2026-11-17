@@ -441,15 +441,15 @@ test('selected prospect buyer names persist and render as separate review cards'
     renderNodes:true,
     requestTimeout:1000,
     fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://linkedin.com/in/johan-example',title:'Johan Example – Chief Operating Officer at Northstar'},{url:'https://linkedin.com/in/mika-example',title:'Mika Example – Procurement Director at Northstar'}]})}),
-    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},getCrmCompany:async id=>({ok:true,company:{id,workspace_id:'workspace-1',normalized_domain:'northstar.com',lifecycle_status:'prospect'}}),searchApolloPeople:async()=>({ok:true,people:[
       {id:'p1',name:'Johan',title:'Chief Operating Officer'},
       {id:'p2',name:'Mika',title:'Procurement Director',linkedin_url:'https://www.linkedin.com/in/mika-example'}
     ]})}
   });
-  const candidate={company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/',title:'Northstar industrial manufacturer'}]};
+  const candidate={company:'Northstar',domain:'northstar.com',crmId:'northstar-crm',website:'https://northstar.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/',title:'Northstar industrial manufacturer'}]};
   context.__setDiscovery({status:'no_results',selectedProspects:[candidate]});
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
-  assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
+  assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true,context.__discoveryState().selectedProspects[0].__leadIntelBuyerStartMessage);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
   assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name).sort(),['Johan Example','Mika Example']);
   assert.equal(restored.pipeline.length,0);
@@ -1286,7 +1286,7 @@ test('Save buyer does not claim Saved when server preference sync fails',async()
 
 test('Companies does not render saved buyer cards; switching to Buyers preserves them',()=>{const c=loadDiscoveryRunner({renderNodes:true});c.__setDiscovery({selectedProspects:[{company:'Target',domain:'target.se',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Alex Buyer',title:'Director',kept:true}]}]});c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));c.__renderPipeline();assert.equal(c.__elements.get('customer-pipeline').innerHTML,'');assert.equal(c.__discoveryState().selectedProspects[0].people[0].kept,true);c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));c.__renderPipeline();assert.match(c.__elements.get('customer-pipeline').innerHTML,/Alex Buyer/);});
 test('optional contact-review timeout preserves a completed core contact pass and records the review gap',async()=>{
- const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:30,
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
   bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
   fetchImpl:async url=>{
   if(String(url).includes('/grounded-contact-search'))return {ok:true,json:async()=>({status:'unavailable',provider:'gemini',web_search:false,reason:'Gemini is not configured',results:[]})};
@@ -1899,6 +1899,12 @@ test('changing the search goal preserves the top ten display without a new searc
  assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,10);
  assert.equal(dom.window.document.querySelectorAll('#discovery-potential-matches .company-card').length,2);
  assert.equal(context.__discoveryState().candidates.length,12);assert.equal(providerCalls(),0);
+});
+test('a stale Strategy scope remains in the saved review queue even when retained operating fit still passes',()=>{
+ const f=companyShortlistDisplayFixture({scores:[84],review:false}),c=f.context.__discoveryState().candidates[0],main=JSON.parse(f.context.localStorage.getItem('leadintel_customer_v2_state'));
+ c.strategyFingerprint=f.context.fingerprint();main.market.signals[0].weight=2;main.market.strategyApproval=StrategyIntegrity.approval(main);f.context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));f.context.__syncStrategyFingerprint();
+ assert.equal(f.context.qualificationAssessment(c).eligible,true,'Operating and purchasing fit can remain valid under a new signal weight');assert.equal(f.context.companyStrategyCurrent(c),false);assert.equal(f.context.researchReviewStatus(c).status,'needs-evidence');
+ const plan=f.context.companyReviewBatchPlan();assert.equal(plan.pendingCount,1);assert.deepEqual(Array.from(plan.domains),['ranked0.lv']);assert.equal(f.providerCalls(),0,'Planning saved review performs no paid provider requests');
 });
 test('an additional checked company retains its original index when selected for Buyers',async()=>{
  const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture({scores:[44,94,90,86,82,79,75,68,64,60,55,22]});render();context.__bindDiscovery();

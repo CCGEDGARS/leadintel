@@ -11,8 +11,47 @@ function runtime({fetchImpl,timeout=1000}={}){
 }
 test('research fingerprint covers input weights and source settings but ignores its own evidence',()=>{const r=runtime(),before=r.c.researchContextFingerprint();r.state.market.signals[0].weight=2;assert.notEqual(r.c.researchContextFingerprint(),before);const current=r.c.researchContextFingerprint();r.state.market.researchResults.push({url:'https://new.example'});r.state.market.opportunities.push({id:'new'});assert.equal(r.c.researchContextFingerprint(),current);r.state.market.researchInstructions='Focus on hospitals';assert.notEqual(r.c.researchContextFingerprint(),current);});
 test('duplicate research clicks share one active run and keep accepted citations',async()=>{let release;const gate=new Promise(resolve=>release=resolve),r=runtime({fetchImpl:async()=>{await gate;return new Response(JSON.stringify({results:[]}));}});const a=r.run(),b=r.run();await tick();assert.equal(r.calls.length,2);release();await Promise.all([a,b]);assert.ok(r.state.market.researchResults.some(x=>x.url==='https://old.example/evidence'));assert.equal(r.state.market.researchExecution.receipts.filter(x=>x.stage==='discovery').length,2);assert.ok(r.state.market.researchExecution.receipts.filter(x=>x.stage==='discovery').every(x=>x.status==='zero_results'));});
+for(const readyProvider of ['firecrawl','openai'])test(readyProvider+' evidence is saved while the other provider is pending and survives the overall deadline',async()=>{
+ let deadline;const r=runtime({timeout:60000,fetchImpl:async url=>{
+  const provider=url.includes('web-search')?'openai':'firecrawl';if(provider!==readyProvider)return new Promise(()=>{});
+  return Response.json({results:[{url:'https://manufacturer.example/expansion',title:'Factory expansion',text:'A manufacturer expands its production facility.'}]});
+ }});r.state.market.researchResults=[];
+ r.c.setTimeout=(callback)=>{deadline??=callback;return callback;};r.c.clearTimeout=()=>{};
+ const pending=r.run('deep');await tick();await tick();
+ const savedBeforeDeadline=r.saved.some(s=>s.market.researchResults.some(row=>row.url==='https://manufacturer.example/expansion'));
+ deadline();await pending;
+ assert.equal(savedBeforeDeadline,true,'The successful provider must publish before its peer settles');
+ assert.equal(r.state.market.researchResults.length,1);assert.equal(r.state.market.researchStatus,'partial');assert.ok(r.state.market.lastResearchAt);
+ assert.equal(r.state.market.researchSourceStatus[readyProvider],'complete');assert.ok(r.state.market.researchErrors.some(row=>/overall time limit/i.test(row.message)));
+ assert.equal(Engine.normalizeMarketState(JSON.parse(JSON.stringify(r.state.market))).researchResults.length,1);
+});
+test('an empty interrupted run records its stop reason instead of only a Gemini cleanup message',async()=>{
+ let deadline;const r=runtime({timeout:60000,fetchImpl:()=>new Promise(()=>{})});r.state.market.researchResults=[];
+ r.c.setTimeout=callback=>{deadline??=callback;return callback;};r.c.clearTimeout=()=>{};
+ const pending=r.run('deep');await tick();deadline();await pending;
+ assert.equal(r.state.market.researchStatus,'error');assert.equal(r.state.market.researchResults.length,0);
+ assert.match(r.state.market.researchErrors[0].message,/overall time limit/);assert.equal(r.state.market.researchVerification.reason,'Research stopped before verification completed');
+ assert.ok(r.saved.at(-1).market.researchErrors.some(e=>/overall time limit/.test(e.message)));
+});
+test('each completed page extraction is retained when a sibling read reaches the deadline',async()=>{
+ let deadline;const r=runtime({timeout:60000,fetchImpl:async(url,options)=>{
+  if(url.includes('web-search'))return Response.json({results:[]});
+  if(url.includes('scrape'))return JSON.parse(options.body).url.includes('first.example')?Response.json({data:{markdown:'Exact completed first-page evidence'}}):new Promise(()=>{});
+  return Response.json({results:['first','second'].map(name=>({url:'https://'+name+'.example/news',title:name+' expansion',text:'Announced factory expansion summary '.repeat(10)}))});
+ }});r.state.market.researchResults=[];r.c.setTimeout=callback=>{deadline??=callback;return callback;};r.c.clearTimeout=()=>{};
+ const pending=r.run();for(let i=0;i<12&&!r.saved.some(s=>s.market.researchResults.some(row=>row.extractedAt));i++)await tick();
+ const savedPage=r.saved.some(s=>s.market.researchResults.some(row=>row.extractedAt&&row.text==='Exact completed first-page evidence'));deadline();await pending;
+ assert.equal(savedPage,true);assert.ok(r.state.market.researchResults.find(row=>row.url.includes('first.example')).extractedAt);assert.equal(r.state.market.researchStatus,'partial');
+});
 test('late provider callbacks cannot mutate or save after workspace change',async()=>{let release;const gate=new Promise(resolve=>release=resolve),r=runtime({fetchImpl:async()=>{await gate;return new Response(JSON.stringify({results:[{url:'https://late.example',title:'Late'}]}));}});const run=r.run();await tick();r.bridge.workspace={id:'w2'};r.state.market={...Engine.normalizeMarketState({}),sentinel:'new workspace'};const before=JSON.stringify(r.state.market),saves=r.saved.length;release();await run;await tick();assert.equal(JSON.stringify(r.state.market),before);assert.equal(r.saved.length,saves);});
-test('hard run deadline settles ignored-abort providers and retains partial execution outcomes',async()=>{const r=runtime({timeout:30,fetchImpl:()=>new Promise(()=>{})});await r.run();assert.notEqual(r.state.market.researchStatus,'running');assert.ok(r.state.market.researchResults.some(x=>x.url==='https://old.example/evidence'));assert.equal(r.state.market.researchExecution.status,'cancelled');assert.ok(r.state.market.researchExecution.receipts.every(x=>!['running','planned'].includes(x.status)));});
+test('hard run deadline settles ignored-abort providers and retains partial execution outcomes',{timeout:5000},async()=>{
+ let entered;const started=new Promise(resolve=>entered=resolve),r=runtime({timeout:60000,fetchImpl:()=>{if(r.calls.length===2)entered();return new Promise(()=>{});}}),timers=new Map();let next=0,deadline;
+ // Expire the real run timer after both providers enter. A 30ms wall clock
+ // could expire during setup under suite load, before any research existed.
+ r.c.setTimeout=(callback,delay)=>{const id=++next;timers.set(id,callback);if(!deadline){deadline={callback,delay};}return id;};r.c.clearTimeout=id=>timers.delete(id);
+ const run=r.run();await started;assert.equal(deadline.delay,60000);assert.equal(r.calls.length,2);deadline.callback();await run;
+ assert.notEqual(r.state.market.researchStatus,'running');assert.ok(r.state.market.researchResults.some(x=>x.url==='https://old.example/evidence'));assert.equal(r.state.market.researchExecution.status,'cancelled');assert.ok(r.state.market.researchExecution.receipts.every(x=>!['running','planned'].includes(x.status)));
+});
 for(const change of ['user','profile','signal weight','sources'])test(`pending discovery is isolated after ${change} changes`,async()=>{let release;const gate=new Promise(resolve=>release=resolve),r=runtime({fetchImpl:async()=>{await gate;return new Response(JSON.stringify({results:[{url:'https://late.example',title:'Late'}]}));}});const pending=r.run();await tick();if(change==='user')r.bridge.session.user={id:'u2'};if(change==='profile')r.state.profile.priorityOffers='Steel';if(change==='signal weight')r.state.market.signals[0].weight=1;if(change==='sources')r.state.market.researchSourceTypes=['jobs'];const before=JSON.stringify(r.state.market),saves=r.saved.length;release();await pending;assert.equal(JSON.stringify(r.state.market),before);assert.equal(r.saved.length,saves);});
 test('OpenAI bridge wait rechecks workspace before the request is sent',async()=>{const r=runtime();let release;r.c.waitForMarketServerBridge=()=>new Promise(resolve=>release=resolve);const pending=r.c.searchOpenAiWeb({query:'Finland hospital'},5,new AbortController().signal);r.bridge.workspace={id:'w2'};release(r.bridge);await assert.rejects(pending,/changed/);assert.equal(r.calls.length,0);});
 test('explicit task cancellation settles an unresponsive fetch without relabeling planned checks as executed',async()=>{const r=runtime({fetchImpl:()=>new Promise(()=>{})});let actions;r.c.window.LeadIntelTaskCentre={start(){},registerActions(id,value){actions=value;},fail(){}};r.state.market.researchCustomSources=['https://custom.example'];const pending=r.run('deep');await tick();assert.ok(actions.cancel);actions.cancel();await pending;assert.equal(r.state.market.researchExecution.status,'cancelled');assert.ok(r.state.market.researchExecution.receipts.some(x=>x.stage==='custom_source'&&x.status==='not_run'));assert.ok(r.state.market.researchExecution.receipts.some(x=>x.stage==='verification'&&x.status==='not_run'));assert.equal(r.state.market.researchProgress.completed,0);});

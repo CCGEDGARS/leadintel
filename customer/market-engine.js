@@ -423,11 +423,15 @@
       current.queryId=current.queryId||next.queryId;current.market=current.market||next.market;current.query=current.query||next.query;
       current.title=current.title||next.title;current.description=current.description||next.description;
       const richer=next.text.trim().length>current.text.trim().length;
-      if(richer){current.text=next.text;if(next.extractedAt){current.title=next.title||current.title;current.description=next.description||current.description;}}
+      // A successful page read is source evidence even when shorter than a
+      // search summary. Later snippets must not replace that extracted body.
+      const currentExtracted=Boolean(current.extractedAt&&current.text.trim()),nextExtracted=Boolean(next.extractedAt&&next.text.trim());
+      const replaceText=next.text.trim().length>0&&((nextExtracted&&!currentExtracted)||(nextExtracted===currentExtracted&&richer));
+      if(replaceText){current.text=next.text;if(next.extractedAt){current.title=next.title||current.title;current.description=next.description||current.description;}}
       if(!current.date&&next.date){current.date=next.date;current.dateSource=next.dateSource;}
       if(next.verification&&(!current.verification||next.verification.contradiction||next.verification.relevance==="reject"))current.verification={...next.verification};
       current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
-      if(richer&&next.extractedAt){current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;}current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
+      if(replaceText){current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;}current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
     }
     return [...merged.values()];
   }
