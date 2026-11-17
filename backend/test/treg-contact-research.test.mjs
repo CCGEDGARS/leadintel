@@ -204,3 +204,22 @@ test('a replacement token can retry only a manually approved uncharged authentic
   db.close();
  }
 });
+
+test('real Treg billing responses persist scoped credit health and successful retry clears it',async()=>{
+ const f=await fixture(),db=new DatabaseSync(':memory:');
+ const {providerCreditIssue}=await import('../src/provider-credit-health.js');
+ db.exec('CREATE TABLE audit_events(id TEXT,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT)');
+ const env={DB:{prepare(sql){let args=[];return {bind(...v){args=v;return this;},async first(){return db.prepare(sql).get(...args)||null;},async run(){return db.prepare(sql).run(...args);}};}}};
+ const success=f.deps.fetch;
+ try{
+  f.deps.fetch=async()=>Response.json({error:'insufficient_balance'},{status:402});
+  await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'billing'},f.deps),/credit balance/);
+  assert.deepEqual(await providerCreditIssue(env,ctx.workspaceId,'treg'),{code:'credits_exhausted',source:'customer'});
+  assert.equal(await providerCreditIssue(env,'other-workspace','treg'),null);
+  f.deps.fetch=async()=>Response.json({error:'rate_limit_exceeded'},{status:429});
+  await assert.rejects(f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'rate'},f.deps),/usage limit/);
+  assert.ok(await providerCreditIssue(env,ctx.workspaceId,'treg'),'a transient error cannot clear a confirmed billing failure');
+  f.deps.fetch=success;await f.mod.findTregWorkEmail(env,ctx,candidate,person,'company-a',{attemptKey:'recover'},f.deps);
+  assert.equal(await providerCreditIssue(env,ctx.workspaceId,'treg'),null);
+ }finally{db.close();}
+});

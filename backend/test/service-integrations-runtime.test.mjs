@@ -584,3 +584,19 @@ sqliteTest('Treg connection failures expose only fixed diagnostic categories in 
   const audit=DB.raw.prepare("SELECT metadata_json FROM audit_events WHERE event_type='service.provider_check_failed' ORDER BY rowid DESC LIMIT 1").get();const metadata=JSON.parse(audit.metadata_json);assert.equal(metadata.code,code);assert.equal(metadata.http_status,http);assert.doesNotMatch(audit.metadata_json,/private-team-secret/);
  }}finally{globalThis.fetch=old;DB.raw.close();}
 });
+
+sqliteTest('Treg credit health reaches authenticated status and clears only after a confirmed balance recheck',async()=>{
+ const {env,token,DB}=await fixture(),original=globalThis.fetch;let balance=0,httpStatus=200;
+ DB.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0046_treg_workspace_credentials.sql'),'utf8'));
+ const encrypted=await encryptSecret('treg-private-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
+ DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES('w1','treg',?,'test',?)").run(encrypted,JSON.stringify({balance_usd:0}));
+ globalThis.fetch=async()=>Response.json(httpStatus===200?{team:'fixture-team',balance_micro:balance}:{error:'provider failure'},{status:httpStatus});
+ const status=async verify=>{const response=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1'+(verify?'&verify=1':''),{token}),env,{});assert.equal(response.status,200);return (await response.json()).providers.find(p=>p.provider==='treg');};
+ try{
+  assert.equal((await status(false)).credit_issue.code,'credits_exhausted');
+  balance=2500000;assert.equal((await status(true)).credit_issue,null);
+  httpStatus=402;assert.equal((await status(true)).credit_issue.code,'credits_exhausted');
+  httpStatus=429;assert.equal((await status(true)).credit_issue.code,'credits_exhausted');
+  httpStatus=200;assert.equal((await status(true)).credit_issue,null);assert.equal((await status(false)).state,'good');
+ }finally{globalThis.fetch=original;DB.raw.close();}
+});

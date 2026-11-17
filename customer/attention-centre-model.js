@@ -31,7 +31,7 @@
     return {provider:'openai',code:'credit_balance_exhausted',sourceCount:Math.max(0,Math.floor(Number(researchMeta.sourceCount)||0))};
   }
   function providerCreditIssues({ai={},services={}}={}){
-    const names={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',firecrawl:'Firecrawl',apollo:'Apollo.io',hunter:'Hunter'};
+    const names={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',firecrawl:'Firecrawl',apollo:'Apollo.io',hunter:'Hunter',treg:'Treg'};
     return [...(ai.providers||[]),...(services.providers||[])].filter(row=>(row?.configured||row?.source==='managed')&&(row.credit_issue?.code==='credits_exhausted'||Number(row.metadata?.proxy_status)===402)).map(row=>({provider:row.provider,name:names[row.provider]||row.name||row.provider,source:row.credit_issue?.source||row.source||'customer'})).filter(row=>names[row.provider]);
   }
   function providerConnectionIssues({ai={},services={},requiredProviders=[]}={}){return [...(ai.providers||[]),...(services.providers||[])].filter(row=>!row.credit_issue&&(((row.configured||row.source==='managed')&&(row.state==='bad'||row.state==='error'))||(requiredProviders.includes(row.provider)&&!row.configured&&row.source!=='managed'))).map(row=>({id:'provider-'+row.provider+'-connection',severity:'recommendation',title:(row.name||row.provider)+' needs attention',detail:clean(row.metadata?.error||row.label||'Check the provider connection before using this tool.'),target:{type:'settings'}}));}
