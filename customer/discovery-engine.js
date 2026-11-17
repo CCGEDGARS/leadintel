@@ -1799,7 +1799,9 @@
   }
 
   function confirmedBuyerShortlist(pool=[],profile={},candidate={},options={}){
-    const ranked=rankedBuyerShortlist(pool,profile,candidate);
+    return confirmedRankedBuyerShortlist(rankedBuyerShortlist(pool,profile,candidate),candidate,options);
+  }
+  function confirmedRankedBuyerShortlist(ranked,candidate,options={}){
     const confirmed=typeof options.confirmedContact==='function'?options.confirmedContact:person=>Object.values(confirmedBuyerContactData(candidate,person,options)).some(Boolean);
     const conflicts=[...(candidate.publicResearch?.conflicts||[]),...(candidate.publicResearch?.aiReview?.conflicts||[])];
     const ready=ranked.people.filter(person=>!conflicts.some(row=>String(row.person_id)===String(person.id))&&Boolean(confirmed(person))),priority=ready.slice(0,4),ids=new Set(priority.map(person=>person.id||buyerIdentity(person)));
@@ -1811,7 +1813,9 @@
   }
 
   function topFourResearchCandidates(pool=[],profile={},candidate={}){
-    const shortlist=rankedBuyerShortlist(pool,profile,candidate);
+    return researchCandidatesFromShortlist(rankedBuyerShortlist(pool,profile,candidate),pool,profile);
+  }
+  function researchCandidatesFromShortlist(shortlist,pool,profile){
     if(shortlist.people.length){const priorities=new Set(shortlist.priorityIds);return shortlist.people.filter(person=>priorities.has(person.id||buyerIdentity(person)));}
     // Legacy or unresolved pools still need identity acquisition. These records
     // remain on hold until evidence resolves the qualification gaps.
@@ -1998,9 +2002,21 @@
     if(!value||typeof value!=='object')return null;
     return {status:['complete','partial','unavailable'].includes(value.status)?value.status:'unavailable',provider:clean(value.provider).slice(0,40),checkedAt:clean(value.checkedAt).slice(0,40),inputSignature:clean(value.inputSignature).slice(0,80),reviewedPersonIds:[...new Set((Array.isArray(value.reviewedPersonIds)?value.reviewedPersonIds:[]).map(clean))].slice(0,10),summary:clean(value.summary).slice(0,500),reason:clean(value.reason).slice(0,300),conflicts:(Array.isArray(value.conflicts)?value.conflicts:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300)})),findings:(Array.isArray(value.findings)?value.findings:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300),source_url:normalizeUrl(row.source_url)})).filter(row=>row.person_id&&row.reason&&row.source_url)};
   }
-  function mandatoryBuyerResearchPriorities(people,candidate,{forExecution=false}={}){
+  function mandatoryBuyerResearchPriorities(people,candidate,{forExecution=false,confirmedFirst=true}={}){
     const profile={decisionMakers:effectiveBuyerRoles(candidate)};
-    const selected=topFourResearchCandidates(people,profile,candidate);
+    const shortlist=rankedBuyerShortlist(people,profile,candidate);
+    // The visible shortlist accepts independently confirmed email, phone or
+    // LinkedIn evidence. Its four people own the free-research priority places;
+    // an unconfirmed committee candidate must not displace a displayed buyer.
+    // Paid selection retains its original ranked group before channel filtering.
+    const confirmed=confirmedFirst?confirmedRankedBuyerShortlist(shortlist,candidate).priorityIds:[];
+    const selected=people.filter(person=>confirmed.includes(person.id||buyerIdentity(person)));
+    const selectedKeys=new Set(selected.map(person=>person.id||buyerIdentity(person)));
+    for(const person of researchCandidatesFromShortlist(shortlist,people,profile)){
+      if(selected.length>=BUYER_CONTACT_RESEARCH_POLICY.deepPeople)break;
+      const key=person.id||buyerIdentity(person);
+      if(!selectedKeys.has(key)){selected.push(person);selectedKeys.add(key);}
+    }
     // Research must be able to establish the evidence needed for qualification.
     // An all-public executive pool can have no supported priority committee yet;
     // fill its unused research places without granting recipient eligibility.
@@ -2183,7 +2199,7 @@
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
     const attributable=person=>Boolean(acceptedOfficialBuyerEmail(candidate,person));
-    const priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
+    let priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
     const collect=(person,rows)=>{
@@ -2342,6 +2358,10 @@
       if(readPage&&people.length&&!sourceRows.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain))&&!people.some(person=>companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain))){
         try{await extract(people[0],[{url:`https://${companyIdentityDomain(candidate.domain)}/`}]);}catch(error){if(error.code||signal?.aborted)throw error;}
       }
+      // The identity wave can establish a different visible four in this pass.
+      // Reconcile their priority before core checks and the deeper expansion.
+      priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
+      publicWork.sort((a,b)=>Number(completedWork(a))-Number(completedWork(b))||Number(priorities.includes(b))-Number(priorities.includes(a)));
       // Give every selected identity its core work-email and phone checks before
       // Gmail or alternative expansion can consume the shared contact window.
       for(const cohort of [publicWork.filter(person=>!completedWork(person)&&priorities.includes(person)),publicWork.filter(person=>!completedWork(person)&&!priorities.includes(person)),publicWork.filter(person=>completedWork(person)&&priorities.includes(person)),publicWork.filter(person=>completedWork(person)&&!priorities.includes(person))]){

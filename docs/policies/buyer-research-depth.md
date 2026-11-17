@@ -1,5 +1,11 @@
 # Mandatory Buyers research standard
 
+## Visible priority cohort — 17 November 2026
+
+The four displayed buyers with accepted contact evidence own the priority places for mandatory free research and the bounded deeper work-email wave. Fill any remaining research places from the existing ranked committee without duplicating identities. Reconcile this cohort again after the LinkedIn identity wave, which can establish new displayed contacts during the same pass. Complete their supported checks before hidden contacts; successful matching receipts retain their original dates through continuation and reopening. Provider failures and bounded pauses remain incomplete, and completed no-match research never supplies an email recipient.
+
+Automatic paid research waits for this cohort's free coverage. Its approved 1–4 paid target group remains selected from the original relevance ranking before channel/readiness filtering; free contact confirmation must not silently reassign spending. Explicit manual paid checks remain person-scoped under the existing permissions and budgets.
+
 ## Core contact scheduling — 16 November 2026
 
 After the existing LinkedIn identity wave, attempt unfinished core official/public work-email, direct-email and phone checks across the priority cohort before its Gmail and alternative-query expansion. Finish that unfinished priority cohort before hidden contacts; defer wholly completed prefixes behind unfinished continuations. Reuse matching fresh completed receipts without renewing their original dates. An already completed core prefix must not consume another slice before an unfinished independent or expansion check. Explicit force may refresh the core once per run; the later expansion must not replay that same core work.
