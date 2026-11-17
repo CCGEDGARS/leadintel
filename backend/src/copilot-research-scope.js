@@ -3,6 +3,13 @@ import {copilotResearchUrls,operationalChangeRequest} from './copilot-mentor.js'
 import {sanitizeExternalResearchQuery} from './copilot-security.js';
 
 const clean=(value,max=180)=>sanitizeExternalResearchQuery(String(value??'')).slice(0,max);
+function latestResearchContext(conversation){
+ for(const message of [...conversation].reverse()){
+  if(message.role==='user'&&/https?:\/\/|\b[a-z0-9-]+\.[a-z]{2,}\b/i.test(message.content||''))return null;
+  if(message.role==='assistant'&&(message.metadata?.research_job||message.metadata?.research_target||message.metadata?.research_scope))return message;
+ }
+ return null;
+}
 export function researchDeclined(question=''){
  return /\b(?:do not|don't|without|no)\s+(?:web\s+)?(?:search|brows\w*|research)\b|nemekl[eē]|nepārlūko/i.test(question)||operationalChangeRequest(question);
 }
@@ -11,7 +18,7 @@ export function referenceResearchRequested(question='',conversation=[]){
  // A new explicit target must never inherit another company's saved scope.
  if(/https?:\/\/|\b[a-z0-9-]+\.[a-z]{2,}\b/i.test(question))return false;
  if(/\breference\s+(?:compan(?:y|ies)|customers?|clients?|models?|list)|\b(?:saved|added|active|my|our|these)\s+references\b/i.test(question)&&/\bsuggest|\brecommend|\banaly[sz]|\bresearch|\bfind|\bcheck|\binvestig|\bcompare|\bsignals?\b|\btriggers?\b|\bwebsites?\b|\bsources?\b|\bevidence\b|\bbuying\b/i.test(question))return true;
- const last=[...conversation].reverse().find(m=>m.role==='assistant'&&(m.metadata?.research_target||m.metadata?.research_scope));
+ const last=latestResearchContext(conversation);
  return last?.metadata.research_scope?.mode==='references'&&/\b(?:their|them|these|same|continue|those)\b/i.test(question);
 }
 export function publicReferenceUrl(value=''){
@@ -33,8 +40,8 @@ export function savedReferenceScope(main={},version=0){
 }
 export async function resolveReferenceResearchScope(env,workspaceId,question,conversation=[]){
  if(!referenceResearchRequested(question,conversation))return null;
- const prior=[...conversation].reverse().find(m=>m.role==='assistant'&&m.metadata?.research_scope?.mode==='references');
- if(prior&&!/\breference|\breferences\b/i.test(question))return prior.metadata.research_scope;
+ const prior=latestResearchContext(conversation);
+ if(prior?.metadata.research_scope?.mode==='references'&&!/\breference|\breferences\b/i.test(question))return prior.metadata.research_scope;
  const state=await getCustomerState(env,workspaceId);
  return savedReferenceScope(state.payload?.main||{},state.version);
 }

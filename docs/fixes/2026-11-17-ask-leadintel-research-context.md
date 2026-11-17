@@ -4,7 +4,7 @@
 
 The request “suggest buying signals for the reference companies that i added” previously executed no searches or page reads. `signal_trigger` also selected `workspace_diagnostic`, which bypassed the optional planning call. The durable-job trigger required other verbs or an explicit URL. The answer model could see reference labels but the reader could not see their websites. Reference projection also omitted the canonical `companyName` field.
 
-The fix routes reference research into the existing saved public-research worker, including requests from older clients without `research_mode`. The server resolves the selected reference list from authoritative workspace state. Public names, safe websites, saved country and request-time market/list/version are captured; notes, deal values and contact credentials are excluded. Changing the list creates a different research identity. Follow-ups retain the captured list, while an explicit new website or a newer researched target supersedes it.
+The fix routes reference research into the existing saved public-research worker, including requests from older clients without `research_mode`. The server resolves the selected reference list from authoritative workspace state. Public names, safe websites, saved country and request-time market/list/version are captured; notes, deal values and contact credentials are excluded. Changing the list creates a different research identity. Follow-ups retain the captured list, while an explicit new website or a newer queued/researched target supersedes it. Queue metadata captures the reference scope immediately; a queued target is a boundary even before its worker has planned sources.
 
 ## Research behavior
 
@@ -26,7 +26,7 @@ Regression coverage includes the exact request through authenticated HTTP, regis
 
 These tests establish the implementation with controlled sources, not the factual quality of a customer's real-provider result. Production deployment and authenticated customer acceptance require their separate exact-release and real-workspace evidence gates. No such success is asserted by this document.
 
-Final focused validation: 144 backend Copilot tests passed with Chromium required and zero skips; 69 customer Copilot tests passed. Three targeted release tests passed, including rejection of stale reference-coverage/control assets. The static build and Wrangler worker dry-run both passed.
+Final focused validation: 145 backend Copilot tests passed with Chromium required and zero skips; 69 customer Copilot tests passed. Three targeted release tests passed, including rejection of stale reference-coverage/control assets. The static build and Wrangler worker dry-run both passed.
 
 Broad regression verification after the initial corrections: 6,376 customer tests passed (13 skipped, no failures), and all 2,097 backend tests passed with Chromium required (zero skips). The backend run includes the controlled authenticated HTTP/scheduler/browser-reopen journey. Final CI and production release evidence are tracked separately for the published revision.
 

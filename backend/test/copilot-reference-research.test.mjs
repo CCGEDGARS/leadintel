@@ -15,8 +15,8 @@ async function prepare(t,references=rows){
  await putCustomerState(f.env,{workspaceId,userId:f.users.owner.id,expectedVersion:state.version,payload:state.payload});
  return f;
 }
-async function post(f,message=question,conversation_id){
- const response=await app.fetch(new Request('https://fixture.test/api/copilot/chat?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({message,...(conversation_id?{conversation_id}:{})})}),f.env,{});
+async function post(f,message=question,conversation_id,research_mode){
+ const response=await app.fetch(new Request('https://fixture.test/api/copilot/chat?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+f.users.owner.token,'Content-Type':'application/json'},body:JSON.stringify({message,...(conversation_id?{conversation_id}:{}),...(research_mode?{research_mode}:{})})}),f.env,{});
  assert.equal(response.status,202);return (await response.json()).research_job;
 }
 async function run(f,id,services){
@@ -44,6 +44,14 @@ test('the exact reported request cannot bypass public research; no-browse and op
  assert.deepEqual(researchInput('Analyze bogestaal.dk and bmg-as.no').urls,['https://bogestaal.dk/','https://bmg-as.no/']);
  const history=[{role:'assistant',metadata:{research_scope:{mode:'references'}}},{role:'assistant',metadata:{research_scope:null,research_target:{companyName:'Different company'}}}];
  assert.equal(referenceResearchRequested('Check their news',history),false,'a newer target supersedes a prior reference scope');
+ for(const newer of [{role:'assistant',metadata:{research_job:{id:'new',status:'queued'}}},{role:'user',content:'Analyze https://another.example/'}])assert.equal(referenceResearchRequested('Also check their careers pages',[history[0],newer]),false,'queued jobs and explicit user targets stop older reference inheritance');
+});
+test('queued HTTP research retains its captured reference scope but a newer queued URL becomes the follow-up target',async t=>{
+ const f=await prepare(t),first=await post(f);
+ const followup=await post(f,'Also check their careers pages',first.conversation_id);assert.equal(followup.scope.targets[0].url,rows[0].website);
+ const next=await post(f,'Analyze https://another.example/',first.conversation_id,'thorough');assert.equal(next.scope,null);
+ const after=await post(f,'Also check their careers pages',first.conversation_id,'thorough');assert.equal(after.scope,null);
+ const input=JSON.parse(f.DB.raw.prepare('SELECT input_json FROM copilot_research_jobs WHERE id=?').get(after.id).input_json);assert.deepEqual(input.urls,['https://another.example/']);
 });
 test('reference scope preserves companyName and safe URLs, deduplicates, bounds coverage and excludes private notes',()=>{
  const scope=savedReferenceScope({referenceCustomers:{rows:[null,'bad row',...rows,...rows,{companyName:'Private URL',website:'http://127.0.0.1/'},{companyName:'Signed URL',website:'https://safe.example/?token=hidden'},...Array.from({length:12},(_,i)=>({companyName:'Extra '+i,domain:'extra'+i+'.example',notes:'CONFIDENTIAL',approximateValue:12345}))]}});
