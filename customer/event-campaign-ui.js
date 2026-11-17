@@ -2,7 +2,7 @@
  'use strict';
  const M=root.LeadIntelEventCampaigns,KEY='leadintel_customer_v2_state',SEARCH_KEY='leadintel_event_search_context_v1';if(!M)return;
  const labels={websiteEvidence:'Website research receipt (attendance unverified)',name:'Event name',website:'Event website',startDate:'Start date',endDate:'End date',location:'City',stand:'Stand number (optional — confirm when available)',meetingPoint:'Meeting point (when attending as a visitor)',audience:'Target companies / industries',objective:'What do you want to achieve at this event?',roles:'Relevant buyer / partner roles',visitValue:'Why should they meet you?',availability:'Meeting availability',bookingUrl:'Booking link (optional)',exhibitorUrl:'Participant list URL (optional)',sourceUrls:'More participant source links (one per line)',country:'Country / target geography',venue:'Venue',attendValue:'Why is this event worth attending for them?',registrationUrl:'Official registration link (optional)',admissionCost:'Admission cost (only if known)',guestPass:'Guest-pass offer (only if available)',timezone:'Meeting timezone',meetingDuration:'Meeting duration'};
- let selection='',preview=null,adapter=null,workspaceKey='',openToken='',attendanceContext='',owner=0,controller=null,busy=false,setupHome=null,quickContext=null,setupOperation=null,websiteReading=false;
+ let selection='',preview=null,messageCampaign=null,adapter=null,workspaceKey='',openToken='',attendanceContext='',owner=0,controller=null,busy=false,setupHome=null,quickContext=null,setupOperation=null,websiteReading=false;
  const el=id=>document.getElementById(id);
  const setupAccount=()=>JSON.stringify([root.LeadIntelServerBridge?.workspace?.id,root.LeadIntelServerBridge?.session?.user?.id]);
  function websiteStatus(message){el('event-campaign-status').textContent=message.startsWith('Website read.')?'Review the event details, then save or choose companies.':message;if(el('event-website-status'))el('event-website-status').textContent=message;}
@@ -50,7 +50,8 @@
   const details=el('event-invitation-details');if(details&&!el('step-2')?.classList.contains('active'))details.open=true;panel.scrollIntoView?.({block:'center',behavior:'smooth'});panel.querySelector('[data-event-field="name"]')?.focus({preventScroll:true});
  }
  const messageDateFormat=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
- function renderMessageSummary(c=M.active(state())){
+ function renderMessageSummary(c=messageCampaign){
+  messageCampaign=c;
   const summary=el('event-message-summary'),badge=el('event-message-badge');if(!summary||!badge)return;
   const dates=[c?.startDate,c?.endDate].filter((value,index,all)=>value&&all.indexOf(value)===index).map(value=>{const date=new Date(value+'T12:00:00Z');return Number.isNaN(date.getTime())?value:messageDateFormat.format(date);});
   summary.textContent=c?[c.name,dates.join(' – ')].filter(Boolean).join(' · '):'No active event';
