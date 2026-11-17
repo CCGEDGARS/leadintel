@@ -148,6 +148,14 @@ function opportunityHypothesisQueries(main,market){
 function bridge(){return window.LeadIntelServerBridge||null;}
 function crmAuthenticated(){const b=bridge();return Boolean(b?.session?.authenticated&&b?.workspace);}
 function persistMainStep(step){if(window.LeadIntelCustomerNavigation?.setStep){window.LeadIntelCustomerNavigation.setStep(step,{review:step===5});return;}const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
+function recoverUnchangedCompanyResearch(value,meta,current,main){
+  const retained=Array.isArray(value?.candidates)?value.candidates:[];
+  if(value?.needsRefresh!==true||value.status==='running'||!retained.length)return false;
+  meta??=loadMeta();current??=fingerprint();main??=mainState();
+  if(!meta?.lastCompanyRun?.fingerprint||!sameStrategyFingerprint(meta.lastCompanyRun.fingerprint,current)||!retained.every(candidate=>candidate?.strategyFingerprint&&sameStrategyFingerprint(candidate.strategyFingerprint,current))||window.LeadIntelStrategyIntegrity?.status(main)?.current!==true)return false;
+  value.needsRefresh=false;
+  return true;
+}
 function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscoveryState(JSON.parse(localStorage.getItem(DISCOVERY_STORAGE_KEY)||"{}"));const recovered=LeadIntelDiscovery.recoverInterruptedDiscoveryState?LeadIntelDiscovery.recoverInterruptedDiscoveryState(normalized):normalized;recoveredInterruptedRun=normalized.status==="running"&&recovered.status!=="running";for(const candidate of recovered.selectedProspects||[]){
       if(candidate.publicContactStatus==="loading")candidate.publicContactStatus="idle";
       // A buyer search persisted as "loading" with no run in flight (page reload or a crash) must not block the stage forever.
@@ -261,7 +269,7 @@ function fingerprint(){
 function currentStrategyApproval(main=mainState()){const status=window.LeadIntelStrategyIntegrity?.status(main);if(status?.current)return true;showToast(status?.reason||'Review and activate the current Strategy before researching companies.');return false;}
 function discoveryAccountContext(){return JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated||false,localStorage.getItem('leadintel_account_context_v1')||'',window.LeadIntelAccountCache?.current?.()??null]);}
 function discoveryOperationContext(){return JSON.stringify([discoveryAccountContext(),fingerprint()]);}
-function sameStrategyFingerprint(previous,current){try{const a=JSON.parse(previous),b=JSON.parse(current);a.website=canonicalDomain(a.website);b.website=canonicalDomain(b.website);delete a.approved;delete b.approved;const event=typeof window==='object'&&window.LeadIntelEventCampaigns;if(event?.researchContext){a.eventCampaign=event.researchContext(a.eventCampaign);b.eventCampaign=event.researchContext(b.eventCampaign);}const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;return JSON.stringify(ordered(a))===JSON.stringify(ordered(b));}catch{return false;}}
+function sameStrategyFingerprint(previous,current){try{const a=JSON.parse(previous),b=JSON.parse(current);a.website=canonicalDomain(a.website);b.website=canonicalDomain(b.website);delete a.approved;delete b.approved;const sameSignedStrategy=typeof a.strategySignature==='string'&&/^20261030-strategy-v1:[a-f0-9]{64}$/.test(a.strategySignature)&&a.strategySignature===b.strategySignature;if(sameSignedStrategy)for(const value of [a,b])if(Array.isArray(value.opps))value.opps=value.opps.map(row=>Array.isArray(row)&&row.length===3?row.slice(0,2):row);const event=typeof window==='object'&&window.LeadIntelEventCampaigns;if(event?.researchContext){a.eventCampaign=event.researchContext(a.eventCampaign);b.eventCampaign=event.researchContext(b.eventCampaign);}const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;return JSON.stringify(ordered(a))===JSON.stringify(ordered(b));}catch{return false;}}
 function loadMeta(){try{return JSON.parse(localStorage.getItem(`${DISCOVERY_STORAGE_KEY}_meta`)||"{}" );}catch{return {};}}
 function saveMeta(meta){localStorage.setItem(`${DISCOVERY_STORAGE_KEY}_meta`,JSON.stringify(meta));}
 const DEFAULT_DISCOVERY_TARGET=5;
@@ -300,6 +308,10 @@ function syncStrategyFingerprint(){
     saveDiscovery();
     showToast("Strategy changed · previous company research kept for review");
   }
+  // Older comparisons included a derived opportunity score that changes as
+  // evidence ages. Recover only stamped research still owned by the same
+  // approved Strategy; missing scopes and actual edits keep their review hold.
+  if(recoverUnchangedCompanyResearch(discovery,meta,current,main))saveDiscovery();
   saveMeta({...loadMeta(),fingerprint:current,website:currentWebsite,pipelineWebsite:currentWebsite});
   restoreCheckedCompanyResearch();
 }
