@@ -1,6 +1,7 @@
 import {readAdditionalContactPolicy,lookupAdditionalEmail} from './additional-contact-services.js';
 import {findCrmCompanyByDomain,getCrmCompany,upsertCrmIntelligence} from './crm.js';
 import {sha256} from './security.js';
+import {buyerContactOptions} from './buyer-contact-context.js';
 import '../../customer/crm-engine.js';
 import '../../customer/contact-confirmation-policy.js';
 import '../../customer/additional-contact-policy.js';
@@ -55,6 +56,7 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
   if(detail.intelligence?.research_snapshot?.buyerResearch?.jobId!==jobId)return stop('blocked','Saved research changed before paid lookup; no provider was started.');
  }
  const active={...paidSnapshotCandidate(candidate,detail),peopleStatus:'complete',publicContactStatus:'complete'};
+ const contactOptions=buyerContactOptions(active,context,detail);
  if(paidBuyerScope(active)!==paidBuyerScope(candidate))return stop('blocked','Saved buyer qualification or evidence changed. Review the current CRM research.','PAID_SCOPE_CHANGED');
  const contactFor=p=>{
   const exact=(detail.contacts||[]).filter(c=>String(c.external_person_id)===String(p.id)&&same(c.name,p.publicName||p.name));
@@ -66,9 +68,9 @@ export async function runBuyerPaidResearch(env,context,candidate,{intent,jobId,g
  const complete=p=>{const contact=contactFor(p);return (!email||D.acceptedOfficialBuyerEmail(active,p)||C.accepted(contact,active.domain,'provider_verified'))&&(!phone||D.confirmedBuyerPhone(active,p,contact,{workspaceId:context.workspaceId,companyId:company.id}));};
  const done=new Set(report.outcomes.filter(r=>r.status!=='processing').map(r=>r.personId));
  if(!report.outcomes.some(row=>row.status==='processing')&&report.outcomes.filter(r=>r.status==='checked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
- const targets=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
+ const targets=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:p=>complete(p)?'complete':''}).filter(p=>!done.has(String(p.id)));
  const person=targets[0];
- if(!person){const selected=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,confirmedEmail:()=>''});if(selected.length&&selected.every(p=>complete(p)||done.has(String(p.id))))return stop('complete','The selected priority buyers have been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
+ if(!person){const selected=P.targets(active,{provider:'treg',automaticBuyerLimit:limit,contactOptions,confirmedEmail:()=>''});if(selected.length&&selected.every(p=>complete(p)||done.has(String(p.id))))return stop('complete','The selected priority buyers have been checked. Other buyers can be checked manually.');const unresolved=(active.people||[]).filter(p=>!complete(p)&&!done.has(String(p.id)));return stop(unresolved.length?'blocked':'complete',unresolved.length?'Remaining buyers need current qualification, free checks or AI review.':'Enabled paid channels have been checked.');}
  if(!report.outcomes.some(row=>row.personId===String(person.id)&&row.status==='processing')&&report.outcomes.filter(r=>r.status!=='blocked').length>=limit)return stop('complete','Automatic research has checked the selected priority buyers. Other buyers can be checked manually.');
  const contact=contactFor(person),includeEmail=Boolean(email&&!D.acceptedOfficialBuyerEmail(active,person)&&!C.accepted(contact,active.domain,'provider_verified')),includePhone=Boolean(phone&&!D.confirmedBuyerPhone(active,person,contact,{workspaceId:context.workspaceId,companyId:company.id}));
  const attempts=(Number(report.outcomes.find(row=>row.personId===String(person.id))?.attempts)||0)+1;

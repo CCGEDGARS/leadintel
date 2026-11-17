@@ -11,6 +11,7 @@ import {sha256,cookieValue} from './security.js';
 import {APOLLO_PEOPLE_SEARCH_URL} from './enrichment.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {contactRequestGuard} from './contact-operation-authority.js';
+import {buyerContactOptions} from './buyer-contact-context.js';
 const D=globalThis.LeadIntelDiscovery,P=globalThis.LeadIntelAdditionalContactPolicy,C=globalThis.LeadIntelContactPolicy;
 const json=(value,status=200,cors={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const fail=(message,status=409,code='ADDITIONAL_CONTACT_HOLD')=>Object.assign(new Error(message),{status,code});
@@ -92,7 +93,8 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
   const selectedId=String(input.person_id??'').trim(),identities=selectedId?candidate.people.filter(p=>String(p.id)===selectedId):[];
   if(identities.length!==1)throw fail('The saved buyer needs one unique nonempty identity. Refresh the company research before contact lookup.',409,'ADDITIONAL_CONTACT_IDENTITY_REQUIRED');
   const person=identities[0];
-  const readiness=deps.researchScope?await deps.researchScope.readiness(candidate,person):P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
+  const contactOptions=buyerContactOptions(candidate,context,detail);
+  const readiness=deps.researchScope?await deps.researchScope.readiness(candidate,person):P.readiness(candidate,person,{automatic:input.automatic===true,provider:providerName,contactOptions});if(!readiness.eligible)throw fail(readiness.reason,409,readiness.code);
   const confirmationLevel=await loadConfirmationLevel(env,context.workspaceId);
   let existing=detail.contacts?.filter(c=>String(c.external_person_id)===String(person.id)&&String(c.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()).find(c=>C.accepted(c,candidate.domain,confirmationLevel));
   const canonicalTitle=value=>{const title=String(value||'').trim().toLowerCase(),name=String(person.publicName||person.name).trim().toLowerCase();return title.startsWith(name)?title.slice(name.length).replace(/^[\s—–:|-]+/,'').trim():title;};
@@ -108,7 +110,7 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
       requireAutomaticReview(candidate,person);
     }
     const targetEmail=providerName==='treg'?policy.enabled&&input.automatic_email!==false:true,targetPhone=providerName==='treg'&&policy.phoneEnabled&&input.automatic_phone!==false;
-    const targets=P.targets(candidate,{automaticBuyerLimit:Math.min(policy.automaticBuyerLimit,P.automaticLimit(input.automatic_buyer_limit??policy.automaticBuyerLimit)),provider:providerName,confirmedEmail:p=>{
+    const targets=P.targets(candidate,{automaticBuyerLimit:Math.min(policy.automaticBuyerLimit,P.automaticLimit(input.automatic_buyer_limit??policy.automaticBuyerLimit)),provider:providerName,contactOptions,confirmedEmail:p=>{
       const contacts=(detail.contacts||[]).filter(c=>String(c.external_person_id)===String(p.id)&&String(c.name).trim().toLowerCase()===String(p.publicName||p.name).trim().toLowerCase());
       return (!targetEmail||D.acceptedOfficialBuyerEmail(candidate,p)||contacts.some(c=>C.accepted(c,candidate.domain,confirmationLevel)))&&(!targetPhone||D.confirmedBuyerPhone(candidate,p,contacts[0]||{},{workspaceId:context.workspaceId,companyId}));
     }});
@@ -158,8 +160,9 @@ export async function lookupAdditionalEmail(env,context,companyId,input={},deps=
     const fresh=await (deps.getCompany||getCrmCompany)(env.DB,context,companyId),active=deps.researchScope?await deps.researchScope.candidate(fresh):fromSnapshot(fresh);
     const matching=active.people.filter(p=>String(p.id)===String(person.id)),selected=matching.length===1&&identityInput(active,matching[0])===originalIdentity?matching[0]:null;
     if(['suppressed','archived'].includes(fresh.company.lifecycle_status)||active.domain!==candidate.domain||active.company!==candidate.company||!selected)throw fail('Workspace company or buyer changed; reload the saved research.');
-    const currentReadiness=deps.researchScope?await deps.researchScope.readiness(active,selected):P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName});if(!currentReadiness.eligible)throw fail(currentReadiness.reason,409,currentReadiness.code);
-    if(input.automatic===true){const currentPolicy=await readAdditionalContactPolicy(env,context.workspaceId),limit=Math.min(currentPolicy.automaticBuyerLimit,P.automaticLimit(input.automatic_buyer_limit??policy.automaticBuyerLimit));if(!P.targets(active,{provider:providerName,automaticBuyerLimit:limit}).some(p=>String(p.id)===String(person.id)))throw fail('Automatic buyer selection changed. Review the saved research before continuing.',409,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');}
+    const currentContactOptions=buyerContactOptions(active,context,fresh);
+    const currentReadiness=deps.researchScope?await deps.researchScope.readiness(active,selected):P.readiness(active,selected,{automatic:input.automatic===true,provider:providerName,contactOptions:currentContactOptions});if(!currentReadiness.eligible)throw fail(currentReadiness.reason,409,currentReadiness.code);
+    if(input.automatic===true){const currentPolicy=await readAdditionalContactPolicy(env,context.workspaceId),limit=Math.min(currentPolicy.automaticBuyerLimit,P.automaticLimit(input.automatic_buyer_limit??policy.automaticBuyerLimit));if(!P.targets(active,{provider:providerName,automaticBuyerLimit:limit,contactOptions:currentContactOptions}).some(p=>String(p.id)===String(person.id)))throw fail('Automatic buyer selection changed. Review the saved research before continuing.',409,'ADDITIONAL_CONTACT_APPROVAL_REQUIRED');}
     if(input.contact_id&&!fresh.contacts?.some(canonicalMatch))throw fail('The saved contact changed; reload before phone research.');
     if(providerName!=='treg'&&input.automatic===true){
       const current=await readAdditionalContactPolicy(env,context.workspaceId);

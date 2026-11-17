@@ -112,7 +112,7 @@
 
     }catch(error){if(policyCurrent(originContext)&&serial===policyRequest&&!busyPolicy){loadedWorkspace='';policy=null;provider=null;renderPolicy();status(error.message);}}
   }
-  function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
+  function readiness(candidate,person,options={}){return P.readiness(candidate,person,{provider:options.dataLookup?'treg':policy?.provider,...options,contactOptions:adapter?.contactOptions?.(candidate),companyAssessment:adapter?.assessment?.(candidate),confirmedEmail:options.confirmedEmail??adapter?.email?.(candidate,person)});}
   function record(candidate,person,message,{status='not_verified',append=false,lookup=null}={}){
     outcomes.set(key(candidate,person),message);
     person.contactVerification={status,lookup,checkedAt:new Date().toISOString(),issues:[...(append?person.contactVerification?.issues||[]:[]),message].slice(-12)};
@@ -306,7 +306,7 @@
       if(!treg?.configured||treg.source!=='customer')return;
       if(trigger!=='research_completed')return;
     }else if(!provider?.configured||provider.source!=='customer'||provider.metadata?.email_enrichment_enabled!==true)return;
-    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),automaticBuyerLimit:buyerLimit(),confirmedEmail:p=>policy.provider==='treg'?(!policy.enabled||adapter.email(candidate,p))&&(!policy.phoneEnabled||savedPhone(candidate,p))?'complete':'':adapter.email(candidate,p)});
+    const targets=P.targets(candidate,{provider:policy.provider,companyAssessment:adapter.assessment(candidate),automaticBuyerLimit:buyerLimit(),contactOptions:adapter.contactOptions?.(candidate),confirmedEmail:p=>policy.provider==='treg'?(!policy.enabled||adapter.email(candidate,p))&&(!policy.phoneEnabled||savedPhone(candidate,p))?'complete':'':adapter.email(candidate,p)});
     for(const person of targets){
       if(!current())return;
       if(manualCompanyBusy(prefix))return;

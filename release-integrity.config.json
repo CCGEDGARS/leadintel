@@ -3749,7 +3749,7 @@
         "Complete qualification and public research for four buyers before automatic lookup.",
         ".slice(0,limit)",
         "ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED",
-        "D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true})"
+        "D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions})"
       ]
     },
     {
@@ -9345,6 +9345,35 @@
       "status": 200,
       "contains": [
         "company-readability-ui=20261117-v1"
+      ]
+    },
+    {
+      "id": "visible-four-research-priorities",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "confirmedFirst=true",
+        "confirmedRankedBuyerShortlist",
+        "researchCandidatesFromShortlist"
+      ]
+    },
+    {
+      "id": "visible-four-paid-target-preservation",
+      "type": "text",
+      "url": "/customer/additional-contact-policy.js",
+      "status": 200,
+      "contains": [
+        "confirmedFirst:false"
+      ]
+    },
+    {
+      "id": "visible-four-research-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "visible-buyer-research=20261117-v1"
       ]
     }
   ],

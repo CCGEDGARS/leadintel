@@ -2002,14 +2002,14 @@
     if(!value||typeof value!=='object')return null;
     return {status:['complete','partial','unavailable'].includes(value.status)?value.status:'unavailable',provider:clean(value.provider).slice(0,40),checkedAt:clean(value.checkedAt).slice(0,40),inputSignature:clean(value.inputSignature).slice(0,80),reviewedPersonIds:[...new Set((Array.isArray(value.reviewedPersonIds)?value.reviewedPersonIds:[]).map(clean))].slice(0,10),summary:clean(value.summary).slice(0,500),reason:clean(value.reason).slice(0,300),conflicts:(Array.isArray(value.conflicts)?value.conflicts:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300)})),findings:(Array.isArray(value.findings)?value.findings:[]).slice(0,10).map(row=>({person_id:clean(row.person_id).slice(0,100),reason:clean(row.reason).slice(0,300),source_url:normalizeUrl(row.source_url)})).filter(row=>row.person_id&&row.reason&&row.source_url)};
   }
-  function mandatoryBuyerResearchPriorities(people,candidate,{forExecution=false,confirmedFirst=true}={}){
+  function mandatoryBuyerResearchPriorities(people,candidate,{forExecution=false,confirmedFirst=true,contactOptions={}}={}){
     const profile={decisionMakers:effectiveBuyerRoles(candidate)};
     const shortlist=rankedBuyerShortlist(people,profile,candidate);
     // The visible shortlist accepts independently confirmed email, phone or
     // LinkedIn evidence. Its four people own the free-research priority places;
     // an unconfirmed committee candidate must not displace a displayed buyer.
     // Paid selection retains its original ranked group before channel filtering.
-    const confirmed=confirmedFirst?confirmedRankedBuyerShortlist(shortlist,candidate).priorityIds:[];
+    const confirmed=confirmedFirst?confirmedRankedBuyerShortlist(shortlist,candidate,contactOptions).priorityIds:[];
     const selected=people.filter(person=>confirmed.includes(person.id||buyerIdentity(person)));
     const selectedKeys=new Set(selected.map(person=>person.id||buyerIdentity(person)));
     for(const person of researchCandidatesFromShortlist(shortlist,people,profile)){
@@ -2109,14 +2109,15 @@
     const logged=(person,key)=>buyerResearchCheckPassed(candidate,person,key,options);
     const checked=person=>BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.every(key=>logged(person,key))&&buyerResearchAssessment(person,options).status==='complete';
     const officialRead=report?.officialPageReads.some(row=>row.sourceRead===true&&companyIdentityDomain(row.url)===companyIdentityDomain(candidate.domain)&&fresh(row.checkedAt));
-    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>acceptedOfficialBuyerEmail(candidate,p,{now})||logged(p,'deep')));
+    return Boolean(people.length&&report?.version===BUYER_CONTACT_RESEARCH_POLICY.version&&(options.allowPartialRoster===true?['complete','partial'].includes(report.status):report.status==='complete'&&report.checkedPeople>=people.length&&report.totalPeople>=people.length)&&officialRead&&fresh(report.completedAt||(options.allowPartialRoster===true?report.startedAt:null))&&people.every(checked)&&mandatoryBuyerResearchPriorities(candidate.people||people,candidate,{forExecution:true,contactOptions:options.contactOptions||options}).filter(p=>people.some(person=>String(person.id)===String(p.id)&&buyerIdentity(person)===buyerIdentity(p))).every(p=>acceptedOfficialBuyerEmail(candidate,p,{now})||logged(p,'deep')));
   }
   function buyerQualityAssessment(candidate={},options={}){
     const people=(candidate.people||[]).slice(0,10),report=safeBuyerResearchAccountability(candidate.publicResearch?.accountability),now=Date.parse(options.now||new Date().toISOString());
     const fresh=stamp=>{const age=now-Date.parse(stamp||'');return age>=0&&age<30*86400000;};
     const researchPassed=buyerResearchCoveragePassed(candidate,options);
-    const email=typeof options.confirmedEmail==='function'?options.confirmedEmail:person=>acceptedOfficialBuyerEmail(candidate,person,{now});
-    const contact=person=>Object.values(confirmedBuyerContactData(candidate,person,{...options,confirmedEmail:email,now})).some(Boolean);
+    const contactOptions=options.contactOptions||options;
+    const email=typeof contactOptions.confirmedEmail==='function'?contactOptions.confirmedEmail:person=>acceptedOfficialBuyerEmail(candidate,person,{now})||listedBuyerEmailSource(candidate,person)?.email;
+    const contact=person=>Object.values(confirmedBuyerContactData(candidate,person,{...contactOptions,confirmedEmail:email,now})).some(Boolean);
     const profile={decisionMakers:effectiveBuyerRoles(candidate)},ranked=options.ranked?.confirmationRequired===true?options.ranked:confirmedBuyerShortlist(people,profile,candidate,{confirmedContact:contact,now}),priorityIds=new Set(ranked.priorityIds),priority=ranked.people.filter(p=>priorityIds.has(p.id||buyerIdentity(p)));
     const confirmedPriorityEmails=priority.filter(person=>Boolean(email(person))).length;
     const confirmedPriorityContacts=priority.filter(contact).length;
@@ -2199,7 +2200,8 @@
       try{return await Promise.race([Promise.resolve().then(operation),stopped]);}finally{clearTimeout(timer);signal?.removeEventListener('abort',cancel);}
     };
     const attributable=person=>Boolean(acceptedOfficialBuyerEmail(candidate,person));
-    let priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
+    const researchPriorities=()=>mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true,contactOptions:options.contactOptions});
+    let priorities=researchPriorities();
     const observePage=page=>{for(const entry of page?.researchTrace||[])recordBuyerResearchTool(report,entry);};
     const staffPages=new Set();
     const collect=(person,rows)=>{
@@ -2360,7 +2362,7 @@
       }
       // The identity wave can establish a different visible four in this pass.
       // Reconcile their priority before core checks and the deeper expansion.
-      priorities=mandatoryBuyerResearchPriorities(people,candidate,{forExecution:true});
+      priorities=researchPriorities();
       publicWork.sort((a,b)=>Number(completedWork(a))-Number(completedWork(b))||Number(priorities.includes(b))-Number(priorities.includes(a)));
       // Give every selected identity its core work-email and phone checks before
       // Gmail or alternative expansion can consume the shared contact window.
@@ -2376,17 +2378,21 @@
       if(check.status==='running'){check.status='partial';check.reason=report.gaps.at(-1)||'Research pass interrupted';check.checkedAt=new Date().toISOString();}
       for(const entry of check.queryLog||[]){if(entry.status==='running')entry.status='partial';if(entry.searchStatus==='running')entry.searchStatus='partial';}
     }
-    for(const person of people)syncContactChannels(person);
     // Resolve profiles against all returned evidence together: attaching the
     // first match early would hide a distinct same-name result found later.
     for(const person of people){const before=buyerResearchIdentityKey(candidate,person),matched=matchPublicLinkedInProfiles([person],sourceRows,candidate.company)[0];if(matched.linkedinProfileReview&&!initialProfiles.get(person)){delete person.publicLinkedinUrl;delete matched.publicLinkedinUrl;}Object.assign(person,matched,matchBuyerScopeEvidence(matched,sourceRows,candidate));if(person.contactResearch?.identityKey===before)person.contactResearch.identityKey=buyerResearchIdentityKey(candidate,person);}
+    // Core and expansion sources can confirm a different visible cohort too.
+    // Leave newly required deeper work partial so continuation runs its missing
+    // queries instead of settling the job on the earlier cohort's receipts.
+    priorities=researchPriorities();
+    for(const person of people)syncContactChannels(person);
     for(const row of sourceRows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
       const checkedAt=Number.isFinite(Date.parse(row.extractedAt))?row.extractedAt:officialReads.get(url)?.checkedAt||report.startedAt,age=Date.now()-Date.parse(checkedAt);
       if(url&&row.sourceRead===true&&row.evidenceKind!=='model_summary'&&String(row.markdown||row.content||'').trim()&&companyIdentityDomain(url)===companyIdentityDomain(candidate.domain)&&age>=0&&age<30*86400000)officialReads.set(url,{url,sourceRead:true,checkedAt});
     }
     report.officialPageReads=[...officialReads.values()].slice(-policy.maxSourcePages);report.officialPages=report.officialPageReads.length;
-    const finished=person=>!person.emailResearch?.failed&&person.contactResearch?.policyVersion===policy.version&&policy.requiredChecks.every(key=>person.contactResearch.checks[key]?.status==='complete')&&(!person.contactResearch.checks.independent||['complete','not_needed'].includes(person.contactResearch.checks.independent.status))&&(!priorities.includes(person)||attributable(person)||person.contactResearch.checks.deep?.status==='complete');
+    const finished=person=>!person.emailResearch?.failed&&person.contactResearch?.policyVersion===policy.version&&policy.requiredChecks.every(key=>buyerResearchCheckPassed(candidate,person,key))&&(!person.contactResearch.checks.independent||['complete','not_needed'].includes(person.contactResearch.checks.independent.status))&&(!priorities.includes(person)||attributable(person)||buyerResearchCheckPassed(candidate,person,'deep'));
     for(const person of people)if(hasFullBuyerName(person.publicName||person.name)&&!finished(person))person.emailResearch={...(person.emailResearch||{}),status:person.emailResearch?.status==='unavailable'?'unavailable':'partial',checkedAt:new Date().toISOString()};
     report.checkedPeople=people.filter(finished).length;
     if(!report.officialPages)report.gaps.push('No underlying official page was read');

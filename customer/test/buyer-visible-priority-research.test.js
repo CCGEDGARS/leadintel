@@ -55,3 +55,32 @@ test('prioritizing the displayed free-research cohort does not move the approved
  assert.equal(P.readiness(c,c.people[2],{provider:'treg',automatic:true}).eligible,false,'automatic paid lookup waits for all four displayed buyers');
  assert.equal(P.readiness(c,c.people[2],{provider:'treg',automatic:false}).eligible,true,'manual paid readiness remains person-scoped');
 });
+
+test('bound CRM channels choose the free cohort without changing person-scoped or pre-channel paid selection',()=>{
+ const {c}=fixture({profiles:false}),stamp=new Date().toISOString(),contacts=new Map(c.people.slice(4).map(p=>[p.id,{name:p.name,external_person_id:p.id,source:'treg',phone_number:'+46 70 123 45 67',phone_status:'verified',workspace_id:'workspace',company_id:'company'}]));
+ const contactOptions={workspaceId:'workspace',companyId:'company',contactForPerson:p=>contacts.get(p.id)||{}};
+ Object.assign(c,{qualification:{eligible:true,score:85,researchedAt:stamp},publicResearch:{accountability:{...D.createBuyerResearchAccountability(),status:'complete',totalPeople:8,checkedPeople:8,completedAt:stamp}}});
+ for(const p of c.people)p.emailResearch={status:'complete',searches:12,failed:0,checkedAt:stamp};receipts(c);
+ c.publicResearch.aiReview={status:'complete',checkedAt:stamp,inputSignature:D.buyerReviewSignature(c),reviewedPersonIds:c.people.map(p=>p.id),findings:[],conflicts:[]};
+ assert.deepEqual(D.mandatoryBuyerResearchPriorities(c.people,c,{forExecution:true,contactOptions}).map(p=>p.id),['p4','p5','p6','p7']);
+ assert.deepEqual(P.targets(c,{provider:'treg',automaticBuyerLimit:1,contactOptions}).map(p=>p.id),['p2']);
+ c.people[4].contactResearch.checks.gmail.status='partial';
+ assert.equal(P.readiness(c,c.people[2],{provider:'treg',automatic:true,contactOptions}).eligible,false,'an unfinished displayed CRM contact blocks automatic lookup');
+ assert.equal(P.readiness(c,c.people[2],{provider:'treg',automatic:false,contactOptions}).eligible,true,'manual readiness stays scoped to p2');
+ assert.deepEqual(D.mandatoryBuyerResearchPriorities(c.people,c,{forExecution:true,contactOptions:{...contactOptions,workspaceId:'other'}}).map(p=>p.id),['p0','p1','p2','p3'],'foreign-workspace evidence cannot choose the cohort');
+});
+
+test('contacts confirmed during core research leave missing final-cohort deep checks resumable',async()=>{
+ const {c,page}=fixture({profiles:false}),stamp=new Date().toISOString(),url='https://forge.example/contact-staff';
+ const phonePage={url,sourceRead:true,extractedAt:stamp,markdown:c.people.slice(4).map(p=>'### '+p.name+'\n'+p.title+'\nPhone: +46 70 123 45 67\nForge Industries').join('\n\n')};
+ const report=await D.runMandatoryBuyerResearch(c,{rows:[page],readPage:async value=>value===url?phonePage:page,search:async query=>query==='site:forge.example "Evan Green"'?[{url,title:'Named staff contacts',description:'Evan Green Frank White Grace Hall Harper South'}]:[]});
+ assert.deepEqual(D.confirmedBuyerShortlist(c.people,{decisionMakers:c.buyerRoles},c).priorityIds,['p4','p5','p7','p6']);
+ assert.equal(report.status,'partial','newly visible people cannot settle before their required deeper checks');
+ for(const p of c.people.slice(4)){assert.equal(p.emailResearch.status,'partial');assert.equal(p.contactResearch.channels.company.status,'partial');}
+ const before=new Map(c.people.map(p=>[p.id,JSON.stringify(Object.fromEntries(D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.map(key=>[key,p.contactResearch.checks[key]])))])),queries=[];
+ await D.runMandatoryBuyerResearch(c,{rows:[page,phonePage],readPage:async value=>value===url?phonePage:page,search:async query=>{queries.push(query);return [];}});
+ assert.equal(D.buyerResearchCoveragePassed(c),true);
+ assert.equal(queries.length,8,'only two missing deep queries for each of the final four run');
+ for(const p of c.people){assert.equal(JSON.stringify(Object.fromEntries(D.BUYER_CONTACT_RESEARCH_POLICY.requiredChecks.map(key=>[key,p.contactResearch.checks[key]]))),before.get(p.id),'base receipts retain their original dates');}
+ for(const p of c.people.slice(4))assert.equal(p.contactResearch.checks.deep.status,'complete');
+});

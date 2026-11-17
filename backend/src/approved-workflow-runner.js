@@ -2,6 +2,7 @@ import {recordOperationalStage} from './operational-observability.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
 import {buyerPaidIntent,runWorkflowPaidResearch,paidBuyerScope,paidSnapshotCandidate} from './buyer-paid-research.js';
+import {loadBuyerContactContext} from './buyer-contact-context.js';
 import '../../customer/additional-contact-policy.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import '../../customer/company-dossier-ui.js';
@@ -60,9 +61,10 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard,account
   for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
   return {coverageFollowUp,people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
-export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={},options={}){
+export async function researchBuyerContacts(candidate,search,guard,readPage,rows=[],profile={},options={},context){
+  await guard();const contactOptions=context?(await loadBuyerContactContext(context.env,{workspaceId:context.workspaceId},candidate)).contactOptions:options.contactOptions;await guard();
   await discovery.runOfficialContactResearch(candidate,{search,guard,rows,readPage:async(...args)=>{const page=await readPage(...args);for(const entry of page?.researchTrace||[])discovery.recordBuyerResearchTool(candidate.publicResearch?.accountability,entry);return page;}});
-  return discovery.runMandatoryBuyerResearch(candidate,{...options,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
+  return discovery.runMandatoryBuyerResearch(candidate,{...options,contactOptions,buyerAgentContext:discovery.buyerAgentContext(candidate,profile),search,guard,readPage,rows,accountability:candidate.publicResearch?.accountability});
 }
 
 export async function persistWorkflowBuyerResearch(env,context,candidate,guard=async()=>{}){
@@ -133,7 +135,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId,seller={},res
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
-  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile,{crossCheck:async person=>{await guard();const result=await searchWorkspaceBuyerContact(env,workspaceId,{company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}});await guard();return result;}});
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard,async url=>{const result=await readPublicBuyerPage(env,workspaceId,url);return {...result.data,researchTrace:result.researchTrace};},research.rows,profile,{crossCheck:async person=>{await guard();const result=await searchWorkspaceBuyerContact(env,workspaceId,{company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}});await guard();return result;}},{env,workspaceId});
   candidate.publicResearch={...candidate.publicResearch,checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
   candidate.publicContactStatus=candidate.publicResearch.accountability?.status!=='complete'||candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
   await guard();

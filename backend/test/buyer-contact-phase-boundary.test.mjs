@@ -10,7 +10,7 @@ test('a shared-budget yield after contact completion preserves the pending revie
  f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='contacts',phase_ms=200000,phase_runs=5 WHERE id=?").run(job.id);
  // confirmNamed runs after mandatory research resolves and immediately before
  // the final checkpoint guard; an admitted peer may use the remaining shared room.
- t.mock.method(D,'acceptedOfficialBuyerEmail',(...args)=>{const result=original(...args);runtime.bookInvocationBudget.used=600;return result;});
+ t.mock.method(D,'acceptedOfficialBuyerEmail',(...args)=>{const result=original(...args);if(args[0]?.publicResearch?.accountability?.status==='complete')runtime.bookInvocationBudget.used=600;return result;});
  const waits=[],noop=async()=>({completed:0}),services={search:async()=>[],read:async url=>({url,markdown:'Robert Lund — Head of Procurement — Forge Industries',metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]})};
  await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{runBuyerResearchJobs:async(env,options)=>{runtime=env;return runBuyerResearchJobs(env,{...options,maxJobs:1,jobId:job.id,services});},runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id}),candidate=JSON.parse(saved.result_json);
