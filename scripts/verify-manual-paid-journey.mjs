@@ -7,7 +7,7 @@ import fixture from '../customer/test/fixtures/manual-paid-company.cjs';
 import {ready,settleInitialSave} from './verify-step5-journey.mjs';
 import '../customer/crm-engine.js';
 export async function verifyManualPaidJourney(){
- const {candidate}=fixture(),providerCalls=[],f=await journeyFixture({initialCandidate:candidate,profileExclusions:'companies with fewer than 20 employees',externalFetch:async(input,options)=>{
+ const {candidate}=fixture(),providerCalls=[],pageErrors=[],f=await journeyFixture({initialCandidate:candidate,profileExclusions:'companies with fewer than 20 employees',externalFetch:async(input,options)=>{
   const url=new URL(typeof input==='string'?input:input.url);if(url.hostname!=='treg.to')return;
   const body=JSON.parse(options.body||'{}');if(url.pathname.startsWith('/call/'))providerCalls.push({path:url.pathname,body});
   const output=url.pathname.includes('email.find')?{email:'anna@nordic.se',full_name:'Anna Buyer'}:url.pathname.includes('email.verify')?{email:'anna@nordic.se',status:'valid'}:url.pathname.includes('phone.find')?{full_name:'Anna Buyer',phone:'+46701234567'}:{full_name:'Anna Buyer',title:'Procurement Director',company_name:'Nordic'};
@@ -27,7 +27,7 @@ export async function verifyManualPaidJourney(){
  assert.equal(providerCalls.length,0,'blocked requests cannot reach paid providers');
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let ctx;
  try{
-  async function open(){ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await ctx.newPage();await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);return page;}
+  async function open(){ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await ctx.newPage();page.on('pageerror',error=>pageErrors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);return page;}
   let page=await open();
   // Bind the controlled company evidence to the active strategy before the test action.
   f.candidate.strategyFingerprint=await page.evaluate(()=>fingerprint());f.candidate.needsRecheck=false;
@@ -57,7 +57,9 @@ export async function verifyManualPaidJourney(){
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/manual-paid-browser-mobile.png',fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1),false,'mobile page must not overflow horizontally');
   assert.equal(f.calls.filter(c=>/send|enqueue|sequence/.test(c.path)).length,0);
-  const evidence={realHttp:true,realCrmSave:true,controlledProvider:true,emailFindCalls:1,phoneCalls:1,noRepeatConfirmation:true,phoneReopen:true,reopenConfirmed:true,repeatClickPaidCalls:0,companyFitStillPending:true,companyExclusionsStillPending:true,outboundMessages:0,privateCustomerAcceptance:false};
+  assert.deepEqual(pageErrors,[],'no browser runtime exceptions during paid lookup and reopening');
+  assert.equal(f.calls.filter(c=>c.path==='/api/additional-contact-services/email'&&c.status===200).length,2,'both independent browser requests succeed');
+  const evidence={realHttp:true,realCrmSave:true,controlledProvider:true,emailFindCalls:1,phoneCalls:1,noRepeatConfirmation:true,browserRuntimeErrors:0,phoneReopen:true,reopenConfirmed:true,repeatClickPaidCalls:0,companyFitStillPending:true,companyExclusionsStillPending:true,outboundMessages:0,privateCustomerAcceptance:false};
   await fs.writeFile('/tmp/manual-paid-browser-evidence.json',JSON.stringify(evidence,null,2));return evidence;
  }finally{await ctx?.close();await browser.close();await f.close();}
 }
