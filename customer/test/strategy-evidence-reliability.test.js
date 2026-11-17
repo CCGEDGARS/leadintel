@@ -176,6 +176,16 @@ test('execution normalization bounds receipt payload and rejects unsupported enu
  assert.equal(state.researchExecution.receipts[0].completedAt,0);
  assert.equal(state.researchExecution.receipts[0].resultCount,0);
 });
+test('new partial verification receipts retain bounded failure details through localization and reload',()=>{
+ const execution={version:1,runId:'partial-review',mode:'deep',status:'partial',stopReason:'Overall time limit',receipts:[{provider:'gemini',stage:'verification',status:'partial',reason:'One source remained unchecked. '.repeat(20),resultCount:59}]};
+ const normalized=Market.normalizeMarketState({researchExecution:execution,researchExecutionHistory:[execution]});
+ const restored=Market.localizeGeneratedState(JSON.parse(JSON.stringify(normalized)),profile,'en');
+ assert.equal(restored.researchExecution.stopReason,execution.stopReason);
+ assert.equal(restored.researchExecution.receipts[0].status,'partial');
+ assert.equal(restored.researchExecution.receipts[0].reason.length,300);
+ assert.equal(restored.researchExecution.receipts[0].resultCount,59);
+ assert.deepEqual(restored.researchExecutionHistory,[restored.researchExecution]);
+});
 test('monitoring revision survives save reload for server compare-and-swap without changing schedule timestamps',()=>{
  const monitoring={revision:17,lastRunAt:'2026-10-29T10:00:00Z',nextRunAt:'2026-11-05T10:00:00Z'};
  const state=Market.normalizeMarketState({monitoring});

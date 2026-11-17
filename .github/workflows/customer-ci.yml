@@ -406,3 +406,36 @@ jobs:
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
         run: node --import ./backend/test/register-wasm-loader.mjs --test --test-concurrency=1 backend/test/buyer-entity-role-journey.test.mjs backend/test/listed-email-journey.test.mjs backend/test/buyer-core-contact-journey.test.mjs backend/test/buyer-visible-priority-journey.test.mjs
+
+  market-research-modes-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser and backend dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npx playwright-core install --with-deps chromium
+          node --input-type=module - <<'JS'
+          import {chromium} from 'playwright-core';
+          import {appendFileSync} from 'node:fs';
+          appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
+          JS
+      - name: Verify all three market research modes and downstream persistence
+        env:
+          LEADINTEL_REQUIRE_BROWSER: 'true'
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/market-research-modes-journey.test.mjs
+      - name: Preserve market research acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-research-modes-${{ github.sha }}
+          path: /tmp/leadintel-market-modes/
+          if-no-files-found: warn
+          retention-days: 14

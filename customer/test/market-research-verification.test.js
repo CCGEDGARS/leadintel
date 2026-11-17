@@ -61,6 +61,19 @@ test('unavailable Gemini remains an explicit non-fatal verification state',()=>{
   assert.equal(applied.verification.reason,'Gemini is not configured');
 });
 
+test('partial Gemini verification retains valid rejection verdicts and its coverage through save/reopen',()=>{
+ const applied=verifier.applyVerification(results,{status:'partial',coverage:{supplied:2,eligible:2,reviewed:1,omitted:0,unreviewed:1},verdicts:[{evidence_id:'evidence-1',relevance:'reject',commercial_fit:'weak',contradiction:true,rationale:'Contradicted by supplied source'}]});
+ assert.equal(applied.verification.status,'partial');assert.equal(applied.results[0].verification.relevance,'reject');assert.equal(applied.results[1].verification,undefined);
+ const saved=market.normalizeMarketState({researchResults:applied.results,researchVerification:applied.verification});
+ assert.equal(saved.researchVerification.coverage.reviewed,1);assert.equal(saved.researchVerification.coverage.unreviewed,1);assert.match(saved.researchVerification.reason,/1.*2/);
+});
+
+test('a bounded verification response cannot label unsubmitted evidence as checked',()=>{
+ const many=Array.from({length:61},(_,i)=>({url:`https://example.com/${i}`}));
+ const applied=verifier.applyVerification(many,{status:'complete',coverage:{supplied:60,eligible:60,reviewed:60,omitted:0,unreviewed:0},verdicts:many.slice(0,60).map((_,i)=>({evidence_id:`evidence-${i+1}`,relevance:'moderate',commercial_fit:'unknown'}))});
+ assert.equal(applied.verification.status,'partial');assert.equal(applied.verification.coverage.reviewed,60);assert.equal(applied.verification.coverage.unreviewed,1);assert.equal(applied.results[60].verification,undefined);
+});
+
 test('deep research wires Gemini as verifier, never as web discovery',()=>{
   const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');

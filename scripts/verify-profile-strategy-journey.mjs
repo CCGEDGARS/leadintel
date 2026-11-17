@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import {step1Fixture} from '../backend/test/step1-journey-fixture.mjs';
 import {loadPlaywright,sessionToken,workspaceId} from '../backend/test/step5-journey-fixture.mjs';
 
-export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false}={}){
+export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false,researchMode="quick",marketModeChecks=false}={}){
  const f=await step1Fixture();await f.connectControlledExtraction();await f.connectControlledAi();const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[],evidence={};let releaseCompanyResponse;await fs.mkdir(artifactDir,{recursive:true});
  async function open({delayDiscovery=false}={}){const c=await browser.newContext({viewport:{width:1440,height:1000}});await c.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await c.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);if(delayDiscovery)await c.addInitScript(()=>{let engine,held=true;Object.defineProperty(window,'LeadIntelDiscovery',{configurable:true,get:()=>held?undefined:engine,set:value=>{engine=value;}});window.__releaseDiscoveryForTest=()=>{held=false;};});await c.addInitScript(()=>{window.__workflowNavigationTrace=[];for(const name of ['click','leadintel:module-opened','leadintel:open-discovery','leadintel:open-module'])window.addEventListener(name,event=>window.__workflowNavigationTrace.push({event:name,target:event.target?.id,closest:event.target?.closest?.('[id]')?.id,detail:event.detail,stack:new Error().stack}),true);});const p=await c.newPage();if(process.env.LEADINTEL_TEST_CPU_RATE){const debug=await c.newCDPSession(p);await debug.send('Emulation.setCPUThrottlingRate',{rate:Number(process.env.LEADINTEL_TEST_CPU_RATE)});}p.setDefaultTimeout(25000);p.on('pageerror',e=>errors.push(e.message));await p.goto(f.origin+'/customer/');await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&window.LeadIntelCustomerNavigation&&window.LeadIntelProfileAnswers?.isReady());await p.evaluate(()=>{const original=LeadIntelCustomerNavigation.setStep;LeadIntelCustomerNavigation.setStep=(...args)=>{window.__workflowNavigationTrace.push({event:'navigation-setStep',args,stack:new Error().stack});return original(...args);};});return p;}
@@ -13,24 +13,25 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
   for(const [id,value] of Object.entries(answers))await p.locator(`[data-question="${id}"]`).fill(value);
   await p.locator('#confirm-targeting').click();await p.waitForFunction(()=>document.getElementById('targeting-confirmation-status')?.textContent.startsWith('Saved.'));await p.locator('#analyze-company').click();if(await p.locator('#profile-enrichment-checkpoint').isVisible()){await p.keyboard.press('Escape');assert.equal(await p.locator('#step-2').isVisible(),true);await p.locator('#analyze-company').click();await p.locator('[data-continue-without-enrichment]').click();evidence.optionalEnrichmentControls=true;}await p.locator('#step-3.active').waitFor();await p.locator('#profile-content').waitFor({state:'visible'});await p.locator('#approve-profile').click();await p.waitForFunction(()=>!document.getElementById('continue-market-strategy')?.disabled);evidence.profileReviewedAndApproved=true;
   if(researchHandoff){
-   f.setControlledMarketResearch();if(failResearchSave)f.failSaves(true);
+   f.setControlledMarketResearch(true,{verification:marketModeChecks&&researchMode==="deep"?"partial":"complete"});if(failResearchSave)f.failSaves(true);
    await p.locator('[data-workflow-stage="2"] strong').click();await p.locator('[data-open-profile-market]:visible').first().click();
-   await p.locator('#run-market-research').click();await p.locator('#confirm-market-research').click();
-   await p.waitForFunction(()=>{const m=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market;return m.researchExecution?.completedAt&&m.researchResults.length===20;},null,{timeout:120000});
+   await p.locator(({quick:'#run-market-research',deep:'#run-detailed-research',intelligence:'#run-market-intelligence'})[researchMode]).click();assert.equal(await p.locator('#research-run-preview').getAttribute('data-research-mode'),researchMode);await p.locator('#confirm-market-research').click();
+   await p.waitForFunction(()=>{const m=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market;return m.researchExecution?.completedAt&&m.researchStatus!=="running";},null,{timeout:120000});
+   const sourceCount=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchResults.length);if(researchMode==='quick')assert.equal(sourceCount,20);else assert.ok(sourceCount>20,'broader modes acquire their own evidence set');
    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchReports.length),1,'one run creates one report');
    await p.locator('[data-review-market-strategy]').click();await p.locator('#step-3.active').waitFor();await p.locator('#continue-market-strategy').click();await p.locator('#step-4.active').waitFor();
    if(failResearchSave){
     await p.waitForFunction(()=>/Sync failed/.test(document.getElementById('workspace-save-state')?.textContent));
     assert.equal(((await f.getState()).payload.main.market.researchResults||[]).length,0);
-    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchResults.length),20);
+    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchResults.length),sourceCount);
     evidence.failedSaveRetainedLocalResults=true;f.failSaves(false);await p.locator('#save-workspace').click();
    }
    await p.waitForFunction(()=>document.getElementById('workspace-save-state')?.textContent==='Saved automatically to LeadIntel');
    const saved=(await f.getState()).payload.main;
-   assert.equal(saved.market.researchResults.length,20);assert.equal(saved.market.researchReports.length,1);assert.equal(saved.market.researchProfileLink.sourceCount,20);assert.equal(saved.market.strategyApproved,false);
+   assert.equal(saved.market.researchResults.length,sourceCount);assert.equal(saved.market.researchReports.length,1);assert.equal(saved.market.researchProfileLink.sourceCount,sourceCount);assert.equal(saved.market.strategyApproved,false);
    const opportunity=saved.market.icps.find(x=>x.type==='opportunity-led');assert.equal(opportunity.active,true);assert.equal(opportunity.requestedActive,true);assert.equal(saved.market.researchContextStale,false);assert.equal(opportunity.value,'');
-   assert.match(await p.locator('#strategy-research-handoff').textContent(),/20 research sources/);
-   evidence.researchHandoff={sources:20,reports:1,automaticCloudSave:!failResearchSave,opportunityAutoActivated:true,strategyAwaitingReview:true};
+   assert.match(await p.locator('#strategy-research-handoff').textContent(),new RegExp(sourceCount+' research sources'));
+   evidence.researchHandoff={sources:sourceCount,reports:1,automaticCloudSave:!failResearchSave,opportunityAutoActivated:true,strategyAwaitingReview:true};
    await p.context().close();
    if(legacyOpportunityContext){
     // Reproduce an old saved run whose derived Opportunity-led switch was
@@ -43,8 +44,30 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    }
    p=await open();
    const reopened=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
-   assert.equal(reopened.researchResults.length,20);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,20);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);
-   if(companyProgress){
+   assert.equal(reopened.researchResults.length,sourceCount);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,sourceCount);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);
+   if(marketModeChecks){
+    assert.equal(reopened.researchMode,researchMode);assert.ok(reopened.opportunities.some(o=>o.evidence.length));
+    const verificationCalls=f.calls.filter(c=>c.path==='/api/ai/research-verification');assert.equal(verificationCalls.length,researchMode==='quick'?0:1);
+    if(researchMode!=='quick'){
+     assert.equal(verificationCalls[0].status,200);assert.ok(reopened.researchVerification.coverage.reviewed>0);
+     assert.equal(reopened.researchVerification.coverage.supplied,sourceCount);
+     assert.equal(reopened.researchSourceStatus.gemini,'partial');
+     if(researchMode==='deep'){const rejected=reopened.researchResults.find(r=>r.verification?.relevance==='reject');assert.ok(rejected);assert.ok(reopened.opportunities.every(o=>o.evidence.every(e=>e.url!==rejected.url)));}
+    }
+    await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#strategy-research-action').click();
+    for(const id of ['run-market-research','run-detailed-research','run-market-intelligence'])assert.equal(await p.locator('#'+id).isEnabled(),true);
+    await p.screenshot({path:artifactDir+'/research-desktop.png',fullPage:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:artifactDir+'/research-mobile.png',fullPage:true});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+    await p.locator('[data-research-view-report]').click();const report=p.frameLocator('#research-report-dialog iframe');await report.getByRole('heading',{name:'Commercial implications'}).waitFor();assert.ok(await report.locator('a.source-link').count()>0);if(researchMode!=='quick')assert.match(await report.locator('body').textContent(),/evidence sources reviewed/);await p.locator('[data-report-close]').click();
+    await p.evaluate(()=>{const original=LeadIntelDiscovery.buildDiscoveryQueries;LeadIntelDiscovery.buildDiscoveryQueries=(...args)=>{window.__marketDiscoveryInput=structuredClone(args[1]);return original(...args);};});
+    let held=false;const responseGate=new Promise(resolve=>releaseCompanyResponse=resolve);
+    await p.route('**/api/ai/generate?*',async route=>{if(!held&&route.request().postDataJSON()?.task==='company-extraction'){held=true;const response=await route.fetch();await responseGate;await route.fulfill({response}).catch(()=>{});}else await route.continue();});
+    await p.setViewportSize({width:1440,height:1000});await p.locator('[data-review-market-strategy]').click();await p.locator('#continue-market-strategy').click();await p.locator('#step-4.active').waitFor();await p.locator('#activate-market-strategy').click();await p.locator('#strategy-handoff-dialog').waitFor({state:'visible'});assert.equal(await p.locator('#confirm-strategy-handoff').isEnabled(),true);await p.locator('#confirm-strategy-handoff').click();await p.locator('#step-5.active').waitFor();
+    await p.waitForFunction(()=>document.querySelector('#company-search-progress h3')?.textContent==='Identifying companies');
+    const input=await p.evaluate(()=>window.__marketDiscoveryInput);assert.equal(input.researchResults.length,sourceCount);assert.equal(input.researchMode,researchMode);assert.ok(input.opportunities.some(o=>o.evidence.length));
+    await p.locator('[data-cancel-company-search]').click();releaseCompanyResponse();await p.waitForFunction(()=>document.getElementById('company-search-progress')?.dataset.state==='canceled');await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());
+    const downstream=(await f.getState()).payload.main.market;assert.equal(downstream.researchResults.length,sourceCount);assert.equal(downstream.researchReports.length,1);assert.ok(downstream.opportunities.some(o=>o.evidence.length));
+    evidence.marketMode={mode:researchMode,sourceCount,gemini:reopened.researchSourceStatus.gemini,coverage:reopened.researchVerification.coverage,reportOpened:true,mobile:true,companiesHandoff:true};
+   }else if(companyProgress){
     let held=false;const responseGate=new Promise(resolve=>releaseCompanyResponse=resolve);
     await p.route('**/api/ai/generate?*',async route=>{if(!held&&route.request().postDataJSON()?.task==='company-extraction'){held=true;const response=await route.fetch();await responseGate;await route.fulfill({response}).catch(()=>{});}else await route.continue();});
     await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#activate-market-strategy').click();await p.locator('#strategy-handoff-dialog').waitFor({state:'visible'});await p.locator('#confirm-strategy-handoff').click();
@@ -54,15 +77,15 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
     await panel.scrollIntoViewIfNeeded();await p.screenshot({path:artifactDir+'/company-progress-desktop.png'});
     await p.setViewportSize({width:390,height:844});await p.waitForFunction(()=>parseFloat(document.getElementById('company-search-progress').style.scrollMarginTop)>=(document.querySelector('header')?.getBoundingClientRect().height||0)+16);await panel.evaluate(e=>e.scrollIntoView({block:'start',behavior:'instant'}));const box=await panel.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390);await p.emulateMedia({reducedMotion:'reduce'});assert.equal(await bar.locator('span').evaluate(e=>getComputedStyle(e).animationName),'none');await p.screenshot({path:artifactDir+'/company-progress-mobile.png'});
     await p.locator('[data-cancel-company-search]').click();await p.waitForFunction(()=>document.getElementById('company-search-progress')?.dataset.state==='canceled');releaseCompanyResponse();assert.equal(await bar.getAttribute('aria-valuenow'),null);const stopped=await panel.locator('[data-company-search-elapsed]').textContent();await p.waitForTimeout(1200);assert.equal(await panel.locator('[data-company-search-elapsed]').textContent(),stopped);
-    await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());await p.context().close();p=await open();assert.equal(await p.locator('#company-search-progress').getAttribute('data-state'),'canceled');const retained=(await f.getState()).payload.main.market;assert.equal(retained.researchResults.length,20);assert.equal(retained.researchReports.length,1);
+    await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());await p.context().close();p=await open();assert.equal(await p.locator('#company-search-progress').getAttribute('data-state'),'canceled');const retained=(await f.getState()).payload.main.market;assert.equal(retained.researchResults.length,sourceCount);assert.equal(retained.researchReports.length,1);
     evidence.companyProgress={slowBatchVisible:true,honestCounts:true,elapsedLive:true,mobile:true,reducedMotion:true,cancelSaved:true,freshReopen:true};
    }else if(legacyOpportunityContext){
     await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#step-4.active').waitFor();const requests=f.externalCalls.length;
     await p.locator('#activate-market-strategy').click();await p.locator('#strategy-handoff-dialog').waitFor({state:'visible'});assert.equal(await p.locator('#strategy-handoff-blockers').isVisible(),false);assert.equal(await p.locator('#confirm-strategy-handoff').isEnabled(),true);assert.equal(f.externalCalls.length,requests,'review must reuse research rather than dispatch another provider scan');
     await p.locator('#confirm-strategy-handoff').click();await p.locator('#step-5.active').waitFor();await p.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.strategyApproved===true);
-    const persisted=(await f.getState()).payload.main;assert.equal(persisted.market.researchContextStale,false);assert.equal(persisted.market.researchResults.length,20);assert.equal(persisted.market.researchReports.length,1);assert.equal(persisted.market.researchExecution.runId,saved.market.researchExecution.runId);
-    await p.context().close();p=await open();const restored=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')));assert.equal(globalThis.LeadIntelStrategyIntegrity.status(restored).current,true);assert.equal(restored.market.researchContextStale,false);assert.equal(restored.market.researchResults.length,20);assert.equal(restored.market.researchReports.length,1);assert.equal(restored.market.researchExecution.runId,saved.market.researchExecution.runId);
-    evidence.legacyOpportunityRecovery={reviewOpened:true,approvalSaved:true,sources:20,reports:1,marketRunReused:true,coldReopen:true};
+    const persisted=(await f.getState()).payload.main;assert.equal(persisted.market.researchContextStale,false);assert.equal(persisted.market.researchResults.length,sourceCount);assert.equal(persisted.market.researchReports.length,1);assert.equal(persisted.market.researchExecution.runId,saved.market.researchExecution.runId);
+    await p.context().close();p=await open();const restored=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')));assert.equal(globalThis.LeadIntelStrategyIntegrity.status(restored).current,true);assert.equal(restored.market.researchContextStale,false);assert.equal(restored.market.researchResults.length,sourceCount);assert.equal(restored.market.researchReports.length,1);assert.equal(restored.market.researchExecution.runId,saved.market.researchExecution.runId);
+    evidence.legacyOpportunityRecovery={reviewOpened:true,approvalSaved:true,sources:sourceCount,reports:1,marketRunReused:true,coldReopen:true};
    }else assert.equal(reopened.opportunityAutoActivationRunId,reopened.researchExecution.runId);
    evidence.researchFreshBrowserReopen=true;evidence.pageErrors=errors;assert.deepEqual(errors,[]);await fs.writeFile(artifactDir+'/evidence.json',JSON.stringify(evidence,null,2));return evidence;
   }
