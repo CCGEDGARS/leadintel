@@ -53,3 +53,10 @@ test('same-reference narrative and eligibility amendments change the source vers
 test('matching and exclusion rules inspect the full bounded source, including text beyond the summary',()=>{const w={purpose:'procurement',queryTerms:['Engineering'],excludeTerms:['foreign suppliers excluded']},event=M.extractEvents({url:'https://public.example/tender',sourceRead:true,text:'Notice ID: X-2\nContracting authority: City\nDeadline: 2099-12-15\nEngineering\n'+('Long public description. '.repeat(90))+'\nEligibility: foreign suppliers excluded'},w)[0];assert.equal(event.summary.includes('foreign suppliers excluded'),false);const a=M.assessEvent(JSON.parse(JSON.stringify(event)),w,now);assert.equal(a.excluded,true);assert.equal(a.relevant,false);});
 
 test('long public notice URLs retain their full case and document identifiers',()=>{const url='https://court.example/notices?document='+('case-reference-'.repeat(85)),plan=M.buildPlan({}, {workflow:{purpose:'court',readMode:'page'},customSources:[url],researchDepth:'quick'},{});assert.equal(plan.queries[0].url,url);});
+
+test('monitoring reads the Messages owner and preserves empty or deleted libraries over legacy Profile copies',()=>{
+ const legacy={myTemplates:{'template-1':{subject:'Legacy',body:'Old'}}},current={myTemplates:{'template-1':{subject:'Current',body:'Saved',deleted:true}}};
+ assert.equal(M.messageStudio({main:{messageStudio:legacy},outreach:{messageStudio:current}}),current);
+ assert.deepEqual(M.messageStudio({main:{messageStudio:legacy},outreach:{messageStudio:{myTemplates:{}}}}),{myTemplates:{}});
+ assert.equal(M.messageStudio({main:{messageStudio:legacy}}),legacy);
+});

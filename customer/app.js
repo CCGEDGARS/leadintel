@@ -1,5 +1,5 @@
-import './monitoring-manager.js?v=20261111-categories-v1';
-import './monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1&monitoring-filter=20261114-v2';
+import './monitoring-manager.js?v=20261111-categories-v1&monitoring-ux=20261117-v1';
+import './monitoring-inbox.js?v=20261110-universal-v1&monitoring-categories=20261111-v1&inbox-buttons=20261111-v1&monitoring-filter=20261114-v2&monitoring-ux=20261117-v1';
 import './language-pack-catalogue.js?v=20261027-v1';
 import './language-pack-ui.js?v=20261027-v1';
 import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1&profile-audit=20261030-v1&profile-adviser=20261101-v1&confirmed-profile=20261104-v1';
@@ -45,6 +45,7 @@ let researchWindowMinimized=false;
 let researchWindowWasRunning=false;
 let monitoringLoaded=false;
 let monitoringBusy=false;
+let monitoringRefreshing=false;
 let monitoringDraftBaseline=null;
 let monitoringDraftMarket=null;
 let pendingResearchMode="",pendingResearchDraft=null;
@@ -1452,15 +1453,24 @@ function renderResearchControls(){
 }
 function renderResearchHistory(){const target=$("research-history");const history=state.market.researchHistory||[];target.innerHTML=history.length?history.slice(0,5).map(run=>`<span>${esc(run.mode)} · ${run.sourceCount} sources · ${esc(new Date(run.completedAt).toLocaleDateString())}</span>`).join(""):"";}
 async function monitoringApi(path,options={},context=captureMonitoringContext()){
-  const bridge=await waitForMarketServerBridge();
-  if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
-  if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw new Error("Sign in to use automatic monitoring");
-  const separator=path.includes("?")?"&":"?";
-  const response=await fetch(`${LEADINTEL_API}${path}${separator}workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{credentials:"include",headers:{Accept:"application/json","Content-Type":"application/json",...(options.headers||{})},...options});
-  const payload=await response.json().catch(()=>({}));
-  if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
-  if(!response.ok)throw new Error(payload.error||`Monitoring returned ${response.status}`);return payload;
+  // Bound bridge readiness, HTTP headers and body parsing; a stalled response
+  // must release the controls without automatically repeating a paid action.
+  const controller=new AbortController(),mutation=Boolean(options.method&&options.method!=='GET');
+  const timeoutMs=/\/run(?:\?|$)/.test(path)?330000:45000;
+  let timer;const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{const error=new Error(mutation?'Monitoring response was not confirmed. Refresh status before retrying; the server may have saved or completed the request.':'Monitoring could not be refreshed in time. Try Refresh status again.');reject(error);controller.abort();},timeoutMs);});
+  try{return await Promise.race([deadline,(async()=>{
+    const bridge=await waitForMarketServerBridge();
+    if(controller.signal.aborted)throw new Error('Monitoring request timed out.');
+    if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
+    if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw new Error("Sign in to use automatic monitoring");
+    const separator=path.includes("?")?"&":"?";
+    const response=await fetch(`${LEADINTEL_API}${path}${separator}workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{...options,credentials:"include",headers:{Accept:"application/json","Content-Type":"application/json",...(options.headers||{})},signal:controller.signal});
+    const payload=await response.json().catch(()=>({}));
+    if(!monitoringContextCurrent(context))throw new Error("Workspace changed. Monitoring response discarded.");
+    if(!response.ok)throw new Error(window.LeadIntelMonitoringModel?.runIssue?.(payload.error)||payload.error||`Monitoring returned ${response.status}`);return payload;
+  })()]);}finally{clearTimeout(timer);}
 }
+
 function monitoringFormSnapshot(){
   return JSON.stringify([...$("monitoring-settings").querySelectorAll("input,select,textarea")].map(input=>[input.id||input.dataset.monitorSignal||input.dataset.monitorSource,input.value,input.checked]));
 }
@@ -1516,6 +1526,7 @@ function updateMonitoringDisclosure(){
   $("toggle-monitoring-settings").disabled=monitoringBusy;$("close-monitoring-settings").disabled=monitoringBusy;$("save-monitoring-close").disabled=monitoringBusy;
   for(const id of ["discard-monitoring-close","keep-editing-monitoring"])$(id).disabled=monitoringBusy;
   $("monitoring-settings").querySelectorAll("input,select,textarea").forEach(input=>{input.disabled=monitoringBusy||(input.id==="monitoring-enabled"&&locked&&!config.enabled);});
+  if($("refresh-monitoring"))$("refresh-monitoring").disabled=monitoringBusy||monitoringRefreshing;
   $("save-monitoring").disabled=monitoringBusy;$("run-monitoring-now").disabled=locked||monitoringBusy||dirty||!config.revision;
   const review=$("monitoring-review-strategy");if(review){review.hidden=!locked;review.disabled=monitoringBusy||dirty;}
   if(typeof updateMonitoringWorkflowHelp==='function'&&$('monitoring-purpose'))updateMonitoringWorkflowHelp();
@@ -1523,7 +1534,7 @@ function updateMonitoringDisclosure(){
   if(!monitoringBusy&&!locked&&config.workflow.purpose==='signals'&&config.signalIds.length&&!$("monitoring-signals").querySelector("input:checked")){$("run-monitoring-now").disabled=true;if($("monitoring-advanced"))$("monitoring-advanced").open=true;$("monitoring-status").textContent="Your saved buying signals have changed. Select active signals below, save settings, then enable monitoring.";}
 }
 function openMonitoringSettings(){
-  renderMonitoringControls();$("monitoring-settings").hidden=false;monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();updateMonitoringDisclosure();$("monitoring-custom-sources").focus();void loadMonitoringServerState();
+  renderMonitoringControls();$("monitoring-settings").hidden=false;monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();updateMonitoringDisclosure();$("monitoring-custom-sources").focus();void loadMonitoringServerState(true);
 }
 function closeMonitoringSettings(){
   $("monitoring-settings").hidden=true;monitoringDraftBaseline=null;monitoringDraftMarket=null;keepEditingMonitoring();updateMonitoringDisclosure();$("toggle-monitoring-settings").focus();
@@ -1531,17 +1542,22 @@ function closeMonitoringSettings(){
 function requestCloseMonitoringSettings(){if(monitoringBusy)return;if(monitoringHasEdits())$("monitoring-close-dialog").showModal();else closeMonitoringSettings();}
 function keepEditingMonitoring(){if($("monitoring-close-dialog").open)$("monitoring-close-dialog").close();}
 function discardMonitoringEdits(){monitoringDraftBaseline=null;closeMonitoringSettings();renderMonitoringControls();}
+function monitoringMessageStudio(){
+ if(!monitoringContextCurrent(captureMonitoringContext()))return {};
+ let outreach;try{outreach=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}');}catch{return {};}
+ return window.LeadIntelMonitoringModel.messageStudio({main:state,outreach});
+}
 function renderMonitoringWorkflow(workflow){
  window.LeadIntelMonitoringManager?.decorate($('monitoring-purpose'),workflow);
  const values={'purpose':workflow.categoryId||workflow.purpose,'read-mode':workflow.readMode,'query-terms':workflow.queryTerms.join('\n'),'exclude-terms':workflow.excludeTerms.join('\n'),'next-action':workflow.nextAction,'message-mode':workflow.messageMode,'daily-limit':workflow.dailyLimit};
  for(const [id,value] of Object.entries(values))if($('monitoring-'+id))$('monitoring-'+id).value=value;
- const templates=window.LeadIntelPersonalTemplates?.normalize(state.messageStudio?.myTemplates)||state.messageStudio?.myTemplates||{};
+ const templates=window.LeadIntelPersonalTemplates?.normalize(monitoringMessageStudio().myTemplates)||monitoringMessageStudio().myTemplates||{};
  $('monitoring-template-id').innerHTML='<option value="">Choose in the inbox</option>'+Object.values(templates).filter(t=>t&&!t.deleted&&/^template-(?:[1-9]|1\d|20)$/.test(t.id)).map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('');$('monitoring-template-id').value=workflow.templateId;
 }
-function updateMonitoringWorkflowHelp(){const selected=$('monitoring-purpose').value,purpose=window.LeadIntelMonitoringManager?.selection(selected)?.purpose||selected,legacy=purpose==='signals'&&!selected.startsWith('MC-');for(const id of ['monitoring-read-mode','monitoring-query-terms','monitoring-exclude-terms'])$(id).disabled=monitoringBusy||legacy;for(const id of ['monitoring-query-terms','monitoring-exclude-terms'])$(id).readOnly=selected.startsWith('MC-');$('monitoring-purpose-help').textContent=legacy?'Buying signals use the active Strategy signals and source categories below. Daily findings appear in Monitoring → review evidence → choose the next action.':'Add independent monitors with their own websites and schedules through Manage monitors. '+(purpose==='court'?'Public case numbers, dates and explicitly identified parties are retained; anonymized or sensitive cases stay held. ':purpose==='procurement'?'Notices, deadlines and amendments enter bid review; eligibility remains open. ':purpose==='hiring'?'Use the actual advertised skills and local job titles. Employers enter company research with buying intent still open. ':'Use matching and exclusion terms for public events. ')+'Unknown page layouts need source review. Personal formats come from Messages; automatic delivery requires exact message approval and the existing Delivery policy, limits and Gmail connection.';}
+function updateMonitoringWorkflowHelp(){const selected=$('monitoring-purpose').value,purpose=window.LeadIntelMonitoringManager?.selection(selected)?.purpose||selected,legacy=purpose==='signals'&&!selected.startsWith('MC-');for(const id of ['monitoring-read-mode','monitoring-query-terms','monitoring-exclude-terms'])$(id).disabled=monitoringBusy||legacy;for(const id of ['monitoring-query-terms','monitoring-exclude-terms'])$(id).readOnly=selected.startsWith('MC-');$('monitoring-purpose-help').textContent=legacy?'Checks use your active Strategy signals and the source categories below. Review new evidence in the Monitoring inbox.':(purpose==='court'?'Tracks public case references, dates and identified parties. Sensitive or anonymized cases require review.':purpose==='procurement'?'Tracks notices, deadlines and amendments. Review bid eligibility in the inbox.':purpose==='hiring'?'Tracks advertised roles and skills. Review employers in the inbox; a job advert alone does not confirm buying intent.':'Tracks public events using your matching and exclusion words. Unknown page layouts need source review.');}
 $('monitoring-purpose')?.addEventListener('change',async()=>{if(await window.LeadIntelMonitoringManager?.legacyCategory($('monitoring-purpose')))return;const selected=window.LeadIntelMonitoringManager?.selection($('monitoring-purpose').value)||{purpose:$('monitoring-purpose').value},defaults=window.LeadIntelMonitoringModel.normalizeWorkflow(selected);if(selected.categoryId){$('monitoring-query-terms').value=defaults.queryTerms.join('\n');$('monitoring-exclude-terms').value=defaults.excludeTerms.join('\n');}$('monitoring-purpose').dataset.previousPurpose=$('monitoring-purpose').value;$('monitoring-read-mode').value=defaults.readMode;$('monitoring-next-action').value=defaults.nextAction;updateMonitoringWorkflowHelp();});
 function readMonitoringWorkflow(){return (window.LeadIntelMonitoringModel?.normalizeWorkflow||((v)=>({...LeadIntelMarket.normalizeMonitoring({}).workflow,...v})))({...window.LeadIntelMonitoringManager?.selection($('monitoring-purpose')?.value),purpose:window.LeadIntelMonitoringManager?.selection($('monitoring-purpose')?.value)?.purpose||$('monitoring-purpose')?.value,readMode:$('monitoring-read-mode')?.value,queryTerms:$('monitoring-query-terms')?.value,excludeTerms:$('monitoring-exclude-terms')?.value,nextAction:$('monitoring-next-action')?.value,messageMode:$('monitoring-message-mode')?.value,templateId:$('monitoring-template-id')?.value,dailyLimit:$('monitoring-daily-limit')?.value});}
-window.LeadIntelMonitoringManager?.configure({api:monitoringApi,capture:captureMonitoringContext,current:monitoringContextCurrent,reviewStrategy:beginMonitoringApproval,legacy:()=>{setStep(2);window.LeadIntelWebsiteScanUI?.openMonitoring?.();openMonitoringSettings();},templates:()=>Object.values(window.LeadIntelPersonalTemplates?.normalize(state.messageStudio?.myTemplates)||{}).filter(t=>t&&!t.deleted)});
+window.LeadIntelMonitoringManager?.configure({api:monitoringApi,capture:captureMonitoringContext,current:monitoringContextCurrent,reviewStrategy:beginMonitoringApproval,legacy:()=>{setStep(2);window.LeadIntelWebsiteScanUI?.openMonitoring?.();openMonitoringSettings();},templates:()=>Object.values(window.LeadIntelPersonalTemplates?.normalize(monitoringMessageStudio().myTemplates)||{}).filter(t=>t&&!t.deleted)});
 window.LeadIntelMonitoringInbox?.configure({api:monitoringApi,capture:captureMonitoringContext,current:monitoringContextCurrent,settings:()=>{setStep(2);window.LeadIntelWebsiteScanUI?.openMonitoring?.();openMonitoringSettings();},company:async(subject,finding,owner)=>{
  if(!monitoringContextCurrent(owner))throw Error('Workspace changed.');
  const bridge=window.LeadIntelServerBridge,website=window.LeadIntelMonitoringModel.publicUrl(subject.website);if(subject.kind!=='organization'||!website)throw Error('Review a company website first.');
@@ -1558,23 +1574,33 @@ function renderMonitoringControls(){
   const selectedSignals=new Set(config.signalIds.length?config.signalIds:state.market.signals.filter(signal=>signal.active).map(signal=>signal.id));$("monitoring-signals").innerHTML=state.market.signals.filter(signal=>signal.active).map(signal=>`<label><input type="checkbox" data-monitor-signal value="${esc(signal.id)}" ${selectedSignals.has(signal.id)?"checked":""}> ${esc(signal.name)}</label>`).join("")||"<span>No active signals</span>";
   const selectedSources=new Set(config.sourceTypes);$("monitoring-sources").innerHTML=Object.keys(LeadIntelMarket.SOURCE_TYPES).map(source=>`<label><input type="checkbox" data-monitor-source value="${source}" ${selectedSources.has(source)?"checked":""}> ${source[0].toUpperCase()+source.slice(1)}</label>`).join("");
   }
-  const locked=!strategyIntegrity()?.status(state).current;$("monitoring-summary-status").textContent=monitoringBusy?"Working…":locked?"Strategy review needed":config.enabled?"Active":"Off";$("monitoring-status").textContent=monitoringBusy?"Monitoring request in progress…":locked?"Save your settings now. Review and activate Strategy in Step 3 before enabling scheduled checks.":config.enabled?`Monitoring active · ${config.frequency}${config.nextRunAt?` · next due ${new Date(config.nextRunAt).toLocaleString()}`:""}. Due schedules are checked hourly; alerts appear here.`:config.revision?"Monitoring is off. Run once now, or enable monitoring for scheduled checks.":"Save your settings, then run once or enable scheduled monitoring.";
+  const locked=!strategyIntegrity()?.status(state).current;$("monitoring-summary-status").textContent=monitoringBusy?"Working…":locked?"Strategy review needed":config.enabled?"Active":"Off";$("monitoring-status").textContent=monitoringBusy?"Checking or saving monitoring… Runs can take up to 5 minutes.":locked?"Save your settings now. Review and activate Strategy in Step 3 before enabling scheduled checks.":config.enabled?`Monitoring active · ${config.frequency}${config.nextRunAt?` · next due ${new Date(config.nextRunAt).toLocaleString()}`:""}. Due schedules are checked hourly; alerts appear here.`:config.revision?"Monitoring is off. Run once now, or enable monitoring for scheduled checks.":"Save your settings, then run once or enable scheduled monitoring.";
   if(!preserveDraft&&!$("monitoring-settings").hidden){monitoringDraftMarket=state.market;monitoringDraftBaseline=monitoringFormSnapshot();}updateMonitoringDisclosure();
 }
 function readMonitoringEdits(persist=true){const sourceTypes=LeadIntelMarket.filterResearchSourceTypes([...document.querySelectorAll('[data-monitor-source]:checked')].map(input=>input.value),state.market.signals||[]);const config=LeadIntelMarket.normalizeMonitoring({workflow:readMonitoringWorkflow(),enabled:$("monitoring-enabled").checked,frequency:$("monitoring-frequency").value,researchDepth:$("monitoring-depth").value,minimumScore:$("monitoring-minimum-score").value,sourceTypes,signalIds:[...document.querySelectorAll('[data-monitor-signal]:checked')].map(input=>input.value),customSources:$("monitoring-custom-sources").value.split(/\n/)});if(persist){state.market.monitoring=config;saveState();}return config;}
-function renderMonitoringAlerts(alerts=[]){if(state.market.monitoring.workflow?.purpose&&state.market.monitoring.workflow.purpose!=='signals'){$("monitoring-alerts").innerHTML='<div class="market-empty">New and changed findings are saved in the Monitoring inbox. Review their sources and choose the next action there.<p><button type="button" data-open-monitoring-inbox>Open Monitoring inbox →</button></p></div>';return;}$("monitoring-alerts").innerHTML=alerts.length?alerts.map(alert=>`<article class="monitor-alert"><div class="monitor-alert-head"><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><strong>${Number(alert.score)||0}/100</strong></div><p>${esc(alert.summary)}</p><span>${esc(new Date(alert.created_at).toLocaleString())}</span> ${alert.status==="new"?`<button type="button" data-monitor-alert-read="${esc(alert.id)}">Mark read</button>`:""}</article>`).join(""):'<div class="market-empty">No monitoring alerts yet.</div>';}
-function renderMonitoringHistory(runs=[]){$("monitoring-history").innerHTML=runs.length?runs.map(run=>`<div class="monitor-run"><span>${esc(run.trigger_type)} · ${esc(run.research_depth)} · ${esc(run.status)}${run.error_message?` · ${esc(run.error_message)}`:""}</span><strong>${Number(run.source_count)||0} sources · ${Number(run.alert_count)||0} alerts</strong></div>`).join(""):'<div class="market-empty">No automatic runs yet.</div>';}
+function renderMonitoringAlerts(alerts=[]){if(state.market.monitoring.workflow?.purpose&&state.market.monitoring.workflow.purpose!=='signals'){$("monitoring-alerts").innerHTML='<div class="market-empty">New and changed findings are saved in the Monitoring inbox. Review their sources and choose the next action there.<p><button class="secondary-btn" type="button" data-open-monitoring-inbox>Open Monitoring inbox →</button></p></div>';return;}$("monitoring-alerts").innerHTML=alerts.length?alerts.map(alert=>`<article class="monitor-alert"><div class="monitor-alert-head"><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><strong>${Number(alert.score)||0}/100</strong></div><p>${esc(alert.summary)}</p><span>${esc(new Date(alert.created_at).toLocaleString())}</span> ${alert.status==="new"?`<button type="button" data-monitor-alert-read="${esc(alert.id)}">Mark read</button>`:""}</article>`).join(""):'<div class="market-empty">No monitoring alerts yet.</div>';}
+function renderMonitoringHistory(runs=[]){
+  $("monitoring-history").innerHTML=runs.length?runs.map(run=>{
+    const status=({completed:'Completed',partial:'Partly checked',failed:'Needs attention',running:'Checking'})[run.status]||'Check pending';
+    const issue=window.LeadIntelMonitoringModel?.runIssue?.(run.error_message)||run.error_message||'';
+    const date=run.completed_at||run.started_at,stamp=date?new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(date)?date:date.replace(' ','T')+'Z').toLocaleString():'';
+    const count=Number(run.alert_count)||0;
+    return `<article class="monitor-run" data-run-status="${esc(run.status)}"><div class="monitor-run-heading"><strong>${esc(status)}</strong><span>${esc(stamp)}</span></div><p>${run.trigger_type==='scheduled'?'Scheduled':'Manual'} · ${run.research_depth==='deep'?'Deep':'Quick'} · ${Number(run.source_count)||0} sources · ${count} new alerts</p>${issue?`<p class="monitor-run-issue">${esc(issue)}</p>`:run.status==='completed'&&!count?'<p>No new findings met your alert criteria.</p>':''}</article>`;
+  }).join(''):'<div class="market-empty">No checks yet. Save your settings and run your first check.</div>';
+}
+
 async function loadMonitoringServerState(force=false){
-  if((monitoringContextCurrent(monitoringLoaded)||monitoringBusy)&&!force)return;
+  if(monitoringBusy||(!force&&monitoringContextCurrent(monitoringLoaded)))return;
   const context=captureMonitoringContext(),serial=++monitoringRequestSerial,bridge=await waitForMarketServerBridge();
   if(!monitoringContextCurrent(context)||serial!==monitoringRequestSerial)return;
   if(!bridge?.session?.authenticated||!bridge.workspace?.id){$("monitoring-status").textContent="Sign in to configure automatic monitoring.";return;}
-  monitoringLoaded=context;
+  monitoringLoaded=context;monitoringRefreshing=true;if($("refresh-monitoring"))$("refresh-monitoring").disabled=true;
   try{
     const [config,alerts,runs]=await Promise.all([monitoringApi('/api/market-monitoring/config',{},context),monitoringApi('/api/market-monitoring/alerts',{},context),monitoringApi('/api/market-monitoring/runs',{},context)]);
     if(!monitoringContextCurrent(context)||serial!==monitoringRequestSerial)return;
-    state.market.monitoring=LeadIntelMarket.normalizeMonitoring(config.config);saveState();renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);
+    const updated=LeadIntelMarket.normalizeMonitoring(config.config),draftConflict=monitoringHasEdits()&&Number(updated.revision)!==Number(state.market.monitoring.revision);if(!draftConflict&&JSON.stringify(updated)!==JSON.stringify(state.market.monitoring)){state.market.monitoring=updated;saveState();}renderMonitoringControls();renderMonitoringAlerts(alerts.alerts);renderMonitoringHistory(runs.runs);if(draftConflict)$("monitoring-status").textContent="Saved settings changed elsewhere. Your draft is retained. Close and discard the draft, then reopen settings to review the newer version.";if($("monitoring-refreshed-at"))$("monitoring-refreshed-at").textContent="Updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
   }catch(error){if(serial===monitoringRequestSerial){if(monitoringLoaded===context)monitoringLoaded=false;if(monitoringContextCurrent(context))$("monitoring-status").textContent=error.message;}}
+  finally{if(serial===monitoringRequestSerial){monitoringRefreshing=false;if($("refresh-monitoring"))$("refresh-monitoring").disabled=monitoringBusy;}}
 }
 async function saveMonitoringConfig({closeAfterSave=true}={}){
   if(monitoringBusy)return false;
@@ -1592,16 +1618,16 @@ async function saveMonitoringConfig({closeAfterSave=true}={}){
     state.market.monitoring=LeadIntelMarket.normalizeMonitoring(result.config);saveState();succeeded=true;monitoringDraftBaseline=null;monitoringLoaded=context;
     showToast(state.market.monitoring.enabled?'Monitoring settings saved — schedule enabled':'Monitoring settings saved — schedule off');return true;
   }catch(error){if(monitoringContextCurrent(context)&&serial===monitoringRequestSerial){state.market.monitoring=previous;$("monitoring-enabled").checked=previous.enabled;saveState();failure=error.message;showToast(failure);}return false;}
-  finally{operation?.finish(!monitoringContextCurrent(context)?'stale':succeeded?'pass':'fail');if(serial===monitoringRequestSerial)monitoringBusy=false;renderMonitoringControls();if(monitoringContextCurrent(context)){if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Not saved — ${failure}. Reload to confirm the server setting.`;}}
+  finally{operation?.finish(!monitoringContextCurrent(context)?'stale':succeeded?'pass':'fail');if(serial===monitoringRequestSerial){monitoringBusy=false;monitoringRefreshing=false;}renderMonitoringControls();if(monitoringContextCurrent(context)){if(succeeded&&closeAfterSave)closeMonitoringSettings();if(failure&&$("monitoring-status"))$("monitoring-status").textContent=`Save not confirmed — ${failure}. Refresh status to confirm the server setting.`;}}
 }
 
 async function runMonitoringNow(){
   if(monitoringBusy)return;if(monitoringHasEdits()){showToast("Save your monitoring changes before running.");return;}
   const report=strategyIntegrity()?.status(state);if(!report?.current){showToast(report?.reason||'Review and activate Strategy first.');return false;}
-  const context=captureMonitoringContext(true);monitoringBusy=true;renderMonitoringControls();
+  const context=captureMonitoringContext(true),serial=++monitoringRequestSerial;let failure="";monitoringBusy=true;renderMonitoringControls();
   try{const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'},context);if(!monitoringContextCurrent(context))return;
-    showToast(`Monitoring ${result.run.status||'completed'} · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);
-  }catch(error){if(monitoringContextCurrent(context))showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}
+    failure=window.LeadIntelMonitoringModel?.runIssue?.(result.run.reason)||result.run.reason||'';showToast(failure||`Monitoring ${result.run.status||'completed'} · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);
+  }catch(error){failure=error.message;if(monitoringContextCurrent(context))showToast(failure);}finally{if(serial===monitoringRequestSerial){monitoringBusy=false;monitoringRefreshing=false;renderMonitoringControls();if(monitoringContextCurrent(context)){await loadMonitoringServerState(true);if(failure&&monitoringContextCurrent(context))$("monitoring-status").textContent=failure;}}}
 }
 async function markMonitoringAlertRead(id){const context=captureMonitoringContext();try{await monitoringApi(`/api/market-monitoring/alerts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:'read'})},context);if(monitoringContextCurrent(context))await loadMonitoringServerState(true);}catch(error){if(monitoringContextCurrent(context))showToast(error.message);}}
 function renderMarketStrategy(){
@@ -1940,7 +1966,11 @@ function bind(){
   $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
     clearMonitoringApproval();openStrategyHandoff();
-  });$("cancel-strategy-handoff").addEventListener("click",cancelStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))cancelStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});window.addEventListener("leadintel:monitoring-opened",()=>{renderMonitoringControls();void loadMonitoringServerState();});$("monitoring-settings").addEventListener("input",updateMonitoringDisclosure);$("monitoring-settings").addEventListener("change",updateMonitoringDisclosure);$("monitoring-review-strategy").addEventListener("click",beginMonitoringApproval);$("monitoring-enabled").addEventListener("change",()=>void saveMonitoringConfig({closeAfterSave:false}));$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+  });$("cancel-strategy-handoff").addEventListener("click",cancelStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))cancelStrategyHandoff();});$("toggle-monitoring-settings").addEventListener("click",()=>$("monitoring-settings").hidden?openMonitoringSettings():requestCloseMonitoringSettings());$("close-monitoring-settings").addEventListener("click",requestCloseMonitoringSettings);$("save-monitoring-close").addEventListener("click",saveMonitoringConfig);$("discard-monitoring-close").addEventListener("click",discardMonitoringEdits);$("keep-editing-monitoring").addEventListener("click",keepEditingMonitoring);$("monitoring-close-dialog").addEventListener("cancel",event=>{if(monitoringBusy)event.preventDefault();});window.addEventListener("leadintel:monitoring-opened",()=>{renderMonitoringControls();void loadMonitoringServerState(true);});$("monitoring-settings").addEventListener("input",updateMonitoringDisclosure);$("monitoring-settings").addEventListener("change",updateMonitoringDisclosure);$("monitoring-review-strategy").addEventListener("click",beginMonitoringApproval);$("monitoring-enabled").addEventListener("change",()=>void saveMonitoringConfig({closeAfterSave:false}));$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("refresh-monitoring")?.addEventListener("click",()=>void loadMonitoringServerState(true));
+  // Read saved progress only while this panel is visible. Never start research
+  // or replace an unsaved form through a timer.
+  setInterval(()=>{if(document.visibilityState==='hidden'||monitoringBusy||monitoringRefreshing||monitoringHasEdits()||!$("monitoring-settings")?.getClientRects().length)return;void loadMonitoringServerState(true);},60000);
+  $("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
   $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);

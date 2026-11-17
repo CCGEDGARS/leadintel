@@ -61,7 +61,15 @@ for(const profileApproved of [true,false])test('monitoring saves before activati
   assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM market_monitoring_alerts').get().n,1);assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM market_monitoring_runs WHERE trigger_type='scheduled' AND status='completed'").get().n,1);
   assert.ok(f.DB.raw.prepare("SELECT count(*) n FROM audit_events WHERE event_type='operations.scheduler' AND entity_type='market_monitoring' AND metadata_json LIKE '%completed%'").get().n>0);
   assert.equal(Date.parse(config().next_run_at)-Date.parse(config().last_run_at),86400000);await hourly();assert.equal(queries.length-count,4);
-  await open();assert.equal(await page.locator('#monitoring-enabled').isChecked(),true);assert.match(await page.locator('#monitoring-history').textContent(),/scheduled.*completed/);assert.equal(await page.locator('#monitoring-alerts .monitor-alert').count(),1);assert.equal(await page.locator('#monitoring-alerts [data-monitor-alert-read]').count(),0);
+  await open();assert.equal(await page.locator('#monitoring-enabled').isChecked(),true);assert.match(await page.locator('#monitoring-history').textContent(),/Completed[\s\S]*Scheduled/);assert.equal(await page.locator('#monitoring-alerts .monitor-alert').count(),1);assert.equal(await page.locator('#monitoring-alerts [data-monitor-alert-read]').count(),0);
+  const previousRuns=await page.locator('#monitoring-history .monitor-run').count();
+  f.DB.raw.prepare("UPDATE market_monitoring_configs SET next_run_at='2020-01-01T00:00:00.000Z' WHERE workspace_id=?").run(workspaceId);await hourly();
+  await page.locator('#monitoring-custom-sources').fill('https://draft.example/news');
+  const refresh=page.waitForResponse(r=>r.url().includes('/market-monitoring/runs')&&r.request().method()==='GET');await page.locator('#refresh-monitoring').click();await refresh;
+  await page.waitForFunction(n=>document.querySelectorAll('#monitoring-history .monitor-run').length>n,previousRuns);
+  assert.equal(await page.locator('#monitoring-custom-sources').inputValue(),'https://draft.example/news');assert.equal(await page.locator('#run-monitoring-now').isDisabled(),true);
+  await page.locator('#monitoring-custom-sources').fill('https://www.jobindex.dk/');
+  await page.locator('#monitoring-open-inbox').click();await page.locator('#monitoring-inbox').waitFor({state:'visible'});await page.locator('[data-mi=refresh]').click();await page.locator('[data-mi=close]').click();await page.locator('#monitoring-inbox').waitFor({state:'hidden'});
   await page.setViewportSize({width:390,height:844});await page.locator('#monitoring-settings').scrollIntoViewIfNeeded();const box=await page.locator('#monitoring-settings').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=391);await page.screenshot({path:dir+'/mobile.png',fullPage:true});await page.locator('#website-scanning-monitor').screenshot({path:dir+'/mobile-monitoring.png'});
   const pause=saveResponse();await page.locator('#monitoring-enabled').uncheck();await pause;assert.equal(config().enabled,0);const paused=queries.length;await hourly();assert.equal(queries.length,paused);assert.deepEqual(errors,[]);
   assert.equal(proxyRejections,0);assert.ok(workspaceWireBytes.length>0);assert.ok(workspaceWireBytes.every(bytes=>bytes<4*1024*1024+1024));

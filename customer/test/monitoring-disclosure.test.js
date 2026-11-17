@@ -13,7 +13,7 @@ function setup(){
  const state={website:'https://seller.example',approved:true,profile:{priorityOffers:'Industrial automation',targetMarkets:'Finland'},market:{strategyApproved:true,icps:[{id:'core',active:true}],signals:[{id:'signal',name:'Expansion',keywords:'expansion',weight:7,active:true}],monitoring:{...config}}};state.market.strategyApproval=I.approval(state);
  window.LeadIntelStrategyIntegrity=I;window.LeadIntelServerBridge={ready:true,workspace:{id:'w1'},session:{authenticated:true,user:{id:'u1'}}};window.LeadIntelAccountCache={current:()=>true};
  const calls=[];
- const context={window,document,$,state,monitoringBusy:false,monitoringLoaded:false,monitoringRequestSerial:0,monitoringDraftBaseline:null,monitoringDraftMarket:null,monitoringApprovalContext:null,closeStrategyHandoff(){},esc:String,saveState(){},showToast(){},LeadIntelMarket:Market,waitForMarketServerBridge:async()=>window.LeadIntelServerBridge,monitoringApi:async(path,options={})=>{if(options.method==='PUT'){const body=JSON.parse(options.body);calls.push(body);return {saved:true,config:serverConfig(body)};}return path.endsWith('/config')?{config:{...config}}:path.endsWith('/alerts')?{alerts:[]}:{runs:[]};}};
+ const context={window,document,$,state,monitoringBusy:false,monitoringRefreshing:false,monitoringLoaded:false,monitoringRequestSerial:0,monitoringDraftBaseline:null,monitoringDraftMarket:null,monitoringApprovalContext:null,closeStrategyHandoff(){},esc:String,saveState(){},showToast(){},LeadIntelMarket:Market,waitForMarketServerBridge:async()=>window.LeadIntelServerBridge,monitoringApi:async(path,options={})=>{if(options.method==='PUT'){const body=JSON.parse(options.body);calls.push(body);return {saved:true,config:serverConfig(body)};}return path.endsWith('/config')?{config:{...config}}:path.endsWith('/alerts')?{alerts:[]}:{runs:[]};}};
  window.LeadIntelWorkspacePersistence={saveWorkspace:async()=>true};
  const dialog=$('monitoring-close-dialog');if(dialog){dialog.showModal=()=>dialog.open=true;dialog.close=()=>dialog.open=false;}
  vm.createContext(context);
@@ -190,7 +190,7 @@ test('failed immediate off save restores the confirmed switch while retaining ot
  c.$('monitoring-enabled').checked=false;c.$('monitoring-frequency').value='daily';
  c.context.monitoringApi=async()=>{throw Error('offline');};await c.context.saveMonitoringConfig({closeAfterSave:false});
  assert.equal(c.$('monitoring-enabled').checked,true);assert.equal(c.$('monitoring-frequency').value,'daily');
- assert.match(c.$('monitoring-status').textContent,/Not saved/);
+ assert.match(c.$('monitoring-status').textContent,/Save not confirmed/);
 });
 test('removing a research website preserves separately saved monitoring scope and states what changed',()=>{
  const c=setup();c.state.market.researchCustomSources=['https://example.com/news'];let notice='';

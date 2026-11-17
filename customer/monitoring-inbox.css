@@ -48,3 +48,20 @@
 .monitoring-workflow-help{line-height:1.6;padding:12px;background:#edf7f3;border-radius:9px}
 @media(max-width:640px){.monitoring-inbox{padding:16px;width:98vw;max-height:96vh}.monitoring-inbox header{top:-16px}.monitoring-inbox header h2{font-size:24px}.mi-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mi-inbox-actions{flex-direction:column;align-items:stretch;gap:6px}.mi-action-buttons{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;order:-1}.mi-action-buttons button{width:100%;min-height:44px;padding-inline:10px}.mi-inbox-actions .mi-button-quiet{align-self:flex-start;min-height:44px}.mi-toolbar>*{box-sizing:border-box}.mi-pagination{justify-content:space-between}.mi-pagination button{min-height:44px}.monitoring-workflow-grid{grid-template-columns:1fr}.mi-facts{gap:15px}.mi-subject input{max-width:100%;box-sizing:border-box}}
 @media(prefers-reduced-motion:reduce){.monitoring-inbox button{transition:none}}
+/* Saved findings are a review queue, with clear filters and next actions. */
+.monitoring-inbox [data-monitor-notice]{padding:12px 16px;border-radius:10px;background:#edf5f0;font-size:14px;line-height:1.6}
+.monitoring-inbox .mi-inbox-toolbar{padding:18px;background:#fff;border:1px solid #d4e3df;border-radius:14px}
+.monitoring-inbox [data-mi-count]{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+.monitoring-inbox [data-mi-count]>span{padding:12px 18px;background:#edf5f0;border-radius:10px;font-size:14px}
+.monitoring-inbox [data-mi-count] strong{font-size:22px;color:#173d34;margin-right:5px}
+.monitoring-inbox .mi-finding{position:relative;padding:20px 24px;border-left:4px solid #8fb9a8;gap:9px;box-shadow:0 2px 5px #123e2405}
+.monitoring-inbox .mi-finding strong{font-size:18px;line-height:1.4}
+.monitoring-inbox .mi-tag{font-family:inherit;font-size:12px;font-weight:650;letter-spacing:.02em}
+.monitoring-inbox .mi-finding-state{font-size:12px;border-radius:6px;padding:3px 8px;background:#edf5f0;color:#3d6555}
+.monitoring-inbox .mi-finding small{font-size:13px;color:#526f62;line-height:1.5}
+.monitoring-inbox .mi-empty{border:1px dashed #cdded8;border-radius:14px;background:#fff;margin:16px 0}
+.monitoring-inbox .mi-empty>span{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#edf5f0;border-radius:12px;font-size:24px}
+.monitoring-inbox .mi-empty p{max-width:440px;margin:12px auto 20px;color:#526f62}
+.monitoring-inbox article h3{font-size:24px;line-height:1.3;margin:12px 0}
+.monitoring-inbox .mi-facts{padding:16px;background:#f4f8f5;border-radius:10px;align-items:flex-start}
+@media(max-width:640px){.monitoring-inbox .mi-inbox-toolbar{padding:12px}.monitoring-inbox .mi-finding{padding:16px}.monitoring-inbox .mi-action-buttons [data-mi=monitors]{grid-column:1/-1}.monitoring-inbox [data-mi-count]>span{flex:1;padding:10px;font-size:12px}}
