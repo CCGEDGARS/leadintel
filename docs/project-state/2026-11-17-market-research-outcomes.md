@@ -38,6 +38,7 @@ Validation:
 
 - `node --test customer/test/market-*.test.js customer/test/research-*.test.js customer/test/strategy-research-lifecycle.test.js customer/test/strategy-profile-reload.test.js customer/test/release-*.test.js customer/test/ci-release.test.js`: 318 passed; the SQL/browser interruption test skipped in this command and passed separately with the WASM loader.
 - Backend verifier, Profile research routes and market-monitoring tests: 94 passed.
+- Existing research receipt compatibility tests caught unwanted empty diagnostic fields on older records. Optional fields now remain absent when absent in the input; the unchanged legacy round-trip assertion and a new partial-receipt diagnostics assertion pass (31 strategy-evidence tests).
 - `backend/test/market-research-modes-journey.test.mjs` with the WASM loader: all three passed, zero skips; desktop 1440x1000 and mobile 390x844; no page errors or horizontal overflow.
 - `customer/test/market-research-checkpoint-persistence.test.js` with the WASM loader: passed, zero skips.
 - `npm run build` and `git diff --check`: passed.
