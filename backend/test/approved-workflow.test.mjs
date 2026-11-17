@@ -587,3 +587,27 @@ test('pending paid buyer work checkpoints at Buyers and is resumed by the next a
  const second=await runApprovedWorkflows(env,{execute});assert.equal(second.completed,1);row=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get();assert.equal(row.status,'completed');assert.equal(attempts,2);assert.equal(stages.filter(s=>s==='companies').length,1);
 });
 
+async function workflowPaidCohort(env){
+ for(const migration of ['0068_paid_buyer_capacity.sql','0069_automatic_buyer_limit.sql'])env.DB.raw.exec(fs.readFileSync(new URL('../migrations/'+migration,import.meta.url),'utf8'));
+ const {paidCohortCandidate}=await import('./paid-candidate-fixture.mjs'),{controlledLookup}=await import('./paid-lookup-fixture.mjs'),crm=await import('../src/crm.js'),paid=await import('../src/buyer-paid-research.js');
+ const candidate=paidCohortCandidate(),context={workspaceId:'w1',userId:'u1',role:'owner'},company=(await crm.upsertCrmCompany(env.DB,context,{company:candidate.company,domain:candidate.domain})).company;candidate.crmId=company.id;
+ await crm.upsertCrmIntelligence(env.DB,context,company.id,globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate).intelligence);
+ env.DB.raw.prepare("INSERT INTO additional_contact_policies(workspace_id,enabled,phone_enabled,provider,daily_limit,monthly_limit,max_per_company,approved_by,automatic_buyer_limit) VALUES('w1',1,1,'treg',10,100,10,'u1',4)").run();
+ const calls=[],body=candidate.people.map(p=>'### '+p.name+'\n'+p.title+'\nForge Industries').join('\n\n'),stamp=new Date().toISOString(),services={paidLookup:await controlledLookup({},calls),search:async()=>[],read:async url=>({url,markdown:body,sourceRead:true,extractedAt:stamp,metadata:{sourceURL:url}}),independent:async()=>({status:'not_configured',results:[]}),review:async(_env,_workspace,input)=>({provider:'controlled-review',supervisor:{status:'complete',reviewedPersonIds:input.people.map(p=>p.id),findings:[]},conflicts:[]})};
+ return {candidate,context,calls,services,paid};
+}
+test('actual automatic Buyers owner preserves paid cohort intent across workflow checkpoints and reopening',{timeout:120000},async()=>{
+ const env=await fixture();await approve(env);const f=await workflowPaidCohort(env),stages=[];
+ const execute=async(stage,args)=>{stages.push(stage);if(stage==='companies'){const c=f.candidate;c.buyerDiscovery.paidRunId=args.run.id;c.buyerDiscovery.paidIntent=await f.paid.buyerPaidIntent(env,'w1',true,c);c.publicResearch.paidResearch={version:1,status:'running',outcomes:[]};return {...args.result,candidates:[c]};}if(stage==='buyers')return executeWorkflowStage(stage,{...args,buyerServices:f.services,researchDossier:async()=>assert.fail('Paid continuation must not restart company dossier/identity discovery')});return args.result;};
+ await runApprovedWorkflows(env,{execute});let row=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get(),saved=JSON.parse(row.result_json);assert.equal(row.status,'running');assert.equal(row.stage_index,3);assert.equal(row.lease_token,null);assert.equal(saved.buyerResearchPending,true);assert.equal(saved.candidates[0].buyerDiscovery.paidRunId,row.id);assert.match(saved.candidates[0].buyerDiscovery.paidIntent.continuationScopeHash,/^[a-f0-9]{64}$/);
+ for(let i=0;i<8&&row.status==='running';i++){await runApprovedWorkflows(env,{execute});row=env.DB.raw.prepare('SELECT * FROM approved_workflow_runs').get();}
+ assert.equal(row.status,'completed',row.error_message);saved=JSON.parse(row.result_json);assert.equal(saved.buyerResearchPending,false);assert.equal(stages.filter(s=>s==='companies').length,1);assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,4);assert.equal(f.calls.filter(c=>c.url.includes('email.verify')).length,4);assert.equal(f.calls.filter(c=>c.url.includes('phone.find')).length,4);assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM outreach_automation_queue').get().n,0);
+});
+test('direct automatic Buyers continuation reuses its retained run ID when no run argument is supplied',{timeout:120000},async()=>{
+ const env=await fixture(),f=await workflowPaidCohort(env),guard=async()=>{};guard.writeAuthority=()=>({sql:'1',args:[]});const c=f.candidate;
+ c.buyerDiscovery.paidRunId='retained-direct-run';c.buyerDiscovery.paidIntent=await f.paid.buyerPaidIntent(env,'w1',true,c);
+ await f.paid.runWorkflowPaidResearch(env,f.context,c,{intent:c.buyerDiscovery.paidIntent,runId:c.buyerDiscovery.paidRunId,guard,lookup:f.services.paidLookup});assert.equal(c.publicResearch.paidResearch.status,'running');
+ const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[JSON.parse(JSON.stringify(c))],buyerResearchPending:true},guard,buyerServices:f.services,researchDossier:async()=>assert.fail('Retained direct run must not restart the company dossier')});
+ assert.equal(result.buyerResearchPending,true);assert.equal(result.candidates[0].buyerDiscovery.paidRunId,'retained-direct-run');assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,2);
+});
+

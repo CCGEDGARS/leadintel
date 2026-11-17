@@ -1,6 +1,6 @@
 import {buyerRunWindow,BUYER_RUN_WINDOW_REASON} from './buyer-research-window.js';
 import {stmt,parse,authoritySql,lost,workspaceBuyerContext,readBuyerJob,publicBuyerJob,recoverInterruptedContactJob} from './buyer-research-store.js';
-import {runBuyerPaidResearch} from './buyer-paid-research.js';
+import {runBuyerPaidResearch,PAID_PRIORITY_RESEARCH_REQUIRED} from './buyer-paid-research.js';
 import {storageFailure} from './workspace-storage.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
@@ -56,7 +56,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   const writeGuard=`EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`;
   const current=async(checkpoint=false)=>{await guard({checkpoint});return [row.id,lease,clock(),contextVersion];};
-  let scheduledContactWork=false,apolloIdentityChecked=Number(input.apolloIdentityVersion||0)>=1;
+  let scheduledContactWork=false,paidContinuation=null,apolloIdentityChecked=Number(input.apolloIdentityVersion||0)>=1;
   input.apolloIdentityReceipts=Array.isArray(input.apolloIdentityReceipts)?input.apolloIdentityReceipts.slice(0,4):[];
   let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
@@ -201,8 +201,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }else{
     const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',row.workspace_id,row.requested_by).first();
     const paidGuard=async()=>guard();paidGuard.writeAuthority=()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]});
-    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup});
-    if(finished)phase='done';
+    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup,onContinuation:scope=>{paidContinuation=scope;}});
+    if(!finished&&candidate.publicResearch.paidResearch.code===PAID_PRIORITY_RESEARCH_REQUIRED){phase='contacts';diagnostics.push({phase,reason:'Completing the newly displayed buyer’s deeper public checks before resuming the saved paid attempt',at:new Date().toISOString()});}
+    else if(finished)phase='done';
     }
    }
    if(invocationExhausted){phase=row.phase;throw Object.assign(Error('Shared invocation query budget reached; saved work will continue'),{code:'TIME_BUDGET'});}
@@ -233,7 +234,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
    candidate.publicContactVersion='20261021-adaptive-depth-v3';
    let updated;
-   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args),true);}
+   try{updated=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_jobs SET input_json=json_set(input_json,'$.executionContinuationVersion',?,'$.contactSchedulingVersion',?,'$.apolloIdentityVersion',?,'$.apolloIdentityReceipts',json(?),'$.paidResearch',json(?)),status=?,phase=?,phase_ms=?,phase_runs=?,result_json=?,diagnostic_json=?,last_error='',lease_token=NULL,lease_until=0,next_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND lease_until>? AND status='running' AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?${paidContinuation?' AND EXISTS(SELECT 1 FROM crm_intelligence WHERE workspace_id=? AND company_id=? AND research_snapshot_json=? AND evidence_json=?)':''}`,deferSemanticStamp?Number(input.executionContinuationVersion||0):4,scheduledContactWork?1:Number(input.contactSchedulingVersion||0),apolloIdentityChecked?1:0,JSON.stringify(input.apolloIdentityReceipts),JSON.stringify(input.paidResearch||null),status,phase,phaseMs,phaseRuns,JSON.stringify(candidate),JSON.stringify(diagnostics.slice(-20)),clock(),...args,...(paidContinuation?[row.workspace_id,input.paidResearch.companyId,paidContinuation.row.research_snapshot_json,paidContinuation.row.evidence_json]:[])),true);}
    catch(error){
     updated={meta:{changes:0}};
     if(storageFailure(error)){status='needs_review';updated=await stmt(env,`UPDATE buyer_research_jobs SET status='needs_review',last_error='Workspace storage is full. Completed evidence is preserved; free space and resume.',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running'`,row.id,lease).run();}

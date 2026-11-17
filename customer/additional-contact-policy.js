@@ -41,15 +41,17 @@
     return {eligible:true,manualFitPending:company.manualFitPending,reason:company.manualFitPending?'Company identity and buyer checked; manual lookup approved separately from purchasing-fit review.':'Qualified company and buyer; public contact research completed.',profile};
   }
   const automaticLimit=value=>Number.isInteger(value)&&value>=1&&value<=4?value:1;
-  function targets(candidate={},options={}){
+  function targetGroup(candidate={},options={}){
     const limit=automaticLimit(options.automaticBuyerLimit);
-    const confirmedEmail=options.confirmedEmail||(()=>'' );
     // Choose the approved priority group before checking channels: free/paid success must not
     // silently move automatic spending to the next person in the roster.
     return D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,confirmedFirst:false})
-      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,limit)
-      .filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible&&!confirmedEmail(person));
+      .sort((a,b)=>D.qualifyBuyer(b,{decisionMakers:b.matchedBuyerRole||b.title},candidate).total-D.qualifyBuyer(a,{decisionMakers:a.matchedBuyerRole||a.title},candidate).total||String(a.id).localeCompare(String(b.id))).slice(0,limit);
   }
-  return {readiness,companyReadiness,targets,automaticLimit};
+  function targets(candidate={},options={}){
+    const confirmedEmail=options.confirmedEmail||(()=>'' );
+    return targetGroup(candidate,options).filter(person=>readiness(candidate,person,{...options,automatic:true,confirmedEmail:false}).eligible&&!confirmedEmail(person));
+  }
+  return {readiness,companyReadiness,targets,targetGroup,automaticLimit};
 });
 
