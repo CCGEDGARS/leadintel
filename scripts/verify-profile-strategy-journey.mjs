@@ -80,7 +80,9 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
     await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());await p.context().close();p=await open();assert.equal(await p.locator('#company-search-progress').getAttribute('data-state'),'canceled');const retained=(await f.getState()).payload.main.market;assert.equal(retained.researchResults.length,sourceCount);assert.equal(retained.researchReports.length,1);
     evidence.companyProgress={slowBatchVisible:true,honestCounts:true,elapsedLive:true,mobile:true,reducedMotion:true,cancelSaved:true,freshReopen:true};
    }else if(legacyOpportunityContext){
-    await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#step-4.active').waitFor();const requests=f.externalCalls.length;
+    // Country language-reference preparation continues under waitUntil after startup.
+    // Settle that existing work before measuring requests caused by strategy review.
+    await p.locator('.steps [data-step-marker="4"]').click();await p.locator('#step-4.active').waitFor();await p.waitForLoadState('networkidle');await f.settleBackground();const requests=f.externalCalls.length;
     await p.locator('#activate-market-strategy').click();await p.locator('#strategy-handoff-dialog').waitFor({state:'visible'});assert.equal(await p.locator('#strategy-handoff-blockers').isVisible(),false);assert.equal(await p.locator('#confirm-strategy-handoff').isEnabled(),true);assert.equal(f.externalCalls.length,requests,'review must reuse research rather than dispatch another provider scan');
     await p.locator('#confirm-strategy-handoff').click();await p.locator('#step-5.active').waitFor();await p.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.strategyApproved===true);
     const persisted=(await f.getState()).payload.main;assert.equal(persisted.market.researchContextStale,false);assert.equal(persisted.market.researchResults.length,sourceCount);assert.equal(persisted.market.researchReports.length,1);assert.equal(persisted.market.researchExecution.runId,saved.market.researchExecution.runId);

@@ -32,3 +32,24 @@
 @media(prefers-reduced-motion:reduce){.event-campaign-panel button{transition:none}}
 
 @media(max-width:720px){#event-campaign-panel>.event-actions{position:static;margin-top:18px}#event-campaign-panel{padding-bottom:72px}}
+
+/* Event invitations share the message editor column and open only on request. */
+#message-studio #event-message-panel{width:100%;box-sizing:border-box;margin:20px 0 0;padding:0;border:1px solid #dce5df;border-left:3px solid #348c70;border-radius:16px;background:#fff;box-shadow:none;min-width:0}
+#message-studio #event-message-panel>summary{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;padding:20px;list-style:none;border-radius:15px;cursor:pointer}
+#message-studio #event-message-panel>summary::-webkit-details-marker{display:none}
+#message-studio #event-message-panel>summary::before{content:'›';font-size:25px;line-height:1;color:#377563;text-align:center}
+#message-studio #event-message-panel[open]>summary::before{transform:rotate(90deg)}
+#message-studio #event-message-panel>summary:hover{background:#f5faf7}
+#message-studio #event-message-panel>summary:focus-visible{outline:3px solid #bf8619;outline-offset:3px}
+#message-studio #event-message-panel .event-message-heading{display:grid;gap:5px;min-width:0;margin:0;font-size:15px;line-height:1.5;color:#203d32}
+#message-studio #event-message-summary{margin:0;font-size:13px;font-weight:400;line-height:1.5;color:#66756d;overflow-wrap:anywhere}
+#message-studio #event-message-badge{margin:0;padding:5px 10px;border-radius:20px;background:#fff5de;color:#795a15;font-size:12px;font-weight:600;line-height:1.5;white-space:nowrap}
+#message-studio #event-message-badge[data-state=saved]{background:#e9f5ee;color:#175d48}
+#message-studio #event-message-badge[data-state=busy]{background:#eef3f1;color:#52665b}
+#message-studio .event-message-content{padding:0 20px 20px;border-top:1px solid #e5ede8;min-width:0}
+#message-studio .event-message-intro{font-size:13px;line-height:1.6;color:#52675b;margin:16px 0 8px}
+#message-studio #event-message-panel .event-message-guide{border:0;margin:0 0 18px;padding:0}
+#message-studio #event-message-panel .event-message-guide>summary{font-size:13px;color:#377563}
+#message-studio #event-message-context{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+#message-studio .event-message-content>button{margin:6px 8px 6px 0}
+@media(max-width:600px){#message-studio #event-message-panel>summary{padding:16px;gap:8px;grid-template-columns:14px minmax(0,1fr)}#message-studio #event-message-badge{grid-column:2;justify-self:start}#message-studio .event-message-content{padding:0 16px 16px}}
