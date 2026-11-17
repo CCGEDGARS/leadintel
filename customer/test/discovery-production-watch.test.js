@@ -182,7 +182,7 @@ const boundedDiscoveryRuntime = [
   'data-cancel-buyer-research Last completed check: readProgress:signal=>withDiscoveryDeadline clearTimeout(buyerPulse)',
   'const DEFAULT_DISCOVERY_TARGET=5; smallStartVersion:1 Waiting for search providers heartbeat=setTimeout(refreshWaiting,2000)',
   'function startCompanyResearchFromStrategy() window.LeadIntelDiscoveryUI.startFromStrategy=startCompanyResearchFromStrategy Needs recheck No checked companies',
-  'const reviewedMatches=verified.filter(matchesReviewed) reviewedCurrent() selectOnly:true,personId:String(person.id),reviewedRecipient The confirmed email changed. if(force)existingRows=officialResult?.freshRows||[] currentRows:evidence Retained/dossier quotes stay historical until a source read succeeds.',
+  'const reviewedMatches=verified.filter(matchesReviewed) reviewedCurrent() addBuyerToFlow(domain,index,{button,personId:String(person.id),reviewedRecipient}) The confirmed email changed. if(force)existingRows=officialResult?.freshRows||[] currentRows:evidence Retained/dossier quotes stay historical until a source read succeeds.',
   'paidOnly:true if(paidOnly&&!automatic&&!both) force:true,manualContact:true,researchOwner:candidate options={manualContact:true,...options,researchOwner}',
  "function buyerHydrationScope( function buyerHydrationSameIdentity( function buyerHydrationContact( Saved CRM buyer identity conflicts with retained local work.",
  "function captureBuyerAction( function buyerActionCurrent( selectionOwner:token data-person-id=",
