@@ -64,5 +64,29 @@
   const missing=new Set(),fill=value=>String(value||'').replace(/\{\{([^{}]+)\}\}/g,(literal,key)=>{if(!FIELDS.has(key)||typeof context[key]!=='string'||!context[key].trim()){missing.add(key);return literal;}return context[key];});
   const subject=fill(template.subject),body=fill(template.body);if(!subject.trim())missing.add('subject');if(!body.trim())missing.add('body');if(/[\r\n]/.test(subject))missing.add('subject_single_line');return {subject,body,missingFields:[...missing]};
  }
- return Object.freeze({PURPOSES,normalizeWorkflow,publicUrl,buildPlan,extractEvents,assessEvent,renderMessage});
+ function messageStudio(payload={}){
+  // Messages owns outreach.messageStudio. An explicitly empty library or
+  // deletion must never resurrect a stale Profile-era copy.
+  const outreach=payload.outreach?.messageStudio;
+  return outreach&&typeof outreach==='object'?outreach:payload.main?.messageStudio||{};
+ }
+ function runIssue(code){return ({
+  strategy_approval_stale:'Strategy changed. Review and activate it, then enable this monitor again.',
+  provider_credits_exhausted:'Firecrawl credits are exhausted. Add credits to the connected account, then run the check again.',
+  provider_auth_failed:'Firecrawl rejected the connection. Check its API key in Connections before retrying.',
+  provider_rate_limited:'Firecrawl is temporarily rate limited. Wait before running another check.',
+  provider_timeout:'The source provider took too long to respond. Saved evidence is retained; try another check later.',
+  provider_query_failed:'The source provider could not complete a check. Saved evidence is retained.',
+  CUSTOMER_SERVICE_KEY_REQUIRED:'Connect Firecrawl in Connections before running monitoring.',
+  monitoring_already_running_or_changed:'A check is already running or its settings changed. Refresh status before starting another.',
+  monitoring_configuration_changed:'Settings changed during this check. Refresh status to see the saved configuration.',
+  monitoring_category_changed:'This category changed. Review the monitor and its matching rules before enabling it again.',
+  monitoring_authorization_revoked:'Monitoring access changed. An owner or researcher must review and enable this monitor.',
+  no_active_monitoring_queries:'Choose websites or active signals, save the settings, then enable monitoring.',
+  lease_expired:'The previous check was interrupted. Refresh status before retrying.',
+  run_deadline_exceeded:'The check reached its time limit. Saved evidence is retained; review history before retrying.',
+  request_canceled:'The check was interrupted. Refresh status to see what was saved.',
+  monitoring_run_failed:'The check could not finish. Saved evidence is retained; refresh status before retrying.'
+ })[code]||'';}
+ return Object.freeze({PURPOSES,normalizeWorkflow,publicUrl,buildPlan,extractEvents,assessEvent,renderMessage,messageStudio,runIssue});
 });
