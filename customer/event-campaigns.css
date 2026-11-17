@@ -25,10 +25,12 @@
 .event-journey li>span{display:grid;place-items:center;flex:0 0 24px;height:24px;border-radius:50%;background:#eef4f1;color:#175d48;font-weight:700}
 #event-website-status{margin:0;font-size:13px;color:#175d48;min-height:0}
 #event-website-status:empty{display:none}
-#event-campaign-panel>.event-actions{position:sticky;bottom:12px;z-index:3;padding:14px;border:1px solid #b7d8cb;border-radius:12px;background:#fff;box-shadow:0 6px 20px #123e3512;align-items:center}
+#event-campaign-panel>.event-actions{position:static;z-index:3;padding:14px;border:1px solid #b7d8cb;border-radius:12px;background:#fff;box-shadow:0 6px 20px #123e3512;align-items:center}
 .event-next-hint{flex-basis:100%;margin:0 0 4px;color:#52665b;font-size:13px}
 #event-message-preview .event-actions small{flex-basis:100%;font-size:13px;color:#52665b}
 @media(max-width:720px){.event-journey{grid-template-columns:repeat(2,minmax(0,1fr))}#event-campaign-panel>.event-actions{bottom:8px;padding:10px}#event-plan-recipients{flex-basis:100%}}
 @media(prefers-reduced-motion:reduce){.event-campaign-panel button{transition:none}}
 
 @media(max-width:720px){#event-campaign-panel>.event-actions{position:static;margin-top:18px}#event-campaign-panel{padding-bottom:72px}}
+
+#event-audience-help{font-size:14px;line-height:1.6;color:#30483d}#event-meeting-notes-label[hidden]{display:none}#event-meeting-notes-label small{font-size:13px;color:#52665b}

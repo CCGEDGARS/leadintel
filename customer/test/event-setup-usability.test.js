@@ -68,3 +68,12 @@ test('research activation restores the requested saved event before the campaign
  const r=ui();let main=JSON.parse(r.w.localStorage.getItem(KEY));main.eventCampaigns=M.save(M.save({}, {id:'a',name:'Event A',startDate:'2099-01-01',endDate:'2099-01-02',roles:'Engineering Director'}),{id:'b',name:'Event B',startDate:'2099-02-01',endDate:'2099-02-02',roles:'CFO'});main.eventCampaigns=M.activate(main.eventCampaigns,'b');r.w.localStorage.setItem(KEY,JSON.stringify(main));
  await r.w.LeadIntelEventCampaignUI.activateForCampaign('a');assert.equal(M.active(JSON.parse(r.w.localStorage.getItem(KEY)).eventCampaigns).id,'a');assert.equal(M.active(JSON.parse(r.w.localStorage.getItem(KEY)).eventCampaigns).roles,'Engineering Director');await assert.rejects(r.w.LeadIntelEventCampaignUI.activateForCampaign('missing'),/saved event|unavailable/i);r.w.close();
 });
+
+test('audience explanations update and source choice stays visible before company selection',()=>{
+ const r=ui();assert.equal(r.plan('sourceChoice').closest('details').id,'event-campaign-panel');
+ for(const [mode,expected] of [['participants',/company listing does not confirm/i],['outside',/not listed at the exhibition/i],['both',/combined total/i]]){r.plan('audienceMode').value=mode;r.plan('audienceMode').dispatchEvent(new r.w.Event('change'));assert.match(r.d.querySelector('#event-audience-help').textContent,expected);}
+ r.w.close();
+});
+test('saved past event can be selected for writing without launching research or sending',async()=>{
+ const r=ui(),past={id:'past',name:'Past Forum',startDate:'2020-01-01',endDate:'2020-01-02',location:'Riga'};r.w.localStorage.setItem(KEY,JSON.stringify({eventCampaigns:M.save({},past)}));r.w.LeadIntelEventCampaignUI.refresh();const select=r.d.querySelector('#event-campaign-select');select.value='past';select.dispatchEvent(new r.w.Event('change'));await r.d.querySelector('#event-campaign-followup').onclick();assert.equal(M.active(JSON.parse(r.w.localStorage.getItem(KEY)).eventCampaigns).id,'past');assert.match(r.status(),/actual conversation/);assert.throws(()=>M.queries(past),/ended/);r.w.close();
+});

@@ -320,7 +320,7 @@
     if(!translationReady(item))return {...item,approved:false,error:'The English source changed. Update and review this translation before approval.'};
     const drafts={commercialContext:item.drafts?.commercialContext||{},emailSubject:String(editedDrafts.emailSubject??''),emailBody:String(editedDrafts.emailBody??""),linkedinMessage:String(editedDrafts.linkedinMessage??""),callOpener:String(editedDrafts.callOpener??item?.drafts?.callOpener??""),followUp:String(editedDrafts.followUp??item?.drafts?.followUp??""),objectionReply:String(editedDrafts.objectionReply??item?.drafts?.objectionReply??""),tone:clean(editedDrafts.tone||item?.drafts?.tone||"consultative")};
     {const C=typeof module==='object'&&module.exports?require('./script-contract.js'):globalThis.LeadIntelScriptContract;try{C?.assertFits(drafts.emailBody,item.messageStudioDraft?.scriptContract||{});}catch(error){return {...item,drafts,approved:false,error:error.message};}}
-    if(item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())throw Error('Event validation unavailable');EventCampaigns().validateDraft(item.messageStudioDraft.eventSnapshot,{subject:drafts.emailSubject,message:drafts.emailBody},item.messageStudioDraft.essentials||{});}catch(e){return {...item,drafts,approved:false,error:e.message};}}
+    if(item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())throw Error('Event validation unavailable');EventCampaigns().validateDraft(item.messageStudioDraft.eventSnapshot,{subject:drafts.emailSubject,message:drafts.emailBody,purpose:item.messageStudioDraft.eventPurpose,meetingNotes:item.messageStudioDraft.eventMeetingNotes},item.messageStudioDraft.essentials||{});}catch(e){return {...item,drafts,approved:false,error:e.message};}}
     if(!drafts.emailSubject.trim()||!drafts.emailBody.trim())return {...item,drafts,approved:false,error:"Email subject and email body are required before approval."};
     if(/\[Add (?:verified )?[^\]]+\]|{{[^}]+}}|\[link\]/i.test(drafts.emailSubject+'\n'+drafts.emailBody))return {...item,drafts,approved:false,error:'Complete the unresolved message facts before approval. Your exact draft is preserved.'};
     if(item.localizationApprovalBlocked||!['native','complete'].includes(clean(item.localizationStatus)))return {...item,drafts,approved:false,error:clean(item.localizationMessage)||"Resolve and confirm the recipient email language before approval."};
@@ -369,7 +369,7 @@
       subject:String(draft.emailSubject??''),body:String(draft.emailBody??''),html:String(draft.emailBodyHtml||''),
       sender:info.essentials||null,brand:item.brandSnapshot||null,style:info.mode||'',recipientIdentity:info.recipientIdentity||null,translation,
       brief:dossier.researchBrief||null,appliedBrief:info.researchBrief||null,trigger:dossier.selectedTrigger||null,appliedTrigger:info.appliedTriggerSnapshot||null,triggerSourceUrl:info.triggerSourceUrl||'',
-      scenario:normalizeCampaignScenario(item.campaignScenario||{}, {},item.campaignScenario?.language||'en'),localizationStatus:item.localizationStatus||'',localizationProvenance:item.localizationProvenance||null,contentLanguage:item.contentLanguage||'',event:info.eventSnapshot||null};
+      scenario:normalizeCampaignScenario(item.campaignScenario||{}, {},item.campaignScenario?.language||'en'),localizationStatus:item.localizationStatus||'',localizationProvenance:item.localizationProvenance||null,contentLanguage:item.contentLanguage||'',event:info.eventSnapshot||null,...(info.eventSnapshot&&info.eventPurpose==='followup'?{eventFollowup:{purpose:info.eventPurpose,meetingNotes:info.eventMeetingNotes||''}}:{})};
     return {recipient,contextKey:scopeHash(JSON.stringify(stable(context)))};
   }
   function messageSourceAuthority(main={},studio={}){
@@ -424,7 +424,7 @@
   }
   function buildApprovedSendPayload(item={},recipient=""){
     if(!item||item.channel==='linkedin')return null;
-    if(item.approvedEventSnapshot||item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())return null;EventCampaigns().validate(item.approvedEventSnapshot||item.messageStudioDraft.eventSnapshot);}catch{return null;}}
+    if(item.approvedEventSnapshot||item.messageStudioDraft?.eventSnapshot){try{if(!EventCampaigns())return null;EventCampaigns().validateMessageEvent(item.approvedEventSnapshot||item.messageStudioDraft.eventSnapshot,{purpose:item.messageStudioDraft?.eventPurpose,meetingNotes:item.messageStudioDraft?.eventMeetingNotes});}catch{return null;}}
     const email=renderApprovedEmail(item);if(!email)return null;
     const address=approvedRecipient(item);if(!address||recipient&&clean(recipient).toLowerCase()!==address)return null;
     return {recipient:address,subject:email.subject,body:email.textBody,textBody:email.textBody,htmlBody:email.htmlBody};
