@@ -36,3 +36,34 @@ test('multiple confirmed CRM addresses retain the exact reviewed contact instead
  assert.equal(await r.c.saveBuyerAndProceed('example.com',0,{personId:r.person.id}),true);assert.equal(r.c.loadMeta().selectedEmailBuyer.contactId,'contact-a');assert.equal(r.c.loadMeta().selectedEmailBuyer.email,'avery@example.com');
  }finally{r.close();}
 });
+
+test('Proceed opens Messages for the exact accepted recipient, including a repeat click on a selected buyer',async()=>{
+ const r=runtime();try{
+  r.person.kept=true;r.seed(r.contact());r.b.getCrmCompany=async()=>r.detail([r.contact()]);let loads=0;r.c.loadOutreachModules=async()=>{loads++;};
+  for(let attempt=0;attempt<2;attempt++){
+   assert.equal(await r.c.saveBuyerAndProceed('example.com',0,{personId:r.person.id}),true);
+   const meta=r.c.loadMeta();assert.equal(meta.activeJourneyStage,6);assert.equal(meta.visibleStep,6);assert.equal(meta.scriptBuyer.personId,r.person.id);assert.equal(meta.scriptBuyer.email,'avery@example.com');
+   assert.equal(r.calls.filter(e=>e.type==='leadintel:buyer-for-scripts').length,attempt+1);
+   assert.equal(meta.pendingMessageHandoff.choice.contactId,'contact-a');
+  }
+  assert.equal(loads,2);
+ }finally{r.close();}
+});
+test('Proceed preserves its saved recipient when Messages cannot load and the next click retries navigation',async()=>{
+ const r=runtime();try{
+  r.person.kept=true;r.seed(r.contact());r.b.getCrmCompany=async()=>r.detail([r.contact()]);r.c.loadOutreachModules=async()=>{throw Error('Messages unavailable; retry');};r.c.renderDiscoveryFocus=()=>{};
+  assert.equal(await r.c.saveBuyerAndProceed('example.com',0,{personId:r.person.id}),false);assert.equal(r.c.loadMeta().activeJourneyStage,5);assert.equal(r.c.loadMeta().selectedEmailBuyer.personId,r.person.id);assert.ok(r.calls.includes('Messages unavailable; retry'));assert.equal(r.calls.filter(e=>e.type==='leadintel:buyer-for-scripts').length,0);
+  r.c.loadOutreachModules=async()=>{};assert.equal(await r.c.saveBuyerAndProceed('example.com',0,{personId:r.person.id}),true);assert.equal(r.c.loadMeta().activeJourneyStage,6);
+ }finally{r.close();}
+});
+
+test('acknowledging an existing draft during save cannot cancel an explicit Proceed navigation',async()=>{
+ for(const replaced of [false,true]){
+  const r=runtime();try{
+   r.person.kept=true;r.seed(r.contact());r.b.getCrmCompany=async()=>r.detail([r.contact()]);
+   r.b.saveNow=async()=>{const meta=r.c.loadMeta();if(replaced)meta.pendingMessageHandoff={version:1,choice:{personId:'different-buyer'}};else delete meta.pendingMessageHandoff;r.c.saveMeta(meta);return {saved:true};};
+   assert.equal(await r.c.saveBuyerAndProceed('example.com',0,{personId:r.person.id}),!replaced);
+   assert.equal(r.calls.filter(e=>e.type==='leadintel:buyer-for-scripts').length,replaced?0:1);
+  }finally{r.close();}
+ }
+});

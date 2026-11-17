@@ -114,7 +114,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The 2,000+ tests can take nearly five minutes before final syntax checks.
+    # Keep test deadlines unchanged; allow setup, audits and checks to finish.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend

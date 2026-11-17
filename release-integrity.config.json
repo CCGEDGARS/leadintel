@@ -6734,7 +6734,7 @@
       "contains": [
         "const reviewedMatches=verified.filter(matchesReviewed)",
         "reviewedCurrent()",
-        "selectOnly:true,personId:String(person.id),reviewedRecipient",
+        "addBuyerToFlow(domain,index,{button,personId:String(person.id),reviewedRecipient})",
         "The confirmed email changed."
       ]
     },

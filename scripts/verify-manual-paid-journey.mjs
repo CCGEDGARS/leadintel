@@ -27,13 +27,18 @@ export async function verifyManualPaidJourney(){
  assert.equal(providerCalls.length,0,'blocked requests cannot reach paid providers');
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let ctx;
  try{
-  async function open(){ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await ctx.newPage();page.on('pageerror',error=>pageErrors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);return page;}
+  async function open(){ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await ctx.newPage();page.on('pageerror',error=>pageErrors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);
+   // Shell support normalizes answer statuses asynchronously. Capture the
+   // research fingerprint only after that real Profile initialization finishes.
+   await page.waitForFunction(()=>LeadIntelProfile.__step2ReadinessPatched&&LeadIntelStep2Readiness.QUESTION_IDS.every(id=>Object.hasOwn(mainState().answerStatus||{},id)),null,{timeout:20000});
+   await settleInitialSave(page);return page;}
   let page=await open();
   // Bind the controlled company evidence to the active strategy before the test action.
   f.candidate.strategyFingerprint=await page.evaluate(()=>fingerprint());f.candidate.needsRecheck=false;
   await upsertCrmIntelligence(f.env.DB,context,f.candidate.crmId,globalThis.LeadIntelCrm.mapDiscoveryCandidateToCrm(f.candidate).intelligence);
   const state=await f.getState();state.payload.discovery.selectedProspects=[f.candidate];await f.replace(state.payload,state.version);await ctx.close();page=await open();
   const email='[data-prospect-enrich-email][data-person-id="buyer-anna"]',proceed='[data-keep-buyer][data-person-id="buyer-anna"]';
+  assert.equal(await page.evaluate(()=>discovery.selectedProspects[0].needsRecheck),false,'the controlled research must still belong to the initialized Profile after reopen');
   const assessment=await page.evaluate(()=>qualificationAssessment(discovery.selectedProspects[0]));assert.deepEqual(assessment.gaps,['Resolve exclusion checks','Verify a specific purchasing application for a confirmed offer']);
   await page.locator('details.buyer-other-contacts').evaluateAll(nodes=>nodes.forEach(n=>n.open=true));
   assert.equal(await page.locator(proceed).isDisabled(),true);await page.locator(email).click();

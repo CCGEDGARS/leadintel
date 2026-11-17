@@ -3196,7 +3196,9 @@ async function addBuyerToFlow(domain,index,{scope='selected',button,selectOnly=f
   const selectionStamp=()=>JSON.stringify([loadMeta().selectedEmailBuyer,loadMeta().selectedLinkedInBuyer,loadMeta().scriptBuyer]),entrySelection=selectionStamp();
   const b=owner.bridge,workspaceId=b.workspace.id,current=()=>buyerActionSelectionOwners.get(operationKey)===token&&buyerActionCurrent(owner)&&person.kept&&(installed||selectionStamp()===entrySelection);
   let installed=null,prior=null,flags=null;
-  const ownsChoice=()=>installed&&discovery===owner.state&&bridge()===b&&discoveryOperationContext()===owner.context&&buyerActionSelectionOwners.get(operationKey)===token&&Object.keys(installed).every(key=>JSON.stringify(loadMeta()[key])===JSON.stringify(installed[key]));
+  // A server-sync acknowledgement may consume the retry marker for an existing
+  // draft. The recipient and stage still own this explicit navigation.
+  const ownsChoice=()=>installed&&discovery===owner.state&&bridge()===b&&discoveryOperationContext()===owner.context&&buyerActionSelectionOwners.get(operationKey)===token&&Object.keys(installed).every(key=>(key==='pendingMessageHandoff'&&loadMeta()[key]===undefined)||JSON.stringify(loadMeta()[key])===JSON.stringify(installed[key]));
   const rollback=()=>{if(!ownsChoice())return;const latest={...loadMeta()};for(const key of Object.keys(installed)){if(Object.prototype.hasOwnProperty.call(prior,key))latest[key]=prior[key];else delete latest[key];}saveMeta(latest);if(flags&&flags.every(([buyer,,selected])=>Boolean(buyer.flowSelected)===selected)){for(const [buyer,value] of flags)buyer.flowSelected=value;saveDiscovery();}};
   try{
     if(!reviewedCurrent())return false;
@@ -3272,7 +3274,7 @@ async function saveBuyerAndProceed(domain,index,{button,personId}={}){
     if(!reviewedRecipient.email){showToast('Confirm an email belonging to this buyer before continuing.');return false;}
     if(!person.kept&&!await keepBuyer(domain,index,{personId:String(person.id),selectionOwner:token}))return false;
     requireBuyerAction(owner);trace?.checkpoint('persistence','pending');
-    const selected=await addBuyerToFlow(domain,index,{button,selectOnly:true,personId:String(person.id),reviewedRecipient});requireBuyerAction(owner);
+    const selected=await addBuyerToFlow(domain,index,{button,personId:String(person.id),reviewedRecipient});requireBuyerAction(owner);
     outcome=selected?'pass':'blocked';return selected;
   }catch(error){outcome=buyerActionCurrent(owner)?'fail':'stale';if(buyerActionCurrent(owner))showToast(error.message||'Buyer could not be saved. Please retry.');return false;}
   finally{trace?.finish(buyerActionCurrent(owner)?outcome:'stale');if(buyerActionSelectionOwners.get(selectionKey)===token){buyerActionSelectionOwners.delete(selectionKey);buyerSelectionPending.delete(selectionKey);}renderAll();renderSelectedEmailBuyer({scroll:false});}

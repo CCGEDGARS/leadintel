@@ -21,7 +21,7 @@ async function handoff(page,personId){
  const button=page.locator('[data-keep-buyer][data-person-id="'+personId+'"]').first();await expandBuyer(button);await button.click();
  try{await page.waitForFunction(personId=>JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').selectedEmailBuyer?.personId===personId,personId,{timeout:10000});}
  catch(error){console.error('Buyer handoff identity',JSON.stringify(await page.evaluate(()=>window.lastBuyerHandoff)));throw error;}
- await page.locator('#continue-to-outreach').click();
+
  await page.waitForFunction(personId=>{const choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').scriptBuyer;return choice?.personId===personId&&document.querySelector('#step-6.active #message-studio')&&document.getElementById('message-recipient')?.textContent.includes(personId==='robert'?'Robert':'Alice');},personId,{timeout:20000});
 }
 async function settled(page,style){await page.waitForFunction(({key,style})=>{const choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')||'{}').scriptBuyer,item=JSON.parse(localStorage.getItem(key)||'{}').items?.find(item=>item.selectedPersonId===choice?.personId&&item.channel==='email');return item?.messageStudioDraft?.mode===style&&item.drafts?.emailBody?.trim()&&document.querySelector('#mw-preparing-editor')?.hidden&&document.querySelector('#mw-edit-message')?.disabled===false&&document.querySelector('#mw-updating-notice')?.dataset.state!=='busy';},{key:outreachKey,style},{timeout:20000});}
