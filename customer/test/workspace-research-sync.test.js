@@ -108,6 +108,25 @@ test('a late older response cannot replace a newer acknowledged cloud baseline',
  root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8});
  const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.equal(base.version,9);assert.equal(base.payload.main.website,'newer.example');
 });
+test('repeated acknowledged-baseline reads decode once and return isolated conflict inputs',async()=>{
+ const payload={main:{website:'seller.example',answers:{offer:'Saved offer'}},discovery:{notes:'Retained source'},outreach:{items:[{draft:'Saved working copy'}]},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>new Response('{}')),p=root.LeadIntelWorkspacePersistence;
+ await p.snapshotFromServerPayload(payload,{workspaceId:'w1',version:9});let decodes=0;
+ root.LeadIntelStateBudget={...budget,restoreFromSync(value){decodes++;return budget.restoreFromSync(value);}};
+ const first=p.syncedBase('w1');first.payload.main.answers.offer='Caller mutation';first.localPayload.outreach.items[0].draft='Caller mutation';
+ for(let n=0;n<20;n++){const next=p.syncedBase('w1');assert.equal(next.payload.main.answers.offer,'Saved offer');assert.equal(next.localPayload.outreach.items[0].draft,'Saved working copy');}
+ assert.equal(decodes,1,'readiness refreshes reuse the same decoded acknowledgement');assert.equal(p.syncedBase('other-workspace'),null);
+ await p.snapshotFromServerPayload({...payload,main:{website:'newer.example'}},{workspaceId:'w1',version:10});decodes=0;
+ assert.equal(p.syncedBase('w1').payload.main.website,'newer.example');assert.equal(p.syncedBase('w1').version,10);assert.equal(decodes,1,'a new acknowledgement invalidates the decoded baseline');
+ values.delete('leadintel_customer_v2_workspace_saved_snapshot_v1');assert.equal(p.syncedBase('w1'),null);
+});
+test('Profile save receipts read only the acknowledged answer without cloning retained research',async()=>{
+ const payload={main:{answers:{offer:'Saved offer'},answerStatus:{offer:'accepted'}},discovery:{notes:'Large retained source'},outreach:{},delivery:{},meta:{discovery:{}}};
+ const root=load(localValues(payload),async()=>new Response('{}')),p=root.LeadIntelWorkspacePersistence;await p.snapshotFromServerPayload(payload,{workspaceId:'w1',version:9});
+ root.structuredClone=()=>{throw Error('A Profile receipt must not clone the whole workspace');};
+ for(let n=0;n<20;n++){const receipt=p.syncedProfileAnswer('w1','offer');assert.equal(receipt.answer,'Saved offer');assert.equal(receipt.status,'accepted');receipt.answer='Caller mutation';}
+ assert.equal(p.syncedProfileAnswer('other-workspace','offer'),null);
+});
 
 test('profile and approved messages round-trip through the real persistence boundary with a clean cloud baseline',async()=>{
  const report={summary:'Commercial evidence '.repeat(1800)};const message={body:'Approved paragraph '.repeat(1500),approved:true};
@@ -163,7 +182,7 @@ test('the real worker saves and reopens a large research workspace without page-
  root.LeadIntelServerBridge.workspaceCompressionCodec='workspace-lzw-v2';
  root.Worker=class{
   constructor(url){
-   assert.match(String(url),/\/customer\/workspace-codec-worker\.js\?v=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1$/);
+   assert.match(String(url),/\/customer\/workspace-codec-worker\.js\?v=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1&byte-decode=20261117-v1$/);
    this.thread=new Worker(`const {parentPort,workerData}=require('node:worker_threads');global.self=global;global.importScripts=()=>{self.LeadIntelStateBudget=require(workerData.codec);};self.postMessage=data=>parentPort.postMessage(data);require(workerData.worker);parentPort.on('message',data=>self.onmessage({data}));`,{eval:true,workerData:{codec:require.resolve('../state-budget.js'),worker:require.resolve('../workspace-codec-worker.js')}});
    workers.push(this.thread);this.thread.on('message',data=>this.onmessage?.({data}));this.thread.on('error',error=>this.onerror?.(error));
   }

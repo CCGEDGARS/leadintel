@@ -219,3 +219,10 @@ test('a matching draft text is not called saved after its review status changes'
  try{w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify({answers:{priority_offers:'Custom manufacturing'},answerStatus:{priority_offers:'accepted'}}));w.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'one'}};w.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>true,syncedBase:()=>({payload:{main:{answers:{priority_offers:'Custom manufacturing'},answerStatus:{priority_offers:'draft'}}}})};readiness.renderReadiness(w);assert.match(w.document.querySelector('[data-answer-save="priority_offers"]').textContent,/Unsaved changes/);
  }finally{w.close();}
 });
+test('Profile receipts use the narrow acknowledged answer and avoid copying all research',()=>{
+ const {JSDOM}=require('jsdom'),dom=new JSDOM('<head></head><body><article class="question-card"><textarea data-question="priority_offers">Custom manufacturing</textarea></article><span id="server-sync-status">Synced to LeadIntel</span></body>',{url:'https://example.com/'}),w=dom.window;
+ try{w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify({answers:{priority_offers:'Custom manufacturing'},answerStatus:{priority_offers:'accepted'}}));w.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'one'}};
+ let status='accepted';w.LeadIntelWorkspacePersistence={hasUnsavedChanges:()=>true,syncedBase:()=>{throw Error('Whole-workspace baseline read for one answer');},syncedProfileAnswer:(workspace,id)=>workspace==='one'&&id==='priority_offers'?{answer:'Custom manufacturing',status}:null};
+ readiness.renderReadiness(w);assert.match(w.document.querySelector('[data-answer-save="priority_offers"]').textContent,/Saved to LeadIntel/);status='draft';readiness.renderReadiness(w);assert.match(w.document.querySelector('[data-answer-save="priority_offers"]').textContent,/Unsaved changes/);
+ }finally{w.close();}
+});

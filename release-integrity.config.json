@@ -4039,7 +4039,7 @@
       "url": "/customer/workspace-codec-worker.js",
       "status": 200,
       "contains": [
-        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1')",
+        "importScripts('./state-budget.js?v=20261020-workspace-worker-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1&byte-decode=20261117-v1')",
         "'prepareForSync','packWorkspaceSnapshot','packRecoveryRecord'",
         "self.postMessage({id,result})"
       ]
@@ -9374,6 +9374,183 @@
       "status": 200,
       "contains": [
         "visible-buyer-research=20261117-v1"
+      ]
+    },
+    {
+      "id": "message-interaction-render-budget",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function withMessageReadSnapshot(callback)",
+        "function messageEditorScope()",
+        "function boundMessageCompanyId(",
+        "canonicalCompanyId",
+        "bridge.getCrmRecipient(id",
+        "const buyerState=",
+        "choice.recipientIdentity?.companyId",
+        "message-interaction=20261117-v1"
+      ]
+    },
+    {
+      "id": "message-interaction-stable-controls",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "Your draft is preserved. You can keep navigating",
+        "Checking your saved recipient before applying an approved template.",
+        "const kept=new Set();let index=0;",
+        "insertBefore"
+      ]
+    },
+    {
+      "id": "message-interaction-wait-state",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        ".mw-style:disabled{opacity:.58;cursor:wait}"
+      ]
+    },
+    {
+      "id": "message-recipient-targeted-bridge",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "async function getCrmRecipient(",
+        "view:",
+        "person_id",
+        "contact_id"
+      ]
+    },
+    {
+      "id": "message-interaction-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "message-interaction=20261117-v1",
+        "recipient-view=20261117-v1"
+      ]
+    },
+    {
+      "id": "message-interaction-dynamic-loader",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "message-interaction=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-acknowledged-decode-cache",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "let decodedAcknowledgedBase=null",
+        "cached.snapshot!==snapshot",
+        "root.structuredClone(value)",
+        "entries.some(([key,value],index)"
+      ]
+    },
+    {
+      "id": "workspace-acknowledged-cache-import",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "baseline-cache=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-acknowledged-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "baseline-cache=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-profile-answer-receipt",
+      "type": "text",
+      "url": "/customer/step2-readiness-engine.js",
+      "status": 200,
+      "contains": [
+        "typeof persistence?.syncedProfileAnswer==='function'",
+        "receipt?receipt.answer:acknowledged.answers?.[id]"
+      ]
+    },
+    {
+      "id": "workspace-profile-answer-loader",
+      "type": "text",
+      "url": "/customer/shell-support-loader.js",
+      "status": 200,
+      "contains": [
+        "baseline-cache=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-direct-byte-decoder",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "const decoded=new Uint8Array(size);let offset=0;",
+        "decoded[offset++]=chunk.charCodeAt(index)",
+        "decode(decoded)"
+      ]
+    },
+    {
+      "id": "workspace-direct-byte-worker",
+      "type": "text",
+      "url": "/customer/workspace-codec-worker.js",
+      "status": 200,
+      "contains": [
+        "byte-decode=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-direct-byte-worker-loader",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "byte-decode=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-direct-byte-browser-loader",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "byte-decode=20261117-v1"
+      ]
+    },
+    {
+      "id": "workspace-root-reference-proof-cache",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "const rootReferenceProofs=new Map();",
+        "proof.raw!==raw||proof.codec!==codec||proof.contract!==contract",
+        "scanRootReferences(roots,references)",
+        "4*1024*1024",
+        "8*1024*1024"
+      ]
+    },
+    {
+      "id": "workspace-root-reference-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "root-proof=20261117-v1"
       ]
     }
   ],

@@ -736,3 +736,5 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 @container message-composer (max-width:400px){
  #message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+.mw-style:disabled{opacity:.58;cursor:wait}

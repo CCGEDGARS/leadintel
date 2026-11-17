@@ -87,13 +87,16 @@ export async function verifyStep6Journey({artifactDir='/tmp/leadintel-step6-jour
   // response must not commit, and the saved buyer must recover automatically.
   await page.evaluate(async()=>{
    const b=LeadIntelServerBridge,choice=JSON.parse(localStorage.getItem('leadintel_customer_v2_discovery_meta')).scriptBuyer;
-   const get=b.getCrmCompany.bind(b);let release,entered;
+   const get=b.getCrmRecipient;let release,entered,timer;
    const waiting=new Promise(r=>entered=r);
-   b.getCrmCompany=async id=>{entered();await new Promise(r=>release=r);return get(id);};
-   const pending=LeadIntelOutreachUI.openBuyerScripts(choice);await waiting;
-   b.getCrmCompany=get;
-   dispatchEvent(new CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:b.workspace.id,domain:choice.domain}}));
-   release();await pending;
+   b.getCrmRecipient=async(...args)=>{entered();await new Promise(r=>release=r);return get.apply(b,args);};
+   const pending=LeadIntelOutreachUI.openBuyerScripts(choice);
+   try{
+    await Promise.race([waiting,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Exact-recipient validation did not enter its CRM read')),6000);})]);
+    b.getCrmRecipient=get;
+    dispatchEvent(new CustomEvent('leadintel:company-records-changed',{detail:{workspaceId:b.workspace.id,domain:choice.domain}}));
+    release();await pending;
+   }finally{clearTimeout(timer);b.getCrmRecipient=get;release?.();}
   });
   await settled(page,'brutal');assert.deepEqual(await fields(page),manual,'CRM refresh recovery preserves exact saved draft');
   assert.equal(await page.evaluate(()=>LeadIntelPageQuality.getReport('messages').checks.find(row=>row.id==='recipient-confirmed')?.status),'pass');

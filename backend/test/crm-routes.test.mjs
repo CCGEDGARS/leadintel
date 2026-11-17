@@ -19,6 +19,21 @@ async function payload(response){return response.json();}
 
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 
+sqliteTest('recipient view returns one contact and only that buyer channel history without company intelligence',async()=>{
+ const {env,token}=await fixture();
+ const response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Buyer',domain:'buyer.example'},contacts:[{name:'Alex Buyer',external_person_id:'alex',work_email:'alex@buyer.example',source:'manual'},{name:'Other Buyer',external_person_id:'other',work_email:'other@buyer.example',source:'manual'}],intelligence:{evidence:[{url:'https://buyer.example/',text:'Large company context '.repeat(500)}]}}}),env,{});
+ const created=await payload(response),companyId=created.company.id,contacts=env.DB.raw.prepare('SELECT * FROM crm_contacts WHERE company_id=?').all(companyId),contact=contacts.find(c=>c.external_person_id==='alex');assert.ok(contact);
+ const insert=env.DB.raw.prepare('INSERT INTO crm_activities(id,workspace_id,company_id,activity_type,metadata_json,occurred_at,created_at) VALUES(?,?,?,?,?,?,?)');
+ for(let n=0;n<60;n++)insert.run('unrelated-'+n,'w1',companyId,'dossier.built',JSON.stringify({script_package:{version:1,item:{channel:'email',selectedPersonId:'other',drafts:{emailBody:'Unrelated history'}}}}),'2026-11-17T12:00:00Z','2026-11-17T12:00:00Z');
+ for(let n=0;n<7;n++)insert.run('selected-'+n,'w1',companyId,'dossier.built',JSON.stringify({script_package:{version:1,item:{channel:'email',selectedPersonId:'alex',drafts:{emailBody:'Exact saved draft '+n}}}}),'2026-11-16T12:00:00Z','2026-11-16T12:00:00Z');
+ insert.run('selected-linkedin','w1',companyId,'dossier.built',JSON.stringify({script_package:{version:1,item:{channel:'linkedin',selectedPersonId:'alex',drafts:{linkedinMessage:'Separate LinkedIn draft'}}}}),'2026-11-18T12:00:00Z','2026-11-18T12:00:00Z');
+ const url=`/api/crm/companies/${companyId}?workspace_id=w1&view=recipient&contact_id=${contact.id}&person_id=alex&channel=email`;
+ const result=await handleCrmRoute(req(url,{token}),env,{});assert.equal(result.status,200);const detail=await payload(result);assert.equal(detail.recipient_view,true);assert.equal(detail.contacts.length,1);assert.equal(detail.contacts[0].id,contact.id);assert.equal(detail.contacts[0].email_status,contact.email_status,'reading does not upgrade contact proof');assert.equal(detail.intelligence,undefined);assert.equal(detail.contactData,undefined);assert.equal(detail.activities.length,5);assert.ok(detail.activity_next_cursor);assert.ok(detail.activities.every(a=>a.metadata.script_package.item.selectedPersonId==='alex'&&a.metadata.script_package.item.channel==='email'));
+ const more=await handleCrmRoute(req(`/api/crm/companies/${companyId}/activities?workspace_id=w1&person_id=alex&channel=email&limit=5&cursor=${encodeURIComponent(detail.activity_next_cursor)}`,{token}),env,{}),page=await payload(more);assert.equal(more.status,200);assert.equal(page.activities.length,2);assert.equal(page.next_cursor,null);assert.ok(page.activities.every(a=>a.metadata.script_package.item.selectedPersonId==='alex'));
+ const unauth=await handleCrmRoute(req(url),env,{});assert.equal(unauth.status,401);const crossWorkspace=await handleCrmRoute(req(url.replace('workspace_id=w1','workspace_id=other'),{token}),env,{});assert.equal(crossWorkspace.status,403);
+ const invalid=await handleCrmRoute(req(url.replace('channel=email','channel=phone'),{token}),env,{});assert.equal(invalid.status,400);const wrongContact=await handleCrmRoute(req(url.replace(contact.id,'unknown-contact'),{token}),env,{});assert.equal((await payload(wrongContact)).contacts.length,0);
+});
+
 sqliteTest('CRM router returns null for unrelated routes and requires authentication for CRM routes',async()=>{
   const {env}=await fixture();
   assert.equal(await handleCrmRoute(req('/api/health'),env,{}),null);
