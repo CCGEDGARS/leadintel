@@ -45,6 +45,22 @@ test('late library source response cannot replace a manually changed draft',asyn
  const original=h.w.fetch;let release;h.w.fetch=(url,options)=>String(url).startsWith('/api/integrations/services/firecrawl/scrape')?new Promise(resolve=>release=resolve):original(url,options);
  h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:[{id:'email:friendly',channel:'email',style:'friendly',body:'Hello [First name]. [project location]',creatorSource:{id:'owner',revision:1}}],personal:[],primary:[],canManage:false})});await tick();
  const pending=h.w.LeadIntelChannelWorkspace.selectStyle('friendly');await tick();assert.ok(release);const item=h.item();item.drafts.emailBody='My words typed while the source was being read.';h.w.upsertItem(item);h.w.renderAll();release({ok:true,json:async()=>({success:true,data:{markdown:'Buyer is building its new sorting plant in Northport. The facility is due to run in 2028.'}})});
- await assert.rejects(pending,/changed.*preserved/i);assert.equal(h.item().drafts.emailBody,'My words typed while the source was being read.');assert.equal(h.item().messageStudioDraft.libraryResearch,undefined);
+ await pending;assert.equal(h.item().drafts.emailBody,'My words typed while the source was being read.');assert.equal(h.item().messageStudioDraft.libraryResearch,undefined);
+ }finally{h.w.close();}
+});
+
+test('managed email applies its mandatory wording before a slow read, allows another style and rejects the old completion',async()=>{
+ const h=setup();try{
+ const rows=['professional','friendly'].map(style=>({id:'email:'+style,channel:'email',style,name:style,subject:style+' for {{firstName}}',body:'Mandatory '+style+' for {{firstName}}. [project location]',builtin:false,creatorSource:{id:style,revision:4}}));
+ h.requests.find(r=>String(r.url).includes('/script-library?')).resolve({ok:true,json:async()=>({core:rows,personal:[],primary:[],canManage:false})});await tick();
+ const pendingReads=[];const baseFetch=h.w.fetch;h.w.fetch=(url,options)=>String(url).includes('/firecrawl/')?new Promise(resolve=>pendingReads.push({url,options,resolve})):baseFetch(url,options);
+ const old=h.item().drafts.emailBody;const first=h.w.LeadIntelChannelWorkspace.selectStyle('professional');await tick();
+ assert.equal(h.item().drafts.emailBody,'Mandatory professional for Alex. Northport');assert.equal(h.item().messageStudioDraft.templateUpdateUndo.draft.message,old);assert.ok(pendingReads.length);h.w.renderMessageWorkspace();assert.equal(h.q('mw-edit-message').disabled,false);assert.equal(h.q('mw-save-message').disabled,false);
+ const second=h.w.LeadIntelChannelWorkspace.selectStyle('friendly');await tick();assert.equal(h.item().drafts.emailBody,'Mandatory friendly for Alex. Northport');assert.equal(pendingReads[0].options.signal.aborted,true);
+ pendingReads[0].resolve({ok:true,json:async()=>({success:true,data:{markdown:'Buyer is building a new sorting plant in Oldtown, due to open in 2028.'}})});await first;
+ assert.equal(h.item().drafts.emailBody,'Mandatory friendly for Alex. Northport');
+ const saved={...h.item(),messageStudioDraft:{...h.item().messageStudioDraft,scriptSavedAt:'now',savedDraft:{subject:'friendly for Alex',message:h.item().drafts.emailBody}}};h.w.upsertItem(saved);
+ for(const row of pendingReads.slice(1))row.resolve({ok:true,json:async()=>({success:true,data:{markdown:'Buyer is building a new sorting plant in Northport. The facility is due to run in 2028.'}})});
+ await second;assert.equal(h.item().drafts.emailBody,saved.drafts.emailBody);assert.equal(h.item().messageStudioDraft.scriptSavedAt,'now');
  }finally{h.w.close();}
 });

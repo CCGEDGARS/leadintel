@@ -1461,7 +1461,7 @@
         "async function addCurrentMessageToFlow()",
         "async function markCurrentTemplateDefault",
         "function updateEventInvitation(",
-        "updateMessageFromTemplate({selectedStyle:true})",
+        "updateMessageFromTemplate({selectedStyle:true,repairOriginal:true})",
         "delete studio.defaultSelection[channel]",
         "messageFactResearchRequest++;messageFactResearchController?.abort()",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
@@ -9699,6 +9699,50 @@
         "function messageStudio(payload={})",
         "payload.outreach?.messageStudio",
         "renderMessage,messageStudio,runIssue"
+      ]
+    },
+    {
+      "id": "mandatory-style-fast-authority-entry",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "core-style-speed=20261117-v1"
+      ]
+    },
+    {
+      "id": "mandatory-style-selected-master-and-first-render",
+      "type": "text",
+      "url": "/customer/channel-scripts.js",
+      "status": 200,
+      "contains": [
+        "query:{core:channel()+':'+style}",
+        "const immediate=row.channel==='email'",
+        "Approved template applied. Checking missing facts",
+        "continueTemplateUpdate:true"
+      ]
+    },
+    {
+      "id": "mandatory-style-exact-field-reuse",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "function reusablePreparedFields(studio,context,caches=[])",
+        "prior.sources[key]===current.sources[key]",
+        "prior.masterVersion!==A.coreContract(prior.style)?.version"
+      ]
+    },
+    {
+      "id": "mandatory-style-working-copy-authority",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "core-style-speed=20261117-v1",
+        "selectedStyle:true,repairOriginal:true",
+        "Working copy \u00b7 approved ",
+        "canCompleteEvidence()"
       ]
     }
   ],

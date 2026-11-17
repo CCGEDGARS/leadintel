@@ -23,7 +23,7 @@ test('email reopening recovers the exact buyer/channel CRM draft when local mess
   clearLocalMessages(h);
   assert.equal(await h.w.openBuyerScripts(choice),true);
   assert.equal(h.item().drafts.emailBody,'Saved message for Alex');assert.equal(h.item().messageStudioDraft.mode,'friendly');
-  assert.equal(h.q('outreach-email-body').value,'Saved message for Alex');assert.equal(h.q('mw-applied-style').textContent,'Style: Friendly');
+  assert.equal(h.q('outreach-email-body').value,'Saved message for Alex');assert.equal(h.q('mw-applied-style').textContent,'Working copy · approved Friendly not applied');
   assert.equal(h.w.studioState().mode,'friendly');assert.equal(E.savedDraft(h.item()),true);
  }finally{h.w.close();}
 });
