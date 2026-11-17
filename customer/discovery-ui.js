@@ -550,7 +550,7 @@ async function refreshCrmState({render=true}={}){
   if(render)renderAll();recoverRuntime?.();refreshed=true;return true;}finally{if(refreshCrmState.owner===owner){crmRefreshing=false;delete refreshCrmState.owner;if(refreshed)window.dispatchEvent(new CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId}}));}}}
 
 function injectDiscoveryUI(){
-  if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css")+"&company-progress=20261109-v1&company-ranking-css=20261116-v1";link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
+  if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css")+"&company-progress=20261109-v1&company-ranking-css=20261116-v1&company-readability-css=20261117-v1";link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
   $("continue-to-discovery")?.remove();
   const content=document.querySelector("main.content");if(content&&!$("step-5"))content.insertAdjacentHTML("beforeend",`<section class="step-view" id="step-5" data-step="5">
     <div class="profile-header discovery-header"><div><span class="eyebrow" id="discovery-stage-kicker">Step 4 · Companies</span><h1 id="discovery-stage-title">Find your next customers</h1><p id="discovery-stage-description">LeadIntel searches the selected markets, checks public evidence, verifies company websites and ranks each match against your approved strategy.</p></div><div class="profile-header-actions"><span class="profile-status" id="discovery-status">Ready</span><button class="secondary-btn small" id="back-to-strategy" type="button">← Strategy</button></div></div>
@@ -1810,11 +1810,43 @@ function updateCompanySearchFeedback(control){
 
 function rankedCompanyResults(){return LeadIntelDiscovery.rankCompanyResults(discovery,{assess:qualificationAssessment,isCurrent:companyStrategyCurrent});}
 function companyResultScoreHtml(entry){return `<div class="company-review-score"><strong>${entry.score===null?'—':entry.score+'/100'}</strong><span>${entry.scoreState==='current'?'Company fit':entry.scoreState==='previous'?'Previous score · needs review':'Awaiting score'}</span></div>`;}
+let companyRowScope='',companyRowsOpen=new Map(),companyRowContainers=new WeakMap(),companyRowFocusPending=null;
+function companyRowState(){
+  const scope=JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',mainState().website||'']);
+  if(scope!==companyRowScope){companyRowScope=scope;companyRowsOpen=new Map();companyRowFocusPending=null;}
+  return companyRowsOpen;
+}
+function rememberCompanyRows(container){
+  const open=companyRowState(),hosts=new Set([container,$('company-candidates'),$('discovery-potential-matches')]);
+  const active=document.activeElement,row=active?.closest?.('details.company-result-row');if(active&&active!==document.body&&!row)companyRowFocusPending=null;let focus=!active||active===document.body?companyRowFocusPending:null;
+  for(const host of hosts){
+    if(!host||companyRowContainers.get(host)!==companyRowScope)continue;
+    for(const item of host.querySelectorAll?.('details.company-result-row')||[]){if(item.open!==(item.dataset.companyRenderedOpen==='true'))open.set(item.dataset.companyRowKey,item.open);}
+    if(row&&host.contains?.(row))focus={key:row.dataset.companyRowKey,scope:companyRowScope,container:host.id,website:active.classList?.contains('company-row-website'),action:active.dataset?.action,review:active.dataset?.reviewAction};
+  }
+  companyRowContainers.set(container,companyRowScope);return focus;
+}
+function restoreCompanyRowFocus(container,focus){
+  if(!focus||focus.scope!==companyRowScope)return;const row=[...(container.querySelectorAll?.('details.company-result-row')||[])].find(row=>row.dataset.companyRowKey===focus.key);
+  if(!row){companyRowFocusPending=container.id!=='discovery-potential-matches'&&(!document.activeElement||document.activeElement===document.body)?focus:null;return;}
+  const outer=row.closest('.company-other-results');if(outer)outer.open=true;
+  const summary=row.querySelector(':scope > summary'),control=focus.website?row.querySelector('.company-row-website'):focus.action||focus.review?[...row.querySelectorAll('button')].find(button=>focus.action?button.dataset.action===focus.action:button.dataset.reviewAction===focus.review):summary;
+  const destination=control&&!control.disabled?control:summary,options={preventScroll:focus.container===container.id};destination?.focus?.(options);if(document.activeElement!==destination)summary?.focus?.(options);companyRowFocusPending=null;
+}
+
+function companyListColumnsHtml(){return '<div class="company-list-columns" aria-hidden="true"><span>Company</span><span>Company fit</span><span>Status</span><span></span></div>';}
+function companyStrategyReviewNoticeHtml(view){return view.rows.some(row=>!companyStrategyCurrent(row.candidate))?'<p class="company-strategy-notice" role="note"><strong>Strategy review needed.</strong> Review the current Strategy before updating company evidence and scores. Earlier scores are marked Previous.</p>':'';}
 function companyRankedCardHtml(entry,rank){
+  const c=entry.candidate,domain=canonicalDomain(c.domain||c.website),open=companyRowState().get(entry.key)===true;
+  const review=researchReviewStatus(c),status=review.contextStale?'Strategy review':entry.actionable?'Checked':review.status==='not-qualified'?'Not qualified':'Needs evidence';
+  const label=entry.scoreState==='previous'?'Previous score':entry.scoreState==='pending'?'Awaiting score':'Current score';
+  return `<details class="company-result-row" data-company-row-key="${esc(entry.key)}" data-company-rendered-open="${open}"${open?' open':''}><summary class="company-row-summary"><div class="company-row-company"><span class="company-row-rank">${rank+1}</span><div><strong class="company-row-name">${esc(c.company)}</strong>${domain?`<a class="company-row-website" href="https://${esc(domain)}/" target="_blank" rel="noopener noreferrer">${esc(domain)}</a>`:''}</div></div><div class="company-row-score"><strong>${entry.score===null?'—':entry.score}<span>${entry.score===null?'':'/100'}</span></strong><small>${label}</small></div><div class="company-row-status"><span class="${entry.actionable?'is-checked':review.status==='not-qualified'?'is-not-qualified':'needs-review'}">${status}</span></div><span class="company-row-review"><span class="company-row-open-label">Review</span><span class="company-row-close-label">Close</span><span class="company-row-chevron" aria-hidden="true">⌄</span></span></summary><div class="company-row-details" aria-label="${esc('Details for '+c.company)}">${companyRankedCardBodyHtml(entry,rank)}</div></details>`;
+}
+function companyRankedCardBodyHtml(entry,rank){
   if(entry.actionable&&entry.storedIndex>=0)return companyCandidateCardHtml({...entry.candidate,storedIndex:entry.storedIndex,qualification:entry.qualification},rank);
   const c=entry.candidate,{q,gaps,status,contextStale}=researchReviewStatus(c),reviewable=entry.storedIndex>=0||entry.source==='review',reviewBlocked=discovery.status==='running'||window.LeadIntelStrategyIntegrity?.status(mainState())?.current!==true;
     const buyingSignalReason=gaps.find(reason=>/buying signal/i.test(reason));
-    const reasons=gaps.filter(reason=>reason!==buyingSignalReason).slice(0,buyingSignalReason?3:4);
+    const reasons=gaps.filter(reason=>reason!==buyingSignalReason&&!/^Saved company retained\./.test(reason));
     if(buyingSignalReason)reasons.push(buyingSignalReason);
     const key=researchReviewKey(c);
     const selected=buyerSelectionRows().some(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(c.domain||c.website));
@@ -1825,13 +1857,13 @@ function companyRankedCardHtml(entry,rank){
 function companyReviewToolsHtml(){
   if(!researchReviewRows().length)return '';
   const blocked=discovery.status==='running'||window.LeadIntelStrategyIntegrity?.status(mainState())?.current!==true;
-  return `<details class="company-review-tools"><summary>Review actions and score status</summary><p>Previous scores need checking against the current Strategy. Awaiting score means the company has not yet received a supported company-fit assessment. Companies that need evidence remain in Research review; not qualified means a verified hard criterion failed.</p><div class="research-review-bulk"><button class="secondary-btn small" type="button" data-review-action="recheck-all" ${blocked?'disabled':''}>Recheck all</button><button class="text-btn" type="button" data-review-action="clear">Clear review list</button></div></details>`;
+  return `<details class="company-review-tools"><summary>Review tools</summary><p>Previous scores need checking against the current Strategy. Awaiting score means the company has not yet received a supported company-fit assessment. Companies that need evidence remain in Research review; not qualified means a verified hard criterion failed.</p><div class="research-review-bulk"><button class="secondary-btn small" type="button" data-review-action="recheck-all" ${blocked?'disabled':''}>Recheck all</button><button class="text-btn" type="button" data-review-action="clear">Clear review list</button></div></details>`;
 }
 function renderPotentialMatches(){
   const target=$('discovery-potential-matches');if(!target)return;
-  const view=rankedCompanyResults(),previous=target.querySelector?.('details.company-other-results'),expanded=previous?.open===true;
-  target.hidden=!view.other.length;if(!view.other.length){target.innerHTML='';return;}
-  target.innerHTML=`<details class="research-checks-compact company-other-results"${expanded?' open':''}><summary><span class="research-checks-title">Show other companies · ${view.other.length}</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body company-ranked-list">${view.other.map((entry,index)=>companyRankedCardHtml(entry,index+10)).join('')}</div></details>`;bindDisplayedCompanyOwners(target,view);
+  const view=rankedCompanyResults();companyRowState();const previous=target.querySelector?.('details.company-other-results'),expanded=companyRowContainers.get(target)===companyRowScope&&previous?.open===true;
+  const rowFocus=rememberCompanyRows(target);target.hidden=!view.other.length;if(!view.other.length){target.innerHTML='';companyRowFocusPending=null;return;}
+  target.innerHTML=`<details class="research-checks-compact company-other-results"${expanded?' open':''}><summary><span class="research-checks-title">Show other companies · ${view.other.length}</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body company-ranked-list">${companyListColumnsHtml()}${view.other.map((entry,index)=>companyRankedCardHtml(entry,index+10)).join('')}</div></details>`;bindDisplayedCompanyOwners(target,view);restoreCompanyRowFocus(target,rowFocus);
 }
 
 function renderTargetList(){
@@ -1901,9 +1933,9 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
   const message=unfinished?.pendingCount&&discovery.status!=="running"?`${unfinished.note} ${unfinished.pendingCount} saved companies still need evidence review.`:discovery.needsRefresh?(savedReviewCount?"Saved company records are retained in Research review below. Review Strategy before updating their evidence and scores.":"No retained company shortlist is available in this workspace state. Review Strategy before starting company research."):discovery.status==="running"?companySearchProgressText():discovery.status==="error"?"Search stopped before verification finished. This is not a confirmed no-match; review the search status before retrying.":discovery.lastRunAt?"Research is preserved, but no company meets the current qualification rules. Recheck existing companies to refresh the evidence.":"Run discovery to create a ranked shortlist of direct company domains.";
   target.innerHTML=`${selectedNotice}${previousNotice}<div class="market-empty">${message}</div>`;
   return;
-}const desired=selectedDiscoveryTarget(),outcome=typeof companySearchOutcome==="function"?companySearchOutcome():null;
+}const rowFocus=rememberCompanyRows(target),desired=selectedDiscoveryTarget(),outcome=typeof companySearchOutcome==="function"?companySearchOutcome():null;
  const shortfall=discovery.status!=="running"&&!(outcome?.targetMet??ranked.length>=desired)?`<div class="discovery-retained-results" role="status"><strong>${outcome?.strongFitCount??0} of ${desired} strong-fit companies found · ${ranked.length} checked.</strong> ${esc(outcome?.note||"This search has finished. Review its warnings or continue the saved evidence checks.")} ${outcome?.pendingCount?`${outcome.pendingCount} saved companies still need evidence. Use Review next companies to continue their checks.`:"Review the search details before running another search."} Completed checks and scores are preserved; incomplete research stays in Research review.</div>`:"";
- target.innerHTML=`${selectedNotice}${recovery}${shortfall}${previousNotice}<p class="discovery-pipeline-instruction company-ranking-summary" role="status" data-company-total="${view.total}"><strong>${view.total} total companies · Showing top ${view.visible.length}</strong> · ${view.other.length} other · ${view.pendingCount} need review</p><p class="discovery-pipeline-instruction">${ranked.length} checked companies · ${outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length} strong fit (80+) · Buying intent unconfirmed. New assessed companies join this saved ranking by company-fit score.</p>${companyReviewToolsHtml()}${view.visible.map(companyRankedCardHtml).join('')}`;bindDisplayedCompanyOwners(target,view);}
+ target.innerHTML=`${selectedNotice}${recovery}${shortfall}${previousNotice}<p class="discovery-pipeline-instruction company-ranking-summary" role="status" data-company-total="${view.total}"><strong>${view.total} total companies · Showing top ${view.visible.length}</strong> · ${view.other.length} other · ${view.pendingCount} need review</p><p class="discovery-pipeline-instruction">${ranked.length} checked companies · ${outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length} strong fit (80+) · Buying intent unconfirmed. New assessed companies join this saved ranking by company-fit score.</p>${companyStrategyReviewNoticeHtml(view)}${companyReviewToolsHtml()}${companyListColumnsHtml()}${view.visible.map(companyRankedCardHtml).join('')}`;bindDisplayedCompanyOwners(target,view);restoreCompanyRowFocus(target,rowFocus);}
 
 
 
@@ -4450,7 +4482,7 @@ function qualificationAssessment(candidate,options={}){
 function qualificationHtml(candidate){const assessment=qualificationAssessment(candidate);const reference=Number.isFinite(assessment.lookalikeScore)?` · Reference similarity ${assessment.lookalikeScore}/100`:'';return `<p class="candidate-fit-summary"><strong>Company fit ${assessment.score===null?'not yet scored':assessment.score+'/100'}</strong>${reference} · ${assessment.eligible?(assessment.automaticEligible?'Checked · 80+ company score':'Checked · Manual review'):'Needs verification'}</p>${!assessment.eligible?`<small>${assessment.gaps.map(esc).join(' · ')}</small>`:''}`;}
 function renderAll(){if(!discoveryMounted)return;if(!qualificationPresentationDepth){const started=Date.now();try{return withQualificationPresentation(()=>renderAll());}finally{window.LeadIntelStartupTrace?.(`companies render ${Date.now()-started} ms`);}}if(window.LeadIntelPageQuality)queueMicrotask(()=>window.LeadIntelPageQuality.refresh(currentJourneyFocus()));let summary=$('company-qualification-summary');if(!summary&&window.LeadIntelQualificationSettings){summary=document.createElement('div');summary.id='company-qualification-summary';summary.className='qualification-summary';document.querySelector('#step-5 .discovery-header')?.after(summary);}window.LeadIntelQualificationSettings?.renderSummary?.();renderStatus();if(qualificationDisplay?.isPending()){
   const status=$('company-discovery-status');if(status)status.textContent='Checking saved company evidence…';
-  const cards=$('company-candidates');if(cards)cards.innerHTML='<div class="market-empty" role="status">Checking saved company evidence… You can continue using the sidebar.</div>';
+  const cards=$('company-candidates');if(cards){const rowFocus=rememberCompanyRows(cards);if(rowFocus)companyRowFocusPending=rowFocus;cards.innerHTML='<div class="market-empty" role="status">Checking saved company evidence… You can continue using the sidebar.</div>';}
   const review=$('discovery-potential-matches');if(review)review.hidden=true;
   const next=$('review-next-companies');if(next)next.disabled=true;
   // Company scoring must not freeze the separately owned Buyers view. CRM

@@ -9310,6 +9310,42 @@
         "[data-score-state=\"previous\"]",
         "@media(max-width:700px)"
       ]
+    },
+    {
+      "id": "company-list-readable-disclosure",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "function companyRankedCardBodyHtml(",
+        "function rememberCompanyRows(",
+        "function restoreCompanyRowFocus(",
+        "company-row-summary",
+        "companyStrategyReviewNoticeHtml(view)",
+        "company-readability-css=20261117-v1"
+      ]
+    },
+    {
+      "id": "company-list-readable-style",
+      "type": "text",
+      "url": "/customer/discovery.css",
+      "status": 200,
+      "contains": [
+        ".company-list-columns,.company-row-summary",
+        "minmax(0,1fr) 120px 170px 104px",
+        ".company-row-summary:focus-visible",
+        ".company-row-name{display:block;font-size:18px",
+        "@media(max-width:1100px)"
+      ]
+    },
+    {
+      "id": "company-list-readable-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-readability-ui=20261117-v1"
+      ]
     }
   ],
   "retry": {
