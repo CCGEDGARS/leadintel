@@ -1,5 +1,15 @@
 # Buyer contact buttons — owner-approved contract, 31 October 2026
 
+## Top-four and explicit paid action amendment — 17 November 2026
+
+Owner instruction: “first make sure that the 4 chosen ones are there for a reason, then make a full free research on each, then i want to be able to press paid buttons and get results without any questions.”
+
+Retain the current evidence-qualified, confirmed-channel priority shortlist and its role/evidence score explanation. A frozen card layout must not retain someone whose current employer, identity or qualification disqualifies them. Preserve stable ordering when the qualified membership is unchanged. The visible four receive the existing full bounded official, public, direct-email, phone, LinkedIn, three-query Gmail and applicable deeper research plans. Completion requires actual successful current receipts and source reads; a completed Gmail check alone is not full completion. Label and resume missing checks honestly.
+
+For an explicit configured E-mail or Phone click, saved channel permission plus the click authorizes that channel's paid request without another confirmation dialog. Reuse accepted data, preserve independent channels, daily/monthly limits, provider readiness, exact identity, workspace and operation guards. No provider activation or budget increase is implied. Separate fallback-provider and optional Hunter approval remain unchanged. Paid requests can return a found contact, no result or a provider error; never promise that a number/address exists. Provider-listed phone results remain visibly unconfirmed and must not be reported as failures merely because no email was requested.
+
+This supersedes the 4 November restriction for manual lookup with unresolved exclusion checks: a currently verified priority buyer may be researched when the only company gaps are purchasing-application review and/or unresolved exclusion checks. Confirmed exclusions, wrong identity/market, stale verification and suppressed/archived companies still block. Preserve the actual company assessment; no automatic qualification or sending approval is created. Automatic paid lookup retains its stricter full-company, all-four free-research and AI-review gates. Per-person Recheck remains free-only.
+
 ## Listed company email amendment — 16 November 2026
 
 The owner explicitly instructed that a company email listed for the named buyer must count and permit progression. This supersedes the official-source-only/provider-confirmation restriction for manual email acceptance. A retained named public listing, including a third-party business directory, is sufficient without a paid reveal, mailbox verification, another source read or completion of unrelated research. The address must match the selected company's domain and the same qualified full identity. Shared inboxes, generated patterns, Gmail guesses, wrong-person evidence, conflicting addresses, explicit source rejection and known invalid emails remain held.

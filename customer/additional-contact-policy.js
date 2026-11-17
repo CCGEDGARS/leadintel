@@ -4,13 +4,14 @@
     const q=options.companyAssessment||candidate.qualification;
     const gaps=Array.isArray(q?.gaps)?q.gaps:[];
     // Explicit manual enrichment may acquire contact data while purchasing-fit
-    // reasoning is pending. Never promote the company to qualified or grant
-    // automation; identity, market, exclusions, lifecycle and freshness remain.
-    const manualFitPending=options.automatic!==true&&q?.version===2&&q.qualificationKind==='company'&&gaps.length>0&&gaps.every(gap=>gap==='Verify a specific purchasing application for a confirmed offer');
-    if((!q?.eligible&&!manualFitPending)||candidate.needsRecheck||['suppressed','archived'].includes(candidate.lifecycle_status))return {eligible:false,reason:'Review company qualification in Companies before a paid lookup.'+(gaps.length?' '+gaps.slice(0,2).join(' · '):''),code:'ADDITIONAL_CONTACT_COMPANY_REQUIRED'};
+    // reasoning or unresolved exclusion checks are pending. Confirmed exclusions,
+    // identity, market, lifecycle and freshness still block; automation is unchanged.
+    const manualReviewPending=options.automatic!==true&&q?.version===2&&q.qualificationKind==='company'&&gaps.length>0&&gaps.every(gap=>['Verify a specific purchasing application for a confirmed offer','Resolve exclusion checks'].includes(gap));
+    const manualFitPending=manualReviewPending&&gaps.includes('Verify a specific purchasing application for a confirmed offer'),manualExclusionsPending=manualReviewPending&&gaps.includes('Resolve exclusion checks');
+    if((!q?.eligible&&!manualReviewPending)||candidate.needsRecheck||['suppressed','archived'].includes(candidate.lifecycle_status))return {eligible:false,reason:'Review company qualification in Companies before a paid lookup.'+(gaps.length?' '+gaps.slice(0,2).join(' · '):''),code:'ADDITIONAL_CONTACT_COMPANY_REQUIRED'};
     const now=Date.parse(options.now||new Date().toISOString()),researched=Date.parse(q.researchedAt||'');
     if(!Number.isFinite(researched)||researched>now+300000||now-researched>30*86400000)return {eligible:false,reason:'Refresh company verification in Companies before a paid lookup.',code:'ADDITIONAL_CONTACT_COMPANY_REQUIRED'};
-    return {eligible:true,manualFitPending};
+    return {eligible:true,manualFitPending,manualExclusionsPending};
   }
   function readiness(candidate={},person={},options={}){
     const qualification=options.companyAssessment||candidate.qualification;
@@ -23,6 +24,7 @@
     const selected=(candidate.people||[]).find(p=>String(p.id)===String(person.id)&&D.buyerIdentity(p)===D.buyerIdentity(person));
     if(!selected)return blocked('This buyer is no longer in the current research. Refresh the buyer list.');
     const contactOptions=options.contactOptions||{};
+    if(company.manualExclusionsPending&&!D.confirmedBuyerShortlist(candidate.people||[],{decisionMakers:D.effectiveBuyerRoles(candidate)},candidate,contactOptions).priorityIds.includes(selected.id||D.buyerIdentity(selected)))return blocked('Resolve company checks or select a currently qualified priority buyer before manual paid lookup.','ADDITIONAL_CONTACT_COMPANY_REQUIRED');
     if(options.automatic===true){
       const priorities=D.mandatoryBuyerResearchPriorities(candidate.people||[],candidate,{forExecution:true,contactOptions});
       if(priorities.length<4||!D.buyerResearchCoveragePassed(candidate,{...options,contactOptions,researchPeople:priorities,allowPartialRoster:true}))return blocked('Complete free research for all four priority buyers before automatic paid search.','ADDITIONAL_CONTACT_PRIORITY_RESEARCH_REQUIRED');
@@ -38,7 +40,7 @@
       if(!String(selected.id||'').trim()||(candidate.people||[]).filter(person=>String(person.id)===String(selected.id)).length!==1||ai?.status!=='complete'||ai.inputSignature!==D.buyerReviewSignature(candidate)||!(age>=0&&age<30*86400000)||!ai.reviewedPersonIds.includes(String(selected.id))||conflicts.some(row=>String(row.person_id)===String(selected.id)))return blocked('Complete this buyer’s current AI evidence review before automatic paid search.','ADDITIONAL_CONTACT_REVIEW_REQUIRED');
     }
     if(options.confirmedEmail)return blocked('A confirmed company email is already available.');
-    return {eligible:true,manualFitPending:company.manualFitPending,reason:company.manualFitPending?'Company identity and buyer checked; manual lookup approved separately from purchasing-fit review.':'Qualified company and buyer; public contact research completed.',profile};
+    return {eligible:true,manualFitPending:company.manualFitPending,manualExclusionsPending:company.manualExclusionsPending,reason:company.manualFitPending||company.manualExclusionsPending?'Company identity and buyer checked; explicit manual lookup is separate from pending company review.':'Qualified company and buyer; public contact research completed.',profile};
   }
   const automaticLimit=value=>Number.isInteger(value)&&value>=1&&value<=4?value:1;
   function targetGroup(candidate={},options={}){

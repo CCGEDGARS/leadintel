@@ -1,5 +1,23 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const {runtime}=require('./helpers/buyer-controls-runtime.cjs');
+test('completed Gmail alone cannot report a successful full free recheck',async()=>{
+ const r=runtime();try{
+  r.c.findPublicProspectContacts=async()=>{r.person.contactResearch={checks:{gmail:{status:'complete'}}};return true;};
+  await r.c.recheckBuyerContact('example.com',0,{personId:r.person.id});
+  const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);
+  assert.match(node.textContent,/Free research incomplete/);assert.notEqual(node.querySelector('[role=status]').style.color,'rgb(11, 107, 87)');
+ }finally{r.close();}
+});
+test('one fully researched buyer is not labelled incomplete because another buyer lacks checks',()=>{
+ const r=runtime();try{
+  r.c.LeadIntelDiscovery.qualifyBuyer=D.qualifyBuyer;
+  const {candidate}=require('./fixtures/manual-paid-company.cjs')();Object.assign(r.candidate,candidate);r.person=r.candidate.people[0];
+  r.candidate.people.push({...r.person,id:'unfinished',name:'Other Buyer',publicName:'Other Buyer',contactResearch:undefined,emailResearch:undefined});
+  r.candidate.publicResearch.accountability.status='partial';
+  assert.equal(D.buyerResearchCoveragePassed(r.candidate,{researchPeople:[r.person],allowPartialRoster:true}),true);
+  assert.doesNotMatch(r.c.buyerQualificationHtml(r.candidate,r.person),/Research needs checking/);
+ }finally{r.close();}
+});
 function setup(r,{available=false}={}){
  const old=new Date(Date.now()-40*86400000).toISOString(),url='https://example.com/team',oldPhone='+371 2211 0000',newPhone='+371 2211 9999';
  const prior={url,markdown:`Avery Buyer — Procurement Director at Example. Phone ${oldPhone}`,sourceRead:true,extractedAt:old};r.candidate.people=[r.person];Object.assign(r.person,D.matchPublicBuyerDetails([r.person],[prior],'example.com','Example')[0]);r.candidate.__leadIntelBuyerSources=[prior];
@@ -75,7 +93,7 @@ test('one selected Recheck leaves all three other cards byte-for-byte unchanged 
   r.candidate.peopleStatus='loading';r.candidate.publicContactStatus='loading';r.candidate.buyerResearchJob={status:'running',personIds:[r.person.id]};
   assert.deepEqual(others.map(p=>r.c.prospectContactControls(r.candidate,p)),before);
   const node=r.dom.window.document.createElement('div');node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.equal(node.querySelector('[role=status]').style.color,'rgb(11, 107, 87)');
-  r.person.contactResearch={checks:{gmail:{status:'complete'}}};r.candidate.peopleStatus='complete';r.candidate.publicContactStatus='complete';r.candidate.buyerResearchJob.status='complete';finish(true);await run;
+  const stamp=new Date().toISOString();r.candidate.publicResearch={accountability:{...D.createBuyerResearchAccountability(),status:'partial',completedAt:stamp,totalPeople:4,checkedPeople:1}};r.person.emailResearch={status:'complete',checkedAt:stamp,searches:12,failed:0};require('./helpers/buyer-research-receipts.cjs')({...r.candidate,people:[r.person]},stamp);r.candidate.peopleStatus='complete';r.candidate.publicContactStatus='complete';r.candidate.buyerResearchJob.status='complete';finish(true);await run;
   node.innerHTML=r.c.prospectContactControls(r.candidate,r.person);assert.match(node.textContent,/Recheck finished.*Gmail: no public match found/);assert.equal(node.querySelector('[role=status]').style.color,'rgb(11, 107, 87)');
   assert.deepEqual(others.map(p=>r.c.prospectContactControls(r.candidate,p)),before);
  }finally{r.close();}

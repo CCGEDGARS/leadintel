@@ -77,6 +77,15 @@ test('selected Recheck preserves other card positions and recommendation badges 
  r.ctx.buyerRecheckLayouts.add(r.candidate);r.candidate.people[0].buyerRelevanceScore=1;r.candidate.people[0].title='Operations Director';
  const next=new JSDOM(r.ctx.renderSelectedProspects([r.candidate]));assert.deepEqual([...next.window.document.querySelectorAll('.selected-prospect-person')].filter(n=>!n.textContent.includes('Anna Buyer0')).map(n=>n.outerHTML),before);next.window.close();r.dom.window.close();
 });
+test('a frozen Recheck layout cannot retain a buyer whose current employer conflicts',()=>{
+ const r=render({confirmedIds:['0','1','2','3','4','5']});try{
+  r.ctx.buyerRecheckLayouts.add(r.candidate);r.candidate.people[0].organization='Unrelated company';
+  const next=new JSDOM(r.ctx.renderSelectedProspects([r.candidate]));try{
+   const main=next.window.document.querySelector('.selected-prospect-buyers > .buyer-shortlist-group > ol');
+   assert.doesNotMatch(main.textContent,/Anna Buyer0/);assert.equal(main.children.length,4);
+  }finally{next.window.close();}
+ }finally{r.dom.window.close();}
+});
 
 
 test('company pages render ten companies and only the chosen full dossier without changing retained research',()=>{
