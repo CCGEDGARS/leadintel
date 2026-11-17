@@ -50,3 +50,19 @@ test('CRM restore uses the same semantic event comparison and retains real resea
  const CRM=require('../crm-engine.js'),source=require('node:fs').readFileSync(require.resolve('../discovery-ui.js'),'utf8'),code=source.match(/function sameStrategyFingerprint\(previous,current\)\{[^\n]+\}/)[0],scope={window:{LeadIntelEventCampaigns:M},canonicalDomain:x=>x};require('node:vm').runInNewContext(code,scope);const previous=JSON.stringify({eventCampaign:event}),detail={company:{id:'co',workspace_id:'w',normalized_domain:'buyer.test'},intelligence:{research_snapshot:{companyResearch:{version:1,domain:'buyer.test',strategyFingerprint:previous,needsRecheck:false}}}},options={workspaceId:'w',sameStrategyFingerprint:scope.sameStrategyFingerprint};
  const restored=CRM.restoreCompanyResearch({domain:'buyer.test'},detail,{...options,strategyFingerprint:JSON.stringify({eventCampaign:M.researchContext({...event,invitationStyle:'friendly',revision:8})})});assert.equal(restored.needsRecheck,false);assert.equal(CRM.restoreCompanyResearch({domain:'buyer.test'},detail,{...options,strategyFingerprint:JSON.stringify({eventCampaign:M.researchContext({...event,roles:'CFO'})})}).needsRecheck,true);assert.equal(CRM.restoreCompanyResearch({domain:'buyer.test'},detail,{...options,workspaceId:'other'}),null);
 });
+
+test('event-specific targeting wins over a long general profile and both audiences run early',()=>{
+ const c={...event,audience:'Medical device distributors',country:'Finland',sourceUrls:Array.from({length:8},(_,i)=>'https://source'+i+'.test/exhibitors').join('\n')};
+ const q=M.queries(c,{idealCustomer:'General industrial customers '.repeat(20),targetMarkets:'Germany'});
+ assert.deepEqual(q.slice(0,2).map(x=>x.audience),['participants','outside']);
+ assert.match(q[0].query,/Medical device distributors/);assert.match(q[1].query,/Medical device distributors/);assert.equal(q[1].market,'Finland');
+});
+test('post-meeting follow-up uses only recorded notes, works after the event and never reinvites',()=>{
+ const c={...event,startDate:'2020-10-10',endDate:'2020-10-12'},notes='We discussed the replacement line. I will send the equipment specification.';
+ const d=M.draft(c,{sender:'Alex',company:'Seller'},{name:'Robin'},'friendly','email',{purpose:'followup',meetingNotes:notes});
+ assert.match(d.message,/Thank you for our conversation at Industry Forum/);assert.ok(d.message.includes(notes));assert.doesNotMatch(d.message,/will be exhibiting|invited to|Our availability|Event registration/);
+ assert.equal(d.meetingNotes,notes);M.validateDraft(c,d,{sender:'Alex'});
+ assert.throws(()=>M.draft(c,{sender:'Alex',company:'Seller'},{name:'Robin'},'friendly','email',{purpose:'followup'}),/meeting notes/i);
+ assert.throws(()=>M.draft(event,{sender:'Alex',company:'Seller'},{name:'Robin'},'friendly','email',{purpose:'followup',meetingNotes:notes}),/not started/i);
+ assert.throws(()=>M.draft(c,{sender:'Alex',company:'Seller'},{name:'Robin'}),/ended/i);
+});

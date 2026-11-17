@@ -41,3 +41,13 @@ test('Prepare event CTA is readable and opens/closes its event editor without al
  assert.equal(JSON.parse(w.localStorage.getItem('leadintel_customer_v2_state')).eventCampaigns.campaigns[0].name,'Industry Forum');
  w.close();
 });
+
+test('past-event follow-up approval binds actual notes and delivers only the reviewed recipient and body',()=>{
+ const past={...campaign,startDate:'2020-10-10',endDate:'2020-10-12'},meetingNotes='We discussed equipment maintenance. I will send the specification.';
+ const d=M.draft(past,essentials,{name:'Event Buyer Fixture'},'professional','email',{purpose:'followup',meetingNotes}),drafts={emailSubject:d.subject,emailBody:d.message};
+ const item=messageFixture({domain:'example.test',channel:'email',drafts,messageStudioDraft:{eventSnapshot:past,eventPurpose:'followup',eventMeetingNotes:meetingNotes,essentials},campaignScenario:{id:'core',language:'en',resolvedLanguage:'en'},localizationStatus:'complete',localizationProvenance:{provider:'approved-event-template',model:'deterministic-v1',language:'en',selectionSource:'manual'}},{email:'buyer@example.test',name:'Event Buyer Fixture'});
+ const approved=O.approveOutreachItem(item,drafts);assert.equal(approved.approved,true,approved.error);assert.equal(O.buildApprovedSendPayload(approved,'buyer@example.test').body,d.message);assert.equal(O.buildApprovedSendPayload(approved,'other@example.test'),null);
+ assert.equal(O.buildApprovedSendPayload({...approved,messageStudioDraft:{...approved.messageStudioDraft,eventMeetingNotes:''}},'buyer@example.test'),null);
+ assert.equal(O.buildApprovedSendPayload({...approved,messageStudioDraft:{...approved.messageStudioDraft,eventMeetingNotes:'A different meeting'}},'buyer@example.test'),null);
+ assert.throws(()=>M.activate(M.save({},past),past.id),/ended/);assert.equal(M.active(M.activate(M.save({},past),past.id,{forFollowup:true})).id,past.id);
+});
