@@ -13,6 +13,12 @@
     if(!banner){banner=document.createElement('div');banner.className='step-action-guidance';banner.setAttribute('role','note');banner.innerHTML='<span class="step-action-label">What to do now</span><strong></strong><p></p>';section.prepend(banner);}
     if(banner.querySelector('strong').textContent!==title)banner.querySelector('strong').textContent=title;
     if(banner.querySelector('p').textContent!==detail)banner.querySelector('p').textContent=detail;
+    // The live journey guide already names the missing requirement and opens
+    // its control. Keep this introductory copy as a fallback, not a second,
+    // potentially contradictory instruction above the user's saved work.
+    const view=section.closest('.step-view')||section,guide=document.getElementById('journey-stage-guide');
+    const guided=view.id!=='step-2'&&guide?.dataset.moduleStep===view.dataset.step&&Boolean(guide.querySelector('[data-stage-guide-title]')?.textContent?.trim());
+    if(banner.hidden!==Boolean(guided))banner.hidden=Boolean(guided);
   }
   function sync(){
     const research=document.getElementById('research-summary'),profileHero=document.querySelector('#step-2 > .hero-copy');
@@ -56,6 +62,6 @@
   }
   let scheduled=false;
   function schedule(){if(scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;sync();});}
-  function start(){sync();new MutationObserver(schedule).observe(document.querySelector('main.content')||document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-research-state']});window.addEventListener('leadintel:module-opened',schedule);}
+  function start(){sync();new MutationObserver(schedule).observe(document.querySelector('main.content')||document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-research-state','data-module-step']});window.addEventListener('leadintel:module-opened',schedule);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();

@@ -95,6 +95,14 @@ test('journey refresh preserves keyboard focus in both guide and sidebar substep
  assert.equal(w.document.activeElement.dataset.sidebarSubstep,'approval');w.close();
 });
 
+test('unchanged journey refresh retains step controls and an actual status change updates them',()=>{
+ const model=Journey.buildJourneyModel(messages()),{w,ctx}=renderer(model);ctx.syncProcessMap();
+ const before=[...w.document.querySelectorAll('[data-stage-mini-step],[data-sidebar-substep],[data-message-channel]')];
+ for(let i=0;i<20;i++)ctx.syncProcessMap();assert.ok(before.every(node=>node.isConnected),'unchanged status must not remove controls under the pointer');
+ const stage=model[5];stage.steps.find(item=>item.id==='approval').complete=false;stage.requiredCompleted--;stage.status='in-progress';stage.nextAction='Review and approve the message package';stage.nextTarget={stageId:6,itemId:'approval'};ctx.syncProcessMap();
+ assert.equal(w.document.querySelector('[data-stage-mini-step="approval"]').parentElement.className,'pending');assert.equal(w.document.querySelector('[data-stage-next-action]').textContent,'Review and approve the message package');w.close();
+});
+
 test('all required Delivery outcomes complete without presenting future replies as required work',()=>{
  const stage=Journey.buildJourneyModel({currentStep:7,availability,delivery:{opportunities:[{domain:'buyer.example',sentAt:'2026-10-24'}]}})[6];
  assert.equal(stage.active,true);assert.equal(stage.status,'complete');assert.equal(stage.optionalCompleted,0);assert.equal(stage.optionalTotal,3);

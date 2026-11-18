@@ -9897,6 +9897,49 @@
       "contains": [
         "research-tasks=20261118-v1"
       ]
+    },
+    {
+      "id": "connected-navigation-refresh-20261118",
+      "type": "text",
+      "url": "/customer/process-map.js",
+      "status": 200,
+      "contains": [
+        "function scheduleProcessMap()",
+        "node.isEqualNode",
+        "function revealMobileStage("
+      ]
+    },
+    {
+      "id": "bounded-workflow-selector-20261118",
+      "type": "text",
+      "url": "/customer/my-flows-ui.js",
+      "status": 200,
+      "contains": [
+        "SUMMARY_FRESH_MS=30000",
+        "summaryFlight",
+        "Promise.race([deadline",
+        "refreshAfter"
+      ]
+    },
+    {
+      "id": "single-live-journey-guidance-20261118",
+      "type": "text",
+      "url": "/customer/step-action-guidance.js",
+      "status": 200,
+      "contains": [
+        "guide?.dataset.moduleStep",
+        "view.id!=='step-2'"
+      ]
+    },
+    {
+      "id": "compact-mobile-stage-navigation-20261118",
+      "type": "text",
+      "url": "/customer/app-shell.css",
+      "status": 200,
+      "contains": [
+        "[data-steps-expanded=\"false\"] [data-message-channels]",
+        "Keep the working screen close on phones"
+      ]
     }
   ],
   "retry": {

@@ -3,7 +3,8 @@
  const F=root.LeadIntelFlowState,API='https://leadintel-api.edgars-7e7.workers.dev';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const bridge=()=>root.LeadIntelServerBridge;
- let dialog,data=null,busy=false,workspace='',requestId=0,summaryRequestId=0,summary=null,summaryWorkspace='',summaryTimer;
+ let dialog,data=null,busy=false,workspace='',requestId=0,summaryRequestId=0,summary=null,summaryWorkspace='',summaryTimer,summaryFlight=null,summaryLoadedAt=0,summaryVersion=-1;
+ const SUMMARY_FRESH_MS=30000;
  const accountContext=()=>bridge()?.session?.authenticated?`${bridge()?.session?.user?.id||''}:${bridge()?.workspace?.id||''}`:'';
  const status={automatic:'Active',paused:'Paused',manual:'Manual',stopped:'Stopped',needs_review:'Review required'};
  function notice(text){dialog?.querySelector('[data-flows-notice]')?.replaceChildren(document.createTextNode(text));}
@@ -11,19 +12,25 @@
   const captured=accountContext(),ws=bridge()?.workspace?.id;if(!bridge()?.session?.authenticated||!ws)throw Error('Sign in to save and manage your flows.');
   if(body&&workspace!==ws)throw Error('Workspace changed. Refresh My Flows.');
   const path='/api/flows'+(id?'/'+encodeURIComponent(id):'')+'?workspace_id='+encodeURIComponent(ws)+(view?'&view='+encodeURIComponent(view):''),url=root.LeadIntelApiTransport?.firstPartyUrl?.(API+path)||API+path;
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
-  try{const response=await fetch(url,{credentials:'include',method:body?'POST':'GET',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal,...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(accountContext()!==captured||bridge()?.workspace?.id!==ws)throw Error('Workspace changed. Refresh My Flows.');if(!response.ok)throw Error(result.error||'Could not update flow');return result;}finally{clearTimeout(timeout);}
+  const controller=new AbortController();let timeout;
+  const deadline=new Promise((_,reject)=>{timeout=setTimeout(()=>{controller.abort();reject(Error('The workflow request timed out. Refresh My Flows to check the saved result.'));},20000);});
+  try{return await Promise.race([deadline,(async()=>{const response=await fetch(url,{credentials:'include',method:body?'POST':'GET',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal,...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(accountContext()!==captured||bridge()?.workspace?.id!==ws)throw Error('Workspace changed. Refresh My Flows.');if(!response.ok)throw Error(result.error||'Could not update flow');return result;})()]);}finally{clearTimeout(timeout);}
  }
  function entrySummary(text){for(const node of document.querySelectorAll('.wf-open [data-flow-summary]'))node.textContent=text;}
- function showSummary(value){++summaryRequestId;summary=value;summaryWorkspace=accountContext();entrySummary(value.activeCount+' active · '+value.flows.length+' saved');root.dispatchEvent(new root.CustomEvent('leadintel:flows-changed'));}
- async function refreshSummary(){
+ function showSummary(value,version=bridge()?.stateVersion){++summaryRequestId;summary=value;summaryWorkspace=accountContext();summaryLoadedAt=Date.now();summaryVersion=version;entrySummary(value.activeCount+' active · '+value.flows.length+' saved');root.dispatchEvent(new root.CustomEvent('leadintel:flows-changed'));}
+ function refreshSummary({force=true}={}){
   if(summaryWorkspace&&summaryWorkspace!==accountContext())clear();
-  const token=++summaryRequestId,ws=bridge()?.workspace?.id;
-  if(!accountContext()){summary=null;summaryWorkspace='';root.dispatchEvent(new root.CustomEvent('leadintel:flows-changed'));}
-  entrySummary('Loading flow counts…');
-  if(!bridge()?.session?.authenticated||!ws){entrySummary('Sign in to manage flows');return;}
-  try{const next=await api('',undefined,'selector');if(token!==summaryRequestId)return;if(bridge()?.workspace?.id!==ws||!bridge()?.session?.authenticated){entrySummary('Sign in to manage flows');return;}showSummary(next);}
-  catch{if(token===summaryRequestId)entrySummary('Flow counts unavailable');}
+  const own=accountContext(),ws=bridge()?.workspace?.id,version=bridge()?.stateVersion;
+  if(!own||!ws){clear();entrySummary('Sign in to manage flows');return Promise.resolve();}
+  if(summaryFlight?.context===own){if(summaryFlight.version!==version)summaryFlight.refreshAfter=true;return summaryFlight.promise;}
+  if(!force&&summaryWorkspace===own&&summaryVersion===version&&Date.now()-summaryLoadedAt<SUMMARY_FRESH_MS)return Promise.resolve();
+  const token=++summaryRequestId,flight={context:own,version,promise:null,refreshAfter:false};summaryFlight=flight;
+  if(!summary)entrySummary('Loading flow counts…');
+  flight.promise=(async()=>{
+   try{const next=await api('',undefined,'selector');if(token!==summaryRequestId||accountContext()!==own)return;showSummary(next,version);}
+   catch{if(token===summaryRequestId&&accountContext()===own)entrySummary('Flow counts unavailable · retry by opening Workflows');}
+   finally{if(summaryFlight===flight){summaryFlight=null;if(flight.refreshAfter&&accountContext()===own&&summaryVersion!==bridge()?.stateVersion)await refreshSummary();}}
+  })();return flight.promise;
  }
  function render(){
   showSummary(data);
@@ -71,15 +78,15 @@
   }catch(e){if(accountContext()===own&&token===requestId)notice(e.message);}finally{if(token===requestId)busy=false;}
  }
  async function selectFlow(id){
-  if(busy)return;busy=true;const token=++requestId,own=accountContext();try{const next=await api();if(token!==requestId||accountContext()!==own)return;showSummary(next);data=next;workspace=bridge().workspace.id;busy=false;return await openFlow(id);}finally{if(token===requestId)busy=false;}
+  if(busy)return;busy=true;const token=++requestId,own=accountContext();try{const next=await api('',undefined,'selector');if(token!==requestId||accountContext()!==own)return;showSummary(next);data=next;workspace=bridge().workspace.id;busy=false;return await openFlow(id);}finally{if(token===requestId)busy=false;}
  }
  function current(){if(!accountContext()||summaryWorkspace!==accountContext())return null;return summary?.flows?.find(f=>f.id===summary.currentId)||null;}
  function listSummary(){return accountContext()&&summaryWorkspace===accountContext()?summary:null;}
- function clear(){++requestId;++summaryRequestId;busy=false;data=null;summary=null;workspace='';summaryWorkspace='';dialog?.close();dialog?.querySelector('[data-flows-content]')?.replaceChildren();root.dispatchEvent(new root.CustomEvent('leadintel:flows-changed'));}
+ function clear(){++requestId;++summaryRequestId;clearTimeout(summaryTimer);summaryFlight=null;summaryLoadedAt=0;summaryVersion=-1;busy=false;data=null;summary=null;workspace='';summaryWorkspace='';dialog?.close();dialog?.querySelector('[data-flows-content]')?.replaceChildren();root.dispatchEvent(new root.CustomEvent('leadintel:flows-changed'));}
  root.LeadIntelMyFlows={open,refresh:load,refreshSummary,current,listSummary,selectFlow,currentId:()=>current()?.id||null};
  root.addEventListener('leadintel:workspace-changed',clear);
  root.addEventListener('leadintel:server-ready',()=>{void refreshSummary();});
- root.addEventListener('leadintel:server-synced',()=>{clearTimeout(summaryTimer);summaryTimer=setTimeout(()=>void refreshSummary(),750);});
- root.addEventListener('focus',()=>{void refreshSummary();});
+ root.addEventListener('leadintel:server-synced',()=>{clearTimeout(summaryTimer);summaryTimer=setTimeout(()=>void refreshSummary({force:false}),750);});
+ root.addEventListener('focus',()=>{void refreshSummary({force:false});});
  if(bridge()?.ready===true)void refreshSummary();
 })(window);

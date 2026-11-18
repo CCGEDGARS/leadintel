@@ -144,6 +144,9 @@ function journeyModel(availability,current){
 const statusLabels={'in-progress':"In progress",'not-started':"Not started",complete:"Complete",locked:"Locked"};
 function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Not started";}
 function replaceJourneyChildren(parent,nodes){
+  // Keep unchanged controls attached: rebuilding during a pointer/keyboard
+  // action can swallow the click even when its visible text did not change.
+  if(parent.childNodes.length===nodes.length&&nodes.every((node,index)=>node.isEqualNode(parent.childNodes[index])))return;
   // Research/status events refresh these lists while customers use the keyboard.
   // Restore the same control only when focus belonged to the refreshed list.
   const focused=parent.contains(document.activeElement)?document.activeElement:null;
@@ -187,6 +190,7 @@ function renderStageGuide(stage){
   replaceJourneyChildren(optional.querySelector('[data-stage-optional-steps]'),stage.steps.filter(item=>item.optional).map(item=>stageMiniStepNode(stage,item)));
 }
 function renderSidebarSteps(marker,stage,expanded){
+  marker.dataset.stepsExpanded=String(expanded);
   if(stage.id===6){
     let channels=marker.querySelector('[data-message-channels]');if(!channels){channels=document.createElement('ol');channels.className='sidebar-substeps message-channel-nav';channels.dataset.messageChannels='true';channels.setAttribute('aria-label','Message channels');marker.append(channels);}
     const choice=readStageJson(DISCOVERY_STORAGE_KEY+'_meta').scriptBuyer,workspace=window.LeadIntelServerBridge?.workspace?.id;
@@ -262,6 +266,21 @@ function syncProcessMap(){
     renderSidebarSteps(marker,stage,expandedSidebarStage===step);
   });
   renderStageGuide(currentStage);
+  const guide=document.getElementById('journey-stage-guide');if(guide)guide.dataset.moduleStep=String(current);
+  revealMobileStage(currentStage?.id);
+}
+function revealMobileStage(stageId){
+  if(!window.matchMedia?.('(max-width:720px)').matches){revealMobileStage.key='';return;}
+  const steps=document.querySelector('.steps'),active=steps?.querySelector(`[data-workflow-stage="${stageId}"]`);if(!active)return;
+  const key=stageId+':'+steps.clientWidth;if(revealMobileStage.key===key)return;revealMobileStage.key=key;
+  // Scroll only the horizontal stage strip, never the user's working page.
+  const frame=steps.getBoundingClientRect(),item=active.getBoundingClientRect();
+  steps.scrollLeft+=item.left-frame.left-(steps.clientWidth-item.width)/2;
+}
+let processMapRefreshTimer=null;
+function scheduleProcessMap(){
+  if(processMapRefreshTimer!==null)return;
+  processMapRefreshTimer=setTimeout(()=>{processMapRefreshTimer=null;syncProcessMap();},0);
 }
 function openProcessStep(stageId){
   const target=Math.min(7,Math.max(1,Number(stageId)||1));
@@ -330,19 +349,20 @@ if(processMap){
   steps?.addEventListener("keydown",event=>{if(event.target.closest('[data-sidebar-expand],[data-sidebar-substep],[data-message-channel]'))return;const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
-  window.addEventListener("leadintel:website-synced",syncProcessMap);
-  window.addEventListener("leadintel:website-activated",syncProcessMap);
-  window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();syncProcessMap();});
-  window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();syncProcessMap();});
-  window.addEventListener("leadintel:journey-changed",syncProcessMap);
-  for(const name of ['leadintel:server-conflict','leadintel:server-synced','leadintel:sync-settled'])window.addEventListener(name,syncProcessMap);
+  window.addEventListener("leadintel:website-synced",scheduleProcessMap);
+  window.addEventListener("leadintel:website-activated",scheduleProcessMap);
+  window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();scheduleProcessMap();});
+  window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();scheduleProcessMap();});
+  window.addEventListener("leadintel:journey-changed",scheduleProcessMap);
+  for(const name of ['leadintel:server-conflict','leadintel:server-synced','leadintel:sync-settled'])window.addEventListener(name,scheduleProcessMap);
   window.addEventListener("leadintel:open-discovery",()=>setTimeout(syncProcessMap,120));
-  window.addEventListener("leadintel:crm-changed",syncProcessMap);
-  window.addEventListener("leadintel:outreach-approved",syncProcessMap);
-  window.addEventListener("leadintel:company-research-updated",syncProcessMap);
-  window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();syncProcessMap();});
-  window.addEventListener("leadintel:journey-focus-changed",syncProcessMap);
-  window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
+  window.addEventListener("leadintel:crm-changed",scheduleProcessMap);
+  window.addEventListener("leadintel:outreach-approved",scheduleProcessMap);
+  window.addEventListener("leadintel:company-research-updated",scheduleProcessMap);
+  window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();scheduleProcessMap();});
+  window.addEventListener("leadintel:journey-focus-changed",scheduleProcessMap);
+  window.addEventListener('resize',scheduleProcessMap);
+  window.addEventListener("storage",event=>{if([PROCESS_STORAGE_KEY,DISCOVERY_STORAGE_KEY,DISCOVERY_STORAGE_KEY+'_meta',OUTREACH_STORAGE_KEY,DELIVERY_STORAGE_KEY].includes(event.key))scheduleProcessMap();});
   syncContextArchitecture();syncProcessMap();
   window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,openWorkflowStage:openProcessStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
 }
