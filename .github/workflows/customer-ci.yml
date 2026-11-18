@@ -16,6 +16,7 @@ on:
       - 'scripts/verify-step1-journey.mjs'
       - 'scripts/verify-connected-experience.mjs'
       - 'scripts/verify-step5-journey.mjs'
+      - 'scripts/verify-manual-paid-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
       - 'scripts/verify-step7-journey.mjs'
       - 'package.json'
@@ -57,6 +58,7 @@ on:
       - 'scripts/verify-step1-journey.mjs'
       - 'scripts/verify-connected-experience.mjs'
       - 'scripts/verify-step5-journey.mjs'
+      - 'scripts/verify-manual-paid-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
       - 'scripts/verify-step7-journey.mjs'
       - 'package.json'
@@ -221,6 +223,7 @@ jobs:
             /tmp/leadintel-step1-test-*/*.png
             /tmp/leadintel-step5-test-*/evidence.json
             /tmp/manual-paid-browser-evidence.json
+            /tmp/manual-paid-browser-failure.json
             /tmp/leadintel-step5-test-*/*.png
             /tmp/leadintel-step6-test-*/evidence.json
             /tmp/leadintel-step6-test-*/failure.json

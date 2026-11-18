@@ -28,9 +28,10 @@ export async function verifyManualPaidJourney(){
  const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});let ctx;
  try{
   async function open(){ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());await ctx.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);const page=await ctx.newPage();page.on('pageerror',error=>pageErrors.push(error.message));await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);
-   // Shell support normalizes answer statuses asynchronously. Capture the
-   // research fingerprint only after that real Profile initialization finishes.
-   await page.waitForFunction(()=>LeadIntelProfile.__step2ReadinessPatched&&LeadIntelStep2Readiness.QUESTION_IDS.every(id=>Object.hasOwn(mainState().answerStatus||{},id)),null,{timeout:20000});
+   // Wait for the actual Profile owner and readiness adapter. Opening Messages
+   // no longer saves derived defaults, so optional status fields need not exist
+   // in storage before the user edits or saves Profile.
+   await page.waitForFunction(()=>LeadIntelProfile.__step2ReadinessPatched&&window.LeadIntelProfileAnswers?.isReady?.(),null,{timeout:20000});
    await settleInitialSave(page);return page;}
   let page=await open();
   // Bind the controlled company evidence to the active strategy before the test action.
@@ -66,5 +67,10 @@ export async function verifyManualPaidJourney(){
   assert.equal(f.calls.filter(c=>c.path==='/api/additional-contact-services/email'&&c.status===200).length,2,'both independent browser requests succeed');
   const evidence={realHttp:true,realCrmSave:true,controlledProvider:true,emailFindCalls:1,phoneCalls:1,noRepeatConfirmation:true,browserRuntimeErrors:0,phoneReopen:true,reopenConfirmed:true,repeatClickPaidCalls:0,companyFitStillPending:true,companyExclusionsStillPending:true,outboundMessages:0,privateCustomerAcceptance:false};
   await fs.writeFile('/tmp/manual-paid-browser-evidence.json',JSON.stringify(evidence,null,2));return evidence;
+ }catch(error){
+  const page=ctx?.pages().find(page=>!page.isClosed());
+  const ui=page?await page.evaluate(()=>({profileReady:window.LeadIntelProfileAnswers?.isReady?.()===true,readinessReady:window.LeadIntelProfile?.__step2ReadinessPatched===true,buttons:[...document.querySelectorAll('[data-prospect-enrich-email],[data-prospect-enrich-phone],[data-keep-buyer]')].map(button=>({text:button.textContent.trim(),disabled:button.disabled,pressed:button.getAttribute('aria-pressed')})),notice:document.getElementById('toast')?.textContent})).catch(()=>null):null;
+  const failure={error:error.message,pageErrors,providerPaths:providerCalls.map(call=>call.path),ui};
+  await fs.writeFile('/tmp/manual-paid-browser-failure.json',JSON.stringify(failure,null,2));console.error('[manual-paid-journey] '+JSON.stringify(failure));throw error;
  }finally{await ctx?.close();await browser.close();await f.close();}
 }
