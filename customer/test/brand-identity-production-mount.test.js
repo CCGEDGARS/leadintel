@@ -8,6 +8,34 @@ const vm = require('node:vm');
 const Profile = require('../profile-engine.js');
 const BrandIdentityUI = require('../brand-identity-ui.js');
 
+function senderMigrationFixture(saved, {ready=true}={}) {
+  const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  let raw=typeof saved==='string'?saved:JSON.stringify(saved),writes=0;
+  const state={profile:{companyName:'Unpersisted profile'},market:{researchSourceTypes:['news']},brandIdentity:{senderName:'Stale sender'}};
+  const context={state,window:{LeadIntelAccountCache:{},LeadIntelServerBridge:{ready},dispatchEvent(){}},CustomEvent:class{},STORAGE_KEY:'main',brandIdentityUI:null,
+    localStorage:{getItem:()=>raw,setItem:(key,value)=>{raw=value;writes++;}},
+    LeadIntelBrandIdentityUI:{mount:()=>({sync(){}})},LeadIntelBrandIdentity:require('../brand-identity.js'),LeadIntelSenderIdentityLocation:require('../sender-identity-location.js'),
+    brandIdentityPublicEvidence(){},updateCompleteness(){},updateNavigationAvailability(){},showToast(){},saveState(){throw Error('Migration must not save unrelated application state');}};
+  vm.runInNewContext(app.match(/function initBrandIdentity\(\)\{[\s\S]*?\n\}/)[0]+'\ninitBrandIdentity();',context);
+  return {initialize:essentials=>context.LeadIntelSenderIdentity.initialize(essentials),state,read:()=>raw,writes:()=>writes};
+}
+
+test('late sender migration owns only sender fields and preserves the latest saved strategy',()=>{
+  const saved={website:'https://saved.example',profile:{companyName:'Saved company'},market:{icps:[{id:'retained'}]},answers:{buyer_roles:'Buyer'},brandIdentity:{companyDisplayName:'Latest company',phone:'+371 20000000'}};
+  const h=senderMigrationFixture(saved);h.initialize({sender:'Robin Lane',company:'Old company',senderRole:'Owner'});
+  const result=JSON.parse(h.read()),{brandIdentity,senderIdentityVersion,...other}=result;
+  assert.deepEqual(other,Object.fromEntries(Object.entries(saved).filter(([key])=>key!=='brandIdentity')));
+  assert.equal(brandIdentity.senderName,'Robin Lane');assert.equal(brandIdentity.companyDisplayName,'Latest company');assert.equal(brandIdentity.phone,saved.brandIdentity.phone);assert.equal(senderIdentityVersion,1);
+  assert.equal(h.state.profile.companyName,'Unpersisted profile');assert.equal(h.state.senderIdentityVersion,1);
+  h.initialize({sender:'Different sender'});assert.equal(h.writes(),1,'migration is durable and runs only once');
+});
+
+test('sender migration waits for account readiness and never replaces invalid or already migrated storage',()=>{
+  for(const [saved,ready] of [[{},false],['{invalid',true],['[]',true],[{senderIdentityVersion:1,brandIdentity:{senderName:''}},true]]){
+    const h=senderMigrationFixture(saved,{ready}),before=h.read();h.initialize({sender:'Old sender'});assert.equal(h.read(),before);assert.equal(h.writes(),0);
+  }
+});
+
 test('production Brand Identity mount supplies a fresh public-only evidence snapshot', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   const evidenceFunction = app.match(/function brandIdentityPublicEvidence\(\)\{[\s\S]*?\n\}/);

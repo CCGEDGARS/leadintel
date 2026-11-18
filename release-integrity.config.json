@@ -9940,6 +9940,44 @@
         "[data-steps-expanded=\"false\"] [data-message-channels]",
         "Keep the working screen close on phones"
       ]
+    },
+    {
+      "id": "messages-defaults-readonly-20261118",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function ensureCampaignStudio(){return campaignStudio();}",
+        "const main=JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||'{}');main.campaignStudio=studio"
+      ]
+    },
+    {
+      "id": "sender-migration-owned-fields-20261118",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "migrate(saved,essentials)",
+        "state.brandIdentity=saved.brandIdentity;state.senderIdentityVersion=1;"
+      ]
+    },
+    {
+      "id": "messages-startup-entry-20261118",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "message-startup=20261118-v1"
+      ]
+    },
+    {
+      "id": "messages-startup-loader-20261118",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "message-startup=20261118-v1"
+      ]
     }
   ],
   "retry": {

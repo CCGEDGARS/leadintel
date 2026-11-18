@@ -1,7 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {mounted}=require('./helpers/message-runtime.js');
 const MAIN='leadintel_customer_v2_state';
-function fixture(){return mounted({selected:'professional',runtimeSetup:`window.renderMessagePanel=renderMessageWorkspace;window.readMessageMain=mainState;window.readMessageMeta=()=>readJson(DISCOVERY_META_KEY);window.readMessageEditor=()=>messageEditor.state();`});}
+function fixture(){return mounted({selected:'professional',runtimeSetup:`window.renderMessagePanel=renderMessageWorkspace;window.readMessageMain=mainState;window.readMessageMeta=()=>readJson(DISCOVERY_META_KEY);window.readMessageEditor=()=>messageEditor.state();window.messageSnapshot=withMessageReadSnapshot;window.messageScenario=ensureCampaignStudio;window.saveMessageScenario=persistCampaignStudio;window.saveMessageStep=persistMainStep;`});}
+test('reading a default campaign scenario does not write the main workspace',()=>{
+ const h=fixture();try{const main=h.w.readMessageMain();delete main.campaignStudio;h.w.localStorage.setItem(MAIN,JSON.stringify(main));const before=h.w.localStorage.getItem(MAIN);assert.ok(h.w.messageScenario().coreScenario);assert.equal(h.w.localStorage.getItem(MAIN),before,'opening Messages must not save a generated scenario or flush other presentation defaults');}finally{h.w.close();}
+});
+test('explicit campaign and route writes preserve fields mutated only in a shared presentation snapshot',()=>{
+ for(const action of ['campaign','route']){const h=fixture();try{const before=JSON.parse(h.w.localStorage.getItem(MAIN)),scenario={schemaVersion:1,coreScenario:{summary:'Explicitly saved scenario'},presets:[],selectedPresetId:''};h.w.document.querySelector('[data-step-marker="6"]')?.remove();h.w.messageSnapshot(()=>{const presentation=h.w.readMessageMain();presentation.profile.companyName='Presentation-only value';presentation.market={strategyApproved:false};presentation.answers={buyer_roles:'Unpersisted role'};if(action==='campaign')h.w.saveMessageScenario(scenario,{sync:false});else h.w.saveMessageStep(6);});const saved=JSON.parse(h.w.localStorage.getItem(MAIN));assert.deepEqual(saved,{...before,...(action==='campaign'?{campaignStudio:scenario}:{step:6})},'only the explicitly owned field is persisted');}finally{h.w.close();}}
+});
 test('one message-panel refresh parses the unchanged workspace once and preserves saved text',()=>{
  const h=fixture(),raw=h.w.localStorage.getItem(MAIN),before=h.item().drafts,parse=h.w.JSON.parse;let reads=0;
  try{h.w.JSON.parse=function(value,...args){if(value===raw)reads++;return parse.call(this,value,...args);};h.w.renderMessagePanel();assert.ok(reads<=2,`one refresh parsed the same full workspace ${reads} times`);assert.deepEqual(h.item().drafts,before);assert.equal(h.w.localStorage.getItem(MAIN),raw);}finally{h.w.JSON.parse=parse;h.w.close();}

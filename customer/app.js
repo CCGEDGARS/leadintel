@@ -258,9 +258,19 @@ function initBrandIdentity(){
       return {...state.brandIdentity};
     },
     initialize(essentials){
-    if(!globalThis.LeadIntelSenderIdentityLocation?.migrate(state,essentials))return;
-    state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(state.brandIdentity);
-    brandIdentityUI?.sync?.(state.brandIdentity);saveState();
+    if(!state||(window.LeadIntelAccountCache&&window.LeadIntelServerBridge?.ready!==true))return false;
+    // Messages mounts lazily. Its migration owns sender details only; saving the
+    // normalized app state here can invalidate an in-flight buyer selection.
+    let saved;
+    try{
+      saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+      if(!saved||typeof saved!=='object'||Array.isArray(saved)||!globalThis.LeadIntelSenderIdentityLocation?.migrate(saved,essentials))return false;
+      saved.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(saved.brandIdentity);
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(saved));
+    }catch{showToast('Sender details could not be restored. Retry after the workspace finishes loading.');return false;}
+    state.brandIdentity=saved.brandIdentity;state.senderIdentityVersion=1;
+    brandIdentityUI?.sync?.(state.brandIdentity);window.dispatchEvent(new CustomEvent('leadintel:workspace-dirty'));
+    updateCompleteness();updateNavigationAvailability();return true;
   }};
 }
 function readSources(){

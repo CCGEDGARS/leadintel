@@ -23,6 +23,19 @@ test('production proof rejects stale connected-experience assets and returning b
  }
 });
 
+test('Messages startup fixes reach returning browsers and stale initialization assets block release proof',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore(),entry=fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),discovery=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');
+ for(const file of ['app.js','discovery-ui.js']){
+  const url=entry.match(new RegExp('src="('+file.replace('.', '\\.')+'\\?[^"\\n]+)"'))?.[1];assert.ok(url,file);assert.equal(new URL(url,'https://example.test/').searchParams.get('message-startup'),'20261118-v1');
+ }
+ assert.match(discovery,/outreach-ui\.js\?[^`\n]*&message-startup=20261118-v1/);
+ const normal=productionFetch({customerHtml:entry,discoveryUi:discovery});
+ for(const [pathname,token,id]of [['/customer/outreach-ui.js','function ensureCampaignStudio(){return campaignStudio();}','messages-defaults-readonly-20261118'],['/customer/app.js','migrate(saved,essentials)','sender-migration-owned-fields-20261118']]){
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'messages-startup',fetchImpl:async url=>{const result=await normal(url);return new URL(String(url)).pathname===pathname?response({text:(await result.text()).replaceAll(token,'stale-startup')}):result;},nonce:'messages-startup'});
+  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(row=>row.id===id)?.passed,false);
+ }
+});
+
 test('production proof rejects missing research checkpoints, extracted evidence preservation and company-only saves',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore();
  const normal=productionFetch({customerHtml:fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),discoveryUi:fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8')});
@@ -229,7 +242,7 @@ const boundedDiscoveryRuntime = [
   'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
   'A new search does not replace your saved selections. This search has finished.',
-  'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1',
+  'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1&message-startup=20261118-v1',
   'function buyerContinuationIssue( function pointToBuyerRequirement( guided-primary-action acquisitionFailed=false Completed buyer research stages',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
