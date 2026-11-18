@@ -11,7 +11,7 @@ export const activeBuyerJob=status=>['queued','running'].includes(status);
 export const stmt=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 export const parse=(text,fallback={})=>{try{return JSON.parse(text);}catch{return fallback;}};
 const allowed="('owner','researcher','sales')";
-export const authoritySql=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=buyer_research_jobs.session_hash AND s.user_id=buyer_research_jobs.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=buyer_research_jobs.workspace_id AND m.role IN ${allowed})`;
+export const authoritySql=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=buyer_research_jobs.session_hash AND s.user_id=buyer_research_jobs.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=buyer_research_jobs.workspace_id AND m.role IN ${allowed}) AND (json_extract(buyer_research_jobs.input_json,'$.taskId') IS NULL OR EXISTS(SELECT 1 FROM copilot_research_tasks t WHERE t.id=json_extract(buyer_research_jobs.input_json,'$.taskId') AND t.workspace_id=buyer_research_jobs.workspace_id AND t.status='running' AND (json_extract(t.input_json,'$.plan.paidMode')<>'saved_policy' OR EXISTS(SELECT 1 FROM additional_contact_policies p WHERE p.workspace_id=t.workspace_id AND p.provider=json_extract(t.input_json,'$.paidPolicy.provider') AND p.enabled=json_extract(t.input_json,'$.paidPolicy.enabled') AND p.phone_enabled=json_extract(t.input_json,'$.paidPolicy.phoneEnabled') AND p.daily_limit=json_extract(t.input_json,'$.paidPolicy.dailyLimit') AND p.monthly_limit=json_extract(t.input_json,'$.paidPolicy.monthlyLimit') AND p.automatic_buyer_limit=json_extract(t.input_json,'$.paidPolicy.automaticBuyerLimit') AND p.max_per_company=json_extract(t.input_json,'$.paidPolicy.maxPerCompany')))))`;
 const callerSql=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>datetime('now') AND m.workspace_id=? AND m.role IN ${allowed})`;
 const callerArgs=(workspaceId,user)=>[user.sessionTokenHash,user.id,workspaceId];
 export const lost=()=>Object.assign(Error('Buyer research authorization or job context changed'),{code:'CANCELED',status:409});
@@ -20,9 +20,10 @@ export function activeBuyerProfile(payload={}){
  const base={...(main.profile||{}),...globalThis.LeadIntelTargeting?.profileFields?.(main),website:main.website||main.profile?.website,referenceDomains,exclusions:[main.profile?.exclusions,main.answers?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets};
  return D.effectiveTargetingProfile(base,main.market||{});
 }
-export async function workspaceBuyerContext(env,workspaceId){
+export async function workspaceBuyerContext(env,workspaceId,taskId){
  const row=await stmt(env,'SELECT version,payload_json FROM customer_workspace_state WHERE workspace_id=?',workspaceId).first();
- const {payload}=await readOwnedPayload(env,workspaceId,row);
+ let {payload}=await readOwnedPayload(env,workspaceId,row);
+ if(taskId){const task=await stmt(env,'SELECT input_json FROM copilot_research_tasks WHERE id=? AND workspace_id=?',taskId,workspaceId).first();if(!task)throw lost();payload={main:parse(task.input_json).main};}
  const main=payload.main||{};
  return {payload,version:Number(row?.version)||0,hash:await sha256(JSON.stringify([main.website||'',main.targetMarkets||[],D.buyerFitContext(activeBuyerProfile(payload))]))};
 }
@@ -49,7 +50,7 @@ export function normalizeBuyerInput(body,stored={}){
  const personIds=normalized.people.map(p=>String(p.id));
  return {candidate:normalized,profile,roles,personIds,scope:selected.length?'selected_buyers':'all_buyers'};
 }
-export async function buyerInputKey(input){return sha256(JSON.stringify([input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
+export async function buyerInputKey(input){return sha256(JSON.stringify([...(input.taskId?[input.taskId]:[]),input.paidResearch,input.candidate.domain,input.candidate.company,input.profile,input.roles.slice().sort(),input.personIds.slice().sort(),input.candidate.people.map(p=>[p.id,p.publicName||p.name,p.title,p.organization]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]));}
 export async function readBuyerJob(env,workspaceId,{id,domain}={}){
  return id?stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND id=?',workspaceId,id).first():stmt(env,'SELECT * FROM buyer_research_jobs WHERE workspace_id=? AND domain=? ORDER BY rowid DESC LIMIT 1',workspaceId,D.canonicalDomain(domain)).first();
 }
@@ -58,7 +59,7 @@ export async function recoverInterruptedContactJob(env,{jobId}={}){
  // only the scheduler may resume the latest still-authorized saved request.
  const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status IN ('needs_review','complete') AND phase='done' AND COALESCE(json_extract(diagnostic_json,'$[#-1].code'),'')<>'run_window' AND COALESCE(json_extract(input_json,'$.recheck.version'),0)=0 AND updated_at>datetime('now','-30 days') AND ((COALESCE(json_extract(input_json,'$.contactSourceScope'),'')<>? AND json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.status') IN ('partial','error') AND COALESCE(json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.discoveryScope'),'')<>?) OR (json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1) OR (COALESCE(json_extract(input_json,'$.contactSchedulingVersion'),0)<1 AND COALESCE(json_extract(input_json,'$.contactSchedulingRecoveryVersion'),0)<1 AND json_extract(result_json,'$.publicResearch.accountability.status')='partial' AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget') OR (COALESCE(json_extract(input_json,'$.executionContinuationVersion'),0)<4 AND (json_extract(result_json,'$.publicResearch.buyerAgent.status')='needs_review' OR json_extract(result_json,'$.publicResearch.aiReview.status')='complete' OR EXISTS(SELECT 1 FROM buyer_research_tasks t WHERE t.job_id=buyer_research_jobs.id AND t.status='running')))) AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,...(jobId?[jobId]:[])).all();
  for(const row of rows.results||[]){
-  const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]),executionRepair=Number(input.contactContinuationVersion||0)>=1;
+  const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id,input.taskId),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]),executionRepair=Number(input.contactContinuationVersion||0)>=1;
   const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate),phase=resumePhase(candidate,input,contactOptions);
   let paidScope=null,continuationScopeHash='';
   if(matches&&input.paidResearch?.companyId){
@@ -164,13 +165,14 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
  return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...parse(row.diagnostic_json,[]),...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:row.status==='needs_review'&&paused?.code==='run_window'?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
-export async function startBuyerJob(env,workspaceId,user,body){
- const stored=await workspaceBuyerContext(env,workspaceId),input=normalizeBuyerInput(body,stored.payload);
+export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
+ const stored=await workspaceBuyerContext(env,workspaceId,trusted?.taskId),input=normalizeBuyerInput(body,stored.payload);
  input.executionWindowStartedAt=new Date().toISOString();
  input.contactContinuationVersion=1;
  input.executionContinuationVersion=4;
  input.contactSourceScope=D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion;
  input.paidResearch=await buyerPaidIntent(env,workspaceId,body.paidResearch===true&&input.scope==='all_buyers',input.candidate);
+ if(trusted?.taskId){input.taskId=trusted.taskId;if(input.paidResearch){input.paidResearch.email=trusted.email===true&&input.paidResearch.email;input.paidResearch.phone=trusted.phone===true&&input.paidResearch.phone;input.paidResearch.automaticBuyerLimit=Math.min(input.paidResearch.automaticBuyerLimit,trusted.buyerCount);}}
  const key=await buyerInputKey(input);
  input.workspaceContext=stored.hash;
  if(body.force===true&&input.scope==='selected_buyers'){
@@ -178,11 +180,13 @@ export async function startBuyerJob(env,workspaceId,user,body){
   prepareBuyerRecheck(input,history.results||[]);
  }
  const current=await readBuyerJob(env,workspaceId,{domain:input.candidate.domain});
+ if(trusted?.taskId&&current&&activeBuyerJob(current.status)&&parse(current.input_json).taskId!==trusted.taskId)throw Object.assign(Error('Another buyer research job is active for this company. Finish or pause it first.'),{status:409});
  if(body.jobId&&current?.id!==body.jobId||body.expectedRevision!==undefined&&Number(body.expectedRevision)!==current?.revision)throw Object.assign(Error('Buyer research changed; reload the latest saved job'),{status:409});
  if(current?.context_key===key&&parse(current.input_json).workspaceContext===stored.hash&&(!body.force||activeBuyerJob(current.status))){
   if((input.paidResearch||body.resumeIncomplete===true)&&!activeBuyerJob(current.status)&&current.status==='needs_review')return commandBuyerJob(env,workspaceId,user,{action:'resume',jobId:current.id,expectedRevision:current.revision});
   return current;
  }
+ if(current&&activeBuyerJob(current.status)&&parse(current.input_json).taskId&&!trusted?.taskId)throw Object.assign(Error('Pause the research task in Ask LeadIntel before replacing this job.'),{status:409});
  if(current&&activeBuyerJob(current.status)){
   // An explicit replacement invalidates the old lease before the next job exists.
   const canceled=await stmt(env,`UPDATE buyer_research_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND status IN ('queued','running') AND ${callerSql}`,current.id,current.revision,...callerArgs(workspaceId,user)).run();if(!canceled.meta.changes)throw Object.assign(Error('Buyer research changed before replacement'),{status:409});
@@ -216,7 +220,7 @@ export async function commandBuyerJob(env,workspaceId,user,body){
   const updated=await stmt(env,`UPDATE buyer_research_jobs SET status='canceled',lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=? AND ${callerSql}`,row.id,row.revision,...callerArgs(workspaceId,user)).run();if(!updated.meta.changes)throw Object.assign(Error('Buyer research changed; reload its saved progress'),{status:409});
  }else{
   if(activeBuyerJob(row.status))return row;
-  const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId);
+  const input=parse(row.input_json),context=await workspaceBuyerContext(env,workspaceId,input.taskId);
   if(input.workspaceContext!==context.hash)throw Object.assign(Error('The company profile changed. Start research with the updated context.'),{status:409});
   const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId},candidate),paused=parse(row.diagnostic_json,[]).at(-1)?.code==='run_window',phase=paused&&row.phase!=='done'?row.phase:resumePhase(candidate,input,contactOptions);
   if(phase==='done')return row;

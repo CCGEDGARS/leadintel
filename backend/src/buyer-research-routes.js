@@ -29,6 +29,7 @@ export async function handleBuyerResearchRoute(request,env,cors={},ctx){
   if(!body||typeof body!=='object'||Array.isArray(body)||new TextEncoder().encode(JSON.stringify(body)).byteLength>262144)return json({error:'A bounded buyer context is required'},400,cors);
   if(!['start','resume','cancel'].includes(body.action||'start'))return json({error:'Unknown buyer research command'},400,cors);
   const current=await access(request,env,workspaceId,true);if(current.error)return json({error:current.error},current.status,cors);
+  if(body.jobId){const existing=await readBuyerJob(env,workspaceId,{id:body.jobId});if(existing&&JSON.parse(existing.input_json).taskId)return json({error:'Use the research task controls in Ask LeadIntel.'},409,cors);}
   const row=(body.action||'start')==='start'?await startBuyerJob(env,workspaceId,current.user,body):await commandBuyerJob(env,workspaceId,current.user,body);
   const job=await publicBuyerJob(env,row,{recoverRetained:true});
   // The HTTP response is the durable acknowledgement. A short wake is optional;

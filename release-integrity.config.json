@@ -9824,6 +9824,48 @@
         "if(!sameWorkspaceContent(currentWorkspaceData(),before))noteStoredWorkspaceEdit()",
         "!hasUnsavedChanges()&&!isBrowserOnlySnapshot()"
       ]
+    },
+    {
+      "id": "copilot-reviewed-tasks-ui-20261118",
+      "type": "text",
+      "url": "/customer/research-task-ui.js",
+      "status": 200,
+      "contains": [
+        "Run reviewed task",
+        "Continue within reviewed allowance",
+        "Save companies in CRM",
+        "Read source"
+      ]
+    },
+    {
+      "id": "copilot-reviewed-tasks-model-20261118",
+      "type": "text",
+      "url": "/customer/research-task-model.js",
+      "status": 200,
+      "contains": [
+        "Research blocked \u2014 credits required",
+        "function questions",
+        "named",
+        "Phone evidence"
+      ]
+    },
+    {
+      "id": "copilot-reviewed-tasks-backend-20261118",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+      "status": 200,
+      "contains": [
+        "\"copilot_tasks_version\":\"20261118-v1\""
+      ]
+    },
+    {
+      "id": "copilot-reviewed-tasks-entry-20261118",
+      "type": "text",
+      "url": "/customer/index.html",
+      "status": 200,
+      "contains": [
+        "research-tasks=20261118-v1"
+      ]
     }
   ],
   "retry": {

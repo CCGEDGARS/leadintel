@@ -51,7 +51,7 @@ export function supportKnowledge(){return {
  'Sender identity, credentials, phone and email belong to the active workspace. Never substitute another customer’s details.',
  'CRM preserves history when a company is removed from the active pipeline. Archive is reversible; suppression blocks outbound eligibility. Script approval is not permission to send.',
  'Save workspace before asking for personalized diagnostics; unsaved changes may not match the server snapshot.',
- 'No attachments, code execution, configuration changes, exports or database access through support. Unknown errors need a sanitized support reference.',
+ 'No attachments, code execution, configuration changes or direct database access through support. Reviewed research tasks use saved Flows and dedicated Run, pause/resume, CRM save and CSV/Word/PDF export controls. Unknown errors need a sanitized support reference.',
  'Use only supplied integration evidence for active capabilities. Current pricing and plan limits require fresh official verification.'
  ],links:[
  {provider:'openai',title:'OpenAI API billing',url:'https://platform.openai.com/settings/organization/billing/overview'},

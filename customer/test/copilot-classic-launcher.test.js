@@ -10,7 +10,7 @@ const html=read('index.html'),css=read('copilot.css'),loader=read('copilot-loade
 export const INTRO={
  title:'Your AI business mentor. Every step of the way.',
  copy:'Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move—with advice tailored to your business.',
- what:'Answers, drafts and recommendations only. I never change your settings, code, workflows, CRM records or approved templates, and never send anything.',
+ what:'Business advice, drafts and public research, plus reviewed research tasks using your saved Flows. Review the scope and limits before Run; save or export results with dedicated controls. I never change settings, code or approved templates, and never send messages.',
  tasks:['Journey support: explain steps, spot missing information and check quality and connections.','Business research: analyse public websites, companies, decision-makers, markets and statistics.','Business advice: compare options, explore scenarios and create drafts tailored to your goals.']
 };
 
