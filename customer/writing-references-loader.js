@@ -1,12 +1,13 @@
 (function(root){
  'use strict';if(!root.document)return;
- let instance=null,workspace='',host=null,pollAt=0,processing=false,activeNames=[],referenceRevision=null,bookCards=[],bookBusy=false,loadGeneration=0;
+ let instance=null,workspace='',host=null,pollAt=0,processing=false,retryDelay=0,activeNames=[],referenceRevision=null,bookCards=[],bookBusy=false,loadGeneration=0;
  const sessionIds=new Set(),sessionSkillIds=new Set();let skillCards=[];
  function currentWorkspace(){return root.LeadIntelServerBridge?.session?.authenticated?root.LeadIntelServerBridge.workspace?.id||'':'';}
  function validWorkspace(){return Boolean(workspace)&&currentWorkspace()===workspace;}
  function changed(){root.dispatchEvent(new root.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:workspace,referenceRevision}}));}
  function resetSession(){if(sessionIds.size||sessionSkillIds.size){sessionIds.clear();sessionSkillIds.clear();changed();}return true;}
  function pruneSession(){let pruned=false;for(const id of sessionIds){if(!bookCards.some(c=>c.id===id&&c.status==='Ready')){sessionIds.delete(id);pruned=true;}}return pruned;}
+ const bookState=cards=>JSON.stringify(cards.map(c=>[c.id,c.revision,c.status,c.active]));
  function renderBookSwitches(){
   // Book choices belong to the current assistant session, never setup settings.
   root.document.getElementById('mw-book-toggles')?.replaceChildren();
@@ -18,15 +19,15 @@
   if(!studio||!next){if(instance)instance.destroy();instance=null;host?.remove();host=null;loadGeneration++;sessionIds.clear();sessionSkillIds.clear();skillCards=[];workspace='';bookCards=[];activeNames=[];referenceRevision=null;renderBookSwitches();indicator();return;}
   if(workspace!==next||!host?.isConnected){
    instance?.destroy();host?.remove();host=root.document.createElement('div');host.id='writing-reference-cards';const details=root.document.getElementById('mw-writing-reference-host')||studio.querySelector('details');details.append(host);workspace=next;bookBusy=false;bookCards=[];processing=false;activeNames=[];referenceRevision=null;sessionIds.clear();sessionSkillIds.clear();skillCards=[];
-   const captured=next,generation=++loadGeneration;
+   retryDelay=0;const captured=next,generation=++loadGeneration;
    const api=root.LeadIntelWritingReferencesApi.createWritingReferencesApi({workspaceId:next,onResult:data=>{
     if(loadGeneration!==generation||workspace!==captured||currentWorkspace()!==captured||!Array.isArray(data.cards)||!Number.isInteger(data.referenceRevision)||referenceRevision!==null&&data.referenceRevision<referenceRevision)return;
-    const revisionChanged=referenceRevision!==data.referenceRevision;referenceRevision=data.referenceRevision;bookCards=data.cards;const selectionChanged=pruneSession();
-    if(revisionChanged||selectionChanged)changed();renderBookSwitches();processing=bookCards.some(c=>['Processing','Deleting'].includes(c.status))||skillCards.some(s=>['Preparing','Processing'].includes(s.status));activeNames=bookCards.filter(c=>c.active&&c.status==='Ready').map(c=>c.presentation?.title||c.filename);indicator();
+    const revisionChanged=referenceRevision!==data.referenceRevision,booksChanged=bookState(bookCards)!==bookState(data.cards);referenceRevision=data.referenceRevision;bookCards=data.cards;const selectionChanged=pruneSession();
+    if(revisionChanged||booksChanged||selectionChanged)changed();renderBookSwitches();processing=bookCards.some(c=>['Processing','Deleting'].includes(c.status))||skillCards.some(s=>['Preparing','Processing','Deleting'].includes(s.status));activeNames=bookCards.filter(c=>c.active&&c.status==='Ready').map(c=>c.presentation?.title||c.filename);indicator();
    }});
-   renderBookSwitches();instance=root.LeadIntelWritingReferences.mountWritingReferences({root:host,api,onChange:data=>{if(data.skills){skillCards=data.skills;for(const id of sessionSkillIds)if(!skillCards.some(s=>s.id===id&&s.enabled&&s.status==='Ready'))sessionSkillIds.delete(id);processing=bookCards.some(c=>['Processing','Deleting'].includes(c.status))||Boolean(data.skillsProcessing);changed();}indicator();}});instance.refresh();pollAt=Date.now();
+   renderBookSwitches();instance=root.LeadIntelWritingReferences.mountWritingReferences({root:host,api,onChange:data=>{if(loadGeneration!==generation||!validWorkspace())return;if(typeof data.refreshFailed==='boolean')retryDelay=data.refreshFailed?Math.min(60000,(retryDelay||2500)*2):0;if(data.skills){skillCards=data.skills;for(const id of sessionSkillIds)if(!skillCards.some(s=>s.id===id&&s.enabled&&s.status==='Ready'))sessionSkillIds.delete(id);processing=bookCards.some(c=>['Processing','Deleting'].includes(c.status))||Boolean(data.skillsProcessing);changed();}indicator();}});instance.refresh();pollAt=Date.now();
    if(!root.document.getElementById('writing-reference-indicator')){const p=root.document.createElement('p');p.id='writing-reference-indicator';p.setAttribute('role','status');studio.querySelector('#message-mode-label')?.after(p);}
-  }else if(processing&&!host.contains(root.document.activeElement)&&Date.now()-pollAt>5000){pollAt=Date.now();instance.refresh();}
+  }else if((processing||retryDelay)&&Date.now()-pollAt>(retryDelay||5000)){pollAt=Date.now();instance.refresh();}
   const summary=root.document.getElementById('mw-reference-count');if(summary)summary.textContent=bookCards.length+' of 3 files';indicator();
  }
  function snapshot(session=false){
