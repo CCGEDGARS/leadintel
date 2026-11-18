@@ -9769,6 +9769,39 @@
         "#message-studio #event-message-badge[data-state=saved]",
         "@media(max-width:600px)"
       ]
+    },
+    {
+      "id": "company-lists-ui-20261118",
+      "contains": [
+        "Build company list",
+        "Download Excel",
+        "Open saved lists",
+        "Resume \u00b7"
+      ],
+      "url": "/customer/company-lists-ui.js",
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "company-lists-model-20261118",
+      "contains": [
+        "Select 1\u201315 analyzed references",
+        "buyingIntent",
+        "referenceQuote",
+        "function xlsx"
+      ],
+      "url": "/customer/company-lists.js",
+      "type": "text",
+      "status": 200
+    },
+    {
+      "id": "company-lists-backend-20261118",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+      "contains": [
+        "\"company_lists_version\":\"20261118-v1\""
+      ],
+      "type": "text",
+      "status": 200
     }
   ],
   "retry": {
