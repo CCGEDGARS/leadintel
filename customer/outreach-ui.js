@@ -73,13 +73,15 @@ function withMessageReadSnapshot(callback){
 function readJson(key){try{const snapshot=key===MAIN_STORAGE_KEY||key===DISCOVERY_META_KEY?messageReadSnapshot:null,raw=localStorage.getItem(key)||"{}",cached=snapshot?.get(key);if(cached?.raw===raw)return cached.value;const value=JSON.parse(raw);snapshot?.set(key,{raw,value});return value;}catch{return {};}}
 function mainState(){return readJson(MAIN_STORAGE_KEY);}
 function campaignStudio(){const main=mainState();return LeadIntelOutreach.normalizeCampaignStudio(main.campaignStudio||{},main.profile||{},contentLanguage());}
-function persistCampaignStudio(studio,{sync=true}={}){const main=mainState();main.campaignStudio=studio;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));window.LeadIntelJourney?.refresh?.();if(sync)window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);return studio;}
-function ensureCampaignStudio(){const main=mainState(),studio=campaignStudio();if(JSON.stringify(main.campaignStudio||null)!==JSON.stringify(studio))persistCampaignStudio(studio,{sync:false});return studio;}
+// Writes own only campaign data, never the mutable shared presentation snapshot.
+function persistCampaignStudio(studio,{sync=true}={}){const main=JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||'{}');main.campaignStudio=studio;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));window.LeadIntelJourney?.refresh?.();if(sync)window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);return studio;}
+// Generated defaults are a view until the user explicitly saves the scenario.
+function ensureCampaignStudio(){return campaignStudio();}
 function activeCampaignScenario(){const studio=ensureCampaignStudio();return studio.presets.find(item=>item.id===studio.selectedPresetId)||studio.coreScenario;}
 function persistMainStep(step){
   const marker=document.querySelector(`[data-step-marker="${step}"]`);
   if(marker&&!marker.classList.contains("active")){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return;}
-  const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));
+  const main=JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||'{}');main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));
 }
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
