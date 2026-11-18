@@ -25,6 +25,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/install-ci-chromium.sh'
       - 'scripts/verify-universal-monitoring.mjs'
       - 'scripts/verify-monitoring-categories.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
@@ -64,6 +65,7 @@ on:
       - 'scripts/verify-worker-propagation.mjs'
       - 'scripts/verify-targeting-confirmation.mjs'
       - 'scripts/verify-profile-strategy-journey.mjs'
+      - 'scripts/install-ci-chromium.sh'
       - 'scripts/verify-universal-monitoring.mjs'
       - 'scripts/verify-monitoring-categories.mjs'
       - 'scripts/verify-apollo-discovery-journey.mjs'
@@ -188,7 +190,7 @@ jobs:
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
       - name: Install Chromium for authenticated journey acceptance
         run: |
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -245,7 +247,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -278,7 +280,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -311,7 +313,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -346,7 +348,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -396,7 +398,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -429,7 +431,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
@@ -454,7 +456,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
-          npx playwright-core install --with-deps chromium
+          bash scripts/install-ci-chromium.sh
           node --input-type=module - <<'JS'
           import {chromium} from 'playwright-core';
           import {appendFileSync} from 'node:fs';
