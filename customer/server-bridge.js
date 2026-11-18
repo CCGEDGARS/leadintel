@@ -166,6 +166,12 @@
     return runWorkspaceSave({workspaceId},async()=>{
       if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed. Refresh My Flows.');
       clearTimeout(saveTimer);const before=bundle();
+      if(before.main?.myFlow?.id===id){
+        const latest=await api(`/api/flows/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(workspaceId)}`);
+        if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed. Refresh My Flows.');
+        if(!latest.response.ok||!Number.isInteger(latest.payload.revision))throw new Error(latest.payload.error||'Workflow could not refresh after saving.');
+        revision=latest.payload.revision;
+      }
       const {response,payload}=await api(`/api/flows/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',body:JSON.stringify({action:'open',revision,workspaceVersion:bridge.stateVersion,step})});
       if(bridge.workspace?.id!==workspaceId)throw new Error('Workspace changed. Refresh My Flows.');
       if(!response.ok||!payload.state)throw new Error(payload.error||'Could not open flow');

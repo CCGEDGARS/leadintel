@@ -36,7 +36,7 @@ async function hydratePayloadRecords(env,workspaceId,payload,parts){
 }
 export function payloadRecordCleanup(env,workspaceId){
  // A saved flow may still own an older snapshot. Never collect referenced data.
- return env.DB.prepare(`DELETE FROM workspace_payload_records WHERE workspace_id=? AND snapshot_id NOT IN (SELECT json_extract(payload_json,'$.snapshot') FROM customer_workspace_state WHERE workspace_id=? AND json_extract(payload_json,'$.format')='${FORMAT}' UNION SELECT json_extract(payload_json,'$.snapshot') FROM saved_flows WHERE workspace_id=? AND json_extract(payload_json,'$.format')='${FORMAT}')`).bind(workspaceId,workspaceId,workspaceId);
+ return env.DB.prepare(`DELETE FROM workspace_payload_records WHERE workspace_id=? AND snapshot_id NOT IN (SELECT json_extract(payload_json,'$.snapshot') FROM customer_workspace_state WHERE workspace_id=? AND json_extract(payload_json,'$.format')='${FORMAT}' UNION SELECT json_extract(payload_json,'$.snapshot') FROM saved_flows WHERE workspace_id=? AND json_extract(payload_json,'$.format')='${FORMAT}' UNION SELECT json_extract(payload_json,'$.snapshot') FROM saved_flow_versions WHERE workspace_id=? AND json_extract(payload_json,'$.format')='${FORMAT}')`).bind(workspaceId,workspaceId,workspaceId,workspaceId);
 }
 
 // A single SELECT gives both the owner revision and its immutable chunks the

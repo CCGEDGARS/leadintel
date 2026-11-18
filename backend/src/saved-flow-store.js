@@ -15,7 +15,7 @@ export async function sharedHash(payload){return fingerprint(FlowState.sharedBus
 export async function savedFlowView(env,row){
  const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio});
  const config=normalizeWorkflowConfig(parse(row.config_json),context),stages=await approvalStatus(context,config,parse(row.approvals_json));
- const sharedChanged=(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,row.workspace_id));
+ const sharedChanged=row.snapshot_policy!=='pinned'&&(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,row.workspace_id));
  const review=parse(row.review_json,[]);const blockers=setupBlockers(context,config);
  if(sharedChanged)blockers.push('Shared business settings changed. Open this flow and review the affected pages.');
  if(review.length)blockers.push('Confirm the duplicate review checklist');
@@ -28,7 +28,7 @@ export async function savedFlowView(env,row){
  if(config.buyers.confirmPhone&&!apollo.phone)blockers.push('Enable Apollo phone enrichment in Apollo Settings');
  const hunter=await hunterVerificationPolicy(env,row.workspace_id);if(hunter.enabled&&!(await resolveWorkspaceServiceCredential(env,row.workspace_id,'hunter')).configured)blockers.push('Additional Hunter verification is enabled but its connection is unavailable');
  const {results:runs=[]}=await env.DB.prepare('SELECT id,revision,status,stage_index,error_message,created_at,updated_at,result_json FROM approved_workflow_runs WHERE workspace_id=? AND flow_id=? ORDER BY created_at DESC LIMIT 10').bind(row.workspace_id,row.id).all();
- return {id:row.id,name:row.name,stateVersion:row.state_version,status:sharedChanged&&row.status==='automatic'?'needs_review':row.status,revision:row.revision,config,context,stages,blockers,review,sharedChanged,summary:FlowState.summary(payload,config),approvedAt:row.approved_at,nextRunAt:row.next_run_at,runs:runs.map(r=>({...r,result:parse(r.result_json),result_json:undefined})),updatedAt:row.updated_at};
+ return {snapshotPolicy:row.snapshot_policy||'legacy_shared',savedVersion:row.latest_version||0,id:row.id,name:row.name,stateVersion:row.state_version,status:sharedChanged&&row.status==='automatic'?'needs_review':row.status,revision:row.revision,config,context,stages,blockers,review,sharedChanged,summary:FlowState.summary(payload,config),approvedAt:row.approved_at,nextRunAt:row.next_run_at,runs:runs.map(r=>({...r,result:parse(r.result_json),result_json:undefined})),updatedAt:row.updated_at};
 }
 export async function savedFlowAuthorized(env,workspaceId,revision,id){
  const row=await savedFlowRow(env,workspaceId,id);if(!row||row.status!=='automatic'||row.revision!==Number(revision)||!row.approved_by||!row.approved_at||parse(row.review_json,[]).length)return false;
@@ -36,7 +36,7 @@ export async function savedFlowAuthorized(env,workspaceId,revision,id){
  const source=await env.DB.prepare('SELECT * FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
  const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}),hash=await fingerprint(context);
  let stagesApproved=false;try{stagesApproved=(await approvalStatus(context,normalizeWorkflowConfig(parse(row.config_json),context),parse(row.approvals_json))).every(stage=>stage.approved);}catch{}
- if(hash!==row.context_hash||!stagesApproved||(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,workspaceId))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic' AND config_json=? AND approvals_json=? AND payload_json=? AND state_version=? AND approved_by IS ? AND approved_at IS ? AND EXISTS(SELECT 1 FROM customer_workspace_state WHERE workspace_id=? AND version=? AND payload_json=?)").bind(workspaceId,id,revision,row.config_json,row.approvals_json,row.payload_json,row.state_version,row.approved_by,row.approved_at,workspaceId,source?.version,source?.payload_json).run();return false;}
+ if(hash!==row.context_hash||!stagesApproved||(row.snapshot_policy!=='pinned'&&(row.shared_hash||await sharedHash(await decode(row,env)))!==await sharedHash(await currentPayload(env,workspaceId)))){await env.DB.prepare("UPDATE saved_flows SET status='needs_review',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=? AND status='automatic' AND config_json=? AND approvals_json=? AND payload_json=? AND state_version=? AND approved_by IS ? AND approved_at IS ? AND EXISTS(SELECT 1 FROM customer_workspace_state WHERE workspace_id=? AND version=? AND payload_json=?)").bind(workspaceId,id,revision,row.config_json,row.approvals_json,row.payload_json,row.state_version,row.approved_by,row.approved_at,workspaceId,source?.version,source?.payload_json).run();return false;}
  return true;
 }
 // Include projection writes in the customer-state CAS transaction. Progress alone never invalidates approval.
