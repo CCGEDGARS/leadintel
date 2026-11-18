@@ -50,6 +50,7 @@ function response({ status = 200, json, text } = {}) {
 function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, sessionStatus=401, privateSettingsStatus=401,storageStatus=401, premiumCss }) {
   return async url => {
     const parsed = new URL(String(url));
+    if(['/customer/company-lists.js','/customer/company-lists-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(parsed.pathname==='/customer/copilot-context.js')return response({text:fs.readFileSync(path.join(root,'customer/copilot-context.js'),'utf8')});
     if(['/customer/market-engine.js','/customer/research-report.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/customer/brand-identity.js','/customer/channel-scripts.js','/customer/event-campaigns.js','/customer/market-research-ux.js','/customer/evidence-view.js','/customer/website-contact-ui.js','/customer/website-scanning.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
@@ -96,7 +97,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
       return response({ json: { service: 'leadintel-customer', commit: SHA, ref: 'main' } });
     }
     if (parsed.hostname === 'leadintel-api.edgars-7e7.workers.dev') {
-      return response({ json: { ...config.backendHealth.json,storyselling_version:'storyselling-v1' } });
+      return response({ json: { ...config.backendHealth.json,storyselling_version:'storyselling-v1',company_lists_version:'20261118-v1' } });
     }
     if (parsed.pathname === '/customer/website-input-sync.js') {
       return response({text:fs.readFileSync(path.join(root,'customer/website-input-sync.js'),'utf8')});
