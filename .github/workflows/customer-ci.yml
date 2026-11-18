@@ -14,6 +14,7 @@ on:
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-step1-journey.mjs'
+      - 'scripts/verify-connected-experience.mjs'
       - 'scripts/verify-step5-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
       - 'scripts/verify-step7-journey.mjs'
@@ -54,6 +55,7 @@ on:
       - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-step1-journey.mjs'
+      - 'scripts/verify-connected-experience.mjs'
       - 'scripts/verify-step5-journey.mjs'
       - 'scripts/verify-step6-journey.mjs'
       - 'scripts/verify-step7-journey.mjs'
@@ -259,6 +261,8 @@ jobs:
         run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/company-lists-journey.test.mjs backend/test/navigation-save-journey.test.mjs backend/test/copilot-tasks-journey.test.mjs
       - name: Verify protected workflow save, copy and resume
         run: node scripts/verify-saved-workflows-local.mjs
+      - name: Verify responsive navigation and bounded workflow refresh
+        run: node --import ./backend/test/register-wasm-loader.mjs scripts/verify-connected-experience.mjs
       - name: Preserve company list acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -267,6 +271,7 @@ jobs:
           path: |
             /tmp/leadintel-company-lists/
             /tmp/leadintel-copilot-tasks/
+            /tmp/leadintel-connected-experience/
           if-no-files-found: warn
           retention-days: 14
 

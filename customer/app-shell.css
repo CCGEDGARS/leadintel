@@ -103,3 +103,18 @@
 #topbar-workflow-btn [data-workflow-state]{grid-column:1/3;grid-row:2}
 #topbar-workflow-btn>span:last-child{grid-column:3;grid-row:1/3}
 @media(max-width:720px){.page-shell #topbar-workflow{order:3}.page-shell #topbar-workflow-btn{max-width:240px;font-size:12px}.page-shell #topbar-workflow-btn [data-workflow-name]{max-width:135px}}
+
+/* Keep the working screen close on phones. Detailed checklists stay behind the
+   existing Show steps control instead of setting every stage card's height. */
+@media(max-width:720px){
+  .page-shell .progress-panel{padding:14px 16px}
+  .page-shell .progress-panel .steps{margin:10px 0;gap:6px;align-items:flex-start;overscroll-behavior-x:contain}
+  .page-shell .progress-panel .steps>li[data-workflow-stage]{flex:0 0 180px;padding:9px 10px}
+  .page-shell .progress-panel .steps>li[data-workflow-stage]>div>small{display:none}
+  .page-shell .progress-panel .steps>li[data-workflow-stage]>em{display:block;margin-top:4px;font-size:8px}
+  .page-shell .progress-panel .steps>li[data-steps-expanded="false"] [data-message-channels]{display:none}
+  .page-shell .progress-panel .steps .sidebar-expand{display:inline-flex!important}
+  .page-shell .progress-panel .steps .sidebar-next-action{display:none!important}
+  .page-shell .progress-panel .steps [data-steps-expanded="true"] .sidebar-substeps button{display:flex!important}
+  .page-shell .progress-panel .wf-open{margin-top:8px;padding:10px 12px;min-height:52px}
+}
