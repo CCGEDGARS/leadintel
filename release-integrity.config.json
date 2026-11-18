@@ -1169,7 +1169,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose up to three books in the Writing Assistant",
+        "To apply these methods to content, select the saved skill in the Writing Assistant (up to three skills). Use Book knowledge to discuss one book at a time.",
         "What AI learned",
         "Retry analysis",
         "error.snapshot?.cards"
@@ -2948,7 +2948,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose up to three books in the Writing Assistant",
+        "To apply these methods to content, select the saved skill in the Writing Assistant (up to three skills). Use Book knowledge to discuss one book at a time.",
         "data-delete",
         "wr-options",
         "[1,2,3].map(slot=>",
