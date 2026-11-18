@@ -34,7 +34,7 @@ test('the page loads topbar.js and the shell stylesheet hides the bridge texts i
 test('three controls replace seven texts: save status, Workspace status with badge, account menu',async()=>{
   const {doc}=await mount();
   const items=[...doc.querySelector('.top-actions').children].map(c=>c.id);
-  assert.deepEqual(items.slice(0,5),['open-crm','topbar-status','topbar-save','topbar-workspace-status','topbar-account']);
+  assert.deepEqual(items.slice(0,6),['open-crm','topbar-workflow','topbar-status','topbar-save','topbar-workspace-status','topbar-account']);
   assert.equal(doc.getElementById('topbar-save').hidden,true,'Save now stays hidden while everything is saved');
   assert.equal(doc.getElementById('topbar-status').textContent,'Saved');
   assert.equal(doc.getElementById('topbar-status').dataset.tone,'ok');
@@ -164,4 +164,13 @@ test('the Admin entry exists only for a platform administrator: a link to /admin
   assert.equal(admin.doc.querySelectorAll('[data-topbar-action="admin"]').length,1,'repeated updates never duplicate it');
   assert.match(css,/\.account-menu-panel>a\{all:unset;display:block;width:100%/,'the shell stylesheet styles the link like the other menu items');
   assert.match(html,/topbar\.js\?v=[^"]*admin-entry=\d{8}-v\d+/);assert.match(html,/app-shell\.css\?v=[^"]*admin-entry=\d{8}-v\d+/);
+});
+test('workflow selector is beside CRM, renders names as text, switches manually and clears private context on signout',async()=>{
+ const {win,doc}=await mount();const selected=[],flow={id:'a',name:'Sweden <private>',status:'paused',savedVersion:2};
+ win.LeadIntelMyFlows={current:()=>flow,listSummary:()=>({role:'owner',flows:[flow,{id:'b',name:'Finland'}]}),refreshSummary:async()=>{},selectFlow:async id=>selected.push(id),open:()=>selected.push('manage')};
+ win.dispatchEvent(new win.CustomEvent('leadintel:flows-changed'));assert.equal(doc.getElementById('open-crm').nextElementSibling.id,'topbar-workflow');
+ const button=doc.getElementById('topbar-workflow-btn');assert.match(button.textContent,/Sweden <private>/);assert.match(button.textContent,/v2 protected/);assert.equal(doc.querySelector('private'),null);
+ button.click();doc.querySelector('[data-workflow-id="b"]').click();await Promise.resolve();assert.deepEqual(selected,['b']);
+ button.click();doc.dispatchEvent(new win.MouseEvent('click',{bubbles:true}));assert.equal(doc.getElementById('topbar-workflow-menu').hidden,true);
+ win.LeadIntelServerBridge.session.authenticated=false;win.LeadIntelTopbar.update();assert.equal(button.hidden,true);assert.equal(doc.getElementById('topbar-workflow-menu').children.length,0);win.close();
 });

@@ -28,11 +28,13 @@ export async function getCustomerState(env,workspaceId){
   const owned=await readOwnedPayload(env,workspaceId,row);row=owned.row;const payload=normalizeCustomerPayload(owned.payload);
   return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,record_backed:JSON.parse(row.payload_json||'{}')?.format==='leadintel-workspace-records-v1',updated_at:row.updated_at||null,state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1',compression_codec:'workspace-lzw-v2',record_codec:WORKSPACE_RECORD_CODEC,max_sync_bytes:MAX_WORKSPACE_TRANSFER_BYTES};
 }
-export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role,allowFlowSwitch=false,operationContext=null,operationAssertions=[]}){
+export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role,allowFlowSwitch=false,trustedSnapshotOriginals=false,operationContext=null,operationAssertions=[]}){
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload,maxBytes:MAX_WORKSPACE_TRANSFER_BYTES});if(decision.conflict)return decision;
   const restored=stateBudget.restoreFromSync(decision.next.payload);
   if(!allowFlowSwitch&&current.payload?.main?.myFlow?.id!==restored.main?.myFlow?.id&&(current.payload?.main?.myFlow?.id||restored.main?.myFlow?.id))throw new Error('Open a flow through My Flows before changing the active flow');
-  await validatePlatformOriginalScriptsWrite(env,current.payload,restored,userId);
+  // Only the authenticated saved-flow route can restore a trusted, CAS-guarded
+  // database snapshot. Browser payloads never receive this internal authority.
+  if(!(allowFlowSwitch&&trustedSnapshotOriginals&&operationContext&&operationAssertions.length))await validatePlatformOriginalScriptsWrite(env,current.payload,restored,userId);
   const next=decision.next,record=await preparePayloadRecord(next.payload,{forceRecords:current.record_backed===true}),encoded=record.encoded;
   const projection=await flowProjectionStatements(env,workspaceId,current.payload,restored,encoded,next.version);
   const guardSql=projection.guard?' AND EXISTS(SELECT 1 FROM saved_flows WHERE workspace_id=? AND id=? AND revision=?)':'';

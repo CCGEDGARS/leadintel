@@ -11,3 +11,7 @@ test('language defaults are flow-specific, survive duplicate and reopen, and app
  const opened=F.composePayload(sweden,germany,{id:'sweden',name:'Sweden',state_version:2});assert.equal(opened.outreach.messageStudio.languageSettings.defaultLanguage,'sv');assert.equal(germany.outreach.messageStudio.languageSettings.defaultLanguage,'de');assert.equal(F.summary(opened).language,'sv');assert.equal(opened.outreach.messageStudio.essentials.language,'en');
  const copy=F.duplicatePayload(sweden,['Finland']);assert.deepEqual(copy.outreach.messageStudio.languageSettings,sweden.outreach.messageStudio.languageSettings);copy.outreach.messageStudio.languageSettings.defaultLanguage='fi';assert.equal(sweden.outreach.messageStudio.languageSettings.defaultLanguage,'sv');assert.ok(F.reviewChecklist(copy).some(c=>c.id==='language'));
 });
+test('a duplicate keeps event preparation settings while removing delivery and recipient state',()=>{
+ const saved=structuredClone(base);saved.main.eventCampaigns={activeId:'exhibition',campaigns:[{id:'exhibition',name:'Industry fair',startDate:'2027-05-01',audienceMode:'both',role:'exhibitor',booth:'A12'}]};
+ const copy=F.duplicatePayload(saved);assert.deepEqual(copy.main.eventCampaigns,saved.main.eventCampaigns);assert.deepEqual(copy.delivery,{});assert.deepEqual(copy.discovery,{});copy.main.eventCampaigns.campaigns[0].booth='B7';assert.equal(saved.main.eventCampaigns.campaigns[0].booth,'A12');
+});

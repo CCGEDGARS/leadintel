@@ -11,6 +11,11 @@
     return {website:main.website||'',answers,profile,brandIdentity:main.brandIdentity||null,scrapedSources:main.scrapedSources||[],websiteActivation:main.websiteActivation||null};
   }
   function composePayload(saved={},current={},flow={}){
+    if(flow.snapshot_policy==='pinned'){
+      const out=copy(saved);out.main=out.main||{};
+      out.main.myFlow={id:flow.id,name:flow.name,stateVersion:flow.state_version,snapshotPolicy:'pinned',savedVersion:flow.latest_version||0};
+      out.meta={...(out.meta||{}),persistence:{explicit_saved:true}};return out;
+    }
     const out=copy(saved),main=copy(current.main);for(const key of flowMainKeys)if(Object.prototype.hasOwnProperty.call(saved.main||{},key))main[key]=copyValue(saved.main[key]);else delete main[key];
     const answers={...(current.main?.answers||{})};for(const key of flowAnswers)if(Object.prototype.hasOwnProperty.call(saved.main?.answers||{},key))answers[key]=saved.main.answers[key];else delete answers[key];main.answers=answers;
     if(saved.main?.profile){main.profile={...saved.main.profile,...sharedBusiness(current).profile};for(const key of flowProfile)if(Object.prototype.hasOwnProperty.call(saved.main.profile,key))main.profile[key]=copyValue(saved.main.profile[key]);}
@@ -24,7 +29,7 @@
   function duplicatePayload(payload={},markets){
     const out=copy(payload),main=out.main||{};out.main=main;delete main.myFlow;delete main.scriptBuyer;
     main.targetingConfirmation=null;main.activeJourneyStage=1;main.visibleStep=1;main.step=1;
-    main.targetCompanies=[];main.eventCampaigns={};
+    main.targetCompanies=[]; // Event dates, audience and invitation settings are configuration; delivery/recipients are reset below.
     if(Array.isArray(markets)&&markets.length){main.targetMarkets=markets.map(x=>String(x).trim()).filter(Boolean);if(main.legacyStrategyContext)main.legacyStrategyContext.growthMarkets=main.targetMarkets.join('; ');if(main.profile){main.profile.targetMarkets=main.targetMarkets.join('; ');main.profile.researchMarkets=main.targetMarkets.slice();main.profile.marketFocus=main.targetMarkets.join('; ');}}
     const market=main.market||{};main.market={...market,strategyApproved:false,researchResults:[],researchReports:[],researchHistory:[],researchRuns:[],monitoringAlerts:[]};
     for(const key of Object.keys(main.market))if(/(?:result|report|history|run|progress|error|alert|selectedCompany|researchAt|researchStatus|monitoring)/i.test(key)&&!['researchInstructions','researchSourceTypes','researchCustomSources'].includes(key))delete main.market[key];
