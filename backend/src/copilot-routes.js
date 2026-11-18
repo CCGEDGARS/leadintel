@@ -1,3 +1,4 @@
+import {planResearchTask,readResearchTask,commandResearchTask,runResearchTasks} from './copilot-tasks.js';
 import {createCopilotResearchJob,readCopilotResearchJob,commandCopilotResearchJob,runCopilotResearchJobs,needsDeepCopilotResearch} from './copilot-research-jobs.js';
 import {cookieValue,sha256} from './security.js';
 import {sanitizeClientScreenContext,redactProtectedData} from './copilot-security.js';
@@ -9,7 +10,10 @@ import {referenceResearchRequested} from './copilot-research-scope.js';
 
 const OPERATING_ROLES=new Set(['owner','researcher','sales']);
 const uuid=()=>crypto.randomUUID();
-const json=(value,status=200,headers={})=>new Response(JSON.stringify(redactProtectedData(value)),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
+// Chat arrays remain bounded to 100. Reviewed tasks explicitly support 200 rows;
+// redact each retained row rather than silently truncating the requested result.
+function taskResponse(value){const safe=redactProtectedData(value);for(const key of ['task','research_task'])if(Array.isArray(value?.[key]?.results)&&safe?.[key]){safe[key].results=value[key].results.slice(0,200).map(row=>redactProtectedData(row));safe[key].receipts=(value[key].receipts||[]).slice(-150).map(row=>redactProtectedData(row));}return safe;}
+const json=(value,status=200,headers={})=>new Response(JSON.stringify(taskResponse(value)),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,extra={})=>json({error:message,...extra},status,headers);
 function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g,' ').trim().slice(0,max);}
 async function sessionUser(request,env){const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();}
@@ -28,6 +32,14 @@ async function latestConversation(env,workspaceId){return env.DB.prepare(`SELECT
 export async function handleCopilotRoute(request,env,cors={},ctx){
   const url=new URL(request.url);const path=url.pathname;if(!path.startsWith('/api/copilot/'))return null;const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
 
+  const taskMatch=path.match(/^\/api\/copilot\/tasks\/([^/]+)$/);
+  if(taskMatch){try{
+    const id=decodeURIComponent(taskMatch[1]);
+    if(request.method==='GET'){const task=await readResearchTask(env,workspaceId,id);return task?json({task},200,cors):error('Research task not found',404,cors);}
+    if(request.method==='POST'){const raw=await request.text();if(raw.length>16000)return error('Task request is too large',413,cors);const body=JSON.parse(raw);const task=await commandResearchTask(env,workspaceId,{id:access.user.id,hash:await sha256(cookieValue(request,'leadintel_session')),role:access.member.role},id,body);if(task.status==='running'&&ctx?.waitUntil)ctx.waitUntil(runResearchTasks(env,{jobId:id}).catch(()=>{}));return json({task},200,cors);}
+    return error('Method not allowed',405,cors);
+  }catch(e){return error(e.status?e.message:'Task progress could not be saved. Check storage and retry.',e.status||503,cors);}}
+
   const researchMatch=path.match(/^\/api\/copilot\/research\/([^/]+)$/);
   if(researchMatch&&request.method==='GET'){const job=await readCopilotResearchJob(env,workspaceId,decodeURIComponent(researchMatch[1]));return job?json({job},200,cors):error('Research not found',404,cors);}
   if(researchMatch&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(Object.keys(body).some(k=>!['action','revision'].includes(k)))return error('Unsupported research command',400,cors);try{const job=await commandCopilotResearchJob(env,{workspaceId,id:decodeURIComponent(researchMatch[1]),userId:access.user.id,sessionHash:await sha256(cookieValue(request,'leadintel_session')),action:body.action,revision:body.revision});return job?json({job},200,cors):error('Research not found',404,cors);}catch(e){return error(e.status?e.message:e.code==='RESEARCH_AUTHORITY_CHANGED'?'Research authorization changed':'Research progress could not be saved. Check workspace storage and retry.',e.status||(e.code==='RESEARCH_AUTHORITY_CHANGED'?403:503),cors);}}
@@ -41,7 +53,7 @@ export async function handleCopilotRoute(request,env,cors={},ctx){
       latestConversation(env,workspaceId),listCopilotMemories(env,workspaceId).catch(()=>[]),dueReminders(env,workspaceId).catch(()=>[]),workspaceUpdatedAt(env,workspaceId),env.DB.prepare(`SELECT provider,model,active FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first(),buildCopilotWorkspaceContext(env,{workspaceId,currentScreen:{step:1,label:'Company & Market'},role:access.member.role,user:{name:access.user.display_name}})
     ]);
     const diagnostics=runDeterministicDiagnostics(context);await persistDiagnosticSnapshot(env,{workspaceId,diagnostics}).catch(()=>{});const unreadImportant=diagnostics.filter(item=>item.severity==='important').length;
-    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,reminders_due:remindersDue,since:{last_conversation_at:clean(latest?.updated_at,40),workspace_updated_at:updatedAt,important:unreadImportant},ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
+    return json({available:true,role:access.member.role,latestConversation:latest||null,diagnostics,unreadImportant,memories,reminders_due:remindersDue,since:{last_conversation_at:clean(latest?.updated_at,40),workspace_updated_at:updatedAt,important:unreadImportant},ai:{configured:Boolean(ai),provider:ai?.provider||'',model:ai?.model||''},readOnly:true,reviewedResearchTasks:true,uploadsAllowed:false,suggestedPrompts:['Help me fix an error','Where can I top up credits?','Estimate my monthly costs']},200,cors);
   }
 
   // B3 (2026-10-25): what the assistant remembers is visible and forgettable; forgetting archives, it never deletes.
@@ -80,7 +92,8 @@ export async function handleCopilotRoute(request,env,cors={},ctx){
     const [recent,existing,priorMessages]=await Promise.all([env.DB.prepare(`SELECT COUNT(*) AS count FROM copilot_messages WHERE workspace_id=? AND user_id=? AND role='user' AND created_at>=datetime('now','-10 minutes')`).bind(workspaceId,access.user.id).first(),requestedConversation?conversation(env,workspaceId,requestedConversation):null,requestedConversation?messages(env,workspaceId,requestedConversation):[]]);
     if(Number(recent?.count)>=30)return error('Support request limit reached. Wait a few minutes; official billing links remain available.',429,cors,{code:'SUPPORT_RATE_LIMIT'});
     let conversationId=requestedConversation;let convo=existing;if(conversationId){if(!convo)return error('Copilot conversation not found',404,cors);}else{conversationId=uuid();await env.DB.prepare(`INSERT INTO copilot_conversations(id,workspace_id,created_by,title) VALUES(?,?,?,?)`).bind(conversationId,workspaceId,access.user.id,clean(redactProtectedData(message),120)).run();convo=await conversation(env,workspaceId,conversationId);}
-    const prior=requestedConversation?priorMessages:[];await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'user',?, '{}')`).bind(uuid(),workspaceId,conversationId,access.user.id,clean(redactProtectedData(message),8000)).run();
+    const prior=requestedConversation?priorMessages:[];for(const item of prior){if(item.metadata?.research_task?.id){const task=await readResearchTask(env,workspaceId,item.metadata.research_task.id);if(task)item.content+='\nSaved research task status: '+JSON.stringify({status:task.status,flow:task.flowName,plan:task.plan,progress:task.progress,blocker:task.blocker});}}await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'user',?, '{}')`).bind(uuid(),workspaceId,conversationId,access.user.id,clean(redactProtectedData(message),8000)).run();
+    try{const planned=await planResearchTask(env,{workspaceId,conversationId,userId:access.user.id,sessionHash:await sha256(cookieValue(request,'leadintel_session')),message,canFollowUp:prior.some(m=>m.metadata?.research_task)});if(planned)return json(planned,200,cors);}catch(e){return error(e.status?e.message:'The research task could not be saved. Check workspace storage.',e.status||503,cors);}
     if((body.research_mode==='thorough'||referenceResearchRequested(message,prior))&&needsDeepCopilotResearch(message,prior)){
       const job=await createCopilotResearchJob(env,{workspaceId,conversationId,userId:access.user.id,sessionHash:await sha256(cookieValue(request,'leadintel_session')),question:message,conversation:prior,screen});
       if(ctx?.waitUntil)ctx.waitUntil(runCopilotResearchJobs(env,{jobId:job.id,windowMs:18000}).catch(()=>{}));

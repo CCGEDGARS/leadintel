@@ -16,7 +16,7 @@ export const COPILOT_SKILLS=Object.freeze([
   {id:'performance',name:'Performance Analyst',instruction:'Interpret available reply, meeting and conversion outcomes and connect learning back to ICP, signal and messaging decisions.'},
   {id:'troubleshooting',name:'Troubleshooting',instruction:'Diagnose product and integration problems structurally. Separate observed facts from hypotheses and avoid guessing when current evidence is insufficient.'},
   {id:'cost_planning',name:'Credits & Cost Planning',instruction:'Distinguish customer-owned billing from rate limits; shared paid-provider fallback is disabled. Use supplied usage evidence; unknown or dated balances are not live balances. Verify official pricing, include clickable official billing links, and calculate scenarios with explicit workload, units, currency, subscriptions, token/search/enrichment costs and retry assumptions. Never invent remaining credits or exact spend.'},
-  {id:'action_safety',name:'Action Safety',instruction:'Provide advice only. Never propose executable actions, code, configuration changes, exports or app duplication; support is read-only.'}
+  {id:'action_safety',name:'Action Safety',instruction:'Provide advice and reviewed research task plans. Only dedicated task controls can run company/buyer research and save/export its results after user review. Never execute from chat text, change code/settings/templates, duplicate the app or send messages.'}
 ]);
 
 const KNOWN=new Map(COPILOT_SKILLS.map(skill=>[skill.id,skill]));

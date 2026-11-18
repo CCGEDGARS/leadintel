@@ -9,24 +9,27 @@ import {upsertCrmCompany} from './crm.js';
 const M=globalThis.LeadIntelCompanyLists;
 const sql=(env,q,...v)=>env.DB.prepare(q).bind(...v),parse=(v,f={})=>{try{return JSON.parse(v);}catch{return f;}};
 const active=s=>['queued','running'].includes(s),fail=(m,status=409)=>Object.assign(Error(m),{status});
-const authority=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=company_lists.session_hash AND s.user_id=company_lists.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=company_lists.workspace_id AND m.role IN ('owner','researcher','sales'))`;
+const authority=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=company_lists.session_hash AND s.user_id=company_lists.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=company_lists.workspace_id AND m.role IN ('owner','researcher','sales')) AND (json_extract(company_lists.input_json,'$.taskId') IS NULL OR EXISTS(SELECT 1 FROM copilot_research_tasks t WHERE t.id=json_extract(company_lists.input_json,'$.taskId') AND t.workspace_id=company_lists.workspace_id AND t.status='running'))`;
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
 export async function companyListOptions(env,workspaceId){return M.options((await getCustomerState(env,workspaceId)).payload?.main||{});}
-function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning'},receipts:s.receipts||[],createdAt:row.created_at,updatedAt:row.updated_at};}
+function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning'},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],createdAt:row.created_at,updatedAt:row.updated_at};}
 export async function readCompanyList(env,workspaceId,id){return publicList(await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,id).first());}
 async function access(request,env,workspaceId){const token=cookieValue(request,'leadintel_session');if(!token)throw fail('Sign in to use company lists.',401);const hash=await sha256(token),row=await sql(env,"SELECT s.user_id,m.role FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=?",hash,workspaceId).first();if(!row||!['owner','researcher','sales'].includes(row.role))throw fail('Workspace research access required.',403);return {id:row.user_id,role:row.role,hash};}
-export async function startCompanyList(env,workspaceId,user,raw){
- const criteria=M.configuration(raw,await companyListOptions(env,workspaceId));
+export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
+ const criteria=M.configuration(raw,trusted?.options||await companyListOptions(env,workspaceId));if(trusted?.taskId)criteria.taskId=trusted.taskId;
+ if(trusted?.id){const retained=await readCompanyList(env,workspaceId,trusted.id);if(retained)return retained;}
  const count=await sql(env,'SELECT COUNT(*) n FROM company_lists WHERE workspace_id=?',workspaceId).first();if(count.n>=50)throw fail('Keep up to 50 company lists. Delete an unused list before creating another.');
  const existing=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running')",workspaceId).first();if(existing)throw fail('A company list is already building. Open it or pause it first.');
- const id=crypto.randomUUID(),state={phase:'planning',results:[],partial:{},queries:[],queryIndex:0,round:0,pending:[],seen:[],checked:0,operations:0,allowance:criteria.budget,receipts:[],reason:'Preparing the selected criteria'};
+ if(trusted?.taskId&&!await sql(env,"SELECT id FROM copilot_research_tasks WHERE id=? AND workspace_id=? AND status='running'",trusted.taskId,workspaceId).first())throw fail('Task research authorization changed.',403);
+ const id=trusted?.id||crypto.randomUUID(),state={phase:'planning',results:[],partial:{},queries:[],queryIndex:0,round:0,pending:[],seen:[],checked:0,operations:0,allowance:criteria.budget,receipts:[],reason:'Preparing the selected criteria'};
  await sql(env,`INSERT INTO company_lists(id,workspace_id,requested_by,session_hash,input_json,state_json) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,id,workspaceId,user.id,user.hash,JSON.stringify(criteria),JSON.stringify(state),user.hash,user.id,workspaceId).run();
  const saved=await readCompanyList(env,workspaceId,id);if(!saved)throw fail('Research authorization changed.',403);return saved;
 }
-async function saveRows(env,row,user,domain,cursor=0){
+export async function saveRows(env,row,user,domain,cursor=0){
  const list=publicList(row),rows=domain?list.results.filter(r=>r.domain===domain):list.results.slice(cursor,cursor+20);if(!rows.length)throw fail('No completed company matches to save.',400);
  const guard=async()=>{const alive=await sql(env,`SELECT id FROM company_lists WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,row.id,row.workspace_id,row.revision,user.hash,user.id,row.workspace_id).first();if(!alive)throw fail('The list changed. Reload before saving.');};
- const writeAuthority=()=>({sql:"EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales')) AND EXISTS(SELECT 1 FROM company_lists WHERE id=? AND workspace_id=? AND revision=?)",args:[user.hash,user.id,row.workspace_id,row.id,row.workspace_id,row.revision]});
+ const parentGuard=user.taskId?" AND EXISTS(SELECT 1 FROM copilot_research_tasks WHERE id=? AND workspace_id=? AND status='running')":'',parentArgs=user.taskId?[user.taskId,row.workspace_id]:[];
+ const writeAuthority=()=>({sql:"EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales')) AND EXISTS(SELECT 1 FROM company_lists WHERE id=? AND workspace_id=? AND revision=?)"+parentGuard,args:[user.hash,user.id,row.workspace_id,row.id,row.workspace_id,row.revision,...parentArgs]});
  const context={workspaceId:row.workspace_id,userId:user.id,role:user.role,guard,writeAuthority};
  const saved=[];for(const r of rows){await guard();const existing=await sql(env,'SELECT id,lifecycle_status,deleted_at FROM crm_companies WHERE workspace_id=? AND normalized_domain=?',row.workspace_id,r.domain).first();
   if(existing?.deleted_at||['suppressed','archived'].includes(existing?.lifecycle_status)){if(domain)throw fail('This CRM company is archived or suppressed. Review it in CRM first.');continue;}
@@ -51,6 +54,11 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
   let list,nextCursor=null;if(body.action==='start')list=await startCompanyList(env,workspaceId,user,body);
   else{
    const row=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,String(body.id||'')).first();if(!row)throw fail('Company list not found.',404);
+   if(parse(row.input_json).taskId&&['pause','resume','delete','buyer'].includes(body.action)){
+    const parent=await sql(env,'SELECT status FROM copilot_research_tasks WHERE id=? AND workspace_id=?',parse(row.input_json).taskId,workspaceId).first();
+    if(parent&&(body.action!=='buyer'||parent.status==='running'))throw fail(body.action==='delete'?'Delete the task conversation before deleting its retained company list.':'Pause or continue this research task in Ask LeadIntel.');
+    if(!parent&&body.action==='resume')throw fail('This task was deleted. Create a new reviewed list; saved results can still be exported or saved in CRM.');
+   }
    if(row.revision!==body.revision)throw fail('The list progressed in another session. Refresh and try again.');
    if(!['pause','resume','save','delete','buyer'].includes(body.action))throw fail('Unknown list action.',400);
    if(active(row.status)&&['save','delete','buyer'].includes(body.action))throw fail('Pause research before saving, deleting or selecting companies.');
@@ -61,7 +69,7 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    else{
     if(body.action==='resume'&&active(row.status))throw fail('This list is already running.');
     if(body.action==='resume'&&row.status==='complete')throw fail('This list has reached its target.');
-    if(body.action==='resume'){const other=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running') AND id<>?",workspaceId,row.id).first();if(other)throw fail('Pause the other running list first.');s.allowance=s.operations+criteria.budget;s.failures=0;s.reason='Continuing saved research';if(s.phase==='exhausted'){s.phase='planning';s.round=0;}}
+    if(body.action==='resume'){const other=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running') AND id<>?",workspaceId,row.id).first();if(other)throw fail('Pause the other running list first.');s.allowance=s.operations+criteria.budget;s.failures=0;s.failureCode='';s.reason='Continuing saved research';if(s.phase==='exhausted'){s.phase='planning';s.round=0;}}
     else s.reason='Paused by you; completed research is retained';
     const result=await sql(env,`UPDATE company_lists SET last_error=NULL,saved=0,status=?,state_json=?,requested_by=?,session_hash=?,lease_token=NULL,lease_until=0,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,body.action==='resume'?'queued':'canceled',JSON.stringify(s),user.id,user.hash,row.id,workspaceId,row.revision,user.hash,user.id,workspaceId).run();if(!result.meta.changes)throw fail('The list changed. Refresh and try again.');
    }
@@ -114,7 +122,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
    await checkpoint('queued');
   }catch(e){
    const live=await sql(env,`SELECT id FROM company_lists WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,row.id,token).first();
-   if(live){s.failures=(s.failures||0)+1;s.reason=s.operations>=s.allowance?'Research allowance reached':e.status&&e.status!==403?clean(e.message,200):'Provider check failed or timed out. Completed matches are retained; check connections and resume.';await checkpoint('incomplete');}
+   if(live){s.failureCode=String(e.code||e.status||'provider_check_failed').slice(0,100);s.failures=(s.failures||0)+1;s.reason=s.operations>=s.allowance?'Research allowance reached':e.status&&e.status!==403?clean(e.message,200):'Provider check failed or timed out. Completed matches are retained; check connections and resume.';await checkpoint('incomplete');}
    else await sql(env,"UPDATE company_lists SET status='incomplete',state_json=json_set(state_json,'$.reason','Research permission changed; sign in and resume.'),revision=revision+1 WHERE id=? AND lease_token=? AND status='running'",row.id,token).run();
   }
   return [row.id];

@@ -52,7 +52,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    if(!live||live.status!=='running'||live.lease_token!==lease||!live.authorized)throw lost();
    if(live.lease_until<=clock())throw Object.assign(Error('Processing lease expired'),{code:'LEASE_EXPIRED'});
    const version=Number((await stmt(env,'SELECT version FROM customer_workspace_state WHERE workspace_id=?',row.workspace_id).first())?.version)||0;
-   if(contextVersion!==version){const context=await workspaceBuyerContext(env,row.workspace_id);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});contextVersion=context.version;}
+   if(contextVersion!==version){const context=await workspaceBuyerContext(env,row.workspace_id,input.taskId);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});contextVersion=context.version;}
   };
   const writeGuard=`EXISTS(SELECT 1 FROM buyer_research_jobs WHERE id=? AND lease_token=? AND status='running' AND lease_until>? AND ${authoritySql} AND COALESCE((SELECT version FROM customer_workspace_state WHERE workspace_id=buyer_research_jobs.workspace_id),0)=?)`;
   const current=async(checkpoint=false)=>{await guard({checkpoint});return [row.id,lease,clock(),contextVersion];};
@@ -148,7 +148,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   };
   let status='queued';
   try{
-   await guard();const context=await workspaceBuyerContext(env,row.workspace_id);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
+   await guard();const context=await workspaceBuyerContext(env,row.workspace_id,input.taskId);if(context.hash!==input.workspaceContext)throw Object.assign(Error('The seller context changed'),{code:'CONTEXT_CHANGED'});
    const rows=await allRows(),phaseStart=clock(),remaining=Math.max(1000,windowMs-(clock()-start)-500);
    if(input.scope!=='selected_buyers'&&!apolloIdentityChecked&&['identities','contacts','review','paid'].includes(phase)){
     const before=new Set((candidate.people||[]).map(person=>person.id));
@@ -220,7 +220,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    else if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
    else if(error.code==='LEASE_EXPIRED'||error.code==='PHASE_DEFERRED')status='queued';
    else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if((phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
-   else{status='needs_review';diagnostics.push({phase,reason:errorReason(error,phase),at:new Date().toISOString()});}
+   else{status='needs_review';diagnostics.push({phase,reason:error.code==='TASK_REQUIRED_CHECK'?error.message:errorReason(error,phase),at:new Date().toISOString()});}
   }finally{
    accepting=false;clearTimeout(timer);controller.abort();
    // Count only actual completed read tasks in this job, including the official
@@ -229,6 +229,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    report.officialPageReads=[...new Map([...(report.officialPageReads||[]),...completedReads.map(r=>({url:r.url,sourceRead:true,checkedAt:r.extractedAt}))].map(r=>[r.url,r])).values()].slice(0,120);
    report.officialPages=report.officialPageReads.length;
    candidate.publicResearch.accountability=report;candidate.publicResearch.officialPages=report.officialPages;
+   if(input.taskId&&status!=='canceled'&&phase!==row.phase){
+    const requiredGap=row.phase==='official'&&!D.officialContactCoveragePassed(candidate)?'Official website checks are incomplete':row.phase==='dossier'&&candidate.buyerDiscovery?.companyDossier?.status!=='complete'?'Required company dossier is incomplete':row.phase==='identities'&&!candidate.people?.length?'No supported decision-maker identities were found':row.phase==='contacts'&&!D.buyerResearchCoveragePassed(candidate,{contactOptions})?'Mandatory contact checks are incomplete':row.phase==='review'&&candidate.publicResearch?.aiReview?.status!=='complete'?'AI evidence review is incomplete':'';
+    if(requiredGap){phase=row.phase;status='needs_review';diagnostics.push({phase,code:'task_required_check',reason:requiredGap,at:new Date().toISOString()});}
+   }
    if(status==='queued'&&phase==='done')await settleQuality();
    candidate.peopleStatus=candidate.people?.length?'complete':status==='queued'?'loading':'empty';
    candidate.publicContactStatus=['queued','running'].includes(status)?'loading':status==='complete'?'complete':'error';
