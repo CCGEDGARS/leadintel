@@ -33,7 +33,7 @@ const server=http.createServer(async(req,res)=>{try{
  res.statusCode=response.status;response.headers.forEach((v,k)=>res.setHeader(k,v));res.end(await response.text());
  }catch(e){res.statusCode=500;res.end(JSON.stringify({error:e.message}));}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
 try{
  const context=await browser.newContext({viewport:{width:1280,height:900}});await context.addCookies([{name:'leadintel_session',value:'browser-workflow',url:origin}]);
  await context.addInitScript(({payload,workspace,version})=>{if(localStorage.getItem('workflow-test-initialized'))return;localStorage.setItem('workflow-test-initialized','1');for(const [part,key]of Object.entries({main:'leadintel_customer_v2_state',outreach:'leadintel_customer_v2_outreach',discovery:'leadintel_customer_v2_discovery',delivery:'leadintel_customer_v2_delivery'}))localStorage.setItem(key,JSON.stringify(payload[part]||{}));localStorage.setItem('leadintel_customer_v2_workspace',workspace);sessionStorage.setItem('leadintel_customer_v2_server_hydration',workspace+':'+version);},{payload:saved.payload,workspace,version:saved.version});
