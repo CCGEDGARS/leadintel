@@ -95,6 +95,9 @@ function saveState(){
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
+    // Materials owns its evidence and coverage metadata. Preserve its latest
+    // records (including removals) instead of flushing a normalized stale copy.
+    if(Array.isArray(current.documents))state.documents=[...(state.documents||[]).filter(doc=>!String(doc?.id||'').startsWith('material:')),...current.documents.filter(doc=>String(doc?.id||'').startsWith('material:'))];
     if(typeof checkStrategyLocalPersistence==='function'&&!checkStrategyLocalPersistence(current))return false;
   }catch{showToast("Saved workspace could not be compared safely. Your local edits are retained; retry after reviewing the saved version.");return false;}
   if(typeof syncStrategyApproval==='function')syncStrategyApproval();
