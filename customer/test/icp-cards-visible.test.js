@@ -6,8 +6,8 @@ test('Strategy keeps evidence-gated fields disabled but allows requesting activa
  const container={innerHTML:''};
  const context={state,LeadIntelMarket:Market,$:()=>container,esc:x=>String(x??''),enforceIcpActivationRequirements:()=>{for(const x of state.market.icps)if(['lookalike','opportunity-led'].includes(x.type))x.active=false;},icpActivationRequirement:x=>({available:!['lookalike','opportunity-led'].includes(x.type),reason:'Evidence required',action:'Add evidence',target:'profile'})};
  vm.runInNewContext(app.slice(app.indexOf('function renderIcps(){'),app.indexOf('function renderSignalDesigner(){'))+'renderIcps();',context);
- assert.equal(state.market.icps.length,4);assert.equal((container.innerHTML.match(/<article /g)||[]).length,4);assert.doesNotMatch(container.innerHTML,/<details/);assert.equal((container.innerHTML.match(/data-icp-field="active"[^>]* disabled/g)||[]).length,0);const document=new (require("jsdom").JSDOM)(container.innerHTML).window.document;const blocked=[...document.querySelectorAll(".icp-card.unavailable")];assert.equal(blocked.length,2);for(const card of blocked)assert.equal(card.querySelector("fieldset").disabled,true);
- vm.runInNewContext('renderIcps();',context);assert.equal(state.market.icps.length,4);
+ assert.equal(state.market.icps.length,1);assert.equal((container.innerHTML.match(/<article /g)||[]).length,4);assert.doesNotMatch(container.innerHTML,/<details/);assert.equal((container.innerHTML.match(/data-icp-field="active"[^>]* disabled/g)||[]).length,0);const document=new (require("jsdom").JSDOM)(container.innerHTML).window.document;const blocked=[...document.querySelectorAll(".icp-card.unavailable")];assert.equal(blocked.length,2);for(const card of blocked)assert.equal(card.querySelector("fieldset").disabled,true);
+ vm.runInNewContext('renderIcps();',context);assert.equal(state.market.icps.length,1);
 });
 
 test('activated reference names fill generated lookalike text without mutating saved manual edits or toggles',()=>{

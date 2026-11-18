@@ -13,14 +13,14 @@ test('normalization keeps every profile and its saved preference and reference i
  assert.equal(normalized.icps.length,5);assert.equal(normalized.icps.find(x=>x.id==='icp-reference-lookalike').requestedActive,false);assert.equal(normalized.icps.find(x=>x.id==='icp-reference-lookalike').referenceFingerprint,'model-one');
 });
 test('missing Core starts on; existing deliberate Core off survives rendering and reload',()=>{
- const h=harness([{id:'opp',type:'opportunity-led',active:false}]);h.context.renderIcps();assert.equal(h.state.market.icps.find(x=>x.type==='core').active,true);
+ const h=harness([{id:'opp',type:'opportunity-led',active:false}]);h.context.renderIcps();assert.equal(h.state.market.icps.some(x=>x.type==='core'),false,'viewing suggestions must not change saved settings');assert.equal(h.document.querySelector('[data-icp-field="active"][data-index="1"]').checked,true);h.context.readMarketEdits();assert.equal(h.state.market.icps.find(x=>x.type==='core').active,true);
  const core=h.state.market.icps.find(x=>x.type==='core');core.active=false;core.requestedActive=false;
  h.state.market=Market.normalizeMarketState(JSON.parse(JSON.stringify(h.state.market)));h.context.renderIcps();h.context.renderIcps();assert.equal(h.state.market.icps.find(x=>x.type==='core').active,false);
 });
 test('missing prerequisites clear On and do not silently activate after reload',()=>{
  const h=harness([{id:'opp',type:'opportunity-led',name:'Opportunity',active:true}]);h.context.renderIcps();
- let opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,false);assert.equal(opp.requestedActive,false);
- assert.equal(h.document.querySelector('[data-icp-field="active"]').checked,false);assert.match(h.document.body.textContent,/Setup required/);
+ let opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,true,'viewing does not rewrite saved settings');assert.equal(opp.requestedActive,undefined);
+ assert.equal(h.document.querySelector('[data-icp-field="active"]').checked,false);assert.match(h.document.body.textContent,/Setup required/);h.context.readMarketEdits();assert.equal(opp.active,false);assert.equal(opp.requestedActive,false);
  h.state.market=Market.normalizeMarketState(JSON.parse(JSON.stringify(h.state.market)));h.context.evidenceAvailable=true;h.context.renderIcps();
  opp=h.state.market.icps.find(x=>x.id==='opp');assert.equal(opp.active,false);assert.equal(opp.requestedActive,false);
 });

@@ -251,10 +251,10 @@ jobs:
           import {appendFileSync} from 'node:fs';
           appendFileSync(process.env.GITHUB_ENV, 'LEADINTEL_CHROMIUM_PATH='+chromium.executablePath()+'\n');
           JS
-      - name: Verify company list research, export and CRM reopening
+      - name: Verify company lists and read-only sidebar navigation
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
-        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/company-lists-journey.test.mjs
+        run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/company-lists-journey.test.mjs backend/test/navigation-save-journey.test.mjs
       - name: Preserve company list acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4

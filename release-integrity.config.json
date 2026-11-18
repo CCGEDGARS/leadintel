@@ -9802,6 +9802,28 @@
       ],
       "type": "text",
       "status": 200
+    },
+    {
+      "id": "navigation-save-readonly-20261118",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function persistNavigationStep(step)",
+        "state.step=step;persistNavigationStep(step);",
+        "if(!changed)return true;"
+      ]
+    },
+    {
+      "id": "navigation-save-status-20261118",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "const contentComparisonCache=new Map()",
+        "if(!sameWorkspaceContent(currentWorkspaceData(),before))noteStoredWorkspaceEdit()",
+        "!hasUnsavedChanges()&&!isBrowserOnlySnapshot()"
+      ]
     }
   ],
   "retry": {

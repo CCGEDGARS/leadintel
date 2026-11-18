@@ -10,7 +10,7 @@ function runtime(){
  saveProfileEdits:()=>canonicalFailure?false:true,
  saveState:()=>{saveCalls++;if(failApproval&&root.state.approved)throw Error('Storage full');w.localStorage.setItem(MAIN,JSON.stringify(root.state));}};
  w.scrollTo=()=>{};w.LeadIntelServerBridge={ready:true,workspace:{id:'w',role:'owner'},session:{authenticated:true,user:{id:'u'}}};
- vm.createContext(root);for(const name of ['profileApprovalSignature','profileApprovalContext','profileApprovalCurrent','profileReviewCurrent','setStep','openModule','approveProfile','openMarketStrategy']){const code=extract(name);if(code)vm.runInContext(code,root);}
+ vm.createContext(root);for(const name of ['profileApprovalSignature','profileApprovalContext','profileApprovalCurrent','profileReviewCurrent','persistNavigationStep','setStep','openModule','approveProfile','openMarketStrategy']){const code=extract(name);if(code)vm.runInContext(code,root);}
  return {root,w,state,notices,saved:()=>JSON.parse(w.localStorage.getItem(MAIN)),saveCalls:()=>saveCalls,failSave:()=>failApproval=true,failEditor:()=>canonicalFailure=true,close:()=>w.close()};
 }
 test('direct stage navigation cannot enter Strategy before Profile approval',()=>{const r=runtime();try{assert.equal(r.root.setStep(4),false);assert.equal(r.root.state.step,3);}finally{r.close();}});

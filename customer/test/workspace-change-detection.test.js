@@ -110,3 +110,18 @@ test('an acknowledgement overtaken during synchronous snapshot publication retur
  const get=r.root.localStorage.getItem;let reads=0;r.root.localStorage.getItem=key=>{if(key===SNAP&&++reads===3){r.values.set(MAIN,newerData[MAIN]);r.values.set(SNAP,JSON.stringify({schema_version:1,server_synced:true,workspace_id:'w1',server_version:9,saved_at:'2026-11-16T11:00:00.000Z',server_payload:newer,data:newerData}));}return get(key);};
  const result=r.api.snapshotFromServerPayload(incoming,{workspaceId:'w1',version:8,localData:incomingData});assert.equal(result.server_version,9);assert.equal(r.api.syncedBase('w1').version,9);assert.equal(r.read(MAIN).answers.offer,'Newer shared acknowledgement');assert.equal(r.api.hasUnsavedChanges(),false);
 });
+
+test('Save stays disabled for acknowledged navigation and enables only for actual edits or recovery',async()=>{
+ const r=runtime({realBridge:true});assert.equal(r.button.disabled,true);r.edit(MAIN,x=>x.step=4);r.event('leadintel:workspace-dirty');assert.equal(r.button.disabled,true);
+ r.edit(MAIN,x=>x.answers.offer='Changed offer');r.event('leadintel:workspace-dirty');assert.equal(r.button.disabled,false);await r.debounce();assert.equal(r.button.disabled,true);
+ r.root.LeadIntelServerBridge.conflict=true;r.event('leadintel:server-conflict');assert.equal(r.button.disabled,false);
+ const browser=runtime({browserOnly:true});assert.equal(browser.button.disabled,false);
+});
+test('unchanged controls during an in-flight save do not enqueue another dirty notification',async()=>{
+ const r=runtime({realBridge:true});r.edit(MAIN,x=>x.answers.offer='First edit');const gate=r.holdSave(),saving=r.root.LeadIntelServerBridge.saveNow({saveIntent:true});await gate.began;
+ for(let i=0;i<20;i++){r.ui('input');r.ui('change');}await r.settle();gate.release();assert.equal((await saving).saved,true);await r.debounce();assert.equal(r.writes.length,1);assert.equal(r.api.hasUnsavedChanges(),false);assert.equal(r.button.disabled,true);
+});
+test('repeated status checks reuse content comparison for the same large navigation snapshot',()=>{
+ const r=runtime();let comparisons=0;const compare=r.root.LeadIntelWorkspaceSync.contentEqual;r.root.LeadIntelWorkspaceSync.contentEqual=(...args)=>{comparisons++;return compare(...args);};r.edit(MAIN,x=>x.step=4);for(let i=0;i<100;i++)assert.equal(r.api.hasUnsavedChanges(),false);assert.equal(comparisons,1);
+ r.edit(MAIN,x=>x.answers.offer='Real edit');assert.equal(r.api.hasUnsavedChanges(),true);assert.equal(comparisons,2);
+});
