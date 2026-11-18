@@ -22,8 +22,8 @@ test('Companies checks do not serialize full seller research, while saved change
 });
 test('viewing saved Companies does not redirect unconfirmed targeting to Profile; research still requires confirmation',()=>{
  const app=fs.readFileSync(require.resolve('../app.js'),'utf8');const fn=app.slice(app.indexOf('function setStep('),app.indexOf('window.LeadIntelCustomerNavigation='));
- let redirected=0,saved=0;const c={state:{website:'https://seller.example',profile:{companyName:'Seller'},answers:{}},campaignModuleAllowed:()=>false,LeadIntelTargeting:{...Targeting,focusRequired:()=>{redirected++;return false;}},saveState:()=>saved++,document:{querySelectorAll:()=>[]},CustomEvent:class{},window:{dispatchEvent(){},scrollTo(){}},renderProfile(){},ensureMarketStrategySeeded(){},renderMarketStrategy(){}};
- vm.createContext(c);vm.runInContext(fn,c);c.setStep(5,{review:true});assert.equal(redirected,0);assert.equal(c.state.step,5);assert.equal(saved,1);
+ let redirected=0,saved=0;const c={state:{website:'https://seller.example',profile:{companyName:'Seller'},answers:{}},campaignModuleAllowed:()=>false,LeadIntelTargeting:{...Targeting,focusRequired:()=>{redirected++;return false;}},saveState:()=>saved++,persistNavigationStep(){},document:{querySelectorAll:()=>[]},CustomEvent:class{},window:{dispatchEvent(){},scrollTo(){}},renderProfile(){},ensureMarketStrategySeeded(){},renderMarketStrategy(){}};
+ vm.createContext(c);vm.runInContext(fn,c);c.setStep(5,{review:true});assert.equal(redirected,0);assert.equal(c.state.step,5);assert.equal(saved,0);
  c.setStep(5);assert.equal(redirected,1,'ordinary advance still requires targeting confirmation');
  c.setStep(6,{review:true});assert.equal(redirected,2,'review cannot bypass Messages gates');
  c.state.profile=null;c.setStep(5,{review:true});assert.equal(redirected,3,'a seller profile is required to review Companies');

@@ -14,7 +14,7 @@ async function persist(page){const result=await page.evaluate(()=>LeadIntelServe
 async function switchSavedWorkspace(page,id){
  for(let attempt=0;attempt<3;attempt++){
   await page.waitForLoadState('networkidle');await persist(page);
-  await page.waitForFunction(()=>!localStorage.getItem('leadintel_customer_v2_server_dirty')&&!window.LeadIntelServerBridge?.conflict&&!window.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.()&&!document.getElementById('save-workspace')?.disabled,null,{timeout:15000});
+  await page.waitForFunction(()=>!localStorage.getItem('leadintel_customer_v2_server_dirty')&&!window.LeadIntelServerBridge?.conflict&&!window.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.()&&!window.LeadIntelServerBridge?.isWorkspaceSaving?.(),null,{timeout:15000});
   await page.locator('#server-workspace-select').selectOption(id);
   await page.waitForFunction(target=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge.workspace?.id===target||document.getElementById('server-workspace-select')?.value!==target&&document.getElementById('toast')?.textContent==='Finish syncing before switching workspaces.',id,{timeout:20000});
   if(await page.evaluate(target=>window.LeadIntelServerBridge?.ready&&window.LeadIntelServerBridge.workspace?.id===target,id)){await page.waitForLoadState('networkidle');return attempt;}

@@ -31,3 +31,11 @@ test('an active research run does not import an extra snapshot before its final 
  assert.equal(imports,0);assert.deepEqual(state.market.researchReports,[]);
  context.activeMarketResearchRun=null;vm.runInContext('renderResearchReports()',context);assert.equal(imports,1,'legacy saved evidence still receives its recovery report');
 });
+test('main-form saves preserve managed material evidence, coverage and removal under their current owner',()=>{
+ const material={id:'material:one',name:'source.pdf',materialRevision:3,managedMaterial:true,text:'Exact source',partial:true,coverage:{total:2,readable:1,unreadable:1}},legacy={id:'legacy',name:'manual.pdf',text:'Edited local text'};
+ const values=new Map([['state',JSON.stringify({documents:[material]})]]),events=[];
+ const context={state:{setupWebsiteDraft:'https://proposed.example/',documents:[legacy,{id:material.id,text:'Stale normalized source',size:0}]},STORAGE_KEY:'state',localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},window:{dispatchEvent:e=>events.push(e.type)},CustomEvent:class{constructor(type){this.type=type;}},profileApprovalContext:()=> 'workspace-a',updateCompleteness(){},updateNavigationAvailability(){}};
+ vm.createContext(context);vm.runInContext(body+';saveState()',context);assert.deepEqual(JSON.parse(values.get('state')).documents,[legacy,material]);
+ vm.runInContext('saveState()',context);assert.equal(events.length,1,'unchanged evidence must not schedule another save');
+ const current=JSON.parse(values.get('state'));current.documents=[legacy];values.set('state',JSON.stringify(current));vm.runInContext('saveState()',context);assert.deepEqual(JSON.parse(values.get('state')).documents,[legacy],'removed managed evidence cannot be resurrected by an old view');
+});

@@ -31,7 +31,7 @@ test('authenticated navigation reuses the saved revision while genuine edits, la
  const f=await step7Fixture({activated:true,connected:false}),{chromium}=await loadPlaywright();
  const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const errors=[],requests=[];let releaseHeld;
- const clean=page=>page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&!document.getElementById('save-workspace')?.disabled&&!LeadIntelWorkspacePersistence.hasUnsavedChanges(),null,{timeout:20000});
+ const clean=page=>page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&document.getElementById('save-workspace')?.disabled&&!LeadIntelWorkspacePersistence.hasUnsavedChanges(),null,{timeout:20000});
  async function open(){
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
@@ -51,12 +51,11 @@ test('authenticated navigation reuses the saved revision while genuine edits, la
  }
  try{
   let page=await open();
-  // The existing fixture precedes first-time Strategy normalization. Let actual
-  // migrations settle before measuring clicks on already prepared screens.
+  // Exercise initial and repeated viewing. A clean workspace keeps Save disabled.
   for(const id of [1,2,3,4,5,6,7]){await stage(page,id);await clean(page);}
   await page.waitForTimeout(2400);await clean(page);
   const before=await f.getState(),requestCount=requests.length;
-  for(const id of [1,2,3,4,5,6,7]){await stage(page,id);await page.waitForTimeout(2300);assert.equal(await page.locator('#save-workspace').isDisabled(),false);}
+  for(const id of [1,2,3,4,5,6,7]){await stage(page,id);await page.waitForTimeout(2300);assert.equal(await page.locator('#save-workspace').isDisabled(),true);}
   await page.locator('#delivery-company-select').click();await page.keyboard.press('Escape');
   await page.locator('#save-workspace').evaluate(button=>button.click());
   assert.equal(await page.evaluate(()=>LeadIntelWorkspacePersistence.saveWorkspace()),true);

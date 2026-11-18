@@ -19,6 +19,10 @@ for(const profileApproved of [true,false])test('monitoring saves before activati
   }
  }});
  const saved=await f.getState();if(!profileApproved){Object.assign(saved.payload.main.answers,{buying_outcomes:'Reduce production equipment downtime',value_proposition:'Engineering and manufacturing of custom machinery',differentiation:'Custom machinery for supplied project requirements',proof_points:'No approved proof yet',objections:'Confirm technical scope, capacity and installation timing',delivery_approach:'Review drawings and project requirements before manufacture',meeting_value:'Review the production equipment scope and drawings'});saved.payload.main.answerStatus=Object.fromEntries(Object.keys(saved.payload.main.answers).map(id=>[id,'user']));}saved.payload.main.approved=profileApproved;saved.payload.main.market.strategyApproved=false;delete saved.payload.main.market.strategyApproval;
+ // Start with the reviewed signal from Profile. Viewing Strategy must not
+ // silently replace the fixture's unrelated legacy signal ID/keywords.
+ const reviewedSignal=saved.payload.main.profile.recommendedSignals.find(signal=>signal.id==='facility-expansion');assert.ok(reviewedSignal);
+ saved.payload.main.market.signals=[{...reviewedSignal,active:true,weight:10}];
  const retainedText='Retained original research quote. Preserve punctuation and evidence. '.repeat(95);const retainedSources=profileApproved?Array.from({length:750},(_,i)=>({url:'https://archive.example/evidence/'+i,title:'Retained source '+i,text:retainedText,market:'Sweden'})):[];
  if(retainedSources.length){saved.payload.discovery.rawResults=retainedSources;assert.ok(Buffer.byteLength(JSON.stringify(saved.payload))>4500000);}
  await f.replace(saved.payload,saved.version);f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,24).toString('base64');
