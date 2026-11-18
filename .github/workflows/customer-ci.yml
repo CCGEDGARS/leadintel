@@ -257,6 +257,8 @@ jobs:
         env:
           LEADINTEL_REQUIRE_BROWSER: 'true'
         run: node --import ./backend/test/register-wasm-loader.mjs --test backend/test/company-lists-journey.test.mjs backend/test/navigation-save-journey.test.mjs backend/test/copilot-tasks-journey.test.mjs
+      - name: Verify protected workflow save, copy and resume
+        run: node scripts/verify-saved-workflows-local.mjs
       - name: Preserve company list acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4

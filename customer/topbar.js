@@ -32,6 +32,7 @@
   }
   function signedIn(){if(root.LeadIntelServerBridge?.session)return Boolean(root.LeadIntelServerBridge.session.authenticated);return Boolean(text(doc.getElementById('server-account-label')));}
   function update(){
+    const crm=doc.getElementById('open-crm'),workflow=doc.getElementById('topbar-workflow');if(crm&&workflow&&crm.parentElement===workflow.parentElement&&crm.nextElementSibling!==workflow)crm.after(workflow);
     const status=doc.getElementById('topbar-status');
     if(status){
       const persistence=text(doc.querySelector('.top-actions>.autosave'))||text(doc.getElementById('workspace-save-state'));
@@ -41,8 +42,35 @@
     }
     const attention=doc.getElementById('workspace-attention');const ws=doc.getElementById('topbar-workspace-status');
     if(ws){const count=Number(text(attention?.querySelector('[data-attention-count]')))||0;const badge=ws.querySelector('[data-topbar-badge]');badge.textContent=String(count);badge.hidden=count===0;ws.hidden=!attention;ws.title=text(attention?.querySelector('[data-attention-summary]'))||'Workspace status';ws.dataset.healthStatus=attention?.dataset.healthStatus||'healthy';const priority=ws.querySelector('[data-topbar-credit-alert]');if(priority)priority.hidden=ws.dataset.healthStatus!=='error';ws.setAttribute('aria-label','Workspace status: '+ws.title);}
+    updateWorkflow();
     const account=doc.getElementById('topbar-account');
     if(account){const name=text(doc.getElementById('server-account-label'))||'Account';const provider=text(doc.getElementById('server-auth-provider'));account.querySelector('[data-topbar-name]').textContent=name;account.querySelector('[data-topbar-initial]').textContent=name.slice(0,1).toUpperCase();account.querySelector('[data-topbar-provider]').textContent=provider;account.hidden=!signedIn();syncAdminEntry(account);}
+  }
+  function updateWorkflow(){
+    const button=doc.getElementById('topbar-workflow-btn'),menu=doc.getElementById('topbar-workflow-menu');if(!button||!menu)return;
+    const api=root.LeadIntelMyFlows,current=signedIn()?api?.current?.():null,summary=signedIn()?api?.listSummary?.():null;
+    doc.getElementById('topbar-workflow').hidden=!signedIn();
+    button.hidden=!signedIn();button.querySelector('[data-workflow-name]').textContent=current?current.name:'Choose workflow';
+    button.title=current?`Workflow: ${current.name}`:'Choose or create a saved workflow';
+    button.querySelector('[data-workflow-state]').textContent=current?`${current.savedVersion?'v'+current.savedVersion+' protected · ':''}${{automatic:'Running',paused:'Paused',manual:'Manual',stopped:'Stopped',needs_review:'Needs attention'}[current.status]||'Saved'}`:'';
+    if(!signedIn()){menu.hidden=true;button.setAttribute('aria-expanded','false');menu.replaceChildren();delete menu.dataset.signature;return;}
+    const signature=JSON.stringify([summary?.role,current?.id,(summary?.flows||[]).map(f=>[f.id,f.name])]);if(menu.dataset.signature===signature)return;menu.dataset.signature=signature;
+    const focused=menu.contains(doc.activeElement),focusId=doc.activeElement?.dataset.workflowId;
+    menu.replaceChildren();
+    for(const flow of summary?.flows||[]){const item=doc.createElement('button');item.type='button';item.setAttribute('role','menuitem');item.textContent=(flow.id===current?.id?'✓ ':'')+flow.name;item.dataset.workflowId=flow.id;item.disabled=summary.role!=='owner';menu.append(item);}
+    const manage=doc.createElement('button');manage.type='button';manage.setAttribute('role','menuitem');manage.dataset.workflowManage='1';manage.textContent='Save, duplicate & manage workflows';menu.append(manage);
+    if(focused)([...menu.querySelectorAll('button')].find(b=>b.dataset.workflowId===focusId)||manage).focus();
+  }
+  function workflowControl(){
+    const group=doc.createElement('div');group.id='topbar-workflow';group.className='account-menu workflow-menu';
+    group.innerHTML='<button type="button" id="topbar-workflow-btn" class="account-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="topbar-workflow-menu"><span>Workflow:</span><strong data-workflow-name>Choose workflow</strong><small data-workflow-state></small><span aria-hidden="true">▾</span></button><div id="topbar-workflow-menu" class="account-menu-panel" role="menu" hidden></div>';
+    const button=group.querySelector('button'),menu=group.querySelector('[role=menu]');
+    const close=()=>{menu.hidden=true;button.setAttribute('aria-expanded','false');};
+    button.addEventListener('click',()=>{const opening=menu.hidden;updateWorkflow();menu.hidden=!opening;button.setAttribute('aria-expanded',String(opening));if(opening){menu.querySelector('button')?.focus();void root.LeadIntelMyFlows?.refreshSummary?.();}});
+    menu.addEventListener('click',event=>{const item=event.target.closest('button');if(!item||item.disabled)return;close();if(item.dataset.workflowId)void root.LeadIntelMyFlows?.selectFlow?.(item.dataset.workflowId).catch(()=>root.LeadIntelMyFlows?.open());else root.LeadIntelMyFlows?.open();});
+    doc.addEventListener('click',event=>{if(!group.contains(event.target))close();});
+    group.addEventListener('keydown',event=>{if(event.key==='Escape'){close();button.focus();}if(['ArrowDown','ArrowUp'].includes(event.key)&&!menu.hidden){event.preventDefault();const items=[...menu.querySelectorAll('button:not(:disabled)')],index=items.indexOf(doc.activeElement);items[(index+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}});
+    root.addEventListener('leadintel:flows-changed',updateWorkflow);root.addEventListener('leadintel:workspace-changed',()=>{close();updateWorkflow();});return group;
   }
   function build(){
     const actions=doc.querySelector('.top-actions');if(!actions)return null;
@@ -62,9 +90,10 @@
       doc.addEventListener('click',event=>{if(!account.contains(event.target))close();});
       doc.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
       panel.addEventListener('click',event=>{const item=event.target.closest('[data-topbar-action]');if(!item)return;close();const target={settings:'open-settings',signout:'server-signout',reset:'reset-workspace'}[item.dataset.topbarAction];doc.getElementById(target)?.click();});
-      if(anchor&&anchor.parentElement===actions)anchor.after(status,save,ws,account);else actions.append(status,save,ws,account);
+      if(anchor&&anchor.parentElement===actions)anchor.after(workflowControl(),status,save,ws,account);else actions.append(workflowControl(),status,save,ws,account);
       for(const name of ['leadintel:server-ready','leadintel:server-conflict','leadintel:server-synced','leadintel:sync-status-changed','leadintel:sync-resolving','leadintel:sync-settled'])root.addEventListener(name,update);
       if(typeof root.MutationObserver==='function'){
+        new root.MutationObserver(update).observe(actions,{childList:true});
         const observe=el=>{if(el)new root.MutationObserver(update).observe(el,{childList:true,characterData:true,subtree:true,attributes:true});};
         observe(doc.getElementById('server-account'));observe(doc.getElementById('workspace-attention'));observe(doc.querySelector('.top-actions>.autosave'));observe(doc.getElementById('save-workspace'));
       }

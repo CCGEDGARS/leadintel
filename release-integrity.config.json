@@ -1169,7 +1169,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose up to three books in the Writing Assistant",
+        "To apply these methods to content, select the saved skill in the Writing Assistant (up to three skills). Use Book knowledge to discuss one book at a time.",
         "What AI learned",
         "Retry analysis",
         "error.snapshot?.cards"
@@ -2948,7 +2948,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Choose up to three books in the Writing Assistant",
+        "To apply these methods to content, select the saved skill in the Writing Assistant (up to three skills). Use Book knowledge to discuss one book at a time.",
         "data-delete",
         "wr-options",
         "[1,2,3].map(slot=>",
@@ -9823,6 +9823,37 @@
         "const contentComparisonCache=new Map()",
         "if(!sameWorkspaceContent(currentWorkspaceData(),before))noteStoredWorkspaceEdit()",
         "!hasUnsavedChanges()&&!isBrowserOnlySnapshot()"
+      ]
+    },
+    {
+      "id": "protected-workflow-topbar-20261118",
+      "type": "text",
+      "url": "/customer/topbar.js",
+      "status": 200,
+      "contains": [
+        "topbar-workflow-btn",
+        "Save, duplicate & manage workflows",
+        "data-workflow-state"
+      ]
+    },
+    {
+      "id": "protected-workflow-version-controls-20261118",
+      "type": "text",
+      "url": "/customer/my-flows-ui.js",
+      "status": 200,
+      "contains": [
+        "Save protected version",
+        "Create copy from this version",
+        "Protected version saved."
+      ]
+    },
+    {
+      "id": "protected-workflow-cache-20261118",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "protected-workflows=20261118-v1"
       ]
     },
     {
