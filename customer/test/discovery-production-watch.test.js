@@ -11,6 +11,18 @@ const corePath = path.join(root, 'scripts/release-integrity-core.mjs');
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const saveOwnerEntries = fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/<script[^>]+src="(?:workspace-sync|server-bridge|app|process-map)\.js\?[^"]+"[^>]*><\/script>/g).join('\n');
 
+test('production proof rejects stale connected-experience assets and returning browsers receive their new versions',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore(),entry=fs.readFileSync(path.join(root,'customer/index.html'),'utf8');
+ for(const file of ['process-map.js','my-flows-ui.js','step-action-guidance.js','app-shell.css']){
+  const url=entry.match(new RegExp('(?:src|href)="('+file.replace('.', '\\.')+'\\?[^"\\n]+)"'))?.[1];assert.ok(url,file);assert.equal(new URL(url,'https://example.test/').searchParams.get('experience-polish'),'20261118-v1',file);
+ }
+ const normal=productionFetch({customerHtml:entry,discoveryUi:fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8')});
+ for(const [pathname,token,id]of [['/customer/process-map.js','node.isEqualNode','connected-navigation-refresh-20261118'],['/customer/my-flows-ui.js','summaryFlight','bounded-workflow-selector-20261118'],['/customer/step-action-guidance.js','guide?.dataset.moduleStep','single-live-journey-guidance-20261118'],['/customer/app-shell.css','Keep the working screen close on phones','compact-mobile-stage-navigation-20261118']]){
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'connected-experience',fetchImpl:async url=>{const result=await normal(url);return new URL(String(url)).pathname===pathname?response({text:(await result.text()).replaceAll(token,'stale-experience')}):result;},nonce:'connected-experience'});
+  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.equal(proof.smokeChecks.find(row=>row.id===id).passed,false);
+ }
+});
+
 test('production proof rejects missing research checkpoints, extracted evidence preservation and company-only saves',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore();
  const normal=productionFetch({customerHtml:fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),discoveryUi:fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8')});
@@ -72,7 +84,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
     if(parsed.pathname==='/customer/styles.css')return response({text:fs.readFileSync(path.join(root,'customer/styles.css'),'utf8')});
     if(parsed.pathname==='/customer/conversation-workflow-ui.js')return response({text:fs.readFileSync(path.join(root,'customer/conversation-workflow-ui.js'),'utf8')});
     if(parsed.pathname==='/api/conversation-workflows')return response({status:401,json:{error:'Authentication required'}});
-    if(['/customer/app-shell.css','/customer/language-pack-catalogue.js','/customer/message-translation-ui.js','/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if(['/customer/step-action-guidance.js','/customer/app-shell.css','/customer/language-pack-catalogue.js','/customer/message-translation-ui.js','/customer/company-materials.js','/customer/storyselling-ui.js','/customer/storyselling-native.js','/customer/original-scripts.js','/customer/original-scripts-ui.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/api/language-packs','/api/integrations/translation/google','/api/company-materials','/api/company-materials/profile-context','/api/story-bank','/api/workspace-skills'].includes(parsed.pathname))return response({status:401,json:{error:'Authentication required'}});
     if(['/customer/rich-text.js','/customer/rich-text-editor.js','/customer/rich-text.css'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if(['/api/integrations/google-calendar/status','/api/integrations/microsoft-calendar/status'].includes(parsed.pathname))return response({status:401,json:{error:'Sign in to connect your calendar'}});
