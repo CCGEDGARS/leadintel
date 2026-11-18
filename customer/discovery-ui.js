@@ -269,7 +269,7 @@ function fingerprint(){
 function currentStrategyApproval(main=mainState()){const status=window.LeadIntelStrategyIntegrity?.status(main);if(status?.current)return true;showToast(status?.reason||'Review and activate the current Strategy before researching companies.');return false;}
 function discoveryAccountContext(){return JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'',bridge()?.session?.authenticated||false,localStorage.getItem('leadintel_account_context_v1')||'',window.LeadIntelAccountCache?.current?.()??null]);}
 function discoveryOperationContext(){
-  // The storage codec can reorder object keys during a sender-only migration.
+  // The Profile storage adapter can reorder object keys during a sender-only migration.
   // Compare the same values deterministically; preserve all fields and array order.
   const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
   return JSON.stringify([discoveryAccountContext(),JSON.stringify(ordered(JSON.parse(fingerprint())))]);
