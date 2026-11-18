@@ -417,7 +417,7 @@
         "Your AI business mentor. Every step of the way.",
         "Get help with any step, spot missing information, check quality and improve your approach. Research companies and markets, compare findings and explore your next business move\u2014with advice tailored to your business.",
         "Explore capabilities",
-        "I never change your settings"
+        "I never change settings"
       ]
     },
     {
@@ -9892,7 +9892,7 @@
     {
       "id": "copilot-reviewed-tasks-entry-20261118",
       "type": "text",
-      "url": "/customer/index.html",
+      "url": "/customer/",
       "status": 200,
       "contains": [
         "research-tasks=20261118-v1"
