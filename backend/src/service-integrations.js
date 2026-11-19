@@ -1,3 +1,4 @@
+import {requestFirecrawl} from './firecrawl-request.js';
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {exposePublishedEmailHtml} from './published-email-html.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
@@ -6,7 +7,7 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
 import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
-import {acquireFirecrawlSlot,firecrawlPlanFromRow,parseRetryAfterMs,recordFirecrawlRateLimit} from './firecrawl-rate-gate.js';
+import {parseRetryAfterMs,recordFirecrawlRateLimit} from './firecrawl-rate-gate.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter','treg']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter',treg:'Treg'});
@@ -82,7 +83,7 @@ async function verifyApollo(apiKey){
 async function verifyFirecrawl(apiKey){
   const response=await fetch('https://api.firecrawl.dev/v2/team/credit-usage',{method:'GET',headers:{Accept:'application/json',Authorization:`Bearer ${apiKey}`}});
   const payload=await response.json().catch(()=>({}));if(!response.ok||payload.success===false)throw new Error(payload.error||`Firecrawl verification failed (${response.status})`);
-  const data=payload.data||{};return {remaining_credits:data.remainingCredits!=null&&Number.isFinite(Number(data.remainingCredits))?Number(data.remainingCredits):null,plan_credits:Number(data.planCredits)||0,billing_period_end:data.billingPeriodEnd||null};
+  const data=payload.data||{};return {remaining_credits:data.remainingCredits!=null&&Number.isFinite(Number(data.remainingCredits))?Number(data.remainingCredits):null,plan_credits:Number(data.planCredits)||0,billing_period_end:data.billingPeriodEnd||null,credits_checked_at:new Date().toISOString()};
 }
 async function verifyHunter(apiKey){
   const response=await fetch('https://api.hunter.io/v2/account',{method:'GET',headers:{Accept:'application/json','X-API-KEY':apiKey}});
@@ -274,7 +275,7 @@ async function extractionFallback(env,url,access,workspaceId,credential,status,s
   await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{operation_id:operationId,source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status,researchTrace}});
   return {...direct,researchTrace};
 }
-export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,totalTimeoutMs=25000,directTimeoutMs=10000,firecrawlTimeoutMs=20000}={}){
+export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,totalTimeoutMs=25000,directTimeoutMs=10000,firecrawlTimeoutMs=20000,purpose='buyer_research'}={}){
   if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
   const totalBudget=Math.max(100,Math.min(55000,Math.floor(Number(totalTimeoutMs)||25000))),deadline=Date.now()+totalBudget;
   const pageSignal=AbortSignal.any([signal,AbortSignal.timeout(totalBudget)]),remaining=()=>Math.max(0,deadline-Date.now());
@@ -298,7 +299,7 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
   if(credential){
     check();budget=Math.max(1,Math.min(Number(firecrawlTimeoutMs)||20000,20000,remaining()-reserve));attempt=attemptSignal(budget);started=Date.now();
     try{
-      const response=await fetch('https://api.firecrawl.dev/v2/scrape',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0}),signal:attempt});
+      const response=await requestFirecrawl(env,workspaceId,'scrape',{credential,payload:{url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0},signal:attempt,purpose});
       const payload=await response.json(),data=payload.data||payload;check();attempt.throwIfAborted();if(!response.ok)throw Object.assign(new Error('Extractor HTTP failure'),{httpStatus:response.status,failureKind:[401,403].includes(response.status)?'authentication':'http'});if(payload.success===false||!valid(data))throw blocked();
       researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
       if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();
@@ -313,11 +314,10 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
 async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
-  let target='',payload={},researchUrl=null;
+  let payload={},researchUrl=null;
   if(kind==='scrape'){
     researchUrl=publicResearchUrl(body.url);if(!researchUrl)return error('A valid public research URL is required',400,cors);
     payload={url:researchUrl.href,formats:Array.isArray(body.formats)&&body.formats.includes('links')?['markdown','links']:['markdown'],onlyMainContent:body.onlyMainContent!==false,timeout:Math.max(5000,Math.min(60000,Number(body.timeout)||30000))};
-    target='https://api.firecrawl.dev/v2/scrape';
   }else{
     const rawQuery=String(body.query||'').trim();if(!rawQuery||rawQuery.length>600)return error('Firecrawl search query is invalid',400,cors);const query=clean(rawQuery,600);
     const limit=Math.max(1,Math.min(10,Math.floor(Number(body.limit)||4)));
@@ -325,15 +325,13 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
     const location=typeof body.location==='string'?clean(body.location,100):'';
     const country=typeof body.country==='string'&&/^[a-z]{2}$/i.test(body.country)?body.country.toUpperCase():'';
     payload={query,limit,...(location?{location}:{}),...(country?{country}:{}),...(wantsMarkdown?{scrapeOptions:{formats:['markdown']}}:{})};
-    target='https://api.firecrawl.dev/v2/search';
   }
   if(kind==='scrape'&&body.publicFirst===true){
     if(request.signal.aborted)return cancelledResponse(request.signal,cors);
-    try{const extracted=await readPublicBuyerPage(env,workspaceId,researchUrl.href,{signal:providerSignal(request,55000)});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{operation_id:operationId,source:extracted.data.metadata?.source,researchTrace:extracted.researchTrace}});return json(extracted,200,cors);}
+    try{const extracted=await readPublicBuyerPage(env,workspaceId,researchUrl.href,{signal:providerSignal(request,55000),purpose:'interactive_research'});await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{operation_id:operationId,source:extracted.data.metadata?.source,researchTrace:extracted.researchTrace}});return json(extracted,200,cors);}
     catch(cause){await audit(env,{workspaceId,userId:access.user.id,type:'service.public_page',provider:'public_web',metadata:{operation_id:operationId,status:'failed',researchTrace:cause.researchTrace||[]}});return json({error:cause.message,code:'PUBLIC_EXTRACTION_UNAVAILABLE',researchTrace:cause.researchTrace||[]},cause.status||502,cors);}
   }
   let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
-  const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const signal=providerSignal(request,kind==='scrape'?Math.min(65000,payload.timeout+5000):30000);
   if(signal.aborted)return cancelledResponse(signal,cors);
   const protectedResult=async value=>{
@@ -345,16 +343,8 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
   // places and tabs, so the Worker paces every customer-key request and WAITS for the next slot while the request's
   // own deadline allows. Only when the slot is further away than the deadline does the caller get a 429 that names
   // the plan limit — a 429 from this gate never reached Firecrawl and never cost a credit.
-  const plan=firecrawlPlanFromRow(credential.row);
   const waitBudgetMs=kind==='scrape'?Math.max(0,Math.min(65000,payload.timeout+5000)-15000):20000;
-  const gate=await acquireFirecrawlSlot(env,workspaceId,kind,{limit:plan?plan[kind]:null,signal,deadlineMs:waitBudgetMs});
-  if(gate.aborted||signal.aborted)return cancelledResponse(signal,cors);
-  if(!gate.allowed){
-    const seconds=Math.max(1,Math.ceil(gate.retryAfterMs/1000));
-    const message=gate.reason==='upstream_429'?`Firecrawl reported a rate limit on this plan; the next ${kind} can start in ${seconds} s.`:`Firecrawl ${kind} limit on the ${plan?.name||'current'} plan is ${plan?.[kind]??'a fixed number of'} requests per minute; the next slot opens in ${seconds} s.`;
-    return json({error:message,code:'FIRECRAWL_RATE_LIMIT',retry_after:seconds,plan:plan?.name||null,limit_per_minute:plan?.[kind]??null,kind},429,{...cors,'Retry-After':String(seconds)});
-  }
-  let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload),signal});}catch(cause){
+  let response;try{response=await requestFirecrawl(env,workspaceId,kind,{credential,payload,signal,waitBudgetMs,purpose:'interactive_research'});}catch(cause){
     if(signal.aborted)return cancelledResponse(signal,cors);
     if(kind==='scrape'&&researchUrl){
       try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0,signal,operationId);return protectedResult(direct);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
@@ -364,6 +354,7 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
   const upstream=await response.json().catch(()=>({}));
   if(signal.aborted)return cancelledResponse(signal,cors);
   const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)return error(current.error,current.status,cors);
+  if(response.status===429&&upstream.code==='FIRECRAWL_RATE_LIMIT')return json(upstream,429,{...cors,'Retry-After':String(upstream.retry_after||1)});
   if(!response.ok||upstream?.success===false){
     const status=response.ok?502:response.status;
     if(creditFailure(status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});

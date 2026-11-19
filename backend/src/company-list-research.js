@@ -44,7 +44,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   const checkpoint=async(status='running')=>{const r=await sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(s),status,row.id,token).run();if(!r.meta.changes)throw error('Research context changed.','authority',403);};
   let lastOperation=null,operationEvents=[];
   const observe=r=>{const safe={provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})};operationEvents.push(safe);};
-  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
+  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
   const operation=async(kind,target,fn)=>{
    await guard();if(controller.signal.aborted)throw error('Research slice finished.','slice_finished');
    if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
@@ -91,7 +91,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(s.results.some(r=>r.domain===M.domain(task.url))){s.pending.shift();await checkpoint();continue;}
      if(!task.page){
       const raw=await operation('page_read',task.url,async signal=>{
-       const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
+       const value=await (services.read?services.read(task.url,{signal}):readPublicBuyerPage(env,row.workspace_id,task.url,{purpose:'company_list',signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}));
        for(const trace of value.researchTrace||[])observe(trace);return value;
       });
       const p=raw.data||raw,actual=M.url(p.url||p.metadata?.sourceURL||task.url),text=String(p.markdown||p.description||p.text||'').slice(0,16000);

@@ -74,9 +74,13 @@ test('request-scoped Apollo override authenticates workspace membership before d
   assert.match(coreSource,/env\.APOLLO_API_KEY/,'legacy opportunity enrichment must continue reading the request-scoped Apollo credential');
 });
 
-test('Firecrawl workspace proxy bounds customer requests and supports managed fallback',()=>{
-  assert.match(source,/api\.firecrawl\.dev\/v2\/scrape/);
-  assert.match(source,/api\.firecrawl\.dev\/v2\/search/);
+test('Firecrawl workspace proxy bounds customer requests and uses the shared customer-only transport',()=>{
+  const transport=fs.readFileSync(path.join(root,'src','firecrawl-request.js'),'utf8');
+  assert.match(source,/requestFirecrawl\(env,workspaceId,kind/);
+  assert.match(transport,/api\.firecrawl\.dev\/v2\//);
+  assert.match(transport,/\['search','scrape'\]\.includes\(kind\)/);
+  assert.match(transport,/acquireFirecrawlSlot/);
+  assert.match(transport,/Bearer \$\{credential\.apiKey\}/);
   assert.match(source,/requireWorkspaceServiceCredential/);assert.doesNotMatch(source,/FIRECRAWL_PROXY_URL|env\.APOLLO_API_KEY/);
   assert.match(source,/Math\.min\(10/);
   assert.match(source,/rawQuery\.length>600/);

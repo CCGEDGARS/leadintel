@@ -1,3 +1,4 @@
+import {isFirecrawlUsageQuestion,readFirecrawlUsage,firecrawlUsageAnswer} from './firecrawl-usage.js';
 import {referenceResearchRequested} from './copilot-research-scope.js';
 import {selectWorkspaceSkillContext,assertWorkspaceSkillsCurrent,reportedSkillUse,WORKSPACE_SKILL_RULES} from './workspace-skill-context.js';
 import {MENTOR_INSTRUCTIONS,needsMentorContext,operationalChangeRequest,copilotResearchUrls,readCopilotPublicPage} from './copilot-mentor.js';
@@ -34,7 +35,7 @@ function zeroUsage(){return {input_tokens:0,output_tokens:0};}
 function boundedFetch(fetchImpl,timeoutMs){return async(url,init={})=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(new Error('Copilot provider timeout')),timeoutMs);const upstream=init.signal;if(upstream?.addEventListener)upstream.addEventListener('abort',()=>controller.abort(),{once:true});try{return await fetchImpl(url,{...init,signal:controller.signal});}finally{clearTimeout(timer);}};}
 
 export function shouldUseExternalResearch({question,skillIds=[],knowledge}={}){
-  if(searchForbidden(question))return false;
+  if(searchForbidden(question)||isFirecrawlUsageQuestion(question))return false;
   if(referenceResearchRequested(question))return true;
   if(knowledge?.freshness==='verify')return true;const q=String(question||'').toLowerCase();
   if(/https?:\/\/|\b(?:www\.)?[a-z0-9-]+\.[a-z]{2,}\b/i.test(String(question||'')))return true;
@@ -113,6 +114,10 @@ export async function runCopilotTurn(env,{workspaceId,userId,role,user,conversat
   const finish=result=>({diagnostics_evaluated:false,...result,timings_ms:{...timings,total:Date.now()-startedAt},model_calls:calls.model,search_calls:calls.search});
   if(operationalChangeRequest(question))return finish({answer:'I can provide advice, create drafts and recommend the best next steps, but I cannot change settings, code, interface elements, workflows, CRM records or operational data, or send anything. Use the dedicated app controls to make changes yourself.',skill_ids:['action_safety'],diagnostics:[],sources:[],action_proposals:[],memory_candidates:[],research_used:false,research_tools:[],provider:{name:'',model:''},usage:zeroUsage()});
   if(restrictedRequest(question))return finish({answer:'I protect LeadIntel’s internal implementation and private data. I can explain its features and guide you through supported user controls, troubleshooting and cost planning.',skill_ids:['product_help'],diagnostics:[],sources:[],action_proposals:[],memory_candidates:[],research_used:false,provider:{name:'',model:''},usage:zeroUsage()});
+  if(isFirecrawlUsageQuestion(question,conversation)){
+    const report=await readFirecrawlUsage(env,workspaceId,{question});
+    return finish({answer:firecrawlUsageAnswer(report),diagnostics_evaluated:false,skill_ids:['cost_planning','troubleshooting'],diagnostics:[],sources:[{provider:'firecrawl',title:'Firecrawl Usage and Logs',url:'https://www.firecrawl.dev/app'}],action_proposals:[],memory_candidates:[],research_used:false,research_tools:[],research_status:'not_needed',provider:{name:'',model:''},usage:zeroUsage(),firecrawl_usage:report});
+  }
   onProgress({phase:'thinking'});
   const safeQuestion=clean(redactProtectedData(question),8000);if(!safeQuestion)return finish({answer:'Please enter a question for LeadIntel Copilot.',skill_ids:['product_help'],diagnostics:[],sources:[],action_proposals:[],memory_candidates:[],research_used:false,provider:{name:'',model:''},usage:zeroUsage()});
   // Speed burst step 3 (2026-10-26): context, memories and the provider credential load together; memories and provider never reject.

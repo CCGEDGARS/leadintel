@@ -374,7 +374,7 @@ jobs:
         run: |
           node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js customer/test/buyer-start-persistence.test.js customer/test/market-research-checkpoint-persistence.test.js
           node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
-          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs backend/test/website-contact-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/firecrawl-usage-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs backend/test/website-contact-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/monitoring-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/workspace-save-journey.test.mjs
       - name: Preserve focused navigation diagnostics
@@ -389,6 +389,7 @@ jobs:
             /tmp/leadintel-buyer-start/
             /tmp/leadintel-buyer-start-saved-review/
             /tmp/leadintel-copilot-research/
+            /tmp/leadintel-firecrawl-usage/
             /tmp/leadintel-website-contacts/
             /tmp/leadintel-buyer-review-wake/
             /tmp/leadintel-monitoring/

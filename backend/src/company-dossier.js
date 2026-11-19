@@ -128,7 +128,7 @@ export async function researchWorkspaceDossier(env,workspaceId,company,{signal,g
  };
  const result=await runDossierResearch({connections,settings:selected,company,signal,guard,prior,onCheckpoint,maxProvidersPerRequest:company.incremental===true?1:Infinity,...(providerTimeoutMs?{timeoutMs:Math.max(1000,Math.min(180000,providerTimeoutMs))}:{}),
   search:(c,q,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_web_search',()=>searchDossierProvider(c,q,{signal:s}),{guard,signal:s}),
-  read:readSource||((u,s)=>readPublicBuyerPage(env,workspaceId,u,{signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000})),
+  read:readSource||((u,s)=>readPublicBuyerPage(env,workspaceId,u,{purpose:'company_dossier',signal:s,directTimeoutMs:3000,firecrawlTimeoutMs:12000,totalTimeoutMs:18000})),
   extract:(c,p,s)=>observeSpecialist(env,workspaceId,c,'company_dossier_extraction',()=>generateText({...c,prompt:p,system:'Extract sourced business facts. No invented facts. Return JSON.',maxOutputTokens:c.provider==='gemini'?6000:3000,responseFormat:c.provider==='gemini'?'json':undefined,signal:s,reasoningEffort:'low'}),{guard,signal:s}).then(r=>r.text)
  });
  if(result.status!=='complete'){try{const previous=D.safe(JSON.parse(saved?.successful_json||'null'),company.domain);if(previous?.contextKey===contextKey)result.previousSuccessful=previous;}catch{}}

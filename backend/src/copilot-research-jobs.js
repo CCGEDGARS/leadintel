@@ -1,3 +1,4 @@
+import {isFirecrawlUsageQuestion} from './firecrawl-usage.js';
 import {sha256} from './security.js';
 import {redactProtectedData,sanitizeExternalResearchQuery} from './copilot-security.js';
 import {copilotResearchUrls} from './copilot-mentor.js';
@@ -25,7 +26,7 @@ export function researchInput(question,conversation=[]){
  return {question:current,publicQuestion,urls,followup,contact:/\b(?:e-?mail|gmail|phone|contact|person|profile|linkedin)\b/i.test(current)||/\blinkedin\.com\/in\//.test(urls.join(' '))};
 }
 export function needsDeepCopilotResearch(question,conversation=[]){
- if(researchDeclined(question))return false;
+ if(researchDeclined(question)||isFirecrawlUsageQuestion(question,conversation))return false;
  if(referenceResearchRequested(question,conversation))return true;
  const input=researchInput(question,conversation);
  return input.urls.length>0||(/\b(?:find|research|analy[sz]e|investigate|look up|check|search|who|his|her)\b/i.test(question)&&(/\b(?:e-?mail|gmail|phone|contacts?|websites?|profiles?|person|company|companies|linkedin)\b/i.test(question)))||input.contact&&input.publicQuestion!==sanitizeExternalResearchQuery(question);
@@ -110,7 +111,7 @@ export async function runCopilotResearchJobs(env,{jobId,now=Date.now(),windowMs=
   };
   let model;const provider=async()=>model||(model=await productionProvider(env,row.workspace_id));
   const record=tool=>{state.tools.push({...tool,at:new Date().toISOString()});state.tools=state.tools.slice(-90);};
-  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe:record,signal:controller.signal});
+  const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'assistant_research',guard,observe:record,signal:controller.signal});
   try{
    await guard();
    if(clock()>=row.deadline_at){state.label='Research time limit reached; completed checks are saved';state.answer='Public research reached its time limit. Saved sources are retained; continue unfinished checks when ready.';await checkpoint('incomplete');return [await readCopilotResearchJob(env,row.workspace_id,row.id)];}
@@ -156,7 +157,7 @@ export async function runCopilotResearchJobs(env,{jobId,now=Date.now(),windowMs=
       if(!state.target.companyDomain&&state.sources.some(s=>new URL(s.url).hostname.replace(/^www\./,'')===next.companyDomain)){state.target.companyDomain=next.companyDomain;addTask(state,'read','https://'+next.companyDomain+'/');}
       if(input.contact)contactQueries(state);
      }else if(task.kind==='read'){
-      const raw=await bounded(()=>services.read?services.read(task.value):readPublicBuyerPage(env,row.workspace_id,task.value,{signal:controller.signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}),18000);await guard();const p=raw.data||raw,actual=sourceUrl(p.url||p.metadata?.sourceURL||task.value);if(!actual||sourceHost(actual)!==sourceHost(task.value))throw Object.assign(Error('Source attribution changed'),{code:'PUBLIC_SOURCE_ATTRIBUTION_CHANGED'});const rawText=String(p.description||p.markdown||p.text||'').slice(0,60000),text=sourceText(state.target.personName?D.buyerEvidenceExcerpt({markdown:rawText},[{name:state.target.personName}],7000):rawText);if(text.length<40)throw Object.assign(Error('Source did not return readable evidence'),{code:'PUBLIC_SOURCE_UNREADABLE'});
+      const raw=await bounded(()=>services.read?services.read(task.value):readPublicBuyerPage(env,row.workspace_id,task.value,{purpose:'assistant_research',signal:controller.signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000}),18000);await guard();const p=raw.data||raw,actual=sourceUrl(p.url||p.metadata?.sourceURL||task.value);if(!actual||sourceHost(actual)!==sourceHost(task.value))throw Object.assign(Error('Source attribution changed'),{code:'PUBLIC_SOURCE_ATTRIBUTION_CHANGED'});const rawText=String(p.description||p.markdown||p.text||'').slice(0,60000),text=sourceText(state.target.personName?D.buyerEvidenceExcerpt({markdown:rawText},[{name:state.target.personName}],7000):rawText);if(text.length<40)throw Object.assign(Error('Source did not return readable evidence'),{code:'PUBLIC_SOURCE_UNREADABLE'});
       const source={...p,url:actual,description:text,evidenceKind:'page_extract',accessed_at:p.accessed_at||new Date().toISOString()};acceptSource(state,source);discoveredLinks(state,source);
       for(const trace of raw.researchTrace||[])record(trace);record({operation:'read_public_page',provider:'public_extraction',status:'succeeded',url:actual});
       const t=state.target;if(!input.scope&&t.companyDomain===new URL(actual).hostname.replace(/^www\./,'')&&t.companyName&&text.toLowerCase().includes(t.companyName.toLowerCase()))addTask(state,'apollo',t.companyDomain);

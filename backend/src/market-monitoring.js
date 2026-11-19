@@ -1,3 +1,4 @@
+import {requestFirecrawl} from './firecrawl-request.js';
 import {monitorScope,readMonitor,categoryAuthority,resolveWorkflow} from './monitoring-store.js';
 import {handleMonitoringManager} from './monitoring-manager.js';
 import Monitoring from '../../customer/monitoring-model.js';
@@ -38,7 +39,7 @@ async function firecrawlSearch(env,workspaceId,query,limit,assertFresh,requestSi
  return boundedProviderOperation(async(signal,check)=>{
   const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');check();await assertFresh();check();
   const direct=query.operation==='scrape';
-  const response=await fetch('https://api.firecrawl.dev/v2/'+(direct?'scrape':'search'),{method:'POST',signal,headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify(direct?{url:query.url,formats:['markdown'],onlyMainContent:true}:{query:query.query,limit,scrapeOptions:{formats:['markdown']}})});check();
+  const response=await requestFirecrawl(env,workspaceId,direct?'scrape':'search',{credential,signal,payload:direct?{url:query.url,formats:['markdown'],onlyMainContent:true}:{query:query.query,limit,scrapeOptions:{formats:['markdown']}},purpose:'market_monitoring'});check();
   const payload=await response.json();check();await assertFresh();check();
   if(!response.ok||payload?.success===false){const exhausted=creditFailure(response.status,payload?.error||payload?.message);if(exhausted)await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});check();throw failure(exhausted?'provider_credits_exhausted':[401,403].includes(response.status)?'provider_auth_failed':response.status===429?'provider_rate_limited':'provider_query_failed',502);}
   await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'recovered',source:credential.source});check();
