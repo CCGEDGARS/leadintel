@@ -169,8 +169,10 @@ test('workflow selector is beside CRM, renders names as text, switches manually 
  const {win,doc}=await mount();const selected=[],flow={id:'a',name:'Sweden <private>',status:'paused',savedVersion:2};
  win.LeadIntelMyFlows={current:()=>flow,listSummary:()=>({role:'owner',flows:[flow,{id:'b',name:'Finland'}]}),refreshSummary:async()=>{},selectFlow:async id=>selected.push(id),open:()=>selected.push('manage')};
  win.dispatchEvent(new win.CustomEvent('leadintel:flows-changed'));assert.equal(doc.getElementById('open-crm').nextElementSibling.id,'topbar-workflow');
- const button=doc.getElementById('topbar-workflow-btn');assert.match(button.textContent,/Sweden <private>/);assert.match(button.textContent,/v2 protected/);assert.equal(doc.querySelector('private'),null);
- button.click();doc.querySelector('[data-workflow-id="b"]').click();await Promise.resolve();assert.deepEqual(selected,['b']);
+ const button=doc.getElementById('topbar-workflow-btn'),menu=doc.getElementById('topbar-workflow-menu');assert.equal(button.textContent,'Workflow▾');assert.equal(menu.hidden,true);assert.match(button.getAttribute('aria-label'),/Sweden <private>/);assert.match(menu.textContent,/v2 protected · Paused/);assert.equal(doc.querySelector('private'),null);
+ button.click();assert.equal(menu.hidden,false);assert.deepEqual(selected,[],'opening the menu does not switch or save');assert.equal(menu.querySelector('[data-workflow-id="a"]').getAttribute('aria-checked'),'true');assert.equal(menu.querySelector('[data-workflow-id="b"]').getAttribute('aria-checked'),'false');doc.querySelector('[data-workflow-id="b"]').click();await Promise.resolve();assert.deepEqual(selected,['b']);assert.equal(menu.hidden,true);assert.equal(button.textContent,'Workflow▾');assert.equal(doc.activeElement,button);
+ flow.status='automatic';flow.savedVersion=3;win.dispatchEvent(new win.CustomEvent('leadintel:flows-changed'));assert.match(menu.textContent,/v3 protected · Running/);assert.equal(menu.hidden,true);
+ button.click();menu.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(menu.hidden,true);assert.equal(doc.activeElement,button);
  button.click();doc.dispatchEvent(new win.MouseEvent('click',{bubbles:true}));assert.equal(doc.getElementById('topbar-workflow-menu').hidden,true);
  win.LeadIntelServerBridge.session.authenticated=false;win.LeadIntelTopbar.update();assert.equal(button.hidden,true);assert.equal(doc.getElementById('topbar-workflow-menu').children.length,0);win.close();
 });

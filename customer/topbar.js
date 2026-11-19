@@ -50,24 +50,27 @@
     const button=doc.getElementById('topbar-workflow-btn'),menu=doc.getElementById('topbar-workflow-menu');if(!button||!menu)return;
     const api=root.LeadIntelMyFlows,current=signedIn()?api?.current?.():null,summary=signedIn()?api?.listSummary?.():null;
     doc.getElementById('topbar-workflow').hidden=!signedIn();
-    button.hidden=!signedIn();button.querySelector('[data-workflow-name]').textContent=current?current.name:'Choose workflow';
+    button.hidden=!signedIn();
     button.title=current?`Workflow: ${current.name}`:'Choose or create a saved workflow';
-    button.querySelector('[data-workflow-state]').textContent=current?`${current.savedVersion?'v'+current.savedVersion+' protected · ':''}${{automatic:'Running',paused:'Paused',manual:'Manual',stopped:'Stopped',needs_review:'Needs attention'}[current.status]||'Saved'}`:'';
+    button.setAttribute('aria-label',current?`Workflow: ${current.name}. Choose workflow`:'Workflow: choose or create a saved workflow');
     if(!signedIn()){menu.hidden=true;button.setAttribute('aria-expanded','false');menu.replaceChildren();delete menu.dataset.signature;return;}
-    const signature=JSON.stringify([summary?.role,current?.id,(summary?.flows||[]).map(f=>[f.id,f.name])]);if(menu.dataset.signature===signature)return;menu.dataset.signature=signature;
+    const signature=JSON.stringify([summary?.role,current?.id,current?.name,current?.savedVersion,current?.status,(summary?.flows||[]).map(f=>[f.id,f.name])]);if(menu.dataset.signature===signature)return;menu.dataset.signature=signature;
     const focused=menu.contains(doc.activeElement),focusId=doc.activeElement?.dataset.workflowId;
     menu.replaceChildren();
-    for(const flow of summary?.flows||[]){const item=doc.createElement('button');item.type='button';item.setAttribute('role','menuitem');item.textContent=(flow.id===current?.id?'✓ ':'')+flow.name;item.dataset.workflowId=flow.id;item.disabled=summary.role!=='owner';menu.append(item);}
+    const heading=doc.createElement('div');heading.className='account-menu-head';
+    const name=doc.createElement('strong');name.dataset.workflowName='';name.textContent=current?.name||'Choose workflow';heading.append(name);
+    const state=doc.createElement('small');state.setAttribute('data-workflow-state','');state.textContent=current?`${current.savedVersion?'v'+current.savedVersion+' protected · ':''}${{automatic:'Running',paused:'Paused',manual:'Manual',stopped:'Stopped',needs_review:'Needs attention'}[current.status]||'Saved'}`:(summary?.flows?.length?'Select a saved workflow':'No saved workflows yet');heading.append(state);menu.append(heading);
+    for(const flow of summary?.flows||[]){const item=doc.createElement('button');item.type='button';item.setAttribute('role','menuitemradio');item.setAttribute('aria-checked',String(flow.id===current?.id));item.textContent=(flow.id===current?.id?'✓ ':'')+flow.name;item.dataset.workflowId=flow.id;item.disabled=summary.role!=='owner';menu.append(item);}
     const manage=doc.createElement('button');manage.type='button';manage.setAttribute('role','menuitem');manage.dataset.workflowManage='1';manage.textContent='Save, duplicate & manage workflows';menu.append(manage);
     if(focused)([...menu.querySelectorAll('button')].find(b=>b.dataset.workflowId===focusId)||manage).focus();
   }
   function workflowControl(){
     const group=doc.createElement('div');group.id='topbar-workflow';group.className='account-menu workflow-menu';
-    group.innerHTML='<button type="button" id="topbar-workflow-btn" class="account-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="topbar-workflow-menu"><span>Workflow:</span><strong data-workflow-name>Choose workflow</strong><small data-workflow-state></small><span aria-hidden="true">▾</span></button><div id="topbar-workflow-menu" class="account-menu-panel" role="menu" hidden></div>';
+    group.innerHTML='<button type="button" id="topbar-workflow-btn" class="account-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="topbar-workflow-menu"><span>Workflow</span><span class="workflow-chev" aria-hidden="true">▾</span></button><div id="topbar-workflow-menu" class="account-menu-panel" role="menu" aria-label="Choose workflow" hidden></div>';
     const button=group.querySelector('button'),menu=group.querySelector('[role=menu]');
     const close=()=>{menu.hidden=true;button.setAttribute('aria-expanded','false');};
-    button.addEventListener('click',()=>{const opening=menu.hidden;updateWorkflow();menu.hidden=!opening;button.setAttribute('aria-expanded',String(opening));if(opening){menu.querySelector('button')?.focus();void root.LeadIntelMyFlows?.refreshSummary?.();}});
-    menu.addEventListener('click',event=>{const item=event.target.closest('button');if(!item||item.disabled)return;close();if(item.dataset.workflowId)void root.LeadIntelMyFlows?.selectFlow?.(item.dataset.workflowId).catch(()=>root.LeadIntelMyFlows?.open());else root.LeadIntelMyFlows?.open();});
+    button.addEventListener('click',()=>{const opening=menu.hidden;updateWorkflow();menu.hidden=!opening;button.setAttribute('aria-expanded',String(opening));if(opening){menu.querySelector('button:not(:disabled)')?.focus();void root.LeadIntelMyFlows?.refreshSummary?.();}});
+    menu.addEventListener('click',event=>{const item=event.target.closest('button');if(!item||item.disabled)return;close();button.focus();if(item.dataset.workflowId)void root.LeadIntelMyFlows?.selectFlow?.(item.dataset.workflowId).catch(()=>root.LeadIntelMyFlows?.open());else root.LeadIntelMyFlows?.open();});
     doc.addEventListener('click',event=>{if(!group.contains(event.target))close();});
     group.addEventListener('keydown',event=>{if(event.key==='Escape'){close();button.focus();}if(['ArrowDown','ArrowUp'].includes(event.key)&&!menu.hidden){event.preventDefault();const items=[...menu.querySelectorAll('button:not(:disabled)')],index=items.indexOf(doc.activeElement);items[(index+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}});
     root.addEventListener('leadintel:flows-changed',updateWorkflow);root.addEventListener('leadintel:workspace-changed',()=>{close();updateWorkflow();});return group;
