@@ -45,7 +45,7 @@ function textFromGemini(payload){
 function safeDiagnosticToken(value){
   const token=clean(value);if(!token||token.length>80||!/^[A-Za-z0-9_.:/-]+$/.test(token))return '';return token;
 }
-function sanitizedUpstreamError(provider,status,payload={}){
+export function sanitizedUpstreamError(provider,status,payload={}){
   const detail=payload?.error&&typeof payload.error==='object'?payload.error:{};
   // Anthropic uses invalid_request_error for billing as well as request errors.
   // Classify known reasons locally; never expose its raw message (it may contain secrets).

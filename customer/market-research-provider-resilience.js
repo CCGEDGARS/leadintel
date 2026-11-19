@@ -37,7 +37,7 @@ async function withOpenAiRetry(operation,{sleep=wait,retryTimeouts=true}={}){
       retryError.attempts=2;
       if(!isTransientOpenAiFailure(retryError))throw retryError;
       const detail=String(retryError?.message||'Unknown request failure').replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').replace(/\s+/g,' ').slice(0,160);
-      const terminal=new Error(`OpenAI signal discovery remained unavailable after 2 attempts · Last error: ${detail}`);
+      const terminal=new Error(`AI page discovery remained unavailable after 2 attempts · Last error: ${detail}`);
       terminal.cause=retryError;
       terminal.attempts=2;
       throw terminal;
@@ -50,9 +50,9 @@ function describePartialCoverage({modeLabel='Research',count=0,openAiStatus='',f
   if(openAiStatus!=='error'||firecrawlStatus==='error'||sourceCount===0)return null;
   const noun=sourceCount===1?'source was':'sources were';
   return {
-    status:`${modeLabel} completed with ${sourceCount} evidence source${sourceCount===1?'':'s'}. Firecrawl succeeded; OpenAI discovery was unavailable within the research time limit.`,
+    status:`${modeLabel} completed with ${sourceCount} evidence source${sourceCount===1?'':'s'}. Firecrawl succeeded; AI page discovery was unavailable within the research time limit.`,
     title:'Research completed with limited coverage',
-    intro:`${sourceCount} public evidence ${noun} saved. Retry only OpenAI discovery without losing these results.`
+    intro:`${sourceCount} public evidence ${noun} saved. Retry only AI page discovery without losing these results.`
   };
 }
 

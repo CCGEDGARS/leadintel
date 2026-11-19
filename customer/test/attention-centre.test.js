@@ -211,8 +211,10 @@ test('research provider notice names the missing research tools before a paid ru
   const status=providers=>({ai:{providers:providers.filter(p=>['openai','anthropic','gemini'].includes(p.provider))},services:{providers:providers.filter(p=>['firecrawl','apollo','hunter'].includes(p.provider))}});
   const row=(provider,configured=true)=>({provider,configured});
   assert.equal(Attention.researchProviderNotice(status([row('openai'),row('gemini'),row('firecrawl')])),'');
-  assert.match(Attention.researchProviderNotice(status([row('anthropic'),row('firecrawl')])),/OpenAI and Google Gemini are not connected.*Firecrawl search only/);
-  assert.match(Attention.researchProviderNotice(status([row('gemini'),row('firecrawl')])),/OpenAI is not connected.*Gemini grounding/);
+  assert.match(Attention.researchProviderNotice(status([row('anthropic'),row('firecrawl')])),/Gemini is not connected/);
+  assert.equal(Attention.researchProviderNotice(status([row('gemini'),row('firecrawl')])),'');
+  assert.equal(Attention.researchProviderNotice(status([row('anthropic'),row('gemini'),row('firecrawl')])),'');
+  assert.match(Attention.researchProviderNotice(status([row('firecrawl')])),/No AI research provider is connected/);
   assert.match(Attention.researchProviderNotice(status([row('openai'),row('firecrawl')])),/Gemini is not connected/);
   assert.match(Attention.researchProviderNotice(status([row('openai'),row('gemini'),row('firecrawl',false)])),/Firecrawl is not connected/);
   assert.equal(Attention.researchProviderNotice({}),'');

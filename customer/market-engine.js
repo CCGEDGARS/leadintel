@@ -54,10 +54,10 @@
     }catch{return "";}
   }
   function normalizeProviders(value){
-    const allowed=new Set(["openai","firecrawl","scrapling"]),seen=new Set();
+    const allowed=new Set(["openai","anthropic","gemini","firecrawl","scrapling"]),seen=new Set();
     const input=Array.isArray(value)?value:[value];
     input.map(item=>clean(item).toLowerCase()).filter(item=>allowed.has(item)).forEach(item=>seen.add(item));
-    return ["openai","firecrawl","scrapling"].filter(item=>seen.has(item));
+    return ["openai","anthropic","gemini","firecrawl","scrapling"].filter(item=>seen.has(item));
   }
   function priorityWeight(priority){return /^high$/i.test(clean(priority))?9:/^medium$/i.test(clean(priority))?7:/^low$/i.test(clean(priority))?5:6;}
   function defaultKeywords(signal){
@@ -360,7 +360,7 @@
     if(!value||typeof value!=="object"||value.version!==1||!clean(value.runId))return null;
     const statuses=new Set(["planned","not_run","running","zero_results","complete","partial","failed","unavailable","cancelled"]);
     const runStatuses=new Set([...statuses,"partial","error"]);
-    const providers=new Set(["openai","firecrawl","gemini","scrapling"]);
+    const providers=new Set(["ai","openai","anthropic","firecrawl","gemini","scrapling"]);
     const stages=new Set(["discovery","custom_source","extraction","extraction_batch","verification"]);
     const integer=(input,maximum=Number.MAX_SAFE_INTEGER)=>Number.isFinite(Number(input))?Math.min(maximum,Math.max(0,Math.floor(Number(input)))):0;
     const timestamp=input=>integer(input,8640000000000000);
@@ -404,7 +404,7 @@
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),researchCategory:clean(queryMeta.researchCategory)||"commercial",
         url,title:clean(item?.title)||new URL(url).hostname,description,
         text:body.slice(0,5000),...(EvidencePolicy?.publication(item)||{date:clean(item?.date)}),
-        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider]),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass)
+        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider]),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),...(item?.evidenceKind?{evidenceKind:item.extractedAt?"source_excerpt":clean(item.evidenceKind).slice(0,40)}:{})
       };
     }).filter(Boolean);
   }
@@ -416,7 +416,7 @@
       const next={
         queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url,
         title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),dateSource:clean(item?.dateSource),
-        sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),...(item?.verification?{verification:{...item.verification}}:{})
+        sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),...(item?.evidenceKind?{evidenceKind:item.extractedAt?"source_excerpt":clean(item.evidenceKind).slice(0,40)}:{}),...(item?.verification?{verification:{...item.verification}}:{})
       };
       const current=merged.get(url);
       if(!current){merged.set(url,next);continue;}
@@ -431,7 +431,7 @@
       if(!current.date&&next.date){current.date=next.date;current.dateSource=next.dateSource;}
       if(next.verification&&(!current.verification||next.verification.contradiction||next.verification.relevance==="reject"))current.verification={...next.verification};
       current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
-      if(replaceText){current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;}current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
+      if(replaceText){if(next.evidenceKind)current.evidenceKind=next.evidenceKind;current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;}current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
     }
     return [...merged.values()];
   }
@@ -471,7 +471,7 @@
     const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
-      const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()&&EvidencePolicy?.supportsMarketContext(item,market)===true&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
+      const evidence=(researchResults||[]).filter(item=>(item.evidenceKind!=="model_summary"||item.extractedAt)&&clean(item.market).toLowerCase()===clean(market).toLowerCase()&&EvidencePolicy?.supportsMarketContext(item,market)===true&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction&&(hasActiveTenderSignal(signals)||!isTenderSignal({name:item.title,keywords:item.url}))).slice(0,5);
       const independentStories=new Set(evidence.map(item=>clean(item.text||item.description||item.title).toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu," ").trim()));
       const score=evidence.length?{
         fit:fitScore(evidence),
@@ -554,7 +554,7 @@
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,RESEARCH_MODES[researchMode].maxQueries).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),sourceType:clean(item?.sourceType),researchCategory:clean(item?.researchCategory)||"commercial",query:clean(item?.query)})).filter(item=>item.id&&item.query);
     // Mode limits bound newly selected run evidence. Durable citations survive mode changes and reruns; workspace byte quotas govern persistence.
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),dateSource:clean(item?.dateSource),sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),
+      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),dateSource:clean(item?.dateSource),sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),...(item?.evidenceKind?{evidenceKind:item.extractedAt?"source_excerpt":clean(item.evidenceKind).slice(0,40)}:{}),
       ...(item?.verification&&typeof item.verification==="object"?{verification:{provider:"gemini",role:"verification",relevance:["strong","moderate","weak","reject"].includes(item.verification.relevance)?item.verification.relevance:"weak",commercialFit:["strong","moderate","weak","unknown"].includes(item.verification.commercialFit)?item.verification.commercialFit:"unknown",contradiction:Boolean(item.verification.contradiction),rationale:clean(item.verification.rationale).slice(0,600),missingEvidence:(Array.isArray(item.verification.missingEvidence)?item.verification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,8)}}:{})
     })).filter(item=>item.url);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>{
@@ -563,7 +563,7 @@
     }).filter(item=>item.id);
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
-    const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle",gemini:sourceAllowed.has(rawSourceStatus.gemini)?rawSourceStatus.gemini:"idle"};
+    const researchSourceStatus={...(sourceAllowed.has(rawSourceStatus.discovery)?{discovery:rawSourceStatus.discovery}:{}),...(sourceAllowed.has(rawSourceStatus.anthropic)?{anthropic:rawSourceStatus.anthropic}:{}),openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle",gemini:sourceAllowed.has(rawSourceStatus.gemini)?rawSourceStatus.gemini:"idle"};
     const rawVerification=input.researchVerification&&typeof input.researchVerification==="object"?input.researchVerification:{};
     const researchVerification={status:sourceAllowed.has(rawVerification.status)?rawVerification.status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:clean(rawVerification.reason).slice(0,300),summary:clean(rawVerification.summary).slice(0,1000),disagreements:(Array.isArray(rawVerification.disagreements)?rawVerification.disagreements:[]).map(clean).filter(Boolean).slice(0,12),missingEvidence:(Array.isArray(rawVerification.missingEvidence)?rawVerification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,12),verifiedAt:clean(rawVerification.verifiedAt),...(rawVerification.coverage&&typeof rawVerification.coverage==="object"?{coverage:Object.fromEntries(["supplied","eligible","reviewed","omitted","unreviewed"].map(key=>[key,Math.max(0,Math.min(2000,Math.floor(Number(rawVerification.coverage[key])||0)))]))}:{})};
     const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};
@@ -586,11 +586,7 @@
     const next=normalizeMarketState(value);
     if(next.researchStatus!=="running")return next;
     next.researchStatus="error";
-    next.researchSourceStatus={
-      openai:next.researchSourceStatus.openai==="running"?"error":next.researchSourceStatus.openai,
-      firecrawl:next.researchSourceStatus.firecrawl==="running"?"error":next.researchSourceStatus.firecrawl,
-      gemini:next.researchSourceStatus.gemini==="running"?"error":next.researchSourceStatus.gemini
-    };
+    next.researchSourceStatus=Object.fromEntries(Object.entries(next.researchSourceStatus).map(([provider,status])=>[provider,status==="running"?"error":status]));
     next.researchProgress={completed:0,total:0};
     next.researchErrors=[{provider:"LeadIntel",query:"Interrupted research run",message:"The page was closed or reloaded before research finished. Review the scope and retry."}];
     return next;
