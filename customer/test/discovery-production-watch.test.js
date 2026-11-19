@@ -254,6 +254,7 @@ const boundedDiscoveryRuntime = [
   'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
   'A new search does not replace your saved selections. No checked companies yet',
+  'Unranked companies · sorted by latest score',
   'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1&message-startup=20261118-v1',
   'function buyerContinuationIssue( function pointToBuyerRequirement( guided-primary-action acquisitionFailed=false Completed buyer research stages',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
@@ -297,7 +298,7 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
     ciConclusion: 'success',
     ciRunId: '199',
     fetchImpl: productionFetch({
-      customerHtml: `${shell}${saveOwnerEntries}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3"></script>`,
+      customerHtml: `${shell}${saveOwnerEntries}<script defer src="qualification-display.js?v=20261020-v1"></script><script defer src="discovery-ui.js?v=current&all-style-facts=20261022-v1&blank-preparation=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&search-relevance=20261020-v1&shortlist-display=20261020-v1&batch-review=20261020-v1&stage-back=20261020-v1&qualification-context=20261020-v3&company-score-order=20261119-v1"></script>`,
       discoveryUi: boundedDiscoveryRuntime
     }),
     nonce: 'intended-timeout-contract'
