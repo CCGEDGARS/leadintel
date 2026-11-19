@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import {step1Fixture} from '../backend/test/step1-journey-fixture.mjs';
 import {loadPlaywright,sessionToken,workspaceId} from '../backend/test/step5-journey-fixture.mjs';
 
-export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false,researchMode="quick",marketModeChecks=false,profileRefreshRecovery=false}={}){
- const f=await step1Fixture({profileResearch:profileRefreshRecovery});await f.connectControlledExtraction();await f.connectControlledAi();const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false,researchMode="quick",marketModeChecks=false,profileRefreshRecovery=false,mainAiProvider="gemini",geminiReviewer=true}={}){
+ const f=await step1Fixture({profileResearch:profileRefreshRecovery});await f.connectControlledExtraction();if(mainAiProvider!=="gemini"&&geminiReviewer)await f.connectControlledAi("gemini");await f.connectControlledAi(mainAiProvider);const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const researchRequests=()=>({publicReads:f.externalCalls.filter(c=>{const u=new URL(c.url);return u.hostname==='seller.example'||u.hostname==='api.firecrawl.dev'&&/\/(search|scrape)$/.test(u.pathname);}).length,profileSynthesis:f.calls.filter(c=>c.body?.task==='profile-synthesis').length});
  const errors=[],evidence={};let releaseCompanyResponse;await fs.mkdir(artifactDir,{recursive:true});
  async function open({delayDiscovery=false}={}){const c=await browser.newContext({viewport:{width:1440,height:1000}});await c.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await c.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);if(delayDiscovery)await c.addInitScript(()=>{let engine,held=true;Object.defineProperty(window,'LeadIntelDiscovery',{configurable:true,get:()=>held?undefined:engine,set:value=>{engine=value;}});window.__releaseDiscoveryForTest=()=>{held=false;};});await c.addInitScript(()=>{window.__workflowNavigationTrace=[];for(const name of ['click','leadintel:module-opened','leadintel:open-discovery','leadintel:open-module'])window.addEventListener(name,event=>window.__workflowNavigationTrace.push({event:name,target:event.target?.id,closest:event.target?.closest?.('[id]')?.id,detail:event.detail,stack:new Error().stack}),true);});const p=await c.newPage();if(process.env.LEADINTEL_TEST_CPU_RATE){const debug=await c.newCDPSession(p);await debug.send('Emulation.setCPUThrottlingRate',{rate:Number(process.env.LEADINTEL_TEST_CPU_RATE)});}p.setDefaultTimeout(25000);p.on('pageerror',e=>errors.push(e.message));await p.goto(f.origin+'/customer/');await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&window.LeadIntelCustomerNavigation&&window.LeadIntelProfileAnswers?.isReady());await p.evaluate(()=>{const original=LeadIntelCustomerNavigation.setStep;LeadIntelCustomerNavigation.setStep=(...args)=>{window.__workflowNavigationTrace.push({event:'navigation-setStep',args,stack:new Error().stack});return original(...args);};});return p;}
@@ -91,6 +91,15 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    }
    const reopened=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
    assert.equal(reopened.researchResults.length,sourceCount);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,sourceCount);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);
+   if(mainAiProvider==='anthropic'){
+    const searches=f.calls.filter(c=>c.path==='/api/ai/web-search');assert.ok(searches.length>0);
+    assert.ok(searches.every(c=>c.status===200&&c.result.provider==='anthropic'&&c.result.web_search===true));
+    assert.ok(reopened.researchExecution.receipts.some(r=>r.provider==='anthropic'&&r.attempt>0&&r.status==='complete'));
+    assert.ok(reopened.researchExecution.receipts.every(r=>r.provider!=='openai'));
+    assert.equal(reopened.researchSourceStatus.anthropic,'complete');assert.equal(reopened.researchSourceStatus.discovery,'complete');
+    assert.equal(f.externalCalls.filter(c=>new URL(c.url).hostname==='api.openai.com').length,0);
+    evidence.claudeDiscovery=true;
+   }
    if(marketModeChecks){
     assert.equal(reopened.researchMode,researchMode);assert.ok(reopened.opportunities.some(o=>o.evidence.length));
     const verificationCalls=f.calls.filter(c=>c.path==='/api/ai/research-verification');assert.equal(verificationCalls.length,researchMode==='quick'?0:1);

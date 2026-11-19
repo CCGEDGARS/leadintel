@@ -10248,6 +10248,37 @@
       "contains": [
         "delivery-setup=20261119-v1"
       ]
+    },
+    {
+      "id": "market-provider-routing-20261119",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "payload.attempts",
+        "state.market.researchSourceStatus.discovery",
+        "selectOutcomeEvidence();"
+      ]
+    },
+    {
+      "id": "market-provider-provenance-20261119",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "\"ai\",\"openai\",\"anthropic\",\"firecrawl\",\"gemini\",\"scrapling\"",
+        "rawSourceStatus.discovery",
+        "evidenceKind:item.extractedAt?\"source_excerpt\""
+      ]
+    },
+    {
+      "id": "market-provider-cache-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "market-provider-routing=20261119-v1"
+      ]
     }
   ]
 }

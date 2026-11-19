@@ -42,11 +42,12 @@ test('configured providers can verify and change models without resubmitting the
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
 
-test('web research routes through workspace-scoped OpenAI and Gemini specialist policy',()=>{
+test('web research routes through the workspace-selected grounded provider',()=>{
   assert.match(source,/searchWorkspaceResearch\(env,workspaceId/);
   const routing=fs.readFileSync(path.join(process.cwd(),'src','ai-task-routing.js'),'utf8');
-  assert.match(routing,/workspaceCredential\(env,workspaceId,'openai'\)/);
-  assert.match(routing,/workspaceCredential\(env,workspaceId,'gemini'\)/);
+  assert.match(routing,/workspaceCredential\(env,workspaceId,provider\)/);
+  assert.match(routing,/settings.primary_provider\|\|rows.find/);
+  assert.match(routing,/openai:searchWeb,anthropic:searchAnthropicWeb,gemini:searchGeminiWeb/);
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
 

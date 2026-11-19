@@ -19,7 +19,7 @@ export const sourceQuote='KNOWN EXACT SOURCE';
 
 // Same all-migration SQL and hashed-cookie authorization used by Step 5. This
 // fixture starts before activation, with no approved profile, targeting or buyer.
-export async function step1Fixture({legacyMarkets=[],profileResearch=false}={}){
+export async function step1Fixture({legacyMarkets=[],profileResearch=false,externalFetch}={}){
  const DB=storageDb(),objects=new Map(),calls=[],externalCalls=[],aiRequests=[],pending=new Set();let gate=null,failedSaves=false,controlledMarketResearch=false,marketSequence=0,marketVerification="complete",marketLabel="Sweden";
  DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'storage-owner',datetime('now','+1 day'))").run(await sha256(sessionToken));
  const bucket={async put(key,value){objects.set(key,typeof value==='string'?value:Uint8Array.from(value));},async get(key){const value=objects.get(key);return value==null?null:{async text(){return typeof value==='string'?value:new TextDecoder().decode(value);},async arrayBuffer(){return typeof value==='string'?new TextEncoder().encode(value).buffer:value.slice().buffer;}};},async delete(key){objects.delete(key);}};
@@ -46,6 +46,7 @@ export async function step1Fixture({legacyMarkets=[],profileResearch=false}={}){
  globalThis.fetch=async(input,options={})=>{
   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);if(url.origin===origin)return originalFetch(input,options);
   externalCalls.push({url:url.href,method:options.method||'GET'});
+  if(externalFetch){const response=await externalFetch(url,options);if(response)return response;}
   if(url.hostname==='failed.example')return new Response('Controlled website unavailable',{status:503});
   if(['seller.example','slow.example','changed.example'].includes(url.hostname)){
    if(gate&&url.hostname==='slow.example'){gate.started();await gate.wait;}
@@ -62,6 +63,15 @@ export async function step1Fixture({legacyMarkets=[],profileResearch=false}={}){
    if(new URL(body.url).hostname!=='seller.example')throw Error('Controlled research cannot read another company');
    return Response.json({success:true,data:{markdown:websiteText,links:[],metadata:{title:'Fixture Industrial',sourceURL:body.url,statusCode:200}}});
   }
+  if(url.hostname==='api.anthropic.com'){
+   const body=JSON.parse(options.body);aiRequests.push({url:url.origin+url.pathname,body});
+   if(body.tools?.some(tool=>tool.name==='web_search')){
+    const batch=marketSequence++,rows=Array.from({length:5},(_,i)=>({type:'web_search_result',url:`https://factory-${batch*5+i}.example/news/expansion`,title:`${marketLabel} industrial manufacturer ${batch*5+i} expands production facility`}));
+    return Response.json({stop_reason:'end_turn',content:[{type:'server_tool_use',name:'web_search'},{type:'web_search_tool_result',content:rows}],usage:{input_tokens:20,output_tokens:20,server_tool_use:{web_search_requests:1}}});
+   }
+   const id=DB.raw.prepare("SELECT id FROM company_materials WHERE workspace_id=? AND status='Ready' ORDER BY created_at LIMIT 1").get(workspaceId)?.id;
+   return Response.json({content:[{type:'text',text:JSON.stringify({fields:{proof_points:{value:sourceQuote,confidence:'high',draft_type:'fact',source_ids:id?['material:'+id]:[],rationale:'Controlled source only.'}}})}],usage:{input_tokens:20,output_tokens:20}});
+  }
   if(url.hostname==='generativelanguage.googleapis.com'){
    const body=JSON.parse(options.body);aiRequests.push({url:url.origin+url.pathname,body});
    const prompt=(body.contents||[]).flatMap(row=>row.parts||[]).map(part=>part.text||'').join('\n');
@@ -77,5 +87,5 @@ export async function step1Fixture({legacyMarkets=[],profileResearch=false}={}){
   }
   throw Error('Acceptance harness blocked unplanned external request: '+url.origin+url.pathname);
  };
- return {DB,env,origin,objects,calls,externalCalls,aiRequests,async settleBackground(){while(pending.size)await Promise.allSettled([...pending]);},getState:()=>getCustomerState(env,workspaceId),runJobs:()=>runCompanyMaterialJobs(env),async connectControlledExtraction(){env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,13).toString('base64');const encrypted=await encryptSecret('controlled-extraction-key',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'firecrawl',?,'test','{}')").run(workspaceId,encrypted);},async connectControlledAi(){env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,13).toString('base64');const encrypted=await encryptSecret('controlled-test-key',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'gemini',?,'test','fixture-model',1)").run(workspaceId,encrypted);},setControlledMarketResearch(value=true,{verification="complete",market="Sweden"}={}){controlledMarketResearch=value;marketVerification=verification;marketLabel=market;},failSaves(value=true){failedSaves=value;},holdWebsite(){let started,release;const began=new Promise(resolve=>started=resolve),wait=new Promise(resolve=>release=resolve);gate={started,wait};return {began,release(){gate=null;release();}};},async close(){gate=null;globalThis.fetch=originalFetch;await Promise.allSettled([...pending]);await new Promise(resolve=>server.close(resolve));DB.raw.close();}};
+ return {DB,env,origin,objects,calls,externalCalls,aiRequests,async settleBackground(){while(pending.size)await Promise.allSettled([...pending]);},getState:()=>getCustomerState(env,workspaceId),runJobs:()=>runCompanyMaterialJobs(env),async connectControlledExtraction(){env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,13).toString('base64');const encrypted=await encryptSecret('controlled-extraction-key',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json) VALUES(?,'firecrawl',?,'test','{}')").run(workspaceId,encrypted);},async connectControlledAi(provider='gemini',{active=true}={}){env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,13).toString('base64');const encrypted=await encryptSecret('controlled-test-key',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));if(active)DB.raw.prepare("UPDATE workspace_ai_integrations SET active=0 WHERE workspace_id=?").run(workspaceId);DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,?,?,'test','fixture-model',?)").run(workspaceId,provider,encrypted,active?1:0);},setControlledMarketResearch(value=true,{verification="complete",market="Sweden"}={}){controlledMarketResearch=value;marketVerification=verification;marketLabel=market;},failSaves(value=true){failedSaves=value;},holdWebsite(){let started,release;const began=new Promise(resolve=>started=resolve),wait=new Promise(resolve=>release=resolve);gate={started,wait};return {began,release(){gate=null;release();}};},async close(){gate=null;globalThis.fetch=originalFetch;await Promise.allSettled([...pending]);await new Promise(resolve=>server.close(resolve));DB.raw.close();}};
 }

@@ -82,9 +82,8 @@
     if(!status||(!status.ai&&!status.services))return '';
     const has=provider=>providerConnected(status,provider);const parts=[];
     if(!has('firecrawl'))parts.push('Firecrawl is not connected: no evidence can be extracted. Connect it in Settings before starting.');
-    if(!has('openai')&&!has('gemini'))parts.push('OpenAI and Google Gemini are not connected: page discovery will run on Firecrawl search only.');
-    else if(!has('openai'))parts.push('OpenAI is not connected: page discovery will use Google Gemini grounding only.');
-    else if(!has('gemini'))parts.push('Google Gemini is not connected: independent evidence verification is off.');
+    if(!['openai','anthropic','gemini'].some(has))parts.push('No AI research provider is connected: page discovery will run on Firecrawl search only.');
+    if(!has('gemini'))parts.push('Google Gemini is not connected: independent evidence verification is off.');
     return parts.join(' ');
   }
   return {aiProviderIssueFromResearch,providerCreditIssues,providerConnectionIssues,healthSummary,buildAttentionItems,providerConnected,researchProviderNotice,syncBudgetNotice};

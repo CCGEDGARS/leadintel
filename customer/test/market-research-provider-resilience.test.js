@@ -30,7 +30,7 @@ test('provider resilience is loaded before research starts and wraps the OpenAI 
   const evidenceView=fs.readFileSync(evidenceViewPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(evidenceView,/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2/);
-  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1['"]/);
+  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1&market-provider-routing=20261119-v1['"]/);
   assert.match(app,/withOpenAiRetry\(attempt=>\{assertMarketResearchRun\(run\)/);
   assert.match(app,/marketResearchRequest\(run,signal=>searchOpenAiWeb/);
   assert.match(app,/describePartialCoverage\(/);
@@ -75,9 +75,9 @@ test('market search does not restart a timed out paid request',async()=>{
 });
 test('all OpenAI market search paths use provider budget and bounded timeout retries',()=>{
  const app=fs.readFileSync(appPath,'utf8');
- assert.equal((app.match(/runtime\.openAiTimeoutMs,"OpenAI (?:search|follow-up)"/g)||[]).length,1);
+ assert.equal((app.match(/runtime\.openAiTimeoutMs,"AI discovery"/g)||[]).length,1);
  assert.equal((app.match(/retryTimeouts:true/g)||[]).length,1);
- assert.doesNotMatch(app,/runtime\.requestTimeoutMs,"OpenAI (?:search|follow-up)"/);
+ assert.doesNotMatch(app,/runtime\.requestTimeoutMs,"AI discovery"/);
  assert.match(app,/runtime\.requestTimeoutMs,"Firecrawl search"/);
 });
 
@@ -119,9 +119,9 @@ test('partial OpenAI coverage explains that Firecrawl evidence was preserved and
   const copy=resilience.describePartialCoverage({modeLabel:'Quick Overview',count:5,openAiStatus:'error',firecrawlStatus:'complete'});
 
   assert.deepEqual(copy,{
-    status:'Quick Overview completed with 5 evidence sources. Firecrawl succeeded; OpenAI discovery was unavailable within the research time limit.',
+    status:'Quick Overview completed with 5 evidence sources. Firecrawl succeeded; AI page discovery was unavailable within the research time limit.',
     title:'Research completed with limited coverage',
-    intro:'5 public evidence sources were saved. Retry only OpenAI discovery without losing these results.'
+    intro:'5 public evidence sources were saved. Retry only AI page discovery without losing these results.'
   });
   assert.equal(resilience.describePartialCoverage({modeLabel:'Quick Overview',count:0,openAiStatus:'error',firecrawlStatus:'error'}),null);
 });
@@ -162,7 +162,7 @@ test('partial research offers one inline OpenAI extension action with live count
   assert.match(app,/data-extend-openai/);
   assert.match(app,/function openAiRetryStatus/);
   assert.match(app,/s remaining/);
-  assert.match(app,/OpenAI \${current}\/\${total} queries/);
+  assert.match(app,/AI discovery \${current}\/\${total} queries/);
   assert.match(app,/startOpenAiCountdown/);
   assert.doesNotMatch(app,/Extend with OpenAI/);
 });

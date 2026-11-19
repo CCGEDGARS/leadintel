@@ -264,7 +264,7 @@ export async function handleAiRoute(request,env,cors={}){
       const current=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(current.error)return error(current.error,current.status,cors);
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:result.provider,metadata:{model:result.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,result_count:result.results.length,routing:result.routing||null}});
       return json(result,200,cors);
-    }catch(cause){try{await assertResearchCurrent(request,env,workspaceId,access.user.id);}catch(stale){return error(stale.message,stale.status||502,cors);}return error(String(cause?.message||'Web search failed').slice(0,180),[400,401,403,409,499,504].includes(cause?.status)?cause.status:502,cors,cause?.code?{code:cause.code}:{});}
+    }catch(cause){try{await assertResearchCurrent(request,env,workspaceId,access.user.id);}catch(stale){return error(stale.message,stale.status||502,cors);}return error(String(cause?.message||'Web search failed').slice(0,180),[400,401,403,409,499,504].includes(cause?.status)?cause.status:502,cors,{...(cause?.code?{code:cause.code}:{}),...(cause?.researchAttempts?{attempts:cause.researchAttempts}:{})});}
   }
 
   if(path==='/api/ai/research-verification'&&request.method==='POST'){
