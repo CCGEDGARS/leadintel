@@ -132,3 +132,77 @@ test('production adapters retain a blocked assessment, its provider error and so
  assert.equal(reads.length,3);assert.equal(new Set(reads).size,3);assert.equal(stages.filter(s=>s==='plan').length,1);
  assert.ok(list.results.every(r=>r.audit.reads[0].providers.some(p=>p.provider==='direct'&&p.status==='succeeded')&&r.audit.review.provider==='openai'));
 });
+
+test('200 companies with four profiles and twenty signals preserve evidence across D1-sized checkpoints and CRM',async t=>{
+ const f=await setup(t),base=profileServices();
+ const signals=Array.from({length:20},(_,i)=>({id:'event-'+i,name:'Production project '+i,active:true}));
+ f.payload.main.market.signals=signals;await save(f);
+ f.DB.raw.exec(`CREATE TRIGGER fixture_owner_size BEFORE UPDATE OF state_json ON company_lists
+   WHEN length(CAST(NEW.state_json AS BLOB))+length(CAST(NEW.input_json AS BLOB))>=2097152 BEGIN SELECT RAISE(ABORT,'D1 row size exceeded'); END;
+   CREATE TRIGGER fixture_result_size BEFORE INSERT ON company_list_evidence
+   WHEN length(CAST(NEW.result_json AS BLOB))>=2097152 BEGIN SELECT RAISE(ABORT,'D1 row size exceeded'); END;`);
+ let batch=0;
+ const event=(name,id)=>name+' commissioned the production equipment associated with '+id+'.';
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const offset=batch++*10;return Array.from({length:10},(_,i)=>({url:'https://factory'+(offset+i)+'.example/'}));},
+  read:async url=>{const page=await base.read(url),company=page.markdown.split(' ')[0];page.markdown+=' '+signals.map(s=>event(company,s.id)).join(' ');return page;},
+  generate:async p=>{
+   if(p.stage==='plan')return {queries:Array.from({length:8},(_,i)=>'Equipment production segment '+(p.round*8+i))};
+   const value=await base.generate(p);
+   if(p.stage==='assess')for(const m of value.signalMatches)m.quote=event(value.company,m.signalId);
+   return value;
+  }
+ };
+ const first=await start(f,{count:200,budget:4000,profileIds:profileMain().market.icps.map(x=>x.id),profileMode:'all',signalMode:'require',mode:'all',signalIds:signals.map(x=>x.id)});
+ for(let i=0;i<80;i++){
+  const row=f.DB.raw.prepare('SELECT status FROM company_lists WHERE id=?').get(first.id);
+  if(!['queued','running'].includes(row.status))break;
+  await tick(f);
+ }
+ let list=(await (await request(f,null,{id:first.id})).json()).list;
+ assert.equal(list.status,'complete',list.progress.reason);assert.equal(list.results.length,200);
+ assert.ok(Buffer.byteLength(JSON.stringify(list.results))>2*1024*1024,'the unsplit result would exceed a D1 row');
+ const stored=f.DB.raw.prepare('SELECT result_json FROM company_list_evidence WHERE list_id=?').all(list.id).map(r=>JSON.parse(r.result_json));
+ assert.deepEqual(M.ranked(stored),list.results);assert.ok(list.results.every(r=>r.profileMatches.length===4&&r.signalMatches.length===20&&r.audit.review.status==='complete'));
+ const summary=(await (await request(f)).json()).lists.find(l=>l.id===list.id);assert.deepEqual(summary.progress,list.progress);
+ assert.match(M.csv(list),/Factory199 commissioned the production equipment associated with event-19/);
+ const ownerBytes=()=>f.DB.raw.prepare('SELECT length(CAST(state_json AS BLOB))+length(CAST(input_json AS BLOB)) n FROM company_lists WHERE id=?').get(list.id).n;
+ assert.ok(ownerBytes()<512*1024);
+ let cursor=0;do{const saved=await (await request(f,{action:'save',cursor,id:list.id,revision:list.revision})).json();assert.ok(saved.list,saved.error);list=saved.list;cursor=saved.nextCursor;}while(cursor!==null);
+ assert.equal(list.saved,true);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_companies').get().n,200);
+ const {candidate}=await (await request(f,{action:'buyer',id:list.id,revision:list.revision,domain:'factory199.example'})).json();
+ assert.ok(candidate.crmId);assert.deepEqual(candidate.signalMatches,list.results.find(r=>r.domain===candidate.domain).signalMatches);
+ const meter=()=>f.DB.raw.prepare('SELECT records_bytes FROM workspace_storage_accounts WHERE workspace_id=?').get(workspaceId).records_bytes;
+ const charged=ownerBytes()+stored.reduce((n,r)=>n+Buffer.byteLength(JSON.stringify(r)),0),before=meter();
+ assert.equal((await request(f,{action:'delete',id:list.id,revision:list.revision})).status,200);
+ assert.equal(before-meter(),charged);assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM company_list_evidence WHERE list_id=?').get(first.id).n,0);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_companies').get().n,200);
+});
+
+test('a failed evidence write is atomic and mixed historical rows retain hydrated rank order when saved',async t=>{
+ const f=await setup(t),base=profileServices({coverage:name=>({profiles:Number(name.slice(7))%2===0?['icp-core']:true,signals:[]})});let batch=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{const offset=batch++*10;return Array.from({length:10},(_,i)=>({url:'https://factory'+(offset+i)+'.example/'}));},
+  generate:async p=>p.stage==='plan'?{queries:['first','second','third']}:base.generate(p)
+ };
+ f.DB.raw.exec("CREATE TRIGGER fixture_failed_evidence BEFORE INSERT ON company_list_evidence WHEN NEW.domain='factory2.example' BEGIN SELECT RAISE(ABORT,'WORKSPACE_STORAGE_FULL'); END");
+ const first=await start(f,{count:22,budget:200,profileIds:['icp-core','icp-reference-lookalike']});
+ const stopped=await readCompanyList(f.env,workspaceId,first.id);assert.equal(stopped.status,'incomplete');assert.equal(stopped.failureCode,'storage_full');assert.equal(stopped.results.length,2);
+ const row=f.DB.raw.prepare('SELECT state_json FROM company_lists WHERE id=?').get(first.id),state=JSON.parse(row.state_json);
+ assert.equal(state.pending[0].candidate.domain,'factory2.example','the pre-write checkpoint retains the assessed candidate');
+ assert.equal(state.results.some(r=>r.domain==='factory2.example'),false);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM company_list_evidence WHERE list_id=?').get(first.id).n,2);
+ f.DB.raw.exec('DROP TRIGGER fixture_failed_evidence');
+ // A list created before migration can have an inline result and later acquire separate evidence records.
+ state.results[0]=stopped.results.find(r=>r.domain===state.results[0].domain);
+ f.DB.raw.prepare('UPDATE company_lists SET state_json=? WHERE id=?').run(JSON.stringify(state),first.id);
+ f.DB.raw.prepare('DELETE FROM company_list_evidence WHERE list_id=? AND domain=?').run(first.id,state.results[0].domain);
+ const wakes=[];assert.equal((await request(f,{action:'resume',id:stopped.id,revision:stopped.revision},{},wakes)).status,200);await Promise.all(wakes);
+ const list=await finish(f,first.id);assert.equal(list.status,'complete');assert.equal(list.results.length,22);
+ assert.equal(list.results[0].matches.length,2);assert.equal(list.results.at(-1).matches.length,1);
+ assert.equal(new Set(list.results.map(r=>r.score)).size,1);
+ const saved=await (await request(f,{action:'save',id:list.id,revision:list.revision,cursor:0})).json();assert.equal(saved.nextCursor,20);
+ const domains=f.DB.raw.prepare('SELECT normalized_domain FROM crm_companies WHERE workspace_id=?').all(workspaceId).map(r=>r.normalized_domain);
+ assert.deepEqual(domains.sort(),list.results.slice(0,20).map(r=>r.domain).sort());
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM company_list_evidence WHERE list_id=?').get(list.id).n,21);
+});

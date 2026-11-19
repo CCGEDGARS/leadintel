@@ -10,8 +10,40 @@ const sql=(env,q,...v)=>env.DB.prepare(q).bind(...v),parse=(v,f={})=>{try{return
 const active=s=>['queued','running'].includes(s),fail=(m,status=409)=>Object.assign(Error(m),{status});
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
 export async function companyListOptions(env,workspaceId){const options=M.options((await getCustomerState(env,workspaceId)).payload?.main||{});return {...options,contextFingerprint:await sha256(JSON.stringify(options))};}
-function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?(s.results||[]):M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning',nextAttemptAt:s.nextAttemptAt||0,pending:s.pending?.length||0,operationTotals:s.operationTotals||null},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],incompleteChecks:(s.reviews||[]).filter(r=>r.status!=='resolved'),createdAt:row.created_at,updatedAt:row.updated_at};}
-export async function readCompanyList(env,workspaceId,id){return publicList(await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,id).first());}
+function publicList(row,s){if(!row)return null;const criteria=parse(row.input_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?(s.results||[]):M.ranked(s.results||[]),progress:{count:s.resultCount??s.results?.length??0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning',nextAttemptAt:s.nextAttemptAt||0,pending:s.pendingCount??s.pending?.length??0,operationTotals:s.operationTotals||null},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],incompleteChecks:(s.reviews||[]).filter(r=>r.status!=='resolved'),createdAt:row.created_at,updatedAt:row.updated_at};}
+async function loadEvidence(env,row,entries){
+ const refs=entries.filter(r=>r.evidenceId);
+ if(!refs.length)return entries;
+ const stored=new Map();
+ for(let i=0;i<refs.length;){
+  // Keep both SQL parameter count and aggregate response size bounded. A single
+  // unusually detailed company travels by itself.
+  const batch=[];let bytes=0;
+  while(i<refs.length&&batch.length<20){
+   const ref=refs[i],size=ref.evidenceBytes||512*1024;
+   if(batch.length&&bytes+size>512*1024)break;
+   batch.push(ref.evidenceId);bytes+=size;i++;
+  }
+  const params=batch.map(()=>'?').join(',');
+  const {results}=await sql(env,`SELECT evidence_id,result_json FROM company_list_evidence WHERE workspace_id=? AND list_id=? AND evidence_id IN (${params})`,row.workspace_id,row.id,...batch).all();
+  for(const r of results)stored.set(r.evidence_id,JSON.parse(r.result_json));
+ }
+ return entries.map(entry=>{
+  if(!entry.evidenceId)return entry;
+  const evidence=stored.get(entry.evidenceId);
+  if(!evidence||evidence.domain!==entry.domain)throw Object.assign(fail('The saved list changed while loading evidence. Refresh the list.'),{code:'list_revision_changed'});
+  return evidence;
+ });
+}
+export async function readCompanyList(env,workspaceId,id){
+ // Re-read the owner once if a replacement or deletion raced the evidence read.
+ for(let attempt=0;;attempt++){
+  const row=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,id).first();if(!row)return null;
+  const state=parse(row.state_json);
+  try{state.results=await loadEvidence(env,row,state.results||[]);return publicList(row,state);}
+  catch(cause){if(attempt||cause.code!=='list_revision_changed')throw cause;}
+ }
+}
 async function saveSearchSnapshot(env,workspaceId,user,body){
  const snapshot=M.normalizeSearchSnapshot(body.snapshot),fingerprint=await sha256(JSON.stringify(snapshot));
  if(body.fingerprint!==fingerprint)throw fail('Company results changed. Save the current list again.');
@@ -40,7 +72,11 @@ export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
  const saved=await readCompanyList(env,workspaceId,id);if(!saved)throw fail('Research authorization changed.',403);return saved;
 }
 export async function saveRows(env,row,user,domain,cursor=0){
- const list=publicList(row),rows=domain?list.results.filter(r=>r.domain===domain):list.results.slice(cursor,cursor+20);if(!rows.length)throw fail('No completed company matches to save.',400);
+ const state=parse(row.state_json),criteria=parse(row.input_json);
+ // The index contains the same score, match count and company used by ranked().
+ // Hydrate only the selected company or the current twenty-row save batch.
+ const selected=domain?state.results.filter(r=>r.domain===domain):M.ranked(state.results.map(r=>r.evidenceId?{...r,matches:{length:r.matchCount}}:r)).slice(cursor,cursor+20);
+ const rows=await loadEvidence(env,row,selected);if(!rows.length)throw fail('No completed company matches to save.',400);
  const guard=async()=>{const alive=await sql(env,`SELECT id FROM company_lists WHERE id=? AND workspace_id=? AND revision=? AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,row.id,row.workspace_id,row.revision,user.hash,user.id,row.workspace_id).first();if(!alive)throw fail('The list changed. Reload before saving.');};
  const parentGuard=user.taskId?" AND EXISTS(SELECT 1 FROM copilot_research_tasks WHERE id=? AND workspace_id=? AND status='running')":'',parentArgs=user.taskId?[user.taskId,row.workspace_id]:[];
  const writeAuthority=()=>({sql:"EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales')) AND EXISTS(SELECT 1 FROM company_lists WHERE id=? AND workspace_id=? AND revision=?)"+parentGuard,args:[user.hash,user.id,row.workspace_id,row.id,row.workspace_id,row.revision,...parentArgs]});
@@ -49,7 +85,7 @@ export async function saveRows(env,row,user,domain,cursor=0){
   if(existing?.deleted_at||['suppressed','archived'].includes(existing?.lifecycle_status)){if(domain)throw fail('This CRM company is archived or suppressed. Review it in CRM first.');continue;}
   // List membership and its evidence stay in company_lists; existing CRM research,
   // contacts, scores and user edits are never replaced by a list snapshot.
-  const record=existing||((await upsertCrmCompany(env.DB,context,{company:{company_name:r.company,website:r.website,country:r.market,source:'signal_company_list'},intelligence_scope:'company',intelligence:{research_snapshot:{companyList:{id:row.id,score:r.score,fitScore:r.fitScore,signalScore:r.signalScore,signalBonus:r.signalBonus,matchedProfiles:r.profileMatches,matchedSignals:r.signalMatches||r.matches,criteriaSummary:M.criteriaSummary(list.criteria),identity:r.identity,locationEvidence:r.locationEvidence,commercialFit:r.commercialFit,quality:r.quality,audit:r.audit,buyingIntent:'unconfirmed'}}}})).company);
+  const record=existing||((await upsertCrmCompany(env.DB,context,{company:{company_name:r.company,website:r.website,country:r.market,source:'signal_company_list'},intelligence_scope:'company',intelligence:{research_snapshot:{companyList:{id:row.id,score:r.score,fitScore:r.fitScore,signalScore:r.signalScore,signalBonus:r.signalBonus,matchedProfiles:r.profileMatches,matchedSignals:r.signalMatches||r.matches,criteriaSummary:M.criteriaSummary(criteria),identity:r.identity,locationEvidence:r.locationEvidence,commercialFit:r.commercialFit,quality:r.quality,audit:r.audit,buyingIntent:'unconfirmed'}}}})).company);
   if(record?.id)saved.push({...r,crmId:record.id});
  }
  return saved;
@@ -62,7 +98,10 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
    if(u.searchParams.has('options'))return respond({options:await companyListOptions(env,workspaceId)});
    if(u.searchParams.has('search_snapshot')){const fingerprint=u.searchParams.get('search_snapshot');if(!/^[a-f0-9]{64}$/.test(fingerprint))throw fail('Invalid saved-list reference.',400);return respond({list:await readCompanyList(env,workspaceId,'search_'+await sha256(workspaceId+'\0'+fingerprint))});}
    if(u.searchParams.has('id'))return respond({list:await readCompanyList(env,workspaceId,u.searchParams.get('id'))});
-   const rows=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50',workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row);return {id:l.id,name:l.name,kind:l.criteria.kind,status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
+   const rows=await sql(env,`SELECT id,status,saved,revision,created_at,updated_at,last_error,
+    json_object('name',json_extract(input_json,'$.name'),'kind',json_extract(input_json,'$.kind'),'count',json_extract(input_json,'$.count'),'budget',json_extract(input_json,'$.budget')) AS input_json,
+    json_object('resultCount',json_array_length(state_json,'$.results'),'pendingCount',json_array_length(state_json,'$.pending'),'operations',json_extract(state_json,'$.operations'),'allowance',json_extract(state_json,'$.allowance'),'checked',json_extract(state_json,'$.checked'),'reason',json_extract(state_json,'$.reason'),'phase',json_extract(state_json,'$.phase'),'nextAttemptAt',json_extract(state_json,'$.nextAttemptAt'),'operationTotals',json_extract(state_json,'$.operationTotals')) AS state_json
+    FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50`,workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row,parse(row.state_json));return {id:l.id,name:l.name,kind:l.criteria.kind,status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
   }
   if(request.method!=='POST')throw fail('Method not allowed.',405);
   const text=await request.text();if(text.length>1024*1024)throw fail('List request is too large.',413);const body=parse(text,null);if(!body||typeof body!=='object')throw fail('List request required.',400);if(body.action!=='snapshot'&&text.length>24000)throw fail('List request is too large.',413);

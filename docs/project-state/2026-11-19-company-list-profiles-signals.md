@@ -42,7 +42,7 @@ Strategy (`main.market.icps`, `signals`, `deletedSignalIds`, and current sourced
 
 The controlled 200-row journey proves processing, verification boundaries and persistence capacity, not the availability of 200 real matching companies for an arbitrary market. Actual yield still depends on source evidence, provider availability and the reviewed allowance. No authenticated production workspace was available for a real customer run.
 
-No schema/data migration or background rewrite is required. Old lists and source evidence remain readable. A rollback must preserve v3 interpretation for existing v3 jobs (or pause those jobs); do not let an older worker process their different schema. Resume uses the existing frozen criteria. Profile/signal edits require a new reviewed list rather than mutating an existing one.
+The original profile and signal rollout used the existing schema. Old lists and source evidence remain readable. A rollback must preserve v3 interpretation for existing v3 jobs (or pause those jobs); do not let an older worker process their different schema. Resume uses the existing frozen criteria. Profile/signal edits require a new reviewed list rather than mutating an existing one.
 
 
 ## Follow-up on the recorded Denmark list
@@ -52,3 +52,6 @@ The recording shows Past Customer Context selected, five reference companies, th
 The assessor and reviewer use the same evidence-based strength scale. Each new match retains its assessed strength and adjusted score. Profiles contribute up to 90 points. Confirmed, dated signals can add up to 10. When any selected profile can qualify, an unsupported Trigger-led match is removed while independently verified Core or Lookalike evidence can still qualify. Older results retain their recorded values. In the Companies search, a retained assessment from a previous Strategy could displace a current result or count toward the strong-fit target after reopening. Ranking, continuation and saved snapshots now respect the current assessment and keep earlier scores marked for review.
 
 The worker carries evidence from the first page to a linked page even when search already queued it. A failed provider authentication on the final operation reports the connection failure and the exhausted allowance together. The browser discards stale polling responses following a list action or workspace change. Controlled regressions exercise profile and signal choices, partial results, continuation from the saved queue, and the recording's selections through authenticated HTTP, SQLite and the registered scheduler.
+
+
+A second capacity check combined all four profiles with twenty signals on a 200-company target. Keeping all verified evidence in the list row exceeded the D1 row-size limit. Migration 0080 adds independently metered company evidence rows. The list retains company identifiers and ranking information, and the API reads full evidence for display, export, Buyers and CRM. Existing inline results remain readable. Production applies this additive migration before replacing the worker. After a list has used the new storage, any rollback must keep a compatible evidence reader and worker.

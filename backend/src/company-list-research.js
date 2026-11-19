@@ -51,7 +51,30 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   s.operationTotals||={started:0,complete:0,failed:0,interrupted:0,previousOperations:s.operations||0};
   if(s.inFlight){const prior=s.receipts.find(r=>r.id===s.inFlight.id);if(prior)prior.status='interrupted';s.operationTotals.interrupted++;s.inFlight=null;}
   const guard=async()=>{const live=await sql(env,`SELECT id FROM company_lists WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,row.id,token).first();if(!live)throw error('Research authority changed.','authority',403);};
-  const checkpoint=async(status='running')=>{const r=await sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(s),status,row.id,token).run();if(!r.meta.changes)throw error('Research context changed.','authority',403);};
+  let evidenceWrite;
+  const retain=result=>{
+   const index=s.results.findIndex(prior=>prior.domain===result.domain);
+   if(index>=0&&s.results[index].score>result.score)return;
+   let entry=result;
+   // Larger lists grow one independent row per company. Also spill unusually
+   // detailed short lists before the combined D1 owner row reaches 2 MB.
+   if(criteria.count>20||s.evidenceCheckpoint||new TextEncoder().encode(JSON.stringify([criteria,s,result])).length>512*1024){
+    s.evidenceCheckpoint=crypto.randomUUID();
+    const encoded=JSON.stringify(result);
+    entry={evidenceId:s.evidenceCheckpoint,evidenceBytes:new TextEncoder().encode(encoded).byteLength,company:result.company,domain:result.domain,score:result.score,matchCount:result.matches.length};
+    evidenceWrite=sql(env,`INSERT INTO company_list_evidence(workspace_id,list_id,domain,evidence_id,result_json)
+     SELECT workspace_id,id,?,?,? FROM company_lists WHERE id=? AND workspace_id=? AND lease_token=? AND json_extract(state_json,'$.evidenceCheckpoint')=?
+     ON CONFLICT(workspace_id,list_id,domain) DO UPDATE SET evidence_id=excluded.evidence_id,result_json=excluded.result_json`,
+     result.domain,entry.evidenceId,encoded,row.id,row.workspace_id,token,entry.evidenceId);
+   }
+   if(index<0)s.results.push(entry);else s.results[index]=entry;
+  };
+  const checkpoint=async(status='running')=>{
+   const update=sql(env,`UPDATE company_lists SET state_json=?,status=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,JSON.stringify(s),status,row.id,token);
+   const [r]=evidenceWrite?await env.DB.batch([update,evidenceWrite]):[await update.run()];
+   if(!r.meta.changes)throw error('Research context changed.','authority',403);
+   evidenceWrite=null;
+  };
   let lastOperation=null,operationEvents=[];
   const observe=r=>{const safe={provider:clean(r.provider,40),operation:clean(r.operation,30),status:clean(r.status,30),...(r.reason?{reason:clean(r.reason,180)}:{}),...(r.httpStatus?{httpStatus:r.httpStatus}:{}),...(Number.isFinite(r.results)?{results:r.results}:{})};operationEvents.push(safe);};
   const search=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe,scrapeResults:false,primaryTimeoutMs:12000});
@@ -128,7 +151,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
        if(result){
         result.audit={reads:pages.map(p=>({url:p.url,readAt:p.readAt,operationId:p.receipt?.id,providers:p.receipt?.providers||[]})),assessment:task.assessment,review:{...lastOperation}};
         for(const prior of s.reviews)if(prior.status==='needs_evidence'&&M.domain(prior.url)===result.domain)prior.status='resolved';
-        s.results=M.ranked([...s.results,result]).slice(0,criteria.count);finishTask(task);
+        retain(result);finishTask(task);
        }else{if(review.decision!=='reject')followup(task,review,pages);finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');}
       }else{
        const raw=await generate({stage:'assess',criteria,pages,instructions:profilePolicy?profileAssessment:assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
@@ -138,7 +161,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
        const result=match&&(profilePolicy||criteria.mode==='any'||match.matches.length===criteria.signals.length)?match:null;
        if(result&&(!strict||result.commercialFit)){
         if(strict){task.candidate=result;task.assessment={...lastOperation};s.phase='reviewing';s.reason='Reviewing source evidence before counting a match';}
-        else{s.results=M.ranked([...s.results,result]).slice(0,criteria.count);finishTask(task);}
+        else{retain(result);finishTask(task);}
        }else{
         if(raw.excluded!==true)followup(task,raw,pages);
         finishTask(task,(raw.gaps||[]).map(g=>clean(g)).join(' · ')||(raw.excluded?'Company excluded':'Identity, market, selected signal or commercial-fit evidence is incomplete.'),raw.excluded?'rejected':'needs_evidence');
@@ -166,7 +189,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   }catch(e){
    const live=await sql(env,`SELECT id FROM company_lists WHERE id=? AND lease_token=? AND status='running' AND ${authority}`,row.id,token).first();
    if(!live){await sql(env,"UPDATE company_lists SET status='incomplete',state_json=json_set(state_json,'$.reason','Research permission changed; sign in and resume.'),revision=revision+1 WHERE id=? AND lease_token=? AND status='running'",row.id,token).run();}
-   else if(/WORKSPACE_STORAGE_FULL/.test(String(e.message)))throw e;
+   else if(evidenceWrite||/WORKSPACE_STORAGE_FULL/.test(String(e.message)))throw e;
    else if(e.code==='slice_finished'){await checkpoint('queued');}
    else{
     const issue=failure(e,operationEvents),key=[lastOperation?.operation,lastOperation?.target].join(':');
