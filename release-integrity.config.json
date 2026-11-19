@@ -73,6 +73,11 @@
       "company_search_lists_version": "20261119-save-export-v1"
     }
   },
+  "retry": {
+    "attempts": 12,
+    "delayMs": 10000,
+    "timeoutMs": 15000
+  },
   "smokeChecks": [
     {
       "id": "company-strategy-derived-priority",
@@ -9981,6 +9986,28 @@
       ]
     },
     {
+      "id": "compact-workflow-menu-20261119",
+      "type": "text",
+      "url": "/customer/topbar.js",
+      "status": 200,
+      "contains": [
+        "<span>Workflow</span>",
+        "menuitemradio",
+        "heading.className='account-menu-head'"
+      ]
+    },
+    {
+      "id": "consistent-topbar-controls-20261119",
+      "type": "text",
+      "url": "/customer/app-shell.css",
+      "status": 200,
+      "contains": [
+        "topbar-design=20261119-v1",
+        "height:40px;min-height:40px",
+        "width:min(300px,calc(100vw - 110px))"
+      ]
+    },
+    {
       "id": "company-search-list-buttons-20261119",
       "type": "text",
       "url": "/customer/company-lists-ui.js",
@@ -10021,10 +10048,5 @@
         "\"company_search_lists_version\":\"20261119-save-export-v1\""
       ]
     }
-  ],
-  "retry": {
-    "attempts": 12,
-    "delayMs": 10000,
-    "timeoutMs": 15000
-  }
+  ]
 }
