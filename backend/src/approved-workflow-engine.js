@@ -15,8 +15,8 @@ const list=v=>(Array.isArray(v)?v:String(v||'').split(/[,;\n]/)).map(x=>text(x,1
 function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));return value;}
 export const fingerprint=value=>sha256(JSON.stringify(canonical(value)));
 export function approvedContext(main={}){
-  const market=main.market||{},confirmed=globalThis.LeadIntelTargeting?.profileFields?.(main)||{};
   const strategy=globalThis.LeadIntelStrategyIntegrity.status(main);
+  const market=globalThis.LeadIntelStrategyIntegrity.executionMarketForState(main,strategy),confirmed=globalThis.LeadIntelTargeting?.profileFields?.(main)||{};
   const lookalike=market.icps?.find(item=>item.type==='lookalike'||item.type==='lookalike-led'||item.id==='icp-lookalike'||item.id==='icp-reference-lookalike');
   const hasPortfolio=Array.isArray(main.referenceCustomerPortfolio?.lists);
   const referenceSimilarityModel=lookalike?.active===false?null:globalThis.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||(!hasPortfolio?globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{}):null)||null;

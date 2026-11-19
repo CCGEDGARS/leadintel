@@ -65,6 +65,6 @@ test('market footer distinguishes no research, empty failures, retained evidence
  assert.match(Market.resultsMessage({profile:{}}),/optional and has not been run/);
  assert.match(Market.resultsMessage({market:{researchStatus:'error'}}),/did not save usable/);
  assert.match(Market.resultsMessage({market:{researchStatus:'running'}}),/running/);
- assert.match(Market.resultsMessage({market:{researchResults:[{}],researchReports:[],researchStatus:'partial',researchContextStale:true}}),/1 research source available · partial coverage · review/);
+ assert.match(Market.resultsMessage({market:{researchResults:[{}],researchReports:[],researchStatus:'partial',researchContextStale:true}}),/1 research source available · partial coverage.*earlier sources are saved.*approve Strategy/);
  assert.match(Market.resultsMessage({market:{researchResults:[],researchReports:[{}]}}),/Saved reports are available.*no current market evidence/);
 });

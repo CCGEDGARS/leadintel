@@ -44,7 +44,8 @@ test('saved discovery retains commercial reasoning and score breakdown',()=>{
 });
 test('search and display share targeting context including reference exclusions',()=>{
  const fs=require('node:fs'),vm=require('node:vm');const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
- const body=source.slice(source.indexOf('function companyQualificationProfile('),source.indexOf('function qualificationAssessment('));
+ const market=source.slice(source.indexOf('function discoveryMarket('),source.indexOf('function mainState()'));
+ const body=market+source.slice(source.indexOf('function companyQualificationProfile('),source.indexOf('function qualificationAssessment('));
  const context={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,window:{LeadIntelTargeting:{profileFields:()=>({idealCustomer:'equipment manufacturers',priorityOffers:'welded frames'})}}};vm.createContext(context);vm.runInContext(body,context);
  const main={website:'seller.example',profile:{targetMarkets:'Latvia',idealCustomer:'obsolete'},targetMarkets:['Sweden'],answers:{exclusions:'retailers'},referenceCustomers:{rows:[{website:'https://ref.example/'}]}};
  const profile=context.companyQualificationProfile(main);assert.equal(profile.targetMarkets,'Sweden');assert.equal(profile.exclusions,'retailers; ref.example');assert.equal(profile.idealCustomer,'equipment manufacturers');

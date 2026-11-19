@@ -58,6 +58,6 @@ test('reconfirming four reviewed answers preserves research, Strategy and its sc
  assert.equal(Integrity.status(reopened).current,true);
  assert.equal(Integrity.researchContext(reopened).stale,false);
  reopened.answers.priority_offers='Payroll software';
- assert.equal(Integrity.status(reopened).recovery,'research');
+ assert.equal(Integrity.status(reopened).code,'research_stale');
  assert.equal(Integrity.approval(reopened),null);
 });

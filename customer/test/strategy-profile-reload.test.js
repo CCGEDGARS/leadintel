@@ -117,5 +117,5 @@ test('reopening an empty reference library preserves researched inputs and the e
     assert.equal(f.I.status(f.state).current,true);
   }
   f.state.referenceCustomerPortfolio.lists.push({id:'selected',active:true,reference:{publishedModel:{active:true,fingerprint:'retail-buyers'}}});
-  assert.equal(f.I.status(f.state).recovery,'research','a newly active model changes the search inputs');
+  assert.equal(f.I.status(f.state).code,'research_stale','a newly active model changes the search inputs');
 });

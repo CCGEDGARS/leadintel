@@ -88,3 +88,27 @@ test('opening a different saved Flow changes the authoritative facts, and resear
     }
   }finally{await f.close();}
 });
+
+test('Copilot counts retained research as history and gives task planning only current targeting evidence',async()=>{
+  const f=await journeyFixture({durableCopilot:true});
+  try{
+    const state=await f.getState(),main=state.payload.main,market=main.market;
+    market.researchContextStale=true;
+    market.researchResults=[{url:'https://earlier.example/report',text:'Archived report'}];
+    market.opportunities=[{id:'archived',title:'Archived opportunity',market:'Portugal',evidence:market.researchResults}];
+    market.icps.push({type:'opportunity-led',id:'icp-opportunity-led',active:true,description:'Archived targeting criteria'});
+    market.strategyApproval=globalThis.LeadIntelStrategyIntegrity.approval(main,undefined,'profile');
+    await f.replace(state.payload,state.version);
+    const context=await buildCopilotWorkspaceContext(f.env,{workspaceId});
+    assert.equal(context.research.count,1);assert.equal(context.research.sourceCount,1);assert.equal(context.research.stale,true);
+    assert.deepEqual(context.research.items,[]);
+    assert.ok(context.icps.length&&context.signals.length);
+    assert.doesNotMatch(JSON.stringify(context.icps),/Archived targeting criteria/);
+    const current=await f.getState(),response=await fetch(f.origin+'/api/flows?workspace_id='+workspaceId,{method:'POST',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({action:'create',name:'Current Profile flow',workspaceVersion:current.version})});
+    assert.equal(response.status,200);const flow=await response.json();
+    const {taskOptions}=await import('../src/copilot-tasks.js'),options=await taskOptions(f.env,workspaceId,flow.id);
+    assert.equal(options.available.profiles.find(p=>p.type==='opportunity-led').active,false);
+    assert.deepEqual(options.main.market.opportunities,[]);assert.doesNotMatch(JSON.stringify(options.main.market.icps),/Archived targeting criteria/);
+    assert.equal((await f.getState()).payload.main.market.opportunities[0].title,'Archived opportunity');
+  }finally{await f.close();}
+});

@@ -4137,7 +4137,7 @@
       "contains": [
         "function qualificationContext(){",
         "previous.raw===raw",
-        "qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}}"
+        "qualificationContextCache={raw,scope,dependencies,profile,market:discoveryMarket(main)}"
       ]
     },
     {
@@ -7957,13 +7957,31 @@
       ]
     },
     {
+      "id": "strategy-approve-earlier-research-20261119",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "Approve Strategy and open Companies",
+        "Approval opens Companies without starting research.",
+        "Research status changed. Review the updated details"
+      ]
+    },
+    {
+      "id": "strategy-approve-earlier-research-version-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": ["&strategy-review-recovery=20261119-v1"]
+    },
+    {
       "id": "company-search-review-recovery-20261119",
       "type": "text",
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
         "function companyRecoveryAction(",
-        "Update market research in Profile",
+        "Review Strategy for Companies",
         "Review saved companies"
       ]
     },

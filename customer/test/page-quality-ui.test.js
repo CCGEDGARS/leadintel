@@ -69,26 +69,31 @@ test('Messages recipient review opens Buyers focus rather than the Companies vie
  }finally{h.close();}
 });
 
-test('stale Strategy permits opening review and recovery while still blocking final approval',()=>{
+test('unresolved Strategy conflicts permit opening review while blocking final approval',()=>{
  const h=harness(),d=h.w.document;try{
-  h.w.LeadIntelPageProcedures.strategyBlockers=()=>['Saved research no longer matches the current company context.'];
+  h.w.LeadIntelPageProcedures.strategyBlockers=()=>['The selected buyer roles conflict with the approved offer.'];
   const review=d.createElement('button');review.id='activate-market-strategy';review.textContent='Review Strategy';
   const confirm=d.createElement('button');confirm.id='confirm-strategy-handoff';confirm.textContent='Approve';d.body.append(review,confirm);
   let reviews=0,approvals=0;review.addEventListener('click',()=>reviews++);confirm.addEventListener('click',()=>approvals++);
-  review.click();assert.equal(reviews,1,'opening the review must reach the handler that routes to Profile recovery');
+  review.click();assert.equal(reviews,1,'opening review must reach the Strategy handoff');
   confirm.click();assert.equal(approvals,0,'opening review cannot authorize stale Strategy or start research');
   assert.equal(h.api.require('strategy','advance'),false);
  }finally{h.close();}
 });
 
-test('the Strategy page check opens Profile market research when that is the prerequisite for approval',async()=>{
+test('the Strategy page check routes outdated market research to the Strategy handoff and allows explicit approval',async()=>{
  const h=harness();try{
   const d=h.w.document,opened=[];d.querySelector('.step-view.active').dataset.step='4';
-  h.w.LeadIntelPageProcedures.strategyBlockers=()=>['Update market research in Profile.'];
-  h.w.LeadIntelStrategyIntegrity={status:()=>({current:false,recovery:'research',code:'research_stale'})};
+  h.main.answers={priority_offers:'Offer',ideal_customer:'Manufacturer',buyer_roles:'Director',exclusions:'None'};
+  h.main.targetingConfirmation=require('../targeting-policy.js').confirm(h.main);
+  h.main.market.researchResults=[{url:'https://evidence.example',text:'Prior market evidence'}];
+  h.w.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(h.main));
+  h.w.LeadIntelPageProcedures.strategyBlockers=()=>[];
+  h.w.LeadIntelStrategyIntegrity={status:()=>({current:false,recovery:'strategy',code:'research_stale',reason:'Review Strategy to use the current Profile.'})};
   h.w.LeadIntelJourneyProgress=require('../journey-progress.js');h.w.LeadIntelJourney={reviewMiniStep:(stage,item)=>opened.push([stage,item])};
   await h.api.open('strategy');
-  assert.equal(h.api.require('strategy','advance'),false);
-  d.querySelector('[data-quality-resolve]').click();assert.deepEqual(opened,[[2,'research']]);
+  assert.equal(h.api.require('strategy','advance'),true);
+  assert.match(d.querySelector('[data-quality-message]').textContent,/Review Strategy/);
+  d.querySelector('[data-quality-resolve]').click();assert.deepEqual(opened,[[3,'strategy']]);
  }finally{h.close();}
 });

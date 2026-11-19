@@ -34,9 +34,16 @@
       checks.push(make('active-icp','Customer definition selected',active(market.icps).length>0,'Activate at least one customer definition.',{target:{step:4,selector:'[data-icp-field="active"]'}}));
       checks.push(make('active-signals','Buying signals selected',active(market.signals).length>0,'Activate at least one buying signal.',{target:{step:4,selector:'[data-signal-field="active"]'}}));
       const blockers=root.LeadIntelPageProcedures?.strategyBlockers?.();
-      const status=blockers?.length&&root.LeadIntelStrategyIntegrity?.status(main);
+      const status=(blockers?.length||market.researchResults?.length)&&root.LeadIntelStrategyIntegrity?.status(main);
       const recovery=status&&root.LeadIntelJourneyProgress?.companyRecoveryAction(status,main);
-      checks.push(make('strategy-consistent','Strategy matches current company context',Array.isArray(blockers)&&!blockers.length,blockers?.[0]||'Wait for Strategy checks to load.',{actions:['approve','advance','research'],target:recovery?{journey:recovery.nextTarget}:{step:4,id:'activate-market-strategy'}}));
+      const canReview=Array.isArray(blockers)&&!blockers.length;
+      const staleResearchOnly=canReview&&status?.code==='research_stale';
+      const label=staleResearchOnly?'Strategy reviewed for Companies':'Strategy matches current company context';
+      const message=staleResearchOnly?status.reason:blockers?.[0]||'Wait for Strategy checks to load.';
+      checks.push(make('strategy-consistent',label,canReview&&!staleResearchOnly,message,{
+        actions:staleResearchOnly?[]:['approve','advance','research'],
+        target:recovery?{journey:recovery.nextTarget}:{step:4,id:'activate-market-strategy'}
+      }));
     }
     return {loaded:Boolean(q(page==='setup'?'step-1':page==='profile'?'step-2':'step-4')),inputs:{website:main.website,markets:main.targetMarkets,answers:main.answers,statuses:main.answerStatus,approval:main.approved,profile:main.profile,market},checks};
   }

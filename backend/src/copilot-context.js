@@ -1,3 +1,4 @@
+import '../../customer/strategy-integrity.js';
 import {providerCreditIssue} from './provider-credit-health.js';
 import {getCustomerState} from './customer-state.js';
 import {assertModelSafe,redactProtectedData,sanitizeClientScreenContext,sanitizeExternalResearchQuery} from './copilot-security.js';
@@ -88,7 +89,7 @@ function publicEvidenceUrl(value){
     return clean(url.origin+url.pathname,500);
   }catch{return '';}
 }
-function marketResearchSummary(market,items){
+function marketResearchSummary(market,items,historical){
   const opportunities=array(market.opportunities||market.research?.items);
   const reports=array(market.researchReports).filter(row=>row&&typeof row.id==='string'&&Array.isArray(row.sources)).slice(0,10);
   const verification=object(market.researchVerification),receipts=array(market.researchExecution?.receipts);
@@ -102,7 +103,7 @@ function marketResearchSummary(market,items){
     return 'unclassified_failure';
   };
   return {items,count:opportunities.length,omitted:Math.max(0,opportunities.length-items.length),
-    sourceCount:array(market.researchResults).length,status:clean(market.researchStatus,40)||'not_run',stale:market.researchContextStale===true,
+    sourceCount:array(market.researchResults).length,status:clean(market.researchStatus,40)||'not_run',stale:historical,
     lastRunAt:clean(market.lastResearchAt,40),completedAt:market.researchExecution?.completedAt||null,
     reports:{count:reports.length,items:reports.map(row=>({id:clean(row.id,160),mode:clean(row.mode,40),status:clean(row.status,40),savedAt:clean(row.createdAt,40),researchedAt:clean(row.researchedAt,40),sourceCount:row.sources.length}))},
     verification:{provider:clean(verification.provider,40),status:clean(verification.status,40)||'not_run',checkedAt:clean(verification.verifiedAt,40),coverage:Object.fromEntries(['supplied','eligible','reviewed','omitted','unreviewed'].map(key=>[key,Number.isFinite(Number(verification.coverage?.[key]))?Number(verification.coverage[key]):null]))},
@@ -203,13 +204,14 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
   const [state,crm,integrations,usage,dossiers,activities,delivery,operations]=await Promise.all([getCustomerState(env,id),crmSummary(env,id,question),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id),copilotOperationContext(env,id)]);
   const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
   const markets=array(main.targetMarkets||main.profile?.targetMarkets,20).map(item=>clean(item,300)).filter(Boolean);
-  const allIcps=array(market.icps||main.icps).filter(item=>item&&typeof item==='object'&&!Array.isArray(item));
+  const scopedMarket={...market,icps:market.icps||main.icps,opportunities:market.opportunities||market.research?.items||main.research?.items};
+  const executionMarket=globalThis.LeadIntelStrategyIntegrity.executionMarketForState({...main,market:scopedMarket});
+  const allIcps=array(executionMarket.icps).filter(item=>item&&typeof item==='object'&&!Array.isArray(item));
   const deleted=new Set(array(market.deletedSignalIds).map(String));
   const allSignals=array(market.signals||main.signals).filter(item=>item&&typeof item==='object'&&!Array.isArray(item)&&!deleted.has(String(item.id)));
   const icps=allIcps.slice(0,MAX_ICP).map(safeIcp);
   const signals=allSignals.slice(0,MAX_SIGNALS).map(safeSignal);
-  const allResearch=array(market.opportunities||market.research?.items||main.research?.items);
-  const researchItems=allResearch.slice(0,MAX_RESEARCH).map(safeResearchItem);
+  const researchItems=array(executionMarket.opportunities,MAX_RESEARCH).map(safeResearchItem);
   const [settings,flow]=await Promise.all([
     firstSafe(env,'SELECT primary_provider,secondary_provider,updated_at FROM workspace_research_settings WHERE workspace_id=?',id),
     main.myFlow?.id?firstSafe(env,'SELECT id,name,status,revision,updated_at FROM saved_flows WHERE workspace_id=? AND id=?',id,clean(main.myFlow.id,160)):null
@@ -231,7 +233,7 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     profile,
     icps,
     signals,
-    research:marketResearchSummary({...market,opportunities:allResearch},researchItems),
+    research:marketResearchSummary(scopedMarket,researchItems,executionMarket.researchContextStale===true||executionMarket.strategyApproval?.researchBasis==='profile'),
     discoverySummary:discoverySummary(payload,screen,question),
     crmSummary:crm,
     outreachSummary:outreachSummary(payload),

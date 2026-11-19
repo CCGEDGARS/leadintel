@@ -611,3 +611,25 @@ test('direct automatic Buyers continuation reuses its retained run ID when no ru
  assert.equal(result.buyerResearchPending,true);assert.equal(result.candidates[0].buyerDiscovery.paidRunId,'retained-direct-run');assert.equal(f.calls.filter(c=>c.url.includes('email.find')).length,2);
 });
 
+
+test('approved Profile-based workflows keep current signals and reference evidence while excluding earlier market research',()=>{
+ const state=structuredClone(main),integrity=globalThis.LeadIntelStrategyIntegrity;
+ const history={url:'https://earlier.example/opportunity',text:'Evidence from the earlier market'};
+ state.market.researchResults=[history];
+ state.market.icps.push({type:'opportunity-led',id:'icp-opportunity-led',active:true,description:'Historical industry',targetMarkets:'Portugal'});
+ state.market.opportunities=[{id:'historical',market:'Portugal',evidence:[history]}];
+ const rows=globalThis.LeadIntelReferenceCustomers.normalizeImportedRows([{companyName:'Reference',website:'https://reference.example'}]),dna={active:true,calibrationVersion:2,dimensions:[{key:'industry',values:['manufacturing']}]};
+ state.referenceCustomers={rows,activeIds:rows.map(row=>row.id),activated:true,fingerprint:'published-ref',dna,publishedModel:{active:true,activeRows:rows,fingerprint:'published-ref',dna}};
+ assert.equal(approvedContext(state).knownEvidence[0].url,history.url);
+ state.market.researchContextStale=true;
+ state.market.strategyApproval=integrity.approval(state,undefined,'profile');
+ for(const stale of [true,false]){
+  state.market.researchContextStale=stale;
+  const context=approvedContext(state);
+  if(stale)assert.equal(context.strategyApproved,true);
+  assert.deepEqual(context.knownEvidence,[]);assert.deepEqual(context.icps,state.market.icps.slice(0,-1));
+  assert.deepEqual(context.signals,state.market.signals);assert.ok(context.profile.referenceSimilarityModel);
+  assert.equal(context.profile.targetMarkets,'Sweden');
+ }
+ assert.deepEqual(state.market.researchResults,[history]);
+});

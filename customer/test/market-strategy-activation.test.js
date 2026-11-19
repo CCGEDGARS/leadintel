@@ -87,10 +87,11 @@ test("data-dependent ICP switches are disabled until their real prerequisites ex
   assert.match(marketCss, /\.icp-unlock-hint/);
 });
 
-test('company discovery blocks unrelated seller signals and stale research',()=>{
+test('company discovery blocks unrelated seller signals and keeps earlier research out of active approval',()=>{
   assert.match(app,/LeadIntelCompanyBrain\?\.unrelatedSignals|LeadIntelCompanyBrain\?\.recommendSignals/);
   assert.match(app,/unrelatedSignals\?\.\(state\.profile\|\|\{\},signals\)/);
-  assert.match(app,/if\(state\.market\.researchContextStale\)blockers\.push/);
+  assert.match(app,/earlierResearch\?\[\]:savedEvidence/);
+  assert.match(app,/Approve Strategy and open Companies/);
   assert.match(app,/state\.market\.researchContextStale=true/);
   assert.match(app,/state\.market\.researchContextStale=false/);
 });

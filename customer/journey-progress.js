@@ -38,7 +38,6 @@
     // recovery links must still reach a stage the website gate will allow.
     if(websiteActivated===undefined&&typeof window!=='undefined')websiteActivated=window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive?.();
     if(websiteActivated===false)return filled(main?.website||main?.profile?.website)?action('Activate your company website in Setup',1,'activate-website'):action('Add your company website in Setup',1,'website');
-    if(status.recovery==='research')return action('Update market research in Profile',2,'research');
     if(status.recovery==='profile'&&main){
       if(!filled(main.website||main.profile?.website))return action('Add your company website in Setup',1,'website');
       if(!filled(main.targetMarkets)&&!filled(main.profile?.targetMarkets))return action('Choose your target markets in Setup',1,'markets');
@@ -51,6 +50,7 @@
     }
     if(status.code==='strategy_incomplete'&&main&&!activeItems(main.market?.icps).length)return action('Activate a customer profile in Strategy',3,'icps');
     if(status.code==='strategy_invalid'||status.code==='strategy_incomplete'&&main&&!activeItems(main.market?.signals).length)return action('Review buying signals in Strategy',3,'signals');
+    if(status.code==='research_stale')return action('Review Strategy for Companies',3,'strategy');
     return action('Review and approve Strategy',3,'strategy');
   }
 
@@ -67,10 +67,11 @@
     const localized=['native','complete'].includes(selectedItem?.localizationStatus);
     const studio=outreach.messageStudio;
     const retainedCompanies=candidates.length+pipeline.length+prospects.length>0;
-    const researchComplete=filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)&&strategyStatus?.recovery!=='research';
+    const researchStale=strategyStatus?.code==='research_stale'||(strategyStatus?.researchBasis==='profile'&&market.researchContextStale===true);
+    const researchComplete=filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)&&!researchStale;
     let researchLabel='Market research not run';
     if(market.researchStatus==='running')researchLabel='Market research in progress';
-    else if(strategyStatus?.recovery==='research')researchLabel='Market research needs updating';
+    else if(researchStale)researchLabel='Saved market research is outdated';
     else if(researchComplete)researchLabel=market.researchStatus==='partial'?'Research saved · partial coverage':'Market research completed';
     const studioReady=studio&&everyField(studio.essentials,['offer','target','value','sender','company','meetingValue','calendly']);
     return {
