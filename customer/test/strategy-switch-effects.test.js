@@ -30,6 +30,7 @@ test('buyer roles follow enabled non-core ICP when core is off',()=>{
 test('discovery qualification consumes selected ICP fields and preserves exclusions',()=>{
  const source=fn(ui,'function companyQualificationProfile(','\n',);
  const context={LeadIntelDiscovery:Discovery,main:{profile,market:{icps},answers:{exclusions:'blocked.example'},targetMarkets:['Latvia']},canonicalDomain:x=>x,window:{LeadIntelMarket:Market,LeadIntelTargeting:{profileFields:()=>({targetMarkets:'Latvia'})}}};
+ context.discoveryMarket=main=>main.market;
  const result=vm.runInNewContext(source+';companyQualificationProfile(main)',context);
  assert.equal(result.idealCustomer,'hospitality');assert.equal(result.targetMarkets,'Sweden');assert.equal(result.decisionMakers,'Hotel manager');assert.match(result.exclusions,/blocked.example/);assert.match(result.exclusions,/competitor.example/);
 });
