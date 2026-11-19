@@ -1906,6 +1906,40 @@ test('a stale Strategy scope remains in the saved review queue even when retaine
  assert.equal(f.context.qualificationAssessment(c).eligible,true,'Operating and purchasing fit can remain valid under a new signal weight');assert.equal(f.context.companyStrategyCurrent(c),false);assert.equal(f.context.researchReviewStatus(c).status,'needs-evidence');
  const plan=f.context.companyReviewBatchPlan();assert.equal(plan.pendingCount,1);assert.deepEqual(Array.from(plan.domains),['ranked0.lv']);assert.equal(f.providerCalls(),0,'Planning saved review performs no paid provider requests');
 });
+test('a newer pending company assessment supersedes an older strong fit in counts, the review queue and a saved list',()=>{
+ const f=companyShortlistDisplayFixture({scores:[95],review:false}),{context}=f;
+ const old=f.candidates[0],fresh={...old,needsRecheck:true,qualificationGaps:['Evidence needs rechecking'],buyerFit:{...old.buyerFit,fit:66},qualification:{...old.qualification,score:66,researchedAt:new Date().toISOString()}};
+ old.qualification={...old.qualification,researchedAt:new Date(Date.now()-86400000).toISOString()};
+ context.__setDiscovery({...context.__discoveryState(),candidates:[old],potentialMatches:[fresh]});
+ assert.equal(context.qualificationAssessment(context.__discoveryState().candidates[0]).eligible,true);
+ const verify=()=>{
+  f.render();
+  const view=context.rankedCompanyResults(),snapshot=require('../company-lists.js').searchSnapshot(view,{});
+  assert.equal(snapshot.rows.length,1);assert.equal(snapshot.rows[0].score,66);assert.equal(snapshot.rows[0].scoreState,'previous');assert.equal(snapshot.rows[0].reviewStatus,'Needs review');
+  const outcome=context.companySearchOutcome();
+  assert.equal(outcome.checkedCount,0);assert.equal(outcome.strongFitCount,0);
+  assert.deepEqual(Array.from(context.companyReviewBatchPlan().domains),[old.domain]);
+  assert.match(f.dom.window.document.getElementById('company-candidates').textContent,/0 checked companies · 0 strong fit/);
+ };
+ verify();context.__setDiscovery(JSON.parse(JSON.stringify(context.__discoveryState())));verify();
+ assert.equal(f.providerCalls(),0);
+});
+test('reopening an approved Strategy keeps the current company assessment when older review evidence still passes fit',()=>{
+ const f=companyShortlistDisplayFixture({scores:[84],review:false}),{context}=f;
+ const current=f.candidates[0],earlier=JSON.parse(JSON.stringify(current));
+ earlier.strategyFingerprint=context.fingerprint();
+ earlier.buyerFit.fit=66;earlier.qualification.score=66;earlier.qualificationGaps=['Review earlier evidence'];
+ const main=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+ main.market.signals[0].weight=2;main.market.strategyApproval=StrategyIntegrity.approval(main);
+ context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ current.strategyFingerprint=context.fingerprint();
+ context.__setDiscovery({...context.__discoveryState(),candidates:[current],potentialMatches:[earlier]});
+ assert.equal(context.qualificationAssessment(earlier).eligible,true);
+ context.__syncStrategyFingerprint();f.render();
+ const row=context.rankedCompanyResults().rows[0];
+ assert.equal(row.score,84);assert.equal(row.scoreState,'current');assert.equal(row.actionable,true);
+ assert.equal(context.companySearchOutcome().strongFitCount,1);assert.equal(f.providerCalls(),0);
+});
 test('an additional checked company retains its original index when selected for Buyers',async()=>{
  const {context,dom,render,candidates,providerCalls}=companyShortlistDisplayFixture({scores:[44,94,90,86,82,79,75,68,64,60,55,22]});render();context.__bindDiscovery();
  const disclosure=dom.window.document.querySelector('details.company-other-results');assert.ok(disclosure);disclosure.querySelector('summary').click();

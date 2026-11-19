@@ -11,7 +11,7 @@ function workspace(){return {website:'https://seller.example/',targetMarkets:['S
 function config(extra={},main=workspace()){return M.configuration({profileIds:['icp-reference-lookalike'],profileMode:'any',signalMode:'off',count:10,markets:['Sweden'],referenceIds:['current:r1'],...extra},M.options(main));}
 const page={url:'https://factory.example/',text:'Factory builds automated production equipment. Factory operates in Stockholm, Sweden. Published 2026-11-01: Factory is hiring production engineers. Published 2026-11-02: Factory opens a new automation facility.',readAt:'2026-11-19T10:00:00Z'};
 function candidate(){return {company:'Factory',website:page.url,identity:{url:page.url,quote:'Factory builds automated production equipment.'},location:{market:'Sweden',label:'Stockholm',url:page.url,quote:'Factory operates in Stockholm, Sweden.'},commercialFit:{status:'supported',url:page.url,quote:'Factory builds automated production equipment.',reason:'The documented operation uses the offered equipment.'},profileMatches:workspace().market.icps.map(p=>({profileId:p.id,url:page.url,quote:p.type==='opportunity-led'?'Factory opens a new automation facility.':'Factory builds automated production equipment.',date:'2026-11-02',strength:90,reason:'Specific documented operations support this profile.',referenceId:'current:r1',referenceQuote,opportunityId:'opp-automation',opportunityQuote})),signalMatches:[{signalId:'hiring',url:page.url,quote:'Factory is hiring production engineers.',date:'2026-11-01',strength:80,reason:'Current production engineering recruitment.'},{signalId:'expansion',url:page.url,quote:'Factory opens a new automation facility.',date:'2026-11-02',strength:90,reason:'A dated new facility announcement.'}]};}
-function review(c,raw=candidate(),change={}){const result=M.assess(raw,c,[page],now);return M.reviewResult(result,{decision:'pass',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedProfileIds:c.profiles.map(p=>p.id),supportedSignalIds:c.signals.map(s=>s.id),reason:'The cited operations and events support the selected criteria.',gaps:[],...change},c,now);}
+function review(c,raw=candidate(),change={},pages=[page]){const result=M.assess(raw,c,pages,now);return M.reviewResult(result,{decision:'pass',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedProfileIds:c.profiles.map(p=>p.id),supportedSignalIds:c.signals.map(s=>s.id),reason:'The cited operations and events support the selected criteria.',gaps:[],...change},c,now);}
 test('each of the four saved profiles can independently produce an evidence-reviewed match',()=>{
  for(const id of workspace().market.icps.map(p=>p.id)){const c=config({profileIds:[id],signalMode:id==='icp-trigger-led'?'require':'off',signalIds:['hiring']});const r=review(c);assert.ok(r,id);assert.deepEqual(r.profileMatches.map(m=>m.profileId),[id]);assert.equal(r.quality.version,M.PROFILE_VERSION);assert.equal(r.fitScore,90);}
 });
@@ -66,4 +66,90 @@ test('the generated Trigger-led definition resolves Profile context without borr
 
 test('Any retains only reviewer-supported profile matches; All requires every selected profile',()=>{
  const c=config({profileIds:['icp-core','icp-reference-lookalike']});const result=review(c,candidate(),{supportedProfileIds:['icp-core']});assert.ok(result);assert.deepEqual(result.profileMatches.map(m=>m.profileId),['icp-core']);assert.equal(result.matches.length,1);assert.equal(review({...c,profileMode:'all'},candidate(),{supportedProfileIds:['icp-core']}),null);
+});
+
+test('rejecting an optional trigger removes only the dependent Trigger-led match and recomputes the score',()=>{
+ const c=config({profileIds:['icp-core','icp-trigger-led'],signalMode:'boost',signalIds:['hiring','expansion'],mode:'all'});
+ const raw=candidate();raw.profileMatches.find(m=>m.profileId==='icp-core').strength=71;
+ const partial={supportedSignalIds:['hiring']};
+ const result=review(c,raw,partial);
+ assert.ok(result);assert.deepEqual(result.profileMatches.map(m=>m.profileId),['icp-core']);
+ assert.deepEqual(result.signalMatches.map(m=>m.signalId),['hiring']);assert.equal(result.fitScore,71);assert.equal(result.signalBonus,4);assert.equal(result.score,75);
+ const missing=review(c,raw,{supportedSignalIds:[]});assert.equal(missing.score,71);assert.equal(missing.matches.length,1);
+ assert.equal(review({...c,profileMode:'all'},raw,partial),null);
+ assert.equal(review({...c,signalMode:'require'},raw,partial),null);
+ assert.equal(review(c,raw,{...partial,supportedProfileIds:['icp-trigger-led']}),null);
+});
+
+test('Lookalike with five references and no checked optional signals runs as Profiles only',()=>{
+ const main=workspace();
+ for(let i=2;i<=5;i++){
+  main.referenceCustomers.rows.push({id:'r'+i,companyName:'Reference '+i,website:'https://reference'+i+'.example/'});
+  main.referenceCustomers.analyses['r'+i]=main.referenceCustomers.analyses.r1;
+ }
+ const references=main.referenceCustomers.rows.map(r=>'current:'+r.id);
+ const input={signalMode:'boost',signalIds:[],referenceIds:references,weights:{hiring:5}};
+ const c=config(input,main);
+ assert.equal(c.signalMode,'off');assert.deepEqual(c.referenceIds,references);
+ assert.deepEqual(c.weights,{});assert.deepEqual(c.signals,[]);assert.equal(review(c).score,90);
+ assert.throws(()=>config({...input,signalMode:'require'},main),/active buying signals/);
+ assert.throws(()=>config({...input,profileIds:['icp-core','icp-trigger-led']},main),/Trigger-led/);
+ assert.throws(()=>config({...input,signalIds:'hiring'},main),/active signal list/);
+});
+
+test('full-strength reviewed signals can earn the full ten-point bonus with source and age discounts retained',()=>{
+ const c=config({signalMode:'require',signalIds:['hiring']});
+ const raw=candidate();raw.signalMatches[0].strength=100;raw.profileMatches.forEach(m=>{m.strength=97;});
+ const result=review(c,raw);assert.equal(result.signalScore,100);assert.equal(result.signalBonus,10);assert.equal(result.score,100);
+ assert.equal(result.fitScore,90);assert.equal(result.profileMatches[0].strength,97);assert.equal(result.profileMatches[0].score,90);
+ const trade={...page,url:'https://jobs.example/hiring',text:'Published 2026-05-01: Factory is hiring production engineers.'};
+ raw.signalMatches[0]={...raw.signalMatches[0],url:trade.url,date:'2026-05-01'};
+ const assessed=M.assess(raw,c,[page,trade],now);assert.equal(assessed.signalScore,64);assert.equal(assessed.signalBonus,6);
+ assert.equal(assessed.signalMatches[0].strength,100);assert.equal(assessed.signalMatches[0].score,64);
+});
+
+test('older assessed checkpoints can be reviewed with retained scores when raw strength was never saved',()=>{
+ const c=config({signalMode:'require',signalIds:['hiring']});
+ const pending=M.assess(candidate(),c,[page],now);pending.matches.forEach(m=>{delete m.strength;});
+ const verdict={decision:'pass',reason:'Verified selected evidence.',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedProfileIds:[c.profiles[0].id],supportedSignalIds:['hiring']};
+ const result=M.reviewResult(pending,verdict,c,now);
+ assert.equal(result.score,98);assert.ok(result.matches.every(m=>!Object.hasOwn(m,'strength')));
+ pending.signalMatches[0].score=0;assert.equal(M.reviewResult(pending,verdict,c,now),null);
+});
+
+test('an invalid assessment strength cannot qualify a profile or a required event',()=>{
+ const c=config({signalMode:'require',signalIds:['hiring']});
+ for(const invalid of [undefined,null,false,[],0,-1,101,'unknown']){
+  const raw=candidate();raw.signalMatches[0].strength=invalid;assert.equal(review(c,raw),null);
+  assert.equal(review({...c,signalMode:'boost'},raw).signalBonus,0);
+  const badProfile=candidate();badProfile.profileMatches.forEach(m=>{m.strength=invalid;});assert.equal(review(c,badProfile),null);
+ }
+});
+
+test('equally reviewed profile and event strength scores equally across seller industries and company names',()=>{
+ for(const [company,domain,market,activity,event,signalId] of [
+  ['North Forge','forge.example','Finland','builds metal presses','opened a new mill','mill-opening'],
+  ['Aster Labs','aster.example','Germany','runs diagnostic laboratories','opened a pathology laboratory','lab-opening']
+ ]){
+  const main={profile:{website:'https://seller.example',idealCustomer:activity},market:{icps:[{id:'icp-core',type:'core',description:activity,active:true}],signals:[{id:signalId,name:event,active:true}]}};
+  const c=config({profileIds:['icp-core'],referenceIds:[],markets:[market],signalMode:'require',signalIds:[signalId]},main);
+  const url='https://'+domain+'/',identity={url,quote:company+' '+activity+'.'},location={url,market,label:market,quote:company+' operates in '+market+'.'};
+  const signal={signalId,url,date:'2026-11-01',quote:company+' '+event+'.',strength:80,reason:event};
+  const raw={company,website:url,identity,location,commercialFit:{...identity,status:'supported',reason:activity},profileMatches:[{...identity,profileId:'icp-core',strength:75,reason:activity}],signalMatches:[signal]};
+  const source={url,text:[identity.quote,location.quote,signal.date,signal.quote].join(' '),readAt:page.readAt};
+  const r=review(c,raw,{},[source]);assert.equal(r.score,83);assert.equal(r.domain,domain);assert.equal(r.market,market);
+  assert.deepEqual(r.signalMatches.map(m=>m.signalId),[signalId]);assert.equal(review(c,raw,{supportedSignalIds:[]},[source]),null);
+ }
+});
+
+test('year and month precision cannot establish a current buying signal or dated opportunity',()=>{
+ const required=config({profileIds:['icp-core'],signalMode:'require',signalIds:['hiring']});
+ const opportunity=config({profileIds:['icp-opportunity-led']});
+ for(const date of ['2026','2026-11','November 2026','2026-11T12:00Z','November 1, 2026','1 Nov 2026','2026-11-01T12:00:00Z']){
+  const raw=candidate();raw.signalMatches[0].date=date;raw.profileMatches.forEach(m=>{m.date=date;});
+  const source={...page,text:page.text+' Published '+date+'.'};
+  const exact=['November 1, 2026','1 Nov 2026','2026-11-01T12:00:00Z'].includes(date);
+  assert.equal(Boolean(review(required,raw,{},[source])),exact,date);
+  assert.equal(Boolean(review(opportunity,raw,{},[source])),exact,date);
+ }
 });

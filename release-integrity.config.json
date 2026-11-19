@@ -74,6 +74,7 @@
       "company_search_lists_version": "20261119-save-export-v1",
       "company_list_quality_version": "20261119-reviewed-evidence-v2",
       "company_list_profiles_version": "20261119-profiles-signals-v3",
+      "company_list_relevance_version": "20261119-reviewed-list-v1",
       "monitoring_inbox_version": "20261119-opportunity-review-v1"
     }
   },
@@ -10096,6 +10097,26 @@
         "Require buying signals",
         "contextFingerprint",
         "saved, sourced opportunities"
+      ]
+    },
+    {
+      "id": "company-list-relevance-shell-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "&company-list-relevance=20261119-v1"
+      ]
+    },
+    {
+      "id": "company-list-relevance-ui-20261119",
+      "type": "text",
+      "url": "/customer/company-lists-ui.js",
+      "status": 200,
+      "contains": [
+        "company-list-form-error",
+        "No optional buying signals selected",
+        "this run can only return a partial list."
       ]
     },
     {
