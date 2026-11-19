@@ -2,7 +2,45 @@ import '../../customer/discovery-engine.js';
 const D=globalThis.LeadIntelDiscovery,clean=v=>String(v||'').replace(/\s+/g,' ').trim();
 export function websiteSourceChunks(page){
  const blocks=String(page.markdown||'').split(/\n(?=#{2,6}\s)/);if(blocks.length<=30)return [page];
- const header=blocks.shift(),chunks=[];for(let i=0;i<blocks.length;i+=30)chunks.push({...page,markdown:header+'\n'+blocks.slice(i,i+30).join('\n')});return chunks;
+ const header=blocks.shift(),chunks=[];
+ for(let i=0;i<blocks.length;){
+  let end=Math.min(i+30,blocks.length);
+  while(end<blocks.length&&blocks[end].match(/^#+/)?.[0].length>blocks[end-1].match(/^#+/)?.[0].length)end++;
+  chunks.push({...page,markdown:header+'\n'+blocks.slice(i,end).join('\n')});i=end;
+ }
+ return chunks;
+}
+// Directories often mark both the name and the job title as headings. Keep
+// each published channel inside that person's card, including link targets.
+function nestedStaffCards(page,input){
+ if(!page.sourceRead||D.canonicalDomain(page.url)!==input.domain)return [];
+ const people=[],body=page.markdown;
+ const headings=/^(#{2,5})[ \t]+([^\n]+?)[ \t]*\n(?=\s*(#{3,6})[ \t]+([^\n]+))/gm;
+ for(const match of body.matchAll(headings)){
+  const [,nameLevel,rawName,roleLevel,rawRole]=match,name=clean(rawName.replace(/[*_]/g,'')),title=clean(rawRole.replace(/[*_]/g,''));
+  if(roleLevel.length<=nameLevel.length||!/^\p{Lu}[\p{L}’'.-]+(?:\s+[\p{L}’'.-]+){1,4}$/u.test(name)||!D.isIndependentContactPerson({name,title})||/^(?:contact|kontakt|our |about |company |general |ledelse|management|team\b)/i.test(name))continue;
+  if(!/\b(?:manager|president|engineer|director|coordinator|chief|head|founder|officer|CEO|CFO|COO)\b|direktør|direktör|chef\b|leder\b|ansvarlig\b|værkfører|bogholder|administration|designer/i.test(title)||/former|previous|retired|tidigare/i.test(title))continue;
+  const afterName=body.slice(match.index+match[0].length).trimStart();
+  const details=afterName.slice(afterName.indexOf('\n')<0?afterName.length:afterName.indexOf('\n')).slice(0,700).split(/\n\s*(?:#{1,6}\s|!?\[!\[|!\[|footer\b|switchboard\b|reception\b)/i)[0];
+  const listed=new Set(),numbers=new Map();
+  for(const line of details.split('\n')){
+   if(/^\s*(?:e-?mail|e-post)\s*:/i.test(line))for(const hit of line.matchAll(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi))listed.add(hit[0].toLowerCase());
+   if(/^\s*(?:tel(?:efon)?\.?|phone|mobile?)\s*:/i.test(line)){
+    const target=line.match(/\]\(tel:([+\d][\d ().-]*)\)/i)?.[1];
+    const visible=line.replace(/\[([^\]]*)\]\(tel:[^)]+\)/gi,'$1').split(':').slice(1).join(':').trim();
+    if(/^\+?\d[\d ().-]{5,23}\d$/.test(visible)){
+     const digits=visible.replace(/\D/g,'');
+     if(target&&!target.replace(/\D/g,'').endsWith(digits))numbers.set('conflict','');
+     numbers.set(digits,visible);
+    }
+   }
+  }
+  const [address]=listed,email=listed.size===1&&D.validResearchEmail(address,input.domain)?address:'',phone=numbers.size===1?[...numbers.values()][0]:'';
+  if(!email&&!phone)continue;
+  people.push({name,publicName:name,title,organization:input.company,publicNameUrl:page.url,identitySource:'public',identityStatus:'confirmed',nameVerification:'confirmed',companyContactSource:'official_staff',
+   publishedStaffCard:{url:page.url,email,phone,quote:clean(name+' '+title+' '+details).slice(0,700),checkedAt:page.extractedAt}});
+ }
+ return people;
 }
 export function websiteStaffCards(page,input){
  const found=[],role=/\b(?:CEO|CFO|COO|CTO|CIO|CRO|CLO|CMO|CHRO|chief|director|head|manager|president|founder|chairman|chairwoman)\b|direktør|direktör|koncernchef|bestyrels|afdelingschef|vadītāj|priekšsēdētāj|valdes locekl/i;
@@ -17,6 +55,6 @@ export function websiteStaffCards(page,input){
   if(!named&&!staffPage)continue;
   found.push(D.matchPublicBuyerDetails([person],[page],input.domain,input.company)[0]);
  }
- return found;
+ return [...found,...nestedStaffCards(page,input)];
 }
 export function websiteOfficialStaff(page,input){if(page.sourceRead!==true||D.canonicalDomain(page.url)!==input.domain)return [];return websiteSourceChunks(page).flatMap(chunk=>[...D.discoverCompanyContacts([chunk],{company:input.company,domain:input.domain},[]),...websiteStaffCards(chunk,input)]);}

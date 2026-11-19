@@ -115,3 +115,46 @@ test('same-name staff with different roles and profiles retain separate identiti
  const services={read:async url=>({url,markdown:url.endsWith('/team-a')?'# Finance Group\n### Maria Olsen\nChief Executive Officer\n[LinkedIn](https://www.linkedin.com/in/maria-olsen-a/)':url.endsWith('/team-b')?'# Finance Group\n### Maria Olsen\nSales Manager\n[LinkedIn](https://www.linkedin.com/in/maria-olsen-b/)':'# Finance Group\nFinance Group provides financial services.',links:url.endsWith('/')?['https://finance.example/team-a','https://finance.example/team-b']:[]}),search:async()=>[],apollo:async()=>({people:[]}),checkPerson:async()=>({complete:true})};
  for(let i=0;i<7;i++)await runWebsiteContactJobs(f.env,{jobId:job.id,windowMs:3000,services});const view=publicWebsiteContacts(await readWebsiteContacts(f.env,workspaceId,{id:job.id}));assert.equal(view.people.length,2);assert.notEqual(view.people[0].id,view.people[1].id);assert.ok(view.people.every(p=>p.identityConflict));assert.equal(view.counts.checked,0);assert.equal(view.counts.review,2);
 });
+
+test('resuming a zero-read job gets attributed contacts from a Danish official directory after a failed homepage',async t=>{
+ const f=await buyerJobsFixture(t),context={workspaceId,userId:f.users.owner.id,role:'owner',sessionHash:f.users.owner.sessionTokenHash};
+ const domain='oststaal.dk',website='https://'+domain+'/',directory=website+'kontakt-os/';
+ const {company}=await upsertCrmCompany(f.DB,context,{company_name:'Øst Stål',website});
+ const job=await startWebsiteContacts(f.env,context,{companyId:company.id}),state=JSON.parse(job.state_json);
+ state.label='Public source extraction unavailable';state.stopReason='source_unavailable';
+ state.tasks=[{kind:'read',value:website,status:'failed',attempts:1,reason:state.label}];
+ f.DB.raw.prepare("UPDATE website_contact_jobs SET status='incomplete',state_json=? WHERE id=?").run(JSON.stringify(state),job.id);
+ const original=globalThis.fetch,urls=[];t.after(()=>{globalThis.fetch=original;});
+ globalThis.fetch=async input=>{
+  const url=String(input);urls.push(url);
+  if(url!==directory)return new Response('Unavailable',{status:503});
+  const html='<title>Kontakt Øst Stål</title><h1>Kontakt Øst Stål</h1><h2>Ledelse</h2><h4>Ib Henrik Jensen</h4><h5>Direktør</h5><p>Salg og projektledelse</p><p>Telefon: 40 13 00 01</p><p>E-mail: <a href="mailto:ihj@oststaal.dk">ihj@oststaal.dk</a></p><h4>Poul Knud Pedersen</h4><h5>Produktionschef</h5><p>Telefon: 25 16 00 02</p><p>E-mail: pk@oststaal.dk</p><h4>Ole Martin Jensen</h4><h5>Projektleder</h5><p>E-mail: <a href="mailto:pk@oststaal.dk">omj@oststaal.dk</a></p>';
+  return new Response(html,{headers:{'Content-Type':'text/html'}});
+ };
+ const headers={'Content-Type':'application/json',Cookie:'leadintel_session='+f.users.owner.token},endpoint='https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,waits=[];
+ const res=await handleWebsiteContactRoute(new Request(endpoint,{method:'POST',headers,body:JSON.stringify({action:'resume',jobId:job.id,revision:job.revision})}),f.env,{}, {waitUntil:p=>waits.push(p)});
+ assert.equal(res.status,200);await Promise.all(waits);
+ const reopened=await app.fetch(new Request(endpoint+'&company_id='+company.id,{headers}),f.env,{}),view=(await reopened.json()).job;
+ assert.equal(view.id,job.id);assert.equal(view.counts.reads,1);assert.equal(urls.filter(u=>u===directory).length,1);
+ for(const [name,email,phone] of [['Ib Henrik Jensen','ihj@oststaal.dk','40 13 00 01'],['Poul Knud Pedersen','pk@oststaal.dk','25 16 00 02']]){
+  const person=view.people.find(p=>p.name===name);assert.ok(person,name);assert.equal(person.publishedStaffCard.email,email);assert.equal(person.publishedStaffCard.phone,phone);assert.equal(person.publishedStaffCard.url,directory);
+ }
+ assert.ok(!view.people.find(p=>p.name==='Ole Martin Jensen')?.publishedStaffCard?.email);
+ assert.ok(view.sourceIssues.some(issue=>issue.value===website&&issue.reason.includes('HTTP 503')));
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);
+});
+
+test('unreadable homepage and misleading directory results cannot authorize contact discovery',async t=>{
+ const f=await fixture(t),job=await startWebsiteContacts(f.env,f.context,{companyId:f.company.id});
+ const fetches=[],searches=[];
+ const services={
+  read:async url=>{fetches.push(url);if(url==='https://finance.example/')throw Error('Failed homepage');return {url,title:'Contact Different Business',markdown:'Contact Different Business\n### Sam Person\nDirector\nEmail: sam@finance.example',links:[]};},
+  search:async query=>{searches.push(query);return [{url:'https://directory.example/contact',title:'Finance Group'},{url:'https://finance.example/contact/',title:'Finance Group'}];},
+  apollo:async()=>assert.fail('Unconfirmed company must not reach directory enrichment')
+ };
+ await runWebsiteContactJobs(f.env,{jobId:job.id,services});
+ const view=publicWebsiteContacts(await readWebsiteContacts(f.env,workspaceId,{id:job.id}));
+ assert.equal(view.status,'incomplete');assert.equal(view.counts.discovered,0);assert.equal(view.counts.reads,0);assert.equal(searches.length,1);
+ assert.ok(fetches.length<=4);assert.ok(fetches.every(url=>new URL(url).hostname==='finance.example'));
+ assert.match(view.label,/official contact page/);
+});
