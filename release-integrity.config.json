@@ -71,7 +71,8 @@
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
       "website_monitoring_version": "20261110-source-rotation-v1",
       "company_search_lists_version": "20261119-save-export-v1",
-      "company_list_quality_version": "20261119-reviewed-evidence-v2"
+      "company_list_quality_version": "20261119-reviewed-evidence-v2",
+      "monitoring_inbox_version": "20261119-opportunity-review-v1"
     }
   },
   "retry": {
@@ -10080,6 +10081,42 @@
       "status": 200,
       "contains": [
         "\"company_list_quality_version\":\"20261119-reviewed-evidence-v2\""
+      ]
+    },
+    {
+      "id": "monitoring-opportunity-queue-20261119",
+      "type": "text",
+      "url": "/customer/monitoring-inbox.js",
+      "status": 200,
+      "contains": [
+        "new opportunities",
+        "need verification",
+        "Schedules and source checks",
+        "refreshSummary",
+        "Inbox refreshed",
+        "data-mi-search"
+      ]
+    },
+    {
+      "id": "monitoring-opportunity-health-20261119",
+      "type": "text",
+      "url": "/customer/monitoring-model.js",
+      "status": 200,
+      "contains": [
+        "monitorHealth",
+        "eventChanges",
+        "Scheduled check overdue",
+        "publishedAt",
+        "matchedTerms"
+      ]
+    },
+    {
+      "id": "monitoring-opportunity-cache-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "opportunity-inbox=20261119-v1"
       ]
     }
   ]

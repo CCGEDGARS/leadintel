@@ -65,3 +65,20 @@
 .monitoring-inbox article h3{font-size:24px;line-height:1.3;margin:12px 0}
 .monitoring-inbox .mi-facts{padding:16px;background:#f4f8f5;border-radius:10px;align-items:flex-start}
 @media(max-width:640px){.monitoring-inbox .mi-inbox-toolbar{padding:12px}.monitoring-inbox .mi-finding{padding:16px}.monitoring-inbox .mi-action-buttons [data-mi=monitors]{grid-column:1/-1}.monitoring-inbox [data-mi-count]>span{flex:1;padding:10px;font-size:12px}}
+/* Opportunity counts and schedule health share the saved review lifecycle. */
+.monitoring-inbox .mi-opportunity{border-left-color:#145c4b;background:#f5fbf7}
+.monitoring-inbox .mi-search{margin:0;max-width:640px}
+.monitoring-inbox .mi-queue-help,.mi-finding-facts,.mi-source-url{font-size:13px;line-height:1.5;color:#526f62}
+.monitoring-inbox .mi-source-url{overflow-wrap:anywhere}
+.monitoring-inbox .mi-change{padding:8px 10px;border-radius:6px;background:#fff5db;color:#725513}
+.monitoring-inbox [data-mi-health]>details{border:1px solid #d4e3df;padding:14px 16px;border-radius:12px}
+.monitoring-inbox [data-mi-health] summary{cursor:pointer;font-weight:650}
+.monitoring-inbox [data-mi-health] p{font-size:13px;line-height:1.5}
+.monitoring-inbox .mi-monitor-health{display:grid;gap:8px;margin:10px 0;padding:14px}
+.monitoring-inbox .mi-monitor-health>span{font-size:13px}
+.monitoring-inbox .mi-monitor-health dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin:0;font-size:13px}
+.monitoring-inbox .mi-monitor-health dd{margin:0}
+.monitoring-inbox .mi-health-error{background:#fff3f2;border:1px solid #d79994;color:#8b2924;padding:12px;border-radius:10px}
+.monitoring-inbox [data-mi-count]>small{flex-basis:100%;font-size:12px}
+.monitoring-inbox article>details details{padding:10px 0;border-bottom:1px solid #d4e3df}
+@media(max-width:640px){.monitoring-inbox .mi-monitor-health dl{grid-template-columns:1fr}.monitoring-inbox .mi-monitor-health dd{margin-bottom:8px}}

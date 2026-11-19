@@ -1,3 +1,4 @@
+import {monitorStatuses} from './monitoring-status.js';
 import Model from '../../customer/monitoring-model.js';
 import {normalizeMonitoringConfig} from './market-monitoring-engine.js';
 import {sha256} from './security.js';
@@ -29,7 +30,7 @@ export async function handleMonitoringManager(request,env,scope,cors,services){
  }
  if(path==='/monitors'&&request.method==='GET'){
   const legacy=await readMonitor(env,workspaceId),{results}=await env.DB.prepare('SELECT * FROM monitoring_monitors WHERE workspace_id=? ORDER BY archived,name').bind(workspaceId).all();
-  const owned=await services.strategyState(env,workspaceId).catch(()=>({approval:{current:false}}));return json({monitors:[...(legacy?[monitorConfig(legacy)]:[]),...results.map(monitorConfig)],role,strategyCurrent:owned.approval.current,maximumOperationsPerDueRun:results.filter(r=>r.enabled&&!r.archived).reduce((n,r)=>n+(r.research_depth==='quick'?4:12),legacy?.enabled?(legacy.research_depth==='quick'?4:12):0)},200,cors);
+  const owned=await services.strategyState(env,workspaceId).catch(()=>({approval:{current:false}}));return json({monitors:await monitorStatuses(env,workspaceId),role,strategyCurrent:owned.approval.current,maximumOperationsPerDueRun:results.filter(r=>r.enabled&&!r.archived).reduce((n,r)=>n+(r.research_depth==='quick'?4:12),legacy?.enabled?(legacy.research_depth==='quick'?4:12):0)},200,cors);
  }
  const action=path.match(/^\/monitors\/([^/]+)\/(pause|archive|run|runs)$/);
  if(action){const row=await readMonitor(env,workspaceId,action[1]);if(!row)fail('Monitor not found',404);const ms=monitorScope(row);
