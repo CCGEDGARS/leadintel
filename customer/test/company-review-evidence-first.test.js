@@ -73,3 +73,23 @@ test('a later empty saved-only review retains the current shortlist status and o
  context.__discoveryState().status='no_results';context.__discoveryState().candidates=[];context.renderStatus();assert.equal(nodes['discovery-status'].textContent,'Evidence incomplete');
  context.__discoveryState().potentialMatches=[];context.renderStatus();assert.equal(nodes['discovery-status'].textContent,'No matches');
 });
+
+for(const mode of ['review','search'])test(mode+' continues checking saved companies when one assessment cites an unknown quote',async()=>{
+ const pending=companies(2).map(company=>({...company,evidence:[{
+   url:'https://'+company.domain+'/operations',verifiedAt:new Date().toISOString(),sourceRead:true,
+   text:company.company+' operates industrial manufacturing facilities in Latvia. Our production teams use industrial automation systems to coordinate machinery and production operations across our business facilities.'
+ }]}));
+ const fitResponse=prompt=>{
+   const response=JSON.parse(goodFit(prompt.split('\nThis is a recovery')[0]));
+   for(const row of response.companies)if(row.domain===pending[0].domain)row.evidence[0].quoteId='unknown-quote';
+   return JSON.stringify(response);
+ };
+ const {context,calls}=helpers.loadRunner({targetCount:2,pendingCompanies:pending,fitResponse});
+ await context.__runDiscovery(mode==='review'?{recheckOnly:true,targetDomains:pending.map(c=>c.domain)}:{});
+ const state=context.__discoveryState();
+ assert.deepEqual(Array.from(state.candidates,c=>c.domain),[pending[1].domain]);
+ assert.equal(state.potentialMatches.find(c=>c.domain===pending[0].domain)?.evidence[0].url,pending[0].evidence[0].url);
+ assert.ok(state.searchFailures.some(f=>f.domain===pending[0].domain&&f.code==='BUYER_FIT_EVIDENCE_REJECTED'));
+ assert.equal(calls.search+calls.scrape,0);
+ assert.equal(state.status,'partial');
+});

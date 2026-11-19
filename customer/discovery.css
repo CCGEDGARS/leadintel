@@ -833,7 +833,7 @@
 .company-row-company{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;min-width:0}
 .company-row-rank{font-size:14px;font-weight:600;line-height:24px;color:#576b60;font-variant-numeric:tabular-nums}
 .company-row-name{display:block;font-size:18px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
-.company-row-website{display:block;margin-top:4px;color:#3c6656;font-size:14px;font-weight:400;line-height:1.4;text-decoration:none;overflow-wrap:anywhere}
+.company-row-website{display:block;width:fit-content;max-width:100%;margin-top:4px;color:#3c6656;font-size:14px;font-weight:400;line-height:1.4;text-decoration:none;overflow-wrap:anywhere}
 .company-row-website:hover{text-decoration:underline}
 .company-row-website:focus-visible{outline:2px solid #19705a;outline-offset:2px}
 .company-row-score{min-width:0;font-variant-numeric:tabular-nums}
@@ -878,3 +878,13 @@
  .company-row-details .research-review-actions{justify-content:flex-start;flex-wrap:wrap}
  .company-row-details .research-review-actions button{min-height:44px}
 }
+
+.company-unranked-list{display:grid;gap:8px}
+.company-unranked-list>h4{margin:8px 0}
+.company-unranked-row .company-row-company{display:block}
+.company-unranked-row .company-row-summary{grid-template-columns:minmax(0,1fr) 170px 104px}
+@media(max-width:1100px){
+ .company-unranked-row .company-row-summary{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"company action" "status action"}
+ .company-unranked-row .company-row-status{padding-left:0}
+}
+.company-review-gap{display:block;margin-top:4px;color:#52665b;overflow-wrap:anywhere}

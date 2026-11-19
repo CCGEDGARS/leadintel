@@ -334,7 +334,7 @@ test('a completed zero-result run renders the search funnel and unqualified matc
 
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Unique source URLs/i);
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
-  assert.match(context.__elements.get('company-candidates').innerHTML,/saved companies still need evidence/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/Unranked companies/i);
   assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/valid finding|No newly qualified opportunities/i);
   assert.match(context.__elements.get('company-candidates').innerHTML,/Review tools/i);
   assert.match(context.__elements.get('company-candidates').innerHTML+context.__elements.get('discovery-potential-matches').innerHTML,/Needs more evidence|Not qualified/i);
@@ -1703,7 +1703,7 @@ test('the visible shortlist distinguishes two completed checks from one strong-f
  const rows=[81,69].map((score,i)=>({company:'Fixture Buyer '+i,domain:`buyer${i}.example`,website:`https://buyer${i}.example`,evidence:[],matchedSignals:[],fitReasons:[],buyerFit:{fit:score}}));
  context.__setDiscovery({status:'complete',candidates:rows,potentialMatches:[],lastRunAt:new Date().toISOString()});
  context.LeadIntelDiscovery={...context.LeadIntelDiscovery,rankQualifiedCompanies:items=>items,companyQualificationPresentation:()=>({routeLabel:'Company fit',referenceScore:null,explanation:'Controlled assessment'})};
- vm.runInNewContext('qualificationAssessment=c=>({eligible:true,score:c.buyerFit.fit});',context);
+ vm.runInNewContext('qualificationAssessment=c=>({eligible:true,score:c.buyerFit.fit,commercial:c.buyerFit});',context);
  context.__discoveryState().candidates=rows;
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:5,autonomousDiscovery:{pass:3,maxPasses:3,callsUsed:90,callLimit:200,exhausted:true}}));
  context.__renderCandidates();const html=context.__elements.get('company-candidates').innerHTML;
@@ -1919,7 +1919,7 @@ test('a newer pending company assessment supersedes an older strong fit in count
   const outcome=context.companySearchOutcome();
   assert.equal(outcome.checkedCount,0);assert.equal(outcome.strongFitCount,0);
   assert.deepEqual(Array.from(context.companyReviewBatchPlan().domains),[old.domain]);
-  assert.match(f.dom.window.document.getElementById('company-candidates').textContent,/0 checked companies · 0 strong fit/);
+  assert.match(f.dom.window.document.getElementById('company-candidates').textContent,/No checked companies yet/);
  };
  verify();context.__setDiscovery(JSON.parse(JSON.stringify(context.__discoveryState())));verify();
  assert.equal(f.providerCalls(),0);
@@ -1949,13 +1949,13 @@ test('an additional checked company retains its original index when selected for
  const persisted=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(persisted.selectedProspects[0].domain,candidates[0].domain);assert.equal(persisted.candidates.length,12);assert.equal(providerCalls(),0);
 });
-test('unscored review companies remain visible in the top ten with an honest pending score',()=>{
+test('unscored review companies stay accessible without a ranking',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[]});render();
- const main=dom.window.document.getElementById('company-candidates');assert.match(main.textContent,/Unfinished Research/);assert.match(main.textContent,/Awaiting score/);assert.equal(main.querySelectorAll('[data-company-rank]').length,1);assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
+ const main=dom.window.document.getElementById('company-candidates');assert.match(main.textContent,/Unfinished Research/);assert.match(main.textContent,/Awaiting score/);assert.equal(main.querySelectorAll('[data-company-rank]').length,0);assert.match(main.textContent,/Unranked companies · 1/);assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
 });
 test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});render();
- assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,3);assert.match(dom.window.document.getElementById('company-candidates').textContent,/1 of 5 strong-fit companies found · 3 checked/);
+ assert.equal(dom.window.document.querySelectorAll('#company-candidates .company-card').length,3);assert.match(dom.window.document.getElementById('company-candidates').textContent,/3 checked companies · 1 strong fit/);
  assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
 });
 test('additional results deduplicate checked identities and retain companies awaiting recheck',()=>{
@@ -2330,7 +2330,7 @@ test('a stale displayed company control cannot select a record that overtook its
 test('Move to Buyers on a reviewed duplicate uses the displayed newer assessment',async()=>{
  const f=companyShortlistDisplayFixture({scores:[95],review:false}),old={...f.candidates[0],needsRecheck:true,researchedAt:'2026-11-01T00:00:00Z',qualification:{...f.candidates[0].qualification,researchedAt:'2026-11-01T00:00:00Z'}},fresh={...f.candidates[0],needsRecheck:true,qualificationGaps:['Earlier check incomplete'],buyerFit:{...f.candidates[0].buyerFit,fit:60},qualification:{...f.candidates[0].qualification,score:60,researchedAt:new Date().toISOString()}};
  f.context.__setDiscovery({...f.context.__discoveryState(),candidates:[old],potentialMatches:[fresh]});f.render();f.context.__bindDiscovery();
- const row=f.dom.window.document.querySelector('[data-review-action="buyers"]');assert.match(row.closest('[data-company-rank]').textContent,/60\/100/,JSON.stringify({pot:f.context.__discoveryState().potentialMatches.map(c=>({fit:c.buyerFit?.fit,qAt:c.qualification?.researchedAt})),rows:f.context.rankedCompanyResults().rows.map(r=>({score:r.score,source:r.source,at:r.candidate.researchedAt,qAt:r.candidate.qualification?.researchedAt,fit:r.candidate.buyerFit?.fit}))}));row.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.context.__discoveryState().selectedProspects[0].buyerFit.fit,60);
+ const row=f.dom.window.document.querySelector('[data-review-action="buyers"]');assert.match(row.closest('.company-row-details').textContent,/60\/100/,JSON.stringify({pot:f.context.__discoveryState().potentialMatches.map(c=>({fit:c.buyerFit?.fit,qAt:c.qualification?.researchedAt})),rows:f.context.rankedCompanyResults().rows.map(r=>({score:r.score,source:r.source,at:r.candidate.researchedAt,qAt:r.candidate.qualification?.researchedAt,fit:r.candidate.buyerFit?.fit}))}));row.click();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.context.__discoveryState().selectedProspects[0].buyerFit.fit,60);
 });
 test('review selection cannot commit an overtaken assessment after its CRM acknowledgement',async()=>{
  const f=companyShortlistDisplayFixture({scores:[60],review:false});f.context.__setDiscovery({...f.context.__discoveryState(),candidates:f.candidates.map(c=>({...c,needsRecheck:true}))});f.render();f.context.__bindDiscovery();
@@ -2347,8 +2347,8 @@ test('saved-evidence review preserves the newer rejected assessment and its asse
 });
 test('company comparison rows align name, website, score, status and Review with one Strategy explanation',()=>{
  const f=companyShortlistDisplayFixture({scores:[84,82,81],review:false});f.context.__setDiscovery({...f.context.__discoveryState(),needsRefresh:true});const before=JSON.stringify(f.context.__discoveryState());f.render();
- const root=f.dom.window.document.getElementById('company-candidates'),rows=root.querySelectorAll('details.company-result-row');assert.equal(rows.length,3);assert.equal(root.querySelectorAll('.company-strategy-notice').length,1);
- for(const row of rows){assert.equal(row.open,false);const summary=row.querySelector(':scope > summary');assert.ok(summary.querySelector('.company-row-name'));assert.ok(summary.querySelector('.company-row-website'));assert.ok(summary.querySelector('.company-row-score'));assert.ok(summary.querySelector('.company-row-status'));assert.match(summary.querySelector('.company-row-review').textContent,/Review/);assert.match(summary.textContent,/Previous score/);assert.equal(summary.querySelector('[data-review-action]'),null,'summary only opens details');assert.ok(row.querySelector('.company-row-details [data-review-action="saved-evidence"]'));}
+ const root=f.dom.window.document.getElementById('company-candidates'),rows=root.querySelectorAll('details.company-result-row');assert.equal(rows.length,3);assert.equal(root.querySelectorAll('.company-strategy-notice').length,0);
+ for(const row of rows){assert.equal(row.open,false);const summary=row.querySelector(':scope > summary');assert.ok(summary.querySelector('.company-row-name'));assert.ok(summary.querySelector('.company-row-website'));assert.equal(summary.querySelector('.company-row-rank,.company-row-score'),null);assert.ok(summary.querySelector('.company-row-status'));assert.match(summary.querySelector('.company-row-review').textContent,/Review/);assert.doesNotMatch(summary.textContent,/Previous score|\/100/);assert.match(row.querySelector('.company-review-assessment').textContent,/Previous score.*\/100/);assert.equal(summary.querySelector('[data-review-action]'),null,'summary only opens details');assert.ok(row.querySelector('.company-row-details [data-review-action="saved-evidence"]'));}
  assert.equal(JSON.stringify(f.context.__discoveryState()),before);assert.equal(f.providerCalls(),0);
 });
 test('opening company details survives rerender without saving or starting research',()=>{
@@ -2368,4 +2368,25 @@ test('open company review follows score changes in both directions across the to
 test('company disclosure state resets in both lists when the workspace changes',()=>{
  const f=companyShortlistDisplayFixture({scores:[94,90,86,82,79,75,68,64,60,55,44,22],review:false});f.render();f.dom.window.document.querySelector('.company-other-results').open=true;for(const row of f.dom.window.document.querySelectorAll('.company-result-row'))row.open=true;
  f.context.LeadIntelServerBridge={session:{authenticated:true,user:{id:'different-user'}},workspace:{id:'different-workspace'}};f.render();assert.ok([...f.dom.window.document.querySelectorAll('.company-result-row')].every(row=>!row.open));assert.equal(f.dom.window.document.querySelector('.company-other-results').open,false);assert.equal(f.providerCalls(),0);
+});
+
+test('only checked current companies take ranking positions above provisional and previous high scores',()=>{
+ const f=companyShortlistDisplayFixture({scores:[99,92,60],review:false});
+ const [previous,provisional,checked]=f.candidates;
+ f.context.__setDiscovery({...f.context.__discoveryState(),candidates:[{...previous,needsRecheck:true},checked],potentialMatches:[{...provisional,qualificationGaps:['Verify company size']}]});
+ f.render();
+ const rows=[...f.dom.window.document.querySelectorAll('#company-candidates .company-result-row')];
+ assert.deepEqual(rows.map(r=>r.dataset.companyRowKey),[checked.domain,previous.domain,provisional.domain]);
+ assert.equal(rows[0].querySelector('.company-row-rank').textContent,'1');
+ for(const row of rows.slice(1))assert.equal(row.querySelector('summary .company-row-score,summary .company-row-rank'),null);
+ assert.match(rows[1].querySelector('.company-review-assessment').textContent,/Previous score/);
+ assert.match(rows[2].querySelector('.company-review-assessment').textContent,/Recorded fit/);
+ assert.equal(f.providerCalls(),0);
+});
+
+test('an AI extraction billing failure and a web billing failure name their respective services',()=>{
+ const {discoveryFailureLabel:label}=loadDiscoveryRunner();
+ assert.match(label({phase:'extracting',status:402}),/AI provider.*402/);
+ assert.match(label({phase:'searching',status:402}),/Firecrawl.*402/);
+ assert.match(label({phase:'extracting',reason:'provider_unavailable',status:503}),/Company extraction provider.*503/);
 });

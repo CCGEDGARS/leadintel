@@ -2794,7 +2794,7 @@
       "status": 200,
       "contains": [
         "A new search does not replace your saved selections.",
-        "This search has finished."
+        "No checked companies yet"
       ]
     },
     {
@@ -8903,7 +8903,7 @@
       "status": 200,
       "contains": [
         "if(signal?.leadIntelSavedEvidenceOnly)",
-        "if(plan.needsWeb&&!savedEvidenceOnly)",
+        "if(plan.needsWeb&&!savedEvidenceOnly&&!rejectedFitFor(candidate))",
         "data-review-action=\"saved-evidence\"",
         "savedEvidenceOnly:true,targetDomain:key"
       ]
@@ -9357,7 +9357,7 @@
       "contains": [
         "function rankedCompanyResults()",
         "data-company-total",
-        "view.visible.map(companyRankedCardHtml)",
+        "companyDisplayPage(groups,0)",
         "handleCompanyReviewClick(event)",
         "company-ranking-css=20261116-v1"
       ]
