@@ -92,7 +92,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   if(!owned){valid=false;throw contactError('Company identity or research authority changed.');}
  };
  const observe=entry=>{state.tools=[...(state.tools||[]),{...entry,at:new Date().toISOString()}].slice(-150);};
- const searchSource=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,signal:controller.signal,observe,scrapeResults:false,primaryTimeoutMs:6000});
+ const searchSource=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'website_contacts',guard,signal:controller.signal,observe,scrapeResults:false,primaryTimeoutMs:6000});
  const inFlight=new Map();let checkpointTail=Promise.resolve();
  state.performance={sourceRequests:0,sourceReuses:0,...state.performance,concurrency:3};
  const checkpoint=()=>{checkpointTail=checkpointTail.then(async()=>{
@@ -126,7 +126,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
  }
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
  const read=async url=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
-  const raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);if(signal.aborted)throw signal.reason;const page=raw?.data||raw||{};
+  const raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);if(signal.aborted)throw signal.reason;const page=raw?.data||raw||{};
   const actual=S.safeUrl(page.url||page.metadata?.sourceURL||url),text=String(page.markdown||page.text||page.content||'');
   if(raw?.success===false||page.error||page.metadata?.statusCode>=400||!actual||!text.trim()||!D.buyerSourceReadLocation(candidateFor(input),url,page,{move:true}))throw Error('Page unreadable or source attribution changed');
   for(const entry of raw.researchTrace||page.researchTrace||[])observe(entry);

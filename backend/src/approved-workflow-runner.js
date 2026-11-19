@@ -1,3 +1,4 @@
+import {requestFirecrawl} from './firecrawl-request.js';
 import {recordOperationalStage} from './operational-observability.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {lookupAdditionalEmail,readAdditionalContactPolicy} from './additional-contact-services.js';
@@ -29,9 +30,7 @@ async function providerJson(url,options={}){
 }
 async function search(env,workspaceId,query,guard){
   await guard();const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const url='https://api.firecrawl.dev/v2/search';
-  const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-  await guard();const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,...(query.kind==='market'&&query.market&&query.market!=='priority market'?{location:discovery.searchLocation(query.market)}:{}),scrapeOptions:{formats:['markdown']}})});await guard();
+  await guard();const response=await requestFirecrawl(env,workspaceId,'search',{credential,payload:{query:query.query,limit:5,...(query.kind==='market'&&query.market&&query.market!=='priority market'?{location:discovery.searchLocation(query.market)}:{}),scrapeOptions:{formats:['markdown']}},purpose:'approved_workflow'});if(!response.ok)throw new Error(`Research provider returned ${response.status}. Review the connection or credits before retrying.`);const payload=await response.json();await guard();
   // Snippets without an extracted page are insufficient for automatic qualification.
   const raw=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
   return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query).map(item=>({...item,verifiedAt:new Date().toISOString()}));

@@ -14,6 +14,7 @@
       "workflow_version": "approved-workflow-v1",
       "saved_flows_version": "my-flows-v1",
       "payment_alerts_version": "payment-connection-v1",
+      "firecrawl_usage_version": "20261119-receipts-v1",
       "writing_assistant_version": "writing-assistant-v2",
       "writing_reference_readable_percent": 80,
       "ai_task_routing_version": "ai-task-routing-v1",

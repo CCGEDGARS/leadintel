@@ -1,3 +1,4 @@
+import {requestFirecrawl} from './firecrawl-request.js';
 import '../../customer/contact-confirmation-policy.js';
 import '../../customer/discovery-engine.js';
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,fetchDirectPublicPage} from './service-integrations.js';
@@ -23,9 +24,7 @@ export async function confirmPublicWorkEmail(env,context,companyId,input={}, {lo
     if(!attributable(row)){
       sourceMethod='public_scrape';
       const credential=await requireWorkspaceServiceCredential(env,context.workspaceId,'firecrawl');
-      const url='https://api.firecrawl.dev/v2/scrape';
-      const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-      await guard();const response=await fetch(url,{method:'POST',headers,body:JSON.stringify({url:source,formats:['markdown'],onlyMainContent:false}),signal:AbortSignal.timeout(20000)});
+      await guard();const response=await requestFirecrawl(env,context.workspaceId,'scrape',{credential,payload:{url:source,formats:['markdown'],onlyMainContent:false},signal:AbortSignal.timeout(20000),purpose:'email_source_check'});
       if(!response.ok)throw Object.assign(new Error('Official email-source check is unavailable'),{status:502});
       const payload=await response.json();row=payload.data||payload;
     }

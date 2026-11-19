@@ -1,3 +1,4 @@
+import {requestFirecrawl} from './firecrawl-request.js';
 import {sha256,cookieValue} from './security.js';
 import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
@@ -18,9 +19,7 @@ function nextCheck(from=new Date(),frequency='daily'){const d=new Date(from);if(
 
 async function publicScrape(env,workspaceId,url){
   const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const target='https://api.firecrawl.dev/v2/scrape';
-  const headers={'Content-Type':'application/json',Accept:'application/json'};headers.Authorization=`Bearer ${credential.apiKey}`;
-  const response=await fetch(target,{method:'POST',headers,body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:25000})});
+  const response=await requestFirecrawl(env,workspaceId,'scrape',{credential,payload:{url,formats:['markdown'],onlyMainContent:true,timeout:25000},purpose:'source_health'});
   const payload=await response.json().catch(()=>({}));if(!response.ok){if(creditFailure(response.status,payload?.error||payload?.message))await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});throw Object.assign(new Error(clean(payload?.error||`Firecrawl scrape returned ${response.status}`,500)),{provider:'firecrawl_customer'});}
   await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'recovered',source:credential.source});
   const data=payload?.data||payload;const text=String(data?.markdown||data?.content||'').trim();return {ok:Boolean(text),text,title:clean(data?.metadata?.title||data?.title,300),provider:'firecrawl_customer',method:'public_scrape'};
