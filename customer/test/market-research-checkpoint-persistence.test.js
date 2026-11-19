@@ -18,6 +18,7 @@ test('Market Research retains completed provider evidence through peer timeout, 
   await page.waitForFunction(()=>{const m=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market;return m.researchStatus==='running'&&m.researchResults.length>0;},null,{timeout:15000});
   assert.ok(heldCalls>0,'The other provider is still pending when sources are saved');
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchExecution?.completedAt,null,{timeout:15000});release();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchReports?.length===1);
   const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
   assert.equal(before.researchStatus,'partial');assert.ok(before.researchResults.length>0);assert.ok(before.researchErrors.some(e=>/overall time limit/.test(e.message)));assert.equal(before.researchReports[0].sources.length,before.researchResults.length);
   assert.ok(before.opportunities.some(o=>o.evidence.length),'interrupted research must build its downstream opportunities');assert.ok(before.researchReports[0].opportunities.some(o=>o.evidence.length));assert.match(before.researchVerification.reason,/Verification not started:.*overall time limit/);assert.equal(f.calls.filter(c=>c.path==='/api/ai/research-verification').length,0);

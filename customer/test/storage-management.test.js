@@ -46,3 +46,6 @@ test('failed policy checks, empty results and delayed responses never create unw
  f.state.market.researchResults=[];w.LeadIntelStorageManagement.reportCopiesAllowed=async()=>true;assert.equal(await f.ui.capture(),false);assert.equal(f.saves,0);
  }finally{w.close();}
 });
+test('a harmless market normalization during preference loading saves into the current state',async()=>{
+ const w=setup();try{let finish;const f=reports(w,{allowed:()=>new Promise(resolve=>finish=resolve)});const old=f.state.market,pending=f.ui.capture();f.state.market=JSON.parse(JSON.stringify(old));finish(true);assert.equal(await pending,true);assert.equal(f.state.market.researchReports.length,1);assert.equal(old.researchReports.length,0);assert.equal(f.saves,1);}finally{w.close();}
+});

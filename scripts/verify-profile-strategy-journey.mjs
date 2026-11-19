@@ -18,6 +18,8 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    await p.locator(({quick:'#run-market-research',deep:'#run-detailed-research',intelligence:'#run-market-intelligence'})[researchMode]).click();assert.equal(await p.locator('#research-run-preview').getAttribute('data-research-mode'),researchMode);await p.locator('#confirm-market-research').click();
    await p.waitForFunction(()=>{const m=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market;return m.researchExecution?.completedAt&&m.researchStatus!=="running";},null,{timeout:120000});
    const sourceCount=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchResults.length);if(researchMode==='quick')assert.equal(sourceCount,20);else assert.ok(sourceCount>20,'broader modes acquire their own evidence set');
+   // The optional copy follows the authenticated saving-preference check.
+   await p.waitForFunction(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchReports?.length===1);
    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchReports.length),1,'one run creates one report');
    await p.locator('[data-review-market-strategy]').click();await p.locator('#step-3.active').waitFor();await p.locator('#continue-market-strategy').click();await p.locator('#step-4.active').waitFor();
    if(failResearchSave){

@@ -68,9 +68,9 @@
       }
     }
     async function capture({manual=false}={}){
-      const main=getState(),report=snapshot(main),market=main.market;
+      const main=getState(),report=snapshot(main);let market=main.market;
       const fingerprint=value=>JSON.stringify({...value,id:'',createdAt:''});
-      const stillCurrent=()=>getState()===main&&main.market===market&&fingerprint(snapshot(main))===fingerprint(report);
+      const stillCurrent=()=>getState()===main&&fingerprint(snapshot(main))===fingerprint(report);
       // Empty failures keep their diagnostics in research state without another history copy.
       if(!manual&&!report.sources.length)return false;
       if(!manual&&!globalThis.LeadIntelStorageManagement){captureNotice='Saving preferences are unavailable. Use Save current report to keep an extra copy.';render();return false;}
@@ -79,6 +79,7 @@
         catch{if(stillCurrent()){captureNotice='Saving preferences could not be checked. Research evidence is retained; save a report manually or retry Storage settings.';render();}return false;}
       }
       if(!stillCurrent())return false;
+      market=main.market;
       if(normalize(market.researchReports).some(saved=>fingerprint(saved)===fingerprint(report))){captureNotice='This report is already saved.';render();return false;}
       const previous=market.researchReports,initialized=market.researchReportsInitialized;
       market.researchReports=append(previous,report);market.researchReportsInitialized=true;
