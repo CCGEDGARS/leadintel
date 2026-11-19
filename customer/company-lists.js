@@ -114,9 +114,11 @@
   const profiles=ids.map(id=>available.profiles?.find(p=>p.id===id&&p.active&&p.ready));
   if(profiles.some(p=>!p))fail('A selected profile is off or missing required evidence. Review Strategy and reload the list criteria.');
   if(raw.profileMode!==undefined&&!['any','all'].includes(raw.profileMode)||raw.mode!==undefined&&!['any','all'].includes(raw.mode))fail('Choose any or all for profile and signal matching.');
-  const signalMode=raw.signalMode||'off';if(!['off','boost','require'].includes(signalMode))fail('Choose profiles only, prioritize buying signals, or require buying signals.');
-  const signalIds=signalMode==='off'?[]:Array.isArray(raw.signalIds)?[...new Set(raw.signalIds)]:[];
-  if(signalIds.length>20||signalMode!=='off'&&!signalIds.length)fail('Select 1–20 active buying signals, or choose Profiles only.');
+  const requestedSignalMode=raw.signalMode||'off';if(!['off','boost','require'].includes(requestedSignalMode))fail('Choose profiles only, prioritize buying signals, or require buying signals.');
+  if(requestedSignalMode!=='off'&&raw.signalIds!==undefined&&!Array.isArray(raw.signalIds))fail('Select buying signals using the active signal list.');
+  const signalIds=requestedSignalMode==='off'?[]:Array.isArray(raw.signalIds)?[...new Set(raw.signalIds)]:[];
+  if(signalIds.length>20||requestedSignalMode==='require'&&!signalIds.length)fail('Select 1–20 active buying signals, or choose Profiles only.');
+  const signalMode=signalIds.length?requestedSignalMode:'off';
   const signals=signalIds.map(id=>available.buyingSignals?.find(s=>s.id===id));
   if(signals.some(s=>!s))fail('A selected buying signal is no longer active. Reload the list criteria from Strategy.');
   if(profiles.some(p=>p.type==='trigger-led')&&!signals.length)fail('Trigger-led needs selected buying signals. Choose Prioritize or Require buying signals, or deselect Trigger-led.');
@@ -134,12 +136,26 @@
    profile:{website:base.website||'',offers:join(profiles.map(p=>p.offers))||base.offers||'',idealCustomer:join(profiles.map(p=>p.description)),exclusions:join([base.exclusions,...profiles.map(p=>p.exclusions)])}};
  }
  function sourceProof(pages,e){const page=pages.find(p=>p.url===url(e?.url));return page&&contains(page.text,e.quote)?{url:page.url,quote:clean(e.quote,1000),readAt:page.readAt,date:clean(e.date,40)}:null;}
- function datedProof(pages,e,now){const proof=sourceProof(pages,e),age=(now-Date.parse(proof?.date))/86400000;return proof&&Number.isFinite(age)&&age>=-1&&age<=365&&pages.find(p=>p.url===proof.url).text.includes(proof.date)?{...proof,age}:null;}
+ function datedProof(pages,e,now){
+  const proof=sourceProof(pages,e);
+  if(!proof||!proof.date)return null;
+  // Date.parse supplies a missing day or month. Only count a date at day precision.
+  const calendar=proof.date.split(/(?:T|\s)(?=\d{1,2}:\d{2})/i)[0];
+  const numbers=calendar.match(/\d+/g)||[];
+  const namedMonth=/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(calendar);
+  if(numbers.length!==(namedMonth?2:3))return null;
+  const age=(now-Date.parse(proof.date))/86400000;
+  return Number.isFinite(age)&&age>=-1&&age<=365&&pages.find(p=>p.url===proof.url).text.includes(proof.date)?{...proof,age}:null;
+ }
  function namedIdentity(quote,name){
   const text=quote.toLowerCase();name=name.toLowerCase();let at=text.indexOf(name);
   while(at>=0){if(!/[\p{L}\p{N}]/u.test(text[at-1]||'')&&!/[\p{L}\p{N}]/u.test(text[at+name.length]||''))return true;at=text.indexOf(name,at+1);}return false;
  }
  function signalRule(matches,c){return matches.length>0&&(c.mode!=='all'||matches.length===c.signals.length);}
+ function matchStrength(value){
+  const score=typeof value==='string'?Number(value):value;
+  return Number.isFinite(score)&&score>=1&&score<=100?score:0;
+ }
  function profileScores(candidate,config){
   const profileMatches=candidate.profileMatches,signalMatches=candidate.signalMatches;
   const fitScore=(config.profileMode==='all'?Math.min:Math.max)(...profileMatches.map(m=>m.score));
@@ -156,14 +172,18 @@
   if(!commercial||raw.commercialFit?.status!=='supported'||!clean(raw.commercialFit.reason))return null;
   const signalMatches=[];
   if(c.signalMode!=='off')for(const s of c.signals){
-   const m=(raw.signalMatches||[]).find(m=>m.signalId===s.id),e=m&&datedProof(pages,m,now);if(!e||!clean(m.reason))continue;
+   const m=(raw.signalMatches||[]).find(m=>m?.signalId===s.id);
+   const e=m&&datedProof(pages,m,now),strength=matchStrength(m?.strength);
+   if(!e||!clean(m.reason)||!strength)continue;
    const recency=e.age<=90?1:e.age<=180?.9:.75,source=domain(e.url)===host?1:.85;
-   signalMatches.push({kind:'signal',signalId:s.id,name:s.name,...e,score:Math.round(Math.min(90,Math.max(0,Number(m.strength)||0))*recency*source),reason:clean(m.reason,700)});
+   signalMatches.push({kind:'signal',signalId:s.id,name:s.name,...e,strength,score:Math.round(strength*recency*source),reason:clean(m.reason,700)});
   }
   if(c.signalMode==='require'&&!signalRule(signalMatches,c))return null;
   const profileMatches=[];
   for(const p of c.profiles){
-   const m=(raw.profileMatches||[]).find(m=>m.profileId===p.id),e=m&&sourceProof(pages,m);if(!e||!clean(m.reason))continue;
+   const m=(raw.profileMatches||[]).find(m=>m?.profileId===p.id);
+   const e=m&&sourceProof(pages,m),strength=matchStrength(m?.strength);
+   if(!e||!clean(m.reason)||!strength)continue;
    const extra={};
    if(p.type==='lookalike'){
     const ref=c.references.find(r=>r.id===m.referenceId),evidence=ref?.evidence.find(e=>contains(e.quote,m.referenceQuote));if(!evidence)continue;
@@ -175,7 +195,7 @@
     if(!proof||!datedProof(pages,m,now))continue;
     Object.assign(extra,{opportunityId:opportunity.id,opportunityTitle:opportunity.title,opportunityQuote:clean(m.opportunityQuote,1000),opportunityUrl:proof.url});
    }
-   profileMatches.push({kind:'profile',profileId:p.id,type:p.type,name:p.name,...e,...extra,score:Math.min(90,Math.max(0,Number(m.strength)||0)),reason:clean(m.reason,700)});
+   profileMatches.push({kind:'profile',profileId:p.id,type:p.type,name:p.name,...e,...extra,strength,score:Math.min(90,strength),reason:clean(m.reason,700)});
   }
   if(!profileMatches.length||c.profileMode==='all'&&profileMatches.length!==c.profiles.length)return null;
   return profileScores({company,website,domain:host,location:clean(raw.location.label,180),market:raw.location.market,identity,locationEvidence:location,
@@ -184,10 +204,11 @@
  function reviewProfiles(candidate,review,c,now){
   if(!candidate||review?.decision!=='pass'||!clean(review.reason)||(review.gaps||[]).length||['identityConfirmed','marketConfirmed','commercialFitConfirmed','exclusionsChecked'].some(k=>review[k]!==true))return null;
   const profiles=new Set(Array.isArray(review.supportedProfileIds)?review.supportedProfileIds:[]),signals=new Set(Array.isArray(review.supportedSignalIds)?review.supportedSignalIds:[]);
-  const profileMatches=candidate.profileMatches.filter(m=>profiles.has(m.profileId));
+  const signalMatches=candidate.signalMatches.filter(m=>signals.has(m.signalId)&&matchStrength(m.score));
+  const eventsSupported=signalRule(signalMatches,c);
+  if(c.signalMode==='require'&&!eventsSupported)return null;
+  const profileMatches=candidate.profileMatches.filter(m=>profiles.has(m.profileId)&&matchStrength(m.score)&&(m.type!=='trigger-led'||eventsSupported));
   if(!profileMatches.length||c.profileMode==='all'&&profileMatches.length!==c.profiles.length)return null;
-  const signalMatches=candidate.signalMatches.filter(m=>signals.has(m.signalId));
-  if((c.signalMode==='require'||profileMatches.some(m=>m.type==='trigger-led'))&&!signalRule(signalMatches,c))return null;
   const result=profileScores({...candidate,profileMatches,signalMatches},c);
   return {...result,quality:{version:PROFILE_VERSION,status:'reviewed',reason:clean(review.reason,1000),checkedAt:new Date(now).toISOString(),checks:['identity','market','selected_profiles','commercial_fit','exclusions',...(c.signalMode==='off'?[]:['selected_buying_signals'])],sourceCount:new Set([result.identity.url,result.locationEvidence.url,result.commercialFit.url,...result.matches.map(m=>m.url)]).size}};
  }
