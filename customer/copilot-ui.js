@@ -94,7 +94,7 @@ function setStatus(text){drawer.querySelector('[data-copilot-status]').textConte
 
 // Research belongs to a server job; this view only observes it.
 const researchWatches=new Map();
-async function attachResearchTask(card,task){const scope=workspaceId(),version=conversationVersion;try{const {attachTask}=await import('./research-task-ui.js?v=20261118-v1');if(scope!==workspaceId()||version!==conversationVersion||!card.isConnected)return;attachTask(card,task,{api:deps.api,isCurrent:()=>scope===workspaceId()&&version===conversationVersion});}catch{if(scope===workspaceId()&&version===conversationVersion)setStatus('Research task controls could not load. Reopen this conversation to retry.');}}
+async function attachResearchTask(card,task){const scope=workspaceId(),version=conversationVersion;try{const {attachTask}=await import('./research-task-ui.js?v=20261118-v1&company-list-quality=20261119-v2');if(scope!==workspaceId()||version!==conversationVersion||!card.isConnected)return;attachTask(card,task,{api:deps.api,isCurrent:()=>scope===workspaceId()&&version===conversationVersion});}catch{if(scope===workspaceId()&&version===conversationVersion)setStatus('Research task controls could not load. Reopen this conversation to retry.');}}
 function attachResearch(card,job){
  if(!job?.id||!card||Number(job.revision||0)<Number(card.dataset.researchRevision||0))return;card.dataset.copilotResearch=job.id;card.dataset.researchRevision=String(job.revision||0);
  const old=card.querySelector('.copilot-research');old?.remove();const wrap=node('section','copilot-research');wrap.setAttribute('aria-label','Public research progress');
