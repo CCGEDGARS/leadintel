@@ -78,7 +78,7 @@ test('authenticated cumulative ranking keeps ten visible, promotes a new higher 
   assert.equal(created,14);await settleInitialSave(page);assert.equal(await page.locator('#company-candidates [data-company-score]').first().getAttribute('data-company-score'),'84');
   const demoted=page.locator('[data-company-row-key="ranked9.example"]');await demoted.locator(':scope > summary').click();await demoted.locator(':scope > summary').focus();await page.evaluate(()=>{discovery.candidates=mergeWorkflowCompanies(discovery.candidates,[window.__newRankedCompany]);saveDiscovery();renderAll();});await settleInitialSave(page);await page.waitForFunction(()=>document.querySelector('#company-candidates [data-company-score]')?.dataset.companyScore==='99');assert.equal(await page.locator('.company-other-results').evaluate(el=>el.open),true,'a focused company moving below rank ten stays visible');assert.equal(await page.evaluate(()=>document.activeElement?.closest('.company-result-row')?.dataset.companyRowKey),'ranked9.example','keyboard focus follows the same company into the remaining list');await page.locator('.company-other-results > summary').click();await page.locator('.steps [data-workflow-stage="4"] strong').click();await check();
   const first=page.locator('#company-candidates details.company-result-row').first();assert.equal(await first.getAttribute('open'),null);await first.locator(':scope > summary').focus();await page.keyboard.press('Enter');assert.notEqual(await first.getAttribute('open'),null);await page.evaluate(()=>renderAll());assert.notEqual(await first.getAttribute('open'),null);assert.equal(await first.locator(':scope > summary').evaluate(el=>document.activeElement===el),true,'keyboard focus stays on the reviewed row after rerender');await first.locator(':scope > summary').click();
-  await page.evaluate(()=>{discovery.needsRefresh=true;renderAll();});assert.equal(await page.locator('.company-strategy-notice').count(),1);assert.equal(await page.locator('#company-candidates .company-row-status').filter({hasText:'Strategy review'}).count(),10);
+  await page.evaluate(()=>{discovery.needsRefresh=true;renderAll();});assert.equal(await page.locator('.company-strategy-notice').count(),1);assert.equal(await page.locator('#company-candidates .company-row-status').filter({hasText:'Needs recheck'}).count(),10);
   const geometry=await page.locator('#company-candidates .company-row-summary').evaluateAll(rows=>rows.slice(0,3).map(row=>({score:row.querySelector('.company-row-score').getBoundingClientRect().x,status:row.querySelector('.company-row-status').getBoundingClientRect().x,height:row.getBoundingClientRect().height})));assert.ok(geometry.every(row=>Math.abs(row.score-geometry[0].score)<1&&Math.abs(row.status-geometry[0].status)<1&&row.height<=112),'desktop columns align in compact rows');
   await page.locator('.company-ranking-summary').scrollIntoViewIfNeeded();await page.screenshot({path:artifactDir+'/desktop.png'});await first.locator(':scope > summary').click();assert.equal(await first.locator('.research-check-company').isHidden(),true,'expanded details do not repeat the comparison heading');await first.locator('.company-row-details').screenshot({path:artifactDir+'/desktop-details.png'});await first.locator(':scope > summary').click();for(const width of [1024,820]){await page.setViewportSize({width,height:1000});assert.equal(await page.locator('#company-candidates').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'comparison columns fit at '+width+'px');}await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('#company-candidates').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);assert.equal(await page.locator('#discovery-potential-matches').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);await page.locator('#company-candidates .company-row-summary').first().scrollIntoViewIfNeeded();await page.screenshot({path:artifactDir+'/mobile.png'});await page.evaluate(()=>{discovery.needsRefresh=false;renderAll();});await context.close();await open();await check();
   const saved=(await f.getState()).payload;assert.equal(saved.discovery.candidates.length,13);assert.equal(selectedText(saved),selected);assert.equal(messageText(saved),protectedText);assert.equal(f.providerCalls.length,0);assert.deepEqual(errors,[]);
@@ -86,6 +86,114 @@ test('authenticated cumulative ranking keeps ten visible, promotes a new higher 
  }catch(error){if(page&&!page.isClosed()){t.diagnostic(JSON.stringify(await page.evaluate(()=>{const e=document.getElementById('discovery-potential-matches');return {active:document.querySelector('.step-view.active')?.id,ancestors:Array.from((function*(node){while(node){yield node;node=node.parentElement;}})(e)).map(n=>({tag:n.tagName,id:n.id,cls:n.className,hidden:n.hidden,display:getComputedStyle(n).display,visibility:getComputedStyle(n).visibility,open:n.open})).slice(0,8)};})));await page.screenshot({path:'/tmp/company-ranking-native-failure.png',fullPage:true});}throw error;}finally{await context?.close();await browser.close();await f.close();}
 });
 
+
+test('Companies recovery routes eight saved companies to Profile research or Strategy without spending or changing selection',{timeout:90000},async t=>{
+ if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('Required native Companies CI runs this SQL/browser journey.');return;}
+ const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs');
+ const {ready,settleInitialSave}=await import('../../scripts/verify-step5-journey.mjs');
+ const D=require('../discovery-engine.js'),integrity=require('../strategy-integrity.js');
+ const f=await journeyFixture(),{chromium}=await loadPlaywright();
+ const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
+ const researchRequests=[],errors=[];let context,page;
+ async function open(){
+  context=await browser.newContext({viewport:{width:1440,height:1000}});
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+  await context.route('**/*',route=>{
+   const request=route.request(),url=new URL(request.url());
+   if(request.method()==='POST'&&/firecrawl|\/ai\/|\/buyers\/research|\/company-lists|\/apollo\/|\/hunter\//i.test(url.pathname)){
+    researchRequests.push(url.pathname);return route.abort();
+   }
+   return url.origin===f.origin?route.continue():route.abort();
+  });
+  page=await context.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(f.origin+'/customer/');await ready(page);
+  await companies();
+ }
+ async function companies(){
+  await page.locator('.steps [data-workflow-stage="4"] strong').click();
+  await page.locator('#step-5.active .company-result-row').first().waitFor({state:'visible'});
+ }
+ const savedScores=[66,66,64,58,58,55],at='2026-11-18T09:30:00Z';
+ function retained(payload){
+  const d=payload.discovery;
+  return {rows:d.potentialMatches.map(c=>[c.domain,c.qualification?.score??null,c.evidence[0]?.url,c.evidence[0]?.text]),
+   selected:d.selectedProspects.map(c=>[c.domain,c.crmId,c.people.map(p=>[p.id,p.name,p.kept])]),receipts:d.researchAudit};
+ }
+ async function checkRows(){
+  const view=page.locator('#company-candidates');
+  assert.equal(await view.locator('.company-result-row').count(),8);
+  assert.deepEqual(await view.locator('[data-score-state="previous"]').evaluateAll(nodes=>nodes.map(el=>Number(el.dataset.companyScore))),savedScores);
+  assert.equal(await view.locator('[data-score-state="pending"][data-company-score=""]').count(),2);
+  assert.match(await page.locator('#company-search-progress h3').textContent(),/Saved results need review/);
+  assert.equal(await page.locator('.company-search-progress-stats dt').nth(1).textContent(),'Websites recorded');
+  assert.deepEqual(await page.locator('.company-search-progress-stats dd').allTextContents(),['26','11','0','0']);
+  assert.equal(await page.locator('#review-next-companies').isDisabled(),true);
+  assert.match(await page.locator('#company-research-usage summary').textContent(),/61 requests · 60 searches · 1 page reads? · 1 reused/);
+ }
+ async function checkRecovery(contextIsStale){
+  const title=contextIsStale?'Update market research in Profile':'Review and approve Strategy';
+  const status=await page.evaluate(()=>LeadIntelStrategyIntegrity.status(mainState()));
+  assert.equal(status.code,contextIsStale?'research_stale':'strategy_unapproved',JSON.stringify(status));
+  for(const selector of ['.steps [data-workflow-stage="4"] [data-sidebar-next-action]','#journey-stage-guide [data-stage-next-action]','#company-review-batch [data-company-review-strategy]']){
+   const action=page.locator(selector);assert.ok((await action.innerText()).includes(title));
+   await action.click();
+   if(contextIsStale){
+    const modal=page.locator('#reference-customer-modal');
+    await modal.locator('#market-intelligence-panel #market-research-workbench #run-market-research').waitFor({state:'visible'});
+    assert.equal(await modal.locator('[data-company-segment="market"]').getAttribute('aria-current'),'page');
+    await modal.locator('header button[data-reference-close]').click();
+   }else await page.locator('#step-4.active #activate-market-strategy').waitFor({state:'visible'});
+   assert.equal(await page.evaluate(()=>mainState().market.strategyApproved),false);
+   await companies();
+  }
+ }
+ try{
+  const seed=await f.getState(),payload=seed.payload,market=payload.main.market;
+  payload.main.websiteActivation={status:'active',url:payload.main.website,activatedAt:at};
+  payload.main.scrapedSources=[{type:'website',url:payload.main.website,title:'Fixture Industrial',text:'Fixture Industrial supplies industrial automation and custom machinery.',status:'ready'}];
+  market.strategyApproved=false;market.strategyApproval=null;market.researchContextStale=true;
+  market.researchContextFingerprint='stale:website-reactivated';market.researchStatus='complete';
+  market.researchResults=[{url:'https://industry.example/factory',title:'Swedish industrial production',text:'Retained market research about Swedish manufacturing.',market:'Sweden',extractedAt:at}];
+  const potentialMatches=Array.from({length:8},(_,i)=>{
+   const domain=i?'maker'+i+'.example':f.candidate.domain,company=i?'Manufacturer '+i:f.candidate.company;
+   return {domain,company,website:'https://'+domain+'/',market:'Sweden',researchedAt:at,needsRecheck:true,
+    qualification:i<savedScores.length?{qualificationKind:'company',score:savedScores[i],researchedAt:at}:undefined,
+    qualificationGaps:['Verify operating evidence'],evidence:[{url:'https://'+domain+'/operations',text:company+' manufactures equipment in Sweden.',sourceRead:true,verifiedAt:at}]};
+  });
+  const entries=Array.from({length:60},(_,i)=>({id:'op-'+i,key:'source-'+i,phase:'market',operation:'search',outcome:'succeeded'}));
+  entries.push({id:'op-page',key:'official-page',phase:'operations',operation:'page',outcome:'succeeded'},
+   {id:'op-reuse',key:'source-0',phase:'market',operation:'search',outcome:'reused'});
+  Object.assign(payload.discovery,{qualityVersion:D.DISCOVERY_QUALITY_VERSION,status:'complete',needsRefresh:true,lastRunAt:at,potentialMatches,
+   funnel:{companiesIdentified:26,companySitesChecked:11,qualifiedCompanies:0},
+   researchAudit:D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'previous-search',entries}}).researchAudit});
+  Object.assign(payload.meta.discovery,{activeJourneyStage:4,visibleStep:5,targetCount:5});
+  const before=retained(payload);assert.equal(before.selected.length,1);assert.equal(before.receipts.entries.length,62);
+  assert.equal((await f.replace(payload,seed.version)).conflict,false);
+  await open();await checkRows();await checkRecovery(true);await settleInitialSave(page);
+  assert.deepEqual(retained((await f.getState()).payload),before);
+  await context.close();await open();await checkRows();await checkRecovery(true);await settleInitialSave(page);await context.close();
+  // Change only the research fingerprint in the fixture to exercise the next
+  // prerequisite without purchasing a real run or approving Strategy.
+  const fresh=await f.getState(),main=fresh.payload.main;
+  Object.assign(main.market,{researchContextFingerprint:integrity.researchFingerprint(main),researchContextStale:false});
+  assert.equal((await f.replace(fresh.payload,fresh.version)).conflict,false);
+  await open();await checkRows();await checkRecovery(false);await settleInitialSave(page);
+  const final=(await f.getState()).payload;
+  assert.deepEqual(retained(final),before);assert.equal(final.main.market.strategyApproved,false);
+  assert.deepEqual(researchRequests,[]);assert.deepEqual(f.providerCalls,[]);assert.deepEqual(errors,[]);
+  assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs').get().n,0);
+ }catch(error){
+  if(page&&!page.isClosed())t.diagnostic(JSON.stringify(await page.evaluate(()=>({
+   step:document.querySelector('.step-view.active')?.id,
+   modal:document.getElementById('reference-customer-modal')?.hidden,
+   mounted:document.getElementById('market-research-workbench')?.parentElement?.id,
+   research:document.getElementById('run-market-research')?.outerHTML,
+   action:document.querySelector('[data-workflow-stage="4"] [data-sidebar-next-action]')?.outerHTML,
+   toast:document.getElementById('toast')?.textContent
+  }))));
+  throw error;
+ }finally{await context?.close();await browser.close();await f.close();}
+});
 
 test('authenticated Companies preserves mixed scores, honest shortfall and the pending queue across SQL save and browser reopen',{timeout:90000},async t=>{
  if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('The required Profile/Strategy browser job runs this SQL journey with the WASM loader.');return;}

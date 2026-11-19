@@ -114,7 +114,7 @@ function loadRunner({ engine = Discovery, targetCompanies = [], targetCount = 10
     .replace(runTimeout[0], 'const DISCOVERY_RUN_TIMEOUT_MIN_MS=4000;')
     .replace(runMargin[0], 'const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=500;')
     .replace(extractionTimeout[0], 'const COMPANY_EXTRACTION_TIMEOUT_MS=1000;')
-    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery=runCompanyDiscovery;\nglobalThis.__discoveryState=()=>discovery;\nglobalThis.__loadMeta=loadMeta;\nglobalThis.__verifyCompany=firecrawlCompanySearch;\nglobalThis.__startBudget=startDiscoveryBudget;globalThis.__fetchDiscoveryResource=fetchDiscoveryResource;\n');
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery=runCompanyDiscovery;\nglobalThis.__discoveryState=()=>discovery;\nglobalThis.__loadMeta=loadMeta;\nglobalThis.__verifyCompany=firecrawlCompanySearch;globalThis.__searchBatch=runDiscoverySearchBatch;\nglobalThis.__startBudget=startDiscoveryBudget;globalThis.__fetchDiscoveryResource=fetchDiscoveryResource;\n');
   assert.ok(source.includes('globalThis.__runDiscovery=runCompanyDiscovery'), 'test hook attached');
   const mainState = {
     website: 'https://acme.example/',
@@ -333,4 +333,38 @@ test('a twenty-call cap verifies discovered companies before spending the allowa
  assert.ok(calls.search+calls.scrape<=20);
  const saved=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.ok(saved.candidates.some(c=>c.qualification?.eligible),'completed checks survive persisted reload');
+});
+
+test('a search snippet cannot mark a website checked when its official page could not be read',async()=>{
+ const {context}=loadRunner();context.__startBudget(5);
+ const original=context.fetch,domain='northsteel.lv',description='North Steel operates production facilities in Latvia and manufactures industrial equipment. Its production team uses specialized machinery and provides documented operating information for engineering projects.';
+ context.fetch=async(url,init)=>String(url).includes('/firecrawl-search')?{ok:true,status:200,json:async()=>({data:[{title:'North Steel',url:'https://northsteel.lv/',description}]})}:String(url).includes('/firecrawl-scrape')?{ok:false,status:403,json:async()=>({})}:original(url,init);
+ const [result]=await context.__searchBatch([{id:'official',kind:'verification',domain,company:'North Steel',verificationFocus:'operations',query:'site:northsteel.lv manufacturing'}],'verifying',new AbortController().signal);
+ assert.ok(result.results.some(e=>e.sourceRead===false));assert.equal(context.__discoveryState().funnel.companySitesChecked,0);
+});
+
+test('new-company acquisition stops new web work once the mandatory purchasing-fit provider is blocked',async()=>{
+ const {context,calls}=loadRunner({targetCount:5}),original=context.fetch;let requestsAtBlock=null,fitAttempts=0;
+ context.fetch=async(url,init)=>{
+  if(String(url).includes('/api/ai/generate')&&JSON.parse(init.body).task==='buyer-fit'){
+   requestsAtBlock??=calls.search+calls.scrape;fitAttempts++;
+   return {ok:false,status:409,json:async()=>({error:'No active AI provider is configured for this workspace'})};
+  }
+  return original(url,init);
+ };
+ await context.__runDiscovery();
+ const state=context.__discoveryState(),saved=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.ok(requestsAtBlock>0&&fitAttempts>=1,'a first source batch reached the required provider');
+ assert.equal(calls.search+calls.scrape,requestsAtBlock,'no subsequent resolution, verification or broad discovery can finish the blocked qualification');
+ assert.ok(state.searchFailures.some(f=>f.phase==='buyer-fit'&&f.status===409));
+ assert.ok(saved.potentialMatches.some(c=>c.evidence.some(e=>e.sourceRead)),'completed company evidence survives reload');
+ assert.ok(['error','partial'].includes(state.status));
+});
+
+test('verification of a missing operating market follows the official site when a readable search page only documents products',async()=>{
+ const {context,calls}=loadRunner();context.__startBudget(6);
+ const original=context.fetch,domain='northsteel.example',product='North Steel designs and manufactures industrial control equipment. Our engineering teams operate large automated manufacturing lines that produce precision equipment for business customers.';
+ context.fetch=async(url,init)=>String(url).includes('/firecrawl-search')?{ok:true,status:200,json:async()=>({data:[{url:'https://northsteel.example/products',title:'North Steel production equipment',markdown:product}]})}:original(url,init);
+ const rows=await context.__verifyCompany({kind:'verification',domain,company:'North Steel',market:'Latvia',verificationFocus:'market',query:'site:northsteel.example Latvia offices'},new AbortController().signal);
+ assert.equal(calls.scrape,1);assert.ok(rows.some(r=>r.sourceRead&&r.text.includes('in Latvia')));
 });

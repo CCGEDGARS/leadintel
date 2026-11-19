@@ -41,3 +41,23 @@ test('missing required targeting stays explained after the action finishes',asyn
 
 test('a native answer edit cannot promote stale displayed text in another field',()=>{const r=confirmationRuntime();r.inputs[0].value='New reviewed offer';r.inputs[1].value='Stale displayed recommendation';r.context.readAnswers({target:r.inputs[0]});assert.equal(r.context.state.answers.priority_offers,'New reviewed offer');assert.equal(r.context.state.answers.ideal_customer,'Hotels and offices');});
 test('Profile review cannot advance after a blocked local save',()=>{const source=fs.readFileSync(require.resolve('../app.js'),'utf8'),body=source.slice(source.indexOf('function validateStep2(){'),source.indexOf('async function getPdfModule(){')),status={},c={readAnswers:()=>false,LeadIntelProfile:{canBuildProfile:()=>true},state:{},$:()=>status};vm.createContext(c);vm.runInContext(body,c);assert.equal(c.validateStep2(),false);assert.match(status.textContent,/conflict|save|review/i);});
+
+test('reconfirming four reviewed answers preserves research, Strategy and its score revision after reopen',async()=>{
+ const r=confirmationRuntime(),main=r.context.state;
+ Object.assign(main.profile,Targeting.profileFields(main));main.approved=true;
+ main.profile.canonical.fields.priorityOffers={value:main.profile.priorityOffers,status:'user_confirmed',provenance:'user',confidence:'high'};
+ main.answerStatus=Object.fromEntries(Object.keys(Targeting.fields).map(key=>[key,'user']));
+ main.market={icps:[{id:'core',active:true}],signals:[{id:'projects',keywords:'office renovations',active:true}],researchResults:[{url:'https://office.example/project'}],strategyApproved:true};
+ main.market.researchContextFingerprint=Integrity.researchFingerprint(main);
+ const signed=Integrity.approval(main,'2026-11-18');main.market.strategyApproval=signed;
+ assert.equal(await r.confirm(),true);
+ const reopened=JSON.parse(r.stored.get('state'));
+ assert.deepEqual(reopened.answerStatus,main.answerStatus);
+ assert.ok(Object.values(reopened.answerStatus).every(value=>value==='user'));
+ assert.equal(Integrity.status(reopened).signature,signed.signature);
+ assert.equal(Integrity.status(reopened).current,true);
+ assert.equal(Integrity.researchContext(reopened).stale,false);
+ reopened.answers.priority_offers='Payroll software';
+ assert.equal(Integrity.status(reopened).recovery,'research');
+ assert.equal(Integrity.approval(reopened),null);
+});

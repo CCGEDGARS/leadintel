@@ -88,3 +88,24 @@ test('automatically enabled reference switches keep a green track when locked',(
  const off=new JSDOM('<style>'+css+'</style><label class="market-toggle"><input type="checkbox" disabled><span></span></label>');
  assert.equal(off.window.getComputedStyle(off.window.document.querySelector('.market-toggle span')).backgroundColor,'rgb(215, 221, 218)');
 });
+
+test('opening the Strategy handoff keeps displayed ICP suggestions outside the signed researched inputs',()=>{
+ const h=harness([{id:'manual',type:'custom',active:true,description:'Reviewed clinics'}]);
+ const {state,context,document}=h,I=require('../strategy-integrity.js');
+ Object.assign(state,{website:'https://seller.example',targetMarkets:['Denmark'],approved:true});
+ state.profile.priorityOffers='Clinical software';
+ state.market.signals=[{id:'clinic',name:'New clinic',active:true}];
+ state.market.researchResults=[{url:'https://clinic.example/open'}];
+ state.market.researchContextFingerprint=I.researchFingerprint(state);
+ context.evidenceAvailable=true;
+ context.requireConfirmedTargeting=()=>true;
+ context.renderMarketStrategy=context.renderIcps;
+ context.renderStrategyHandoff=()=>{state.market.researchContextStale=I.researchContext(state).stale;return {};};
+ context.returnToProfileResearch=()=>assert.fail('Opening an unchanged Strategy review must not request another research run');
+ document.body.insertAdjacentHTML('beforeend','<dialog id="strategy-handoff-dialog"></dialog>');
+ context.renderIcps();
+ vm.runInContext(part('function openStrategyHandoff(){','function closeStrategyHandoff(){')+'openStrategyHandoff();',context);
+ assert.equal(state.market.icps.length,1);
+ assert.equal(state.market.icps[0].id,'manual');
+ assert.equal(document.getElementById('strategy-handoff-dialog').hasAttribute('open'),true);
+});

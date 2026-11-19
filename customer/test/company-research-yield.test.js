@@ -16,9 +16,9 @@ test('operation receipts survive state normalization without retaining query bod
 });
 
 test('the receipt summary distinguishes actual requests, cached reuse, retry and missing credit prices',()=>{
- const entries=[{id:'op-1',operation:'search',phase:'market',key:'a',outcome:'failed',credits:2},{id:'op-2',operation:'search',phase:'market',key:'a',outcome:'succeeded'},{id:'op-3',operation:'search',phase:'market',key:'a',outcome:'reused'},{id:'op-4',operation:'page',phase:'market-presence',key:'b',outcome:'succeeded',credits:1}];
+ const entries=[{id:'op-1',operation:'search',phase:'market',key:'a',outcome:'failed',credits:2},{id:'op-2',operation:'search',phase:'market',key:'a',outcome:'succeeded',readableCount:2},{id:'op-3',operation:'search',phase:'market',key:'a',outcome:'reused',readableCount:2},{id:'op-4',operation:'page',phase:'market-presence',key:'b',outcome:'succeeded',credits:1}];
  const saved=JSON.parse(JSON.stringify(D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'run-test',entries}})));
- const result=D.companyResearchAuditSummary(saved.researchAudit);assert.equal(result.requests,3);assert.equal(result.searches,2);assert.equal(result.pageReads,1);assert.equal(result.reused,1);assert.equal(result.retries,1);assert.equal(result.failures,1);assert.equal(result.knownCredits,3);assert.equal(result.unpricedRequests,1);assert.deepEqual(result.phases,{'market':2,'market-presence':1});assert.equal(D.companyResearchAuditSummary(null).available,false);
+ const result=D.companyResearchAuditSummary(saved.researchAudit);assert.equal(result.requests,3);assert.equal(result.searches,2);assert.equal(result.pageReads,1);assert.equal(result.readableSearchResults,2);assert.equal(result.reused,1);assert.equal(result.retries,1);assert.equal(result.failures,1);assert.equal(result.knownCredits,3);assert.equal(result.unpricedRequests,1);assert.deepEqual(result.phases,{'market':2,'market-presence':1});assert.equal(D.companyResearchAuditSummary(null).available,false);
 });
 test('operating evidence planning is independent of seller names and follows the supplied industry',()=>{
  for(const offers of ['business accounting services','warehouse automation']){
@@ -34,4 +34,13 @@ test('journey startup can request company progress before discovery has loaded',
 test('bounded receipts retain the full request allowance alongside repeated cache hits',()=>{
  const entries=Array.from({length:600},(_,i)=>({id:'op-'+i,operation:'search',phase:'market',key:'key-'+i,outcome:i<200?'succeeded':'reused'}));
  const audit=D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'three-pass-run',entries}}).researchAudit,result=D.companyResearchAuditSummary(audit);assert.equal(result.requests,200);assert.equal(result.reused,400);assert.equal(audit.entries.length,600);
+});
+
+test('current website-read receipts survive reload and historical website totals keep their original meaning',()=>{
+ const classic=D.normalizeDiscoveryState({funnel:{companySitesChecked:11}}).funnel;
+ assert.equal(classic.companySitesChecked,11);assert.equal(classic.officialSitesRead,undefined);
+ const current=D.normalizeDiscoveryState({funnel:{companySitesChecked:11,officialSitesRead:['north.example','north.example','south.example']}}).funnel;
+ assert.equal(current.companySitesChecked,2);assert.deepEqual(current.officialSitesRead,['north.example','south.example']);
+ assert.match(Progress.html(Progress.model({status:'complete',funnel:classic})),/Websites recorded/);
+ assert.match(Progress.html(Progress.model({status:'complete',funnel:current})),/Websites checked/);
 });

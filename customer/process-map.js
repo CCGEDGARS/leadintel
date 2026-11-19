@@ -121,11 +121,20 @@ function currentProcessStep(){
   const state=readProcessState();
   return window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,state.step)||Number(state.step)||1;
 }
+// Journey and sidebar redraw frequently. Reuse the integrity assessment only
+// while the exact saved workspace data and its assessment function still match.
+let journeyStrategySnapshot;
 function readJourneyState(){
+  let raw;try{raw=localStorage.getItem(PROCESS_STORAGE_KEY)||"{}";}catch{raw="{}";}
+  const assessStrategy=window.LeadIntelStrategyIntegrity?.status,checkSignals=window.LeadIntelCompanyBrain?.unrelatedSignals;
+  if(!journeyStrategySnapshot||raw!==journeyStrategySnapshot.raw||assessStrategy!==journeyStrategySnapshot.assessStrategy||checkSignals!==journeyStrategySnapshot.checkSignals){
+    let main;try{main=JSON.parse(raw)||{};}catch{main={};}
+    journeyStrategySnapshot={raw,main,assessStrategy,checkSignals,strategyStatus:assessStrategy?.(main)};
+  }
   const discovery=readStageJson(DISCOVERY_STORAGE_KEY),assess=window.LeadIntelDiscoveryUI?.assessCompany;
   discovery.candidates=typeof assess==='function'?(discovery.candidates||[]).map(candidate=>({...candidate,qualification:assess(candidate,{researchedAt:discovery.lastRunAt})})):[];
   return {
-    companyOutcome:window.LeadIntelDiscoveryUI?.getCompanyOutcome?.(),main:readProcessState(),discovery,discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
+    companyOutcome:window.LeadIntelDiscoveryUI?.getCompanyOutcome?.(),main:journeyStrategySnapshot.main,strategyStatus:journeyStrategySnapshot.strategyStatus,discovery,discoveryMeta:readStageJson(`${DISCOVERY_STORAGE_KEY}_meta`),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
   };
 }
 function websiteActivated(main){
@@ -304,22 +313,24 @@ function openProcessStep(stageId){
 function reviewMiniStep(stageId,itemId){
   if(itemId==='sync-review'||window.LeadIntelServerBridge?.conflict){window.LeadIntelAttention?.open?.();return;}
   if(stageId===2&&itemId==='research'){void window.LeadIntelProfileMarket?.open?.();return;}
+  if(stageId===2&&itemId==='targeting'){window.LeadIntelTargeting?.focusRequired(window,readProcessState());return;}
   const profileGroups={'offer-customer':'priority_offers','decision-fit':'buyer_roles','demand-signals':'buying_outcomes','message-proof':'value_proposition'};
   if(stageId===2&&profileGroups[itemId]){
     window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:2,journeyStage:2}}));
     setTimeout(()=>{const field=document.querySelector(`[data-question="${profileGroups[itemId]}"]`);field?.scrollIntoView({behavior:'smooth',block:'center'});field?.focus({preventScroll:true});syncProcessMap();},80);
     return;
   }
-  if(stageId===2&&['profile','review','approval'].includes(itemId)){
-    window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:3,journeyStage:2}}));
+  if(stageId===2&&['profile','review','approval','build-profile'].includes(itemId)){
+    window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:itemId==='build-profile'?2:3,journeyStage:2}}));
     setTimeout(syncProcessMap,80);
-    return;
+  }else if(stageId!==4||!document.querySelector('[data-workflow-stage="4"][aria-current="step"]')){
+    openProcessStep(stageId);
   }
-  openProcessStep(stageId);
   const targets={
-    1:{website:'#activate-website, #company-website',markets:'#target-country',evidence:'#pdf-input'},
+    1:{website:'#activate-website, #company-website','activate-website':'#activate-website',markets:'#target-country',evidence:'#pdf-input'},
+    2:{'build-profile':'#analyze-company',approval:'#approve-profile'},
     3:{icps:'#icp-list',signals:'#signal-designer',opportunities:'#strategy-market-summary',strategy:'#activate-market-strategy'},
-    4:{scope:'#discovery-target-count',companies:'#run-company-discovery',review:'#company-candidates',pipeline:'#company-candidates'},
+    4:{scope:'#discovery-target-count',companies:'#run-company-discovery','saved-review':'#review-next-companies','search-progress':'#company-search-progress',review:'#company-candidates',pipeline:'#company-candidates'},
     5:{'buyer-quality':'.buyer-quality-supervisor',people:'.selected-prospect-row'},
     6:{brand:'#brand-identity-toggle',scenario:'#step-6.message-workspace #message-offer, #step-6:not(.message-workspace) #core-scenario-summary',company:'#outreach-company-select',dossier:'#build-opportunity-dossier',scripts:'#outreach-email-body',approval:'#step-6.message-workspace #mw-flow-readiness, #step-6:not(.message-workspace) #approve-outreach'},
     7:{package:'#delivery-company-select',sent:'#confirm-delivery-sent',reply:'#reply-text',outcome:'#delivery-outcomes',learning:'#delivery-activity'}
@@ -352,6 +363,7 @@ if(processMap){
   window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();scheduleProcessMap();});
   window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();scheduleProcessMap();});
   window.addEventListener("leadintel:journey-changed",scheduleProcessMap);
+  window.addEventListener("leadintel:support-modules-ready",scheduleProcessMap);
   for(const name of ['leadintel:server-conflict','leadintel:server-synced','leadintel:sync-settled'])window.addEventListener(name,scheduleProcessMap);
   window.addEventListener("leadintel:open-discovery",()=>setTimeout(syncProcessMap,120));
   window.addEventListener("leadintel:crm-changed",scheduleProcessMap);
@@ -362,7 +374,7 @@ if(processMap){
   window.addEventListener('resize',scheduleProcessMap);
   window.addEventListener("storage",event=>{if([PROCESS_STORAGE_KEY,DISCOVERY_STORAGE_KEY,DISCOVERY_STORAGE_KEY+'_meta',OUTREACH_STORAGE_KEY,DELIVERY_STORAGE_KEY].includes(event.key))scheduleProcessMap();});
   syncContextArchitecture();syncProcessMap();
-  window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,openWorkflowStage:openProcessStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
+  window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,openWorkflowStage:openProcessStep,reviewMiniStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
 }
 }
 if(window.LeadIntelAccountCache)window.LeadIntelAccountCache.afterVerification(initializeVerifiedProcessMap);else initializeVerifiedProcessMap();

@@ -99,3 +99,23 @@ for(const [offer,buyers] of [['Custom metal manufacturing','Industrial project c
     assert.equal(I.status(state).current,false,'real commercial edits still invalidate Strategy');
   });
 }
+
+test('reopening an empty reference library preserves researched inputs and the exact Strategy used for company scores',()=>{
+  const f=approvedReloadFixture();
+  f.state.market.researchResults=[{url:'https://clinic.example/project',market:'Denmark',text:'Construction of an outpatient clinic.'}];
+  f.state.market=f.r.LeadIntelMarket.normalizeMarketState(f.state.market);
+  f.state.market.researchContextFingerprint=f.I.researchFingerprint(f.state);
+  f.state.market.strategyApproval=f.I.approval(f.state,'2026-11-18T12:00:00Z');
+  const signed=f.state.market.strategyApproval.signature;
+  const Portfolio=require('../reference-customer-portfolio.js');
+  f.state=Portfolio.migrateLegacy(f.state);
+  assert.equal(f.state.referenceCustomerPortfolio.lists.length,0);
+  for(let i=0;i<2;i++){
+    f.state=f.reload(f.state);
+    assert.equal(f.I.researchContext(f.state).stale,false);
+    assert.equal(f.I.signature(f.state),signed);
+    assert.equal(f.I.status(f.state).current,true);
+  }
+  f.state.referenceCustomerPortfolio.lists.push({id:'selected',active:true,reference:{publishedModel:{active:true,fingerprint:'retail-buyers'}}});
+  assert.equal(f.I.status(f.state).recovery,'research','a newly active model changes the search inputs');
+});

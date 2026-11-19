@@ -146,3 +146,49 @@ test('unmet buyer quality is not labelled as met and sync recovery takes priorit
  assert.equal(blocked.requiredCompleted,stage.requiredCompleted);assert.equal(blocked.steps.find(s=>s.id==='buyer-quality').complete,false);
  const passed=Journey.buildJourneyModel({...input,buyerQualityPassed:true})[4];assert.match(passed.steps.find(s=>s.id==='buyer-quality').label,/requirements met/);
 });
+
+test('Companies next actions reach the blocking prerequisite and then the saved queue without starting a run',()=>{
+ const strategy=require('../strategy-integrity.js');
+ const main={website:'https://seller.example',targetMarkets:['Sweden'],answers:{priority_offers:'Offer',ideal_customer:'Manufacturer',buyer_roles:'Director',exclusions:'None'},profile:{priorityOffers:'Offer'},approved:true,market:{strategyApproved:true,icps:[{active:true}],signals:[{id:'expansion',name:'Expansion',active:true}],researchResults:[{url:'https://evidence.example',text:'Manufacturing evidence'}],researchStatus:'complete',lastResearchAt:'2026-11-01'}};
+ main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
+ main.market.researchContextFingerprint=strategy.researchFingerprint(main);main.market.strategyApproval=strategy.approval(main);
+ main.market.signals[0].weight=8;
+ const discovery={status:'partial',needsRefresh:true,selectedProspects:[{domain:'saved.example',company:'Saved company'}]};
+ const saved=JSON.stringify(discovery);
+ const input={main,discovery,currentStep:5,availability,discoveryMeta:{targetCount:5},companyOutcome:{pendingCount:8,checkedCount:0,strongFitCount:0,targetMet:false}};
+ const {w,ctx}=renderer([]),d=w.document,opened=[];
+ try{
+  d.querySelector('.steps').insertAdjacentHTML('beforeend','<li data-workflow-stage="4"><em data-sidebar-stage-state></em></li>');
+  d.getElementById('commercial-process-map').append(d.getElementById('journey-stage-guide'));
+  d.body.insertAdjacentHTML('beforeend','<button id="activate-market-strategy">Review strategy</button><button id="review-next-companies">Review next five</button><section id="company-search-progress"></section>');
+  let runs=0;for(const button of d.body.querySelectorAll('#review-next-companies,#activate-market-strategy'))button.addEventListener('click',()=>runs++);
+  w.HTMLElement.prototype.scrollIntoView=()=>{};
+  ctx.window.LeadIntelProfileMarket={open:()=>opened.push('market research')};ctx.openProcessStep=stage=>opened.push(stage);ctx.setTimeout=callback=>callback();
+  vm.runInContext(source.slice(source.indexOf('function reviewMiniStep('),source.indexOf('if(processMap){',source.indexOf('function reviewMiniStep(')))+
+   source.slice(source.indexOf('processMap.addEventListener("click"'),source.indexOf('const steps=document.querySelector(".steps");')),ctx);
+  function show(extras={}){
+   const model=Journey.buildJourneyModel({...input,...extras});ctx.journeyModel=()=>model;ctx.syncProcessMap();return model;
+  }
+  function checkAndClick(text,stageId,itemId){
+   const guide=d.querySelector('[data-stage-next-action]'),sidebar=d.querySelector('[data-workflow-stage="4"] [data-sidebar-next-action]');
+   assert.equal(guide.textContent,text);assert.equal(guide.dataset.stageId,String(stageId));assert.equal(sidebar.dataset.stageId,String(stageId));assert.equal(sidebar.dataset.sidebarSubstep,itemId);
+   assert.equal(guide.dataset.stageMiniStep,itemId);guide.click();
+  }
+  const blocked=show();
+  assert.deepEqual(blocked[3].steps.filter(s=>s.complete).map(s=>s.id),['scope','pipeline']);
+  assert.equal(blocked[1].steps.find(s=>s.id==='research').complete,false);assert.equal(blocked[2].steps.find(s=>s.id==='strategy').complete,false);
+  assert.equal(blocked[4].available,true);
+  checkAndClick('Update market research in Profile',2,'research');assert.deepEqual(opened,['market research']);
+  const missingSetup=show({websiteActivated:false});
+  assert.equal(missingSetup[3].nextAction,'Activate your company website in Setup');assert.deepEqual(missingSetup[3].nextTarget,{stageId:1,itemId:'activate-website'});
+  main.market.researchContextFingerprint=strategy.researchFingerprint(main);main.market.strategyApproved=false;delete main.market.strategyApproval;
+  show();
+  checkAndClick('Review and approve Strategy',3,'strategy');assert.deepEqual(opened,['market research',3]);assert.equal(d.activeElement.id,'activate-market-strategy');
+  main.market.strategyApproval=strategy.approval(main);main.market.strategyApproved=true;
+  show();checkAndClick('Review saved companies',4,'saved-review');assert.equal(d.activeElement.id,'review-next-companies');
+  const retainedApproval=show({websiteActivated:false});
+  assert.equal(retainedApproval[3].nextAction,'Review saved companies','an active signed Strategy and confirmed targeting can continue saved research in Companies');
+  show({discovery:{...discovery,status:'running'}});checkAndClick('View company search progress',4,'search-progress');assert.equal(d.activeElement.id,'company-search-progress');
+  assert.equal(runs,0);assert.equal(JSON.stringify(discovery),saved);
+ }finally{w.close();}
+});

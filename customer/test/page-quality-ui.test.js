@@ -80,3 +80,15 @@ test('stale Strategy permits opening review and recovery while still blocking fi
   assert.equal(h.api.require('strategy','advance'),false);
  }finally{h.close();}
 });
+
+test('the Strategy page check opens Profile market research when that is the prerequisite for approval',async()=>{
+ const h=harness();try{
+  const d=h.w.document,opened=[];d.querySelector('.step-view.active').dataset.step='4';
+  h.w.LeadIntelPageProcedures.strategyBlockers=()=>['Update market research in Profile.'];
+  h.w.LeadIntelStrategyIntegrity={status:()=>({current:false,recovery:'research',code:'research_stale'})};
+  h.w.LeadIntelJourneyProgress=require('../journey-progress.js');h.w.LeadIntelJourney={reviewMiniStep:(stage,item)=>opened.push([stage,item])};
+  await h.api.open('strategy');
+  assert.equal(h.api.require('strategy','advance'),false);
+  d.querySelector('[data-quality-resolve]').click();assert.deepEqual(opened,[[2,'research']]);
+ }finally{h.close();}
+});

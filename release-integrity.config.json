@@ -7957,14 +7957,32 @@
       ]
     },
     {
-      "id": "opportunity-completed-research-context-recovery",
+      "id": "company-search-review-recovery-20261119",
       "type": "text",
-      "url": "/customer/app.js",
+      "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "function repairCompletedOpportunityResearchContext()",
-        "if(![original,legacyOriginal].includes(market.researchContextFingerprint))return false;",
-        "if(hasResults&&market.researchContextFingerprint!==currentFingerprint)repairCompletedOpportunityResearchContext();"
+        "function companyRecoveryAction(",
+        "Update market research in Profile",
+        "Review saved companies"
+      ]
+    },
+    {
+      "id": "company-search-review-recovery-shell-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": ["&company-search-recovery=20261119-v1"]
+    },
+    {
+      "id": "opportunity-completed-research-context-recovery",
+      "type": "text",
+      "url": "/customer/strategy-integrity.js",
+      "status": 200,
+      "contains": [
+        "function completedOpportunityScope(market,scope)",
+        "if(opportunity.length!==1||opportunity[0].active!==true)return null;",
+        "if(prior&&matchesSavedScope(prior,saved,true))return {stale:false,fingerprint:current};"
       ]
     },
     {
