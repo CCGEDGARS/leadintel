@@ -65,8 +65,9 @@ test('Firecrawl support is scoped, dated and uses no AI, search or deep-research
   const other=await runCopilotTurn(env,{workspaceId:'other',question});assert.equal(other.firecrawl_usage.selected.requests,0);assert.equal(other.firecrawl_usage.balance.remainingCredits,null);
 });
 test('dated investigation uses the requested UTC day and does not present newer events as historical charges',async t=>{
-  const {env,credential,raw}=fixture(t),now=Date.now(),day=new Date(now-2*86400000).toISOString().slice(0,10);
+  const {env,credential,raw}=fixture(t);
   await requestFirecrawl(env,'one','search',{credential,payload:{query:'q'},fetchImpl:async()=>result(3)});
+  const now=Date.now(),day=new Date(now-2*86400000).toISOString().slice(0,10);
   const report=await readFirecrawlUsage(env,'one',{question:'Firecrawl credits on '+day,now});assert.equal(report.selected.requests,0);assert.equal(report.last24Hours.requests,1);
   raw.prepare('UPDATE audit_events SET created_at=? WHERE event_type=?').run(day+'T12:00:00Z',FIRECRAWL_RECEIPT_EVENT);
   assert.equal((await readFirecrawlUsage(env,'one',{question:'Firecrawl credits on '+day,now})).selected.reportedCredits,3);

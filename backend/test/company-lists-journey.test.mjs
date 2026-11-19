@@ -9,7 +9,21 @@ import {putCustomerState} from '../src/customer-state.js';
 import app from '../src/app.js';
 import {runCompanyListJobs} from '../src/company-lists.js';
 const require=createRequire(import.meta.url),Ref=require('../../customer/reference-customers.js');
-async function openCompanies(browser,f,contexts,errors){const c=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});contexts.push(c);await c.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);await c.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(f.origin+'/customer/');await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelCompanyListUI&&window.LeadIntelDiscoveryUI);await p.waitForLoadState('networkidle');await p.evaluate(()=>LeadIntelDiscoveryUI.open({focus:'companies'}));return p;}
+async function openCompanies(browser, fixture, contexts, errors) {
+  const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
+  contexts.push(context);
+  await context.addCookies([{name:'leadintel_session',value:sessionToken,url:fixture.origin}]);
+  await context.route('**/*',route=>{
+    return new URL(route.request().url()).origin===fixture.origin ? route.continue() : route.abort();
+  });
+  const page=await context.newPage();
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(fixture.origin+'/customer/');
+  await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&window.LeadIntelCompanyListUI&&window.LeadIntelDiscoveryUI);
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(()=>LeadIntelDiscoveryUI.open({focus:'companies'}));
+  return page;
+}
 
 test('company-list browser chooses one reference, verifies criteria, builds 200 with browser closed, downloads, saves and reopens through real HTTP/SQL',{timeout:180000},async t=>{
  let chromium;try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(e){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw e;t.skip('Chromium unavailable');return;}
