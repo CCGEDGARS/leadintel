@@ -167,7 +167,7 @@ function productionFetch({ customerHtml, discoveryUi, diagnosticsStatus=401, ses
   };
 }
 
-const storageEntries=['topbar.js','account-cache.js','ai-settings.js','attention-centre.js','api-transport.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[0]).join('\n');
+const storageEntries=['topbar.js','account-cache.js','ai-settings.js','attention-centre.js','api-transport.js','workspace-storage-management.js','research-report.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[0]).join('\n');
 const workflowEntries=fs.readFileSync(path.join(root,'customer/index.html'),'utf8').split('\n').filter(line=>/conversation-workflow-ui\.js|conversation\.css|research-brief\.js/.test(line)).join('\n');
 const step6EntryVersion=fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/step6-journey=\d{8}-v\d+/)?.[0]||'';
 const step1EntryVersion=fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(/step1-setup=\d{8}-v\d+/)?.[0]||'';
