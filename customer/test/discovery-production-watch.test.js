@@ -185,7 +185,7 @@ const boundedDiscoveryRuntime = [
   (()=>{const ui=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');return ui.slice(ui.indexOf('function recoverUnchangedCompanyResearch('),ui.indexOf('function currentStrategyApproval('))+ui.slice(ui.indexOf('function sameStrategyFingerprint('),ui.indexOf('function restoreCheckedCompanyResearch('));})(),
   "message-interaction=20261117-v1",
   'function companyRankedCardBodyHtml( function rememberCompanyRows( function restoreCompanyRowFocus( company-row-summary companyStrategyReviewNoticeHtml(view) company-readability-css=20261117-v1',
-  'function rankedCompanyResults() data-company-total view.visible.map(companyRankedCardHtml) handleCompanyReviewClick(event) company-ranking-css=20261116-v1',
+  'function rankedCompanyResults() data-company-total companyDisplayPage(groups,0) handleCompanyReviewClick(event) company-ranking-css=20261116-v1',
 
   "if(row.status==='not_searched')",
   "const records=checks.flatMap",
@@ -200,7 +200,7 @@ const boundedDiscoveryRuntime = [
   "Company scoring must not freeze the separately owned Buyers view. renderPipeline();refreshResearchBriefViews();\n  return;",
   'if(!discoveryMounted)ensureDiscoveryMounted({refreshCrm:false,preloadMessages:false}) if(preloadMessages)void loadOutreachModules()',
  'checkedCount?(["error","partial"].includes(discovery.status) budgetIncomplete,callsUsed:discoveryCallsUsed(),callLimit:discoveryCallLimit Evidence incomplete',
- 'if(signal?.leadIntelSavedEvidenceOnly) if(plan.needsWeb&&!savedEvidenceOnly) data-review-action="saved-evidence" savedEvidenceOnly:true,targetDomain:key',
+ 'if(signal?.leadIntelSavedEvidenceOnly) if(plan.needsWeb&&!savedEvidenceOnly&&!rejectedFitFor(candidate)) data-review-action="saved-evidence" savedEvidenceOnly:true,targetDomain:key',
  'remainingBudgetInsufficient:!targetOnly&&!recheckOnly',
  "if(recheckOnly){ const retained=previousRawResults.filter(e=>e.sourceRead===true queries.push(...checks);discovery.queries=queries; runCandidates.filter(c=>!evaluated.has(canonicalDomain(c.domain))) Reviewed saved evidence and completed company checks before moving to the next company.",
  "if(budgetIncomplete)discovery.status='partial' canceled,budgetIncomplete checkedCount:runCandidates.length,websitesChecked:discovery.funnel.companySitesChecked const evidenceOwner=qualified||review if(partialCheckedTargets&&!qualified)continue",
@@ -253,7 +253,7 @@ const boundedDiscoveryRuntime = [
   'const waitForRun=async operation=> BUYER_RESEARCH_CANCELED Cross-checking buyer evidence with grounded web research scopeIsCurrent',
   'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
   'async function discoverCampaign leadIntelScopeValid campaignPlan.results=runCandidates',
-  'A new search does not replace your saved selections. This search has finished.',
+  'A new search does not replace your saved selections. No checked companies yet',
   'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1&message-startup=20261118-v1',
   'function buyerContinuationIssue( function pointToBuyerRequirement( guided-primary-action acquisitionFailed=false Completed buyer research stages',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
@@ -330,9 +330,17 @@ test('production proof rejects a stale core contact scheduler, channel receipts 
   assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK,id);assert.equal(proof.smokeChecks.find(row=>row.id===id).passed,false,id);
  }
 });
+test('both Companies scripts and the review layout refresh for returning browsers',()=>{
+ const entry=fs.readFileSync(path.join(root,'customer/index.html'),'utf8');
+ const sources=Array.from(entry.matchAll(/<script[^>]+src="([^"]+)"/g),match=>new URL(match[1],'https://example.test/'));
+ for(const file of ['discovery-ui.js','company-search-progress.js'])
+  assert.equal(sources.find(url=>url.pathname.endsWith('/'+file))?.searchParams.get('company-review-queue'),'20261119-v1',file);
+ const ui=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');
+ assert.match(ui,/asset\("discovery\.css"\)\+"[^"]*company-review-queue=20261119-v1/);
+});
 test('production proof rejects an older cumulative ranking model, view, loader or score style',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore(),base=productionFetch({customerHtml:fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),discoveryUi:fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8')});
- for(const [pathname,token,id] of [['/customer/discovery-engine.js','function rankCompanyResults(','cumulative-company-ranking-model'],['/customer/discovery-ui.js','view.visible.map(companyRankedCardHtml)','cumulative-company-ranking-view'],['/customer/','company-ranking-ui=20261116-v1','cumulative-company-ranking-cache'],['/customer/discovery.css','.company-review-score','cumulative-company-ranking-style']]){
+ for(const [pathname,token,id] of [['/customer/discovery-engine.js','function rankCompanyResults(','cumulative-company-ranking-model'],['/customer/discovery-ui.js','companyDisplayPage(groups,0)','cumulative-company-ranking-view'],['/customer/','company-ranking-ui=20261116-v1','cumulative-company-ranking-cache'],['/customer/discovery.css','.company-review-score','cumulative-company-ranking-style']]){
   const fetchImpl=async url=>{const r=await base(url);return new URL(String(url)).pathname===pathname?response({text:(await r.text()).replaceAll(token,'previous-company-ranking')}):r;};
   const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'cumulative-ranking',fetchImpl,nonce:'cumulative-ranking'});
   assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK,id);assert.equal(proof.smokeChecks.find(c=>c.id===id).passed,false,id);
@@ -582,7 +590,7 @@ test('production proof rejects stale company fact parsing, offer ownership and e
 
 test('production proof rejects a stale complete-read policy or a saved-only action without its web boundary',async()=>{
  const {verifyRelease,VERDICTS}=await loadCore(),entry=fs.readFileSync(path.join(root,'customer/index.html'),'utf8'),ui=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');
- for(const [pathname,token]of [['/customer/discovery-engine.js','const extendsRead='],['/customer/discovery-ui.js','if(signal?.leadIntelSavedEvidenceOnly)'],['/customer/discovery-ui.js','if(plan.needsWeb&&!savedEvidenceOnly)'],['/customer/discovery-ui.js','data-review-action="saved-evidence"']]){
+ for(const [pathname,token]of [['/customer/discovery-engine.js','const extendsRead='],['/customer/discovery-ui.js','if(signal?.leadIntelSavedEvidenceOnly)'],['/customer/discovery-ui.js','if(plan.needsWeb&&!savedEvidenceOnly&&!rejectedFitFor(candidate))'],['/customer/discovery-ui.js','data-review-action="saved-evidence"']]){
   const normal=productionFetch({customerHtml:entry,discoveryUi:ui}),proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'complete-read-saved-only',fetchImpl:async url=>{const result=await normal(url);return new URL(String(url)).pathname===pathname?response({text:(await result.text()).replaceAll(token,'stale-complete-read-policy')}):result;},nonce:'stale-complete-read-policy'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK,pathname+':'+token);
  }
 });

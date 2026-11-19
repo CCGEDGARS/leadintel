@@ -18,3 +18,11 @@ test('rendered clock ticks preserve the meter node, do not advance counts, and s
   d.status='partial';ctx.loadMeta=()=>({lastCompanyRun:{runId:1,canceled:true}});ctx.renderCompanySearchProgress();assert.ok(cleared);assert.equal(w.document.getElementById('company-search-progress').dataset.state,'canceled');now=91000;ctx.renderCompanySearchProgress();assert.equal(w.document.querySelector('[data-company-search-elapsed]').textContent,'1:00');
  }finally{w.close();}
 });
+
+test('an interrupted search identifies the recorded check and distinguishes run activity from list quality',()=>{
+ const result=Progress.outcome({status:'error',goal:'strong_fit',pendingCount:17});
+ const model=Progress.model({status:'error',result,failureNote:'Assessment could not verify the supplied quote · example.com',funnel:{companiesIdentified:25,companySitesChecked:12,officialSitesRead:[]}});
+ assert.match(model.note,/supplied quote · example.com.*17 companies await evidence review/);
+ assert.deepEqual(model.stats,[['Names identified this run',25],['Websites checked this run',12],['Checked companies in this list',0],['Strong fit in this list · 80+',0]]);
+ assert.doesNotMatch(Progress.model({status:'error',result}).note,/provider|billing|credits/i);
+});
