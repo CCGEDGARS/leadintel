@@ -62,3 +62,8 @@ test('the generated Trigger-led definition resolves Profile context without borr
  const main=workspace();main.market.icps[0].active=false;main.market.icps[0].description='Inactive definition must not leak';main.market.icps[2].description='Companies that fit the core profile and are currently showing relevant buying signals.';
  const c=config({profileIds:['icp-trigger-led'],signalMode:'require',signalIds:['hiring']},main);assert.match(c.profile.idealCustomer,/Equipment manufacturers/);assert.doesNotMatch(JSON.stringify(c),/Inactive definition must not leak/);
 });
+
+
+test('Any retains only reviewer-supported profile matches; All requires every selected profile',()=>{
+ const c=config({profileIds:['icp-core','icp-reference-lookalike']});const result=review(c,candidate(),{supportedProfileIds:['icp-core']});assert.ok(result);assert.deepEqual(result.profileMatches.map(m=>m.profileId),['icp-core']);assert.equal(result.matches.length,1);assert.equal(review({...c,profileMode:'all'},candidate(),{supportedProfileIds:['icp-core']}),null);
+});

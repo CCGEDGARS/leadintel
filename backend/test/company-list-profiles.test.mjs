@@ -63,3 +63,9 @@ test('editing a definition without changing its id invalidates a reviewed previe
  const r=await request(f,{...input,contextFingerprint:before.contextFingerprint,signalMode:'require',signalIds:['hiring']});assert.equal(r.status,409);
  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM company_lists').get().n,0);
 });
+
+
+test('Any retains a verified profile after the independent reviewer removes an unsupported optional comparison',async t=>{
+ const f=await setup(t);f.env.COMPANY_LIST_TEST_SERVICES=profileServices({count:1,reviewChange:()=>({supportedProfileIds:['icp-core']})});
+ const list=await finish(f,(await start(f,{count:1,profileIds:['icp-core','icp-reference-lookalike']})).id);assert.equal(list.status,'complete');assert.deepEqual(list.results[0].profileMatches.map(m=>m.profileId),['icp-core']);assert.equal(list.results[0].audit.review.status,'complete');
+});
