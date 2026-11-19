@@ -12,10 +12,10 @@
   const response=await root.fetch(`${base}${pathname}?workspace_id=${encodeURIComponent(workspace||'')}`,{method,credentials:'include',signal:root.AbortSignal?.timeout?.(15000),headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();if(!response.ok)throw Error(result.error||'Storage could not be loaded. Retry.');return result;
  }
- function say(message){dialog.querySelector('[data-storage-message]').textContent=message;}
+ function say(message,error=false){const node=dialog.querySelector('[data-storage-message]');node.textContent=message;node.dataset.error=String(error);}
  function render(){
   const canEdit=bridge()?.workspace?.role==='owner';
-  dialog.querySelector('[data-storage-content]').innerHTML=`<section class="storage-saving"><h3>Choose what to keep</h3><label><input type="checkbox" data-auto-reports ${preferences?.auto_report_copies?'checked':''} ${!canEdit||busy||!preferences?'disabled':''}> Save an extra report copy after research</label><p>Turn this off to save report copies only when you choose Save report. Research evidence, monitoring findings, CRM records and workflows remain saved.</p><p>Identical company-file uploads are reused. Abandoned book uploads expire automatically; saved books and files are never removed based on age or relevance.</p>${!canEdit?'<small>Only the workspace owner can change saving settings or delete files here.</small>':''}</section><h3>Uploaded files and books</h3><p>Largest files first. Download a copy before deleting. Other content still counts toward the usage bars.</p><div class="storage-file-list">${files.length?files.map((file,index)=>`<article class="storage-file"><div><strong>${esc(file.name)}</strong><small>${file.kind==='book'?'Book':'Company file'} · ${esc(file.status)} · ${file.measured?bytes(file.bytes):`${bytes(file.bytes)} accounted; total not yet confirmed`}</small></div><div class="storage-file-actions"><a class="ai-settings-btn" href="${path(file.kind,file.id)}/original?workspace_id=${encodeURIComponent(bridge()?.workspace?.id||'')}" target="_blank" rel="noopener">Download</a><button class="ai-settings-btn storage-delete" type="button" data-delete-file="${index}" ${!canEdit||busy||['Processing','Uploading','Deleting'].includes(file.status)?'disabled':''}>${file.kind==='book'?'Delete book':'Delete file'}</button></div></article>`).join(''):'<p>No uploaded company files or books.</p>'}</div>`;
+  dialog.querySelector('[data-storage-content]').innerHTML=`<section class="storage-saving"><h3>Choose what to keep</h3><label><input type="checkbox" data-auto-reports ${preferences?.auto_report_copies?'checked':''} ${!canEdit||busy||!preferences?'disabled':''}> Save an extra report copy after research</label><p>Turn this off to save report copies only when you choose Save report. Research evidence, monitoring findings, CRM records and workflows remain saved.</p><p>Identical company-file uploads are reused. Abandoned book uploads expire automatically; saved books and files are never removed based on age or relevance.</p>${!canEdit?'<small>Only the workspace owner can change saving settings or delete files here.</small>':''}</section><h3>Uploaded files and books</h3><p>Largest files first. Download a copy before deleting. Other content still counts toward the usage bars.</p><div class="storage-file-list">${files.length?files.map((file,index)=>`<article class="storage-file"><div><strong>${esc(file.name)}</strong><small>${file.kind==='book'?'Book':'Company file'} · ${esc(file.status)} · ${file.measured?bytes(file.bytes):`${bytes(file.bytes)} accounted; total not yet confirmed`}</small></div><div class="storage-file-actions"><a class="ai-settings-btn" href="${path(file.kind,file.id)}/original?workspace_id=${encodeURIComponent(bridge()?.workspace?.id||'')}" target="_blank" rel="noopener">Download</a><button class="ai-settings-btn storage-delete" type="button" data-delete-file="${index}" ${!canEdit||busy||['Processing','Uploading','Deleting'].includes(file.status)?'disabled':''}>${file.kind==='book'?'Delete book':'Delete file'}</button></div></article>`).join(''):preferences?'<p>No uploaded company files or books.</p>':busy?'<p>Loading saved files…</p>':'<p>File list unavailable. Refresh files to try again.</p>'}</div>`;
  }
  async function load(){
   const token=++generation;busy=true;files=[];preferences=null;render();say('Loading files and saving preferences…');
@@ -24,7 +24,7 @@
    if(!current(token))return;
    if(list.workspace_id!==bridge().workspace.id||policy.workspace_id!==bridge().workspace.id)throw Error('Workspace changed. Reopen storage.');
    files=list.files;preferences=policy.preferences;say('Usage includes original files and their extracted content.');
-  }catch(error){if(current(token))say(error.message);}
+  }catch(error){if(current(token))say(error.message,true);}
   finally{if(current(token)){busy=false;render();}}
  }
  async function remove(index){
@@ -38,7 +38,7 @@
    await api(path(file.kind,file.id),{method:'DELETE',body:{expectedRevision:file.revision},workspace});
    if(!current(token))return;
    await load();if(owner===context()){void root.LeadIntelStorage?.refresh();root.dispatchEvent(new root.CustomEvent('leadintel:storage-files-changed'));}
-  }catch(error){if(current(token))say(error.message);}
+  }catch(error){if(current(token))say(error.message,true);}
   finally{if(current(token)){busy=false;render();}}
  }
  async function savePreference(value){
@@ -46,7 +46,7 @@
   if(busy||!preferences||!current(token)||bridge()?.workspace?.role!=='owner')return;
   busy=true;render();
   try{const result=await api('/api/storage/preferences',{method:'POST',body:{auto_report_copies:value,revision:preferences.revision}});if(!current(token))return;preferences=result.preferences;say('Saving preference updated. Existing content is preserved.');}
-  catch(error){if(current(token))say(error.message);}
+  catch(error){if(current(token))say(error.message,true);}
   finally{if(current(token)){busy=false;render();}}
  }
  function open(){

@@ -49,3 +49,7 @@ test('failed policy checks, empty results and delayed responses never create unw
 test('a harmless market normalization during preference loading saves into the current state',async()=>{
  const w=setup();try{let finish;const f=reports(w,{allowed:()=>new Promise(resolve=>finish=resolve)});const old=f.state.market,pending=f.ui.capture();f.state.market=JSON.parse(JSON.stringify(old));finish(true);assert.equal(await pending,true);assert.equal(f.state.market.researchReports.length,1);assert.equal(old.researchReports.length,0);assert.equal(f.saves,1);}finally{w.close();}
 });
+test('a storage outage is visible as an error, never as an empty file inventory',async()=>{
+ const w=setup();w.fetch=async()=>{throw Error('Storage connection unavailable');};
+ try{w.eval(source('workspace-storage-management.js'));w.LeadIntelStorageManagement.open();await tick();assert.match(w.document.querySelector('dialog').textContent,/File list unavailable/);assert.doesNotMatch(w.document.querySelector('dialog').textContent,/No uploaded company files/);assert.equal(w.document.querySelector('[data-storage-message]').dataset.error,'true');assert.equal(w.document.querySelector('[data-auto-reports]').disabled,true);}finally{w.close();}
+});
