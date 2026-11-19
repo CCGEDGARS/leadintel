@@ -46,6 +46,11 @@
   const proof=e=>{const page=pages.find(p=>p.url===url(e?.url));return page&&contains(page.text,e.quote)?{url:page.url,quote:clean(e.quote,1000),readAt:page.readAt,date:clean(e.date,40)}:null;};
   const identity=proof(raw.identity),location=proof(raw.location);if(!identity||domain(identity.url)!==host||!location||!config.markets.includes(raw.location?.market))return null;
   if(!clean(identity.quote).toLowerCase().includes(company.toLowerCase())&&!clean(identity.quote).toLowerCase().includes(host))return null;
+  if(config.qualityVersion===QUALITY_VERSION){
+   const text=clean(identity.quote).toLowerCase(),name=company.toLowerCase();let at=text.indexOf(name),named=false;
+   while(at>=0){if(!/[\p{L}\p{N}]/u.test(text[at-1]||'')&&!/[\p{L}\p{N}]/u.test(text[at+name.length]||'')){named=true;break;}at=text.indexOf(name,at+1);}
+   if(!named)return null;
+  }
   if(!clean(raw.location?.label)||!clean(location.quote).toLowerCase().includes(clean(raw.location.label).toLowerCase()))return null;
   const matches=[];
   for(const s of config.signals){const m=(raw.matches||[]).find(x=>x.signalId===s.id),e=m&&proof(m);if(!e)continue;

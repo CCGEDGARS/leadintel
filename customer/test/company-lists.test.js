@@ -32,3 +32,10 @@ test('every size uses the same evidence review; limits scale explicitly without 
  }
  assert.throws(()=>config({budget:5001}));assert.throws(()=>config({budget:0}));assert.equal(config({count:200,budget:150}).budget,150,'small explicit allowance is not silently raised');
 });
+
+test('new-policy identity must name the company; a domain footer or another company name prefix cannot substitute',()=>{
+ const source={...page,text:page.text+' Factory10 manufactures equipment at factory.example.'};
+ const identity={url:source.url,quote:'Factory10 manufactures equipment at factory.example.'};
+ for(const company of ['Invented Factory','Factory1'])assert.equal(M.assess({...raw,company,identity},config(),[source]),null);
+ assert.ok(M.assess({...raw,company:'Factory10',identity},config(),[source]));
+});
