@@ -72,6 +72,7 @@ export function sanitizeClientScreenContext(input){
   const entityType=cleanText(source.entityType??source.entity_type,MAX_ENTITY_TYPE);
   const entityId=cleanText(source.entityId??source.entity_id,MAX_ENTITY_ID);
   const out={step,label};
+  if(source.saveState&&['saved','unsaved','conflict','unknown'].includes(source.saveState.status))out.saveState={status:source.saveState.status,...(Number.isSafeInteger(source.saveState.version)&&source.saveState.version>=0?{version:source.saveState.version}:{})};
   if(entityType)out.entityType=entityType;
   if(entityId)out.entityId=entityId;
   const activity=sanitizeActivity(source.activity);

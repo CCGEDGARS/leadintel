@@ -39,6 +39,8 @@ export function currentCopilotScreenContext(){
       .map(data=>({domain:data.companyKey,score:Number(data.companyScore),state:data.scoreState}))
       .sort((a,b)=>b.score-a.score).slice(0,10);
   }
+  const bridge=window.LeadIntelServerBridge,persistence=window.LeadIntelWorkspacePersistence;
+  context.saveState={status:bridge?.conflict?'conflict':persistence?.hasUnsavedChanges?.()?'unsaved':persistence?.isExplicitlySaved?.()?'saved':'unknown',...(Number.isInteger(bridge?.stateVersion)?{version:bridge.stateVersion}:{})};
   context.controls=currentCopilotControls();
   const workspace=String(window.LeadIntelServerBridge?.workspace?.id||'');
   const operations=window.LeadIntelReliabilityTrace?.snapshot?.();

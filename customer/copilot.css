@@ -103,3 +103,10 @@ html.leadintel-copilot-ready body{transition:padding-right .28s cubic-bezier(.2,
 .copilot-task[data-status="draft"],.copilot-task[data-status="blocked"]{border-left-color:#b42332}.copilot-task[data-status="running"]{border-left-color:#2563a5}.copilot-task[data-status="complete"]{border-left-color:#15734e}.copilot-task[data-status="paused"]{border-left-color:#b77910}
 .copilot-task-blocker,.copilot-task-error{padding:12px;border:1px solid #e7aab0;border-radius:8px;background:#fff0f1;color:#8f1827}.copilot-task details{margin-top:12px}.copilot-task summary{cursor:pointer;font-weight:650;padding:8px 0}
 .copilot-task-form{display:grid;gap:12px;margin-top:10px}.copilot-task-form label{display:grid;gap:6px}.copilot-task-form input,.copilot-task-form select{box-sizing:border-box;width:100%;min-width:0;padding:9px;border:1px solid #b7cac1;border-radius:7px;background:white;color:#17372d;font:inherit}.copilot-task-form input[type="checkbox"]{width:20px;height:20px}.copilot-task-form select[multiple]{min-height:85px}.copilot-task button{border:1px solid #9cb8ac;border-radius:8px;padding:9px 12px;background:#fff;color:#154f3b;cursor:pointer;font:inherit;font-weight:650}.copilot-task button:disabled{opacity:.55;cursor:wait}.copilot-task button:focus-visible,.copilot-task input:focus-visible,.copilot-task select:focus-visible{outline:3px solid #2d8069;outline-offset:2px}.copilot-task-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.copilot-task[data-status="ready"] .copilot-task-actions button:first-child{background:#12674e;color:#fff}.copilot-task li{margin-bottom:8px}.copilot-task a{color:#095e49;text-decoration:underline}
+
+/* Evidence remains readable on narrow screens and in saved conversations. */
+.copilot-grounding {margin:12px 0;padding:10px;border:1px solid #526077;border-radius:10px;font-size:12px;overflow-wrap:anywhere;}
+.copilot-grounding summary {cursor:pointer;font-weight:700;}
+.copilot-grounding p {margin:6px 0;line-height:1.5;}
+.copilot-evidence-row {padding:8px 0;border-top:1px solid #526077;}
+.copilot-grounding .copilot-evidence-warning {color:#ffd58a;}

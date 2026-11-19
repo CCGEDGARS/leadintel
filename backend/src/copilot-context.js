@@ -19,8 +19,9 @@ function clean(value,max=MAX_TEXT){return String(value??'').replace(/\s+/g,' ').
 function object(value){return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}
 function array(value,limit){return Array.isArray(value)?value.slice(0,limit):[];}
 function safeNumber(value){const n=Number(value);return Number.isFinite(n)?n:0;}
-async function firstSafe(env,sql,...args){try{return await env.DB.prepare(sql).bind(...args).first();}catch{return null;}}
-async function allSafe(env,sql,...args){try{const {results=[]}=await env.DB.prepare(sql).bind(...args).all();return Array.isArray(results)?results:[];}catch{return [];}}
+function unavailable(env,sql){const section=/crm_activities/.test(sql)?'crmActivities':/crm_companies/.test(sql)?'crm':/email_activity/.test(sql)?'delivery':/dossiers/.test(sql)?'dossiers':/saved_flows/.test(sql)?'flow':/workspace_research_settings/.test(sql)?'researchSettings':/connections|integrations/.test(sql)?'integrations':'usage';env.copilotReadGaps?.add(section);}
+async function firstSafe(env,sql,...args){try{return await env.DB.prepare(sql).bind(...args).first();}catch{unavailable(env,sql);return null;}}
+async function allSafe(env,sql,...args){try{const {results=[]}=await env.DB.prepare(sql).bind(...args).all();return Array.isArray(results)?results:[];}catch{unavailable(env,sql);return [];}}
 
 function safeProfile(value){
   const source=redactProtectedData(object(value));
@@ -35,16 +36,16 @@ function safeProfile(value){
   }
   return out;
 }
-function safeIcp(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),criteria:clean(value.criteria||value.description||value.definition,3000),exclusions:clean(value.exclusions,2000),priority:clean(value.priority,80)};}
+function safeIcp(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),active:value.active!==false,type:clean(value.type,80),criteria:clean(value.criteria||value.description||value.definition,3000),exclusions:clean(value.exclusions,2000),priority:clean(value.priority,80)};}
 function safeSignal(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),description:clean(value.description||value.reason,2400),active:value.active!==false,keywords:array(typeof value.keywords==='string'?value.keywords.split(/[,;\n]+/):value.keywords,12).filter(item=>typeof item==='string').map(item=>clean(item,120)),weight:Math.max(0,Math.min(100,safeNumber(value.weight||value.score)))};}
 function safeResearchItem(item){const value=object(redactProtectedData(item));return {name:clean(value.name||value.title,280),summary:clean(value.summary||value.description||value.hypothesis,2400),score:Math.max(0,Math.min(100,safeNumber(value.score?.total??value.score))),sourceUrl:clean(value.sourceUrl||value.source_url||value.url,1200)};}
 
-async function crmSummary(env,workspaceId){
+async function crmSummary(env,workspaceId,question=''){
   // Speed burst step 3 (2026-10-26): independent reads run concurrently.
   const [countsRow,pipelineRows,companies]=await Promise.all([
     firstSafe(env,`SELECT COUNT(*) AS total,SUM(CASE WHEN pipeline_stage IS NOT NULL THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN lifecycle_status='customer' THEN 1 ELSE 0 END) AS customers FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL`,workspaceId),
     allSafe(env,`SELECT COALESCE(pipeline_stage,'None') AS pipeline_stage,COUNT(*) AS count FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL GROUP BY pipeline_stage ORDER BY count DESC`,workspaceId),
-    allSafe(env,`SELECT id,company_name,website,country,industry,pipeline_stage,opportunity_score,confidence,updated_at FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL ORDER BY COALESCE(opportunity_score,0) DESC,updated_at DESC LIMIT 10`,workspaceId)
+    allSafe(env,`SELECT id,company_name,website,country,industry,pipeline_stage,opportunity_score,confidence,updated_at FROM crm_companies WHERE workspace_id=? AND deleted_at IS NULL ORDER BY CASE WHEN length(company_name)>=3 AND instr(lower(?),lower(company_name))>0 THEN length(company_name) ELSE 0 END DESC,COALESCE(opportunity_score,0) DESC,updated_at DESC LIMIT 10`,workspaceId,clean(question,1000))
   ]);const counts=countsRow||{};
   return {
     total:safeNumber(counts.total),active:safeNumber(counts.active),customers:safeNumber(counts.customers),
@@ -54,14 +55,16 @@ async function crmSummary(env,workspaceId){
 }
 
 async function integrationStatus(env,workspaceId){
-  const [gmail,ai,service]=await Promise.all([
+  const [gmail,ai,service,microsoft]=await Promise.all([
     firstSafe(env,`SELECT 'gmail' AS provider,status,connected_at,updated_at FROM gmail_connections WHERE workspace_id=? LIMIT 1`,workspaceId),
     allSafe(env,`SELECT provider,active,verified_at,last_used_at,updated_at FROM workspace_ai_integrations WHERE workspace_id=? ORDER BY active DESC,updated_at DESC LIMIT 10`,workspaceId),
-    allSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 10`,workspaceId)
+    allSafe(env,`SELECT provider,verified_at,last_used_at,updated_at FROM workspace_service_integrations WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 10`,workspaceId),
+    firstSafe(env,`SELECT status,connected_at,updated_at FROM microsoft_mail_connections WHERE workspace_id=? LIMIT 1`,workspaceId)
   ]);
   const items=[];
   if(gmail)items.push({provider:'gmail',state:clean(gmail.status||'connected',80),connectedAt:clean(gmail.connected_at,80),updatedAt:clean(gmail.updated_at,80)});
-  for(const item of ai)items.push({provider:clean(item.provider,80),state:item.active===0?'inactive':item.verified_at?'connected':'configured',verifiedAt:clean(item.verified_at,80),lastUsedAt:clean(item.last_used_at,80),updatedAt:clean(item.updated_at,80)});
+  if(microsoft)items.push({provider:'microsoft',state:clean(microsoft.status,80),connectedAt:clean(microsoft.connected_at,80),updatedAt:clean(microsoft.updated_at,80)});
+  for(const item of ai)items.push({provider:clean(item.provider,80),kind:'ai',mainEngine:Number(item.active)===1,state:item.verified_at?'connected':'configured',verifiedAt:clean(item.verified_at,80),lastUsedAt:clean(item.last_used_at,80),updatedAt:clean(item.updated_at,80)});
   for(const item of service)items.push({provider:clean(item.provider,80),state:item.verified_at?'connected':'configured',verifiedAt:clean(item.verified_at,80),lastUsedAt:clean(item.last_used_at,80),updatedAt:clean(item.updated_at,80)});
   return items;
 }
@@ -70,7 +73,7 @@ async function supportUsage(env,workspaceId){
  const [consumption,rows,issues]=await Promise.all([
   allSafe(env,`SELECT entity_id AS provider,json_extract(metadata_json,'$.model') AS model,COUNT(*) AS requests,SUM(COALESCE(json_extract(metadata_json,'$.input_tokens'),0)) AS input_tokens,SUM(COALESCE(json_extract(metadata_json,'$.output_tokens'),0)) AS output_tokens FROM audit_events WHERE workspace_id=? AND event_type IN ('ai.generation_completed','ai.web_search_completed') AND created_at>=datetime('now','-30 days') GROUP BY entity_id,json_extract(metadata_json,'$.model') LIMIT 20`,workspaceId),
   allSafe(env,`SELECT provider,json_extract(metadata_json,'$.remaining_credits') AS remaining_credits,verified_at FROM workspace_service_integrations WHERE workspace_id=?`,workspaceId),
-  Promise.all(['openai','anthropic','firecrawl','apollo','hunter'].map(async provider=>({provider,issue:await providerCreditIssue(env,workspaceId,provider)})))
+  Promise.all(['openai','anthropic','gemini','firecrawl','apollo','hunter'].map(async provider=>({provider,issue:await providerCreditIssue(env,workspaceId,provider)})))
  ]);
  return {period:'last 30 days',coverage:'Recorded AI generation/search only; incomplete total spend. Copilot tokens are recorded in message metadata. Subscriptions, enrichment, retries and currency conversion need separate evidence.',consumption:consumption.map(row=>({provider:clean(row.provider,80),model:clean(row.model,120),requests:safeNumber(row.requests),inputTokens:safeNumber(row.input_tokens),outputTokens:safeNumber(row.output_tokens)})),balances:rows.map(row=>({provider:clean(row.provider,80),remainingCredits:row.remaining_credits!=null&&Number.isFinite(Number(row.remaining_credits))?Number(row.remaining_credits):null,verifiedAt:clean(row.verified_at,80),live:false})),creditIssues:issues.filter(row=>row.issue),pricesVerified:false};
 }
@@ -85,7 +88,28 @@ function publicEvidenceUrl(value){
     return clean(url.origin+url.pathname,500);
   }catch{return '';}
 }
-function discoverySummary(payload,screen){
+function marketResearchSummary(market,items){
+  const opportunities=array(market.opportunities||market.research?.items);
+  const reports=array(market.researchReports).filter(row=>row&&typeof row.id==='string'&&Array.isArray(row.sources)).slice(0,10);
+  const verification=object(market.researchVerification),receipts=array(market.researchExecution?.receipts);
+  const reason=message=>{
+    const text=String(message||'');
+    if(/credits_exhausted|insufficient[_ ](?:quota|credit)|credit balance.*too low|billing_hard_limit_reached/i.test(text))return 'credit_or_billing_limit';
+    if(/rate.?limit|429/i.test(text))return 'rate_limit';
+    if(/model_unavailable|model.*not (?:found|available)/i.test(text))return 'model_unavailable';
+    if(/timed? ?out|timeout|AbortError/i.test(text))return 'timeout';
+    if(/401|403|unauth|authentication|not connected|no .*provider/i.test(text))return 'connection_or_access';
+    return 'unclassified_failure';
+  };
+  return {items,count:opportunities.length,omitted:Math.max(0,opportunities.length-items.length),
+    sourceCount:array(market.researchResults).length,status:clean(market.researchStatus,40)||'not_run',stale:market.researchContextStale===true,
+    lastRunAt:clean(market.lastResearchAt,40),completedAt:market.researchExecution?.completedAt||null,
+    reports:{count:reports.length,items:reports.map(row=>({id:clean(row.id,160),mode:clean(row.mode,40),status:clean(row.status,40),savedAt:clean(row.createdAt,40),researchedAt:clean(row.researchedAt,40),sourceCount:row.sources.length}))},
+    verification:{provider:clean(verification.provider,40),status:clean(verification.status,40)||'not_run',checkedAt:clean(verification.verifiedAt,40),coverage:Object.fromEntries(['supplied','eligible','reviewed','omitted','unreviewed'].map(key=>[key,Number.isFinite(Number(verification.coverage?.[key]))?Number(verification.coverage[key]):null]))},
+    errors:array(market.researchErrors,12).map(row=>({provider:clean(row.provider,40),category:reason(row.message)})),
+    receiptsOmitted:Math.max(0,receipts.length-20),receipts:receipts.slice(0,20).map(row=>({provider:clean(row.provider,40),status:clean(row.status,40),phase:clean(row.phase,80)}))};
+}
+function discoverySummary(payload,screen,question=''){
   const discovery=object(payload.discovery);
   const candidates=Array.isArray(discovery.candidates)?discovery.candidates:array(discovery.companies);
   const visibleDomains=new Set((screen.companyScores||[]).map(row=>row.domain));
@@ -101,7 +125,8 @@ function discoverySummary(payload,screen){
       rows.push({item,name,domain,source,fit:scoreValue(item.qualification?.score),opportunity:scoreValue(item.score?.total??item.score)});
     }
   }
-  rows.sort((a,b)=>Number(visibleDomains.has(b.domain))-Number(visibleDomains.has(a.domain))||(b.fit??b.opportunity??-1)-(a.fit??a.opportunity??-1));
+  const mentioned=row=>[row.name,row.domain].some(value=>value.length>=3&&new RegExp('(^|[^\\p{L}\\p{N}])'+value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^\\p{L}\\p{N}])','iu').test(question));
+  rows.sort((a,b)=>Number(mentioned(b))-Number(mentioned(a))||Number(visibleDomains.has(b.domain))-Number(visibleDomains.has(a.domain))||(b.fit??b.opportunity??-1)-(a.fit??a.opportunity??-1));
   const companyScores=rows.slice(0,MAX_TOP_COMPANIES).map(({item,name,domain,source,fit,opportunity})=>{
     const qualification=object(item.qualification);
     const breakdown=Object.fromEntries(['fit','signal','evidence','timing','value'].filter(key=>scoreValue(item.score?.[key])!==null).map(key=>[key,scoreValue(item.score[key])]));
@@ -121,7 +146,7 @@ function discoverySummary(payload,screen){
   const scores=rows.filter(row=>row.source==='candidate').map(row=>row.opportunity).filter(score=>score!==null);
   const failures=array(discovery.searchFailures);
   return {
-    companyCount:candidates.length,reviewCount:array(discovery.potentialMatches).length,companyScores,
+    companyCount:candidates.length,reviewCount:array(discovery.potentialMatches).length,companyScores,detailsTotal:rows.length,detailsOmitted:Math.max(0,rows.length-companyScores.length),
     highPriorityCount:scores.filter(score=>score>=70).length,averageScore:scores.length?Math.round(scores.reduce((sum,n)=>sum+n,0)/scores.length):null,
     status:['idle','running','complete','no_results','partial','error'].includes(discovery.status)?discovery.status:null,
     lastRunAt:clean(discovery.lastRunAt,40),retainedEarlierResults:discovery.retainedLastSuccessfulResults===true,
@@ -143,7 +168,7 @@ function outreachSummary(payload){
 }
 function readiness(main,{icps,signals,markets}){
   const website=clean(main.website||main.profile?.website,1000);
-  const checks={website:Boolean(website),market:markets.length>0,icp:icps.length>0,signal:signals.some(item=>item.active)};
+  const checks={website:Boolean(website),market:markets.length>0,icp:icps.some(item=>item.active!==false),signal:signals.some(item=>item.active)};
   const complete=Object.values(checks).filter(Boolean).length;
   return {checks,completeCount:complete,totalChecks:4,percent:Math.round((complete/4)*100)};
 }
@@ -170,19 +195,34 @@ async function deliveryActivity(env,workspaceId){
   return {period:'last 30 days',sent:find('sent'),replies:find('reply')};
 }
 
-export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role,user}={}){
+export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScreen,role,user,question=''}={}){
   const id=clean(workspaceId,160);if(!id)throw new Error('workspaceId is required');
+  // Per-turn coverage: a failed read is unknown, never evidence of zero records.
+  env={...env,copilotReadGaps:new Set()};
   // Speed burst step 3 (2026-10-26): the workspace state and the six summaries do not depend on each other; they load together.
-  const [state,crm,integrations,usage,dossiers,activities,delivery,operations]=await Promise.all([getCustomerState(env,id),crmSummary(env,id),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id),copilotOperationContext(env,id)]);
+  const [state,crm,integrations,usage,dossiers,activities,delivery,operations]=await Promise.all([getCustomerState(env,id),crmSummary(env,id,question),integrationStatus(env,id),supportUsage(env,id),dossierSummary(env,id),crmActivities(env,id),deliveryActivity(env,id),copilotOperationContext(env,id)]);
   const payload=object(state.payload);const main=object(payload.main);const market=object(main.market);const profile=safeProfile(main.profile);
   const markets=array(main.targetMarkets||main.profile?.targetMarkets,20).map(item=>clean(item,300)).filter(Boolean);
-  const icps=array(market.icps||main.icps,MAX_ICP).map(safeIcp);
-  const signals=array(market.signals||main.signals,MAX_SIGNALS).map(safeSignal);
-  const researchItems=array(market.opportunities||market.research?.items||main.research?.items,MAX_RESEARCH).map(safeResearchItem);
+  const allIcps=array(market.icps||main.icps).filter(item=>item&&typeof item==='object'&&!Array.isArray(item));
+  const deleted=new Set(array(market.deletedSignalIds).map(String));
+  const allSignals=array(market.signals||main.signals).filter(item=>item&&typeof item==='object'&&!Array.isArray(item)&&!deleted.has(String(item.id)));
+  const icps=allIcps.slice(0,MAX_ICP).map(safeIcp);
+  const signals=allSignals.slice(0,MAX_SIGNALS).map(safeSignal);
+  const allResearch=array(market.opportunities||market.research?.items||main.research?.items);
+  const researchItems=allResearch.slice(0,MAX_RESEARCH).map(safeResearchItem);
+  const [settings,flow]=await Promise.all([
+    firstSafe(env,'SELECT primary_provider,secondary_provider,updated_at FROM workspace_research_settings WHERE workspace_id=?',id),
+    main.myFlow?.id?firstSafe(env,'SELECT id,name,status,revision,updated_at FROM saved_flows WHERE workspace_id=? AND id=?',id,clean(main.myFlow.id,160)):null
+  ]);
   const screen=sanitizeClientScreenContext(currentScreen);const activity=Array.isArray(screen.activity)?screen.activity:[];delete screen.activity;
   const person=safeUser(user);
   const context={
     workspace:{id,...(role?{role:clean(role,40)}:{})},
+    snapshot:{checkedAt:new Date().toISOString(),savedAt:state.updated_at,version:state.version,source:'saved_workspace',unavailable:[...env.copilotReadGaps],browser:screen.saveState||{status:'unknown'},scope:'Fresh saved workspace summaries. Browser observations and saved data are separate; missing detail is not proof of absence.'},
+    flow:{selectedId:clean(main.myFlow?.id,160),found:Boolean(flow),...(flow?{name:clean(flow.name,160),status:clean(flow.status,40),revision:flow.revision,updatedAt:clean(flow.updated_at,40)}:{})},
+    counts:{signals:{total:allSignals.length,active:allSignals.filter(item=>item?.active!==false).length,off:allSignals.filter(item=>item?.active===false).length,deleted:deleted.size,omitted:Math.max(0,allSignals.length-signals.length)},profiles:{total:allIcps.length,active:allIcps.filter(item=>item?.active!==false).length,off:allIcps.filter(item=>item?.active===false).length,omitted:Math.max(0,allIcps.length-icps.length)}},
+    signalDefinitions:{weightScale:'1–10 priority, not a signal count or measured probability',profileTriggers:clean(main.answers?.buying_triggers||main.profile?.buyingTriggers,MAX_PROFILE_TEXT),profileTriggersMeaning:'Profile descriptions, not activated Strategy cards; no inferred count.'},
+    researchSettings:{primary:clean(settings?.primary_provider,40)||'automatic',secondary:clean(settings?.secondary_provider,40)||'automatic',updatedAt:clean(settings?.updated_at,40)},
     ...(person?{user:person}:{}),
     screen,
     activity,
@@ -191,8 +231,8 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     profile,
     icps,
     signals,
-    research:{items:researchItems,count:researchItems.length},
-    discoverySummary:discoverySummary(payload,screen),
+    research:marketResearchSummary({...market,opportunities:allResearch},researchItems),
+    discoverySummary:discoverySummary(payload,screen,question),
     crmSummary:crm,
     outreachSummary:outreachSummary(payload),
     integrationStatus:integrations,
@@ -207,6 +247,8 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     crmActivities:activities,
     deliveryActivity:delivery
   };
+  if(env.copilotReadGaps.has('crm'))Object.assign(context.crmSummary,{total:null,active:null,customers:null});
+  if(env.copilotReadGaps.has('delivery'))Object.assign(context.deliveryActivity,{sent:null,replies:null});
   const sanitized=redactProtectedData(context);
   assertModelSafe(sanitized);
   return sanitized;
