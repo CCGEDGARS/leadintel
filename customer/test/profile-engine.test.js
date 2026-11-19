@@ -32,7 +32,7 @@ test('normalizes URLs and adds https when missing', () => {
   assert.equal(engine.normalizeUrl('javascript:alert(1)'), '');
 });
 
-test('website and at least one target market are required before customer modules unlock', () => {
+test('research and Messages require website and target markets; Delivery setup stays available', () => {
   const ready = {website: 'example.com', targetMarkets:['Sweden'], answers: {}};
   assert.equal(engine.canBuildProfile(ready), true);
   for(let step=1; step<=7; step++) assert.equal(engine.canAccessModule(ready, step), true);
@@ -40,7 +40,8 @@ test('website and at least one target market are required before customer module
   assert.equal(engine.canBuildProfile({website:'',targetMarkets:['Sweden']}), false);
   const empty = {website: '', targetMarkets:[], answers: {}};
   assert.equal(engine.canAccessModule(empty, 1), true);
-  for(let step=2; step<=7; step++) assert.equal(engine.canAccessModule(empty, step), false);
+  for(let step=2; step<=6; step++) assert.equal(engine.canAccessModule(empty, step), false);
+  assert.equal(engine.canAccessModule(empty, 7), true);
 });
 
 test('normalizes manual target markets and expands supported region presets for research', () => {

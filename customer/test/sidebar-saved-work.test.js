@@ -8,7 +8,7 @@ const availabilityFunction=source.slice(source.indexOf('function stageAvailabili
 function availability(main,previous=false){const context={readProcessState:()=>main,contextReady:()=>true,window:{LeadIntelWorkspaceIsolation:{hasPreviousDiscovery:()=>previous}},localStorage:{},hasPipelineOpportunity:()=>false,hasOutreachContent:()=>false};vm.createContext(context);return vm.runInContext(availabilityFunction+'stageAvailability()',context);}
 test('saved target research remains reachable before profile approval',()=>{
   const result=availability({profile:{},approved:false,targetCompanies:[{companyName:'Sandvik'}]});
-  assert.equal(result[4],true);assert.equal(result[5],true);assert.equal(result[6],false);assert.equal(result[7],false);
+  assert.equal(result[4],true);assert.equal(result[5],true);assert.equal(result[6],false);assert.equal(result[7],true);
   assert.equal(availability({profile:{},approved:false},true)[5],true);
 });
 test('selected target enables Buyers without falsely qualifying the company',()=>{

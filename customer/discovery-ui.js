@@ -4716,7 +4716,8 @@ function restoreDiscoveryNavigation(){
   const current=Number(window.LeadIntelCustomerNavigation?.currentStep?.())||0;
   if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;
   else if((!current||current===5)&&mainState().step===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());
-  else if(Number(mainState().step)===7||Number(mainState().step)>=6&&moduleReady())ensureDiscoveryMounted({refreshCrm:false});
+  else if(Number(mainState().step)>=6&&moduleReady())ensureDiscoveryMounted();
+  else if(Number(mainState().step)===7)ensureDiscoveryMounted({refreshCrm:false});
   else if((!current||current===5)&&loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());
 }
 function initDiscoveryWhenReady(attempt=0){if(window.LeadIntelAccountCache&&(window.LeadIntelServerBridge?.ready!==true||!window.LeadIntelAccountCache.current())){window.LeadIntelAccountCache.afterVerification(()=>initDiscoveryWhenReady(attempt));return;}if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
