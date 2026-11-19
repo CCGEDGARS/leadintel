@@ -2333,7 +2333,7 @@
       "url": "/customer/ai-settings.js",
       "status": 200,
       "contains": [
-        "workspace-storage-ui.js?v=20261012-v1",
+        "workspace-storage-ui.js?v=20261119-management-v1",
         "leadintel:settings-opened"
       ]
     },
@@ -10153,6 +10153,56 @@
       "status": 200,
       "contains": [
         "opportunity-inbox=20261119-v1"
+      ]
+    },
+    {
+      "id": "storage-file-manager-runtime",
+      "type": "text",
+      "url": "/customer/workspace-storage-management.js",
+      "status": 200,
+      "contains": [
+        "Manage storage",
+        "data-auto-reports",
+        "expectedRevision:file.revision",
+        "LeadIntelDialogs?.confirm",
+        "reportCopiesAllowed",
+        "accountEpoch"
+      ]
+    },
+    {
+      "id": "storage-report-copy-controls",
+      "type": "text",
+      "url": "/customer/research-report.js",
+      "status": 200,
+      "contains": [
+        "Save current report",
+        "reportCopiesAllowed",
+        "This report is already saved."
+      ]
+    },
+    {
+      "id": "storage-file-inventory-private",
+      "type": "text",
+      "url": "/api/storage/files?workspace_id=release-proof",
+      "status": 401,
+      "contains": []
+    },
+    {
+      "id": "storage-preferences-private",
+      "type": "text",
+      "url": "/api/storage/preferences?workspace_id=release-proof",
+      "status": 401,
+      "contains": []
+    },
+    {
+      "id": "storage-management-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "workspace-storage-management.js?v=20261119-v1",
+        "storage-management=20261119-v1",
+        "storage-saving=20261119-v1"
       ]
     },
     {

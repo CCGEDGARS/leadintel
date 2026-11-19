@@ -29,7 +29,7 @@ test('an active research run does not import an extra snapshot before its final 
  const context={state,activeMarketResearchRun:{id:'finishing'},saveState(){},window:{dispatchEvent(){}},LeadIntelResearchReport:{snapshot(){imports++;return {};},install(){return {render(){}};}}};
  vm.createContext(context);vm.runInContext('let researchReportUi;'+app.slice(start,end)+';renderResearchReports()',context);
  assert.equal(imports,0);assert.deepEqual(state.market.researchReports,[]);
- context.activeMarketResearchRun=null;vm.runInContext('renderResearchReports()',context);assert.equal(imports,1,'legacy saved evidence still receives its recovery report');
+ context.activeMarketResearchRun=null;vm.runInContext('renderResearchReports()',context);assert.equal(imports,0,'viewing retained evidence must not create a report copy when automatic copies may be off');assert.equal(state.market.researchResults.length,1);assert.deepEqual(state.market.researchReports,[]);
 });
 test('main-form saves preserve managed material evidence, coverage and removal under their current owner',()=>{
  const material={id:'material:one',name:'source.pdf',materialRevision:3,managedMaterial:true,text:'Exact source',partial:true,coverage:{total:2,readable:1,unreadable:1}},legacy={id:'legacy',name:'manual.pdf',text:'Edited local text'};

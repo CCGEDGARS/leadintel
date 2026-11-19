@@ -1190,7 +1190,7 @@ async function runMarketResearch(modeOverride="",{retryOnly=false,previewDraft=n
       state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:run.id,mode,status:state.market.researchStatus,sourceCount:results.length,queryCount:state.market.researchQueries.length,completedAt:new Date().toISOString()});
       researchButtons.forEach(button=>{button.disabled=false;});
       try{if(saveState()===false)throw Error("Workspace save was not confirmed");}catch(error){if(!marketResearchScopeCurrent(run))return;state.market.researchStatus=state.market.researchResults.length?"partial":"error";state.market.researchExecution.status="failed";taskCentre?.fail(taskId,"Research results remain in memory; the workspace save did not complete",{canRetry:true,resultCount:results.length});renderMarketStrategy();showToast("Research results remain in memory. Workspace save did not complete; check storage and synchronization before leaving.");return;}
-      if(!marketResearchScopeCurrent(run))return;renderMarketStrategy();if(!marketResearchScopeCurrent(run))return;researchReportUi?.capture();
+      if(!marketResearchScopeCurrent(run))return;renderMarketStrategy();if(!marketResearchScopeCurrent(run))return;await researchReportUi?.capture();if(!marketResearchScopeCurrent(run))return;
       if(cancelled||state.market.researchStatus==="error")taskCentre?.fail(taskId,cancelled?"Market research stopped; collected evidence was retained":"Market research could not complete",{canRetry:true,resultCount:results.length});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==="partial"?'Completed with source warnings':'Market research complete',resultCount:results.length});
       showToast(`${cancelled?"Market research stopped":state.market.researchStatus==="complete"?"Market research complete":"Market research partially complete"} · ${results.length} new evidence sources · saved evidence retained`);
     }}finally{finishMarketResearchRun(run);}
@@ -1679,10 +1679,7 @@ function renderMarketStrategy(){
 let researchReportUi;
 function renderResearchReports(){
   if(!globalThis.LeadIntelResearchReport)return;
-  if(!state.market.researchReportsInitialized&&!state.market.researchReports?.length&&state.market.researchResults?.length&&state.market.researchStatus!=="running"&&!activeMarketResearchRun){
-    state.market.researchReports=[globalThis.LeadIntelResearchReport.snapshot(state,'imported-current')];state.market.researchReportsInitialized=true;
-    saveState();
-  }
+  // Viewing research must not create an extra stored report copy.
   researchReportUi ||= globalThis.LeadIntelResearchReport.install({getState:()=>state,save:saveState,onStrategy:()=>window.dispatchEvent(new CustomEvent('leadintel:open-market-strategy'))});
   researchReportUi.render();
 }
