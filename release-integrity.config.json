@@ -71,7 +71,8 @@
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
       "website_monitoring_version": "20261110-source-rotation-v1",
       "company_search_lists_version": "20261119-save-export-v1",
-      "company_list_quality_version": "20261119-reviewed-evidence-v2"
+      "company_list_quality_version": "20261119-reviewed-evidence-v2",
+      "company_list_profiles_version": "20261119-profiles-signals-v3"
     }
   },
   "retry": {
@@ -10055,7 +10056,7 @@
       "url": "/customer/company-lists-ui.js",
       "status": 200,
       "contains": [
-        "Inactive signals are excluded",
+        "Off profiles have no influence on this list",
         "Research operation limit for this run",
         "Show all ",
         "cl-blocker"
@@ -10080,6 +10081,41 @@
       "status": 200,
       "contains": [
         "\"company_list_quality_version\":\"20261119-reviewed-evidence-v2\""
+      ]
+    },
+    {
+      "id": "company-list-profiles-ui-20261119",
+      "type": "text",
+      "url": "/customer/company-lists-ui.js",
+      "status": 200,
+      "contains": [
+        "1. Targeting profiles",
+        "Prioritize buying signals",
+        "Require buying signals",
+        "contextFingerprint",
+        "saved, sourced opportunities"
+      ]
+    },
+    {
+      "id": "company-list-profiles-model-20261119",
+      "type": "text",
+      "url": "/customer/company-lists.js",
+      "status": 200,
+      "contains": [
+        "20261119-profiles-signals-v3",
+        "function assessProfiles",
+        "supportedProfileIds",
+        "profileConfigurationPresent",
+        "opportunityQuote"
+      ]
+    },
+    {
+      "id": "company-list-profiles-backend-20261119",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+      "status": 200,
+      "contains": [
+        "\"company_list_profiles_version\":\"20261119-profiles-signals-v3\""
       ]
     }
   ]

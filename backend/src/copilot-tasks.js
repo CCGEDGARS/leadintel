@@ -17,14 +17,17 @@ export async function taskOptions(env,w,flowId){
  const row=flowId&&await savedFlowRow(env,w,flowId),payload=row?await savedFlowPayload(env,row):{main:{}},main=payload.main||{},available=M.options(main),policy=await readAdditionalContactPolicy(env,w);
  // Freeze only research context, not message drafts, delivery controls or credentials.
  const frozen=Object.fromEntries(['website','profile','answers','targetMarkets','market','referenceCustomers','referenceCustomerPortfolio'].filter(k=>main[k]!==undefined).map(k=>[k,main[k]]));
- if(frozen.market)frozen.market={signals:frozen.market.signals||[],strategy:frozen.market.strategy,positioning:frozen.market.positioning};
+ if(frozen.market)frozen.market={...Object.fromEntries(['icps','deletedSignalIds','opportunities','researchContextStale'].filter(k=>Object.hasOwn(frozen.market,k)).map(k=>[k,frozen.market[k]])),signals:frozen.market.signals||[],strategy:frozen.market.strategy,positioning:frozen.market.positioning};
  const fingerprint=await sha256(JSON.stringify([row?.id,row?.revision,available,frozen,policy]));
  return {flows,available,policy,main:frozen,fingerprint,flowMissing:!row,flowName:row?.name||''};
 }
 function defaults(input,o){
- const p={mode:'any',buyerCount:0,phoneEvidence:'none',...T.answers(input)};
+ const p={mode:'any',profileMode:'any',buyerCount:0,phoneEvidence:'none',...T.answers(input)};
  if(!p.markets?.length&&o.available.markets?.length)p.markets=o.available.markets;
- if(p.signalIds===undefined)p.signalIds=o.available.signals.map(s=>s.id);
+ if(p.profileIds===undefined)p.profileIds=p.signalIds?.includes('lookalike')?[o.available.profiles.find(p=>p.type==='lookalike')?.id||'icp-lookalike']:o.available.profiles.filter(p=>p.active&&p.ready).map(p=>p.id);
+ if(p.signalIds)p.signalIds=p.signalIds.filter(id=>id!=='lookalike');
+ if(p.signalMode===undefined)p.signalMode=p.signalIds?.length?'require':p.profileIds.some(id=>o.available.profiles.find(p=>p.id===id)?.type==='trigger-led')?'boost':'off';
+ if(p.signalMode==='off')p.signalIds=[];else if(p.signalIds===undefined)p.signalIds=o.available.buyingSignals.map(s=>s.id);
  if(p.budget===undefined)p.budget=M.recommendedBudget(p.count);
  if(p.referenceIds===undefined){const ready=o.available.references.filter(r=>r.ready&&r.active!==false);p.referenceIds=ready.length<=15?ready.map(r=>r.id):[];}
  if(p.buyerCount>0){if(p.buyerCompanies===undefined)p.buyerCompanies=Math.min(p.count||1,10);if(p.count===1)p.buyerScope='per_company';if(!p.roles?.length)p.roles=String(o.main.answers?.buyer_roles||o.main.profile?.decisionMakers||'').split(/[,;\n]/).map(v=>v.trim()).filter(Boolean);}
@@ -33,7 +36,8 @@ function defaults(input,o){
 }
 function questions(plan,o){
  const q=T.questions(plan,o.available,o);
- if(plan.signalIds?.some(id=>!o.available.signals.find(s=>s.id===id)))q.push({field:'signalIds',title:'A selected signal is no longer available. Choose the signals to research.'});
+ if(plan.profileIds&&Number.isInteger(plan.count)&&plan.markets?.length&&Number.isInteger(plan.budget)){try{M.configuration(plan,o.available);}catch(e){if(!q.some(item=>item.title===e.message))q.push({field:/reference/i.test(e.message)?'referenceIds':/signal/i.test(e.message)?'signalIds':'profileIds',title:e.message});}}
+ if(plan.signalIds?.some(id=>!(plan.profileIds?o.available.buyingSignals:o.available.signals).find(s=>s.id===id)))q.push({field:'signalIds',title:'A selected signal is no longer available. Choose the signals to research.'});
  if(plan.buyerCount>0&&plan.paidMode==='saved_policy'&&(o.policy.provider!=='treg'||(plan.phoneEvidence!=='none'?!o.policy.phoneEnabled:!o.policy.enabled)))q.push({field:'paidMode',title:'The required paid channel is not enabled for the supported automatic provider (Treg). Review Setup, or choose public research only.'});
  return q;
 }
@@ -43,14 +47,28 @@ export async function readResearchTask(env,w,id){
  const results=(list?.results||[]).map(r=>({...r,buyers:state.people?.[r.domain]||[]}));
  return {id:row.id,revision:row.revision,status:row.status,plan:input.plan,flowName:input.flowName,questions:state.questions||[],options:state.options||{},blocker:state.blocker||(row.last_error?T.issue({code:row.last_error,message:row.last_error==='storage_full'?'Workspace storage is full. Free storage before continuing.':'Task processing failed. Review saved progress before continuing.'}):null),results,progress:list?.progress||{count:0,target:input.plan.count,reason:'Review the task before starting'},phase:state.phase||'review',buyerProgress:state.buyerProgress||'',listId:state.listId||'',saved:Boolean(list?.saved),receipts:list?.receipts||[],updatedAt:row.updated_at};
 }
-async function prepared(env,w,raw){const o=await taskOptions(env,w,raw.flowId);if(raw.sourceText){const words=String(raw.sourceText).toLowerCase(),named=o.available.signals.filter(signal=>[signal.name,signal.id].filter(Boolean).some(name=>new RegExp('\\b'+String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(words))).map(signal=>signal.id);if(named.length)raw={...raw,signalIds:[...new Set([...(raw.signalIds||[]),...named])]};else if(!raw.signalIds&&/\bsignals?\b/i.test(words))raw={...raw,signalIds:[]};}const plan=defaults(raw,o),q=questions(plan,o);return {input:{plan,flowName:o.flowName,fingerprint:o.fingerprint,paidPolicy:o.policy,main:o.main},state:{questions:q,options:{flows:o.flows,...o.available,policy:o.policy},phase:'review',blocker:q.length?T.issue({code:'context',message:q.map(v=>v.title).join(' ')}):null},status:q.length?'draft':'ready'};}
+function namedCriteria(raw,o,text){
+ const words=String(text||'').toLowerCase();if(!words)return raw;
+ const named=(o.main.market?.signals||o.available.signals).filter(signal=>[signal.name,signal.id].filter(Boolean).some(name=>new RegExp('\\b'+String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(words))).map(signal=>o.available.signals.find(s=>s.id==='lookalike'&&s.sourceId===signal.id)?'lookalike':signal.id);
+ if(named.length){raw={...raw,signalIds:[...new Set([...(raw.signalIds||[]),...named])]};if(raw.signalMode===undefined&&named.some(id=>id!=='lookalike'))raw.signalMode='require';}
+ else if(!raw.signalIds&&/\bsignals?\b/i.test(words))raw={...raw,signalIds:[]};
+ if(raw.profileIds===undefined){const named=o.available.profiles.filter(p=>new RegExp('\\b'+p.type+'(?: profile| icp)?\\b','i').test(words));if(named.length)raw={...raw,profileIds:named.map(p=>p.id)};}
+ return raw;
+}
+async function prepared(env,w,raw){
+ const o=await taskOptions(env,w,raw.flowId);raw=namedCriteria(raw,o,raw.sourceText);
+ const plan=defaults(raw,o),q=questions(plan,o);
+ return {input:{plan,flowName:o.flowName,fingerprint:o.fingerprint,paidPolicy:o.policy,main:o.main},state:{questions:q,options:{flows:o.flows,...o.available,policy:o.policy},phase:'review',blocker:q.length?T.issue({code:'context',message:q.map(v=>v.title).join(' ')}):null},status:q.length?'draft':'ready'};
+}
 export async function planResearchTask(env,{workspaceId:w,conversationId,userId,sessionHash,message,canFollowUp=false}){
  const isNew=T.requested(message);if(!isNew&&!canFollowUp)return null;
  const o=await taskOptions(env,w),extracted=T.extract(message,countries),matches=extracted.flowQuery?o.flows.filter(f=>f.name.toLowerCase()===extracted.flowQuery.toLowerCase()):[];
  if(!isNew){
   const pending=await sql(env,"SELECT * FROM copilot_research_tasks WHERE workspace_id=? AND conversation_id=? AND status IN ('draft','ready') ORDER BY rowid DESC LIMIT 1",w,conversationId).first();
-  if(!pending||!Object.keys(extracted).length)return null;
+  if(!pending)return null;
   if(extracted.flowQuery)extracted.flowId=matches.length===1?matches[0].id:'';
+  const context=await taskOptions(env,w,extracted.flowId??parse(pending.input_json).plan.flowId);Object.assign(extracted,namedCriteria(extracted,context,message));
+  if(!Object.keys(extracted).length)return null;
   const task=await commandResearchTask(env,w,{id:userId,hash:sessionHash},pending.id,{action:'update',revision:pending.revision,answers:T.answers(extracted)});
   const answer='I updated the research plan. Review the task details and remaining questions before selecting Run reviewed task.';
   await sql(env,`INSERT INTO copilot_messages(id,workspace_id,conversation_id,role,content,metadata_json) VALUES(?,?,?,'assistant',?,?)`,crypto.randomUUID(),w,conversationId,answer,JSON.stringify({research_task:{id:task.id}})).run();return {conversation_id:conversationId,answer,research_task:task,sources:[]};
@@ -76,7 +94,7 @@ export async function commandResearchTask(env,w,user,id,body){
   if(!['draft','ready'].includes(status))throw fail('This task has started. Create a new task to change its scope.');
   if(Object.keys(body.answers||{}).some(k=>!Object.hasOwn(T.answers(body.answers),k)))throw fail('Unsupported task answer.',400);
   if(Array.isArray(body.answers?.referenceIds)&&body.answers.referenceIds.length>15)throw fail('Choose up to 15 analyzed references for this task.',400);
-  const a=T.answers(body.answers),changed=a.flowId!==undefined&&a.flowId!==input.plan.flowId,raw={...input.plan,...a};if(changed){delete raw.referenceIds;raw.marketOverride=false;}
+  const a=T.answers(body.answers),changed=a.flowId!==undefined&&a.flowId!==input.plan.flowId,raw={...input.plan,...a};if(changed){for(const k of ['profileIds','signalIds','signalMode','referenceIds'])delete raw[k];raw.marketOverride=false;}
   const data=await prepared(env,w,raw);input=data.input;state=data.state;status=data.status;
  }else if(body.action==='run'){
   if(status!=='ready')throw fail('Answer the task questions before running.');
@@ -84,6 +102,7 @@ export async function commandResearchTask(env,w,user,id,body){
   if(questions(input.plan,o).length)throw fail('Task prerequisites changed. Review the task.');
   M.configuration({...input.plan,name:'Ask LeadIntel · '+input.flowName},o.available);
   // Geography overrides belong to the task only; never switch or save the active Flow.
+  if(input.plan.profileIds){input.main.market||={};input.main.market.icps=o.available.profiles.map(p=>({...p,active:input.plan.profileIds.includes(p.id)}));input.main.market.signals=(input.main.market.signals||[]).map(s=>({...s,active:input.plan.signalMode!=='off'&&input.plan.signalIds.includes(s.id)}));}
   input.main.targetMarkets=input.plan.markets;input.main.profile={...input.main.profile,targetMarkets:input.plan.markets.join('; ')};
   status='running';state.phase='companies';state.blocker=null;state.people={};state.buyerIndex=0;
  }else if(body.action==='pause'){
