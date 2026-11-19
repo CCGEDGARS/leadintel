@@ -142,7 +142,8 @@ test('research keeps an English master without launching a workspace translation
 });
 
 test('research reruns preserve reviewed answers through provenance-aware merge',()=>{
-  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft,readMeta\(\)\.fields\|\|\{\}\)/);
+  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft,reviewedResearchFields\(state,readMeta\(\)\)\)/);
+  assert.match(ui,/\.mergeDraft\(latest\.answers\|\|\{\},draft,reviewedResearchFields\(latest,latestMeta\)\)/);
   assert.match(ui,/Rerun company research/);
 });
 
