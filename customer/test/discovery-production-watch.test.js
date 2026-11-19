@@ -248,7 +248,7 @@ const boundedDiscoveryRuntime = [
   "channel==='gmail'?person.contactResearch?.checks?.gmail||{status:'not_searched'}",
   'function buyerResearchAccountabilityHtml( Mandatory depth: Adaptive deep researchTrace runMandatoryBuyerResearch(candidate,',
   'function prospectContactControls( Confirm data buyer-email-confirmed data-prospect-enrich-email function hydratePublishedCompanyEmails( function confirmPublishedCompanyContacts(',
-  'function qualificationContext(){ previous.raw===raw qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}}',
+  'function qualificationContext(){ previous.raw===raw qualificationContextCache={raw,scope,dependencies,profile,market:discoveryMarket(main)}',
   'CRM refresh request_timeout crm-refresh:',
   'const waitForRun=async operation=> BUYER_RESEARCH_CANCELED Cross-checking buyer evidence with grounded web research scopeIsCurrent',
   'function navigateBackFromDiscoveryStage() if(currentJourneyFocus()==="buyers"){setJourneyFocus("companies");renderAll();return;} $("back-to-strategy")?.addEventListener("click",navigateBackFromDiscoveryStage)',
