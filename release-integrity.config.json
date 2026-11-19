@@ -9978,6 +9978,28 @@
       "contains": [
         "message-startup=20261118-v1"
       ]
+    },
+    {
+      "id": "compact-workflow-menu-20261119",
+      "type": "text",
+      "url": "/customer/topbar.js",
+      "status": 200,
+      "contains": [
+        "<span>Workflow</span>",
+        "menuitemradio",
+        "heading.className='account-menu-head'"
+      ]
+    },
+    {
+      "id": "consistent-topbar-controls-20261119",
+      "type": "text",
+      "url": "/customer/app-shell.css",
+      "status": 200,
+      "contains": [
+        "topbar-design=20261119-v1",
+        "height:40px;min-height:40px",
+        "width:min(300px,calc(100vw - 110px))"
+      ]
     }
   ],
   "retry": {
