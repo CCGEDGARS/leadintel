@@ -23,8 +23,8 @@
   function sync(){
     const research=document.getElementById('research-summary'),profileHero=document.querySelector('#step-2 > .hero-copy');
     if(research&&profileHero){
-      const complete=research.dataset.researchState==='complete';
-      if(complete){
+      const reviewable=['complete','partial','saved'].includes(research.dataset.researchState);
+      if(reviewable){
         const step2=document.getElementById('step-2');
         insert(step2,'Review your profile, add customer examples and explore your market','Check the AI suggestions, add reference companies if available, and explore your selected market. Then review your Profile to continue.');
         const banner=step2.querySelector(':scope > .step-action-guidance');
