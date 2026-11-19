@@ -10146,21 +10146,17 @@
     },
     {
       "id": "storage-file-inventory-private",
-      "type": "json",
-      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/storage/files?workspace_id=release-proof",
+      "type": "text",
+      "url": "/api/storage/files?workspace_id=release-proof",
       "status": 401,
-      "json": {
-        "error": "Authentication required"
-      }
+      "contains": []
     },
     {
       "id": "storage-preferences-private",
-      "type": "json",
-      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/storage/preferences?workspace_id=release-proof",
+      "type": "text",
+      "url": "/api/storage/preferences?workspace_id=release-proof",
       "status": 401,
-      "json": {
-        "error": "Authentication required"
-      }
+      "contains": []
     }
   ]
 }
