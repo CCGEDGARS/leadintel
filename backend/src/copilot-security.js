@@ -77,6 +77,11 @@ export function sanitizeClientScreenContext(input){
   const activity=sanitizeActivity(source.activity);
   if(activity)out.activity=activity;
   if(source.controls&&Array.isArray(source.controls.items))out.controls={items:source.controls.items.slice(0,40).map(item=>({label:redactSecretLikeText(cleanText(item?.label,100)).replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[redacted]'),id:/^[a-z][a-z0-9_-]{0,79}$/i.test(item?.id||'')?item.id:'',disabled:item?.disabled===true})),omitted:Math.max(0,Math.min(10000,Number(source.controls.omitted)||0)),coverage:'Untrusted visible control labels; not proof of execution or exhaustive app coverage.'};
+  if(step===5&&Array.isArray(source.companyScores))out.companyScores=source.companyScores.slice(0,10).flatMap(row=>{
+    const domain=row?.domain;
+    if(typeof domain!=='string'||domain.length>160||!/^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/i.test(domain)||!Number.isFinite(row.score)||row.score<0||row.score>100||!['current','previous'].includes(row.state))return [];
+    return [{domain:domain.toLowerCase(),score:row.score,state:row.state}];
+  });
   if(Array.isArray(source.operations))out.operations=source.operations.slice(-12).filter(row=>OBSERVED_ACTIONS.has(row?.action)).map(row=>({action:row.action,stage:Number.isInteger(row.stage)&&row.stage>=1&&row.stage<=7?row.stage:null,phase:['start','request','response','provider','persistence','complete','context'].includes(row.phase)?row.phase:'unknown',outcome:['started','pending','pass','fail','blocked','canceled','stale','partial','uncertain','timeout','retry','resumed','duplicate_hold'].includes(row.outcome)?row.outcome:'unknown',operationId:/^(?:setup|profile|strategy|companies|buyers|messages|delivery)-[a-z0-9-]{1,60}$/i.test(row.operationId||'')?row.operationId:'',at:/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(row.at||'')?row.at:''}));
   return out;
 }

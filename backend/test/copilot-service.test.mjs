@@ -124,7 +124,7 @@ test('the system instruction keeps answers to eighty words by default and reache
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.equal(systems.length,2);
-  for(const system of systems){assert.match(system,/at most 80 words by default/);assert.match(system,/Go longer only when the person asks/);}
+  for(const system of systems){assert.match(system,/at most 80 words by default/);assert.match(system,/Go longer for troubleshooting, score investigations/);}
 });
 
 test('a provider that rejects no-reasoning with 400 answers once more at low effort, and that model is remembered',async()=>{
@@ -161,4 +161,20 @@ test('without a delta listener the turn behaves as before',async()=>{
   const provider={key:'openai:test-no-stream',async search(){throw new Error('no research expected');},async generate(options){assert.equal(options.onDelta,undefined,'no listener is forwarded');return {provider:'openai',model:'gpt-test',text:JSON.stringify({research_query:'',answer:'Short.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}};
   const result=await runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:provider},{workspaceId:'w1',userId:'u1',role:'owner',question:'What is positioning in sales?',currentScreen:{step:4,label:'Market Strategy'}});
   assert.equal(result.answer,'Short.');
+});
+
+test('a reported company score goes directly to workspace diagnosis',async()=>{
+  const calls=[];
+  const discoverySummary={companyScores:[{domain:'steel.example',savedCompanyFit:66,savedOpportunityScore:48,gaps:['Verify purchasing application']}]};
+  const env={COPILOT_TEST_CONTEXT:{...context,discoverySummary},COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async search(){calls.push('public search');throw new Error('unexpected public search');},
+    async generate({prompt}){
+      calls.push(JSON.parse(prompt));
+      return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'The saved company fit is 66.'})};
+    }
+  }};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',question:'highest company was 66 out of a 100'});
+  assert.equal(calls.length,1);
+  assert.deepEqual(calls[0].workspace_context.discoverySummary,discoverySummary);
+  assert.ok(result.skill_ids.includes('troubleshooting'));
 });

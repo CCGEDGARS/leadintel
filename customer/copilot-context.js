@@ -31,6 +31,14 @@ export function currentCopilotControls(){
 export function currentCopilotScreenContext(){
   const step=activeStep();let label=STEP_LABELS[step]||STEP_LABELS[1];if(step===5){const buyersGuide=document.getElementById('discovery-buyers-guide');if(buyersGuide&&!buyersGuide.hidden)label='Buyers';}const context={step,label};const trail=window.LeadIntelCopilotActivity?.snapshot?.();if(Array.isArray(trail)&&trail.length)context.activity=trail.slice(-20);const entity=document.querySelector('[data-copilot-entity-type][data-copilot-entity-id]');
   if(entity?.dataset?.copilotEntityType)context.entity_type=String(entity.dataset.copilotEntityType).slice(0,80);if(entity?.dataset?.copilotEntityId)context.entity_id=String(entity.dataset.copilotEntityId).slice(0,180);
+  if(step===5){
+    context.companyScores=[...document.querySelectorAll('.company-result-row[data-company-row-key]')]
+      .filter(row=>row.getClientRects().length)
+      .map(row=>row.querySelector('[data-company-score]')?.dataset)
+      .filter(data=>data?.companyScore)
+      .map(data=>({domain:data.companyKey,score:Number(data.companyScore),state:data.scoreState}))
+      .sort((a,b)=>b.score-a.score).slice(0,10);
+  }
   context.controls=currentCopilotControls();
   const workspace=String(window.LeadIntelServerBridge?.workspace?.id||'');
   const operations=window.LeadIntelReliabilityTrace?.snapshot?.();
