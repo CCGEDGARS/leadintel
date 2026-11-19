@@ -1809,11 +1809,18 @@ function retrySignalRecommendationsFromHandoff(){
 }
 function openStrategyHandoff(){
   if(!requireConfirmedTargeting())return false;
+  // Reconcile independently saved fields before review. Persistence preserves
+  // conflicting edits, so the dialog never approves an unreviewed merge.
+  if(!strategyReviewCurrent()&&(saveState()===false||!strategyReviewCurrent())){
+    showToast('The saved Strategy could not be synchronized. Review Workspace status and reopen Strategy.');
+    return false;
+  }
   renderMarketStrategy();
   const model=renderStrategyHandoff();
   const activeIcps=(state.market.icps||[]).some(x=>x.active!==false),activeSignals=(state.market.signals||[]).some(x=>x.active!==false);
   if(!activeIcps||!activeSignals){LeadIntelTargeting.focusControl(window,{step:4,selector:activeIcps?'[data-signal-field="active"]':'[data-icp-field="active"]',message:activeIcps?'Enable at least one buying signal before continuing.':'Enable at least one customer profile before continuing.'});return false;}
   const dialog=$("strategy-handoff-dialog");
+  dialog.dataset.reviewedScope=strategyIntegrity().signature(state);
   if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");
 }
 function closeStrategyHandoff(){
@@ -1852,7 +1859,9 @@ async function activateMarketStrategy(){
     if(monitoring&&!monitoringApprovalCurrent(monitoringOwner))throw Error('Monitoring review changed. Reopen monitoring before approving Strategy.');
     if(!strategyIntegrity())throw Error('Strategy verification is still loading. Retry in a moment.');
     if(window.LeadIntelServerBridge?.conflict)throw Error('Resolve the workspace synchronization conflict before activating Strategy.');
-    if(!strategyReviewCurrent())throw Error('Strategy changed in another view. Reopen and review the saved Strategy before activating.');
+    if(!strategyReviewCurrent()||review?.dataset.reviewedScope&&review.dataset.reviewedScope!==context.signature){
+      throw Error('Strategy changed in another view. Reopen and review the saved Strategy before activating.');
+    }
     const model=strategyHandoffModel();
     if(model.blockers.length){renderStrategyHandoff();return false;}
     if(monitoring&&model.earlierResearch){returnToProfileResearch();return false;}
