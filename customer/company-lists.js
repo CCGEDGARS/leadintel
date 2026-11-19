@@ -58,7 +58,30 @@
   return {...current,matches,score:Math.round(matches.reduce((n,m)=>n+m.score*config.weights[m.signalId],0)/total)};
  }
  function ranked(rows){const unique=new Map();for(const r of rows)if(!unique.has(r.domain)||unique.get(r.domain).score<=r.score)unique.set(r.domain,r);return [...unique.values()].sort((a,b)=>b.score-a.score||b.matches.length-a.matches.length||a.company.localeCompare(b.company));}
- function exportRows(list){return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)})])];}
+ // A saved search is a view of existing research, never a new qualification.
+ // Keep its review labels separate from verified signal-list matches.
+ function normalizeSearchSnapshot(input={}){
+  const fail=message=>{throw Object.assign(Error(message),{status:400});};
+  if(!input||typeof input!=='object')fail('Company results are required.');
+  if(!Array.isArray(input.rows)||!input.rows.length||input.rows.length>1000)fail('Save between 1 and 1,000 company results.');
+  const rows=input.rows.map(r=>{
+   if(!r||typeof r!=='object')fail('Invalid company result.');
+   const company=clean(r.company,180);if(!company)fail('Each company needs a name.');
+   const score=typeof r.score==='number'&&Number.isFinite(r.score)&&r.score>=0&&r.score<=100?r.score:null;
+   const scoreState=score===null?'pending':r.scoreState==='current'?'current':'previous';
+   return {company,website:url(r.website),location:clean(r.location,300),score,scoreState,
+    reviewStatus:r.reviewStatus==='Checked'&&scoreState==='current'?'Checked':'Needs review',
+    signals:(Array.isArray(r.signals)?r.signals:[]).map(s=>clean(s,160)).filter(Boolean).slice(0,30),
+    summary:clean(r.summary,2000),checkedAt:clean(r.checkedAt,80),
+    evidence:(Array.isArray(r.evidence)?r.evidence:[]).filter(e=>e&&url(e.url)).slice(0,60).map(e=>({url:url(e.url),quote:clean(e.quote,2000),date:clean(e.date,80)}))};
+  });
+  return {version:1,rows,context:{markets:(Array.isArray(input.context?.markets)?input.context.markets:[]).map(s=>clean(s,120)).slice(0,30),signals:(Array.isArray(input.context?.signals)?input.context.signals:[]).map(s=>clean(s,160)).slice(0,30),sellerWebsite:url(input.context?.sellerWebsite)}};
+ }
+ function searchSnapshot(view,context){return normalizeSearchSnapshot({context,rows:view.rows.map(row=>{
+  const c=row.candidate,q=row.qualification||{},evidence=[c.sourceEvidence,c.evidence,c.buyerFit?.evidence,c.operatingEvidence].flatMap(value=>Array.isArray(value)?value:value&&typeof value==='object'?[value]:[]).filter(e=>e&&typeof e==='object');
+  return {company:c.company||c.companyName,website:c.website||('https://'+(c.domain||'')),location:c.location||c.country||c.market||'',score:row.score,scoreState:row.scoreState,reviewStatus:row.actionable?'Checked':'Needs review',signals:(Array.isArray(q.matchedSignals)?q.matchedSignals:Array.isArray(c.matchedSignals)?c.matchedSignals:[]).map(s=>typeof s==='string'?s:s.name||s.label||s.id),summary:c.description||c.summary||c.reason||'',checkedAt:c.qualification?.researchedAt||c.researchedAt||'',evidence:evidence.map(e=>({url:e.url||e.sourceUrl,quote:e.quote||e.description||e.text||e.title,date:e.date||e.publishedAt}))};
+ })});}
+ function exportRows(list){if(list.criteria.kind==='search_snapshot')return [['Company','Website','Location','Company fit score','Score status','Review status','Matched signals','Summary','Sources','Evidence','Checked at','Buying intent','List','Search context'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score??'',r.scoreState==='current'?'Current':r.scoreState==='previous'?'Previous · needs review':'Awaiting score',r.reviewStatus,r.signals.join('; '),r.summary,[...new Set(r.evidence.map(e=>e.url))].join('; '),r.evidence.map(e=>[e.quote,e.url,e.date].filter(Boolean).join(' | ')).join('\n'),r.checkedAt,'Unconfirmed',list.name,JSON.stringify(list.criteria.context)])];return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)})])];}
  const safeCell=v=>/^[\s]*[=+@-]/.test(String(v))?"'"+v:String(v??'');
  const csv=list=>'\uFEFF'+exportRows(list).map(row=>row.map(v=>'"'+safeCell(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  function xlsx(list){
@@ -70,5 +93,5 @@
   for(const [name,text] of Object.entries(files)){const n=enc.encode(name),b=enc.encode(text),checksum=crc(b),h=new Uint8Array(30+n.length),d=new DataView(h.buffer);d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint32(14,checksum,true);d.setUint32(18,b.length,true);d.setUint32(22,b.length,true);d.setUint16(26,n.length,true);h.set(n,30);chunks.push(h,b);const c=new Uint8Array(46+n.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint32(16,checksum,true);v.setUint32(20,b.length,true);v.setUint32(24,b.length,true);v.setUint16(28,n.length,true);v.setUint32(42,offset,true);c.set(n,46);central.push(c);offset+=h.length+b.length;}
   const size=central.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);chunks.push(...central,end);const result=new Uint8Array(offset+size+22);let i=0;for(const c of chunks){result.set(c,i);i+=c.length;}return result;
  }
- return {options,configuration,assess,mergeResult,ranked,exportRows,csv,xlsx,safeCell,url,domain};
+ return {options,configuration,assess,mergeResult,ranked,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
 });

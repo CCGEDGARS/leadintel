@@ -69,8 +69,14 @@
       "copilot_research_version": "public-research-20261117-v2",
       "website_contact_research_version": "20261111-independent-v1",
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
-      "website_monitoring_version": "20261110-source-rotation-v1"
+      "website_monitoring_version": "20261110-source-rotation-v1",
+      "company_search_lists_version": "20261119-save-export-v1"
     }
+  },
+  "retry": {
+    "attempts": 12,
+    "delayMs": 10000,
+    "timeoutMs": 15000
   },
   "smokeChecks": [
     {
@@ -10000,11 +10006,47 @@
         "height:40px;min-height:40px",
         "width:min(300px,calc(100vw - 110px))"
       ]
+    },
+    {
+      "id": "company-search-list-buttons-20261119",
+      "type": "text",
+      "url": "/customer/company-lists-ui.js",
+      "status": 200,
+      "contains": [
+        "save-company-search-list",
+        "export-company-search-list",
+        "result.list?.criteria?.fingerprint!==fingerprint",
+        "renderSearchSnapshot"
+      ]
+    },
+    {
+      "id": "company-search-list-export-20261119",
+      "type": "text",
+      "url": "/customer/company-lists.js",
+      "status": 200,
+      "contains": [
+        "normalizeSearchSnapshot",
+        "Review status",
+        "Previous \u00b7 needs review"
+      ]
+    },
+    {
+      "id": "company-search-list-cache-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-list-save-export=20261119-v1"
+      ]
+    },
+    {
+      "id": "company-search-list-backend-20261119",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+      "status": 200,
+      "contains": [
+        "\"company_search_lists_version\":\"20261119-save-export-v1\""
+      ]
     }
-  ],
-  "retry": {
-    "attempts": 12,
-    "delayMs": 10000,
-    "timeoutMs": 15000
-  }
+  ]
 }

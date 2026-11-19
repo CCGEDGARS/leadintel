@@ -12,8 +12,21 @@ const active=s=>['queued','running'].includes(s),fail=(m,status=409)=>Object.ass
 const authority=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=company_lists.session_hash AND s.user_id=company_lists.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=company_lists.workspace_id AND m.role IN ('owner','researcher','sales')) AND (json_extract(company_lists.input_json,'$.taskId') IS NULL OR EXISTS(SELECT 1 FROM copilot_research_tasks t WHERE t.id=json_extract(company_lists.input_json,'$.taskId') AND t.workspace_id=company_lists.workspace_id AND t.status='running'))`;
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
 export async function companyListOptions(env,workspaceId){return M.options((await getCustomerState(env,workspaceId)).payload?.main||{});}
-function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning'},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],createdAt:row.created_at,updatedAt:row.updated_at};}
+function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?(s.results||[]):M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning'},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],createdAt:row.created_at,updatedAt:row.updated_at};}
 export async function readCompanyList(env,workspaceId,id){return publicList(await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,id).first());}
+async function saveSearchSnapshot(env,workspaceId,user,body){
+ const snapshot=M.normalizeSearchSnapshot(body.snapshot),fingerprint=await sha256(JSON.stringify(snapshot));
+ if(body.fingerprint!==fingerprint)throw fail('Company results changed. Save the current list again.');
+ const id='search_'+await sha256(workspaceId+'\0'+fingerprint);
+ const criteria={kind:'search_snapshot',name:clean(body.name,120)||'Company search',fingerprint,count:snapshot.rows.length,context:snapshot.context};
+ const state={phase:'saved',results:snapshot.rows,reason:'Saved search results. Review status is preserved; buying intent is unconfirmed.'};
+ // Content-addressed snapshots make retry after a lost response idempotent.
+ // No provider call or CRM qualification is authorized by saving a list.
+ await sql(env,`INSERT OR IGNORE INTO company_lists(id,workspace_id,requested_by,session_hash,input_json,state_json,status)
+ SELECT ?,?,?,?,?,?,'complete' WHERE (SELECT COUNT(*) FROM company_lists WHERE workspace_id=?)<50
+ AND EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.user_id=? AND m.workspace_id=? AND m.role IN ('owner','researcher','sales'))`,id,workspaceId,user.id,user.hash,JSON.stringify(criteria),JSON.stringify(state),workspaceId,user.hash,user.id,workspaceId).run();
+ const saved=await readCompanyList(env,workspaceId,id);if(!saved)throw fail('The list could not be saved. Check workspace access or delete an unused list if you have reached the 50-list limit.');return saved;
+}
 async function access(request,env,workspaceId){const token=cookieValue(request,'leadintel_session');if(!token)throw fail('Sign in to use company lists.',401);const hash=await sha256(token),row=await sql(env,"SELECT s.user_id,m.role FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=?",hash,workspaceId).first();if(!row||!['owner','researcher','sales'].includes(row.role))throw fail('Workspace research access required.',403);return {id:row.user_id,role:row.role,hash};}
 export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
  const criteria=M.configuration(raw,trusted?.options||await companyListOptions(env,workspaceId));if(trusted?.taskId)criteria.taskId=trusted.taskId;
@@ -46,14 +59,17 @@ export async function handleCompanyListsRoute(request,env,cors={},ctx){
  try{const workspaceId=u.searchParams.get('workspace_id');if(!workspaceId||workspaceId.length>160)throw fail('Workspace required.',400);const user=await access(request,env,workspaceId);
   if(request.method==='GET'){
    if(u.searchParams.has('options'))return respond({options:await companyListOptions(env,workspaceId)});
+   if(u.searchParams.has('search_snapshot')){const fingerprint=u.searchParams.get('search_snapshot');if(!/^[a-f0-9]{64}$/.test(fingerprint))throw fail('Invalid saved-list reference.',400);return respond({list:await readCompanyList(env,workspaceId,'search_'+await sha256(workspaceId+'\0'+fingerprint))});}
    if(u.searchParams.has('id'))return respond({list:await readCompanyList(env,workspaceId,u.searchParams.get('id'))});
-   const rows=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50',workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row);return {id:l.id,name:l.name,status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
+   const rows=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50',workspaceId).all();return respond({lists:(rows.results||[]).map(row=>{const l=publicList(row);return {id:l.id,name:l.name,kind:l.criteria.kind,status:l.status,saved:l.saved,progress:l.progress,updatedAt:l.updatedAt};})});
   }
   if(request.method!=='POST')throw fail('Method not allowed.',405);
-  const text=await request.text();if(text.length>24000)throw fail('List request is too large.',413);const body=parse(text,null);if(!body||typeof body!=='object')throw fail('List request required.',400);
-  let list,nextCursor=null;if(body.action==='start')list=await startCompanyList(env,workspaceId,user,body);
+  const text=await request.text();if(text.length>1024*1024)throw fail('List request is too large.',413);const body=parse(text,null);if(!body||typeof body!=='object')throw fail('List request required.',400);if(body.action!=='snapshot'&&text.length>24000)throw fail('List request is too large.',413);
+  let list,nextCursor=null;if(body.action==='snapshot')list=await saveSearchSnapshot(env,workspaceId,user,body);
+  else if(body.action==='start')list=await startCompanyList(env,workspaceId,user,body);
   else{
    const row=await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,String(body.id||'')).first();if(!row)throw fail('Company list not found.',404);
+   if(parse(row.input_json).kind==='search_snapshot'&&body.action!=='delete')throw fail('This is a saved search copy. Continue company review and buyer selection in Companies.',400);
    if(parse(row.input_json).taskId&&['pause','resume','delete','buyer'].includes(body.action)){
     const parent=await sql(env,'SELECT status FROM copilot_research_tasks WHERE id=? AND workspace_id=?',parse(row.input_json).taskId,workspaceId).first();
     if(parent&&(body.action!=='buyer'||parent.status==='running'))throw fail(body.action==='delete'?'Delete the task conversation before deleting its retained company list.':'Pause or continue this research task in Ask LeadIntel.');
