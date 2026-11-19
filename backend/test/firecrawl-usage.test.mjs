@@ -60,6 +60,8 @@ test('Firecrawl support is scoped, dated and uses no AI, search or deep-research
   const turn=await runCopilotTurn({...env,COPILOT_TEST_PROVIDER:{generate:async()=>assert.fail('Support must not spend AI credits'),search:async()=>assert.fail('Support must not spend search credits')}},{workspaceId:'one',question});
   assert.equal(turn.model_calls,0);assert.equal(turn.search_calls,0);assert.equal(turn.research_used,false);assert.equal(turn.firecrawl_usage.selected.requests,1);assert.match(turn.answer,/Last saved balance: 0 credits/);assert.equal(turn.firecrawl_usage.balance.checkedAt,'2026-11-17T10:00:00.000Z');assert.match(turn.answer,/not a live balance/);assert.deepEqual(turn.action_proposals,[]);
   assert.equal(isFirecrawlUsageQuestion('How many credits did it use?', [{role:'user',content:'Firecrawl is connected'}]),true);assert.equal(isFirecrawlUsageQuestion('OpenAI credits ran out',[{role:'user',content:'Firecrawl is connected'}]),false);
+  assert.equal(isFirecrawlUsageQuestion('What is the current price to buy 10000 Firecrawl credits?'),false);
+  assert.equal(shouldUseExternalResearch({question:'What is the current price to buy 10000 Firecrawl credits?'}),true);
   const other=await runCopilotTurn(env,{workspaceId:'other',question});assert.equal(other.firecrawl_usage.selected.requests,0);assert.equal(other.firecrawl_usage.balance.remainingCredits,null);
 });
 test('dated investigation uses the requested UTC day and does not present newer events as historical charges',async t=>{

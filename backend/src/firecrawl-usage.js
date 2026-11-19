@@ -11,6 +11,9 @@ export function isFirecrawlUsageQuestion(question,conversation=[]){
   const provider=/fire\s*crawl|firacrawl|firacracwl/i;
   const usage=/credits?|quota|balance|billing|usage|spent|spend|consum|ran out|run out|exhaust|burn|charged|duplicat|retr(?:y|ies)|кредит|расход|баланс|kredīt|kredit|patēriņ/i;
   if(!usage.test(q))return false;
+  // Pricing and future workload estimates still use the ordinary adviser. Account
+  // consumption cannot be established by web research; diagnose it from receipts.
+  if(/\b(?:price|pricing|plans?|subscriptions?|buy|purchase|top.?up|upgrade|cost)\b/i.test(q)&&!/\b(?:why|used|usage|spent|consum\w*|ran out|run out|exhaust\w*|burn\w*|remaining|balance|deduct\w*|charged|disappear\w*)\b/i.test(q))return false;
   return provider.test(q)||(!/openai|apollo|hunter|treg|anthropic|gemini/i.test(q)&&conversation.slice(-4).some(m=>m.role==='user'&&provider.test(String(m.content||''))));
 }
 export function firecrawlUsageWindow(question='',now=Date.now()){
