@@ -16,6 +16,7 @@
   ]);
 
   const Targeting=globalThis.LeadIntelTargeting||(typeof require==='function'?require('./targeting-policy.js'):null);
+  const Strategy=globalThis.LeadIntelStrategyIntegrity||(typeof require==='function'?require('./strategy-integrity.js'):null);
   const filled=value=>Boolean(String(value??'').trim());
   const list=value=>Array.isArray(value)?value:[];
   const activeItems=value=>list(value).filter(item=>item&&item.active!==false);
@@ -28,7 +29,32 @@
     return STATUS_LABELS[stage.status]||'Not started';
   }
 
-  function stageSteps({companyOutcome,main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
+  function companyRecoveryAction(status,main,websiteActivated){
+    const action=(nextAction,stageId,itemId)=>({nextAction,nextTarget:{stageId,itemId}});
+    if(!status)return null;
+    const targetingMissing=main&&Targeting&&!Targeting.isConfirmed(main);
+    if(status.current&&!targetingMissing)return null;
+    // Restored Companies work can be viewed before Setup is completed. Its
+    // recovery links must still reach a stage the website gate will allow.
+    if(websiteActivated===undefined&&typeof window!=='undefined')websiteActivated=window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive?.();
+    if(websiteActivated===false)return filled(main?.website||main?.profile?.website)?action('Activate your company website in Setup',1,'activate-website'):action('Add your company website in Setup',1,'website');
+    if(status.recovery==='research')return action('Update market research in Profile',2,'research');
+    if(status.recovery==='profile'&&main){
+      if(!filled(main.website||main.profile?.website))return action('Add your company website in Setup',1,'website');
+      if(!filled(main.targetMarkets)&&!filled(main.profile?.targetMarkets))return action('Choose your target markets in Setup',1,'markets');
+      if(!main.profile)return action('Review your company Profile',2,'build-profile');
+    }
+    if(targetingMissing)return action('Confirm targeting in Profile',2,'targeting');
+    if(status.recovery==='profile'){
+      if(status.code==='strategy_incomplete')return action('Review your priority offer in Profile',2,'offer-customer');
+      return action('Review and approve your Profile',2,'approval');
+    }
+    if(status.code==='strategy_incomplete'&&main&&!activeItems(main.market?.icps).length)return action('Activate a customer profile in Strategy',3,'icps');
+    if(status.code==='strategy_invalid'||status.code==='strategy_incomplete'&&main&&!activeItems(main.market?.signals).length)return action('Review buying signals in Strategy',3,'signals');
+    return action('Review and approve Strategy',3,'strategy');
+  }
+
+  function stageSteps({companyOutcome,strategyStatus,main={},discovery={},discoveryMeta={},outreach={},delivery={},websiteActivated=false,buyerQualityPassed=false}={}){
     const answers=main.answers&&typeof main.answers==='object'?main.answers:{};
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
@@ -41,6 +67,11 @@
     const localized=['native','complete'].includes(selectedItem?.localizationStatus);
     const studio=outreach.messageStudio;
     const retainedCompanies=candidates.length+pipeline.length+prospects.length>0;
+    const researchComplete=filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)&&strategyStatus?.recovery!=='research';
+    let researchLabel='Market research not run';
+    if(market.researchStatus==='running')researchLabel='Market research in progress';
+    else if(strategyStatus?.recovery==='research')researchLabel='Market research needs updating';
+    else if(researchComplete)researchLabel=market.researchStatus==='partial'?'Research saved · partial coverage':'Market research completed';
     const studioReady=studio&&everyField(studio.essentials,['offer','target','value','sender','company','meetingValue','calendly']);
     return {
       1:[
@@ -58,13 +89,13 @@
         step('profile','Intelligence profile generated',Boolean(profile),{action:'Generate the intelligence profile'}),
         step('review','Evidence reviewed and gaps corrected',Boolean(profile&&main.approved),{action:'Review evidence and correct missing information'}),
         step('approval','Intelligence profile approved',Boolean(main.approved),{action:'Approve the intelligence profile'}),
-        step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?(market.researchStatus==='partial'?'Research saved · partial coverage':'Market research completed'):'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{optional:true,action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
+        step('research',researchLabel,researchComplete,{optional:true,action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
       ],
       4:[
         step('icps','Customer definition configured',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),
         step('signals','Buying signals activated',activeItems(market.signals).length>0,{action:'Activate at least one buying signal'}),
         step('opportunities','Target markets configured',filled(main.profile?.targetMarkets)||filled(main.profile?.currentMarkets)||filled(main.targetMarkets),{action:'Choose a target market'}),
-        step('strategy','Strategy approved',Boolean(market.strategyApproved),{action:'Review and approve the strategy'})
+        step('strategy','Strategy approved',strategyStatus?.current??Boolean(market.strategyApproved),{action:'Review and approve the strategy'})
       ],
       5:[
         step('scope','Discovery amount selected',Boolean(discoveryMeta.targetCount||discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
@@ -95,9 +126,11 @@
   function buildJourneyModel(input={}){
     const currentStep=Math.min(7,Math.max(1,Number(input.currentStep)||1));
     const availability=input.availability&&typeof input.availability==='object'?input.availability:{};
-    const internal=stageSteps(input);
+    const strategyStatus=input.strategyStatus??(input.main&&Strategy?.status(input.main));
+    const internal=stageSteps({...input,strategyStatus});
     const discovery=input.discovery&&typeof input.discovery==='object'?input.discovery:{};
     const candidates=checkedCompanies(discovery),pipeline=list(discovery.pipeline);
+    const recovery=companyRecoveryAction(strategyStatus,input.main,input.websiteActivated);
     const groups={
       1:internal[1]||[],
       2:[...(internal[2]||[]),...(internal[3]||[])],
@@ -127,12 +160,19 @@
       const active=definition.id===activeJourneyStage;
       const status=requiredComplete?'complete':!available&&!active?'locked':requiredCompleted?'in-progress':'not-started';
       const next=required.find(item=>!item.complete);
-      return {...definition,steps,total:steps.length,completed,requiredTotal:required.length,requiredCompleted,requiredComplete,optionalTotal:optional.length,optionalCompleted,available,active,status,nextAction:next?.action||'Required steps complete',nextTarget:next?{stageId:definition.id,itemId:next.id}:null};
+      let guidance={nextAction:next?.action||'Required steps complete',nextTarget:next?{stageId:definition.id,itemId:next.id}:null};
+      if(definition.id===3&&next?.id==='strategy'&&recovery)guidance=recovery;
+      if(definition.id===4&&steps.some(item=>item.id==='companies'&&!item.complete)){
+        if(discovery.status==='running')guidance={nextAction:'View company search progress',nextTarget:{stageId:4,itemId:'search-progress'}};
+        else if(recovery)guidance=recovery;
+        else if(input.companyOutcome?.pendingCount>0&&!input.companyOutcome.targetMet)guidance={nextAction:'Review saved companies',nextTarget:{stageId:4,itemId:'saved-review'}};
+      }
+      return {...definition,steps,total:steps.length,completed,requiredTotal:required.length,requiredCompleted,requiredComplete,optionalTotal:optional.length,optionalCompleted,available,active,status,...guidance};
     });
     for(const stage of model){
       if(!stage.requiredComplete)continue;
       const next=model.find(candidate=>candidate.id>stage.id&&candidate.available&&!candidate.requiredComplete);
-      if(next){stage.nextAction=`Continue to ${next.name}`;stage.nextTarget={stageId:next.id,itemId:next.nextTarget?.itemId||''};}
+      if(next){stage.nextAction=next.nextTarget?.stageId===next.id?`Continue to ${next.name}`:next.nextAction;stage.nextTarget=next.nextTarget;}
     }
     if(input.syncConflict)for(const stage of model)if(stage.active){stage.nextAction='Resolve workspace synchronization';stage.nextTarget={stageId:stage.id,itemId:'sync-review'};}
     return model;
@@ -174,5 +214,5 @@
     return visible;
   }
 
-  return {STAGES,buildJourneyModel,journeyStageForModuleStep,routeForJourneyStage,visibleStageIds,stageStatusLabel};
+  return {STAGES,buildJourneyModel,companyRecoveryAction,journeyStageForModuleStep,routeForJourneyStage,visibleStageIds,stageStatusLabel};
 });

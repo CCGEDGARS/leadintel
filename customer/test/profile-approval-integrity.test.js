@@ -19,3 +19,20 @@ test('a failed canonical edit prevents Profile approval',()=>{const r=runtime();
 test('failed local approval persistence cannot leave the active Profile approved',()=>{const r=runtime();try{r.failSave();assert.doesNotThrow(()=>r.root.approveProfile());assert.equal(r.root.state.approved,false);assert.equal(r.saved().approved,false);assert.match(r.notices.join(' '),/sav|storage/i);}finally{r.close();}});
 test('approval cannot overwrite a Profile edited in another view',()=>{const r=runtime();try{const latest=r.saved();latest.profile.priorityOffers='New reviewed offer';latest.answers.priority_offers='New reviewed offer';r.w.localStorage.setItem(MAIN,JSON.stringify(latest));assert.equal(r.root.approveProfile(),false);assert.equal(r.saved().profile.priorityOffers,'New reviewed offer');assert.equal(r.saved().approved,false);assert.equal(r.saveCalls(),0);}finally{r.close();}});
 test('an unchanged reviewed Profile can still be approved and proceed to Strategy',()=>{const r=runtime();try{assert.notEqual(r.root.approveProfile(),false);assert.equal(r.saved().approved,true);r.root.openMarketStrategy();assert.equal(r.root.state.step,4);}finally{r.close();}});
+
+test('confirming an already approved Profile preserves its manually reviewed Strategy on save and reopen',()=>{
+ const r=runtime(),I=require('../strategy-integrity.js');
+ try{
+  const main=r.root.state;
+  main.approved=true;
+  main.market={icps:[{id:'core',active:true,description:'Reviewed account segment'}],signals:[{id:'project',keywords:'new projects',active:true}],researchResults:[{url:'https://source.example/project'}],strategyApproved:true};
+  main.market.researchContextFingerprint=I.researchFingerprint(main);
+  main.market.strategyApproval=I.approval(main,'2026-11-01');
+  r.w.localStorage.setItem(MAIN,JSON.stringify(main));
+  r.root.seedMarketStrategy=()=>assert.fail('An unchanged Profile has no new Strategy defaults to apply');
+  assert.equal(r.root.approveProfile(),true);
+  const reopened=r.saved();
+  assert.equal(I.status(reopened).current,true);
+  assert.deepEqual(reopened.market,main.market);
+ }finally{r.close();}
+});

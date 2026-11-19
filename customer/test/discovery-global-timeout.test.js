@@ -332,7 +332,7 @@ test('a completed zero-result run renders the search funnel and unqualified matc
   context.__renderCandidates();
   context.__renderPotentialMatches();
 
-  assert.match(context.__elements.get('discovery-funnel').innerHTML,/Evidence pages/i);
+  assert.match(context.__elements.get('discovery-funnel').innerHTML,/Unique source URLs/i);
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/saved companies still need evidence/i);
   assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/valid finding|No newly qualified opportunities/i);

@@ -10,17 +10,17 @@ test('research fingerprints ignore object property order while retaining materia
  const {state,ctx}=opportunityRecovery();
  state.answers={priority_offers:'Clinical software',buyer_roles:'Operations Director'};
  state.workspaceGoals={successOutcome:'Find opportunities',measurement:'Qualified buyers'};
- const before=ctx.researchContextFingerprint(),legacy=ctx.researchContextFingerprint(null,true),strategy=Integrity.signature(state);
+ const before=ctx.researchContextFingerprint(),legacy=Integrity.researchFingerprint(state,true),strategy=Integrity.signature(state);
  state.answers={buyer_roles:'Operations Director',priority_offers:'Clinical software'};
  state.workspaceGoals={measurement:'Qualified buyers',successOutcome:'Find opportunities'};
  assert.equal(Integrity.signature(state),strategy);
  assert.equal(ctx.researchContextFingerprint(),before);
- assert.notEqual(ctx.researchContextFingerprint(null,true),legacy,'the old digest was order-sensitive');
+ assert.notEqual(Integrity.researchFingerprint(state,true),legacy,'the old digest was order-sensitive');
  state.answers.priority_offers='Payroll software';assert.notEqual(ctx.researchContextFingerprint(),before);
 });
 test('only an exactly reproduced legacy research digest migrates without new provider calls',()=>{
  const {state,ctx}=opportunityRecovery(),evidence=JSON.stringify(state.market.researchResults);
- state.market.researchContextFingerprint=ctx.researchContextFingerprint(null,true);
+ state.market.researchContextFingerprint=Integrity.researchFingerprint(state,true);
  state.market.strategyApproved=false;
  assert.equal(ctx.syncResearchContextStale(),false);
  assert.equal(state.market.researchContextFingerprint,ctx.researchContextFingerprint());
@@ -33,14 +33,14 @@ test('only an exactly reproduced legacy research digest migrates without new pro
 });
 test('an unmatched legacy digest remains stale even when current Strategy inputs are valid',()=>{
  const {state,ctx}=opportunityRecovery();state.answers={a:'one',b:'two'};
- const original=ctx.researchContextFingerprint(null,true);state.market.researchContextFingerprint=original;
+ const original=Integrity.researchFingerprint(state,true);state.market.researchContextFingerprint=original;
  state.answers={b:'two',a:'one'};
  assert.equal(ctx.syncResearchContextStale(),true);
  assert.equal(state.market.researchContextFingerprint,original,'do not bless an unreproduced historical preimage');
 });
 test('completed Opportunity-led recovery also requires exact matching of the legacy original scope',()=>{
  const {state,ctx}=opportunityRecovery();state.market.icps[1].active=false;
- state.market.researchContextFingerprint=ctx.researchContextFingerprint(null,true);
+ state.market.researchContextFingerprint=Integrity.researchFingerprint(state,true);
  state.market.icps[1].active=true;
  assert.equal(ctx.syncResearchContextStale(),false);
  assert.equal(state.market.researchContextFingerprint,ctx.researchContextFingerprint());
@@ -108,4 +108,62 @@ test('retained previous research keeps the fingerprint of the run it came from a
  assert.match(app,/fingerprint:state\.market\.researchContextFingerprint/);
  assert.match(app,/state\.market\.researchContextFingerprint=previous\.fingerprint\|\|"stale:rerun-failed"/);
  assert.match(fn('strategyHandoffModel','function renderStrategyHandoff'),/^function strategyHandoffModel\(\)\{\s*syncResearchContextStale\(\);/);
+});
+
+test('preexisting digests from the two reviewed-answer spellings survive reference migration only for the original targeting',()=>{
+ const {state,ctx}=opportunityRecovery();
+ state.approved=true;state.market.strategyApproved=true;
+ state.answers={priority_offers:'Clinical software',ideal_customer:'Clinics',buyer_roles:'Manager',exclusions:'Retailers'};
+ state.answerStatus=Object.fromEntries(Object.keys(state.answers).map(id=>[id,'accepted']));
+ state.referenceCustomerPortfolio={lists:[]};
+ const sortKeys=(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,value[key]])):value;
+ const original=Integrity.material(state);
+ const oldStrategy=Integrity.VERSION+':'+Integrity.digest(JSON.stringify(original,sortKeys));
+ state.market.strategyApproval={version:1,signature:oldStrategy,approvedAt:'2026-11-18'};
+ delete original.opportunities;delete original.evidence;
+ state.market.researchContextFingerprint=Integrity.VERSION+':research:v2:'+Integrity.digest(JSON.stringify(original,sortKeys));
+ state.answerStatus=Object.fromEntries(Object.keys(state.answers).map(id=>[id,'user']));
+ delete state.referenceCustomerPortfolio;
+ assert.equal(Integrity.status(state).current,true,'a stale latch from an older client cannot overrule the matching researched inputs');
+ assert.equal(Integrity.status(state).signature,oldStrategy);
+ assert.equal(ctx.syncResearchContextStale(),false);
+ assert.equal(state.market.researchContextFingerprint,Integrity.researchFingerprint(state));
+ state.answerStatus.buyer_roles='draft';
+ assert.equal(Integrity.status(state).current,false,'reviewed and draft inputs remain distinct');
+ assert.equal(Integrity.status(state).recovery,'research');
+ state.answerStatus.buyer_roles='user';
+ state.market.signals[0].weight+=1;
+ assert.equal(ctx.syncResearchContextStale(),true);
+ assert.equal(Integrity.status(state).code,'research_stale');
+ assert.equal(Integrity.approval(state),null);
+});
+
+test('a legacy hold without a reproducible fingerprint keeps its evidence and an actionable recovery',()=>{
+ const {state,ctx}=opportunityRecovery();state.approved=true;
+ state.market.researchContextFingerprint='';state.market.researchContextStale=true;state.market.strategyApproved=false;
+ assert.equal(ctx.syncResearchContextStale(),true);
+ assert.equal(Integrity.status(state).recovery,'research');
+ state.approved=false;assert.equal(Integrity.status(state).recovery,'profile');
+ state.approved=true;state.market.researchResults=[];
+ assert.equal(ctx.syncResearchContextStale(),false);
+ assert.equal(Integrity.status(state).recovery,'strategy');
+});
+
+test('reseeding a researched Strategy after a reference update preserves the saved signal subset through real normalization',()=>{
+ const profile={companyName:'Clinic supplier',priorityOffers:'Clinical software',targetMarkets:'Finland',recommendedSignals:[{id:'expansion',name:'Expansion'},{id:'project',name:'Project'}]};
+ const market=Market.normalizeMarketState({icps:Market.buildIcpCandidates(profile),signals:[{id:'historical',name:'Reviewed investment',active:true,weight:8}],opportunities:[{id:'opportunity',evidence:[{url:'https://clinic.example/project'}]}],researchResults:[{url:'https://clinic.example/project'}],strategyApproved:true});
+ const state={website:'https://supplier.example',profile,market,approved:true};
+ state.market.researchContextFingerprint=Integrity.researchFingerprint(state);
+ state.market.strategyApproval=Integrity.approval(state);
+ const ctx={state,LeadIntelMarket:Market,LeadIntelStrategyIntegrity:Integrity,contentLanguage:()=> 'en',saveState:()=>{}};
+ vm.createContext(ctx);
+ vm.runInContext(fn('strategyIntegrity','function captureStrategyContext')+fn('researchContextFingerprint','function returnToProfileResearch')+fn('ensureMarketStrategySeeded','async function openModule')+'ensureMarketStrategySeeded();',ctx);
+ assert.deepEqual(state.market.signals.map(signal=>signal.id),['historical']);
+ const reopened=JSON.parse(JSON.stringify(state));
+ assert.equal(Integrity.researchContext(reopened).stale,false);
+ assert.equal(Integrity.status(reopened).current,true);
+ state.market.signals=[];state.market.deletedSignalIds=['historical'];
+ vm.runInContext('ensureMarketStrategySeeded();',ctx);
+ assert.deepEqual(state.market.signals,[],'removing every saved signal must not activate a new recommendation');
+ assert.equal(Integrity.status(state).current,false);
 });

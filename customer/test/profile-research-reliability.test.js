@@ -123,9 +123,25 @@ for(const action of ['runCompanyResearch','runAiSynthesis'])test(`${action} reta
  assert.deepEqual(result.referenceCustomerPortfolio,before.referenceCustomerPortfolio);assert.deepEqual(result.researchMeta,r.meta());assert.equal(result.researchMeta.mode,'ai');assert.ok(result.researchMeta.execution.receipts.length);
  if(action==='runAiSynthesis')assert.ok(r.calls.every(call=>call.url.includes('/api/ai/generate')),'synthesis uses saved evidence without Firecrawl');r.close();
 });
-test('AI preparation with unchanged confirmed answers preserves approvals and all Strategy settings',async()=>{
- const r=runtime({prior:true}),before=r.state();before.market=marketWithSavedWork();for(const id of engine.QUESTION_IDS)if(!before.answers[id])before.answers[id]='User confirmed '+id;r.saved.set(STATE,JSON.stringify(before));
- await r.hooks.runAiSynthesis();const result=r.state();assert.equal(result.approved,true);assert.deepEqual(result.market,before.market);assert.deepEqual(result.answers,before.answers);assert.deepEqual(result.profile,before.profile);r.close();
+test('AI preparation with unchanged confirmed answers preserves the signed Strategy and its research through reopen',async()=>{
+ const r=runtime({prior:true}),before=r.state(),integrity=require('../strategy-integrity.js');
+ before.market=marketWithSavedWork();
+ for(const id of engine.QUESTION_IDS){
+  if(!before.answers[id])before.answers[id]='User confirmed '+id;
+  before.answerStatus[id]='user';
+ }
+ before.profile.priorityOffers=before.answers.priority_offers;
+ before.market.signals[0].active=true;
+ before.market.researchContextFingerprint=integrity.researchFingerprint(before);
+ before.market.strategyApproval=integrity.approval(before,'2026-11-01');
+ assert.equal(integrity.status(before).current,true);
+ r.saved.set(STATE,JSON.stringify(before));
+ await r.hooks.runAiSynthesis();const result=r.state();
+ assert.equal(result.approved,true);assert.deepEqual(result.market,before.market);assert.deepEqual(result.answers,before.answers);assert.deepEqual(result.profile,before.profile);
+ assert.equal(result.answerStatus.proof_points,'accepted','reviewed evidence uses the seller research spelling after synthesis');
+ assert.equal(integrity.researchContext(result).stale,false);assert.equal(integrity.status(result).current,true);
+ assert.equal(integrity.status(result).signature,before.market.strategyApproval.signature);
+ r.close();
 });
 test('completed legacy profile without research receipts offers optional refresh, never an initial start',()=>{
  const r=runtime({prior:true});r.saved.delete(META);r.hooks.renderResearchReview();const summary=r.context.document.getElementById('research-summary');assert.match(summary.textContent,/Saved company profile available/);assert.match(summary.textContent,/receipts.*unavailable/);assert.doesNotMatch(summary.textContent,/Start company research|Research has not run/);assert.equal(r.calls.length,0);r.close();

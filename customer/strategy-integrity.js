@@ -17,29 +17,96 @@
  const pick=(value,keys)=>Object.fromEntries(keys.map(key=>[key,value?.[key]??'']));
  function evidence(value){return rows(value).map(item=>({...pick(item,['id','url','type','title','description','date','dateSource','publishedDate','eventDate','extracted','extractedBy','status','role','sourceClass','market','companyId','companyDomain','company','supportedClaim','claim','confidence','qualityScore','commercialRelevance','publishedAt','detectedAt']),body:digest(String(item.text||item.markdown||'')),extractionComplete:Boolean(item.extractedAt),sourceProviders:list(item.sourceProviders),verification:item.verification||null})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));}
  function referenceModel(ref={}){if(ref.publishedModel)return ref.publishedModel.active===true?ref.publishedModel:null;return ref.activated===true?pick(ref,['activeIds','activeSegmentIds','fingerprint','rows','analyses','dna']):null;}
- function material(state={}){
+ function material(state={},researchOnly=false){
   const profile=state.profile||{},market=state.market||{},portfolio=state.referenceCustomerPortfolio;
   const references=Array.isArray(portfolio?.lists)?portfolio.lists.filter(item=>item.active===true).map(item=>({id:item.id,model:referenceModel(item.reference)})).filter(item=>item.model).sort((a,b)=>String(a.id).localeCompare(String(b.id))):{legacy:referenceModel(state.referenceCustomers)};
   const fields=Object.fromEntries(Object.entries(profile.canonical?.fields||{}).map(([key,value])=>[key,{...pick(value,['value','status','provenance']),sourceIds:list(value.sourceIds)}]));
-  return {version:VERSION,website:clean(state.website||profile.website),targetMarkets:list(state.targetMarkets?.length?state.targetMarkets:profile.targetMarkets),answers:state.answers||{},answerStatus:state.answerStatus||{},goals:state.workspaceGoals||{},profile:pick(profile,['companyName','companyOverview','priorityOffers','idealCustomer','customerPainPoints','decisionMakers','currentMarkets','targetMarkets','valueProposition','differentiation','proofPoints','buyingTriggers','commonObjections','exclusions','buyingOutcomes','commercialObjective','opportunityValue','marketFocus','lookalikeCustomers','researchMarkets','companyClassification','companyClaims','companyDomain','companyWebsite','website','referenceDomains','referenceSimilarityModel','collectAllCompanyContacts','discoveryPriority','searchFeedback','customerPainPointsStatus','customerPainPointsLanguage']),fields,sources:evidence(state.scrapedSources),documents:rows(state.documents).map(item=>({id:item.id||'',name:item.name||'',body:digest(String(item.text||'')),claims:item.claims||null})),references,icps:rows(market.icps).map(item=>({...pick(item,['id','type','name','description','targetMarkets','buyerRoles','offers','value','exclusions']),active:item.active!==false})).sort((a,b)=>String(a.id).localeCompare(String(b.id))),signals:rows(market.signals).map(item=>({...pick(item,['id','name','keywords','priority','source','description']),active:item.active!==false,weight:Number(item.weight??5)})).sort((a,b)=>String(a.id).localeCompare(String(b.id))),opportunities:rows(market.opportunities).map(item=>({id:item.id,active:item.active!==false,market:item.market,evidence:evidence(item.evidence)})),researchMode:market.researchMode||'quick',sourceTypes:list(market.researchSourceTypes),sourceTypesCustomized:market.researchSourceTypesCustomized===true,customSources:list(market.researchCustomSources),instructions:clean(market.researchInstructions),evidence:evidence(market.researchResults)};
+  return {version:VERSION,website:clean(state.website||profile.website),targetMarkets:list(state.targetMarkets?.length?state.targetMarkets:profile.targetMarkets),answers:state.answers||{},answerStatus:state.answerStatus||{},goals:state.workspaceGoals||{},profile:pick(profile,['companyName','companyOverview','priorityOffers','idealCustomer','customerPainPoints','decisionMakers','currentMarkets','targetMarkets','valueProposition','differentiation','proofPoints','buyingTriggers','commonObjections','exclusions','buyingOutcomes','commercialObjective','opportunityValue','marketFocus','lookalikeCustomers','researchMarkets','companyClassification','companyClaims','companyDomain','companyWebsite','website','referenceDomains','referenceSimilarityModel','collectAllCompanyContacts','discoveryPriority','searchFeedback','customerPainPointsStatus','customerPainPointsLanguage']),fields,sources:evidence(state.scrapedSources),documents:rows(state.documents).map(item=>({id:item.id||'',name:item.name||'',body:digest(String(item.text||'')),claims:item.claims||null})),references,icps:rows(market.icps).map(item=>({...pick(item,['id','type','name','description','targetMarkets','buyerRoles','offers','value','exclusions']),active:item.active!==false})).sort((a,b)=>String(a.id).localeCompare(String(b.id))),signals:rows(market.signals).map(item=>({...pick(item,['id','name','keywords','priority','source','description']),active:item.active!==false,weight:Number(item.weight??5)})).sort((a,b)=>String(a.id).localeCompare(String(b.id))),...(!researchOnly&&{opportunities:rows(market.opportunities).map(item=>({id:item.id,active:item.active!==false,market:item.market,evidence:evidence(item.evidence)}))}),researchMode:market.researchMode||'quick',sourceTypes:list(market.researchSourceTypes),sourceTypesCustomized:market.researchSourceTypesCustomized===true,customSources:list(market.researchCustomSources),instructions:clean(market.researchInstructions),...(!researchOnly&&{evidence:evidence(market.researchResults)})};
  }
- function signature(state){return VERSION+':'+digest(JSON.stringify(canonical(material(state))));}
+ // Profile approval, seller research and targeting confirmation use two names
+ // for reviewed answers. Canonical provenance, evidence and drafts stay material.
+ const targetingFields=['priority_offers','ideal_customer','buyer_roles','exclusions'];
+ function reviewedStatuses(statuses,marker,keys=Object.keys(statuses)){
+  const next={...statuses};
+  for(const key of keys)if(next[key]==='accepted'||next[key]==='user')next[key]=marker;
+  return next;
+ }
+ function hasNoActiveReferences(references){return Array.isArray(references)?references.length===0:references?.legacy===null;}
+ function normalizedScope(scope){
+  return {...scope,answerStatus:reviewedStatuses(scope.answerStatus,'user'),references:hasNoActiveReferences(scope.references)?{legacy:null}:scope.references};
+ }
+ function scopeDigest(scope,research=false,legacy=false){
+  const prefix=research?(legacy?':research:':':research:v2:'):':';
+  return VERSION+prefix+digest(JSON.stringify(legacy?scope:canonical(scope)));
+ }
+ function matchesSavedScope(scope,saved,research=false){
+  if(typeof saved!=='string')return false;
+  const legacy=research&&!saved.startsWith(VERSION+':research:v2:');
+  if(!saved.startsWith(VERSION+(research?':research:':':')))return false;
+  // Accept historical digests only by reproducing their complete preimage.
+  // No active models could be serialized as an absent legacy model or an
+  // initialized portfolio. Active references never enter this compatibility path.
+  const references=hasNoActiveReferences(scope.references)?[scope.references,Array.isArray(scope.references)?{legacy:null}:[]]:[scope.references];
+  const statuses=[scope.answerStatus,reviewedStatuses(scope.answerStatus,'user'),reviewedStatuses(scope.answerStatus,'accepted'),
+   reviewedStatuses(scope.answerStatus,'user',targetingFields),reviewedStatuses(scope.answerStatus,'accepted',targetingFields)];
+  const tried=new Set();
+  for(const answerStatus of statuses){
+   const key=JSON.stringify(answerStatus);if(tried.has(key))continue;tried.add(key);
+   for(const reference of references){
+    if(saved===scopeDigest({...scope,answerStatus,references:reference},research,legacy))return true;
+   }
+  }
+  return false;
+ }
+ function signature(state={}){
+  const scope=material(state),current=scopeDigest(normalizedScope(scope)),saved=state.market?.strategyApproval;
+  // Company scores carry the approved digest. Keep its original identifier
+  // across a compatible migration so a reload also preserves checked scores.
+  if(saved?.version===1&&saved.signature&&saved.signature!==current&&matchesSavedScope(scope,saved.signature))return saved.signature;
+  return current;
+ }
+ function researchFingerprint(state,legacy=false){
+  const scope=material(state,true);
+  return scopeDigest(legacy?scope:normalizedScope(scope),true,legacy);
+ }
+ function completedOpportunityScope(market,scope){
+  const execution=market.researchExecution||{};
+  if(!['complete','partial'].includes(market.researchStatus)||!['complete','partial'].includes(execution.status)
+    ||!execution.runId||!Number(execution.completedAt)||market.researchQuality?.passed===false)return null;
+  if(!rows(market.researchHistory).some(run=>run.id===execution.runId&&Number(run.sourceCount)>0)
+    ||!rows(market.opportunities).some(item=>item.active!==false&&item.profileOnly!==true&&item.evidence?.length))return null;
+  const opportunity=scope.icps.filter(item=>item.type==='opportunity-led'||item.id==='icp-opportunity-led');
+  if(opportunity.length!==1||opportunity[0].active!==true)return null;
+  return {...scope,icps:scope.icps.map(item=>item===opportunity[0]?{...item,active:false}:item)};
+ }
+ function researchContext(state={},companyBrain=globalThis.LeadIntelCompanyBrain){
+  const market=state.market||{},saved=market.researchContextFingerprint||'';
+  if(!rows(market.researchResults).length)return {stale:false,fingerprint:''};
+  if(companyBrain?.unrelatedSignals?.(state.profile||{},market.signals)?.length)return {stale:true,fingerprint:saved};
+  if(!saved||typeof saved!=='string'||!saved.startsWith(VERSION+':research:'))return {stale:saved!==''||market.researchContextStale===true,fingerprint:saved};
+  const scope=material(state,true),current=scopeDigest(normalizedScope(scope),true);
+  if(saved===current||matchesSavedScope(scope,saved,true))return {stale:false,fingerprint:current};
+  const prior=completedOpportunityScope(market,scope);
+  if(prior&&matchesSavedScope(prior,saved,true))return {stale:false,fingerprint:current};
+  return {stale:true,fingerprint:saved};
+ }
  function requirements(state={}){
-  if(state.approved!==true||!state.profile)return {code:'profile_unapproved',reason:'Review and approve the current company Profile before activating Strategy.'};
-  if(!clean(state.website||state.profile.website)||!clean(state.profile.priorityOffers)||!list(state.targetMarkets?.length?state.targetMarkets:state.profile.targetMarkets).length)return {code:'strategy_incomplete',reason:'Complete the seller website, priority offer and target markets in Profile.'};
+  if(state.approved!==true||!state.profile)return {code:'profile_unapproved',recovery:'profile',reason:'Review and approve the current company Profile before activating Strategy.'};
+  if(!clean(state.website||state.profile.website)||!clean(state.profile.priorityOffers)||!list(state.targetMarkets?.length?state.targetMarkets:state.profile.targetMarkets).length)return {code:'strategy_incomplete',recovery:'profile',reason:'Complete the seller website, priority offer and target markets in Profile.'};
+  if(researchContext(state).stale)return {code:'research_stale',recovery:'research',reason:'Saved research no longer matches the current company, offers, markets or buying signals. Update market research in Profile before finding companies.'};
   const icps=rows(state.market?.icps).filter(item=>item.active!==false),signals=rows(state.market?.signals).filter(item=>item.active!==false);
-  if(!icps.length||!signals.length)return {code:'strategy_incomplete',reason:'Enable at least one customer profile and one buying signal, then review Strategy.'};
-  if(signals.some(item=>!clean(item.id)||!clean(item.keywords||item.name)||!Number.isFinite(Number(item.weight??5))||Number(item.weight??5)<1||Number(item.weight??5)>10))return {code:'strategy_invalid',reason:'Review active signal names, keywords and weights (1–10).'};
+  if(!icps.length||!signals.length)return {code:'strategy_incomplete',recovery:'strategy',reason:'Enable at least one customer profile and one buying signal, then review Strategy.'};
+  if(signals.some(item=>!clean(item.id)||!clean(item.keywords||item.name)||!Number.isFinite(Number(item.weight??5))||Number(item.weight??5)<1||Number(item.weight??5)>10))return {code:'strategy_invalid',recovery:'strategy',reason:'Review active signal names, keywords and weights (1–10).'};
   return null;
  }
  function approval(state,at=new Date().toISOString()){if(requirements(state))return null;return {version:1,signature:signature(state),approvedAt:at};}
  function status(state={}){
   const issue=requirements(state);if(issue)return {current:false,...issue,signature:''};
   const current=signature(state),saved=state.market?.strategyApproval;
-  if(saved?.version===1&&saved.signature!==current)return {current:false,code:'strategy_stale',reason:'Strategy context changed. Review Strategy and activate it again; saved evidence is retained.',signature:current};
-  if(state.market?.strategyApproved!==true)return {current:false,code:'strategy_unapproved',reason:'Review and activate Strategy before starting new company searches or automatic runs.',signature:current};
-  if(saved?.version!==1||saved.signature!==current)return {current:false,code:'strategy_stale',reason:'Strategy context changed or predates revision checks. Review Strategy and activate it again; saved evidence is retained.',signature:current};
+  if(saved?.version===1&&saved.signature!==current)return {current:false,code:'strategy_stale',recovery:'strategy',reason:'Strategy context changed. Review Strategy and activate it again; saved evidence is retained.',signature:current};
+  if(state.market?.strategyApproved!==true)return {current:false,code:'strategy_unapproved',recovery:'strategy',reason:'Review and activate Strategy before starting new company searches or automatic runs.',signature:current};
+  if(saved?.version!==1||saved.signature!==current)return {current:false,code:'strategy_stale',recovery:'strategy',reason:'Strategy context changed or predates revision checks. Review Strategy and activate it again; saved evidence is retained.',signature:current};
   return {current:true,code:'current',reason:'',signature:current};
  }
- return {VERSION,digest,material,signature,requirements,approval,status};
+ return {VERSION,digest,material,signature,researchFingerprint,researchContext,requirements,approval,status};
 });
