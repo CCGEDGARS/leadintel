@@ -128,7 +128,7 @@ test('resuming a zero-read job gets attributed contacts from a Danish official d
  globalThis.fetch=async input=>{
   const url=String(input);urls.push(url);
   if(url!==directory)return new Response('Unavailable',{status:503});
-  const html='<title>Kontakt Øst Stål</title><h1>Kontakt Øst Stål</h1><h2>Ledelse</h2><h4>Ib Henrik Jensen</h4><h5>Direktør</h5><p>Salg og projektledelse</p><p>Telefon: 40 13 00 01</p><p>E-mail: <a href="mailto:ihj@oststaal.dk">ihj@oststaal.dk</a></p><h4>Poul Knud Pedersen</h4><h5>Produktionschef</h5><p>Telefon: 25 16 00 02</p><p>E-mail: pk@oststaal.dk</p><h4>Ole Martin Jensen</h4><h5>Projektleder</h5><p>E-mail: <a href="mailto:pk@oststaal.dk">omj@oststaal.dk</a></p>';
+  const html='<title>Kontakt Øst Stål</title><h1>Kontakt Øst Stål</h1><h2>Ledelse</h2><h4>Ib Henrik Jensen</h4><h5>Direktør</h5><p>Salg og projektledelse</p><p>Telefon: 40 13 00 01</p><p>E-mail: <a href="mailto:ihj@oststaal.dk">ihj@oststaal.dk</a></p><h4>Poul Knud Pedersen</h4><h5>Teknisk design elev</h5><p>Telefon: 25 16 00 02</p><p>E-mail: pk@oststaal.dk</p><h4>Ole Martin Jensen</h4><h5>Projektleder</h5><p>E-mail: <a href="mailto:pk@oststaal.dk">omj@oststaal.dk</a></p>';
   return new Response(html,{headers:{'Content-Type':'text/html'}});
  };
  const headers={'Content-Type':'application/json',Cookie:'leadintel_session='+f.users.owner.token},endpoint='https://app.fixture.test/api/websites/contacts?workspace_id='+workspaceId,waits=[];

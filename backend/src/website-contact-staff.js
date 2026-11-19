@@ -15,11 +15,13 @@ export function websiteSourceChunks(page){
 function nestedStaffCards(page,input){
  if(!page.sourceRead||D.canonicalDomain(page.url)!==input.domain)return [];
  const people=[],body=page.markdown;
+ const directory=/(?:^|[\/_.-])(?:contacts?|kontakt|team|staff|medarbejdere|ledelse)(?:$|[\/_.-])/i.test(new URL(page.url).pathname);
  const headings=/^(#{2,5})[ \t]+([^\n]+?)[ \t]*\n(?=\s*(#{3,6})[ \t]+([^\n]+))/gm;
  for(const match of body.matchAll(headings)){
   const [,nameLevel,rawName,roleLevel,rawRole]=match,name=clean(rawName.replace(/[*_]/g,'')),title=clean(rawRole.replace(/[*_]/g,''));
   if(roleLevel.length<=nameLevel.length||!/^\p{Lu}[\p{L}’'.-]+(?:\s+[\p{L}’'.-]+){1,4}$/u.test(name)||!D.isIndependentContactPerson({name,title})||/^(?:contact|kontakt|our |about |company |general |ledelse|management|team\b)/i.test(name))continue;
-  if(!/\b(?:manager|president|engineer|director|coordinator|chief|head|founder|officer|CEO|CFO|COO)\b|direktør|direktör|chef\b|leder\b|ansvarlig\b|værkfører|bogholder|administration|designer/i.test(title)||/former|previous|retired|tidigare/i.test(title))continue;
+  const knownRole=/\b(?:manager|president|engineer|director|coordinator|chief|head|founder|officer|CEO|CFO|COO)\b|direktør|direktör|chef\b|leder\b|ansvarlig\b|værkfører|bogholder|administration|designer/i.test(title);
+  if((!directory&&!knownRole)||title.length>120||/[#@:\d]|former|previous|retired|tidigare|privacy|copyright/i.test(title))continue;
   const afterName=body.slice(match.index+match[0].length).trimStart();
   const details=afterName.slice(afterName.indexOf('\n')<0?afterName.length:afterName.indexOf('\n')).slice(0,700).split(/\n\s*(?:#{1,6}\s|!?\[!\[|!\[|footer\b|switchboard\b|reception\b)/i)[0];
   const listed=new Set(),numbers=new Map();
