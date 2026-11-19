@@ -37,7 +37,7 @@
   const scope=publicUrl(evidence.sourceScope)||sourceUrl,eventKey=[w.purpose,scope,reference||sourceUrl+(index?'#entry-'+index:'')].join('|');
   // For labelled notices fingerprint semantic facts, excluding page navigation.
   const semantic=reference?{title,sourceUrl,reference,fields,eventDate,deadline,subjects:subjects.map(s=>({kind:s.kind,name:s.name,role:s.role,website:s.website})),status:line(text,['Status','Decision','Amendment','Stage'])}:{title,summary};
-  return {purpose:w.purpose,eventKey,title,summary,bodyText:clean(text,60000),sourceUrl,sourceType:clean(evidence.sourceType,60)||'public',sourceRead,reference,eventDate,deadline,fields,subjects,access:restricted?'restricted':sourceRead?'read':'unread',sensitive,versionMaterial:JSON.stringify({facts:semantic,body:clean(text,60000),access:restricted?'restricted':sourceRead?'read':'unread',sensitive})};
+  return {purpose:w.purpose,eventKey,title,summary,bodyText:clean(text,60000),sourceUrl,sourceType:clean(evidence.sourceType,60)||'public',sourceRead,reference,eventDate,publishedAt:date(line(text,['Published','Publication date'])||evidence.date),deadline,fields,subjects,access:restricted?'restricted':sourceRead?'read':'unread',sensitive,versionMaterial:JSON.stringify({facts:semantic,body:clean(text,60000),access:restricted?'restricted':sourceRead?'read':'unread',sensitive})};
  }
  function extractEvents(evidence={},workflow={}){
   const text=String(evidence.text||evidence.markdown||evidence.description||'').slice(0,60000),chunks=text.split(/(?=^#{1,3}\s+)/m).filter(s=>s.trim()),w=normalizeWorkflow(workflow),label=w.purpose==='court'?/Case number|Case no\.|Case ID|Lieta Nr\.|Lietas numurs/i:w.purpose==='procurement'?/Notice ID|Tender ID|Procurement ID|Iepirkuma numurs/i:w.purpose==='hiring'?/Employer\s*:|Virksomhed\s*:|Darba devējs\s*:/i:null;
@@ -57,7 +57,27 @@
   const relevant=!excluded.length&&!expired&&!gaps.length;
   if(relevant)reasons.push('Source-backed '+PURPOSES[w.purpose].toLowerCase()+' matches the monitoring criteria');
   gaps.push(w.purpose==='procurement'?'Supplier eligibility is unconfirmed':w.purpose==='court'?'Service relevance and contact permission require review':'Buying intent is unconfirmed');
-  return {relevant,excluded:Boolean(excluded.length),score,reasons,gaps,qualification:'not_assessed',contactReadiness:'review_required'};
+  return {relevant,excluded:Boolean(excluded.length),score,matchedTerms:matched,reasons,gaps,qualification:'not_assessed',contactReadiness:'review_required'};
+ }
+ function isOpportunity(finding={}){return finding.assessment?.relevant===true&&finding.assessment?.meetsThreshold===true;}
+ function eventChanges(previous={},event={}){
+  const fields=[['title','Title'],['eventDate','Event date'],['publishedAt','Publication date'],['deadline','Deadline'],['reference','Reference'],['sourceUrl','Source'],['access','Source access']];
+  const changes=fields.filter(([key])=>(previous[key]||'')!==(event[key]||'')).map(([key,label])=>label+': '+(previous[key]||'Not stated')+' → '+(event[key]||'Not stated'));
+  if(JSON.stringify(previous.fields||{})!==JSON.stringify(event.fields||{}))changes.push('Advertised role or notice details changed');
+  const parties=v=>(v.subjects||[]).map(s=>[s.kind,s.name,s.role,s.website]);
+  if(JSON.stringify(parties(previous))!==JSON.stringify(parties(event)))changes.push('Named parties or their roles changed');
+  if(previous.sensitive!==event.sensitive)changes.push('Source sensitivity changed');
+  if(!changes.length)changes.push('Published content changed. Review the updated source text.');
+  return changes;
+ }
+ function displayTime(value){if(!value)return '';const date=new Date(/^[0-9-]+ [0-9:]+$/.test(value)?value.replace(' ','T')+'Z':value);return Number.isFinite(date.getTime())?date.toLocaleString():'';}
+ function monitorHealth(m={},now=Date.now()){
+  const run=m.latestRun,failed=['failed','partial'].includes(run?.status),due=Date.parse(m.nextRunAt),overdue=m.enabled&&!m.archived&&Number.isFinite(due)&&now-due>3600000&&run?.status!=='running';
+  const status=m.archived?'Archived':failed?'Check needs attention':overdue?'Scheduled check overdue':run?.status==='running'?'Checking sources':m.enabled?'Scheduled':'Paused';
+  return {status,blocked:!m.archived&&(failed||overdue),
+   issue:m.archived?'':failed?(runIssue(run.error)||'Some source checks did not finish. Review monitor history and retry. Saved findings are retained.')+(run.status==='partial'?' Coverage is incomplete.':''):overdue?'The scheduled check has not completed. Review monitor history and scheduler status.':'',
+   lastSuccess:displayTime(m.lastSuccessfulAt)||'No successful check yet',
+   next:m.archived?'Archived — no scheduled checks':!m.enabled?'Paused — no scheduled checks':Number.isFinite(due)&&due<=now?'Due now · awaiting scheduler':displayTime(m.nextRunAt)||'Next scheduler check'};
  }
  const FIELDS=new Set(['firstName','name','buyerName','company','buyerCompany','role','buyerRole','event','eventDate','deadline','reference','caseNumber','tenderId','jobRole','sourceUrl','evidenceUrl','sender','offer']);
  function renderMessage(template={},context={}){
@@ -88,5 +108,5 @@
   request_canceled:'The check was interrupted. Refresh status to see what was saved.',
   monitoring_run_failed:'The check could not finish. Saved evidence is retained; refresh status before retrying.'
  })[code]||'';}
- return Object.freeze({PURPOSES,normalizeWorkflow,publicUrl,buildPlan,extractEvents,assessEvent,renderMessage,messageStudio,runIssue});
+ return Object.freeze({PURPOSES,normalizeWorkflow,publicUrl,buildPlan,extractEvents,assessEvent,renderMessage,messageStudio,runIssue,isOpportunity,eventChanges,displayTime,monitorHealth});
 });
