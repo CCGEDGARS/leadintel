@@ -120,13 +120,11 @@ test('Step 2 remains editable while prerequisites or research are incomplete',()
   assert.match(ui,/Needs your input/);
 });
 
-test('fresh research persists answers and evidence into the existing main Customer V2 state then invalidates stale strategy',()=>{
+test('research preserves the existing workspace instead of clearing its market state',()=>{
   assert.match(ui,/leadintel_customer_v2_state/);
   assert.match(ui,/scrapedSources/);
   assert.match(ui,/answers/);
-  assert.match(ui,/profile\s*=\s*null/);
-  assert.match(ui,/approved\s*=\s*false/);
-  assert.match(ui,/market\s*=\s*\{\}/);
+  assert.doesNotMatch(ui,/next\.market\s*=\s*\{\}/);
 });
 
 test('company research always persists English workspace content',()=>{
@@ -144,7 +142,8 @@ test('research keeps an English master without launching a workspace translation
 });
 
 test('research reruns preserve reviewed answers through provenance-aware merge',()=>{
-  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft,readMeta\(\)\.fields\|\|\{\}\)/);
+  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft,reviewedResearchFields\(state,readMeta\(\)\)\)/);
+  assert.match(ui,/\.mergeDraft\(latest\.answers\|\|\{\},draft,reviewedResearchFields\(latest,latestMeta\)\)/);
   assert.match(ui,/Rerun company research/);
 });
 

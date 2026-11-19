@@ -19,12 +19,12 @@ test('twelve-answer review fills useful drafts but preserves accepted answers an
  const h=await harness();try{
  const api=h.w.LeadIntelProfileAdvice;assert.ok(h.w.document.getElementById('review-profile-advice'));assert.equal(await api.review(),true);
  assert.equal(h.w.document.querySelectorAll('.profile-advice-card').length,12);assert.match(h.w.document.getElementById('profile-advice-review').textContent,/Generic professional-services roles/);
- const original=h.state();assert.equal(await api.apply(),true);const current=h.state();
+ const original=h.state();assert.equal(await api.apply(),true);const current=h.state();assert.deepEqual(current.researchMeta,h.meta());assert.ok(current.researchMeta.adviceUndo);
  for(const id of ['priority_offers','ideal_customer','buyer_roles','exclusions'])assert.equal(current.answers[id],original.answers[id],id);
  for(const id of ['buying_outcomes','buying_triggers','value_proposition','delivery_approach','meeting_value','objections']){assert.ok(current.answers[id],id);assert.equal(current.answerStatus[id],'draft');}
  assert.equal(current.market.customData,'keep this');assert.equal(current.market.strategyApproved,false);assert.equal(current.approved,false);
  assert.equal(await api.apply(['buyer_roles']),true);assert.match(h.state().answers.buyer_roles,/Engineering Director/);assert.equal(h.state().answerStatus.buyer_roles,'draft');assert.match(h.w.document.querySelector('[data-question="buyer_roles"]').value,/Engineering Director/);
- assert.equal(await api.undo(),true);assert.equal(h.state().answers.buyer_roles,original.answers.buyer_roles);assert.equal(h.state().answerStatus.buyer_roles,'accepted');assert.ok(h.saves());assert.deepEqual(h.errors,[]);
+ assert.equal(await api.undo(),true);assert.deepEqual(h.state().researchMeta,h.meta());assert.equal(h.state().researchMeta.adviceUndo,undefined);assert.equal(h.state().answers.buyer_roles,original.answers.buyer_roles);assert.equal(h.state().answerStatus.buyer_roles,'accepted');assert.ok(h.saves());assert.deepEqual(h.errors,[]);
  }finally{h.close();}
 });
 test('newer manual edits survive Undo and workspace changes reject old suggestions',async()=>{

@@ -10,7 +10,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
   const labelFor=field=>({priorityOffers:'Priority Offer',idealCustomer:'Ideal Customer / ICP',targetMarkets:'Target Market',customerPainPoints:'Customer Problems',buyingTriggers:'Buying Triggers',decisionMakers:'Decision Makers',differentiation:'Differentiation',commercialObjective:'Commercial Objective'}[field]||field);
 
   function readResearchMeta(input={}){
-    if(input.researchMeta&&typeof input.researchMeta==='object')return input.researchMeta;
+    if(Object.hasOwn(input,'researchMeta'))return input.researchMeta&&(!input.researchMeta.website||Profile.normalizeUrl(input.researchMeta.website)===Profile.normalizeUrl(input.website))?input.researchMeta:{};
     if(typeof localStorage==='undefined')return {};
     try{const meta=JSON.parse(localStorage.getItem(RESEARCH_META_KEY)||'{}');const website=String(input.website||'').replace(/\/$/,'');const metaWebsite=String(meta.website||'').replace(/\/$/,'');return website&&metaWebsite&&website===metaWebsite?meta:{};}catch{return {};}
   }

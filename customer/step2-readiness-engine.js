@@ -75,7 +75,7 @@
   }
   function localContext(root,input={}){
     if(!root?.localStorage)return {state:{},meta:{}};
-    const state=readJson(root.localStorage,STORAGE_KEY,{});const meta=readJson(root.localStorage,RESEARCH_META_KEY,{});
+    const state=readJson(root.localStorage,STORAGE_KEY,{});const meta=Object.hasOwn(state,'researchMeta')?(state.researchMeta||{}):readJson(root.localStorage,RESEARCH_META_KEY,{});
     const sameWebsite=!clean(input.website)||!clean(state.website)||clean(input.website)===clean(state.website);
     return sameWebsite?{state,meta}:{state:{},meta:{}};
   }
@@ -226,7 +226,7 @@
   }
   function normalizedBrowserState(root){
     let state=readJson(root.localStorage,STORAGE_KEY,{});if(!state||typeof state!=="object")return state;state=Brief?.migrateState?Brief.migrateState(state):state;state.answers={...(state.answers||{})};
-    const meta=readJson(root.localStorage,RESEARCH_META_KEY,{});state.answerStatus=deriveStatusMap(state,meta);return state;
+    const meta=Object.hasOwn(state,'researchMeta')?(state.researchMeta||{}):readJson(root.localStorage,RESEARCH_META_KEY,{});state.answerStatus=deriveStatusMap(state,meta);return state;
   }
   function patchStateStorage(root){
     if(storagePatched||!root.Storage?.prototype)return;const previous=root.Storage.prototype.setItem;root.Storage.prototype.setItem=function(key,value){

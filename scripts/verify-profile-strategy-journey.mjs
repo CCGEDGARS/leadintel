@@ -3,18 +3,25 @@ import fs from 'node:fs/promises';
 import {step1Fixture} from '../backend/test/step1-journey-fixture.mjs';
 import {loadPlaywright,sessionToken,workspaceId} from '../backend/test/step5-journey-fixture.mjs';
 
-export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false,researchMode="quick",marketModeChecks=false}={}){
- const f=await step1Fixture();await f.connectControlledExtraction();await f.connectControlledAi();const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-profile-strategy',researchHandoff=false,failResearchSave=false,legacyOpportunityContext=false,companyProgress=false,researchMode="quick",marketModeChecks=false,profileRefreshRecovery=false}={}){
+ const f=await step1Fixture({profileResearch:profileRefreshRecovery});await f.connectControlledExtraction();await f.connectControlledAi();const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const researchRequests=()=>({publicReads:f.externalCalls.filter(c=>{const u=new URL(c.url);return u.hostname==='seller.example'||u.hostname==='api.firecrawl.dev'&&/\/(search|scrape)$/.test(u.pathname);}).length,profileSynthesis:f.calls.filter(c=>c.body?.task==='profile-synthesis').length});
  const errors=[],evidence={};let releaseCompanyResponse;await fs.mkdir(artifactDir,{recursive:true});
  async function open({delayDiscovery=false}={}){const c=await browser.newContext({viewport:{width:1440,height:1000}});await c.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await c.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);if(delayDiscovery)await c.addInitScript(()=>{let engine,held=true;Object.defineProperty(window,'LeadIntelDiscovery',{configurable:true,get:()=>held?undefined:engine,set:value=>{engine=value;}});window.__releaseDiscoveryForTest=()=>{held=false;};});await c.addInitScript(()=>{window.__workflowNavigationTrace=[];for(const name of ['click','leadintel:module-opened','leadintel:open-discovery','leadintel:open-module'])window.addEventListener(name,event=>window.__workflowNavigationTrace.push({event:name,target:event.target?.id,closest:event.target?.closest?.('[id]')?.id,detail:event.detail,stack:new Error().stack}),true);});const p=await c.newPage();if(process.env.LEADINTEL_TEST_CPU_RATE){const debug=await c.newCDPSession(p);await debug.send('Emulation.setCPUThrottlingRate',{rate:Number(process.env.LEADINTEL_TEST_CPU_RATE)});}p.setDefaultTimeout(25000);p.on('pageerror',e=>errors.push(e.message));await p.goto(f.origin+'/customer/');await p.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&window.LeadIntelCustomerNavigation&&window.LeadIntelProfileAnswers?.isReady());await p.evaluate(()=>{const original=LeadIntelCustomerNavigation.setStep;LeadIntelCustomerNavigation.setStep=(...args)=>{window.__workflowNavigationTrace.push({event:'navigation-setStep',args,stack:new Error().stack});return original(...args);};});return p;}
  try{
   let p=await open();await p.locator('#company-website').fill('seller.example');await p.locator('#activate-website').click();await p.waitForFunction(()=>document.getElementById('website-activation-status')?.dataset.state==='active');await p.locator('[data-target-market="Sweden"]').click();await p.locator('#to-questionnaire').click();await p.locator('#step-2.active').waitFor();evidence.setupResearchOpenedProfile=true;
   const answers={priority_offers:'Custom machinery manufacturing; Engineering services; On-site installation',ideal_customer:'Manufacturing companies in Sweden planning production equipment upgrades',buyer_roles:'Engineering Director; Production Director; Procurement Manager',exclusions:'Residential customers and work outside confirmed technical scope',buying_outcomes:'Reduce production disruption while installing compliant production equipment',buying_triggers:'Factory expansion; announced production-line upgrades; equipment replacement',value_proposition:'Coordinate engineering, machinery manufacturing and installation within one project scope',differentiation:'Engineering and manufacturing combined with installation services',proof_points:'No approved proof yet',objections:'Technical scope, available capacity, installation timing and delivery risk',delivery_approach:'Review drawings and requirements, manufacture the equipment and coordinate installation',meeting_value:'Review the equipment scope, existing drawings and installation constraints'};
   for(const [id,value] of Object.entries(answers))await p.locator(`[data-question="${id}"]`).fill(value);
-  await p.locator('#confirm-targeting').click();await p.waitForFunction(()=>document.getElementById('targeting-confirmation-status')?.textContent.startsWith('Saved.'));await p.locator('#analyze-company').click();if(await p.locator('#profile-enrichment-checkpoint').isVisible()){await p.keyboard.press('Escape');assert.equal(await p.locator('#step-2').isVisible(),true);await p.locator('#analyze-company').click();await p.locator('[data-continue-without-enrichment]').click();evidence.optionalEnrichmentControls=true;}await p.locator('#step-3.active').waitFor();await p.locator('#profile-content').waitFor({state:'visible'});await p.locator('#approve-profile').click();await p.waitForFunction(()=>!document.getElementById('continue-market-strategy')?.disabled);evidence.profileReviewedAndApproved=true;
+  await p.locator('#confirm-targeting').click();await p.waitForFunction(()=>document.getElementById('targeting-confirmation-status')?.textContent.startsWith('Saved.'));if(profileRefreshRecovery){
+   await p.locator('[data-reference-customers-manage]:visible').first().click();await p.locator('[data-company-segment="market"]').click();
+   assert.match(await p.locator('#profile-market-result-status').textContent(),/No market evidence is saved yet/);
+   assert.match(await p.locator('[data-research-reports]:visible').textContent(),/No saved reports/);
+   const reads=researchRequests();await p.locator('[data-complete-market-profile]').click();await p.locator('#step-3.active').waitFor();await p.locator('#profile-content').waitFor({state:'visible'});
+   assert.deepEqual(researchRequests(),reads,'review reuses saved evidence without another provider request');evidence.directEmptyReview=true;
+  }else await p.locator('#analyze-company').click();if(await p.locator('#profile-enrichment-checkpoint').isVisible()){await p.keyboard.press('Escape');assert.equal(await p.locator('#step-2').isVisible(),true);await p.locator('#analyze-company').click();await p.locator('[data-continue-without-enrichment]').click();evidence.optionalEnrichmentControls=true;}await p.locator('#step-3.active').waitFor();await p.locator('#profile-content').waitFor({state:'visible'});await p.locator('#approve-profile').click();await p.waitForFunction(()=>!document.getElementById('continue-market-strategy')?.disabled);evidence.profileReviewedAndApproved=true;
   if(researchHandoff){
    f.setControlledMarketResearch(true,{verification:marketModeChecks&&researchMode==="deep"?"partial":"complete"});if(failResearchSave)f.failSaves(true);
-   await p.locator('[data-workflow-stage="2"] strong').click();await p.locator('[data-open-profile-market]:visible').first().click();
+   await p.locator('[data-workflow-stage="2"] strong').click();if(await p.locator('[data-open-profile-market]:visible').count())await p.locator('[data-open-profile-market]:visible').first().click();else {await p.locator('[data-reference-customers-manage]:visible').first().click();await p.locator('[data-company-segment="market"]').click();}
    await p.locator(({quick:'#run-market-research',deep:'#run-detailed-research',intelligence:'#run-market-intelligence'})[researchMode]).click();assert.equal(await p.locator('#research-run-preview').getAttribute('data-research-mode'),researchMode);await p.locator('#confirm-market-research').click();
    await p.waitForFunction(()=>{const m=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market;return m.researchExecution?.completedAt&&m.researchStatus!=="running";},null,{timeout:120000});
    const sourceCount=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market.researchResults.length);if(researchMode==='quick')assert.equal(sourceCount,20);else assert.ok(sourceCount>20,'broader modes acquire their own evidence set');
@@ -34,6 +41,22 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
    const opportunity=saved.market.icps.find(x=>x.type==='opportunity-led');assert.equal(opportunity.active,true);assert.equal(opportunity.requestedActive,true);assert.equal(saved.market.researchContextStale,false);assert.equal(opportunity.value,'');
    assert.match(await p.locator('#strategy-research-handoff').textContent(),new RegExp(sourceCount+' research sources'));
    evidence.researchHandoff={sources:sourceCount,reports:1,automaticCloudSave:!failResearchSave,opportunityAutoActivated:true,strategyAwaitingReview:true};
+   if(profileRefreshRecovery){
+    f.setControlledMarketResearch(false);
+    await p.evaluate(()=>LeadIntelCustomerNavigation.setStep(2));
+    const before=(await f.getState()).payload.main;assert.ok(before.researchMeta.generatedAt,'seller research metadata must be in the cloud payload');
+    const previousClock=before.researchMeta.generatedAt;
+    await p.locator('.research-more-options summary').click();await p.locator('#rerun-company-research').click();
+    await p.waitForFunction(clock=>{const s=JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));return s.researchMeta?.generatedAt!==clock&&s.researchMeta?.mode==='ai'&&document.getElementById('research-summary')?.dataset.researchState!=='running';},previousClock);
+    await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());
+    const refreshed=(await f.getState()).payload.main;assert.ok(refreshed.profile);assert.equal(refreshed.approved,true,'unchanged confirmed answers keep approval');
+    for(const key of ['researchResults','researchReports','signals','icps','deletedSignalIds','researchExecution'])assert.deepEqual(refreshed.market[key],before.market[key],key);
+    assert.ok(refreshed.researchMeta.execution.receipts.length>0);assert.match(await p.locator('#research-summary').textContent(),/AI profile drafts ready/);assert.doesNotMatch(await p.locator('#research-summary').textContent(),/Research and AI profile preparation complete/);
+    if(await p.locator('[data-open-profile-market]:visible').count())await p.locator('[data-open-profile-market]:visible').first().click();else {await p.locator('[data-reference-customers-manage]:visible').first().click();await p.locator('[data-company-segment="market"]').click();}assert.match(await p.locator('#profile-market-result-status').textContent(),/research sources available/);
+    await p.setViewportSize({width:390,height:844});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);await p.screenshot({path:artifactDir+'/market-mobile.png',fullPage:true});
+    await p.locator('[data-review-market-strategy]').click();await p.locator('#step-3.active').waitFor();await p.screenshot({path:artifactDir+'/profile-mobile.png',fullPage:true});
+    evidence.refreshPreservedResearch=true;
+   }
    await p.context().close();
    if(legacyOpportunityContext){
     // Reproduce an old saved run whose derived Opportunity-led switch was
@@ -44,7 +67,28 @@ export async function verifyProfileStrategyJourney({artifactDir='/tmp/leadintel-
     legacy.main.market.researchContextStale=true;legacy.main.market.opportunityAutoActivationRunId='';
     const result=await fetch(f.origin+'/api/customer/state?workspace_id='+workspaceId,{method:'PUT',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({version:current.version,payload:legacy})});assert.equal(result.status,200);
    }
+   if(profileRefreshRecovery){
+    // Reproduce a workspace saved by the old refresh path with no Profile,
+    // while evidence and selections are still recoverable. Use the real API.
+    const current=await f.getState(),payload=structuredClone(current.payload);payload.main.profile=null;payload.main.approved=false;payload.main.step=2;
+    const result=await fetch(f.origin+'/api/customer/state?workspace_id='+workspaceId,{method:'PUT',headers:{Cookie:'leadintel_session='+sessionToken,'Content-Type':'application/json'},body:JSON.stringify({version:current.version,payload})});assert.equal(result.status,200);
+   }
    p=await open();
+   if(profileRefreshRecovery){
+    await f.settleBackground();await p.waitForLoadState('networkidle');const reads=researchRequests();
+    assert.match(await p.locator('#research-summary').textContent(),/AI profile drafts ready/);assert.doesNotMatch(await p.locator('#research-summary').textContent(),/Start company research/);
+    await p.locator('[data-reference-customers-manage]:visible').first().click();await p.locator('[data-company-segment="market"]').click();await p.locator('[data-complete-market-profile]').click();await p.locator('#step-3.active').waitFor();await p.locator('#profile-content').waitFor({state:'visible'});assert.deepEqual(researchRequests(),reads,'fresh-browser recovery must not repeat company extraction, search or profile synthesis');
+    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).approved),false,'review never implies approval');
+    await p.locator('#approve-profile').click();await p.waitForFunction(()=>!document.getElementById('continue-market-strategy')?.disabled);await p.locator('#continue-market-strategy').click();await p.locator('#step-4.active').waitFor();await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());
+    assert.match(await p.locator('#strategy-research-handoff').textContent(),new RegExp(sourceCount+' research sources'));await p.screenshot({path:artifactDir+'/strategy-recovered.png',fullPage:true});
+    assert.equal((await fetch(f.origin+'/api/customer/state?workspace_id=foreign-workspace',{headers:{Cookie:'leadintel_session='+sessionToken}})).status,403);
+    evidence.profileRecoveryReusedEvidence=true;evidence.foreignWorkspaceBlocked=true;
+    const beforeMarketEdit=(await f.getState()).payload.main;
+    await p.evaluate(()=>LeadIntelCustomerNavigation.setStep(1));await p.locator('[data-target-market="Finland"]').click();await p.waitForFunction(()=>!LeadIntelWorkspacePersistence.hasUnsavedChanges());
+    const afterMarketEdit=(await f.getState()).payload.main;assert.ok(afterMarketEdit.targetMarkets.includes('Finland'));assert.equal(afterMarketEdit.approved,false);assert.equal(afterMarketEdit.market.strategyApproved,false);assert.equal(afterMarketEdit.market.researchContextStale,true);
+    for(const key of ['researchResults','researchReports','signals','icps','deletedSignalIds'])assert.deepEqual(afterMarketEdit.market[key],beforeMarketEdit.market[key],key+' after target-market edit');
+    assert.deepEqual(afterMarketEdit.researchMeta,beforeMarketEdit.researchMeta);evidence.marketEditPreservedEvidence=true;
+   }
    const reopened=await p.evaluate(()=>JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).market);
    assert.equal(reopened.researchResults.length,sourceCount);assert.equal(reopened.researchReports.length,1);assert.equal(reopened.researchProfileLink.sourceCount,sourceCount);assert.equal(reopened.icps.find(x=>x.type==='opportunity-led').active,true);
    if(marketModeChecks){

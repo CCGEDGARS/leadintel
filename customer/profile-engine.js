@@ -408,6 +408,7 @@
       advancedScoring:migrated.advancedScoring||{},
       workspaceGoals:migrated.workspaceGoals||{},
       scrapedSources,
+      ...(Object.hasOwn(value,'researchMeta')?{researchMeta:value.researchMeta&&typeof value.researchMeta==='object'&&!Array.isArray(value.researchMeta)&&normalizeUrl(value.researchMeta.website)===normalizeUrl(value.website)?value.researchMeta:{}}:{}),
       profile,
       approved:Boolean(value.approved),
       ...(value.eventCampaigns&&typeof value.eventCampaigns==="object"&&!Array.isArray(value.eventCampaigns)?{eventCampaigns:value.eventCampaigns}:{}),

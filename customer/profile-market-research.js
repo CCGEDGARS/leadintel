@@ -5,6 +5,14 @@
   'use strict';
   const RESEARCH_IDS=['run-market-research','run-detailed-research','run-market-intelligence'];
   let environment=null;
+  function resultsMessage(main={}){
+    const market=main.market||{},count=market.researchResults?.length||0,reports=market.researchReports?.length||0;
+    if(market.researchStatus==='running')return count?`Research is running. ${count} sources are retained so far.`:'Research is running. Results will appear as evidence is collected.';
+    if(count)return `${count} research source${count===1?'':'s'} available${market.researchStatus==='partial'?' · partial coverage':''}${market.researchContextStale?' · review against your updated profile':''}. Review your profile before choosing the Strategy.`;
+    if(reports)return 'Saved reports are available. There is no current market evidence linked to Strategy.';
+    if(['error','failed','canceled'].includes(market.researchStatus))return 'The last run did not save usable market evidence. Review the research status before retrying.';
+    return main.profile?'Market research is optional and has not been run. You can review your profile and continue to Strategy.':'Review your company profile to enable market research. No market evidence is saved yet.';
+  }
   function mount(host,root=environment){
     if(!root?.document||!host)return false;
     const workbench=root.document.getElementById('market-research-workbench');if(!workbench)return false;
@@ -26,8 +34,8 @@
     root.document.addEventListener('click',event=>{
       if(event.target?.closest?.('[data-open-profile-market]')){void open(root);return;}
       if(event.target?.closest?.('[data-review-market-strategy]')){root.dispatchEvent(new root.CustomEvent('leadintel:review-research-profile'));return;}
-      if(event.target?.closest?.('[data-complete-market-profile]')){root.LeadIntelReferenceCustomerUI?.close?.();root.LeadIntelCustomerNavigation?.setStep?.(2);const button=root.document.getElementById('analyze-company');button?.scrollIntoView?.({behavior:'smooth',block:'center'});button?.focus?.({preventScroll:true});}
+      if(event.target?.closest?.('[data-complete-market-profile]')){root.dispatchEvent(new root.CustomEvent('leadintel:review-research-profile'));}
     });
   }
-  return {mount,open,install,RESEARCH_IDS};
+  return {mount,open,install,resultsMessage,RESEARCH_IDS};
 });

@@ -188,7 +188,7 @@ for(const reason of ['Failed to fetch','AI unavailable (503)','Too many requests
 test('successful AI preparation keeps evidence accessible and removes the recovery controls',()=>{
   const runtime=createRuntime();const meta=runtime.getMeta();meta.mode='ai';meta.provider='OpenAI';meta.reason='';
   runtime.saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));runtime.hooks.renderResearchReview();
-  assert.match(runtime.summary.innerHTML,/AI profile preparation complete/);
+  assert.match(runtime.summary.innerHTML,/AI profile drafts ready/);
   assert.match(runtime.summary.innerHTML,/Review saved sources/);
   assert.doesNotMatch(runtime.summary.innerHTML,/Retry AI profile preparation|Open AI settings/);
 });
@@ -198,5 +198,5 @@ test('workspace refresh cannot replace running status with Ready or enable a dup
   const runtime=createRuntime({dom,fetchImpl:()=>new Promise(resolve=>{finish=()=>resolve({ok:false,status:503,json:async()=>({error:'Try later'})});})});
   const pending=runtime.hooks.runAiSynthesis();for(let i=0;i<10&&!finish;i++)await Promise.resolve();
   runtime.hooks.renderResearchReview();assert.equal(runtime.summary.dataset.researchState,'running');assert.match(runtime.summary.textContent,/In progress/);assert.doesNotMatch(runtime.summary.textContent,/Ready to research/);assert.equal(runtime.summary.querySelector('#rerun-company-research').disabled,true);
-  finish();await pending;assert.equal(runtime.summary.dataset.researchState,'complete');assert.equal(runtime.summary.querySelector('#synthesize-company-research').disabled,false);dom.window.close();
+  finish();await pending;assert.equal(runtime.summary.dataset.researchState,'partial');assert.equal(runtime.summary.querySelector('#synthesize-company-research').disabled,false);dom.window.close();
 });

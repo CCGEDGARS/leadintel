@@ -80,6 +80,7 @@
       websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},
       scrapedSources:sameCompany?refreshWebsiteSources(base.scrapedSources,websiteSource):[{type:"website",url,title,text,status:"ready"}],
       profile:sameCompany?base.profile||null:null,
+      researchMeta:sameCompany?base.researchMeta||{}:{},
       approved:sameCompany?Boolean(base.approved):false,
       market:sameCompany?{...(base.market||{}),...(base.profile?{researchContextStale:true,researchContextFingerprint:'stale:website-reactivated'}:{})}:{}
     };
