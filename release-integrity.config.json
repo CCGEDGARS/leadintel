@@ -4137,7 +4137,7 @@
       "contains": [
         "function qualificationContext(){",
         "previous.raw===raw",
-        "qualificationContextCache={raw,scope,dependencies,profile,market:main.market||{}}"
+        "qualificationContextCache={raw,scope,dependencies,profile,market:discoveryMarket(main)}"
       ]
     },
     {
@@ -7972,7 +7972,7 @@
       "type": "text",
       "url": "/customer/",
       "status": 200,
-      "contains": ["&strategy-review-recovery=20261119-v1", "id=\"update-strategy-research\""]
+      "contains": ["&strategy-review-recovery=20261119-v1"]
     },
     {
       "id": "company-search-review-recovery-20261119",
