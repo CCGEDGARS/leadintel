@@ -70,7 +70,8 @@
       "website_contact_research_version": "20261111-independent-v1",
       "buyer_review_scheduling_version": "20261110-full-slice-v1",
       "website_monitoring_version": "20261110-source-rotation-v1",
-      "company_search_lists_version": "20261119-save-export-v1"
+      "company_search_lists_version": "20261119-save-export-v1",
+      "company_list_quality_version": "20261119-reviewed-evidence-v2"
     }
   },
   "retry": {
