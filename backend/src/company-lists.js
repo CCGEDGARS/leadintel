@@ -9,7 +9,7 @@ const M=globalThis.LeadIntelCompanyLists;
 const sql=(env,q,...v)=>env.DB.prepare(q).bind(...v),parse=(v,f={})=>{try{return JSON.parse(v);}catch{return f;}};
 const active=s=>['queued','running'].includes(s),fail=(m,status=409)=>Object.assign(Error(m),{status});
 const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
-export async function companyListOptions(env,workspaceId){return M.options((await getCustomerState(env,workspaceId)).payload?.main||{});}
+export async function companyListOptions(env,workspaceId){const options=M.options((await getCustomerState(env,workspaceId)).payload?.main||{});return {...options,contextFingerprint:await sha256(JSON.stringify(options))};}
 function publicList(row){if(!row)return null;const criteria=parse(row.input_json),s=parse(row.state_json);return {id:row.id,name:criteria.name,criteria,status:row.status,saved:Boolean(row.saved),revision:row.revision,results:criteria.kind==='search_snapshot'?(s.results||[]):M.ranked(s.results||[]),progress:{count:s.results?.length||0,target:criteria.count,operations:s.operations||0,allowance:s.allowance||criteria.budget,checked:s.checked||0,reason:row.last_error==='storage_full'?'Workspace storage is full. Completed research is retained; free storage before resuming.':s.reason||'',phase:s.phase||'planning',nextAttemptAt:s.nextAttemptAt||0,pending:s.pending?.length||0,operationTotals:s.operationTotals||null},failureCode:s.failureCode||row.last_error||'',receipts:s.receipts||[],incompleteChecks:(s.reviews||[]).filter(r=>r.status!=='resolved'),createdAt:row.created_at,updatedAt:row.updated_at};}
 export async function readCompanyList(env,workspaceId,id){return publicList(await sql(env,'SELECT * FROM company_lists WHERE workspace_id=? AND id=?',workspaceId,id).first());}
 async function saveSearchSnapshot(env,workspaceId,user,body){
@@ -27,7 +27,10 @@ async function saveSearchSnapshot(env,workspaceId,user,body){
 }
 async function access(request,env,workspaceId){const token=cookieValue(request,'leadintel_session');if(!token)throw fail('Sign in to use company lists.',401);const hash=await sha256(token),row=await sql(env,"SELECT s.user_id,m.role FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>datetime('now') AND m.workspace_id=?",hash,workspaceId).first();if(!row||!['owner','researcher','sales'].includes(row.role))throw fail('Workspace research access required.',403);return {id:row.user_id,role:row.role,hash};}
 export async function startCompanyList(env,workspaceId,user,raw,trusted=null){
- const criteria=M.configuration(raw,trusted?.options||await companyListOptions(env,workspaceId));if(trusted?.taskId)criteria.taskId=trusted.taskId;
+ const options=trusted?.options||await companyListOptions(env,workspaceId);
+ if(!trusted&&Object.hasOwn(raw,'profileIds')&&raw.contextFingerprint!==options.contextFingerprint)throw fail('Strategy profiles, signals or references changed. Reopen Build company list and review the current criteria.');
+ if(!trusted&&options.profileConfigurationPresent&&!Object.hasOwn(raw,'profileIds'))throw fail('Reload Build company list to choose the active targeting profiles and buying signals.');
+ const criteria=M.configuration(raw,options);if(trusted?.taskId)criteria.taskId=trusted.taskId;
  if(trusted?.id){const retained=await readCompanyList(env,workspaceId,trusted.id);if(retained)return retained;}
  const count=await sql(env,'SELECT COUNT(*) n FROM company_lists WHERE workspace_id=?',workspaceId).first();if(count.n>=50)throw fail('Keep up to 50 company lists. Delete an unused list before creating another.');
  const existing=await sql(env,"SELECT id FROM company_lists WHERE workspace_id=? AND status IN ('queued','running')",workspaceId).first();if(existing)throw fail('A company list is already building. Open it or pause it first.');
@@ -46,7 +49,7 @@ export async function saveRows(env,row,user,domain,cursor=0){
   if(existing?.deleted_at||['suppressed','archived'].includes(existing?.lifecycle_status)){if(domain)throw fail('This CRM company is archived or suppressed. Review it in CRM first.');continue;}
   // List membership and its evidence stay in company_lists; existing CRM research,
   // contacts, scores and user edits are never replaced by a list snapshot.
-  const record=existing||((await upsertCrmCompany(env.DB,context,{company:{company_name:r.company,website:r.website,country:r.market,source:'signal_company_list'},intelligence_scope:'company',intelligence:{research_snapshot:{companyList:{id:row.id,score:r.score,matchedSignals:r.matches,identity:r.identity,locationEvidence:r.locationEvidence,commercialFit:r.commercialFit,quality:r.quality,audit:r.audit,buyingIntent:'unconfirmed'}}}})).company);
+  const record=existing||((await upsertCrmCompany(env.DB,context,{company:{company_name:r.company,website:r.website,country:r.market,source:'signal_company_list'},intelligence_scope:'company',intelligence:{research_snapshot:{companyList:{id:row.id,score:r.score,fitScore:r.fitScore,signalScore:r.signalScore,signalBonus:r.signalBonus,matchedProfiles:r.profileMatches,matchedSignals:r.signalMatches||r.matches,criteriaSummary:M.criteriaSummary(list.criteria),identity:r.identity,locationEvidence:r.locationEvidence,commercialFit:r.commercialFit,quality:r.quality,audit:r.audit,buyingIntent:'unconfirmed'}}}})).company);
   if(record?.id)saved.push({...r,crmId:record.id});
  }
  return saved;

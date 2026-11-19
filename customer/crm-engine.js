@@ -53,6 +53,8 @@
   function companyResearchPatch(snapshot={}){
     const source=snapshot&&typeof snapshot==='object'&&!Array.isArray(snapshot)?snapshot:{},patch={};
     for(const key of ['market','fitDescription','buyerFit','buyerFitIssue','buyerFitIssueCode','qualification'])if(Object.hasOwn(source,key))patch[key]=source[key];
+    const list=source.companyList;
+    if(list&&typeof list==='object'&&!Array.isArray(list))patch.companyList=Object.fromEntries(['id','score','fitScore','signalScore','signalBonus','matchedProfiles','matchedSignals','criteriaSummary','identity','locationEvidence','commercialFit','quality','audit','buyingIntent'].filter(key=>Object.hasOwn(list,key)).map(key=>[key,list[key]]));
     const company=source.companyResearch;
     if(company&&typeof company==='object'&&!Array.isArray(company)){
       const buyerFields=new Set(['buyerRoles','buyerRolesChanged','buyerRolesSource','peopleStatus','publicContactStatus','publicContactVersion','buyerSearchMode']);
