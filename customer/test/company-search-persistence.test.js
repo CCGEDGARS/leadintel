@@ -96,16 +96,19 @@ function retainedCompanyWork(payload){
 
 async function assertSavedCompanyScores(page){
  const snapshot=await page.waitForFunction(()=>{
-  const rows=[...document.querySelectorAll('#step-5.active #company-candidates .company-unranked-row')];
+  const rows=[...document.querySelectorAll('#step-5.active #company-candidates details.company-result-row')];
   if(rows.length!==8)return null;
-  return {
-   ranked:rows.some(row=>row.querySelector('summary .company-row-score,summary .company-row-rank,[data-company-rank]')),
-   history:rows.map(row=>row.querySelector('.company-review-assessment').textContent)
-  };
+  return rows.map(row=>({
+   rank:row.querySelector('summary .company-row-rank')?.textContent??null,
+   score:row.querySelector('summary .company-row-score strong')?.textContent??null,
+   label:row.querySelector('summary .company-row-score small')?.textContent??null,
+   history:row.querySelector('.company-review-assessment')?.textContent
+  }));
  });
- const {ranked,history}=await snapshot.jsonValue();
- assert.equal(ranked,false);
- assert.deepEqual(history.sort(),[...savedScores.map(score=>'Previous score · '+score+'/100'),'Awaiting score','Awaiting score'].sort());
+ const results=await snapshot.jsonValue();
+ assert.deepEqual(results,[...savedScores.map((score,index)=>({
+  rank:String(index+1),score:score+'/100',label:'Previous score',history:'Previous score · '+score+'/100'
+ })),...Array.from({length:2},()=>({rank:null,score:null,label:null,history:'Awaiting score'}))]);
 }
 
 async function savedCompanyBrowser(t){

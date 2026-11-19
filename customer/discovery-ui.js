@@ -1869,24 +1869,18 @@ function updateCompanySearchFeedback(control){
 }
 
 function rankedCompanyResults(){return LeadIntelDiscovery.rankCompanyResults(discovery,{assess:qualificationAssessment,isCurrent:companyStrategyCurrent});}
-// Historical scores remain available to review and export. Only completed,
-// current assessments can occupy a position in the visible ranking.
+// rankCompanyResults owns score order and deduplication. Review eligibility
+// controls the available actions independently of a company's list position.
 function companyDisplayGroups(view){
-  const ranked=[],unranked=[];
-  for(const entry of view.rows){
-    if(entry.actionable && entry.scoreState==='current' && entry.storedIndex>=0)ranked.push(entry);
-    else unranked.push(entry);
-  }
-  unranked.sort((a,b)=>String(a.candidate.company||a.key).localeCompare(String(b.candidate.company||b.key))||a.key.localeCompare(b.key));
-  return {ranked,unranked};
+  return {ranked:view.rows.filter(row=>row.score!==null),unranked:view.rows.filter(row=>row.score===null)};
 }
 function companyDisplayPage(groups,start){
   const end=start===0?10:Infinity;
-  const checked=groups.ranked.slice(start,end);
-  const review=groups.unranked.slice(Math.max(0,start-groups.ranked.length),Math.max(0,end-groups.ranked.length));
-  const checkedHtml=checked.length?companyListColumnsHtml()+checked.map((row,i)=>companyRankedCardHtml(row,start+i)).join(''):'';
-  const reviewHtml=review.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Unranked companies · ${groups.unranked.length}</h4>${review.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
-  return checkedHtml+reviewHtml;
+  const scored=groups.ranked.slice(start,end);
+  const pending=groups.unranked.slice(Math.max(0,start-groups.ranked.length),Math.max(0,end-groups.ranked.length));
+  const scoredHtml=scored.length?companyListColumnsHtml()+scored.map((row,i)=>companyRankedCardHtml(row,start+i)).join(''):'';
+  const pendingHtml=pending.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Awaiting score · ${groups.unranked.length}</h4>${pending.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
+  return scoredHtml+pendingHtml;
 }
 let companyRowScope='',companyRowsOpen=new Map(),companyRowContainers=new WeakMap(),companyRowFocusPending=null;
 function companyRowState(){
@@ -1918,17 +1912,19 @@ function companyStrategyReviewNoticeHtml(view){
   const status=companyDisplayStrategyStatus();
   if(status?.current)return '';
   const message=status?.reason||'Review Strategy before updating company evidence.';
-  return `<p class="company-strategy-notice" role="note"><strong>Saved scores need rechecking.</strong> ${esc(message)} Earlier scores are available in each company’s review.</p>`;
+  return `<p class="company-strategy-notice" role="note"><strong>Saved scores need rechecking.</strong> ${esc(message)} Earlier ratings are labeled Previous score.</p>`;
 }
 function companyRankedCardHtml(entry,rank){
   const c=entry.candidate,domain=canonicalDomain(c.domain||c.website),open=companyRowState().get(entry.key)===true;
-  const review=researchReviewStatus(c),status=review.contextStale||c.needsRecheck?'Needs recheck':rank!==null?'Checked':entry.source==='selected'?'Selected for Buyers':entry.source==='pipeline'?'In pipeline':review.status==='not-qualified'?'Not qualified':'Needs evidence';
+  const checked=entry.actionable&&entry.scoreState==='current'&&entry.storedIndex>=0;
+  const scoreLabel=entry.scoreState==='previous'?'Previous score':entry.actionable?'Current score':'Provisional score';
+  const review=researchReviewStatus(c),status=review.contextStale||c.needsRecheck?'Needs recheck':checked?'Checked':entry.source==='selected'?'Selected for Buyers':entry.source==='pipeline'?'In pipeline':review.status==='not-qualified'?'Not qualified':'Needs evidence';
   const ranked=rank!==null;
-  const gap=!ranked && status==='Needs evidence' ? review.gaps.find(reason=>reason&&!/^Saved company retained/.test(reason)) : '';
-  return `<details class="company-result-row${ranked?'':' company-unranked-row'}" data-company-row-key="${esc(entry.key)}" data-company-rendered-open="${open}"${open?' open':''}><summary class="company-row-summary"><div class="company-row-company">${ranked?`<span class="company-row-rank">${rank+1}</span>`:''}<div><strong class="company-row-name">${esc(c.company)}</strong>${domain?`<a class="company-row-website" href="https://${esc(domain)}/" target="_blank" rel="noopener noreferrer">${esc(domain)}</a>`:''}${gap?`<small class="company-review-gap">${esc(gap)}</small>`:''}</div></div>${ranked?`<div class="company-row-score"><strong>${entry.score}<span>/100</span></strong><small>Current score</small></div>`:''}<div class="company-row-status"><span class="${ranked?'is-checked':review.status==='not-qualified'?'is-not-qualified':'needs-review'}">${status}</span></div><span class="company-row-review"><span class="company-row-open-label">Review</span><span class="company-row-close-label">Close</span><span class="company-row-chevron" aria-hidden="true">⌄</span></span></summary><div class="company-row-details" aria-label="${esc('Details for '+c.company)}">${companyRankedCardBodyHtml(entry,rank)}</div></details>`;
+  const gap=!checked && status==='Needs evidence' ? review.gaps.find(reason=>reason&&!/^Saved company retained/.test(reason)) : '';
+  return `<details class="company-result-row${ranked?'':' company-unranked-row'}" data-company-row-key="${esc(entry.key)}" data-company-rendered-open="${open}"${open?' open':''}><summary class="company-row-summary"><div class="company-row-company">${ranked?`<span class="company-row-rank">${rank+1}</span>`:''}<div><strong class="company-row-name">${esc(c.company)}</strong>${domain?`<a class="company-row-website" href="https://${esc(domain)}/" target="_blank" rel="noopener noreferrer">${esc(domain)}</a>`:''}${gap?`<small class="company-review-gap">${esc(gap)}</small>`:''}</div></div>${ranked?`<div class="company-row-score"><strong>${entry.score}<span>/100</span></strong><small>${scoreLabel}</small></div>`:''}<div class="company-row-status"><span class="${checked?'is-checked':review.status==='not-qualified'?'is-not-qualified':'needs-review'}">${status}</span></div><span class="company-row-review"><span class="company-row-open-label">Review</span><span class="company-row-close-label">Close</span><span class="company-row-chevron" aria-hidden="true">⌄</span></span></summary><div class="company-row-details" aria-label="${esc('Details for '+c.company)}">${companyRankedCardBodyHtml(entry,rank,checked,scoreLabel)}</div></details>`;
 }
-function companyRankedCardBodyHtml(entry,rank){
-  if(rank!==null)return companyCandidateCardHtml({...entry.candidate,storedIndex:entry.storedIndex,qualification:entry.qualification},rank);
+function companyRankedCardBodyHtml(entry,rank,checked,scoreLabel){
+  if(checked)return companyCandidateCardHtml({...entry.candidate,storedIndex:entry.storedIndex,qualification:entry.qualification},rank);
   const c=entry.candidate,{q,gaps,status,contextStale}=researchReviewStatus(c),reviewable=entry.storedIndex>=0||entry.source==='review',reviewBlocked=discovery.status==='running'||companyDisplayStrategyStatus()?.current!==true;
     const buyingSignalReason=gaps.find(reason=>/buying signal/i.test(reason));
     const reasons=gaps.filter(reason=>reason!==buyingSignalReason&&!/^Saved company retained\./.test(reason));
@@ -1936,7 +1932,8 @@ function companyRankedCardBodyHtml(entry,rank){
     const key=researchReviewKey(c);
     const selected=buyerSelectionRows().some(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(c.domain||c.website));
     const lookalike=Number.isFinite(q.lookalikeScore)?`<span class="research-review-reference">Reference similarity ${q.lookalikeScore}/100${q.referenceMatch?.referenceCompany?' · '+esc(q.referenceMatch.referenceCompany):''}</span>`:'';
-    return `<article class="research-check-row company-ranked-review" data-company-key="${esc(entry.key)}" data-company-score="${entry.score??''}" data-score-state="${entry.scoreState}" data-review-status="${status}"><div class="research-check-company"><strong>${esc(c.company)}</strong><span class="research-review-status ${status}">${entry.actionable&&selected?'Checked · selected for Buyers':contextStale?'Needs recheck':status==='needs-evidence'?'Needs more evidence':'Not qualified'}</span></div><a href="https://${esc(canonicalDomain(c.domain||c.website))}/" target="_blank" rel="noopener noreferrer">${esc(canonicalDomain(c.domain||c.website))}</a><p class="company-review-assessment">${entry.scoreState==='previous'?`Previous score · ${entry.score}/100`:entry.scoreState==='current'?`Recorded fit · ${entry.score}/100 · outside the checked ranking`:'Awaiting score'}</p><div class="research-check-tags">${lookalike}${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div>${companySearchFeedbackHtml(c)}<div class="research-review-actions"><button class="secondary-btn small" type="button" data-review-action="recheck" data-review-key="${esc(key)}" ${reviewBlocked||!reviewable?'disabled':''}>Recheck</button><button class="secondary-btn small" type="button" data-review-action="saved-evidence" data-review-key="${esc(key)}" title="No web requests. AI usage is billed separately." ${reviewBlocked||!reviewable?'disabled':''}>Review saved evidence</button><button class="secondary-btn small" type="button" data-review-action="buyers" data-review-key="${esc(key)}" ${selected||!reviewable?'disabled':''}>${selected?'Selected for Buyers ✓':'Move to Buyers'}</button><button ${!reviewable?'disabled':''} class="text-btn research-review-remove" type="button" data-review-action="remove" data-review-key="${esc(key)}">Remove</button></div></article>`;
+    const assessment=entry.score===null?'Awaiting score':scoreLabel+' · '+entry.score+'/100'+(scoreLabel==='Provisional score'?' · evidence review incomplete':'');
+    return `<article class="research-check-row company-ranked-review"${rank===null?'':` data-company-rank="${rank+1}"`} data-company-key="${esc(entry.key)}" data-company-score="${entry.score??''}" data-score-state="${entry.scoreState}" data-review-status="${status}"><div class="research-check-company"><strong>${esc(c.company)}</strong><span class="research-review-status ${status}">${entry.actionable&&selected?'Checked · selected for Buyers':contextStale?'Needs recheck':status==='needs-evidence'?'Needs more evidence':'Not qualified'}</span></div><a href="https://${esc(canonicalDomain(c.domain||c.website))}/" target="_blank" rel="noopener noreferrer">${esc(canonicalDomain(c.domain||c.website))}</a><p class="company-review-assessment">${assessment}</p><div class="research-check-tags">${lookalike}${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div>${companySearchFeedbackHtml(c)}<div class="research-review-actions"><button class="secondary-btn small" type="button" data-review-action="recheck" data-review-key="${esc(key)}" ${reviewBlocked||!reviewable?'disabled':''}>Recheck</button><button class="secondary-btn small" type="button" data-review-action="saved-evidence" data-review-key="${esc(key)}" title="No web requests. AI usage is billed separately." ${reviewBlocked||!reviewable?'disabled':''}>Review saved evidence</button><button class="secondary-btn small" type="button" data-review-action="buyers" data-review-key="${esc(key)}" ${selected||!reviewable?'disabled':''}>${selected?'Selected for Buyers ✓':'Move to Buyers'}</button><button ${!reviewable?'disabled':''} class="text-btn research-review-remove" type="button" data-review-action="remove" data-review-key="${esc(key)}">Remove</button></div></article>`;
 
 }
 function companyReviewToolsHtml(){
@@ -2022,9 +2019,10 @@ function renderCandidates(){void window.LeadIntelCompanyListUI?.refreshSearch?.(
   target.innerHTML=`${selectedNotice}${previousNotice}<div class="market-empty">${message}</div>`;
   return;
 }const rowFocus=rememberCompanyRows(target),outcome=typeof companySearchOutcome==="function"?companySearchOutcome():null;
- const groups=companyDisplayGroups(view),checked=groups.ranked.length,strong=outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length;
- const summary=checked?`${checked} checked companies · ${strong} strong fit (80+)`:'No checked companies yet';
- const more=checked>10?` · Showing top 10 of ${checked}`:'';
+ const groups=companyDisplayGroups(view),checked=ranked.length,strong=outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length;
+ const summary=checked?`${checked} checked ${checked===1?'company':'companies'} · ${strong} strong fit (80+)`:'No checked companies yet';
+ const scored=groups.ranked.length;
+ const more=scored>10?` · Showing top 10 of ${scored} by score`:scored?' · Sorted by company fit':'';
  const receipt=$('company-search-progress');
  const showRunNotes=receipt?.hidden!==false || !receipt.querySelector?.('[data-company-search-content]');
  target.innerHTML=`${recovery}${showRunNotes?selectedNotice+previousNotice:''}<p class="discovery-pipeline-instruction company-ranking-summary" role="status" data-company-total="${view.total}"><strong>${summary}${more}</strong>${showRunNotes&&outcome?.note?' · '+esc(outcome.note):''}</p>${companyStrategyReviewNoticeHtml(view)}${companyReviewToolsHtml()}${companyDisplayPage(groups,0)}`;bindDisplayedCompanyOwners(target,view);restoreCompanyRowFocus(target,rowFocus);}

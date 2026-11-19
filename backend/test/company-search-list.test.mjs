@@ -10,8 +10,11 @@ test('saved search HTTP/SQL lifecycle: full copy, retry, read, export, isolation
  const f=await buyerJobsFixture(t),body=await input();
  for(const role of ['viewer','foreign'])assert.equal((await route(f,body,role)).status,403);
  const response=await route(f,body);assert.equal(response.status,200);const list=(await response.json()).list;assert.equal(list.results.length,31);assert.equal(list.criteria.kind,'search_snapshot');assert.equal(list.saved,false);
+ const expectedScores=[...Array.from({length:30},(_,i)=>84-i),null];
+ assert.deepEqual(list.results.map(r=>r.score),expectedScores);assert.equal(list.criteria.fingerprint,body.fingerprint);
  assert.equal((await (await route(f,body)).json()).list.id,list.id);assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM company_lists').get().n,1);
- assert.equal((await (await route(f,null,'owner',{search_snapshot:body.fingerprint})).json()).list.id,list.id);
+ const reopened=(await (await route(f,null,'owner',{search_snapshot:body.fingerprint})).json()).list;
+ assert.equal(reopened.id,list.id);assert.deepEqual(reopened.results.map(r=>r.score),expectedScores);
  assert.equal((await (await route(f,null,'foreign',{workspace_id:foreignWorkspaceId,id:list.id})).json()).list,null);
  const bytes=f.DB.raw.prepare('SELECT records_bytes FROM workspace_storage_accounts WHERE workspace_id=?').get(workspaceId).records_bytes;assert.ok(bytes>JSON.stringify(body.snapshot).length);
  for(const action of ['save','buyer','pause','resume'])assert.equal((await route(f,{action,id:list.id,revision:list.revision})).status,400);

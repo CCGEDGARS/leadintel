@@ -64,7 +64,19 @@
   finally{searchBusy=false;paintSearch();}
  }
  function renderSearchSnapshot(l){
-  $('company-list-content').innerHTML='<div class="cl-result-heading"><h4>'+esc(l.name)+'</h4><span>Saved search results</span></div><p>'+l.results.length+' companies · Saved '+esc(new Date(l.createdAt+'Z').toLocaleString())+'</p><p>This copy preserves the scores, review status and sources at the time of saving. Continue research in Companies. Buying intent remains unconfirmed.</p><div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="csv">Download CSV</button><button type="button" class="secondary-btn" data-cl="xlsx">Download Excel</button><button type="button" class="text-btn" data-cl="delete">Delete list</button></div><div class="cl-table-wrap"><table><thead><tr><th>Company</th><th>Location</th><th>Company fit</th><th>Review and evidence</th></tr></thead><tbody>'+l.results.map(r=>'<tr><td><strong>'+esc(r.company)+'</strong>'+(r.website?'<a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(M.domain(r.website))+' ↗</a>':'')+'</td><td>'+esc(r.location)+'</td><td>'+(r.score??'—')+'<small>'+esc(r.scoreState==='current'?'Current score':r.scoreState==='previous'?'Previous score · needs review':'Awaiting score')+'</small></td><td><strong>'+esc(r.reviewStatus)+'</strong><p>'+esc(r.signals.join(', '))+'</p><details><summary>Saved evidence</summary><p>'+esc(r.summary)+'</p>'+r.evidence.map(e=>'<blockquote>'+esc(e.quote)+'</blockquote><a href="'+esc(e.url)+'" target="_blank" rel="noopener noreferrer">Source'+(e.date?' · '+esc(e.date):'')+' ↗</a>').join('')+'</details></td></tr>').join('')+'</tbody></table></div>';
+  const rows=M.inScoreOrder(l.results).map((r,i)=>{
+   const hasScore=Number.isFinite(r.score)&&r.score>=0&&r.score<=100;
+   const label=!hasScore?'Awaiting score':r.scoreState==='previous'?'Previous score · needs review':r.reviewStatus==='Checked'?'Current score':'Provisional score';
+   const website=r.website?'<a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(M.domain(r.website))+' ↗</a>':'';
+   const sources=r.evidence.map(e=>'<blockquote>'+esc(e.quote)+'</blockquote><a href="'+esc(e.url)+'" target="_blank" rel="noopener noreferrer">Source'+(e.date?' · '+esc(e.date):'')+' ↗</a>').join('');
+   return '<tr><td>'+(hasScore?i+1:'—')+'</td><td><strong>'+esc(r.company)+'</strong>'+website+'</td><td>'+esc(r.location)+'</td>'+
+    '<td>'+(hasScore?r.score:'—')+'<small>'+label+'</small></td><td><strong>'+esc(r.reviewStatus)+'</strong><p>'+esc(r.signals.join(', '))+'</p>'+
+    '<details><summary>Saved evidence</summary><p>'+esc(r.summary)+'</p>'+sources+'</details></td></tr>';
+  }).join('');
+  $('company-list-content').innerHTML='<div class="cl-result-heading"><h4>'+esc(l.name)+'</h4><span>Saved search results</span></div><p>'+l.results.length+' companies · Saved '+esc(new Date(l.createdAt+'Z').toLocaleString())+'</p>'+
+   '<p>This copy preserves the scores, review status and sources at the time of saving. Continue research in Companies. Buying intent remains unconfirmed.</p>'+
+   '<div class="cl-toolbar"><button type="button" class="secondary-btn" data-cl="csv">Download CSV</button><button type="button" class="secondary-btn" data-cl="xlsx">Download Excel</button><button type="button" class="text-btn" data-cl="delete">Delete list</button></div>'+
+   '<div class="cl-table-wrap"><table><thead><tr><th>Rank</th><th>Company</th><th>Location</th><th>Company fit</th><th>Review and evidence</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
  }
  function mount(){
   const searchContext=$('company-search-context');
