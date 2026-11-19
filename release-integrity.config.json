@@ -843,6 +843,35 @@
       ]
     },
     {
+      "id": "company-fit-classification",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerFitRelationship(value)",
+        "The assessment did not classify the company as buyer, competitor, supplier, reseller or unrelated."
+      ]
+    },
+    {
+      "id": "company-score-order",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "sorted by latest score"
+      ]
+    },
+    {
+      "id": "company-fit-classification-asset",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "company-fit-classification=20261119-v1",
+        "company-score-order=20261119-v1"
+      ]
+    },
+    {
       "id": "clear-company-results",
       "type": "text",
       "url": "/customer/discovery-ui.js",

@@ -1871,13 +1871,15 @@ function updateCompanySearchFeedback(control){
 function rankedCompanyResults(){return LeadIntelDiscovery.rankCompanyResults(discovery,{assess:qualificationAssessment,isCurrent:companyStrategyCurrent});}
 // Historical scores remain available to review and export. Only completed,
 // current assessments can occupy a position in the visible ranking.
+// Owner request (19 Nov 2026): both groups follow the relevance score, highest
+// first. Unranked rows keep the engine order: score descending, current before
+// previous, awaiting score last, then name. Labels still show score provenance.
 function companyDisplayGroups(view){
   const ranked=[],unranked=[];
   for(const entry of view.rows){
     if(entry.actionable && entry.scoreState==='current' && entry.storedIndex>=0)ranked.push(entry);
     else unranked.push(entry);
   }
-  unranked.sort((a,b)=>String(a.candidate.company||a.key).localeCompare(String(b.candidate.company||b.key))||a.key.localeCompare(b.key));
   return {ranked,unranked};
 }
 function companyDisplayPage(groups,start){
@@ -1885,7 +1887,7 @@ function companyDisplayPage(groups,start){
   const checked=groups.ranked.slice(start,end);
   const review=groups.unranked.slice(Math.max(0,start-groups.ranked.length),Math.max(0,end-groups.ranked.length));
   const checkedHtml=checked.length?companyListColumnsHtml()+checked.map((row,i)=>companyRankedCardHtml(row,start+i)).join(''):'';
-  const reviewHtml=review.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Unranked companies · ${groups.unranked.length}</h4>${review.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
+  const reviewHtml=review.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Unranked companies · ${groups.unranked.length} <small>· sorted by latest score</small></h4>${review.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
   return checkedHtml+reviewHtml;
 }
 let companyRowScope='',companyRowsOpen=new Map(),companyRowContainers=new WeakMap(),companyRowFocusPending=null;
