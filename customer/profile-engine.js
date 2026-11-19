@@ -95,7 +95,7 @@
   function canBuildProfile(input={}){return Boolean(normalizeUrl(input.website)&&normalizeTargetMarkets(input.targetMarkets).length);}
   function canAccessModule(input={},step=1){
     const moduleNumber=Number(step)||1;
-    if(moduleNumber===1)return true;
+    if(moduleNumber===1||moduleNumber===7)return true;
     return moduleNumber>=2&&moduleNumber<=7&&canBuildProfile(input);
   }
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}

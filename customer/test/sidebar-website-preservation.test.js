@@ -66,7 +66,7 @@ test('a draft strategy still lets the user revisit results scoped to the same co
   const main={website:'https://www.ercon.lv/',targetMarkets:['Sweden'],profile:{companyName:'Ercon'},approved:true,market:{strategyApproved:false}};
   assert.equal(isolation.hasPreviousDiscovery(storage,main),true);
   assert.equal(isolation.safeStep(storage,main,5),5);
-  assert.equal(isolation.safeStep(storage,main,7),5);
+  assert.equal(isolation.safeStep(storage,main,7),7);
   assert.equal(isolation.safeStep(storage,{...main,website:'https://other.se/'},5),4,'another company cannot inherit Ercon results');
   assert.equal(isolation.safeStep({getItem:()=>null},main,5),4,'first-time company discovery still needs an approved strategy');
 });

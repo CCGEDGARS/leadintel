@@ -13,7 +13,7 @@ function canonicalItems(){try{const saved=JSON.parse(localStorage.getItem('leadi
 function canonicalItem(item){return canonicalItems().find(row=>row.domain===item?.domain&&String(row.selectedPersonId)===String(item?.selectedPersonId)&&JSON.stringify(row)===JSON.stringify(item))||null;}
 function sourceCurrent(item){let main={},studio={};try{main=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}');studio=JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}').messageStudio||{};}catch{return false;}return root.LeadIntelOutreach?.sourceAuthorityCurrent?.(item,main,studio)===true;}
 function activeAutomatic(){const p=serverPolicy(),b=bridge();return Boolean(isOwner()&&p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled&&!p.paused&&!p.emergencyStop&&b?.gmail?.connected);}
-const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
+const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['7','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20261024-delivery-experience-v1&delivery-spacing=20261024-v1&manual-settings=20261108-v1&status-badge=20261108-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
@@ -158,19 +158,14 @@ function render(){
     el.querySelector('[data-oa-retry]')?.addEventListener('click',refresh);return;
   }
   if(p.approvedWorkflow){el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Approved workflow delivery</span><h3>${p.approvedWorkflow.status==='automatic'?'Automatic workflow':'Workflow '+esc(p.approvedWorkflow.status)}</h3><p>Only messages created under your approved workflow can send automatically. Use the workflow controls for review, limits, pause and manual takeover.</p><p>${Number(s.activity?.sent)||0} sent · ${Number(s.queue?.queued)||0} queued · ${Number(s.activity?.replies)||0} replies</p></div></div><button data-open-approved-workflow>Open workflow controls</button>`;el.querySelector('[data-open-approved-workflow]')?.addEventListener('click',()=>root.LeadIntelApprovedWorkflow?.open());return;}
-  if(p.automaticDelivery==='manual_only'){
-    el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Delivery mode</span><h3>Manual delivery</h3><p>You choose when each approved email is sent. Review the recipient and use Send with Gmail or Microsoft above.</p><p class="oa-manual-note">First-email automation is off. Separately approved conversation follow-ups are managed in Conversations &amp; follow-ups.</p></div><span class="oa-role">Manual sending</span></div><button class="secondary-btn small" type="button" data-oa-settings>Delivery settings →</button><p class="oa-message" id="oa-message" role="status" aria-live="polite"></p>`;
-    el.querySelector('[data-oa-settings]')?.addEventListener('click',()=>{root.LeadIntelCustomerNavigation?.setStep?.(1);document.getElementById('delivery-setup')?.scrollIntoView?.({behavior:'smooth',block:'center'});});
-    return;
-  }
+  const manualOnly=p.automaticDelivery!=='enabled',active=p.mode==='automatic'&&p.enabled;
   const owner=isOwner();const usage=s.usage||{},q=s.queue||{},activity=s.activity||{};
   const custom=!['5','10','20'].includes(String(p.workspaceDailyLimit||20));
   el.innerHTML=`
-  <div class="oa-head"><div><span class="oa-kicker">Outreach Automation</span><h3>Safe automatic Gmail outreach</h3><p>Manual stays available. Automatic sends only approved contacts under server-enforced limits.</p></div><span class="oa-role">${owner?'Owner controls':'Read only'}</span></div>
+  <div class="oa-head"><div><span class="oa-kicker">Delivery settings</span><h3>${active?'Automatic delivery':'Manual delivery · plan ahead'}</h3><p>Save your mode, schedule, limits and follow-up preferences here. Saving a plan never starts automatic sending.</p><p class="oa-manual-note">${manualOnly?'Scheduled sending is not enabled for this workspace. You can save a plan and send approved messages manually.':active?'Automatic sending is active under your saved approval. Changes to active settings require confirmation.':'Sending stays off until you review and activate your plan.'} Separately approved conversation follow-ups are managed in Conversations &amp; follow-ups.</p></div><span class="oa-role">${owner?'Owner controls':'Read only'}</span></div>
   <div class="outreach-automation-grid">
     <div class="oa-card"><h4>Mode & limits</h4>
-      <label>Mode<select id="oa-mode"><option value="manual" ${p.mode!=='automatic'?'selected':''}>Manual</option><option value="automatic" ${p.mode==='automatic'?'selected':''}>Automatic</option></select></label>
-      <label class="oa-toggle"><input id="oa-enabled" type="checkbox" ${p.enabled?'checked':''}> Automation enabled</label>
+      <label>Mode<select id="oa-mode"><option value="manual" ${(p.preferredMode||p.mode)!=='automatic'?'selected':''}>Manual</option><option value="automatic" ${(p.preferredMode||p.mode)==='automatic'?'selected':''}>Automatic plan</option></select></label>
       <label>Workspace daily limit<select id="oa-workspace-limit"><option>5</option><option>10</option><option>20</option><option value="custom" ${custom?'selected':''}>Custom</option></select></label>
       <input id="oa-custom-limit" type="number" min="1" max="500" value="${esc(p.workspaceDailyLimit||20)}" ${custom?'':'hidden'} aria-label="Custom daily limit">
       <label>Mailbox daily limit<input id="oa-mailbox-limit" type="number" min="1" max="500" value="${esc(p.mailboxDailyLimit||20)}"><small>One Gmail mailbox per workspace today. Both limits apply; the sending window may allow fewer messages.</small></label>
@@ -183,18 +178,18 @@ function render(){
     <div class="oa-card"><h4>Follow-ups</h4><label>Follow-ups<input id="oa-followups" type="number" min="0" max="5" value="${esc(p.maxFollowups??2)}"></label><label>Follow-up delays, days<input id="oa-followup-days" value="${esc((p.followupDelaysDays||[3,7]).join(','))}"></label><label>Reply polling, minutes<input id="oa-reply-poll" type="number" min="60" value="${esc(p.replyPollIntervalMinutes||60)}"></label></div>
     <div class="oa-card oa-status"><h4>Live status</h4><div><strong>${esc(usage.workspaceSentToday||0)} / ${esc(usage.workspaceLimit||p.workspaceDailyLimit||20)}</strong><span>Sent today${Number(usage.workspaceReservedToday)>0?` · ${esc(usage.workspaceReservedToday)} reserved or unconfirmed`:''}</span></div><div><strong>${esc(q.queued||0)}</strong><span>Queue</span></div><div><strong>${esc(q.nextEligibleSendAt||'—')}</strong><span>Next send</span></div><div><strong>${esc(q.blockedByLimit||0)}</strong><span>Blocked reason: daily limit</span></div></div>
   </div>
-  <div class="oa-actions"><button id="oa-save" class="oa-primary">Save settings</button><button id="oa-pause">${p.paused?'Resume automation':'Pause automation'}</button><button id="oa-stop" class="oa-danger">${p.emergencyStop?'Clear emergency stop':'Emergency stop'}</button><button id="oa-refresh">Refresh status</button></div>
+  <div class="oa-actions"><button id="oa-save" class="oa-primary">Save settings</button><button id="oa-activate" ${manualOnly||active||!owner||!bridge()?.gmail?.connected||!approvedItems().length?'disabled':''}>Review &amp; activate automatic delivery</button><button id="oa-pause" ${!active?'disabled':''}>${p.paused?'Resume automation':'Pause automation'}</button><button id="oa-stop" class="oa-danger">${p.emergencyStop?'Clear emergency stop':'Emergency stop'}</button><button id="oa-refresh">Refresh status</button></div>
   <div class="oa-activity" aria-label="Automatic delivery outcomes"><div><strong>${esc(activity.sent||0)}</strong><span>Sent</span></div><div><strong>${esc(activity.failed||0)}</strong><span>Failed</span></div><div><strong>${esc(activity.replies||0)}</strong><span>Replies</span></div><div><strong>${esc(activity.interested||0)}</strong><span>Interested replies</span></div><div><strong>${esc(activity.meetingRequests||0)}</strong><span>Meeting requests</span></div></div>
   <div class="oa-queue-preview"><div><h4>Queue preview</h4><p>${q.queued?`${esc(q.queued)} approved message(s) waiting.`:'No approved messages waiting.'} ${q.blockedByLimit?`${esc(q.blockedByLimit)} blocked by limit.`:''}</p></div><button id="oa-enqueue" ${queueEligibility()?'':'disabled'}>Add approved contact to automatic queue</button><button id="oa-enqueue-all" ${owner&&p.mode==='automatic'&&p.enabled&&!busy?'':'disabled'}>Queue approved verified contacts</button></div>
   <p id="oa-package-note" class="oa-note">${approvedPackage?`Approved package ready for ${esc(approvedPackage.recipient||approvedPackage.domain||'contact')}.`:'Automatic queueing matches each approved message to its selected verified CRM contact. Missing matches stay for review.'}</p>
   <p id="oa-message" class="oa-message" aria-live="polite"></p>`;
-  el.querySelectorAll('input,select,button').forEach(node=>{if(!owner&&node.id!=='oa-refresh')node.disabled=true;});
+  el.querySelectorAll('input,select,button').forEach(node=>{if((!owner||busy)&&node.id!=='oa-refresh')node.disabled=true;});
   const limit=el.querySelector('#oa-workspace-limit');if(limit)limit.value=custom?'custom':String(p.workspaceDailyLimit||20);limit?.addEventListener('change',()=>{el.querySelector('#oa-custom-limit').hidden=limit.value!=='custom';});
-  for(const id of ['oa-pause','oa-stop']){const button=el.querySelector('#'+id);if(button&&busy&&queueOperationOwner!==operationOwner)button.disabled=true;}
+  for(const id of ['oa-pause','oa-stop']){const button=el.querySelector('#'+id);if(button)button.disabled=!owner||!active||busy&&queueOperationOwner!==operationOwner;}
   bind(el);
 }
 function message(text,error=false){const el=document.getElementById('oa-message');if(el){el.textContent=text||'';el.dataset.error=error?'1':'0';}}
-function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-enabled').checked,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
+function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-mode').value==='automatic'&&serverPolicy().mode==='automatic'&&serverPolicy().enabled===true,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
 function refresh(){const pending=refreshOperation();refreshCompletion=pending;return pending;}
 async function refreshOperation(){
   const owned=authority(),b=owned.bridge,workspace=b?.workspace?.id,request=++refreshRequest;
@@ -213,9 +208,33 @@ async function mutate(next,success,owned=authority({withPolicy:true})){
  const b=owned.bridge;if(busy||!owned.current()||!isOwner()||!b?.saveOutreachAutomationPolicy)return false;
  const wasAutomatic=activeAutomatic(),token=++operationOwner;busy=true;render();
  try{const result=await b.saveOutreachAutomationPolicy(next);if(token!==operationOwner||!owned.current()){syncOwner();return false;}if(!result?.ok){message(result?.error||'Settings were not saved',true);return false;}busy=false;await refresh();if(token!==operationOwner||!owned.accountCurrent()||!isOwner())return false;if(!wasAutomatic&&next.mode==='automatic'&&next.enabled)await queueApprovedPackages();if(owned.accountCurrent())message(success||'Automation settings saved.');return true;}
- catch(error){if(owned.current())message(error.message||'Settings were not saved',true);return false;}finally{if(token===operationOwner){busy=false;render();}}
+ catch(error){if(owned.current())message(error.message||'Settings were not saved',true);return false;}finally{if(token===operationOwner){const feedback=document.getElementById('oa-message')?.textContent,failed=document.getElementById('oa-message')?.dataset.error==='1';busy=false;render();if(owned.accountCurrent()&&feedback)message(feedback,failed);}}
 }
-async function save(){const owned=authority({withPolicy:true});if(busy||!owned.current()||!isOwner())return;const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const token=++operationOwner;busy=true;let confirmed=false;try{const ok=(await (window.LeadIntelDialogs?.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.')??false));if(!ok)return;confirmed=true;}catch{}finally{if(token===operationOwner)busy=false;}if(!confirmed)return;if(token!==operationOwner||!owned.current()){syncOwner();render();return;}}await mutate(next,'Automation settings saved.',owned);}
+function planReview(next){
+ const messages=approvedItems().map(item=>root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(item,root.LeadIntelOutreach?.approvedRecipient?.(item))).filter(Boolean);
+ return `Mailbox: ${bridge()?.gmail?.email||'Gmail not connected'}\nSchedule: ${next.workingDays.map(n=>days.find(([id])=>Number(id)===n)?.[1]||n).join(', ')} · ${next.sendWindowStart}–${next.sendWindowEnd} (${next.timezone})\nLimits: ${next.workspaceDailyLimit}/day per workspace, ${next.mailboxDailyLimit}/day per mailbox\nSpacing: ${next.minDelayMinutes}–${next.maxDelayMinutes} minutes\nFollow-ups: up to ${next.maxFollowups}, after ${(next.followupDelaysDays||[]).slice(0,next.maxFollowups).join(', ')||'no'} days, only from approved follow-up text; stop on reply.\nExisting queue: ${Number(serverStatus().queue?.queued)||0} messages.\n\n`+messages.map(m=>`To: ${m.recipient}\nSubject: ${m.subject}\n${m.body}\nFollow-up: ${m.followup_body||'None approved'}`).join('\n\n');
+}
+async function confirmPlan(next,{activate=false}={}){
+ const owned=authority({withPolicy:true}),stamp=JSON.stringify(approvedItems()),formStamp=JSON.stringify(readPolicy()),review=planReview(next),token=++operationOwner;
+ busy=true;
+ try{
+  const confirmed=await (root.LeadIntelDialogs?.confirm(review+'\n\n'+(activate?'Activate this plan? Approved contacts can be sent automatically within these limits.':'Apply these settings to the active automatic delivery plan?'),{title:activate?'Review automatic delivery':'Review active delivery changes',action:activate?'Activate delivery':'Apply changes'})??false);
+  if(!confirmed||token!==operationOwner||!owned.current()||stamp!==JSON.stringify(approvedItems())||formStamp!==JSON.stringify(readPolicy())||review!==planReview(next))return null;
+  return owned;
+ }finally{if(token===operationOwner)busy=false;}
+}
+async function save(){
+ const owned=authority({withPolicy:true});if(busy||!owned.current()||!isOwner())return;
+ const next=readPolicy();
+ if(next.enabled){const confirmed=await confirmPlan(next);if(!confirmed)return;await mutate(next,'Active delivery settings saved.',confirmed);return;}
+ await mutate(next,'Delivery settings saved. Sending remains off.',owned);
+}
+async function activate(){
+ if(busy||!authority().current()||!isOwner()||serverPolicy().automaticDelivery!=='enabled'||!bridge()?.gmail?.connected||!approvedItems().length)return;
+ const next={...readPolicy(),mode:'automatic',enabled:true};
+ const owned=await confirmPlan(next,{activate:true});if(!owned)return;
+ await mutate(next,'Automatic delivery activated.',owned);
+}
 async function safetyControl(next,success){
  const trace=deliveryTrace('delivery_pause');trace.checkpoint('request','pending');
  if(busy&&queueOperationOwner===operationOwner&&(next.paused===true||next.emergencyStop===true)){operationOwner++;queueOperationOwner=0;busy=false;}
@@ -223,6 +242,7 @@ async function safetyControl(next,success){
 }
 function bind(el){
   el.querySelector('#oa-save')?.addEventListener('click',save);
+  el.querySelector('#oa-activate')?.addEventListener('click',activate);
   el.querySelector('#oa-refresh')?.addEventListener('click',refresh);
   el.querySelector('#oa-pause')?.addEventListener('click',()=>safetyControl({...serverPolicy(),paused:!serverPolicy().paused},serverPolicy().paused?'Automation resumed.':'Automation paused.'));
   el.querySelector('#oa-stop')?.addEventListener('click',()=>safetyControl({...serverPolicy(),emergencyStop:!serverPolicy().emergencyStop},serverPolicy().emergencyStop?'Emergency stop cleared.':'Emergency stop activated.'));
