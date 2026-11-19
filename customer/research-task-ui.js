@@ -1,4 +1,4 @@
-import './research-task-model.js?v=20261118-v1';
+import './research-task-model.js?v=20261118-v1&company-list-quality=20261119-v2';
 const T=globalThis.LeadIntelResearchTasks;
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
 const button=(label,fn)=>{const n=el('button',label);n.type='button';n.addEventListener('click',fn);return n;};
@@ -33,7 +33,7 @@ export function attachTask(card,initial,{api,isCurrent}){
   field(form,'roles','Decision-maker roles (separate with semicolons)',{value:p.roles});
   field(form,'phoneEvidence','Required phone evidence',{options:[{value:'none',label:'Phone optional'},{value:'confirmed',label:'Named public source or verified provider'},{value:'provider_verified',label:'Verified provider only'}],value:p.phoneEvidence});
   field(form,'paidMode','Paid contact permission',{options:[{value:'off',label:'Public research only'},{value:'saved_policy',label:'Use saved provider policy and limits'}],value:p.paidMode});
-  field(form,'budget','Company-research operation allowance (10–500)',{type:'number',min:10,max:500,value:p.budget});
+  field(form,'budget','Company-research operation allowance (10–5,000)',{type:'number',min:10,max:5000,value:p.budget});
   field(form,'format','Result format',{options:[{value:'app',label:'In-app list'},{value:'csv',label:'CSV'},{value:'word',label:'Word (.doc)'},{value:'pdf',label:'PDF (print / save)'}],value:p.format});
   const save=el('button','Review these answers');save.type='submit';form.append(save);form.addEventListener('submit',event=>{event.preventDefault();const answer={};for(const c of form.elements){if(!c.name)continue;answer[c.name]=c.multiple?[...c.selectedOptions].map(o=>o.value):c.type==='checkbox'?c.checked:['markets','roles'].includes(c.name)?c.value.split(/[;\n]/).map(v=>v.trim()).filter(Boolean):c.value;}void command('update',answer);});return form;
  }

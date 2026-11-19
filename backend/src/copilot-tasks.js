@@ -22,9 +22,10 @@ export async function taskOptions(env,w,flowId){
  return {flows,available,policy,main:frozen,fingerprint,flowMissing:!row,flowName:row?.name||''};
 }
 function defaults(input,o){
- const p={mode:'any',buyerCount:0,phoneEvidence:'none',budget:100,...T.answers(input)};
+ const p={mode:'any',buyerCount:0,phoneEvidence:'none',...T.answers(input)};
  if(!p.markets?.length&&o.available.markets?.length)p.markets=o.available.markets;
- if(p.signalIds===undefined)p.signalIds=['lookalike'];
+ if(p.signalIds===undefined)p.signalIds=o.available.signals.map(s=>s.id);
+ if(p.budget===undefined)p.budget=M.recommendedBudget(p.count);
  if(p.referenceIds===undefined){const ready=o.available.references.filter(r=>r.ready&&r.active!==false);p.referenceIds=ready.length<=15?ready.map(r=>r.id):[];}
  if(p.buyerCount>0){if(p.buyerCompanies===undefined)p.buyerCompanies=Math.min(p.count||1,10);if(p.count===1)p.buyerScope='per_company';if(!p.roles?.length)p.roles=String(o.main.answers?.buyer_roles||o.main.profile?.decisionMakers||'').split(/[,;\n]/).map(v=>v.trim()).filter(Boolean);}
  if(!p.buyerCount)p.paidMode='off';
@@ -122,7 +123,7 @@ export async function runResearchTasks(env,{now=Date.now(),jobId}={}){
    const list=await readCompanyList(env,w,s.listId);if(!list)throw fail('The saved company list is unavailable.');
    if(active(list.status))return [row.id];
    if(list.status!=='complete'){
-    if(s.resume){await guard();const stateRow=await sql(env,'SELECT state_json FROM company_lists WHERE id=? AND workspace_id=?',list.id,w).first(),ls=parse(stateRow.state_json);ls.reason='Continuing the reviewed task';ls.failureCode='';if(s.allowanceTarget)ls.allowance=Math.max(ls.allowance,s.allowanceTarget);if(ls.phase==='exhausted')throw fail('The selected research plan is exhausted. Review the criteria.');await sql(env,"UPDATE company_lists SET status='queued',state_json=?,last_error=NULL,requested_by=?,session_hash=?,revision=revision+1 WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM copilot_research_tasks WHERE id=? AND status='running' AND lease_token=?)",JSON.stringify(ls),user.id,user.hash,list.id,list.revision,row.id,token).run();s.resume=false;delete s.allowanceTarget;await checkpoint();return [row.id];}
+    if(s.resume){await guard();const stateRow=await sql(env,'SELECT state_json FROM company_lists WHERE id=? AND workspace_id=?',list.id,w).first(),ls=parse(stateRow.state_json);ls.reason='Continuing the reviewed task';ls.failureCode='';ls.failures=0;ls.retryKey='';ls.nextAttemptAt=0;if(s.allowanceTarget)ls.allowance=Math.max(ls.allowance,s.allowanceTarget);if(ls.phase==='exhausted')throw fail('The selected research plan is exhausted. Review the criteria.');await sql(env,"UPDATE company_lists SET status='queued',state_json=?,last_error=NULL,requested_by=?,session_hash=?,revision=revision+1 WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM copilot_research_tasks WHERE id=? AND status='running' AND lease_token=?)",JSON.stringify(ls),user.id,user.hash,list.id,list.revision,row.id,token).run();s.resume=false;delete s.allowanceTarget;await checkpoint();return [row.id];}
     throw Object.assign(fail(list.progress.reason||'Company research did not reach the requested count.'),{code:list.failureCode});
    }
    if(!plan.buyerCount){s.phase='done';s.blocker=null;await checkpoint('complete');return [row.id];}

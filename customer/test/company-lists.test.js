@@ -10,3 +10,25 @@ test('only selected signals score; any uses a fixed denominator while all requir
 test('invented quotes, unrelated reference quotes, unsupported location, wrong identity, old signals and unselected markets are rejected',()=>{const now=Date.parse('2026-11-18');for(const change of [{identity:{url:page.url,quote:'Invented company identity.'}},{location:{...raw.location,label:'Copenhagen'}},{website:'https://other.example/'},{location:{...raw.location,market:'Denmark'}},{matches:[{...raw.matches[0],referenceQuote:'An invented capability with no source.'}]}])assert.equal(M.assess({...raw,...change},config(),[page],now),null);assert.equal(M.assess(raw,config({signalIds:['hiring'],referenceIds:[]}),[page],Date.parse('2028-11-18')),null);});
 test('reference country never becomes target market; grouping and independent industries preserve exact reference identity',()=>{const main={targetMarkets:['Denmark'],referenceCustomerPortfolio:{lists:[{id:'a',name:'Machinery',active:true,reference:{rows:[{id:'1',companyName:'Factory',website:'https://reference.example/',country:'Sweden',reason:'Buys equipment'}],analyses:{1:{sourceEvidence:ref.evidence}}}},{id:'b',name:'Healthcare',active:true,reference:{rows:[{id:'2',companyName:'Clinic',website:'https://clinic.example/'}],analyses:{2:{sourceEvidence:[{field:'industry',quote:'Provides clinical diagnostic services',url:'https://clinic.example/'}]}}}}]}};const o=M.options(main);assert.deepEqual(o.markets,['Denmark']);const c=M.configuration({count:10,signalIds:['lookalike'],referenceIds:['b:2'],markets:['Denmark']},o);assert.equal(c.references.length,1);assert.equal(c.references[0].name,'Clinic');assert.equal(c.references[0].evidence[0].quote,'Provides clinical diagnostic services');assert.deepEqual(main.targetMarkets,['Denmark']);});
 test('exports preserve evidence, criteria and Unicode without executable spreadsheet formula cells',()=>{const r=M.assess(raw,config(),[page],Date.parse('2026-11-18')),list={name:'=DANGEROUS()',criteria:config(),results:[{...r,company:'=HYPERLINK("bad") Ā'}]};const csv=M.csv(list);assert.match(csv,/'=HYPERLINK/);assert.match(csv,/Unconfirmed/);assert.match(csv,/factory.example/);const xlsx=M.xlsx(list);assert.equal(new DataView(xlsx.buffer).getUint32(0,true),0x04034b50);const text=new TextDecoder().decode(xlsx);assert.match(text,/t="inlineStr"/);assert.doesNotMatch(text,/<f>/);assert.match(text,/Ā/);assert.match(text,/xl\/worksheets\/sheet1.xml/);});
+
+test('active Lookalike alone excludes disabled/deleted signals and keeps string keywords for active signals',()=>{
+ const main={market:{signals:[{id:'custom-lookalike-1',name:'Lookalike',active:true},{id:'hiring',name:'Hiring',active:false},{id:'funding',name:'Funding',active:true}],deletedSignalIds:['funding']}};
+ const options=M.options(main);assert.deepEqual(options.signals.map(s=>s.id),['lookalike']);
+ assert.throws(()=>M.configuration({count:200,signalIds:['hiring'],markets:['Denmark']},options),/no longer active/);
+ main.market.signals[0].active=false;assert.deepEqual(M.options(main).signals,[]);
+ main.market.signals=[{id:'expansion',name:'Expansion',keywords:'new factory; production capacity',active:true}];
+ assert.deepEqual(M.options(main).signals.map(s=>s.id),['expansion']);assert.deepEqual(M.options(main).signals[0].keywords,['new factory','production capacity']);
+ main.market.signals=[];assert.deepEqual(M.options(main).signals,[]);main.market.icps=[{id:'icp-reference-lookalike',active:true}];main.market.deletedSignalIds=['custom-lookalike-1'];assert.deepEqual(M.options(main).signals,[]);
+});
+test('every size uses the same evidence review; limits scale explicitly without relaxing the checks',()=>{
+ const commercialFit={status:'supported',url:page.url,quote:raw.identity.quote,reason:'The documented manufacturing operation is relevant to industrial equipment.'};
+ const review={decision:'pass',identityConfirmed:true,marketConfirmed:true,commercialFitConfirmed:true,exclusionsChecked:true,supportedSignalIds:['lookalike'],reason:'Source evidence establishes the business comparison and all required checks.',gaps:[]};
+ for(const count of [1,10,50,100,200]){
+  const c=config({count,budget:undefined});assert.equal(c.budget,M.recommendedBudget(count));
+  const candidate=M.assess({...raw,commercialFit},c,[page]),result=M.reviewResult(candidate,review,c);
+  assert.equal(result.quality.version,M.QUALITY_VERSION);assert.equal(result.matches[0].referenceUrl,ref.evidence[0].url);
+  for(const changed of [{decision:'needs_evidence'},{identityConfirmed:false},{marketConfirmed:false},{commercialFitConfirmed:false},{exclusionsChecked:false},{supportedSignalIds:[]},{gaps:['Exclusion is unresolved']}])assert.equal(M.reviewResult(candidate,{...review,...changed},c),null);
+  assert.equal(M.reviewResult(M.assess(raw,c,[page]),review,c),null,'no commercial evidence means no counted match');
+ }
+ assert.throws(()=>config({budget:5001}));assert.throws(()=>config({budget:0}));assert.equal(config({count:200,budget:150}).budget,150,'small explicit allowance is not silently raised');
+});

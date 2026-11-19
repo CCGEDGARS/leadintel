@@ -38,7 +38,7 @@
   }
   if(!['none','confirmed','provider_verified'].includes(plan.phoneEvidence))ask('phoneEvidence','What phone evidence do you require?',[{value:'none',label:'Phone optional'},{value:'confirmed',label:'Named source or verified provider'},{value:'provider_verified',label:'Verified provider only'}]);
   if(!['app','csv','word','pdf'].includes(plan.format))ask('format','What format would you like for the result?',[{value:'app',label:'In-app list'},{value:'csv',label:'CSV'},{value:'word',label:'Word'},{value:'pdf',label:'PDF'}]);
-  if(!Number.isInteger(plan.budget)||plan.budget<10||plan.budget>500)ask('budget','Choose 10–500 company-research operations. This is an operation allowance, not a money balance.');
+  if(!Number.isInteger(plan.budget)||plan.budget<10||plan.budget>5000)ask('budget','Choose 10–5,000 company-research operations. This is an operation allowance, not a money balance.');
   return q;
  }
  function issue(value={}){

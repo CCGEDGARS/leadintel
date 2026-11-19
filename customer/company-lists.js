@@ -3,6 +3,9 @@
  const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
  function url(v){try{const u=new URL(v);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&!u.port&&u.hostname.includes('.')&&!/^(?:localhost|127\.|10\.|192\.168\.|169\.254\.)|\.local$/.test(u.hostname)?u.href:'';}catch{return '';}}
  const domain=v=>{try{return new URL(url(v)).hostname.replace(/^www\./,'').toLowerCase();}catch{return '';}};
+ const QUALITY_VERSION='20261119-reviewed-evidence-v2';
+ const isLookalike=s=>s?.kind==='lookalike'||s?.type==='lookalike'||/(?:^|[-_])lookalike(?:[-_]|$)/i.test(clean(s?.id))||/^look[ -]?alike(?:\s+(?:signal|companies|customers))?$/i.test(clean(s?.name));
+ const recommendedBudget=count=>Math.min(5000,Math.max(100,Number(count||10)*20));
  function options(main={}){
   const refs=[],groups=[],seen=new Set(),portfolio=main.referenceCustomerPortfolio||{};
   const lists=(portfolio.lists||[]).slice();
@@ -15,22 +18,27 @@
    }
    if(members.length)groups.push({id:list.id,name:clean(list.name,120),referenceIds:members});
   }
-  const signals=[{id:'lookalike',name:'Lookalike',keywords:[],description:'Similarity to your selected reference companies'}];
-  for(const s of main.market?.signals||[]){const id=clean(s.id,120);if(!id||id==='lookalike'||signals.some(x=>x.id===id))continue;signals.push({id,name:clean(s.name||s.label||id,180),keywords:(Array.isArray(s.keywords)?s.keywords:[]).map(v=>clean(v,120)).filter(Boolean).slice(0,10),description:clean(s.description||s.evidenceToLookFor,700)});}
-  return {references:refs,groups,signals,markets:(main.targetMarkets||[]).map(v=>clean(v,100)).filter(Boolean),profile:{offers:clean(main.profile?.priorityOffers||main.answers?.priorityOffers,1500),idealCustomer:clean(main.profile?.idealCustomer,1500),exclusions:clean(main.profile?.exclusions||main.answers?.exclusions,1500),website:url(main.website||main.profile?.website)}};
+  const signals=[],market=main.market||{},deleted=new Set(market.deletedSignalIds||[]),saved=market.signals||[];
+  const lookalike=saved.find(isLookalike),lens=(market.icps||[]).find(i=>i.id==='icp-reference-lookalike'||i.type==='lookalike'||i.type==='lookalike-led');
+  // Legacy reference-only workspaces have no signal configuration. Once signals
+  // are configured, an inactive/deleted signal must never be silently restored.
+  const lookalikeDeleted=[...deleted].some(id=>/(?:^|[-_])look[ -]?alike(?:[-_]|$)/i.test(id));
+  if(lookalike?lookalike.active!==false&&!deleted.has(lookalike.id):!lookalikeDeleted&&(lens?lens.active!==false:!Array.isArray(market.signals)))signals.push({id:'lookalike',kind:'lookalike',name:'Lookalike',keywords:[],description:'Similarity to your selected reference companies',sourceId:lookalike?.id||'lookalike'});
+  for(const s of saved){const id=clean(s.id,120);if(!id||s.active===false||deleted.has(id)||isLookalike(s)||signals.some(x=>x.id===id))continue;signals.push({id,name:clean(s.name||s.label||id,180),keywords:(Array.isArray(s.keywords)?s.keywords:String(s.keywords||'').split(/[,;\n]/)).map(v=>clean(v,120)).filter(Boolean).slice(0,10),description:clean(s.description||s.evidenceToLookFor||s.reason,700)});}
+  return {references:refs,groups,signals,markets:(main.targetMarkets||[]).map(v=>clean(v,100)).filter(Boolean),profile:{offers:clean(main.profile?.priorityOffers||main.answers?.priority_offers||main.answers?.priorityOffers,1500),idealCustomer:clean(main.profile?.idealCustomer||main.answers?.ideal_customer,1500),exclusions:clean(main.profile?.exclusions||main.answers?.exclusions,1500),website:url(main.website||main.profile?.website)}};
  }
  function configuration(raw={},available={}){
   const fail=m=>{throw Object.assign(Error(m),{status:400});};
   const count=Number(raw.count);if(!Number.isInteger(count)||count<1||count>200)fail('Choose between 1 and 200 companies.');
   const ids=[...new Set(raw.signalIds||[])];if(!ids.length||ids.length>8)fail('Select between one and eight signals.');
-  const signals=ids.map(id=>available.signals.find(s=>s.id===id));if(signals.some(s=>!s))fail('A selected signal changed. Reload the list criteria.');
+  const signals=ids.map(id=>available.signals.find(s=>s.id===id&&s.active!==false));if(signals.some(s=>!s))fail('A selected signal is no longer active. Reload the list criteria from Strategy.');
   const selected=[...new Set(raw.referenceIds||[])],references=selected.map(id=>available.references.find(r=>r.id===id));
   if(references.some(r=>!r))fail('A selected reference changed. Reload the list criteria.');
   if(ids.includes('lookalike')&&(!references.length||references.length>15||references.some(r=>!r.ready)))fail('Select 1–15 analyzed references. Analyze their websites in Profile first.');
   const markets=[...new Set((raw.markets||[]).map(v=>clean(v,100)).filter(Boolean))];if(!markets.length||markets.length>10)fail('Choose 1–10 target countries or markets.');
-  const budget=Number(raw.budget||100);if(!Number.isInteger(budget)||budget<10||budget>500)fail('Choose a research allowance between 10 and 500 operations.');
+  const budget=Number(raw.budget??recommendedBudget(count));if(!Number.isInteger(budget)||budget<10||budget>5000)fail('Choose a research allowance between 10 and 5,000 operations.');
   const weights={};for(const s of signals){const w=Number(raw.weights?.[s.id]??1);if(!Number.isFinite(w)||w<1||w>5)fail('Signal importance must be between 1 and 5.');weights[s.id]=w;}
-  return {version:1,name:clean(raw.name,120)||'Company list',count,signals,referenceIds:selected,references:ids.includes('lookalike')?references:[],markets,mode:raw.mode==='all'?'all':'any',weights,budget,profile:available.profile};
+  return {version:2,qualityVersion:QUALITY_VERSION,name:clean(raw.name,120)||'Company list',count,signals,referenceIds:selected,references:ids.includes('lookalike')?references:[],markets,mode:raw.mode==='all'?'all':'any',weights,budget,profile:available.profile||{}};
  }
  const contains=(text,quote)=>clean(quote,3000).length>=12&&clean(text,60000).toLowerCase().includes(clean(quote,3000).toLowerCase());
  function assess(raw,config,pages,now=Date.now()){
@@ -41,15 +49,24 @@
   if(!clean(raw.location?.label)||!clean(location.quote).toLowerCase().includes(clean(raw.location.label).toLowerCase()))return null;
   const matches=[];
   for(const s of config.signals){const m=(raw.matches||[]).find(x=>x.signalId===s.id),e=m&&proof(m);if(!e)continue;
-   let reference=null;if(s.id==='lookalike'){reference=config.references.find(r=>r.id===m.referenceId&&r.evidence.some(x=>contains(x.quote,m.referenceQuote)));if(!reference)continue;}
+   let reference=null,referenceEvidence=null;if(s.id==='lookalike'){reference=config.references.find(r=>r.id===m.referenceId&&r.evidence.some(x=>contains(x.quote,m.referenceQuote)));if(!reference)continue;referenceEvidence=reference.evidence.find(x=>contains(x.quote,m.referenceQuote));}
    const date=Date.parse(e.date),age=(now-date)/86400000;if(s.id!=='lookalike'&&(!Number.isFinite(date)||age< -1||age>365||!String(pages.find(p=>p.url===e.url)?.text||'').includes(e.date)))continue;
    const strength=Math.max(1,Math.min(100,Number(m.strength)||0));
    const quality=domain(e.url)===host?1:.85,recency=s.id==='lookalike'?1:age<=90?1:age<=180?.9:.75;
-   matches.push({signalId:s.id,name:s.name,...e,score:Math.round(Math.min(90,strength)*quality*recency),reason:clean(m.reason,500),...(reference?{referenceId:reference.id,referenceName:reference.name,referenceQuote:clean(m.referenceQuote,700)}:{})});
+   if(!clean(m.reason))continue;
+   matches.push({signalId:s.id,name:s.name,...e,score:Math.round(Math.min(90,strength)*quality*recency),reason:clean(m.reason,500),...(reference?{referenceId:reference.id,referenceName:reference.name,referenceQuote:clean(m.referenceQuote,700),referenceUrl:referenceEvidence.url}:{})});
   }
   if(!matches.length||config.mode==='all'&&matches.length!==config.signals.length)return null;
   const denominator=config.signals.reduce((n,s)=>n+config.weights[s.id],0),score=Math.round(matches.reduce((n,m)=>n+m.score*config.weights[m.signalId],0)/denominator);
-  return {company,website,domain:host,location:clean(raw.location.label,180)||raw.location.market,market:raw.location.market,score,matches,identity,locationEvidence:location,checkedAt:new Date(now).toISOString(),buyingIntent:'unconfirmed'};
+  const commercialProof=proof(raw.commercialFit),commercialFit=raw.commercialFit?.status==='supported'&&commercialProof&&clean(raw.commercialFit.reason)?{...commercialProof,reason:clean(raw.commercialFit.reason,700),status:'supported',buyingIntent:'unconfirmed'}:null;
+  return {company,website,domain:host,location:clean(raw.location.label,180)||raw.location.market,market:raw.location.market,score,matches,identity,locationEvidence:location,commercialFit,checkedAt:new Date(now).toISOString(),buyingIntent:'unconfirmed'};
+ }
+ function reviewResult(candidate,review,config,now=Date.now()){
+  if(!candidate||!candidate.commercialFit||review?.decision!=='pass'||!clean(review.reason))return null;
+  if(['identityConfirmed','marketConfirmed','commercialFitConfirmed','exclusionsChecked'].some(k=>review[k]!==true))return null;
+  const ids=new Set(Array.isArray(review.supportedSignalIds)?review.supportedSignalIds:[]),matches=candidate.matches.filter(m=>ids.has(m.signalId));
+  if(!matches.length||matches.length!==candidate.matches.length||config.mode==='all'&&matches.length!==config.signals.length||(review.gaps||[]).length)return null;
+  return {...candidate,quality:{version:QUALITY_VERSION,status:'reviewed',reason:clean(review.reason,1000),checkedAt:new Date(now).toISOString(),checks:['identity','market','selected_signals','commercial_fit','exclusions'],sourceCount:new Set([candidate.identity.url,candidate.locationEvidence.url,candidate.commercialFit.url,...matches.map(m=>m.url)]).size}};
  }
  function mergeResult(previous,current,config){
   if(!current)return previous||null;if(!previous||previous.domain!==current.domain)return current;
@@ -81,7 +98,7 @@
   const c=row.candidate,q=row.qualification||{},evidence=[c.sourceEvidence,c.evidence,c.buyerFit?.evidence,c.operatingEvidence].flatMap(value=>Array.isArray(value)?value:value&&typeof value==='object'?[value]:[]).filter(e=>e&&typeof e==='object');
   return {company:c.company||c.companyName,website:c.website||('https://'+(c.domain||'')),location:c.location||c.country||c.market||'',score:row.score,scoreState:row.scoreState,reviewStatus:row.actionable?'Checked':'Needs review',signals:(Array.isArray(q.matchedSignals)?q.matchedSignals:Array.isArray(c.matchedSignals)?c.matchedSignals:[]).map(s=>typeof s==='string'?s:s.name||s.label||s.id),summary:c.description||c.summary||c.reason||'',checkedAt:c.qualification?.researchedAt||c.researchedAt||'',evidence:evidence.map(e=>({url:e.url||e.sourceUrl,quote:e.quote||e.description||e.text||e.title,date:e.date||e.publishedAt}))};
  })});}
- function exportRows(list){if(list.criteria.kind==='search_snapshot')return [['Company','Website','Location','Company fit score','Score status','Review status','Matched signals','Summary','Sources','Evidence','Checked at','Buying intent','List','Search context'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score??'',r.scoreState==='current'?'Current':r.scoreState==='previous'?'Previous · needs review':'Awaiting score',r.reviewStatus,r.signals.join('; '),r.summary,[...new Set(r.evidence.map(e=>e.url))].join('; '),r.evidence.map(e=>[e.quote,e.url,e.date].filter(Boolean).join(' | ')).join('\n'),r.checkedAt,'Unconfirmed',list.name,JSON.stringify(list.criteria.context)])];return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)})])];}
+ function exportRows(list){if(list.criteria.kind==='search_snapshot')return [['Company','Website','Location','Company fit score','Score status','Review status','Matched signals','Summary','Sources','Evidence','Checked at','Buying intent','List','Search context'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score??'',r.scoreState==='current'?'Current':r.scoreState==='previous'?'Previous · needs review':'Awaiting score',r.reviewStatus,r.signals.join('; '),r.summary,[...new Set(r.evidence.map(e=>e.url))].join('; '),r.evidence.map(e=>[e.quote,e.url,e.date].filter(Boolean).join(' | ')).join('\n'),r.checkedAt,'Unconfirmed',list.name,JSON.stringify(list.criteria.context)])];return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria','Evidence review','Candidate evidence','Reference evidence','Commercial fit'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)}),r.quality?.status==='reviewed'?r.quality.reason:'Earlier evidence policy; separate review not recorded',[r.identity,r.locationEvidence,...r.matches].map(e=>e.quote+' | '+e.url).join('\n'),r.matches.filter(m=>m.referenceQuote).map(m=>m.referenceName+': '+m.referenceQuote+' | '+(m.referenceUrl||'')).join('\n'),r.commercialFit?[r.commercialFit.reason,r.commercialFit.quote,r.commercialFit.url].join(' | '):''])];}
  const safeCell=v=>/^[\s]*[=+@-]/.test(String(v))?"'"+v:String(v??'');
  const csv=list=>'\uFEFF'+exportRows(list).map(row=>row.map(v=>'"'+safeCell(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  function xlsx(list){
@@ -93,5 +110,5 @@
   for(const [name,text] of Object.entries(files)){const n=enc.encode(name),b=enc.encode(text),checksum=crc(b),h=new Uint8Array(30+n.length),d=new DataView(h.buffer);d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint32(14,checksum,true);d.setUint32(18,b.length,true);d.setUint32(22,b.length,true);d.setUint16(26,n.length,true);h.set(n,30);chunks.push(h,b);const c=new Uint8Array(46+n.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint32(16,checksum,true);v.setUint32(20,b.length,true);v.setUint32(24,b.length,true);v.setUint16(28,n.length,true);v.setUint32(42,offset,true);c.set(n,46);central.push(c);offset+=h.length+b.length;}
   const size=central.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);chunks.push(...central,end);const result=new Uint8Array(offset+size+22);let i=0;for(const c of chunks){result.set(c,i);i+=c.length;}return result;
  }
- return {options,configuration,assess,mergeResult,ranked,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
+ return {QUALITY_VERSION,recommendedBudget,options,configuration,assess,reviewResult,mergeResult,ranked,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
 });
