@@ -95,8 +95,12 @@ function retainedCompanyWork(payload){
 }
 
 async function assertSavedCompanyScores(page){
- const scores=await page.locator('#company-candidates .company-row-summary .company-row-score').evaluateAll(cells=>
-  cells.map(cell=>[cell.querySelector('strong').textContent,cell.querySelector('small').textContent]));
+ const values=await page.waitForFunction(()=>{
+  const cells=[...document.querySelectorAll('#step-5.active #company-candidates .company-row-summary .company-row-score')];
+  if(cells.length!==8)return null;
+  return cells.map(cell=>[cell.querySelector('strong').textContent,cell.querySelector('small').textContent]);
+ });
+ const scores=await values.jsonValue();
  assert.deepEqual(scores,[...savedScores.map(score=>[score+'/100','Previous score']),['—','Awaiting score'],['—','Awaiting score']]);
 }
 
