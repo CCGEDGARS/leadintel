@@ -5,6 +5,50 @@ import {journeyFixture,loadPlaywright,sessionToken,workspaceId} from './step5-jo
 import {upsertCrmCompany} from '../src/crm.js';
 import {runWebsiteContactJobs} from '../src/website-contact-runner.js';
 import app from '../src/app.js';
+import {encryptSecret,importAesKey} from '../src/oauth.js';
+
+test('Nordic company scans recover a saved blank website and reach native CRM/contact research without a discovery search',{timeout:100000},async t=>{
+ try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in Customer CI.');return;}
+ const name='BØGE STÅL',url='https://bogestaal.example/',quote='BØGE STÅL develops and manufactures steel constructions.',source='# '+name+'\n'+quote+'\n### Jens Nielsen\nChief Executive Officer\njens@bogestaal.example',providerCalls=[];
+ const f=await journeyFixture({durableWebsite:true,externalFetch:async(input,options={})=>{
+  const target=new URL(typeof input==='string'?input:input.url);
+  if(target.hostname==='api.firecrawl.dev'){
+   if(target.pathname.endsWith('/credit-usage'))return Response.json({success:true,data:{remainingCredits:500,planCredits:500}});
+   providerCalls.push({kind:target.pathname,body:JSON.parse(options.body||'{}')});
+   if(target.pathname.endsWith('/scrape'))return Response.json({success:true,data:{markdown:source,metadata:{title:name+' | Home'},links:[]}});
+   return Response.json({success:true,data:[]});
+  }
+  if(target.hostname==='api.openai.com'){
+   providerCalls.push({kind:'ai'});
+   return Response.json({output_text:JSON.stringify({pageType:'company',companies:[{name,website:url,quote,descriptionQuote:quote}]}),usage:{}});
+  }
+ }});
+ const {chromium}=await loadPlaywright(),browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']}),dir='/tmp/leadintel-website-contacts';let context,page;const errors=[];
+ const researchCalls=()=>f.calls.filter(c=>c.path.includes('/firecrawl/scrape')||c.path.includes('/firecrawl/search')).length;
+ try{
+  await fs.mkdir(dir,{recursive:true});f.env.OAUTH_TOKEN_ENCRYPTION_KEY=Buffer.alloc(32,31).toString('base64');const key=await importAesKey(f.env.OAUTH_TOKEN_ENCRYPTION_KEY);
+  f.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES(?,'firecrawl',?,'fixture')").run(workspaceId,await encryptSecret('controlled-scanner-key',key));
+  f.DB.raw.prepare("INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active) VALUES(?,'openai',?,'fixture','gpt-6.1-sol',1)").run(workspaceId,await encryptSecret('controlled-scanner-ai',key));
+  const stored=await f.getState(),scan={id:'saved-nordic',name:'Website prospects',url,status:'complete',rows:[{id:'nordic',name,website:'',sourceUrl:url,quote,description:quote,identityStatus:'unresolved',identityEvidence:'Official website not confirmed.',selected:true}]};
+  await f.replace({...stored.payload,main:{...stored.payload.main,websiteScans:{version:1,activeId:scan.id,items:[scan]}}},stored.version);
+  async function open(width=1440){context=await browser.newContext({viewport:{width,height:1050}});await context.route('**/*',r=>new URL(r.request().url()).origin===f.origin?r.continue():r.abort());await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(f.origin+'/customer/');await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&window.LeadIntelProfileAnswers?.isReady());await page.waitForLoadState('networkidle');await page.evaluate(()=>LeadIntelCustomerNavigation.setStep(2));await page.locator('#website-scanning-open').click();}
+  await open();assert.equal(await page.locator('[data-scan-website]').inputValue(),'');await page.locator('[data-scan-action=buyers]').click();await page.locator('#website-contact-results').waitFor();
+  await page.waitForFunction(()=>document.querySelector('#website-scanning-status')?.textContent.includes('Public contact research opened'));
+  assert.equal(await page.locator('[data-scan-website]').inputValue(),url);assert.match(await page.locator('.website-scan-table').textContent(),/Website checked/);
+  const job=f.DB.raw.prepare('SELECT * FROM website_contact_jobs').get();assert.ok(job);assert.equal(job.status,'queued');assert.equal(JSON.parse(job.input_json).company,name);
+  assert.ok(f.calls.some(c=>c.path.endsWith('/firecrawl/scrape')&&c.status===200));assert.equal(providerCalls.filter(c=>c.kind.endsWith('/search')).length,0);
+  await page.waitForFunction(()=>window.LeadIntelServerBridge?.saveNow);await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));const saved=await f.getState(),savedRow=saved.payload.main.websiteScans.items[0].rows[0];assert.equal(savedRow.identityStatus,'verified');assert.equal(savedRow.identityUrl,url);assert.equal(savedRow.crmId,job.company_id);
+  await page.screenshot({path:dir+'/nordic-queued.png',fullPage:true});await context.close();
+  const noop=async()=>({}),services={read:async pageUrl=>({url:pageUrl,markdown:source,links:[]}),search:async()=>[],apollo:async()=>({people:[]}),independent:async()=>({status:'not_configured'})};
+  for(let pass=0;pass<8;pass++){const waits=[];await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{runWebsiteContactJobs:(env,o)=>runWebsiteContactJobs(env,{...o,jobId:job.id,windowMs:5000,services}),runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);if(f.DB.raw.prepare('SELECT status FROM website_contact_jobs WHERE id=?').get(job.id).status==='complete')break;}
+  const checks=researchCalls();await open(390);await page.locator('[data-scan-action=buyers]').click();await page.locator('.website-contact-person').first().waitFor();assert.match(await page.locator('#website-contact-results').textContent(),/Jens Nielsen/);assert.equal(researchCalls(),checks,'fresh reopening reuses checked identity');assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,1);
+  const bounds=await page.locator('#website-contact-results').boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=391);await page.locator('#website-contact-results').screenshot({path:dir+'/nordic-reopened-mobile.png'});
+  await page.locator('[data-scan-action=scan]').click();await page.waitForFunction(()=>document.querySelector('[data-scan-website]')?.value==='https://bogestaal.example/'&&!document.querySelector('[data-scan-action=buyers]').disabled&&document.querySelector('.website-scan-table')?.textContent.includes('Website not checked'));
+  assert.equal(await page.locator('[data-scan-name]').inputValue(),name);assert.ok(providerCalls.some(c=>c.kind==='ai'));await page.locator('[data-scan-action=buyers]').click();await page.locator('.website-contact-person').first().waitFor();assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM website_contact_jobs').get().n,1);assert.equal(providerCalls.filter(c=>c.kind.endsWith('/search')).length,0);
+  assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM additional_contact_attempts').get().n,0);assert.deepEqual(errors,[]);
+  await fs.writeFile(dir+'/nordic-identity.json',JSON.stringify({nativeHttp:true,realSql:true,legacyBlankRecovered:true,freshScanPreservedWebsite:true,registeredScheduler:true,freshMobileReopen:true,noRepeatedIdentityRead:true,identitySearchCalls:0,duplicateContactJobs:0,paidCalls:0,pageErrors:errors},null,2));
+ }catch(error){await page?.screenshot({path:dir+'/nordic-failure.png',fullPage:true}).catch(()=>{});throw error;}finally{await context?.close();await browser.close();await f.close();}
+});
 
 test('unrelated company contacts use native HTTP, management-first research and fresh-browser restoration without paid calls',{timeout:100000},async t=>{
  try{await loadPlaywright();await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable; mandatory in Customer CI.');return;}
