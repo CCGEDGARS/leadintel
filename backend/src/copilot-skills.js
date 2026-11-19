@@ -39,7 +39,8 @@ export function routeCopilotSkills(question,context={}){
   if(/crm|pipeline|stalled|stage|opportunity/.test(q))add(selected,'crm_pipeline');
   if(/performance|conversion|reply rate|meeting rate|results/.test(q))add(selected,'performance');
   if(/credits?|billing|balance|cost|expenses?|budget|top.?up/.test(q))add(selected,'cost_planning','technical_setup','troubleshooting');
-  if(/error|failed|not working|problem|why can.?t|diagnose/.test(q))add(selected,'troubleshooting');
+  if(/error|failed|not working|problem|why can.?t|diagnose|timed out|stuck|nothing happened/.test(q))add(selected,'troubleshooting');
+  if(/\b(?:compan(?:y|ies)|lead|discover\w*)\b/.test(q)&&/\b(?:scor\w*|out of\s+(?:a\s+)?100)\b|\/\s*100/.test(q))add(selected,'lead_qualification','troubleshooting','workspace_diagnostic');
   if(/add|update|apply|change|edit|set|remove|execute/.test(q))add(selected,'action_safety');
   if(!selected.size)add(selected,'business_adviser');
   return [...selected];

@@ -85,3 +85,35 @@ test('independent context reads run concurrently instead of one after another',a
   // Overlapping I/O above proves concurrency without a wall-clock threshold that fails under parallel suite CPU load.
   assert.equal(context.workspace.id,'w1');assert.equal(context.crmSummary.total,12);assert.ok(Array.isArray(context.integrationStatus));assert.ok(context.supportUsage.period);
 });
+
+test('support can correlate a displayed score with saved qualification and recent run failures',async()=>{
+  class DiscoveryDB extends FakeDB{
+    first(sql,args){
+      const row=super.first(sql,args);
+      if(!/customer_workspace_state/i.test(sql))return row;
+      const payload=JSON.parse(row.payload_json);
+      payload.discovery={
+        status:'partial',
+        candidates:[{company:'Steelworks',domain:'steel.example',qualification:{score:66,gaps:['Verify purchasing application']},score:{total:48,timing:0},evidence:[{url:'https://steel.example/news?session=PRIVATE-QUERY',title:'Factory news'}],people:[{email:'private@steel.example'}]}],
+        potentialMatches:[{company:'Another company',domain:'another.example'}],
+        researchAudit:{entries:[]},
+        searchFailures:[{phase:'verifying',reason:'rate_limit',status:429,message:'PRIVATE-PROVIDER-RESPONSE'}]
+      };
+      return {...row,payload_json:JSON.stringify(payload)};
+    }
+  }
+  const context=await buildCopilotWorkspaceContext({DB:new DiscoveryDB()},{workspaceId:'w1',currentScreen:{step:5,companyScores:[
+    {domain:'steel.example',score:66,state:'current'},
+    {domain:'untrusted.example/private',score:100,state:'current'}
+  ]}});
+  const discovery=context.discoverySummary;
+  assert.equal(discovery.companyCount,1);
+  assert.equal(discovery.reviewCount,1);
+  assert.deepEqual(context.screen.companyScores,[{domain:'steel.example',score:66,state:'current'}]);
+  assert.equal(discovery.companyScores[0].savedCompanyFit,66);
+  assert.equal(discovery.companyScores[0].savedOpportunityScore,48);
+  assert.equal(discovery.companyScores[0].opportunityBreakdown.timing,0);
+  assert.equal(discovery.companyScores[0].evidence[0].url,'https://steel.example/news');
+  assert.deepEqual(discovery.recentFailures,[{phase:'verifying',reason:'rate_limit',status:429}]);
+  assert.doesNotMatch(JSON.stringify(discovery),/PRIVATE-|private@steel/);
+});

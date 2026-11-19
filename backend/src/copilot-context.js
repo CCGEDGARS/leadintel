@@ -1,6 +1,6 @@
 import {providerCreditIssue} from './provider-credit-health.js';
 import {getCustomerState} from './customer-state.js';
-import {assertModelSafe,redactProtectedData,sanitizeClientScreenContext} from './copilot-security.js';
+import {assertModelSafe,redactProtectedData,sanitizeClientScreenContext,sanitizeExternalResearchQuery} from './copilot-security.js';
 import {savedReferenceScope} from './copilot-research-scope.js';
 import {copilotOperationContext} from './copilot-operation-context.js';
 
@@ -36,7 +36,7 @@ function safeProfile(value){
   return out;
 }
 function safeIcp(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),criteria:clean(value.criteria||value.description||value.definition,3000),exclusions:clean(value.exclusions,2000),priority:clean(value.priority,80)};}
-function safeSignal(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),description:clean(value.description||value.reason,2400),active:value.active!==false,weight:Math.max(0,Math.min(100,safeNumber(value.weight||value.score)))};}
+function safeSignal(item){const value=object(redactProtectedData(item));return {id:clean(value.id,120),name:clean(value.name||value.title,240),description:clean(value.description||value.reason,2400),active:value.active!==false,keywords:array(typeof value.keywords==='string'?value.keywords.split(/[,;\n]+/):value.keywords,12).filter(item=>typeof item==='string').map(item=>clean(item,120)),weight:Math.max(0,Math.min(100,safeNumber(value.weight||value.score)))};}
 function safeResearchItem(item){const value=object(redactProtectedData(item));return {name:clean(value.name||value.title,280),summary:clean(value.summary||value.description||value.hypothesis,2400),score:Math.max(0,Math.min(100,safeNumber(value.score?.total??value.score))),sourceUrl:clean(value.sourceUrl||value.source_url||value.url,1200)};}
 
 async function crmSummary(env,workspaceId){
@@ -75,10 +75,67 @@ async function supportUsage(env,workspaceId){
  return {period:'last 30 days',coverage:'Recorded AI generation/search only; incomplete total spend. Copilot tokens are recorded in message metadata. Subscriptions, enrichment, retries and currency conversion need separate evidence.',consumption:consumption.map(row=>({provider:clean(row.provider,80),model:clean(row.model,120),requests:safeNumber(row.requests),inputTokens:safeNumber(row.input_tokens),outputTokens:safeNumber(row.output_tokens)})),balances:rows.map(row=>({provider:clean(row.provider,80),remainingCredits:row.remaining_credits!=null&&Number.isFinite(Number(row.remaining_credits))?Number(row.remaining_credits):null,verifiedAt:clean(row.verified_at,80),live:false})),creditIssues:issues.filter(row=>row.issue),pricesVerified:false};
 }
 
-function discoverySummary(payload){
-  const discovery=object(payload.discovery);const companies=Array.isArray(discovery.companies)?discovery.companies:[];
-  const scores=companies.map(item=>safeNumber(item?.score?.total??item?.score)).filter(n=>n>0);
-  return {companyCount:companies.length,highPriorityCount:scores.filter(score=>score>=70).length,averageScore:scores.length?Math.round(scores.reduce((sum,n)=>sum+n,0)/scores.length):0};
+function scoreValue(value){
+  return (typeof value==='number'||typeof value==='string'&&value.trim())&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=100?Number(value):null;
+}
+function publicEvidenceUrl(value){
+  try{
+    const url=new URL(value);
+    if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return '';
+    return clean(url.origin+url.pathname,500);
+  }catch{return '';}
+}
+function discoverySummary(payload,screen){
+  const discovery=object(payload.discovery);
+  const candidates=Array.isArray(discovery.candidates)?discovery.candidates:array(discovery.companies);
+  const visibleDomains=new Set((screen.companyScores||[]).map(row=>row.domain));
+  const seen=new Set();
+  const rows=[];
+  for(const [source,items] of [['candidate',candidates],['research_review',array(discovery.potentialMatches)],['buyers_selection',array(discovery.selectedProspects)],['saved_pipeline',array(discovery.pipeline)]]){
+    for(const item of items){
+      const name=clean(item?.company||item?.companyName||item?.name,200);
+      const domain=clean(item?.domain||publicEvidenceUrl(item?.website).split('/')[2],160).toLowerCase();
+      const key=domain||name.toLowerCase();
+      if(!name||seen.has(key))continue;
+      seen.add(key);
+      rows.push({item,name,domain,source,fit:scoreValue(item.qualification?.score),opportunity:scoreValue(item.score?.total??item.score)});
+    }
+  }
+  rows.sort((a,b)=>Number(visibleDomains.has(b.domain))-Number(visibleDomains.has(a.domain))||(b.fit??b.opportunity??-1)-(a.fit??a.opportunity??-1));
+  const companyScores=rows.slice(0,MAX_TOP_COMPANIES).map(({item,name,domain,source,fit,opportunity})=>{
+    const qualification=object(item.qualification);
+    const breakdown=Object.fromEntries(['fit','signal','evidence','timing','value'].filter(key=>scoreValue(item.score?.[key])!==null).map(key=>[key,scoreValue(item.score[key])]));
+    return {
+      name,domain,source,savedCompanyFit:fit,retainedBuyerFit:item.buyerFit?.version===2?scoreValue(item.buyerFit.fit):null,savedOpportunityScore:opportunity,opportunityBreakdown:breakdown,
+      companyPoints:scoreValue(qualification.companyScore),signalPoints:scoreValue(qualification.signalPoints),confidence:clean(qualification.confidence||item.confidence,40),
+      needsRecheck:item.needsRecheck===true,
+      gaps:array(qualification.gaps||item.qualificationGaps,5).map(value=>clean(sanitizeExternalResearchQuery(value),220)),
+      evidenceCount:array(item.evidence).length,
+      evidence:array(item.evidence,3).flatMap(entry=>{
+        const url=publicEvidenceUrl(entry?.url);
+        return url?[{url,title:clean(sanitizeExternalResearchQuery(entry.title),160),excerpt:clean(sanitizeExternalResearchQuery(entry.description||entry.text),180),publicationDate:clean(entry.publishedDate||entry.publishedAt||entry.date,40),sourceRead:entry.sourceRead===true}]:[];
+      }),
+      matchedSignals:array(qualification.matchedSignals||item.matchedSignals,5).map(signal=>clean(sanitizeExternalResearchQuery(signal?.name),120)).filter(Boolean)
+    };
+  });
+  const scores=rows.filter(row=>row.source==='candidate').map(row=>row.opportunity).filter(score=>score!==null);
+  const failures=array(discovery.searchFailures);
+  return {
+    companyCount:candidates.length,reviewCount:array(discovery.potentialMatches).length,companyScores,
+    highPriorityCount:scores.filter(score=>score>=70).length,averageScore:scores.length?Math.round(scores.reduce((sum,n)=>sum+n,0)/scores.length):null,
+    status:['idle','running','complete','no_results','partial','error'].includes(discovery.status)?discovery.status:null,
+    lastRunAt:clean(discovery.lastRunAt,40),retainedEarlierResults:discovery.retainedLastSuccessfulResults===true,
+    needsRefresh:discovery.needsRefresh===true,sourceResultCount:array(discovery.rawResults).length,
+    recordedRequests:Array.isArray(discovery.researchAudit?.entries)?discovery.researchAudit.entries.length:null,
+    failureCount:failures.length,
+    recentFailures:failures.slice(-12).map(row=>({
+      phase:['searching','following','resolving','verifying','extracting','buyer-fit'].includes(row?.phase)?row.phase:'unknown',
+      reason:['timeout','rate_limit','quota_exhausted','provider_unavailable','network_error','auth_error','request_rejected'].includes(row?.reason)?row.reason:'unknown_error',
+      status:Number.isInteger(row?.status)&&row.status>=100&&row.status<=599?row.status:null,
+      ...(/^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/i.test(row?.domain||'')?{domain:clean(row.domain,160).toLowerCase()}:{}),
+      ...(row?.code==='BUYER_FIT_EVIDENCE_REJECTED'?{code:row.code}:{})
+    }))
+  };
 }
 function outreachSummary(payload){
   const outreach=object(payload.outreach);const delivery=object(payload.delivery);const metrics=object(delivery.metrics);
@@ -135,7 +192,7 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     icps,
     signals,
     research:{items:researchItems,count:researchItems.length},
-    discoverySummary:discoverySummary(payload),
+    discoverySummary:discoverySummary(payload,screen),
     crmSummary:crm,
     outreachSummary:outreachSummary(payload),
     integrationStatus:integrations,
