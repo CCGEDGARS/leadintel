@@ -3703,7 +3703,7 @@
         "MAX_COMPANIES=50",
         "sourceBackedWebsite",
         "Maximum ",
-        "brandDomain",
+        "brandMatchesDomain",
         "assessIdentity"
       ]
     },
