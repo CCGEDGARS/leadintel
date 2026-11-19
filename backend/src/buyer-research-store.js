@@ -1,3 +1,4 @@
+import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
 import {prepareBuyerRecheck} from './buyer-recheck-plan.js';
 import {sha256} from './security.js';
@@ -18,7 +19,7 @@ export const lost=()=>Object.assign(Error('Buyer research authorization or job c
 export function activeBuyerProfile(payload={}){
  const main=payload.main||{},referenceDomains=(main.referenceCustomers?.rows||[]).map(r=>D.canonicalDomain(r.website||r.domain));
  const base={...(main.profile||{}),...globalThis.LeadIntelTargeting?.profileFields?.(main),website:main.website||main.profile?.website,referenceDomains,exclusions:[main.profile?.exclusions,main.answers?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets};
- return D.effectiveTargetingProfile(base,main.market||{});
+ return D.effectiveTargetingProfile(base,globalThis.LeadIntelStrategyIntegrity.executionMarketForState(main));
 }
 export async function workspaceBuyerContext(env,workspaceId,taskId){
  const row=await stmt(env,'SELECT version,payload_json FROM customer_workspace_state WHERE workspace_id=?',workspaceId).first();

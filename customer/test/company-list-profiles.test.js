@@ -50,6 +50,12 @@ test('all twenty supported active buying signals are selectable and stale opport
  const main=workspace();main.market.signals=Array.from({length:20},(_,i)=>({id:'s'+i,name:'Signal '+i,active:true}));
  assert.equal(config({signalMode:'boost',signalIds:main.market.signals.map(s=>s.id)},main).signals.length,20);
  main.market.researchContextStale=true;assert.throws(()=>config({profileIds:['icp-opportunity-led']},main),/missing required evidence/);
+ main.market.researchContextStale=false;main.market.strategyApproval={researchBasis:'profile'};
+ const available=M.options(main);
+ assert.deepEqual(available.opportunities,[]);
+ assert.equal(available.profiles.find(p=>p.type==='opportunity-led').active,false);
+ assert.throws(()=>config({profileIds:['icp-opportunity-led']},main),/missing required evidence/);
+ assert.equal(available.buyingSignals.length,20);assert.ok(main.market.opportunities.length);
  assert.throws(()=>config({profileMode:'unsupported'}),/any or all/);
 });
 test('saved/exported criteria retain separate profiles, events, scores and opportunity evidence',()=>{

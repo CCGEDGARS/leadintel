@@ -130,7 +130,7 @@ test('preexisting digests from the two reviewed-answer spellings survive referen
  assert.equal(state.market.researchContextFingerprint,Integrity.researchFingerprint(state));
  state.answerStatus.buyer_roles='draft';
  assert.equal(Integrity.status(state).current,false,'reviewed and draft inputs remain distinct');
- assert.equal(Integrity.status(state).recovery,'research');
+ assert.equal(Integrity.status(state).code,'research_stale');
  state.answerStatus.buyer_roles='user';
  state.market.signals[0].weight+=1;
  assert.equal(ctx.syncResearchContextStale(),true);
@@ -142,7 +142,8 @@ test('a legacy hold without a reproducible fingerprint keeps its evidence and an
  const {state,ctx}=opportunityRecovery();state.approved=true;
  state.market.researchContextFingerprint='';state.market.researchContextStale=true;state.market.strategyApproved=false;
  assert.equal(ctx.syncResearchContextStale(),true);
- assert.equal(Integrity.status(state).recovery,'research');
+ assert.equal(Integrity.status(state).code,'research_stale');
+ assert.equal(Integrity.status(state).recovery,'strategy','the user can review the available research choices in Strategy');
  state.approved=false;assert.equal(Integrity.status(state).recovery,'profile');
  state.approved=true;state.market.researchResults=[];
  assert.equal(ctx.syncResearchContextStale(),false);
@@ -166,4 +167,38 @@ test('reseeding a researched Strategy after a reference update preserves the sav
  vm.runInContext('ensureMarketStrategySeeded();',ctx);
  assert.deepEqual(state.market.signals,[],'removing every saved signal must not activate a new recommendation');
  assert.equal(Integrity.status(state).current,false);
+});
+
+test('opening the reference library migrates a single active published model without invalidating its research or Strategy',()=>{
+ const Portfolio=require('../reference-customer-portfolio.js'),Ref=require('../reference-customers.js');
+ const rows=[{id:'r1',companyName:'Clinical practice',website:'https://practice.example',status:'ready',reviewed:true}];
+ const dna={version:3,calibrationVersion:2,active:true,activeCount:1,fingerprint:'published-1',dimensions:[{key:'industry',values:['Healthcare'],weight:1}]};
+ const model={active:true,fingerprint:'published-1',dna,activeCount:1,activeRows:rows,updatedAt:'2026-11-12'};
+ const original=opportunityRecovery().state;
+ original.approved=true;original.market.strategyApproved=true;original.market.researchContextStale=false;
+ original.referenceCustomers=Ref.normalizeReferenceState({rows,dna,publishedModel:model,activated:true,activeIds:['r1'],fingerprint:'published-1'});
+ original.market.researchContextFingerprint=Integrity.researchFingerprint(original);
+ original.market.strategyApproval=Integrity.approval(original,'2026-11-13');
+ assert.equal(Integrity.status(original).current,true);
+
+ const migrated=JSON.parse(JSON.stringify(Portfolio.migrateLegacy(original)));
+ const [active]=migrated.referenceCustomerPortfolio.lists;
+ assert.equal(active.active,true);
+ assert.deepEqual(active.reference.publishedModel,original.referenceCustomers.publishedModel);
+ assert.equal(Integrity.researchContext(migrated).stale,false);
+ assert.equal(Integrity.status(migrated).signature,original.market.strategyApproval.signature);
+ assert.equal(Integrity.status(migrated).current,true);
+
+ function verifyHold(change){
+  const updated=structuredClone(migrated);change(updated);
+  assert.equal(Integrity.researchContext(updated).stale,true);
+  assert.equal(Integrity.status(updated).current,false);
+ }
+ verifyHold(s=>{s.referenceCustomerPortfolio.lists[0].reference.publishedModel.dna.dimensions[0].values=['Logistics'];});
+ verifyHold(s=>{s.referenceCustomerPortfolio.lists[0].active=false;});
+ verifyHold(s=>{s.referenceCustomerPortfolio.lists.push({...structuredClone(active),id:'second-active-list'});});
+ verifyHold(s=>{s.market.signals[0].weight+=1;});
+ migrated.market.researchContextFingerprint=Integrity.researchContext(migrated).fingerprint;
+ migrated.referenceCustomerPortfolio.lists[0].id='replacement-list';
+ assert.equal(Integrity.researchContext(migrated).stale,true,'a research digest that already named a list still requires that list');
 });

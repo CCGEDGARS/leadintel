@@ -39,14 +39,22 @@
   const prefix=research?(legacy?':research:':':research:v2:'):':';
   return VERSION+prefix+digest(JSON.stringify(legacy?scope:canonical(scope)));
  }
+ function historicalReferences(references){
+  if(hasNoActiveReferences(references))return [references,Array.isArray(references)?{legacy:null}:[]];
+  // The first library migration wraps the existing published model in a list.
+  // A legacy digest had no list ID. Reproduce it only with the entire model.
+  if(Array.isArray(references)&&references.length===1){
+   const model=references[0].model;
+   if(model?.active===true&&model.fingerprint)return [references,{legacy:model}];
+  }
+  return [references];
+ }
  function matchesSavedScope(scope,saved,research=false){
   if(typeof saved!=='string')return false;
   const legacy=research&&!saved.startsWith(VERSION+':research:v2:');
   if(!saved.startsWith(VERSION+(research?':research:':':')))return false;
   // Accept historical digests only by reproducing their complete preimage.
-  // No active models could be serialized as an absent legacy model or an
-  // initialized portfolio. Active references never enter this compatibility path.
-  const references=hasNoActiveReferences(scope.references)?[scope.references,Array.isArray(scope.references)?{legacy:null}:[]]:[scope.references];
+  const references=historicalReferences(scope.references);
   const statuses=[scope.answerStatus,reviewedStatuses(scope.answerStatus,'user'),reviewedStatuses(scope.answerStatus,'accepted'),
    reviewedStatuses(scope.answerStatus,'user',targetingFields),reviewedStatuses(scope.answerStatus,'accepted',targetingFields)];
   const tried=new Set();
@@ -90,23 +98,44 @@
   if(prior&&matchesSavedScope(prior,saved,true))return {stale:false,fingerprint:current};
   return {stale:true,fingerprint:saved};
  }
- function requirements(state={}){
+ const excludeEarlierResearch=market=>market.researchContextStale===true||market.strategyApproval?.researchBasis==='profile';
+ const opportunityProfile=item=>item.type==='opportunity-led'||item.id==='icp-opportunity-led';
+ function marketForExecution(market={},approvalStatus){
+  if(!excludeEarlierResearch(market))return market;
+  if(market.strategyApproval?.researchBasis!=='profile'&&approvalStatus?.current===true&&approvalStatus.researchBasis!=='profile'){
+   return {...market,researchContextStale:false};
+  }
+  return {...market,...(Array.isArray(market.icps)&&{icps:market.icps.filter(item=>!opportunityProfile(item))}),opportunities:[],researchResults:[]};
+ }
+ function executionMarketForState(state={},approvalStatus){
+  const market=state.market||{};
+  const verify=market.researchContextStale===true&&market.strategyApproved===true&&market.strategyApproval?.version===1&&market.strategyApproval.researchBasis!=='profile';
+  return marketForExecution(market,approvalStatus??(verify?status(state):undefined));
+ }
+ const profileBasisSignature=signature=>VERSION+':'+digest(JSON.stringify(['profile',signature]));
+ function requirements(state={},researchBasis='research'){
   if(state.approved!==true||!state.profile)return {code:'profile_unapproved',recovery:'profile',reason:'Review and approve the current company Profile before activating Strategy.'};
   if(!clean(state.website||state.profile.website)||!clean(state.profile.priorityOffers)||!list(state.targetMarkets?.length?state.targetMarkets:state.profile.targetMarkets).length)return {code:'strategy_incomplete',recovery:'profile',reason:'Complete the seller website, priority offer and target markets in Profile.'};
-  if(researchContext(state).stale)return {code:'research_stale',recovery:'research',reason:'Saved research no longer matches the current company, offers, markets or buying signals. Update market research in Profile before finding companies.'};
-  const icps=rows(state.market?.icps).filter(item=>item.active!==false),signals=rows(state.market?.signals).filter(item=>item.active!==false);
+  if(researchBasis!=='profile'&&researchContext(state).stale)return {code:'research_stale',recovery:'strategy',reason:'Earlier market research needs review. You can approve Strategy using the current Profile and signals, or update market research.'};
+  const icps=rows(state.market?.icps).filter(item=>item.active!==false&&(researchBasis!=='profile'||!opportunityProfile(item))),signals=rows(state.market?.signals).filter(item=>item.active!==false);
   if(!icps.length||!signals.length)return {code:'strategy_incomplete',recovery:'strategy',reason:'Enable at least one customer profile and one buying signal, then review Strategy.'};
   if(signals.some(item=>!clean(item.id)||!clean(item.keywords||item.name)||!Number.isFinite(Number(item.weight??5))||Number(item.weight??5)<1||Number(item.weight??5)>10))return {code:'strategy_invalid',recovery:'strategy',reason:'Review active signal names, keywords and weights (1–10).'};
   return null;
  }
- function approval(state,at=new Date().toISOString()){if(requirements(state))return null;return {version:1,signature:signature(state),approvedAt:at};}
+ function approval(state,at=new Date().toISOString(),researchBasis='research'){
+  if(requirements(state,researchBasis))return null;
+  const scope=signature(state);
+  return {version:1,signature:scope,approvedAt:at,...(researchBasis==='profile'&&{researchBasis,profileSignature:profileBasisSignature(scope)})};
+ }
  function status(state={}){
-  const issue=requirements(state);if(issue)return {current:false,...issue,signature:''};
-  const current=signature(state),saved=state.market?.strategyApproval;
+  const saved=state.market?.strategyApproval;
+  const profileBasis=saved?.version===1&&saved.researchBasis==='profile'&&saved.profileSignature===profileBasisSignature(saved.signature);
+  const issue=requirements(state,profileBasis?'profile':'research');if(issue)return {current:false,...issue,signature:''};
+  const current=signature(state);
   if(saved?.version===1&&saved.signature!==current)return {current:false,code:'strategy_stale',recovery:'strategy',reason:'Strategy context changed. Review Strategy and activate it again; saved evidence is retained.',signature:current};
   if(state.market?.strategyApproved!==true)return {current:false,code:'strategy_unapproved',recovery:'strategy',reason:'Review and activate Strategy before starting new company searches or automatic runs.',signature:current};
   if(saved?.version!==1||saved.signature!==current)return {current:false,code:'strategy_stale',recovery:'strategy',reason:'Strategy context changed or predates revision checks. Review Strategy and activate it again; saved evidence is retained.',signature:current};
-  return {current:true,code:'current',reason:'',signature:current};
+  return {current:true,code:'current',reason:'',signature:profileBasis?saved.profileSignature:current,...(profileBasis&&{researchBasis:'profile'})};
  }
- return {VERSION,digest,material,signature,researchFingerprint,researchContext,requirements,approval,status};
+ return {VERSION,digest,material,signature,researchFingerprint,researchContext,marketForExecution,executionMarketForState,requirements,approval,status};
 });

@@ -132,3 +132,43 @@ for(const change of ['account ticket','bridge','sign out'])test(`a late research
  if(change==='sign out')f.ctx.LeadIntelServerBridge.session.authenticated=false;
  f.state().status='complete';await Promise.resolve();await Promise.resolve();assert.equal(f.state().status,'complete');
 });
+
+test('Profile-based Strategy searches and qualifies against current criteria while retaining earlier research',async()=>{
+ const f=fixture(),stale={id:'icp-opportunity-led',type:'opportunity-led',active:true,description:'Archived buyer industry',offers:'Archived offer',buyerRoles:'Archived buyer role',targetMarkets:'Portugal'};
+ f.main.market.icps.unshift(stale);
+ f.main.market.opportunities=[{id:'earlier',market:'Portugal',active:true,score:{total:99}}];
+ f.main.market.researchResults=[{url:'https://earlier.example',text:'Earlier market report.'}];
+ f.main.market.researchContextStale=true;
+ f.main.market.strategyApproval=Integrity.approval(f.main,undefined,'profile');
+ f.write();
+ assert.equal(Integrity.status(f.main).current,true);
+ vm.runInContext(`discovery.selectedProspects=[{domain:'saved.example',people:[{name:'Anna Buyer'}],evidence:[{url:'https://saved.example/team'}]}];
+ runDiscoverySearchBatch=async items=>{globalThis.acquired=items;throw new DOMException('End controlled acquisition','AbortError');};`,f.ctx);
+ await vm.runInContext('runCompanyDiscovery({savingMode:true})',f.ctx);
+ assert.ok(f.ctx.acquired.length);
+ assert.ok(f.ctx.acquired.every(row=>row.market==='Sweden'));
+ const context=vm.runInContext('qualificationContext()',f.ctx);
+ assert.equal(context.profile.priorityOffers,'Staff training');
+ assert.equal(context.profile.decisionMakers,'Hotel manager');
+ assert.deepEqual(Array.from(context.market.signals,x=>x.id),['expansion']);
+ assert.doesNotMatch(JSON.stringify([context.market.icps,context.market.opportunities,context.market.researchResults,f.ctx.acquired]),/Archived|Portugal|earlier\.example/);
+ const saved=f.state().selectedProspects[0];
+ assert.equal(saved.people[0].name,'Anna Buyer');assert.equal(saved.evidence[0].url,'https://saved.example/team');
+ assert.equal(vm.runInContext('mainState().market.researchResults[0].url',f.ctx),'https://earlier.example');
+});
+
+test('a signed research scope keeps its validated opportunity even when an older browser saved a stale flag',()=>{
+ const f=fixture(),market=f.main.market;
+ market.opportunities=[{id:'valid',market:'Sweden',active:true,evidence:[{url:'https://sweden.example/research'}]}];
+ market.researchResults=[{url:'https://sweden.example/research',text:'Current research sources.'}];
+ market.researchContextFingerprint=Integrity.researchFingerprint(f.main);
+ market.strategyApproval=Integrity.approval(f.main);
+ market.researchContextStale=true;
+ f.write();
+ assert.equal(Integrity.status(f.main).current,true);
+ assert.equal(vm.runInContext('discoveryMarket(mainState()).opportunities[0].id',f.ctx),'valid');
+ assert.equal(vm.runInContext('qualificationContext().market.researchResults[0].url',f.ctx),'https://sweden.example/research');
+ f.main.profile.priorityOffers='Changed offer';f.write();
+ assert.equal(Integrity.status(f.main).current,false);
+ assert.equal(vm.runInContext('discoveryMarket(mainState()).opportunities.length',f.ctx),0);
+});

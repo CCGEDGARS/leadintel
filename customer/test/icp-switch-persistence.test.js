@@ -109,3 +109,33 @@ test('opening the Strategy handoff keeps displayed ICP suggestions outside the s
  assert.equal(state.market.icps[0].id,'manual');
  assert.equal(document.getElementById('strategy-handoff-dialog').hasAttribute('open'),true);
 });
+
+test('reviewing the Strategy keeps a disabled lookalike placeholder out of the saved research scope',()=>{
+ const h=harness(),{state,context,document}=h,I=require('../strategy-integrity.js');
+ Object.assign(state,{website:'https://seller.example',targetMarkets:['Denmark'],approved:true});
+ Object.assign(state.profile,{priorityOffers:'Machine tools',lookalikeCustomers:'Reviewed reference anchors',targetMarkets:'Denmark'});
+ state.market=Market.normalizeMarketState({
+  icps:Market.buildIcpCandidates(state.profile).map(icp=>({...icp,active:icp.type==='core'})),
+  signals:[{id:'factory',name:'Plant expansion',active:true}],
+  researchResults:[{url:'https://source.example/project'}]
+ });
+ const savedLookalike=state.market.icps.find(icp=>icp.type==='lookalike');
+ savedLookalike.description=''; // Older workspaces can have no saved lookalike definition.
+ const savedDescription=savedLookalike.description;
+ state.market.researchContextFingerprint=I.researchFingerprint(state);
+ context.LeadIntelMarket=Market;
+ context.icpActivationRequirement=icp=>({available:icp.type==='core',model:null});
+ context.requireConfirmedTargeting=()=>true;
+ context.renderMarketStrategy=context.renderIcps;
+ context.renderStrategyHandoff=()=>{state.market.researchContextStale=I.researchContext(state).stale;return {};};
+ document.body.insertAdjacentHTML('beforeend','<dialog id="strategy-handoff-dialog"></dialog>');
+ context.renderIcps();
+ const index=state.market.icps.findIndex(icp=>icp.type==='lookalike');
+ const displayed=document.querySelector('[data-icp-field="description"][data-index="'+index+'"]');
+ assert.equal(displayed.matches(':disabled'),true);
+ assert.notEqual(displayed.value,savedDescription);
+ vm.runInContext(part('function openStrategyHandoff(){','function closeStrategyHandoff(){')+'openStrategyHandoff();',context);
+ assert.equal(state.market.icps[index].description,savedDescription);
+ assert.equal(I.researchContext(state).stale,false);
+ assert.equal(document.getElementById('strategy-handoff-dialog').hasAttribute('open'),true);
+});

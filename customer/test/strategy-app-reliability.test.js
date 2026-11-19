@@ -61,3 +61,38 @@ test('a stalled large workspace save remains bounded and cannot activate from a 
 });
 
 test('a deferred Companies open cannot re-arm after the user navigates away',async()=>{let finish;const w={},c={window:w,waitForDiscoveryOpen:()=>new Promise(resolve=>finish=resolve),CustomEvent:class{}};w.dispatchEvent=()=>{};vm.createContext(c);vm.runInContext(extract('openDiscoveryAfterActivation'),c);const work=c.openDiscoveryAfterActivation();w.__leadIntelPendingDiscoveryOpen=false;finish(false);assert.equal(await work,false);assert.equal(w.__leadIntelPendingDiscoveryOpen,false);});
+
+test('approval with earlier research persists the new basis and opens Companies without starting research',async()=>{
+ const r=runtime(),M=require('../market-engine.js'),market=r.state.market;
+ market.researchContextStale=true;
+ market.researchContextFingerprint='stale:website-reactivated';
+ market.researchResults=[{url:'https://market.example/earlier'}];
+ market.icps.push({id:'icp-opportunity-led',type:'opportunity-led',active:true});
+ market.opportunities=[{id:'earlier',active:true}];
+ r.state.market=M.normalizeMarketState(market);
+ r.saved.set('leadintel_customer_v2_state',JSON.stringify(r.state));
+ r.ctx.strategyHandoffModel=()=>({blockers:[],earlierResearch:true});
+ r.ctx.$('strategy-handoff-dialog').dataset.researchBasis='profile';
+ assert.equal(I.approval(r.state),null);
+ assert.equal(await r.activate(),true);
+ assert.equal(r.opened(),1);
+ assert.equal(r.researchStarts(),0);
+ const reopened=JSON.parse(r.saved.get('leadintel_customer_v2_state'));
+ reopened.market=M.normalizeMarketState(reopened.market);
+ assert.equal(I.status(reopened).current,true);
+ assert.equal(I.status(reopened).researchBasis,'profile');
+ assert.equal(reopened.market.researchResults.length,1);
+ assert.equal(I.marketForExecution(reopened.market).researchResults.length,0);
+ assert.deepEqual(I.marketForExecution(reopened.market).icps.map(x=>x.id),['core']);
+ reopened.market.signals[0].weight=9;
+ assert.equal(I.status(reopened).current,false);
+});
+
+test('a stale-research approval cannot unexpectedly become a paid run after the dialog opens',async()=>{
+ const r=runtime();
+ r.ctx.$('strategy-handoff-dialog').dataset.researchBasis='profile';
+ assert.equal(await r.activate(),false);
+ assert.equal(r.opened(),0);
+ assert.equal(r.researchStarts(),0);
+ assert.match(r.notices.at(-1),/Research status changed/);
+});

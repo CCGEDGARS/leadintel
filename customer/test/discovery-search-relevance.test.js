@@ -155,3 +155,21 @@ test('balanced query families rotate selected signals in priority order',()=>{
  const rows=D.buildDiscoveryQueries(profile,market,9).filter(q=>q.discoveryRoute==='signal');
  assert.equal(rows.length,3);assert.match(rows[0].query,/merger/);assert.match(rows[1].query,/hiring/);assert.match(rows[2].query,/rebrand/);
 });
+
+test('query planning and automatic buyer roles exclude earlier opportunities and retain active signals and references',()=>{
+ const profile={...consultancy,targetMarkets:'',currentMarkets:['Latvia'],decisionMakers:'Procurement director',
+  referenceSimilarityModel:{active:true,dna:{referenceProfiles:[{dimensions:[{key:'industry',values:['insurance']}]}]}}};
+ const opportunity={id:'icp-opportunity-led',active:true,buyerRoles:'Archived role',targetMarkets:'Portugal',description:'Archived segment'};
+ const lens={id:'icp-reference-lookalike',type:'lookalike',active:true};
+ const original={...signals,icps:[opportunity,lens],opportunities:[{market:'Portugal',active:true}]};
+ assert.ok(D.buildDiscoveryQueries(profile,original).some(row=>row.market==='Portugal'));
+ for(const flag of [{researchContextStale:true},{strategyApproval:{researchBasis:'profile'}}]){
+  const market={...original,...flag},main={profile,market};
+  const rows=D.buildDiscoveryQueries(profile,market,8),follow=D.buildDiscoveryFollowUpQueries(profile,market,rows,4);
+  assert.ok(rows.some(row=>row.discoveryRoute==='lookalike'));assert.ok(rows.some(row=>row.discoveryRoute==='signal'));
+  assert.ok(follow.length);assert.ok([...rows,...follow].every(row=>row.market==='Latvia'&&!/Archived|Portugal/i.test(row.query)));
+  assert.equal(D.buyerRolesForTarget(main,{}),'Procurement director');
+  assert.equal(D.buyerRolesForTarget(main,{buyerRoles:'Named role',buyerRolesSource:'manual'}),'Named role');
+ }
+ assert.equal(original.icps[0],opportunity);
+});

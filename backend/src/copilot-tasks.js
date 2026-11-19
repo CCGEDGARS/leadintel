@@ -1,5 +1,6 @@
 import '../../customer/research-task-model.js';
 import '../../customer/company-lists.js';
+import '../../customer/strategy-integrity.js';
 import {savedFlowRow,savedFlowPayload} from './saved-flow-store.js';
 import {sha256} from './security.js';
 import {readAdditionalContactPolicy} from './additional-contact-services.js';
@@ -17,7 +18,10 @@ export async function taskOptions(env,w,flowId){
  const row=flowId&&await savedFlowRow(env,w,flowId),payload=row?await savedFlowPayload(env,row):{main:{}},main=payload.main||{},available=M.options(main),policy=await readAdditionalContactPolicy(env,w);
  // Freeze only research context, not message drafts, delivery controls or credentials.
  const frozen=Object.fromEntries(['website','profile','answers','targetMarkets','market','referenceCustomers','referenceCustomerPortfolio'].filter(k=>main[k]!==undefined).map(k=>[k,main[k]]));
- if(frozen.market)frozen.market={...Object.fromEntries(['icps','deletedSignalIds','opportunities','researchContextStale'].filter(k=>Object.hasOwn(frozen.market,k)).map(k=>[k,frozen.market[k]])),signals:frozen.market.signals||[],strategy:frozen.market.strategy,positioning:frozen.market.positioning};
+ if(frozen.market){
+  frozen.market=globalThis.LeadIntelStrategyIntegrity.executionMarketForState(main);
+  frozen.market={...Object.fromEntries(['icps','deletedSignalIds','opportunities','researchContextStale'].filter(k=>Object.hasOwn(frozen.market,k)).map(k=>[k,frozen.market[k]])),signals:frozen.market.signals||[],strategy:frozen.market.strategy,positioning:frozen.market.positioning};
+ }
  const fingerprint=await sha256(JSON.stringify([row?.id,row?.revision,available,frozen,policy]));
  return {flows,available,policy,main:frozen,fingerprint,flowMissing:!row,flowName:row?.name||''};
 }

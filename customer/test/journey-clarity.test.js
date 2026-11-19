@@ -158,7 +158,7 @@ test('Companies next actions reach the blocking prerequisite and then the saved 
  const input={main,discovery,currentStep:5,availability,discoveryMeta:{targetCount:5},companyOutcome:{pendingCount:8,checkedCount:0,strongFitCount:0,targetMet:false}};
  const {w,ctx}=renderer([]),d=w.document,opened=[];
  try{
-  d.querySelector('.steps').insertAdjacentHTML('beforeend','<li data-workflow-stage="4"><em data-sidebar-stage-state></em></li>');
+  d.querySelector('.steps').insertAdjacentHTML('beforeend','<li data-workflow-stage="3"><em data-sidebar-stage-state></em></li><li data-workflow-stage="4"><em data-sidebar-stage-state></em></li>');
   d.getElementById('commercial-process-map').append(d.getElementById('journey-stage-guide'));
   d.body.insertAdjacentHTML('beforeend','<button id="activate-market-strategy">Review strategy</button><button id="review-next-companies">Review next five</button><section id="company-search-progress"></section>');
   let runs=0;for(const button of d.body.querySelectorAll('#review-next-companies,#activate-market-strategy'))button.addEventListener('click',()=>runs++);
@@ -170,7 +170,7 @@ test('Companies next actions reach the blocking prerequisite and then the saved 
    const model=Journey.buildJourneyModel({...input,...extras});ctx.journeyModel=()=>model;ctx.syncProcessMap();return model;
   }
   function checkAndClick(text,stageId,itemId){
-   const guide=d.querySelector('[data-stage-next-action]'),sidebar=d.querySelector('[data-workflow-stage="4"] [data-sidebar-next-action]');
+   const guide=d.querySelector('[data-stage-next-action]'),sidebar=d.querySelector('[data-workflow-stage][aria-current="step"] [data-sidebar-next-action]');
    assert.equal(guide.textContent,text);assert.equal(guide.dataset.stageId,String(stageId));assert.equal(sidebar.dataset.stageId,String(stageId));assert.equal(sidebar.dataset.sidebarSubstep,itemId);
    assert.equal(guide.dataset.stageMiniStep,itemId);guide.click();
   }
@@ -178,12 +178,22 @@ test('Companies next actions reach the blocking prerequisite and then the saved 
   assert.deepEqual(blocked[3].steps.filter(s=>s.complete).map(s=>s.id),['scope','pipeline']);
   assert.equal(blocked[1].steps.find(s=>s.id==='research').complete,false);assert.equal(blocked[2].steps.find(s=>s.id==='strategy').complete,false);
   assert.equal(blocked[4].available,true);
-  checkAndClick('Update market research in Profile',2,'research');assert.deepEqual(opened,['market research']);
+  checkAndClick('Review Strategy for Companies',3,'strategy');assert.equal(d.activeElement.id,'activate-market-strategy');
+  show({activeJourneyStage:3});checkAndClick('Review Strategy for Companies',3,'strategy');
+  assert.deepEqual(opened,[3,3]);assert.equal(d.activeElement.id,'activate-market-strategy');
+  show({activeJourneyStage:2});
+  d.querySelector('[data-stage-optional-steps] [data-stage-mini-step="research"]').click();assert.deepEqual(opened,[3,3,'market research']);
   const missingSetup=show({websiteActivated:false});
   assert.equal(missingSetup[3].nextAction,'Activate your company website in Setup');assert.deepEqual(missingSetup[3].nextTarget,{stageId:1,itemId:'activate-website'});
-  main.market.researchContextFingerprint=strategy.researchFingerprint(main);main.market.strategyApproved=false;delete main.market.strategyApproval;
+  main.market.researchContextStale=true;main.market.strategyApproval=strategy.approval(main,undefined,'profile');
+  const profileBased=show();
+  assert.equal(profileBased[2].steps.find(s=>s.id==='strategy').complete,true);
+  const research=profileBased[1].steps.find(s=>s.id==='research');
+  assert.equal(research.optional,true);assert.equal(research.complete,false);assert.match(research.label,/outdated/i);
+  checkAndClick('Review saved companies',4,'saved-review');assert.equal(d.activeElement.id,'review-next-companies');
+  main.market.researchContextFingerprint=strategy.researchFingerprint(main);main.market.researchContextStale=false;main.market.strategyApproved=false;delete main.market.strategyApproval;
   show();
-  checkAndClick('Review and approve Strategy',3,'strategy');assert.deepEqual(opened,['market research',3]);assert.equal(d.activeElement.id,'activate-market-strategy');
+  checkAndClick('Review and approve Strategy',3,'strategy');assert.deepEqual(opened,[3,3,'market research',3]);assert.equal(d.activeElement.id,'activate-market-strategy');
   main.market.strategyApproval=strategy.approval(main);main.market.strategyApproved=true;
   show();checkAndClick('Review saved companies',4,'saved-review');assert.equal(d.activeElement.id,'review-next-companies');
   const retainedApproval=show({websiteActivated:false});

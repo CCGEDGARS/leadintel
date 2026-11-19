@@ -8,7 +8,7 @@
   function resultsMessage(main={}){
     const market=main.market||{},count=market.researchResults?.length||0,reports=market.researchReports?.length||0;
     if(market.researchStatus==='running')return count?`Research is running. ${count} sources are retained so far.`:'Research is running. Results will appear as evidence is collected.';
-    if(count)return `${count} research source${count===1?'':'s'} available${market.researchStatus==='partial'?' · partial coverage':''}${market.researchContextStale?' · review against your updated profile':''}. Review your profile before choosing the Strategy.`;
+    if(count)return `${count} research source${count===1?'':'s'} available${market.researchStatus==='partial'?' · partial coverage':''}.${market.researchContextStale?' These earlier sources are saved. You can update market research or approve Strategy using your current Profile and signals.':' Review your profile before choosing the Strategy.'}`;
     if(reports)return 'Saved reports are available. There is no current market evidence linked to Strategy.';
     if(['error','failed','canceled'].includes(market.researchStatus))return 'The last run did not save usable market evidence. Review the research status before retrying.';
     return main.profile?'Market research is optional and has not been run. You can review your profile and continue to Strategy.':'Review your company profile to enable market research. No market evidence is saved yet.';

@@ -87,15 +87,29 @@ test('authenticated cumulative ranking keeps ten visible, promotes a new higher 
 });
 
 
-test('Companies recovery routes eight saved companies to Profile research or Strategy without spending or changing selection',{timeout:90000},async t=>{
- if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('Required native Companies CI runs this SQL/browser journey.');return;}
+const savedScores=[66,66,64,58,58,55];
+function retainedCompanyWork(payload){
+ const d=payload.discovery;
+ return {rows:d.potentialMatches.map(c=>[c.domain,c.qualification?.score??null,c.evidence[0]?.url,c.evidence[0]?.text]),
+  selected:d.selectedProspects.map(c=>[c.domain,c.crmId,c.people.map(p=>[p.id,p.name,p.kept])]),receipts:d.researchAudit};
+}
+
+async function assertSavedCompanyScores(page){
+ const scores=await page.locator('#company-candidates .company-row-summary .company-row-score').evaluateAll(cells=>
+  cells.map(cell=>[cell.querySelector('strong').textContent,cell.querySelector('small').textContent]));
+ assert.deepEqual(scores,[...savedScores.map(score=>[score+'/100','Previous score']),['—','Awaiting score'],['—','Awaiting score']]);
+}
+
+async function savedCompanyBrowser(t){
  const {journeyFixture,loadPlaywright,sessionToken}=await import('../../backend/test/step5-journey-fixture.mjs');
- const {ready,settleInitialSave}=await import('../../scripts/verify-step5-journey.mjs');
- const D=require('../discovery-engine.js'),integrity=require('../strategy-integrity.js');
+ const D=require('../discovery-engine.js');
  const f=await journeyFixture(),{chromium}=await loadPlaywright();
  const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
  const researchRequests=[],errors=[];let context,page;
- async function open(){
+ t.after(async()=>{await context?.close();await browser.close();await f.close();});
+ async function closePage(){await context?.close();context=null;}
+ async function open({openCompanies=true}={}){
+  await closePage();
   context=await browser.newContext({viewport:{width:1440,height:1000}});
   await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
   await context.route('**/*',route=>{
@@ -105,94 +119,167 @@ test('Companies recovery routes eight saved companies to Profile research or Str
    }
    return url.origin===f.origin?route.continue():route.abort();
   });
-  page=await context.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(f.origin+'/customer/');await ready(page);
-  await companies();
+  page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>window.LeadIntelServerBridge?.ready&&LeadIntelServerBridge.session?.authenticated&&
+   window.LeadIntelJourney?.getModel&&window.LeadIntelDiscoveryUI?.open&&typeof discovery!=='undefined'&&
+   discovery?.selectedProspects?.length===1&&discovery?.potentialMatches?.length===8);
+  if(openCompanies)await companies();
+  return page;
+ }
+ async function saveWorkspace(){
+  const saved=await page.evaluate(()=>LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));
+  assert.equal(saved.saved,true,JSON.stringify(saved));
  }
  async function companies(){
-  await page.locator('.steps [data-workflow-stage="4"] strong').click();
-  await page.locator('#step-5.active .company-result-row').first().waitFor({state:'visible'});
+  await page.locator('.steps [data-workflow-stage="4"] strong').click({noWaitAfter:true});
+  try{await page.locator('#step-5.active .company-result-row').first().waitFor({state:'visible'});}
+  catch(e){
+   t.diagnostic(JSON.stringify(await page.evaluate(()=>({
+    active:document.querySelector('.step-view.active')?.id,stage:loadMeta().activeJourneyStage,
+    websites:mainState().websiteActivation?.status,context:LeadIntelStrategyIntegrity.status(mainState()),
+    ui:document.getElementById('company-candidates')?.innerText.slice(0,400),
+    filter:document.querySelector('#step-5 .discovery-panel')?.hidden,toast:document.getElementById('toast')?.textContent
+   }))));t.diagnostic(JSON.stringify(errors));
+   throw e;
+  }
  }
- const savedScores=[66,66,64,58,58,55],at='2026-11-18T09:30:00Z';
- function retained(payload){
-  const d=payload.discovery;
-  return {rows:d.potentialMatches.map(c=>[c.domain,c.qualification?.score??null,c.evidence[0]?.url,c.evidence[0]?.text]),
-   selected:d.selectedProspects.map(c=>[c.domain,c.crmId,c.people.map(p=>[p.id,p.name,p.kept])]),receipts:d.researchAudit};
- }
+ const at='2026-11-18T09:30:00Z';
+ const seed=await f.getState(),payload=seed.payload,market=payload.main.market;
+ payload.main.websiteActivation={status:'active',url:payload.main.website,activatedAt:at};
+ payload.main.scrapedSources=[{type:'website',url:payload.main.website,title:'Fixture Industrial',text:'Fixture Industrial supplies industrial automation and custom machinery.',status:'ready'}];
+ market.strategyApproved=false;market.strategyApproval=null;market.researchContextStale=true;
+ market.researchContextFingerprint='stale:website-reactivated';market.researchStatus='complete';
+ market.researchMode='quick';market.lastResearchAt=at;
+ market.researchResults=Array.from({length:20},(_,i)=>({
+  url:'https://industry.example/report-'+i,title:'Swedish industrial production '+(i+1),
+  text:'Earlier research about Swedish manufacturing operation '+(i+1)+'.',market:'Sweden',extractedAt:at
+ }));
+ market.researchHistory=[{id:'saved-quick',mode:'quick',status:'complete',sourceCount:20,queryCount:4,completedAt:at}];
+ const potentialMatches=Array.from({length:8},(_,i)=>{
+  const domain=i?'maker'+i+'.example':f.candidate.domain,company=i?'Manufacturer '+i:f.candidate.company;
+  return {domain,company,website:'https://'+domain+'/',market:'Sweden',researchedAt:at,needsRecheck:true,
+   qualification:i<savedScores.length?{qualificationKind:'company',score:savedScores[i],researchedAt:at}:undefined,
+   qualificationGaps:['Verify operating evidence'],evidence:[{url:'https://'+domain+'/operations',text:company+' manufactures equipment in Sweden.',sourceRead:true,verifiedAt:at}]};
+ });
+ const entries=Array.from({length:60},(_,i)=>({id:'op-'+i,key:'source-'+i,phase:'market',operation:'search',outcome:'succeeded'}));
+ entries.push({id:'op-page',key:'official-page',phase:'operations',operation:'page',outcome:'succeeded'},
+  {id:'op-reuse',key:'source-0',phase:'market',operation:'search',outcome:'reused'});
+ Object.assign(payload.discovery,{qualityVersion:D.DISCOVERY_QUALITY_VERSION,status:'complete',needsRefresh:true,lastRunAt:at,potentialMatches,
+  funnel:{companiesIdentified:26,companySitesChecked:11,qualifiedCompanies:0},
+  researchAudit:D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'previous-search',entries}}).researchAudit});
+ Object.assign(payload.meta.discovery,{activeJourneyStage:4,visibleStep:5,targetCount:5});
+ const before=retainedCompanyWork(payload);assert.equal(before.selected.length,1);assert.equal(before.receipts.entries.length,62);
+ assert.equal((await f.replace(payload,seed.version)).conflict,false);
+ return {f,before,open,companies,saveWorkspace,closePage,
+  assertNoResearch(){
+   assert.deepEqual(researchRequests,[]);assert.deepEqual(f.providerCalls,[]);assert.deepEqual(errors,[]);
+   assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs').get().n,0);
+  }};
+}
+
+test('Companies recovery routes eight saved companies to Strategy without spending or changing selection',{timeout:120000},async t=>{
+ if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('Required native Companies CI runs this SQL/browser journey.');return;}
+ const h=await savedCompanyBrowser(t),{f,before,saveWorkspace}=h,integrity=require('../strategy-integrity.js');
+ let page;
  async function checkRows(){
-  const view=page.locator('#company-candidates');
-  assert.equal(await view.locator('.company-result-row').count(),8);
-  assert.deepEqual(await view.locator('[data-score-state="previous"]').evaluateAll(nodes=>nodes.map(el=>Number(el.dataset.companyScore))),savedScores);
-  assert.equal(await view.locator('[data-score-state="pending"][data-company-score=""]').count(),2);
+  await assertSavedCompanyScores(page);
   assert.match(await page.locator('#company-search-progress h3').textContent(),/Saved results need review/);
   assert.equal(await page.locator('.company-search-progress-stats dt').nth(1).textContent(),'Websites recorded');
   assert.deepEqual(await page.locator('.company-search-progress-stats dd').allTextContents(),['26','11','0','0']);
   assert.equal(await page.locator('#review-next-companies').isDisabled(),true);
   assert.match(await page.locator('#company-research-usage summary').textContent(),/61 requests · 60 searches · 1 page reads? · 1 reused/);
  }
- async function checkRecovery(contextIsStale){
-  const title=contextIsStale?'Update market research in Profile':'Review and approve Strategy';
-  const status=await page.evaluate(()=>LeadIntelStrategyIntegrity.status(mainState()));
-  assert.equal(status.code,contextIsStale?'research_stale':'strategy_unapproved',JSON.stringify(status));
-  for(const selector of ['.steps [data-workflow-stage="4"] [data-sidebar-next-action]','#journey-stage-guide [data-stage-next-action]','#company-review-batch [data-company-review-strategy]']){
-   const action=page.locator(selector);assert.ok((await action.innerText()).includes(title));
-   await action.click();
-   if(contextIsStale){
-    const modal=page.locator('#reference-customer-modal');
-    await modal.locator('#market-intelligence-panel #market-research-workbench #run-market-research').waitFor({state:'visible'});
-    assert.equal(await modal.locator('[data-company-segment="market"]').getAttribute('aria-current'),'page');
-    await modal.locator('header button[data-reference-close]').click();
-   }else await page.locator('#step-4.active #activate-market-strategy').waitFor({state:'visible'});
+ const entryPoints=['.steps [data-workflow-stage="4"] [data-sidebar-next-action]','#journey-stage-guide [data-stage-next-action]','#company-review-batch [data-company-review-strategy]'];
+ async function checkRecovery(contextIsStale,selectors){
+  const state=await page.evaluate(()=>({unapproved:!mainState().market.strategyApproved,stale:LeadIntelStrategyIntegrity.researchContext(mainState()).stale}));
+  assert.deepEqual(state,{unapproved:true,stale:contextIsStale});
+  for(const selector of selectors){
+   const action=page.locator(selector);assert.match(await action.innerText(),/strategy/i);
+   await action.click({noWaitAfter:true});
+   await page.locator('#step-4.active #activate-market-strategy').waitFor({state:'visible'});
    assert.equal(await page.evaluate(()=>mainState().market.strategyApproved),false);
-   await companies();
+   await h.companies();
   }
  }
- try{
-  const seed=await f.getState(),payload=seed.payload,market=payload.main.market;
-  payload.main.websiteActivation={status:'active',url:payload.main.website,activatedAt:at};
-  payload.main.scrapedSources=[{type:'website',url:payload.main.website,title:'Fixture Industrial',text:'Fixture Industrial supplies industrial automation and custom machinery.',status:'ready'}];
-  market.strategyApproved=false;market.strategyApproval=null;market.researchContextStale=true;
-  market.researchContextFingerprint='stale:website-reactivated';market.researchStatus='complete';
-  market.researchResults=[{url:'https://industry.example/factory',title:'Swedish industrial production',text:'Retained market research about Swedish manufacturing.',market:'Sweden',extractedAt:at}];
-  const potentialMatches=Array.from({length:8},(_,i)=>{
-   const domain=i?'maker'+i+'.example':f.candidate.domain,company=i?'Manufacturer '+i:f.candidate.company;
-   return {domain,company,website:'https://'+domain+'/',market:'Sweden',researchedAt:at,needsRecheck:true,
-    qualification:i<savedScores.length?{qualificationKind:'company',score:savedScores[i],researchedAt:at}:undefined,
-    qualificationGaps:['Verify operating evidence'],evidence:[{url:'https://'+domain+'/operations',text:company+' manufactures equipment in Sweden.',sourceRead:true,verifiedAt:at}]};
-  });
-  const entries=Array.from({length:60},(_,i)=>({id:'op-'+i,key:'source-'+i,phase:'market',operation:'search',outcome:'succeeded'}));
-  entries.push({id:'op-page',key:'official-page',phase:'operations',operation:'page',outcome:'succeeded'},
-   {id:'op-reuse',key:'source-0',phase:'market',operation:'search',outcome:'reused'});
-  Object.assign(payload.discovery,{qualityVersion:D.DISCOVERY_QUALITY_VERSION,status:'complete',needsRefresh:true,lastRunAt:at,potentialMatches,
-   funnel:{companiesIdentified:26,companySitesChecked:11,qualifiedCompanies:0},
-   researchAudit:D.normalizeDiscoveryState({researchAudit:{version:1,requestId:'previous-search',entries}}).researchAudit});
-  Object.assign(payload.meta.discovery,{activeJourneyStage:4,visibleStep:5,targetCount:5});
-  const before=retained(payload);assert.equal(before.selected.length,1);assert.equal(before.receipts.entries.length,62);
-  assert.equal((await f.replace(payload,seed.version)).conflict,false);
-  await open();await checkRows();await checkRecovery(true);await settleInitialSave(page);
-  assert.deepEqual(retained((await f.getState()).payload),before);
-  await context.close();await open();await checkRows();await checkRecovery(true);await settleInitialSave(page);await context.close();
-  // Change only the research fingerprint in the fixture to exercise the next
-  // prerequisite without purchasing a real run or approving Strategy.
-  const fresh=await f.getState(),main=fresh.payload.main;
-  Object.assign(main.market,{researchContextFingerprint:integrity.researchFingerprint(main),researchContextStale:false});
-  assert.equal((await f.replace(fresh.payload,fresh.version)).conflict,false);
-  await open();await checkRows();await checkRecovery(false);await settleInitialSave(page);
-  const final=(await f.getState()).payload;
-  assert.deepEqual(retained(final),before);assert.equal(final.main.market.strategyApproved,false);
-  assert.deepEqual(researchRequests,[]);assert.deepEqual(f.providerCalls,[]);assert.deepEqual(errors,[]);
-  assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM buyer_research_jobs').get().n,0);
- }catch(error){
-  if(page&&!page.isClosed())t.diagnostic(JSON.stringify(await page.evaluate(()=>({
-   step:document.querySelector('.step-view.active')?.id,
-   modal:document.getElementById('reference-customer-modal')?.hidden,
-   mounted:document.getElementById('market-research-workbench')?.parentElement?.id,
-   research:document.getElementById('run-market-research')?.outerHTML,
-   action:document.querySelector('[data-workflow-stage="4"] [data-sidebar-next-action]')?.outerHTML,
-   toast:document.getElementById('toast')?.textContent
-  }))));
-  throw error;
- }finally{await context?.close();await browser.close();await f.close();}
+ page=await h.open();await checkRows();await checkRecovery(true,entryPoints.slice(0,1));await saveWorkspace();
+ assert.deepEqual(retainedCompanyWork((await f.getState()).payload),before);
+ page=await h.open();await checkRows();await checkRecovery(true,entryPoints.slice(1));await saveWorkspace();await h.closePage();
+ // Change only the research fingerprint in the fixture to exercise the next
+ // prerequisite without purchasing a real run or approving Strategy.
+ const fresh=await f.getState(),main=fresh.payload.main;
+ Object.assign(main.market,{researchContextFingerprint:integrity.researchFingerprint(main),researchContextStale:false});
+ assert.equal((await f.replace(fresh.payload,fresh.version)).conflict,false);
+ page=await h.open();await checkRows();await checkRecovery(false,entryPoints);await saveWorkspace();
+ const final=(await f.getState()).payload;
+ assert.deepEqual(retainedCompanyWork(final),before);assert.equal(final.main.market.strategyApproved,false);
+ h.assertNoResearch();
+});
+
+test('explicit Strategy approval after Profile review preserves twenty older Quick Overview sources and opens Companies without starting research',{timeout:120000},async t=>{
+ if(!process.execArgv.some(a=>a.includes('register-wasm-loader'))){t.skip('Required native Companies CI runs this SQL/browser journey.');return;}
+ const h=await savedCompanyBrowser(t),{f,before}=h,integrity=require('../strategy-integrity.js');
+ const historical=main=>main.market.researchResults.map(r=>[r.url,r.title,r.text,r.extractedAt]);
+ let page=await h.open({openCompanies:false});
+ const oldSources=historical((await f.getState()).payload.main);
+ assert.equal(oldSources.length,20);
+ async function openOlderResearch(){
+  await page.locator('.steps [data-workflow-stage="3"] strong').click({noWaitAfter:true});
+  await page.locator('#step-4.active [data-open-profile-market]').click({noWaitAfter:true});
+  const workbench=page.locator('#market-intelligence-panel #market-research-workbench');
+  await workbench.waitFor({state:'visible'});
+  assert.match(await workbench.locator('#profile-market-result-status').textContent(),/20/);
+  return workbench;
+ }
+ const workbench=await openOlderResearch();
+ await workbench.getByRole('button',{name:'Proceed to profile review'}).click({noWaitAfter:true});
+ await page.locator('#step-3.active #profile-company-name').waitFor({state:'visible'});
+ await page.locator('#continue-market-strategy').click({noWaitAfter:true});
+ await page.locator('#step-4.active #activate-market-strategy').click({noWaitAfter:true});
+ const handoff=page.locator('#strategy-handoff-dialog');
+ await page.locator('#strategy-handoff-dialog[open], #reference-customer-modal:not([hidden]) #market-research-workbench').first().waitFor({state:'visible'});
+ assert.equal(await handoff.isVisible(),true,'Review & Continue returned to the Market Research workbench after Profile review');
+ assert.equal(await page.evaluate(()=>mainState().market.strategyApproved),false);
+ assert.equal(await handoff.getByRole('button',{name:/update market research/i}).isVisible(),true);
+ assert.match(await handoff.innerText(),/exclud|not used|without (?:the )?(?:earlier|older|saved) research/i);
+ h.assertNoResearch();
+ const approve=handoff.getByRole('button',{name:/approve strategy and open companies/i});
+ assert.equal(await approve.isEnabled(),true);
+ await approve.click({noWaitAfter:true});
+ async function waitForCompanies(){
+  try{await page.locator('#step-5.active #company-candidates .company-result-row').first().waitFor({state:'visible'});}
+  catch(e){
+   t.diagnostic(JSON.stringify(await page.evaluate(()=>({
+    step:document.querySelector('.step-view.active')?.id,
+    handoff:document.getElementById('strategy-handoff-dialog')?.open,
+    feedback:document.getElementById('strategy-activation-feedback')?.textContent,
+    status:LeadIntelStrategyIntegrity.status(mainState()),
+    toast:document.getElementById('toast')?.textContent,
+    rows:document.getElementById('company-candidates')?.innerText.slice(0,400),
+    discovery:discovery?.status,scope:mainState().market?.strategyApproval?.researchBasis
+   }))));
+   throw e;
+  }
+ }
+ await waitForCompanies();
+ await assertSavedCompanyScores(page);
+ await h.saveWorkspace();
+ async function checkSaved(){
+  const payload=(await f.getState()).payload;
+  assert.deepEqual(historical(payload.main),oldSources);
+  assert.deepEqual(retainedCompanyWork(payload),before);
+  assert.equal(payload.main.market.strategyApproved,true);
+  assert.equal(payload.main.market.strategyApproval.researchBasis,'profile');
+  assert.equal(payload.main.market.researchContextStale,true);
+  const status=integrity.status(payload.main);
+  assert.equal(status.current,true,JSON.stringify(status));
+  assert.equal((await page.evaluate(()=>LeadIntelStrategyIntegrity.status(mainState()))).current,true);
+ }
+ await checkSaved();
+ page=await h.open({openCompanies:false});
+ await waitForCompanies();
+ await assertSavedCompanyScores(page);
+ await checkSaved();await openOlderResearch();h.assertNoResearch();
 });
 
 test('authenticated Companies preserves mixed scores, honest shortfall and the pending queue across SQL save and browser reopen',{timeout:90000},async t=>{

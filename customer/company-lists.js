@@ -1,5 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelCompanyLists=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
+ const StrategyIntegrity=typeof module==='object'&&module.exports?require('./strategy-integrity.js'):globalThis.LeadIntelStrategyIntegrity;
  const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
  function url(v){try{const u=new URL(v);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&!u.port&&u.hostname.includes('.')&&!/^(?:localhost|127\.|10\.|192\.168\.|169\.254\.)|\.local$/.test(u.hostname)?u.href:'';}catch{return '';}}
  const domain=v=>{try{return new URL(url(v)).hostname.replace(/^www\./,'').toLowerCase();}catch{return '';}};
@@ -84,8 +85,8 @@
   return PROFILE_TYPES.find(([type])=>p.type===type||p.id==='icp-'+type||p.id===type)?.[0]||'';
  }
  function profileOptions(main,available){
-  const market=main.market||{},configured=Array.isArray(market.icps),saved=market.icps||[];
-  const opportunities=(market.researchContextStale?[]:market.opportunities||[]).filter(o=>o.active!==false&&!o.profileOnly).map(o=>({
+  const market=StrategyIntegrity.executionMarketForState(main),configured=Array.isArray(market.icps),saved=market.icps||[];
+  const opportunities=(market.opportunities||[]).filter(o=>o.active!==false&&!o.profileOnly).map(o=>({
    id:clean(o.id,120),title:clean(o.title,300),hypothesis:clean(o.hypothesis,1000),market:clean(o.market,100),
    evidence:(o.evidence||[]).filter(e=>e.verification?.relevance!=='reject'&&!e.verification?.contradiction).map(e=>({url:url(e.url),quote:clean(e.text||e.quote||e.description,1800),date:clean(e.date,40)})).filter(e=>e.url&&e.quote.length>=12).slice(0,8)
   })).filter(o=>o.id&&o.evidence.length).slice(0,12);
