@@ -22,7 +22,13 @@ const $=id=>document.getElementById(id);
 function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 function readJson(key,fallback={}){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'?value:fallback;}catch{return fallback;}}
 function readState(){return readJson(MAIN_STORAGE_KEY,{});}
-function writeState(value){localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(value));}
+function writeState(value){
+  const current=readState();
+  // Answer/material writers must not replace a newer metadata update with their
+  // older state copy. Only writeMeta owns research history and review decisions.
+  if(Object.hasOwn(current,'researchMeta')&&normalizeUrl(current.website)===normalizeUrl(value.website))value={...value,researchMeta:current.researchMeta};
+  localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(value));
+}
 function readMeta(){
   const state=readState();
   // Workspace history is authoritative; the old browser key is a migration fallback.
@@ -31,7 +37,7 @@ function readMeta(){
 function writeMeta(value){
   const state=readState();
   if(normalizeUrl(value.website)!==normalizeUrl(state.website))return;
-  writeState({...state,researchMeta:value});
+  localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify({...state,researchMeta:value}));
   try{localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}catch{/* The durable workspace value already owns this history. */}
 }
 function retainResearchOutputs(next,previous){
