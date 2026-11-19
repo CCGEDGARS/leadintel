@@ -1679,10 +1679,7 @@ function renderMarketStrategy(){
 let researchReportUi;
 function renderResearchReports(){
   if(!globalThis.LeadIntelResearchReport)return;
-  if(!state.market.researchReportsInitialized&&!state.market.researchReports?.length&&state.market.researchResults?.length&&state.market.researchStatus!=="running"&&!activeMarketResearchRun){
-    state.market.researchReports=[globalThis.LeadIntelResearchReport.snapshot(state,'imported-current')];state.market.researchReportsInitialized=true;
-    saveState();
-  }
+  // Viewing research must not create an extra stored report copy.
   researchReportUi ||= globalThis.LeadIntelResearchReport.install({getState:()=>state,save:saveState,onStrategy:()=>window.dispatchEvent(new CustomEvent('leadintel:open-market-strategy'))});
   researchReportUi.render();
 }

@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import {cookieValue,sha256,allowedOrigin} from './security.js';
 import {getStorageStatus,storageAccount,storageErrorResponse} from './workspace-storage.js';
+import {storagePreferences,listStorageFiles} from './workspace-storage-management.js';
 export const STRIPE_STORAGE_API_VERSION='2026-09-30.endive';
 const json=(data,status=200,cors={})=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 const id=value=>typeof value==='string'?value:value?.id||'';
@@ -31,10 +32,23 @@ export async function handleStorageRoute(request,env,cors={},options={}){
  const url=new URL(request.url);if(!url.pathname.startsWith('/api/storage/'))return null;
  try{
   const action=url.pathname.slice('/api/storage/'.length),workspace=url.searchParams.get('workspace_id')||'';
-  if(!['status','checkout','portal'].includes(action))return json({error:'Not found'},404,cors);
-  if(request.method!==(action==='status'?'GET':'POST'))return json({error:'Method not allowed'},405,cors);
-  if(action!=='status'&&(!allowedOrigin(request,env.APP_ORIGIN)||!request.headers.get('Content-Type')?.startsWith('application/json')))throw fail('Billing request origin is not permitted',403);
-  const member=await authorize(request,env,workspace,action!=='status');
+  if(!['status','checkout','portal','files','preferences'].includes(action))return json({error:'Not found'},404,cors);
+  const read=request.method==='GET'&&['status','files','preferences'].includes(action);
+  if(!read&&(request.method!=='POST'||!['checkout','portal','preferences'].includes(action)))return json({error:'Method not allowed'},405,cors);
+  if(!read&&(!allowedOrigin(request,env.APP_ORIGIN)||!request.headers.get('Content-Type')?.startsWith('application/json')))throw fail('Storage request origin is not permitted',403);
+  const member=await authorize(request,env,workspace,!read);
+  if(action==='files')return json(await listStorageFiles(env,workspace),200,cors);
+  if(action==='preferences'){
+   const account=await storageAccount(env,workspace);
+   if(!read){
+    const text=await request.text();if(text.length>1024)throw fail('Storage settings request is too large',413);
+    let body;try{body=JSON.parse(text);}catch{throw fail('Invalid storage settings',400);}
+    if(typeof body?.auto_report_copies!=='boolean'||!Number.isSafeInteger(body.revision)||body.revision<0)throw fail('Storage preference and revision are required',400);
+    const result=await stmt(env,'UPDATE workspace_storage_accounts SET auto_report_copies=?,storage_policy_revision=storage_policy_revision+1 WHERE workspace_id=? AND storage_policy_revision=?',body.auto_report_copies?1:0,workspace,body.revision).run();
+    if(!result.meta.changes)throw fail('Storage settings changed. Refresh and try again.',409);
+   }
+   return json({workspace_id:workspace,preferences:storagePreferences(read?account:await storageAccount(env,workspace))},200,cors);
+  }
   const status=await getStorageStatus(env,workspace,{role:member.role});
   if(action==='status'){
    if(status.billing.checkout_ready){

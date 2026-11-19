@@ -2332,7 +2332,7 @@
       "url": "/customer/ai-settings.js",
       "status": 200,
       "contains": [
-        "workspace-storage-ui.js?v=20261012-v1",
+        "workspace-storage-ui.js?v=20261119-management-v1",
         "leadintel:settings-opened"
       ]
     },
@@ -10118,6 +10118,49 @@
       "contains": [
         "opportunity-inbox=20261119-v1"
       ]
+    },
+    {
+      "id": "storage-file-manager-runtime",
+      "type": "text",
+      "url": "/customer/workspace-storage-management.js",
+      "status": 200,
+      "contains": [
+        "Manage storage",
+        "data-auto-reports",
+        "expectedRevision:file.revision",
+        "LeadIntelDialogs?.confirm",
+        "reportCopiesAllowed",
+        "accountEpoch"
+      ]
+    },
+    {
+      "id": "storage-report-copy-controls",
+      "type": "text",
+      "url": "/customer/research-report.js",
+      "status": 200,
+      "contains": [
+        "Save current report",
+        "reportCopiesAllowed",
+        "This report is already saved."
+      ]
+    },
+    {
+      "id": "storage-file-inventory-private",
+      "type": "json",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/storage/files?workspace_id=release-proof",
+      "status": 401,
+      "json": {
+        "error": "Authentication required"
+      }
+    },
+    {
+      "id": "storage-preferences-private",
+      "type": "json",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/storage/preferences?workspace_id=release-proof",
+      "status": 401,
+      "json": {
+        "error": "Authentication required"
+      }
     }
   ]
 }
