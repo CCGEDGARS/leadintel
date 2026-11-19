@@ -21,7 +21,7 @@ function list(status='running',revision=1){
  return {id:'one',name:'Manufacturers',criteria,status,revision,results,receipts:[],progress:{count:2,target:10,checked:2,operations:8,allowance:10}};
 }
 function setup(t,respond){
- const dom=new JSDOM('<main id="step-5"><section class="discovery-panel"></section></main>',{runScripts:'outside-only',url:'https://app.example/'}),w=dom.window;
+ const dom=new JSDOM('<main id="step-5"><section class="discovery-panel"><div id="company-search-context"></div></section></main>',{runScripts:'outside-only',url:'https://app.example/'}),w=dom.window;
  t.after(()=>w.close());
  w.LeadIntelCompanyLists=M;w.AbortSignal=AbortSignal;
  w.LeadIntelServerBridge={session:{authenticated:true,user:{id:'user'}},workspace:{id:'workspace',role:'owner'}};
