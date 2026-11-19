@@ -104,6 +104,8 @@ test('opening the Strategy handoff keeps displayed ICP suggestions outside the s
  context.returnToProfileResearch=()=>assert.fail('Opening an unchanged Strategy review must not request another research run');
  document.body.insertAdjacentHTML('beforeend','<dialog id="strategy-handoff-dialog"></dialog>');
  context.renderIcps();
+ context.strategyReviewCurrent=()=>true;
+ context.strategyIntegrity=()=>I;
  vm.runInContext(part('function openStrategyHandoff(){','function closeStrategyHandoff(){')+'openStrategyHandoff();',context);
  assert.equal(state.market.icps.length,1);
  assert.equal(state.market.icps[0].id,'manual');
@@ -134,6 +136,8 @@ test('reviewing the Strategy keeps a disabled lookalike placeholder out of the s
  const displayed=document.querySelector('[data-icp-field="description"][data-index="'+index+'"]');
  assert.equal(displayed.matches(':disabled'),true);
  assert.notEqual(displayed.value,savedDescription);
+ context.strategyReviewCurrent=()=>true;
+ context.strategyIntegrity=()=>I;
  vm.runInContext(part('function openStrategyHandoff(){','function closeStrategyHandoff(){')+'openStrategyHandoff();',context);
  assert.equal(state.market.icps[index].description,savedDescription);
  assert.equal(I.researchContext(state).stale,false);
