@@ -120,13 +120,11 @@ test('Step 2 remains editable while prerequisites or research are incomplete',()
   assert.match(ui,/Needs your input/);
 });
 
-test('fresh research persists answers and evidence into the existing main Customer V2 state then invalidates stale strategy',()=>{
+test('research preserves the existing workspace instead of clearing its market state',()=>{
   assert.match(ui,/leadintel_customer_v2_state/);
   assert.match(ui,/scrapedSources/);
   assert.match(ui,/answers/);
-  assert.match(ui,/profile\s*=\s*null/);
-  assert.match(ui,/approved\s*=\s*false/);
-  assert.match(ui,/market\s*=\s*\{\}/);
+  assert.doesNotMatch(ui,/next\.market\s*=\s*\{\}/);
 });
 
 test('company research always persists English workspace content',()=>{

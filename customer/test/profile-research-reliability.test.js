@@ -20,7 +20,7 @@ async function flush(){for(let i=0;i<120;i++)await Promise.resolve();}
 
 test('canceling after extraction preserves previous profile, answers and source citations',async()=>{
  const r=runtime({prior:true,fetchImpl:async url=>url.includes('/api/ai/generate')?new Promise(()=>{}):null});const before=r.saved.get(STATE);const pending=r.hooks.runCompanyResearch({rerun:true});await flush();assert.ok(r.calls.some(call=>call.url.includes('/api/ai/generate')));const [id,action]=[...r.actions][0];r.tasks.get(id).status='canceled';action.cancel();await pending;
- assert.equal(r.saved.get(STATE),before);assert.equal(r.meta().fields.proof_points.sourceIds[0],'S1');assert.equal(r.tasks.get(id).status,'canceled');r.close();
+ const {researchMeta,...retained}=r.state();assert.deepEqual(retained,JSON.parse(before));assert.equal(researchMeta.lastFailure,r.meta().lastFailure);assert.equal(r.meta().fields.proof_points.sourceIds[0],'S1');assert.equal(r.tasks.get(id).status,'canceled');r.close();
 });
 
 test('foreign redirects cannot masquerade as extracted evidence from the company domain',async()=>{
@@ -61,7 +61,7 @@ for(const change of ['website','profile','approval','workspace','account'])test(
 
 test('saved optional links remain research inputs when their Setup textarea is not mounted',async()=>{const r=runtime();const state=r.state();state.additionalLinks=['https://sample.example/catalog'];r.saved.set(STATE,JSON.stringify(state));await r.hooks.runCompanyResearch();assert.ok(r.calls.some(call=>call.url.includes('scrape')&&JSON.parse(call.options.body).url==='https://sample.example/catalog'));assert.deepEqual(r.state().additionalLinks,['https://sample.example/catalog']);r.close();});
 
-test('failed AI refresh preserves the previously approved profile and its original evidence',async()=>{const r=runtime({prior:true,fetchImpl:async url=>url.includes('/api/ai/generate')?response({error:'Provider unavailable'},503):null});const before=r.saved.get(STATE);await r.hooks.runCompanyResearch({rerun:true});assert.equal(r.saved.get(STATE),before);assert.match(r.meta().lastFailure,/Provider unavailable/);r.close();});
+test('failed AI refresh preserves the previously approved profile and its original evidence',async()=>{const r=runtime({prior:true,fetchImpl:async url=>url.includes('/api/ai/generate')?response({error:'Provider unavailable'},503):null});const before=r.saved.get(STATE);await r.hooks.runCompanyResearch({rerun:true});const {researchMeta,...retained}=r.state();assert.deepEqual(retained,JSON.parse(before));assert.equal(researchMeta.lastFailure,r.meta().lastFailure);assert.match(r.meta().lastFailure,/Provider unavailable/);r.close();});
 
 test('the research UI refuses a tentative website that differs from the activated workspace website',async()=>{const r=runtime();const input=r.context.document.createElement('input');input.id='company-website';input.value='https://tentative.example/';r.context.document.body.append(input);await r.hooks.runCompanyResearch();assert.equal(r.calls.length,0);assert.equal(r.state().website,'https://sample.example/');r.close();});
 
@@ -112,4 +112,28 @@ test('all fifteen uploaded materials preserve five older document sources during
  const r=runtime();const state=r.state();state.documents=Array.from({length:5},(_,i)=>({id:'D'+(i+1),name:'legacy'+i+'.pdf',text:'Preserved historical document '+i,status:'ready'}));r.saved.set(STATE,JSON.stringify(state));
  const materials=Array.from({length:15},(_,i)=>({id:'material:'+i,name:'new'+i+'.png',materialId:String(i),materialRevision:1,status:'ready',text:'Source image '+i}));r.context.window.LeadIntelCompanyMaterials={profileDocuments:async()=>materials};
  await r.hooks.runCompanyResearch();assert.equal(r.state().documents.length,20);assert.equal(r.state().documents[0].id,'D1');assert.equal(r.state().documents[19].id,'material:14');r.close();
+});
+
+function marketWithSavedWork(){return {strategyApproved:true,strategyApprovedAt:'2026-10-01',researchStatus:'partial',lastResearchAt:'2026-10-01',researchResults:[{url:'https://market.example/expansion',title:'Factory expansion',text:'Retained public evidence'}],researchReports:[{id:'report-1',sources:[{url:'https://market.example/expansion'}]}],signals:[{id:'custom-investment',name:'Investment',active:false}],icps:[{id:'custom-icp',type:'lookalike',active:true}],deletedSignalIds:['unused-signal'],researchExecution:{runId:'retained-market-run',status:'partial'},researchProfileLink:{sourceCount:1},opportunities:[{id:'opportunity-1',active:false,evidence:[{url:'https://market.example/expansion'}]}]};}
+for(const action of ['runCompanyResearch','runAiSynthesis'])test(`${action} retains market evidence, reports and selections while changed drafts require review`,async()=>{
+ const r=runtime({prior:true}),before=r.state();before.market=marketWithSavedWork();before.referenceCustomerPortfolio={lists:[{id:'reference-1',active:true}]};r.saved.set(STATE,JSON.stringify(before));
+ await r.hooks[action]({rerun:true});const result=r.state();
+ assert.deepEqual(result.profile,before.profile);assert.equal(result.approved,false);assert.equal(result.market.strategyApproved,false);assert.equal(result.market.researchContextStale,true);
+ for(const key of ['researchResults','researchReports','researchStatus','lastResearchAt','signals','icps','deletedSignalIds','researchExecution','researchProfileLink','opportunities'])assert.deepEqual(result.market[key],before.market[key],key);
+ assert.deepEqual(result.referenceCustomerPortfolio,before.referenceCustomerPortfolio);assert.deepEqual(result.researchMeta,r.meta());assert.equal(result.researchMeta.mode,'ai');assert.ok(result.researchMeta.execution.receipts.length);
+ if(action==='runAiSynthesis')assert.ok(r.calls.every(call=>call.url.includes('/api/ai/generate')),'synthesis uses saved evidence without Firecrawl');r.close();
+});
+test('AI preparation with unchanged confirmed answers preserves approvals and all Strategy settings',async()=>{
+ const r=runtime({prior:true}),before=r.state();before.market=marketWithSavedWork();for(const id of engine.QUESTION_IDS)if(!before.answers[id])before.answers[id]='User confirmed '+id;r.saved.set(STATE,JSON.stringify(before));
+ await r.hooks.runAiSynthesis();const result=r.state();assert.equal(result.approved,true);assert.deepEqual(result.market,before.market);assert.deepEqual(result.answers,before.answers);assert.deepEqual(result.profile,before.profile);r.close();
+});
+test('completed legacy profile without research receipts offers optional refresh, never an initial start',()=>{
+ const r=runtime({prior:true});r.saved.delete(META);r.hooks.renderResearchReview();const summary=r.context.document.getElementById('research-summary');assert.match(summary.textContent,/Saved company profile available/);assert.match(summary.textContent,/receipts.*unavailable/);assert.doesNotMatch(summary.textContent,/Start company research|Research has not run/);assert.equal(r.calls.length,0);r.close();
+});
+test('workspace research receipts survive normalization and render without the browser cache',async()=>{
+ const r=runtime();await r.hooks.runCompanyResearch();const before=r.state(),Profile=require('../profile-engine.js');const restored=Profile.normalizeSavedState(JSON.parse(JSON.stringify(before)));assert.deepEqual(restored.researchMeta,before.researchMeta);r.saved.set(STATE,JSON.stringify(restored));r.saved.delete(META);r.hooks.renderResearchReview();assert.match(r.context.document.getElementById('research-summary').textContent,/AI profile drafts ready|Research saved/);assert.match(r.context.document.getElementById('research-summary').textContent,/Research execution/);r.close();
+});
+test('research history from another seller and explicitly cleared history cannot return via normalization',()=>{
+ const Profile=require('../profile-engine.js');const old={website:'https://old.example/',generatedAt:'2026-10-01',fields:{}};assert.deepEqual(Profile.normalizeSavedState({website:'https://new.example/',researchMeta:old}).researchMeta,{});
+ const r=runtime({prior:true}),state=r.state();state.researchMeta={};r.saved.set(STATE,JSON.stringify(state));r.hooks.renderResearchReview();assert.match(r.context.document.getElementById('research-summary').textContent,/Saved company profile available/);assert.doesNotMatch(r.context.document.getElementById('research-summary').textContent,/AI profile drafts ready/);r.close();
 });

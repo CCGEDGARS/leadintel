@@ -20,7 +20,7 @@
   }
   function pendingItems(){
     const state=readJson(MAIN_STORAGE_KEY);
-    const input={website:state.website,researchMeta:readJson(RESEARCH_META_KEY),referenceCustomers:state.referenceCustomers};
+    const input={website:state.website,researchMeta:Object.hasOwn(state,'researchMeta')?(state.researchMeta||{}):readJson(RESEARCH_META_KEY),referenceCustomers:state.referenceCustomers};
     return model()?.pending(input)||fallbackPending(input);
   }
 

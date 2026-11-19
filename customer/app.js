@@ -9,7 +9,7 @@ import './business-identity.js?v=20260924-workspace-profile-english-v1&startup-t
 import './reference-customers.js?v=20261030-reference-reliability-v1';
 import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&reference-auto=20261101-v1';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=6&reference-save-stability=2&list-lifecycle=20261002-v1&qualification-context=20261020-v1&reference-auto=20261101-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1&observer-stability=20261016-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1&accepted-context=20261101-v1&activation-gates=20261101-v1&reference-auto=20261101-v1&research-row=20261101-v1&research-title-alignment=20261101-v1&confirmed-profile=20261104-v1&opportunity-auto=20261109-v1&confirmed-authority=20261113-v1&company-lifecycle=20261114-v1&research-preview=20261114-v4&strategy-refresh=20261115-v1&company-lists=20261118-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1&icp-intent=20261015-v1&observer-stability=20261016-v1&profile-clocks=20261020-v1&profile-audit=20261030-v1&accepted-context=20261101-v1&activation-gates=20261101-v1&reference-auto=20261101-v1&research-row=20261101-v1&research-title-alignment=20261101-v1&confirmed-profile=20261104-v1&opportunity-auto=20261109-v1&confirmed-authority=20261113-v1&company-lifecycle=20261114-v1&research-preview=20261114-v4&strategy-refresh=20261115-v1&company-lists=20261118-v1&profile-research-preservation=20261119-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './strategy-integrity.js?strategy-audit=20261030-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1&local-storage=20261016-v1&startup-cleanup=20261016-v1&research-recovery=20261020-v1&research-storage=20261101-v1&workspace-transfer=20261110-v1&decoded-local-references=20261114-v6&byte-decode=20261117-v1';
@@ -71,6 +71,10 @@ function loadState(){
     window.LeadIntelWorkspaceIsolation?.reconcileLocalWorkspace?.(localStorage,raw);
     const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
     const source=saved&&typeof saved==="object"&&!Array.isArray(saved)?saved:raw;
+    if(!Object.hasOwn(source,'researchMeta')){
+      try{const legacy=JSON.parse(localStorage.getItem('leadintel_customer_v2_research_meta_v1')||'{}');
+      if(legacy.website&&LeadIntelProfile.normalizeUrl(legacy.website)===LeadIntelProfile.normalizeUrl(source.website))source.researchMeta=legacy;}catch{}
+    }
     const base=LeadIntelProfile.normalizeSavedState(source);
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
     base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
@@ -95,6 +99,7 @@ function saveState(){
     if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
+    if(Object.hasOwn(current,'researchMeta'))state.researchMeta=current.researchMeta;
     // Materials owns its evidence and coverage metadata. Preserve its latest
     // records (including removals) instead of flushing a normalized stale copy.
     if(Array.isArray(current.documents))state.documents=[...(state.documents||[]).filter(doc=>!String(doc?.id||'').startsWith('material:')),...current.documents.filter(doc=>String(doc?.id||'').startsWith('material:'))];
@@ -109,8 +114,9 @@ function saveState(){
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
 function invalidateStrategicOutputs(clearSources=false){
-  state.profile=null;state.approved=false;state.market=LeadIntelMarket.normalizeMarketState({});
+  state.approved=false;state.market=LeadIntelMarket.normalizeMarketState({...state.market,strategyApproved:false,strategyApprovedAt:'',researchContextStale:Boolean(state.market?.researchResults?.length)});
   if(clearSources)state.scrapedSources=[];
+  if(state.profile)state.profile=LeadIntelProfile.normalizeSavedState(state).profile;
 }
 function updateNavigationAvailability(){
   document.querySelectorAll("[data-step-marker]").forEach(el=>{
@@ -147,7 +153,7 @@ function setStep(step,{review=false}={}){
   window.scrollTo({top:0,behavior:"smooth"});
   return true;
 }
-window.LeadIntelCustomerNavigation={setStep,openModule,currentStep:()=>Number(state?.step)||0};
+window.LeadIntelCustomerNavigation={setStep,openModule,reviewProfile:analyzeCompany,currentStep:()=>Number(state?.step)||0};
 window.LeadIntelProfileAnswers={isReady:()=>Boolean(state)};
 window.addEventListener("leadintel:open-module",event=>{const step=Number(event.detail?.step);if(step>=1&&step<=7)void openModule(step);});
 function restoreResetLanding(){
@@ -332,7 +338,13 @@ async function confirmTargeting(){
     operation={context,signature:LeadIntelTargeting.signature(state)};targetingSaveOwner=operation;
     const current=()=>targetingSaveOwner===operation&&profileApprovalCurrent(context)&&operation.signature===LeadIntelTargeting.signature(state);
     state.targetingConfirmation=LeadIntelTargeting.confirm(state);
-    try{const key="leadintel_customer_v2_research_meta_v1",meta=JSON.parse(localStorage.getItem(key)||"{}");for(const id of Object.keys(LeadIntelTargeting.fields)){if(meta.fields?.[id]){meta.fields[id].reviewed=true;meta.fields[id].origin="user";}}localStorage.setItem(key,JSON.stringify(meta));}catch{}
+    try{
+      const key="leadintel_customer_v2_research_meta_v1",latest=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"),meta=Object.hasOwn(latest,'researchMeta')?latest.researchMeta:JSON.parse(localStorage.getItem(key)||"{}");
+      if(meta?.website&&LeadIntelProfile.normalizeUrl(meta.website)===LeadIntelProfile.normalizeUrl(state.website)){
+        for(const id of Object.keys(LeadIntelTargeting.fields))if(meta.fields?.[id]){meta.fields[id].reviewed=true;meta.fields[id].origin="user";}
+        latest.researchMeta=meta;state.researchMeta=meta;localStorage.setItem(STORAGE_KEY,JSON.stringify(latest));localStorage.setItem(key,JSON.stringify(meta));
+      }
+    }catch{}
     for(const id of Object.keys(LeadIntelTargeting.fields))state.answerStatus[id]="accepted";
     if(state.profile){Object.assign(state.profile,LeadIntelTargeting.profileFields(state));for(const key of Object.values(LeadIntelTargeting.fields)){const record=state.profile.canonical?.fields?.[key];if(record)Object.assign(record,{value:state.profile[key],status:"user_confirmed",provenance:"user",confidence:"high"});}}
     if(saveState()===false)throw Error("Targeting could not be saved locally. Your edits are retained; retry after resolving the workspace save status.");
@@ -429,8 +441,8 @@ async function analyzeCompany(targetStep=3){
   try{
   const current=()=>state===original&&profileApprovalCurrent(context)&&profileApprovalSignature(state)===signature&&profileApprovalSignature(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'))===signature;
   setStep(3);$("profile-content").hidden=true;$("analysis-state").hidden=false;$("analysis-log").innerHTML="";
-  const sources=[{url:state.website,type:"website"},...state.additionalLinks.map(url=>({url,type:"link"}))];
-  analysisStatus("Reading company sources…","Public source failures will not block the profile; they will be shown as intelligence gaps.");
+  const sources=[{url:state.website,type:"website"},...state.additionalLinks.map(url=>({url,type:"link"}))].filter(source=>!(state.scrapedSources||[]).some(saved=>LeadIntelProfile.normalizeUrl(saved.url)===LeadIntelProfile.normalizeUrl(source.url)&&saved.extracted!==false&&String(saved.text||'').trim()));
+  analysisStatus(sources.length?"Reading missing company sources…":"Using saved company evidence…","Saved readable sources are reused. Missing evidence remains visible in the profile.");
   analysisLog(`Target markets: ${state.targetMarkets.join(" · ")}`);
   const sourceResults=await Promise.all(sources.map(async(source,index)=>{
     try{return {index,source,result:await scrapeSource(source.url,source.type),error:null};}
@@ -445,7 +457,7 @@ async function analyzeCompany(targetStep=3){
   const usable=collected.filter(x=>x.text);
   if(!usable.length&&!state.documents.some(doc=>doc.text)){analysisStatus('Company sources unavailable','Your saved work is retained. Retry company research when sources are available.');return false;}
   analysisStatus("Synthesizing strategic context…","Optional answers enrich the website evidence; missing answers remain explicit intelligence gaps.");
-  analysisLog(`${usable.length}/${sources.length} web sources readable`);analysisLog(`${state.documents.filter(d=>d.text).length} PDFs with extracted text`);
+  analysisLog(`${usable.length} saved web sources readable`);analysisLog(`${state.documents.filter(d=>d.text).length} PDFs with extracted text`);
   const profile=LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});
   if(!current())return false;
   state.scrapedSources=collected;state.profile=profile;state.approved=false;seedMarketStrategy();
@@ -1379,6 +1391,7 @@ function renderRunningResearchStatus(statusNode,view){
   updateQuickResearchInsight(statusNode,view);
 }
 function renderResearchStatus(){
+  const resultStatus=$('profile-market-result-status');if(resultStatus&&window.LeadIntelProfileMarket?.resultsMessage)resultStatus.textContent=window.LeadIntelProfileMarket.resultsMessage(state);
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;const sources=state.market.researchSourceStatus||{openai:"idle",firecrawl:"idle",gemini:"idle"};
   const modeLabel=researchModeUi(state.market.researchMode).label;
   const partialCoverage=status==="partial"?describePartialCoverage({modeLabel,count,openAiStatus:sources.openai,firecrawlStatus:sources.firecrawl}):null;
@@ -1920,6 +1933,7 @@ async function resetSelectedSections(){
     if(selected.includes("research")){
       state.market=LeadIntelMarket.normalizeMarketState({});
       state.profile=null;state.approved=false;
+      state.researchMeta={};const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');current.researchMeta={};localStorage.setItem(STORAGE_KEY,JSON.stringify(current));
       clearResetLocalKeys(["leadintel_customer_v2_research_meta_v1"]);
     }
     if(selected.includes("sources"))await window.LeadIntelIntelligenceSources?.clearAll?.();
@@ -2016,11 +2030,19 @@ function bind(){
   window.addEventListener("leadintel:review-market-research",()=>{void window.LeadIntelProfileMarket?.open?.().then(()=>{if(state.profile)openResearchPreview("deep");});});
   window.addEventListener("leadintel:profile-market-opened",()=>{renderResearchReports();renderResearchControls();renderResearchStatus();renderMarketJourney();});
   document.addEventListener("click",event=>{if(event.target?.closest?.("[data-profile-review-edit]"))$("edit-profile")?.click();});
-  window.addEventListener("leadintel:review-research-profile",()=>{
-    if(!state.profile){showToast("Complete your profile before reviewing research");return;}
-    state.market.researchProfileLink={linkedAt:new Date().toISOString(),evidenceDate:state.market.lastResearchAt||"",sourceCount:state.market.researchResults?.length||0};
-    saveState();window.LeadIntelReferenceCustomerUI?.close?.();setStep(3);renderProfile();
-    showToast("Research linked to your profile · review before approval");
+  let reviewingResearchProfile=false;
+  window.addEventListener("leadintel:review-research-profile",async()=>{
+    if(reviewingResearchProfile)return;reviewingResearchProfile=true;
+    const context=profileApprovalContext();
+    try{
+      window.LeadIntelReferenceCustomerUI?.close?.();
+      const opened=await analyzeCompany(3);if(!profileApprovalCurrent(context))return;
+      if(!opened){if(!state.profile&&state.step!==3)setStep(2);return;}
+      const sourceCount=state.market.researchResults?.length||0;
+      if(sourceCount){state.market.researchProfileLink={linkedAt:new Date().toISOString(),evidenceDate:state.market.lastResearchAt||"",sourceCount};saveState();}
+      renderProfile();document.getElementById('profile-company-name')?.scrollIntoView?.({block:'start'});
+    }catch(error){if(profileApprovalCurrent(context))showToast(error.message||'Profile review could not open. Your saved work is retained.');}
+    finally{reviewingResearchProfile=false;}
   });
   window.addEventListener("leadintel:open-market-strategy",()=>{if(!state.profile){showToast("Review your company profile first");return;}window.LeadIntelReferenceCustomerUI?.close?.();openMarketStrategy();});
   window.addEventListener("leadintel:website-draft-discarded",()=>{state=loadState();syncInputsFromState();});

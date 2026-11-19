@@ -56,3 +56,15 @@ test('profile approval seeding preserves evidence, reports and research linkage'
  assert.equal(state.market.researchStatus,'partial');assert.equal(state.market.lastResearchAt,'2026-10-01');
  assert.equal(state.market.researchResults[0].url,'https://example.com/legal');assert.equal(state.market.researchReports[0].id,'saved');assert.equal(state.market.researchProfileLink.sourceCount,1);assert.equal(state.market.researchErrors[0].message,'Timed out');assert.equal(state.market.signals.find(item=>item.id==='custom-manual').active,false);
 });
+
+test('both market review controls dispatch the same direct Profile review action',()=>{
+ const f=fixture();Market.install(f.root);f.listeners[0]({target:{closest:selector=>selector==='[data-complete-market-profile]'?{}:null}});assert.deepEqual(f.events,['leadintel:review-research-profile']);
+});
+test('market footer distinguishes no research, empty failures, retained evidence and optional report copies',()=>{
+ assert.match(Market.resultsMessage({}),/No market evidence is saved yet/);
+ assert.match(Market.resultsMessage({profile:{}}),/optional and has not been run/);
+ assert.match(Market.resultsMessage({market:{researchStatus:'error'}}),/did not save usable/);
+ assert.match(Market.resultsMessage({market:{researchStatus:'running'}}),/running/);
+ assert.match(Market.resultsMessage({market:{researchResults:[{}],researchReports:[],researchStatus:'partial',researchContextStale:true}}),/1 research source available · partial coverage · review/);
+ assert.match(Market.resultsMessage({market:{researchResults:[],researchReports:[{}]}}),/Saved reports are available.*no current market evidence/);
+});

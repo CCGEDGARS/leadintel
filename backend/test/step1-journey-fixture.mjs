@@ -19,7 +19,7 @@ export const sourceQuote='KNOWN EXACT SOURCE';
 
 // Same all-migration SQL and hashed-cookie authorization used by Step 5. This
 // fixture starts before activation, with no approved profile, targeting or buyer.
-export async function step1Fixture({legacyMarkets=[]}={}){
+export async function step1Fixture({legacyMarkets=[],profileResearch=false}={}){
  const DB=storageDb(),objects=new Map(),calls=[],externalCalls=[],aiRequests=[],pending=new Set();let gate=null,failedSaves=false,controlledMarketResearch=false,marketSequence=0,marketVerification="complete",marketLabel="Sweden";
  DB.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'storage-owner',datetime('now','+1 day'))").run(await sha256(sessionToken));
  const bucket={async put(key,value){objects.set(key,typeof value==='string'?value:Uint8Array.from(value));},async get(key){const value=objects.get(key);return value==null?null:{async text(){return typeof value==='string'?value:new TextDecoder().decode(value);},async arrayBuffer(){return typeof value==='string'?new TextEncoder().encode(value).buffer:value.slice().buffer;}};},async delete(key){objects.delete(key);}};
@@ -72,6 +72,7 @@ export async function step1Fixture({legacyMarkets=[]}={}){
    }
    const id=DB.raw.prepare("SELECT id FROM company_materials WHERE workspace_id=? AND status='Ready' ORDER BY created_at LIMIT 1").get(workspaceId)?.id;
    const value={fields:{proof_points:{value:sourceQuote,confidence:'high',draft_type:'fact',source_ids:id?['material:'+id]:[],rationale:'Exact words from the uploaded company material; no outcome or approval is implied.'}}};
+   if(profileResearch&&!id)value.fields.ideal_customer={value:'Manufacturers planning production equipment projects',confidence:'medium',draft_type:'hypothesis',source_ids:['S1'],rationale:'Potential customers inferred from the supplied machinery and engineering source.'};
    return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(value)}]}}],usageMetadata:{}});
   }
   throw Error('Acceptance harness blocked unplanned external request: '+url.origin+url.pathname);

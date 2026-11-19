@@ -23,8 +23,27 @@ function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&am
 function readJson(key,fallback={}){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'?value:fallback;}catch{return fallback;}}
 function readState(){return readJson(MAIN_STORAGE_KEY,{});}
 function writeState(value){localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(value));}
-function readMeta(){return readJson(RESEARCH_META_KEY,{});}
-function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}
+function readMeta(){
+  const state=readState();
+  // Workspace history is authoritative; the old browser key is a migration fallback.
+  return Object.hasOwn(state,'researchMeta')?(state.researchMeta||{}):readJson(RESEARCH_META_KEY,{});
+}
+function writeMeta(value){
+  const state=readState();
+  if(normalizeUrl(value.website)!==normalizeUrl(state.website))return;
+  writeState({...state,researchMeta:value});
+  try{localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}catch{/* The durable workspace value already owns this history. */}
+}
+function retainResearchOutputs(next,previous){
+  const text=value=>String(value||'').replace(/\s+/g,' ').trim();
+  const evidence=state=>JSON.stringify((state.scrapedSources||[]).map(row=>[normalizeUrl(row.url),text(row.text)]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  const changed=engine().QUESTION_IDS.some(id=>text(next.answers?.[id])!==text(previous.answers?.[id]))||evidence(next)!==evidence(previous);
+  next.profile=previous.profile||null;
+  next.approved=Boolean(previous.approved)&&!changed;
+  next.market={...(previous.market||{})};
+  if(changed){next.market.strategyApproved=false;next.market.strategyApprovedAt='';if(next.market.researchResults?.length)next.market.researchContextStale=true;}
+  return next;
+}
 // Async provider responses must belong to the same account and input evidence.
 // Unrelated live settings may still change; commits merge into the latest state.
 function captureResearchContext(state){return {
@@ -124,7 +143,7 @@ function researchReviewDetails(state,meta,map){
 function renderResearchReview(){
   const state=readState();const meta=metaForCurrentState();if(!running)repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
-    if(summary.dataset)summary.dataset.researchState=running?'running':meta.generatedAt?'complete':meta.failureAt?'failed':'ready';
+    if(summary.dataset)summary.dataset.researchState=running?'running':meta.generatedAt?(meta.execution?.status==='partial'||meta.quality?.coverage?.missing?.length?'partial':'complete'):meta.failureAt?'failed':state.profile?'saved':'ready';
     summary.classList.remove('research-summary-failed');
     if(running){
       summary.innerHTML=`<div class="research-summary-main"><div class="company-research-spinner" aria-hidden="true"></div><div><strong>${esc(activeProgress?.title||'Researching company…')}</strong><small>${esc(activeProgress?.detail||'Preparing your company evidence.')}</small></div></div><div class="research-summary-actions"><span class="research-mode">In progress</span><button class="research-rerun research-primary" id="rerun-company-research" type="button" disabled>Researching company…</button></div>`;
@@ -135,10 +154,12 @@ function renderResearchReview(){
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
       const coverageNote=`Source coverage: ${covered} of ${total} areas. Review the evidence and profile answers before approval.`;
       const followup=aiAvailable?'':`<small>Your ${Number(meta.sourceCount)||0} sources are saved. Retry using saved evidence without collecting sources again, or complete the profile yourself.</small><div class="research-summary-followup"><button class="research-rerun research-primary" id="synthesize-company-research" type="button">Retry AI profile preparation</button>${recovery.settings?'<button class="research-rerun" id="open-ai-settings-from-research" type="button">Open AI settings</button>':''}</div>`;
-      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon" aria-hidden="true">✦</div><div><strong>${aiAdvice?'Analytical profile drafts ready for review':aiAvailable?'Research and AI profile preparation complete':recovery.title}</strong>${aiAvailable?`<small>${esc(aiAdvice?'AI-assisted commercial recommendations':modeLabel(meta))} · ${Number(meta.sourceCount)||0} sources saved</small>`:''}<small class="research-coverage ${covered===total?'complete':'partial'}">${esc(coverageNote)}</small>${followup}${researchReviewDetails(state,meta,map)}<details class="research-more-options"><summary>More research options</summary>${!aiAvailable?`<small>Last AI result: ${esc(meta.reason||'No evidence-backed profile fields were returned.')}</small>`:''}${meta.failures?`<small>${Number(meta.failures)} source/search requests were unavailable.</small>`:''}<small>Refresh collects sources again. Use this when your website or company information has changed.</small><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></details></div></div><div class="research-summary-actions"><span class="research-mode">${state.approved?'Profile approved':'Profile needs review'}</span></div>`;
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon" aria-hidden="true">✦</div><div><strong>${aiAdvice?'Analytical profile drafts ready for review':aiAvailable?'AI profile drafts ready · review source coverage':recovery.title}</strong>${aiAvailable?`<small>${esc(aiAdvice?'AI-assisted commercial recommendations':modeLabel(meta))} · ${Number(meta.sourceCount)||0} sources saved</small>`:''}<small class="research-coverage ${covered===total?'complete':'partial'}">${esc(coverageNote)}</small>${followup}${researchReviewDetails(state,meta,map)}<details class="research-more-options"><summary>More research options</summary>${!aiAvailable?`<small>Last AI result: ${esc(meta.reason||'No evidence-backed profile fields were returned.')}</small>`:''}${meta.failures?`<small>${Number(meta.failures)} source/search requests were unavailable.</small>`:''}<small>Refresh collects sources again. Use this when your website or company information has changed.</small><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></details></div></div><div class="research-summary-actions"><span class="research-mode">${state.approved?'Profile approved':'Profile needs review'}</span></div>`;
     } else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
+    } else if(state.profile){
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon" aria-hidden="true">✦</div><div><strong>Saved company profile available</strong><small>Your profile and saved evidence are available. Detailed receipts from earlier research are unavailable; refresh only when company information needs updating.</small>${researchReviewDetails(state,meta,map)}<details class="research-more-options"><summary>More research options</summary><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></details></div></div><div class="research-summary-actions"><span class="research-mode">${state.approved?'Profile approved':'Profile needs review'}</span></div>`;
     } else {
       const hasWebsite=Boolean(normalizeUrl(state.website));const hasMarkets=selectedMarkets(state).length>0;const ready=hasWebsite&&hasMarkets;
       let title='Setup complete — ready for company research',detail='LeadIntel will analyse your website and selected market. Usually takes 1–2 minutes.',badge='Ready to research',label='Start company research <span aria-hidden="true">→</span>';
@@ -400,7 +421,7 @@ async function runAiSynthesis(){
     const fallback=researchEngine.buildEvidenceDraft({website,answers:latest.answers||{},sources,targetMarkets:selectedMarkets(latest),uiLanguage:'en'});
     const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),latestMeta.quality?.coverage||{});
     const merged=researchEngine.mergeDraft(latest.answers||{},draft,latestMeta.fields||{});
-    const next={...latest,documents:researchEngine.normalizeDocumentIds(latest.documents),answers:merged.answers,answerStatus:{...(latest.answerStatus||{})},profile:null,approved:false,market:{}};
+    const next=retainResearchOutputs({...latest,documents:researchEngine.normalizeDocumentIds(latest.documents),answers:merged.answers,answerStatus:{...(latest.answerStatus||{})}},latest);
     for(const [id,row] of Object.entries(merged.meta))next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';
     writeState(next);
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:'ai'};}
@@ -515,7 +536,7 @@ async function runCompanyResearch({rerun=false}={}){
     const next={...latest};next.documents=researchEngine.normalizeDocumentIds(latest.documents);next.uiLanguage='en';next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=retained.map(source=>({id:source.id,type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,extracted:source.extracted,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
     next.answerStatus={...(state.answerStatus||{})};for(const [id,row] of Object.entries(merged.meta)){next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';}
-    next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
+    retainResearchOutputs(next,latest);next.step=2;writeState(next);
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:ai.mode};}
     writeMeta({website,generatedAt:new Date().toISOString(),contentLanguage:researchLanguage,mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:retained.length,primarySourceCount:retained.filter(source=>source.role==='primary').length,supportingSourceCount:retained.filter(source=>source.role!=='primary').length,excludedSourceCount:research.excluded.length,characters:retained.reduce((total,source)=>total+String(source.text||'').length,0),limits:research.limits,quality,failures,execution:execution(),reason:ai.reason||'',fields});
     window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
@@ -536,7 +557,7 @@ async function runCompanyResearch({rerun=false}={}){
     if(researchContextCurrent(context,latest)&&normalizeUrl(latest.website||'')===website){
       const now=new Date().toISOString();const existing=readMeta();const previous=normalizeUrl(existing.website)===website?existing:{};
       writeMeta(previous.generatedAt?{...previous,lastFailureAt:now,lastFailure:message,lastExecution:execution()}:{...previous,website,failureAt:now,error:message,generatedAt:'',mode:'failed',execution:execution(),fields:previous.fields||{}});
-      if(!canceled&&!previous.generatedAt){latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);}window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
+      if(!canceled&&!previous.generatedAt){const failed=readState();failed.step=2;writeState(failed);}window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
     }
   }
   finally{clearTimeout(runTimer);running=false;activeProgress=null;renderResearchReview();}

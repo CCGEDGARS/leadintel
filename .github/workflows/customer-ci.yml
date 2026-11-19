@@ -348,9 +348,9 @@ jobs:
 
   profile-strategy-journey:
     runs-on: ubuntu-24.04
-    # The combined journeys reached 7m after all assertions passed on a slower runner.
+    # Includes cold-browser Profile preservation and the existing connected journeys.
     # Allow installation and evidence upload; keep every individual test deadline.
-    timeout-minutes: 9
+    timeout-minutes: 12
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v6
@@ -374,6 +374,7 @@ jobs:
         run: |
           node --import ./backend/test/register-wasm-loader.mjs --test customer/test/company-search-persistence.test.js customer/test/buyer-start-persistence.test.js customer/test/market-research-checkpoint-persistence.test.js
           node --import ./backend/test/register-wasm-loader.mjs --test --test-name-pattern='fresh Setup through|Quick Overview' backend/test/step1-journey.test.mjs
+          node --import ./backend/test/register-wasm-loader.mjs --test backend/test/profile-research-preservation-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/copilot-research-journey.test.mjs backend/test/firecrawl-usage-journey.test.mjs backend/test/buyer-review-wake-journey.test.mjs backend/test/website-contact-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/monitoring-journey.test.mjs
           node --import ./backend/test/register-wasm-loader.mjs --test backend/test/workspace-save-journey.test.mjs
@@ -384,6 +385,7 @@ jobs:
           name: profile-strategy-acceptance-${{ github.sha }}
           path: |
             /tmp/leadintel-profile-strategy/
+            /tmp/leadintel-profile-preservation/
             /tmp/leadintel-company-search-outcome/
             /tmp/leadintel-company-review-button/
             /tmp/leadintel-buyer-start/

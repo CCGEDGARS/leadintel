@@ -14,7 +14,7 @@ async function buildProfileFromResearch(targetStep=3){
   building=true;const button=document.getElementById('analyze-company');if(button){button.disabled=true;button.textContent='Building intelligence profile…';}
   try{
     const usable=state.scrapedSources.filter(source=>String(source?.text||'').trim());
-    state.profile=window.LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});state.approved=false;state.market={};state.step=3;writeState(state);
+    state.profile=window.LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});state.approved=false;state.market={...(state.market||{}),strategyApproved:false,strategyApprovedAt:''};state.step=3;writeState(state);
     const account=localStorage.getItem('leadintel_account_context_v1'),workspaceId=window.LeadIntelServerBridge?.workspace?.id||'',snapshot=JSON.stringify(state);
     const current=()=>account===localStorage.getItem('leadintel_account_context_v1')&&workspaceId===(window.LeadIntelServerBridge?.workspace?.id||'')&&snapshot===JSON.stringify(readState())&&(!window.LeadIntelAccountCache||window.LeadIntelAccountCache.current());
     let timer;let saved;
@@ -30,9 +30,11 @@ async function buildProfileFromResearch(targetStep=3){
 }
 
 function interceptAnalyze(event){
+  if(window.LeadIntelCustomerNavigation?.reviewProfile)return;
   const state=readState();if(state.profile||!hasResearchEvidence(state))return;event.preventDefault();event.stopImmediatePropagation();buildProfileFromResearch(3);
 }
 function interceptStepMarker(event){
+  if(window.LeadIntelCustomerNavigation?.reviewProfile)return;
   const marker=event.target.closest('[data-step-marker]');if(!marker)return;const target=Number(marker.dataset.stepMarker);if(![3,4].includes(target))return;
   const state=readState();if(state.profile||!hasResearchEvidence(state))return;event.preventDefault();event.stopImmediatePropagation();buildProfileFromResearch(target);
 }
