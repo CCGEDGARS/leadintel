@@ -720,7 +720,7 @@
       "contains": [
         "Delivery status unavailable",
         "data-oa-retry",
-        "data-oa-settings",
+        "oa-timezone",
         "data-oa-suppression-retry"
       ]
     },
@@ -10203,6 +10203,49 @@
         "workspace-storage-management.js?v=20261119-v1",
         "storage-management=20261119-v1",
         "storage-saving=20261119-v1"
+      ]
+    },
+    {
+      "id": "delivery-setup-access-20261119",
+      "type": "text",
+      "url": "/customer/delivery-ui.js",
+      "status": 200,
+      "contains": [
+        "No messages ready yet",
+        "delivery-go-messages",
+        "Saving settings never starts automatic sending"
+      ]
+    },
+    {
+      "id": "delivery-plan-controls-20261119",
+      "type": "text",
+      "url": "/customer/outreach-automation-ui.js",
+      "status": 200,
+      "contains": [
+        "Review &amp; activate automatic delivery",
+        "function confirmPlan",
+        "Sending remains off.",
+        "['7','Sun']"
+      ]
+    },
+    {
+      "id": "delivery-exact-send-review-20261119",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "Review and send email",
+        "When: Now",
+        "preview.textBody"
+      ]
+    },
+    {
+      "id": "delivery-setup-cache-20261119",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "delivery-setup=20261119-v1"
       ]
     }
   ]

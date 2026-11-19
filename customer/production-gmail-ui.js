@@ -34,7 +34,8 @@
       status.textContent=checking?`Checking ${label} connection…`:!authenticated?(isMicrosoft?'Sign in to connect Microsoft mail':'Local mode · Gmail Compose fallback available'):unavailable?`${label} connection check failed · Retry`:connected?`${isMicrosoft?'Microsoft':'Gmail'} · ${connection.email}`:!connection.configured?`${label} is not configured`:`${label} not connected`;
       status.dataset.state=checking?'loading':!authenticated?'local':unavailable?'error':connected?'connected':connection.configured?'disconnected':'not-configured';status.setAttribute('aria-busy',String(checking));
       connect.hidden=!authenticated||checking||unavailable||connected||!connection.configured;send.hidden=!connected;disconnect.hidden=!connected||connection.role!=='owner';retry.hidden=!authenticated||checking||!unavailable;
-      send.disabled=sendBusy||blocked;send.textContent=sendBusy?'Sending…':isMicrosoft?'Send with Microsoft':'Send with Gmail';
+      const pkg=approvedPackage(),recipient=approvedRecipient(pkg);
+      send.disabled=sendBusy||blocked||!pkg||!recipient||!Outreach?.approvalCurrent?.(pkg)||String(q("delivery-recipient")?.value||"").trim().toLowerCase()!==recipient;send.textContent=sendBusy?'Sending…':isMicrosoft?'Send with Microsoft':'Send with Gmail';
       if(!isMicrosoft)q('sync-gmail-replies').hidden=!connected;
     }
     const connected=authenticated&&!workspaceLoading&&(gmail.connected&&!gmail.loading&&!gmail.error||microsoft.connected&&!microsoft.loading&&!microsoft.error),badge=document.querySelector('#step-7 .connector-badge'),note=document.querySelector('#step-7 .warning-note');
@@ -80,8 +81,8 @@
     try{
       const preview=buildProviderSendRequest(pkg,email,'');if(!preview?.textBody?.trim()||!preview.subject?.trim())return {ok:false,error:'An unchanged approved email for this exact recipient is required.'};
       trace.checkpoint('request','pending');
-      const question=delivery?`Send this approved email to ${email} with ${label}?`:'Send now from '+(authority.connection.email||provider)+' to '+email+'?\nSubject: '+preview.subject;
-      if(!(await (root.LeadIntelDialogs?.confirm(question)??false)))return {ok:false,cancelled:true};
+      const question=`From: ${authority.connection.email||label}\nTo: ${email}\nWhen: Now\nSubject: ${preview.subject}\n\n${preview.textBody}\n\nThis confirms this email only. Automatic follow-ups require separate activation.`;
+      if(!(await (root.LeadIntelDialogs?.confirm(question,{title:'Review and send email',action:'Send email'})??false)))return {ok:false,cancelled:true};
       if(activeSend!==operation||!authority.current())return {ok:false,stale:true,error:'Delivery context changed during confirmation. Review the saved recipient and approved message before retrying.'};
       const key=await deterministicKey(pkg,email,provider);if(activeSend!==operation||!authority.current())return {ok:false,stale:true,error:'Delivery context changed before submission. Review and retry.'};
       const payload=buildProviderSendRequest(pkg,email,key),action=provider==='microsoft'?b.sendMicrosoftMail:b.sendGmail;if(!payload||typeof action!=='function')return {ok:false,error:'Connected mail delivery is unavailable.'};
@@ -166,7 +167,7 @@
     finally{if(mailboxOperations.get(key)===operation)mailboxOperations.delete(key);}
   }
   function maybeReopen(){if(sessionStorage.getItem('leadintel_reopen_delivery')==='1'&&q('continue-to-delivery')){sessionStorage.removeItem('leadintel_reopen_delivery');q('continue-to-delivery').click();}}
-  function init(){inject();render();maybeReopen();root.addEventListener('leadintel:server-ready',()=>{render();maybeReopen();});for(const event of ['leadintel:gmail-status','leadintel:microsoft-mail-status','leadintel:workspace-changed','leadintel:server-conflict','leadintel:sync-resolving','leadintel:sync-settled','leadintel:server-synced'])root.addEventListener(event,render);}
+  function init(){document.addEventListener('change',event=>{if(['delivery-company-select','delivery-recipient'].includes(event.target?.id))render();});document.addEventListener('input',event=>{if(event.target?.id==='delivery-recipient')render();});inject();render();maybeReopen();root.addEventListener('leadintel:server-ready',()=>{render();maybeReopen();});for(const event of ['leadintel:gmail-status','leadintel:microsoft-mail-status','leadintel:workspace-changed','leadintel:server-conflict','leadintel:sync-resolving','leadintel:sync-settled','leadintel:server-synced','leadintel:module-opened','leadintel:outreach-approved','leadintel:message-flow-ready'])root.addEventListener(event,render);}
   if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();}
   root.LeadIntelProductionMail={buildProviderSendRequest,sendApprovedFromMessages,render};
   if(typeof module!=='undefined'&&module.exports)module.exports=root.LeadIntelProductionMail;

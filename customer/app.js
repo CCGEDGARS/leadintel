@@ -123,7 +123,7 @@ function observeNavigation(){
   const observer=new MutationObserver(()=>updateNavigationAvailability());
   observer.observe(steps,{childList:true});
 }
-function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7?Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.()):false;}
+function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7;}
 function persistNavigationStep(step){
   if(window.LeadIntelAccountCache&&(window.LeadIntelServerBridge?.ready!==true||window.LeadIntelAccountCache.current?.()===false))return;
   // A route change owns only the last viewed page. Never flush an older form,

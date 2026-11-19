@@ -39,7 +39,7 @@
  * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1&app-dialogs=20261017-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
- * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1&qualification=20261003-qualified-v2&app-dialogs=20261017-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1';
+ * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1&qualification=20261003-qualified-v2&app-dialogs=20261017-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&delivery-setup=20261119-v1';
  * import './copilot-loader.js?v=20261011-business-research-v1&book-skills=20261027-v1';
  */
 
@@ -104,9 +104,7 @@ function stageAvailability(){
   const previousDiscovery=Boolean(window.LeadIntelWorkspaceIsolation?.hasPreviousDiscovery?.(localStorage,current));
   const savedTargets=Array.isArray(current.targetCompanies)&&current.targetCompanies.length>0;
   const pipeline=hasPipelineOpportunity();
-  const content=hasOutreachContent();
   const handoff=Boolean(window.LeadIntelWorkspaceIsolation?.hasSavedMessageHandoff?.(localStorage,current,window.LeadIntelServerBridge?.workspace?.id));
-  const approvedHandoff=Boolean(window.LeadIntelWorkspaceIsolation?.hasSavedMessageHandoff?.(localStorage,current,window.LeadIntelServerBridge?.workspace?.id,true));
   return {
     1:true,
     2:ready,
@@ -114,7 +112,7 @@ function stageAvailability(){
     4:ready&&profile,
     5:ready&&(savedTargets||previousDiscovery||profile&&approved&&strategy),
     6:ready&&profile&&approved&&(strategy||handoff)&&pipeline||Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()),
-    7:ready&&profile&&approved&&(strategy||approvedHandoff)&&pipeline&&content||Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.())
+    7:true // Setup is available; approved recipients/messages still govern every send.
   };
 }
 function currentProcessStep(){

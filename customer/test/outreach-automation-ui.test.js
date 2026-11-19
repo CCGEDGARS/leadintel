@@ -10,14 +10,14 @@ const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 test('Outreach Automation panel exposes all safety controls and live status labels',()=>{
   const ui=read('outreach-automation-ui.js');
   for(const text of [
-    'Outreach Automation','Manual','Automatic','5','10','20','Custom',
+    'Delivery settings','Manual','Automatic','5','10','20','Custom',
     'Mailbox daily limit','Working days','Timezone','Send window','Delay range',
     'Follow-ups','Pause automation','Resume automation','Emergency stop',
     'Sent today','Queue','Next send','Queue preview','Blocked reason'
   ]) assert.match(ui,new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`missing ${text}`);
-  assert.match(ui,/approved contacts may be emailed without per-message confirmation/i);
-  assert.match(ui,/const ok=\(await \(window\.LeadIntelDialogs\?\.confirm/);
-  assert.match(ui,/if\(!ok\)return/);
+  assert.match(ui,/Approved contacts can be sent automatically within these limits/i);
+  assert.match(ui,/const confirmed=await \(root\.LeadIntelDialogs\?\.confirm/);
+  assert.match(ui,/if\(!confirmed\|\|token!==operationOwner/);
 });
 
 test('owner mutation and non-owner read-only behavior are explicit',()=>{

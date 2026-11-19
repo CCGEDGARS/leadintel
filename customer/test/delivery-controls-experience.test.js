@@ -5,11 +5,11 @@ async function fixture(overrides={}){
  const context={LeadIntelServerBridge:bridge,LeadIntelCustomerNavigation:{setStep:s=>navigations.push(s)}};vm.createContext(context);vm.runInContext(fs.readFileSync(require.resolve('../outreach-automation-ui.js'),'utf8'),context);context.document=dom.window.document;
  await context.LeadIntelOutreachAutomationUI.refresh();return {dom,bridge,context,navigations,q:s=>dom.window.document.querySelector(s)};
 }
-test('manual mode has working settings navigation and readable light controls',async()=>{const f=await fixture();try{
+test('manual mode exposes schedule and follow-up settings in Delivery with activation held',async()=>{const f=await fixture();try{
  const style=f.dom.window.document.createElement('style');style.textContent=fs.readFileSync(require.resolve('../outreach-automation.css'),'utf8');f.dom.window.document.head.append(style);
  assert.equal(f.dom.window.getComputedStyle(f.q('#outreach-automation-panel')).backgroundColor,'rgb(255, 255, 255)');
  assert.equal(f.dom.window.getComputedStyle(f.q('#oa-suppress-email')).backgroundColor,'rgb(255, 255, 255)');
- const action=f.q('[data-oa-settings]');assert.ok(action);action.click();assert.deepEqual(f.navigations,[1]);assert.equal(f.q('.connector-card').nextElementSibling.id,'outreach-automation-panel');
+ assert.ok(f.q('#oa-save'));assert.ok(f.q('#oa-timezone'));assert.ok(f.q('#oa-followups'));assert.equal(f.q('#oa-activate').disabled,true);assert.deepEqual(f.navigations,[]);assert.equal(f.q('.connector-card').nextElementSibling.id,'outreach-automation-panel');
 }finally{f.dom.window.close();}});
 test('disconnected provider send buttons remain hidden despite shared flex button styles',()=>{const dom=new JSDOM('<section id="step-7"><button class="primary-btn" hidden>Send with Microsoft</button></section>');try{const style=dom.window.document.createElement('style');style.textContent='.primary-btn{display:flex}\n'+fs.readFileSync(require.resolve('../styles.css'),'utf8');dom.window.document.head.append(style);assert.equal(dom.window.getComputedStyle(dom.window.document.querySelector('button')).display,'none');}finally{dom.window.close();}});
 test('policy error is unknown with retry instead of falsely displaying manual delivery',async()=>{const f=await fixture({getOutreachAutomationPolicy:async()=>({ok:false,error:'Connection unavailable'})});try{

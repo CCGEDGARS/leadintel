@@ -109,6 +109,8 @@
   }
   function safeStep(storage,main={},requested=1){
     const target=normalizedStep(requested);
+    // Delivery setup is independent of research/message readiness. Sending keeps its own authority checks.
+    if(target===7)return 7;
     const website=websiteFromMain(main);
     const markets=Array.isArray(main.targetMarkets)?main.targetMarkets.filter(Boolean):[];
     if(!website||!markets.length)return 1;
