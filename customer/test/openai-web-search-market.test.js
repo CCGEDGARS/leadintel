@@ -52,9 +52,10 @@ test('each market query attempts OpenAI discovery and Firecrawl verification wit
   assert.doesNotMatch(block,/apollo|mixed_people|people\/search|crm-contact\/enrich/i);
 });
 
-test('OpenAI unavailability is isolated so Firecrawl can continue',()=>{
+test('AI configuration failures are isolated so Firecrawl can continue',()=>{
   assert.match(app,/openAiAvailable/);
-  assert.match(app,/OpenAI integration is required for web search/);
+  assert.match(app,/payload.code==='AI_SEARCH_PROVIDER_NOT_CONNECTED'/);
+  assert.doesNotMatch(app,/connect OpenAI in Settings for page discovery/);
   assert.match(app,/searchMarket\(query/);
   assert.match(app,/firecrawl/i);
 });

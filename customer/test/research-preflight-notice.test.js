@@ -10,7 +10,7 @@ test('the market-research plan screen has a provider pre-flight line fed by the 
 test('the Companies review names Apollo and discovery providers that are not connected',()=>{
  const app=read('app.js');
  assert.match(app,/providerConnected\("apollo"\)\)warnings\.push\("Apollo is not connected/);
- assert.match(app,/!providerConnected\("openai"\)&&!providerConnected\("gemini"\)\)warnings\.push\("OpenAI and Google Gemini are not connected/);
+ assert.match(app,/!providerConnected\("openai"\)&&!providerConnected\("anthropic"\)&&!providerConnected\("gemini"\)\)warnings\.push\("No AI research provider is connected/);
 });
 test('the attention centre exposes the last provider status for pre-flight checks',()=>{
  const centre=read('attention-centre.js');
