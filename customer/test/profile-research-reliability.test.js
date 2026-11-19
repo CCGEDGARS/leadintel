@@ -137,3 +137,8 @@ test('research history from another seller and explicitly cleared history cannot
  const Profile=require('../profile-engine.js');const old={website:'https://old.example/',generatedAt:'2026-10-01',fields:{}};assert.deepEqual(Profile.normalizeSavedState({website:'https://new.example/',researchMeta:old}).researchMeta,{});
  const r=runtime({prior:true}),state=r.state();state.researchMeta={};r.saved.set(STATE,JSON.stringify(state));r.hooks.renderResearchReview();assert.match(r.context.document.getElementById('research-summary').textContent,/Saved company profile available/);assert.doesNotMatch(r.context.document.getElementById('research-summary').textContent,/AI profile drafts ready/);r.close();
 });
+
+for(const action of ['runCompanyResearch','runAiSynthesis'])test(`${action} respects saved answer acceptance even when older research metadata still calls it a draft`,async()=>{
+ const r=runtime({prior:true}),state=r.state(),meta=r.meta();state.answers.ideal_customer='Previously approved customer segment';state.answerStatus.ideal_customer='user';meta.fields.ideal_customer={origin:'hypothesis_draft',reviewed:false,draftValue:state.answers.ideal_customer,sourceIds:['S1']};r.saved.set(STATE,JSON.stringify(state));r.saved.set(META,JSON.stringify(meta));
+ await r.hooks[action]({rerun:true});const result=r.state();assert.equal(result.answers.ideal_customer,state.answers.ideal_customer);assert.equal(result.researchMeta.fields.ideal_customer.reviewed,true);const sourceId=result.researchMeta.fields.ideal_customer.sourceIds[0];assert.equal(result.scrapedSources.find((row,index)=>(row.id||`S${index+1}`)===sourceId).text,'Original named project proof');r.close();
+});

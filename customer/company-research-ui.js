@@ -44,6 +44,9 @@ function retainResearchOutputs(next,previous){
   if(changed){next.market.strategyApproved=false;next.market.strategyApprovedAt='';if(next.market.researchResults?.length)next.market.researchContextStale=true;}
   return next;
 }
+function reviewedResearchFields(state,meta){
+  return Object.fromEntries(Object.entries(meta.fields||{}).map(([id,row])=>[id,['user','accepted'].includes(state.answerStatus?.[id])?{...row,reviewed:true}:row]));
+}
 // Async provider responses must belong to the same account and input evidence.
 // Unrelated live settings may still change; commits merge into the latest state.
 function captureResearchContext(state){return {
@@ -420,7 +423,7 @@ async function runAiSynthesis(){
     }
     const fallback=researchEngine.buildEvidenceDraft({website,answers:latest.answers||{},sources,targetMarkets:selectedMarkets(latest),uiLanguage:'en'});
     const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),latestMeta.quality?.coverage||{});
-    const merged=researchEngine.mergeDraft(latest.answers||{},draft,latestMeta.fields||{});
+    const merged=researchEngine.mergeDraft(latest.answers||{},draft,reviewedResearchFields(latest,latestMeta));
     const next=retainResearchOutputs({...latest,documents:researchEngine.normalizeDocumentIds(latest.documents),answers:merged.answers,answerStatus:{...(latest.answerStatus||{})}},latest);
     for(const [id,row] of Object.entries(merged.meta))next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';
     writeState(next);
@@ -524,12 +527,12 @@ async function runCompanyResearch({rerun=false}={}){
     runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
     setProgress('Preparing your AI profile…','Interpreting the collected evidence. This stage can take up to one minute.');
     taskCentre?.update(taskId,{stage:'Preparing AI profile',completed:3,resultCount:sources.length});
-    const fallback=researchEngine.buildEvidenceDraft({website,answers:state.answers||{},sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage,answers:state.answers||{}},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
+    const fallback=researchEngine.buildEvidenceDraft({website,answers:state.answers||{},sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage,answers:state.answers||{}},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,reviewedResearchFields(state,readMeta()));
     const latest=readState();assertResearchContext(context,latest);
     if(ai.receipt)receipts.push({...ai.receipt,id:`R${receipts.length+1}`});
     if(canceled)throw new Error('Company research canceled.');
     if(state.profile&&ai.mode!=='ai')throw new Error(`AI refresh did not complete: ${ai.reason||'No usable AI fields returned.'}`);
-    const retained=retainAcceptedEvidence(sources,state,readMeta().fields||{},merged);
+    const retained=retainAcceptedEvidence(sources,state,reviewedResearchFields(state,readMeta()),merged);
     quality=researchEngine.evaluateResearchQuality({website,primary:retained.filter(source=>source.role==='primary'),supporting:retained.filter(source=>source.role!=='primary'),failures});
     if(!quality.publishable)throw new Error('Retained research no longer meets the website evidence gate; previous evidence was preserved.');
     for(const [id,row] of Object.entries(merged.meta)){if(!row.reviewed)merged.meta[id]=researchEngine.capDraftConfidence({[id]:row},quality.coverage)[id];}
