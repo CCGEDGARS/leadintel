@@ -10193,6 +10193,17 @@
       "url": "/api/storage/preferences?workspace_id=release-proof",
       "status": 401,
       "contains": []
+    },
+    {
+      "id": "storage-management-returning-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "workspace-storage-management.js?v=20261119-v1",
+        "storage-management=20261119-v1",
+        "storage-saving=20261119-v1"
+      ]
     }
   ]
 }
