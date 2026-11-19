@@ -96,3 +96,15 @@ test('a stale-research approval cannot unexpectedly become a paid run after the 
  assert.equal(r.researchStarts(),0);
  assert.match(r.notices.at(-1),/Research status changed/);
 });
+
+
+test('a saved Strategy changed after the confirmation opened must be reviewed again',async()=>{
+ const r=runtime(),original=I.signature(r.state);
+ r.ctx.$('strategy-handoff-dialog').dataset.reviewedScope=original;
+ r.state.market.signals[0].weight=9;
+ r.saved.set('leadintel_customer_v2_state',JSON.stringify(r.state));
+ assert.equal(await r.activate(),false);
+ assert.equal(r.opened(),0);
+ assert.equal(r.researchStarts(),0);
+ assert.match(r.notices.at(-1),/Strategy changed/);
+});
