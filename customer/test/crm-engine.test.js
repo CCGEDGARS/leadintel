@@ -83,3 +83,10 @@ test('company restore patch leaves buyer identity, research and in-flight owner 
  for(const key of ['people','buyerDiscovery','publicResearch'])assert.equal(Object.hasOwn(patch,key),false);
  Object.assign(candidate,patch);assert.equal(candidate.people[0],person);assert.equal(candidate.buyerDiscovery,buyerDiscovery);assert.equal(candidate.publicResearch,publicResearch);assert.equal(candidate.buyerRoles,'Engineering Director');
 });
+
+
+test('company-list evidence survives the company-owned CRM patch without introducing buyer or arbitrary fields',()=>{
+ const source={companyList:{id:'list-one',fitScore:90,signalScore:80,matchedProfiles:[{profileId:'icp-core',quote:'A source-backed operation'}],criteriaSummary:'Profiles: Core',buyerResearch:{buyers:[{name:'Must not enter'}]},unknown:'discard'},buyerResearch:{buyers:[{name:'Must not enter'}]}};
+ const result=crm.companyResearchPatch(source);assert.equal(result.companyList.fitScore,90);assert.equal(result.companyList.matchedProfiles[0].quote,'A source-backed operation');assert.equal(result.companyList.buyerResearch,undefined);assert.equal(result.companyList.unknown,undefined);assert.equal(result.buyerResearch,undefined);
+ source.companyList.matchedProfiles[0].quote='Changed';assert.equal(result.companyList.matchedProfiles[0].quote,'A source-backed operation');
+});

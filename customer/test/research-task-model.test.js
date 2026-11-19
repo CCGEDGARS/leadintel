@@ -14,3 +14,12 @@ test('CSV formula protection and document escaping retain partial-outcome and ph
  const task={status:'blocked',plan:{count:3},blocker:{reason:'Phone source missing'},results:[{company:'=HYPERLINK("evil")',website:'https://supplier.example',location:'<script>alert(1)</script>',score:90,buyers:[{name:'John Smith',role:'Director',phone:'+4512345678',phoneStatus:'named_public_source',phoneSource:'https://supplier.example/team'}]}]};
  const csv=T.csv(task);assert.match(csv,/"'=HYPERLINK/);assert.match(csv,/"'\+4512345678"/);assert.match(csv,/named_public_source/);const doc=T.documentHtml(task);assert.match(doc,/1 of 3/);assert.match(doc,/Phone source missing/);assert.doesNotMatch(doc,/<script>/);assert.match(doc,/&lt;script&gt;/);
 });
+
+
+test('a single company can use explicit profile and buying-signal modes',()=>{
+ assert.equal(T.requested('Use Flow 1 core profile and find 1 company in Sweden CSV'),true);
+ assert.equal(T.extract('Use Flow 1 core profile, profiles only, find 1 company in Sweden CSV').signalMode,'off');
+ assert.equal(T.extract('Find 10 companies matching all profiles; prioritize buying signals').profileMode,'all');
+ assert.equal(T.extract('Find 10 companies matching all profiles; prioritize buying signals').signalMode,'boost');
+ assert.equal(T.extract('Find 10 companies and require buying signals').signalMode,'require');
+});
