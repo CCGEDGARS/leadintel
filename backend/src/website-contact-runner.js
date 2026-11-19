@@ -125,12 +125,21 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   finally{clearTimeout(operationTimer);controller.signal.removeEventListener('abort',canceled);operationController.abort();}
  }
  const search=async query=>task('search',query,async signal=>{const raw=await searchSource(query,{signal});if(signal.aborted)throw signal.reason;const rows=(Array.isArray(raw)?raw:raw?.results||[]).slice(0,8).map(r=>({url:S.safeUrl(r.url),title:clean(r.title).slice(0,300),description:String(r.description||r.text||'').slice(0,1800),evidenceKind:'search_excerpt'})).filter(r=>r.url);if(services.search)observe({provider:'controlled-public-search',operation:'search',status:'succeeded',results:rows.length});return rows;});
- const read=async url=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
-  const raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);if(signal.aborted)throw signal.reason;const page=raw?.data||raw||{};
+ const establishes=(page,officialContactPage=false)=>page&&sameHost(page.url,input.domain)&&S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title},{officialContactPage}).verified;
+ const read=async (url,{confirmCompany=false}={})=>task('read',S.safeUrl(url),async(signal,operationMs)=>{
+  let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{purpose:'website_contacts',signal,totalTimeoutMs:Math.min(18000,operationMs)})))(url,signal);}catch(error){
+   for(const entry of error.researchTrace||[])observe(entry);
+   const details=(error.researchTrace||[]).map(entry=>[entry.provider,entry.reason].filter(Boolean).join(' · ')).join(', ');
+   if(details&&!signal.aborted)error.message=error.message+' ('+details+')';
+   throw error;
+  }
+  if(signal.aborted)throw signal.reason;const page=raw?.data||raw||{};
   const actual=S.safeUrl(page.url||page.metadata?.sourceURL||url),text=String(page.markdown||page.text||page.content||'');
   if(raw?.success===false||page.error||page.metadata?.statusCode>=400||!actual||!text.trim()||!D.buyerSourceReadLocation(candidateFor(input),url,page,{move:true}))throw Error('Page unreadable or source attribution changed');
   for(const entry of raw.researchTrace||page.researchTrace||[])observe(entry);
-  return {url:actual,title:clean(page.title||page.metadata?.title||text.match(/^#\s+([^\n]+)/m)?.[1]).slice(0,300),markdown:text.slice(0,60000),textTruncated:text.length>60000,sourceRead:true,evidenceKind:'page_extract',metadata:{sourceURL:actual,statusCode:200},extractedAt:new Date().toISOString(),links:(page.links||[]).map(l=>S.safeUrl(typeof l==='string'?l:l.href)).filter(Boolean).slice(0,160)};
+  const result={url:actual,title:clean(page.title||page.metadata?.title||text.match(/^#\s+([^\n]+)/m)?.[1]).slice(0,300),markdown:text.slice(0,60000),textTruncated:text.length>60000,sourceRead:true,evidenceKind:'page_extract',metadata:{sourceURL:actual,statusCode:200},extractedAt:new Date().toISOString(),links:(page.links||[]).map(l=>S.safeUrl(typeof l==='string'?l:l.href)).filter(Boolean).slice(0,160)};
+  if(confirmCompany&&!establishes(result,true))throw Error('Official contact page did not establish this company identity');
+  return result;
  });
  const apollo=(key,payload)=>task('apollo',key,signal=>(services.apollo||((payload,options)=>searchWorkspaceApolloPeople(env,row.workspace_id,payload,{userId:row.requested_by,guard,...options})))(payload,{signal}));
  const optional=async operation=>{try{return await operation();}catch(error){if(!valid||controller.signal.aborted||['TIME_BUDGET','BATCH_LIMIT','PASS_LIMIT'].includes(error.code))throw error;state.gaps=[...new Set([...(state.gaps||[]),clean(error.message).slice(0,180)])].slice(-30);return null;}};
@@ -184,8 +193,28 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
   observe({provider:'apollo',operation:'leadership_identity_search',status:leaders?'succeeded':'unavailable',results:leaders?.people?.length||0,paidReveal:false});
  };
  const plannedPages=()=>{
-  const found=new Set(reads(state).map(p=>p.url));
+  const found=new Set(state.tasks.filter(t=>t.kind==='read'&&t.status==='complete').flatMap(t=>[t.value,t.result.url]));
   return [...new Set([...state.tasks.filter(t=>t.kind==='search'&&t.status==='complete'&&!t.archived).flatMap(t=>t.result.map(r=>r.url)),...reads(state).flatMap(p=>p.links||[])])].filter(url=>sameHost(url,input.domain)&&!found.has(url)&&!state.tasks.some(t=>t.kind==='read'&&t.value===url&&t.attempts>=2)).sort((a,b)=>Number(contactPage(b))-Number(contactPage(a)));
+ };
+ // The saved company still has to establish its identity on its own domain.
+ // Search excerpts and directory listings can locate a page but cannot authorize it.
+ const readCompanyIdentity=async()=>{
+  const attempted=(kind,value)=>state.tasks.some(t=>t.kind===kind&&t.value===value&&t.status==='failed'&&t.attempts>0);
+  const home=attempted('read',input.website)?null:await optional(()=>read(input.website));
+  if(home){
+   if(establishes(home,true))return home;
+   throw Error('The website does not establish this saved company identity. Review its name and website.');
+  }
+  state.label='Finding an official contact page after the homepage could not be read';
+  const query=queries(input)[1],results=attempted('search',query)?[]:await optional(()=>search(query));
+  const paths=input.domain.endsWith('.dk')?['/kontakt-os/','/kontakt/']:['/contact/','/contact-us/'];
+  const urls=[...new Set([...(results||[]).map(row=>row.url).filter(url=>sameHost(url,input.domain)&&contactPage(new URL(url).pathname)),...paths.map(path=>new URL(path,input.website).href)])].slice(0,3);
+  for(const url of urls){
+   if(attempted('read',url))continue;
+   const page=await optional(()=>read(url,{confirmCompany:true}));
+   if(establishes(page,true))return page;
+  }
+  throw Error('The homepage could not be read and no official contact page confirmed the company. See Access and research gaps for the sources checked.');
  };
  const readBatch=async urls=>{
   const outcomes=await Promise.allSettled(urls.map(url=>optional(()=>read(url))));
@@ -209,7 +238,7 @@ export async function runWebsiteContactJobs(env,{jobId,now=Date.now(),windowMs=4
    // corporate site must not make its known leaders wait for every page.
    if(state.apolloLeadershipDone&&state.contactsDue!==false&&waitingPeople().length){state.contactsDue=false;await checkContacts();continue;}
    state.contactsDue=true;
-   if(step===0){state.label='Read the company website';const page=await read(input.website);const identity=S.assessIdentity({name:input.company,website:input.website},{url:page.url,text:page.markdown,title:page.title});if(!identity.verified)throw Error('The website does not establish this saved company identity. Review its name and website.');state.identityVerifiedAt=new Date().toISOString();state.description=companyDescription(page);state.descriptionSourceUrl=page.url;state.discoveryStep++;}
+   if(step===0){state.label='Read the company website';const page=await readCompanyIdentity();state.identityVerifiedAt=new Date().toISOString();state.description=companyDescription(page);state.descriptionSourceUrl=page.url;state.discoveryStep++;}
    else if(step<=6){state.label=step===1?'Find decision-makers and senior management':'Discover staff and published company contact pages';await optional(()=>search(queries(input)[step-1]));state.discoveryStep++;}
    else if(step===7){
     const planned=plannedPages();
