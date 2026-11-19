@@ -90,3 +90,16 @@ test('a restart after the last successful checkpoint finishes without buying ano
  f.env.COMPANY_LIST_TEST_SERVICES={search:()=>assert.fail('extra search'),read:()=>assert.fail('extra read'),generate:()=>assert.fail('extra reasoning')};
  await tick(f);const after=await readCompanyList(f.env,workspaceId,first.id);assert.equal(after.status,'complete');assert.equal(after.progress.operations,before.progress.operations);assert.deepEqual(after.results,before.results);
 });
+
+test('retrying a failed plan does not count the same empty discovery round twice',async t=>{
+ const f=await setup(t),base=services(1);let failed=false;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,search:async q=>q==='empty first round'?[]:base.search(),generate:async p=>{
+  if(p.stage!=='plan')return base.generate(p);
+  if(p.round===0)return {queries:['empty first round']};
+  if(!failed){failed=true;throw Object.assign(Error('Temporary model failure'),{status:503});}
+  return {queries:['new useful round']};
+ }};
+ const waits=[],first=(await (await route(f,{...input,count:1},'owner',{},waits)).json()).list;await Promise.all(waits);
+ let list=await readCompanyList(f.env,workspaceId,first.id);assert.equal(list.status,'queued');await tick(f,list.progress.nextAttemptAt+1);list=await readCompanyList(f.env,workspaceId,first.id);assert.equal(list.status,'complete');
+ const state=JSON.parse(f.DB.raw.prepare('SELECT state_json FROM company_lists WHERE id=?').get(first.id).state_json);assert.equal(state.noProgressRounds,1);
+});
