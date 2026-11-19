@@ -115,7 +115,7 @@
 .workflow-menu button:focus-visible{outline:2px solid #157763;outline-offset:2px}
 .workflow-menu[hidden]{display:none!important}
 .mf-version{padding:10px 0;border-bottom:1px solid #dce7e2}.mf-version button{margin-left:8px}
-@media(min-width:721px) and (max-width:1250px){.page-shell .topbar{height:auto;min-height:78px;gap:16px;padding:12px 24px}.page-shell .brand{flex-shrink:0}}
+@media(min-width:721px){.page-shell .topbar{height:auto;min-height:72px;gap:16px;padding:12px 24px}.page-shell .brand{flex-shrink:0}}
 @media(max-width:720px){
   .page-shell #topbar-workflow,.page-shell #open-monitoring-inbox{order:3}
   .page-shell #server-account{order:4}
