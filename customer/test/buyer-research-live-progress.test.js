@@ -35,5 +35,7 @@ test('contact work cannot claim that the company dossier is still running',()=>{
  const dossier=D.reconcile([],{company:'Example',domain:'example.com'});
  const c={domain:'example.com',company:'Example',peopleStatus:'loading',publicContactStatus:'loading',buyerResearchProgress:{jobId:'j',phase:'contacts'},buyerDiscovery:{companyDossier:dossier}};
  assert.doesNotMatch(UI.render(c),/Company research in progress/);assert.match(UI.render(c),/Company research needs attention/);
- c.buyerResearchProgress.phase='dossier';assert.match(UI.render(c),/Company research in progress/);
+ c.buyerResearchProgress.phase='official';assert.match(UI.render(c),/Company research pending/);
+ c.buyerResearchProgress.phase='dossier';c.buyerResearchProgress.executionStatus='queued';assert.match(UI.render(c),/Company research pending/);
+ c.buyerResearchProgress.executionStatus='running';assert.match(UI.render(c),/Company research in progress/);
 });

@@ -18,3 +18,35 @@ test('a resumed final-stage job restores queued coverage and finishes native AI 
   const waits=[],noop=async()=>({completed:0});await app.scheduled({cron:'* * * * *',scheduledTime:Date.now()},f.env,{waitUntil:p=>waits.push(p)},{runBuyerResearchJobs:(env,o)=>runBuyerResearchJobs(env,{...o,maxJobs:1,jobId:job.id}),runCopilotResearchJobs:noop,runWritingReferenceJobs:noop,runWorkspaceSkillJobs:noop,runCompanyMaterialJobs:noop,runLanguagePackJobs:noop});await Promise.all(waits);await page.waitForFunction(()=>discovery.selectedProspects[0].buyerResearchProgress?.aiReviewStatus==='complete');assert.equal(reviews,1);assert.equal(f.DB.raw.prepare('SELECT status FROM buyer_research_jobs WHERE id=?').get(job.id).status,'needs_review');assert.deepEqual(f.DB.raw.prepare('SELECT * FROM buyer_research_tasks WHERE job_id=? ORDER BY task_key').all(job.id),receipts);assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);assert.deepEqual(errors,[]);await page.screenshot({path:dir+'/reviewed.png',fullPage:true});await fs.writeFile(dir+'/result.json',JSON.stringify({sameJob:true,savedChecks:129,sourceReplays:0,queuedHasNoExecutingStage:true,freshReopen:true,nativeReviewCalls:reviews,wholeQualityApproved:false,paidContactCalls:0,pageErrors:errors},null,2));
  }catch(e){await page?.screenshot({path:dir+'/failure.png',fullPage:true}).catch(()=>{});throw e;}finally{await context?.close();await browser.close();await f.close();}
 });
+
+test('reopening a running official-source job shows saved names without completing identity or contact checks',{timeout:90000},async t=>{
+ let chromium;
+ try{({chromium}=await loadPlaywright());await fs.access(process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium');}
+ catch(error){if(process.env.LEADINTEL_REQUIRE_BROWSER==='true')throw error;t.skip('Chromium unavailable');return;}
+ const f=await journeyFixture({durableJobs:true,roleReviewPending:true,incompleteDossier:true});
+ t.after(()=>f.close());
+ const job=await startBuyerJob(f.env,workspaceId,{id:'storage-owner',sessionTokenHash:await sha256(sessionToken)},{candidate:f.candidate});
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='running',lease_token='test-worker',lease_until=? WHERE id=?").run(Date.now()+180000,job.id);
+ const insert=f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,result_json) VALUES(?,?,'search','official',?,'complete',1,'{\"rows\":[]}')");
+ for(let i=0;i<42;i++)insert.run(job.id,'receipt-'+i,'Completed source check '+i);
+ const browser=await chromium.launch({executablePath:process.env.LEADINTEL_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ t.after(()=>browser.close());
+ const context=await browser.newContext();
+ await context.route('**/*',route=>new URL(route.request().url()).origin===f.origin?route.continue():route.abort());
+ await context.addCookies([{name:'leadintel_session',value:sessionToken,url:f.origin}]);
+ const page=await context.newPage();
+ for(let visit=0;visit<2;visit++){
+  await page.goto(f.origin+'/customer/',{waitUntil:'domcontentloaded'});await ready(page);await settleInitialSave(page);
+  await page.evaluate(()=>showDiscoveryStep('buyers'));
+  const panel=page.locator('.buyer-research-progress');
+  await panel.getByText('42 source checks saved',{exact:true}).waitFor();
+  assert.match(await panel.locator('li.active').textContent(),/Official sources/);
+  assert.equal(await panel.locator('li.done').count(),0);
+  assert.match(await panel.textContent(),/Contact checks pending · 2 saved people/);
+  assert.match(await page.locator('.company-dossier').textContent(),/Company research pending/);
+  assert.doesNotMatch(await page.locator('.selected-prospect-row').textContent(),/Refresh to assess the saved contacts/);
+ }
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_jobs').get().n,1);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM buyer_research_tasks').get().n,42);
+ assert.equal(f.DB.raw.prepare('SELECT count(*) n FROM crm_enrichment_requests').get().n,0);
+});

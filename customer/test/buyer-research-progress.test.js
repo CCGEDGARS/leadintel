@@ -78,3 +78,18 @@ test('queued review shows verified coverage without claiming an active worker or
  const dom=new JSDOM(context.buyerResearchProgressHtml({domain:'example.com',people:Array.from({length:10},(_,i)=>({id:String(i)})),publicResearch:{accountability:{checkedPeople:0,totalPeople:10}},buyerResearchProgress:{jobId:'j',phase:'review',step:5,executionStatus:'queued',aiReviewStatus:'not_assessed',completedChecks:129,stages:{official:false,dossier:false,identities:true,contacts:false,review:false},timing:{runWindow:{startedAt:new Date().toISOString(),deadlineAt:new Date(Date.now()+1800000).toISOString()}}}}));
  const doc=dom.window.document;assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/1 of 5 stages verified/);assert.match(doc.querySelector('.buyer-research-progress-head').textContent,/Next: Review evidence/);assert.equal(doc.querySelectorAll('li.active').length,0,'Queued work has no executing stage');assert.equal(doc.querySelectorAll('li.done').length,1);assert.match(doc.body.textContent,/Contact checks complete for 0\/10 people/);assert.match(doc.body.textContent,/AI evidence review: queued/);assert.doesNotMatch(doc.body.textContent,/buyer reviews finished/);assert.equal(doc.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'1');dom.window.close();
 });
+
+
+test('official-source work never presents saved people as a completed later stage',()=>{
+ const vm=require('node:vm'),{JSDOM}=require('jsdom'),context={Date,esc:String};vm.createContext(context);
+ vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),context);
+ const candidate={people:Array.from({length:10},(_,id)=>({id})),buyerResearchProgress:{
+  phase:'official',executionStatus:'running',jobId:'j',step:1,completedChecks:42,stages:{identities:true}
+ }};
+ const dom=new JSDOM(context.buyerResearchProgressHtml(candidate)),doc=dom.window.document;
+ assert.match(doc.body.textContent,/42 source checks saved/);
+ assert.match(doc.body.textContent,/Contact checks pending · 10 saved people/);
+ assert.match(doc.querySelector('li.active').textContent,/Official sources/);
+ assert.equal(doc.querySelectorAll('li.done').length,0);
+ assert.equal(doc.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'0');dom.window.close();
+});
