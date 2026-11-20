@@ -4,6 +4,11 @@
  // A rule excludes a company only on a known mismatch. Missing or unavailable
  // facts stay "unknown": they never exclude and never confirm.
  const MAX_INDUSTRIES=40;
+ // Two-digit divisions of the European NACE classification, on which the national
+ // register codes are built. Titles follow NACE Rev. 2; a few service divisions
+ // were regrouped in Rev. 2.1, the mining, manufacturing, energy and construction
+ // divisions were not.
+ const DIVISIONS='01 Crop and animal production|02 Forestry and logging|03 Fishing and aquaculture|05 Mining of coal and lignite|06 Extraction of crude petroleum and natural gas|07 Mining of metal ores|08 Other mining and quarrying|09 Mining support services|10 Food products|11 Beverages|12 Tobacco products|13 Textiles|14 Wearing apparel|15 Leather and related products|16 Wood and wood products|17 Paper and paper products|18 Printing and recorded media|19 Coke and refined petroleum products|20 Chemicals and chemical products|21 Pharmaceuticals|22 Rubber and plastic products|23 Other non-metallic mineral products (glass, cement, concrete)|24 Basic metals|25 Fabricated metal products|26 Computer, electronic and optical products|27 Electrical equipment|28 Machinery and equipment|29 Motor vehicles and trailers|30 Other transport equipment|31 Furniture|32 Other manufacturing|33 Repair and installation of machinery and equipment|35 Electricity, gas and steam supply|36 Water collection, treatment and supply|37 Sewerage|38 Waste collection, treatment and recovery|39 Remediation and other waste management|41 Construction of buildings|42 Civil engineering|43 Specialised construction activities|45 Trade and repair of motor vehicles|46 Wholesale trade|47 Retail trade|49 Land transport and pipelines|50 Water transport|51 Air transport|52 Warehousing and transport support|53 Postal and courier activities|55 Accommodation|56 Food and beverage service|58 Publishing|59 Film, video, television and sound production|60 Programming and broadcasting|61 Telecommunications|62 Computer programming and consultancy|63 Information services|64 Financial services|65 Insurance and pension funding|66 Activities auxiliary to finance and insurance|68 Real estate|69 Legal and accounting|70 Head offices and management consultancy|71 Architecture, engineering and technical testing|72 Scientific research and development|73 Advertising and market research|74 Other professional, scientific and technical activities|75 Veterinary activities|77 Rental and leasing|78 Employment activities|79 Travel agencies and tour operators|80 Security and investigation|81 Services to buildings and landscape|82 Office administration and business support|84 Public administration and defence|85 Education|86 Human health|87 Residential care|88 Social work|90 Creative, arts and entertainment|91 Libraries, archives and museums|92 Gambling and betting|93 Sports, amusement and recreation|94 Membership organisations|95 Repair of computers and household goods|96 Other personal services'.split('|').map(entry=>({code:entry.slice(0,2),label:entry.slice(3)}));
  // Holding companies and head offices carry a legal-entity code that says
  // nothing about the group's operations.
  const NON_OPERATING=/^(?:642|701)/;
@@ -89,12 +94,26 @@
   return {key:'revenue',status:'match',detail:stated+(preferred?', within the ideal range':'')};
  }
 
- function evaluate(criteria,facts){
+ // A register code describes the legal entity and can differ from what the
+ // business does. A quoted statement on the company's own website of an activity
+ // in a selected division confirms the industry. It can rescue a register-code
+ // mismatch; evidence of any other activity changes nothing and never excludes.
+ function industryEvidence(criteria,value){
+  const division=String(value?.division??'').trim(),url=String(value?.url??'').trim(),quote=String(value?.quote??'').replace(/\s+/g,' ').trim();
+  return /^\d{2}$/.test(division)&&url&&quote&&criteria.industries.includes(division)?{division,url,quote}:null;
+ }
+
+ function evaluate(criteria,facts,options={}){
   if(!criteria)return {decision:'pass',checks:[],excludedBy:[]};
   const known=facts?.status==='found';
   const pending=(key,detail)=>({key,status:'unknown',detail});
   const checks=[registryCheck(criteria,facts)];
-  if(criteria.industries.length)checks.push(known?industryCheck(criteria,facts):pending('industry','Industry not checked without a register entry'));
+  if(criteria.industries.length){
+   const registered=known?industryCheck(criteria,facts):pending('industry','Industry not checked without a register entry');
+   const stated=registered.status==='match'?null:industryEvidence(criteria,options.industryEvidence);
+   const code=known?String(facts.industry?.code||'').replace(/\D/g,''):'';
+   checks.push(stated?{key:'industry',status:'match',detail:(code?'Register code '+[industryCode(code),facts.industry.label].filter(Boolean).join(' ')+'; ':'')+'the company website states an activity in division '+stated.division+': “'+stated.quote+'”',evidence:{url:stated.url,quote:stated.quote}}:registered);
+  }
   if(criteria.employees)checks.push(known?employeesCheck(criteria,facts):pending('employees','Employee count not checked without a register entry'));
   if(criteria.revenue)checks.push(known?revenueCheck(criteria,facts):pending('revenue','Revenue not checked without a register entry'));
   const excludedBy=checks.filter(c=>c.status==='mismatch').map(c=>c.key);
@@ -113,5 +132,5 @@
   return parts.join(' · ');
  }
 
- return {MAX_INDUSTRIES,normalize,evaluate,describe};
+ return {MAX_INDUSTRIES,DIVISIONS,normalize,evaluate,describe};
 });

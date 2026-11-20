@@ -102,3 +102,31 @@ test('a group sized by its largest registered member is excluded when that membe
  const small=T.evaluate(criteria(),{...group,employees:{min:40,max:null}});
  assert.equal(small.decision,'pass');assert.equal(check(small,'employees').status,'unknown');
 });
+
+test('a quoted first-party statement of an allowed activity overrides a register code, and never excludes by itself',()=>{
+ const wholesale={code:'467200',label:'Wholesale of motor vehicle parts'};
+ const evidence={division:'25',url:'https://example.test/about',quote:'We manufacture welded steel structures'};
+ const rescued=T.evaluate(criteria(),found({industry:wholesale}),{industryEvidence:evidence});
+ assert.equal(rescued.decision,'pass');assert.equal(check(rescued,'industry').status,'match');
+ assert.match(check(rescued,'industry').detail,/46\.72 Wholesale of motor vehicle parts/);assert.match(check(rescued,'industry').detail,/We manufacture welded steel structures/);
+ assert.deepEqual(check(rescued,'industry').evidence,{url:evidence.url,quote:evidence.quote});
+ // Evidence for an activity outside the selection changes nothing in either direction.
+ const other={...evidence,division:'20'};
+ assert.equal(T.evaluate(criteria(),found({industry:wholesale}),{industryEvidence:other}).decision,'exclude');
+ assert.equal(check(T.evaluate(criteria(),found(),{industryEvidence:other}),'industry').status,'match');
+ // Without a register opinion the quoted activity confirms the industry.
+ for(const facts of [found({industry:null}),found({industry:{code:'642120',label:'Holding'}}),{status:'ambiguous',registry:'DK-CVR'},null]){
+  assert.equal(check(T.evaluate(criteria(),facts,{industryEvidence:evidence}),'industry').status,'match');
+  assert.equal(check(T.evaluate(criteria(),facts,{industryEvidence:other}),'industry').status,'unknown');
+ }
+ // Incomplete evidence is ignored.
+ for(const bad of [{division:'25'},{division:'25',url:evidence.url},{division:'metal',url:evidence.url,quote:evidence.quote},{}])
+  assert.equal(T.evaluate(criteria(),found({industry:wholesale}),{industryEvidence:bad}).decision,'exclude');
+});
+
+test('the industry divisions offered in forms are unique two-digit codes with a title',()=>{
+ assert.ok(T.DIVISIONS.length>80);assert.equal(new Set(T.DIVISIONS.map(d=>d.code)).size,T.DIVISIONS.length);
+ assert.ok(T.DIVISIONS.every(d=>/^\d{2}$/.test(d.code)&&d.label));
+ assert.equal(T.DIVISIONS.find(d=>d.code==='25').label,'Fabricated metal products');
+ assert.ok(T.DIVISIONS.length>T.MAX_INDUSTRIES);
+});
