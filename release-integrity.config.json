@@ -10058,7 +10058,9 @@
       "contains": [
         "save-company-search-list",
         "export-company-search-list",
-        "result.list?.criteria?.fingerprint!==fingerprint",
+        "result.list.criteria?.fingerprint!==fingerprint",
+        "Export saved copy",
+        "download(format,result.list)",
         "renderSearchSnapshot",
         "M.inScoreOrder(l.results)"
       ]
@@ -10070,6 +10072,7 @@
       "status": 200,
       "contains": [
         "normalizeSearchSnapshot",
+        "clean(value,limit).trimEnd()",
         "results:inScoreOrder(list.results||[])",
         "Review status",
         "Previous \u00b7 needs review"
@@ -10081,7 +10084,8 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "company-list-save-export=20261119-v1"
+        "company-list-save-export=20261119-v1",
+        "saved-list-export=20261120-v1"
       ]
     },
     {

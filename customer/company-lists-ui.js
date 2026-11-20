@@ -4,7 +4,7 @@
  let current=null,options=null,scope='',pending=false,timer=null,pollVersion=0,sort='score',descending=true,prepared=null,showAll=false;
  const identity=()=>JSON.stringify([root.LeadIntelServerBridge?.session?.authenticated,root.LeadIntelServerBridge?.session?.user?.id,root.LeadIntelServerBridge?.workspace?.id,root.LeadIntelServerBridge?.workspace?.role]);
  function stopPolling(){clearTimeout(timer);pollVersion++;}
- function synchronize(){const key=identity();if(key!==scope){scope=key;current=null;options=null;prepared=null;showAll=false;searchKey='';savedSearch=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();notice('');paintSearch();}return key;}
+ function synchronize(){const key=identity();if(key!==scope){scope=key;current=null;options=null;prepared=null;showAll=false;searchScopeRevision++;searchKey='';savedSearch=null;lastSavedCopy=null;searchMessage='';searchState={snapshot:null,busy:false};stopPolling();if($('company-list-content'))$('company-list-content').replaceChildren();notice('');paintSearch();}return key;}
  async function api(params={},body){const key=synchronize(),bridge=root.LeadIntelServerBridge;if(!bridge?.session?.authenticated||!bridge.workspace?.id)throw Error('Sign in and select a workspace first.');const query=new URLSearchParams({workspace_id:bridge.workspace.id,...params});const response=await fetch('https://leadintel-api.edgars-7e7.workers.dev/api/company-lists?'+query,{signal:AbortSignal.timeout(30000),credentials:'include',method:body?'POST':'GET',headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();if(key!==identity())throw Error('Workspace changed. Reopen company lists.');if(!response.ok)throw Error(data.error||'Company list request failed.');return data;}
  function notice(message){if($('company-list-notice'))$('company-list-notice').textContent=message;}
  async function action(fn,formAction=false){
@@ -20,16 +20,34 @@
    }
   }finally{pending=false;$('company-list-panel')?.setAttribute('aria-busy','false');poll();}
  }
- let searchKey='',searchEpoch=0,savedSearch=null,searchBusy=false,searchMessage='',searchState={snapshot:null,busy:false};
+ let searchKey='',searchEpoch=0,searchScopeRevision=0,savedSearch=null,lastSavedCopy=null,searchBusy=false,searchMessage='',searchState={snapshot:null,busy:false};
  const digest=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(b=>b.toString(16).padStart(2,'0')).join('');
  function searchView(){try{return root.LeadIntelDiscoveryUI?.getCompanyListSnapshot?.()||{snapshot:null,busy:false};}catch(error){return {snapshot:null,busy:false,error:error.message};}}
+ function exportTarget(){
+  if(savedSearch)return savedSearch;
+  const snapshot=searchState.snapshot;
+  if(snapshot&&lastSavedCopy&&lastSavedCopy.criteria.context?.sellerWebsite===snapshot.context.sellerWebsite)return lastSavedCopy;
+  return null;
+ }
  function paintSearch(){
   const save=$('save-company-search-list'),exp=$('export-company-search-list');if(!save||!exp)return;
   const view=searchState,signedIn=root.LeadIntelServerBridge?.session?.authenticated,allowed=['owner','researcher','sales'].includes(root.LeadIntelServerBridge?.workspace?.role);
   save.disabled=searchBusy||view.busy||!view.snapshot||!signedIn||!allowed;
-  save.textContent=searchBusy?'Please wait…':'Save list';
-  exp.disabled=searchBusy||view.busy||!savedSearch||!signedIn||!allowed;
-  $('company-search-list-status').textContent=searchMessage||view.error||(!view.snapshot?'Run a company search to save a list.':!signedIn?'Sign in to save and export a list.':!allowed?'Your workspace role cannot save company lists.':view.busy?'Wait for the search to finish before saving the list.':savedSearch?'Saved · '+savedSearch.results.length+' companies. Available in CRM → Company lists.':'Save all '+view.snapshot.rows.length+' companies before exporting. Review status and sources are included.');
+  save.textContent=searchBusy==='save'?'Saving list…':'Save list';
+  const target=exportTarget(),previousCopy=target&&!savedSearch;
+  exp.disabled=searchBusy||!target||!signedIn||!allowed;
+  exp.textContent=searchBusy==='export'?'Exporting…':previousCopy?'Export saved copy':'Export list';
+  const status=$('company-search-list-status');
+  if(searchMessage||view.error)status.textContent=searchMessage||view.error;
+  else if(!signedIn)status.textContent='Sign in to save and export a list.';
+  else if(!allowed)status.textContent='Your workspace role cannot save company lists.';
+  else if(previousCopy){
+   const count=target.results.length;
+   status.textContent='The current results have changed. Export the saved copy ('+count+' '+(count===1?'company':'companies')+'), or save again to include the changes.';
+  }else if(savedSearch)status.textContent='Saved · '+savedSearch.results.length+' companies. Available in CRM → Company lists.';
+  else if(view.busy)status.textContent='Wait for the search to finish before saving the list.';
+  else if(view.snapshot)status.textContent='Save all '+view.snapshot.rows.length+' companies before exporting. Review status and sources are included.';
+  else status.textContent='Run a company search to save a list.';
  }
  function mountSearch(){
   const anchor=document.querySelector('#step-5 .discovery-controls');if(!anchor||$('company-search-list-actions'))return;
@@ -40,27 +58,41 @@
  async function refreshSearch(){
   synchronize();const view=searchState=searchView(),key=view.snapshot?JSON.stringify(view.snapshot):'';paintSearch();
   if(key===searchKey)return;searchKey=key;searchEpoch++;savedSearch=null;searchMessage='';paintSearch();
-  if(!key||!root.LeadIntelServerBridge?.session?.authenticated)return;const owner=scope,epoch=searchEpoch;
+  if(!key||!root.LeadIntelServerBridge?.session?.authenticated)return;const owner=scope,epoch=searchEpoch,revision=searchScopeRevision;
   try{const fingerprint=await digest(key);if(owner!==identity()||key!==searchKey)return;
-   const result=await api({search_snapshot:fingerprint});if(owner!==identity()||key!==searchKey||epoch!==searchEpoch)return;savedSearch=result.list;paintSearch();
+   const result=await api({search_snapshot:fingerprint});if(owner!==identity()||revision!==searchScopeRevision||key!==searchKey||epoch!==searchEpoch)return;
+   savedSearch=result.list?.criteria?.fingerprint===fingerprint?result.list:null;
+   if(savedSearch)lastSavedCopy=savedSearch;
+   paintSearch();
   }catch{if(owner===identity()&&key===searchKey)paintSearch();}
  }
  async function searchAction(command){
-  if(searchBusy)return;await refreshSearch();const owner=scope,key=searchKey,view=searchState;if(searchBusy||!key||view.busy)return;
-  searchBusy=true;searchEpoch++;searchMessage='';paintSearch();
+  if(searchBusy)return;
+  synchronize();
+  const owner=scope,revision=searchScopeRevision,key=searchKey,target=exportTarget(),format=$('company-search-list-format').value;
+  const stillHere=()=>owner===identity()&&revision===searchScopeRevision;
+  if(command==='save'?(!key||searchState.busy):!target)return;
+  searchBusy=command;searchMessage='';paintSearch();
   try{
-   const fingerprint=await digest(key);if(owner!==identity()||key!==searchKey)throw Error('Company results changed. Save the current list again.');
    if(command==='save'){
+    // Save the rows captured at the click, even if background checks finish meanwhile.
+    const fingerprint=await digest(key);if(!stillHere())return;
     const result=await api({}, {action:'snapshot',name:'Company search · '+new Date().toLocaleString(),snapshot:JSON.parse(key),fingerprint});
-    if(owner!==identity()||key!==searchKey)throw Error('List saved. Results have since changed; save the updated list before exporting.');
-    if(result.list?.criteria?.fingerprint!==fingerprint)throw Error('List save was not confirmed. Please retry.');savedSearch=result.list;
+    if(!stillHere())return;
+    if(!result.list?.id||result.list.criteria?.fingerprint!==fingerprint)throw Error('List save was not confirmed. Please retry.');
+    lastSavedCopy=result.list;
+    if(key===searchKey){searchEpoch++;savedSearch=result.list;}
    }else{
-    if(!savedSearch||savedSearch.criteria.fingerprint!==fingerprint)throw Error('Save the current list before exporting.');
-    const result=await api({id:savedSearch.id});if(owner!==identity()||key!==searchKey)throw Error('Company results changed. Save the current list again.');
-    if(!result.list||result.list.criteria.fingerprint!==fingerprint){savedSearch=null;throw Error('This saved list is no longer available. Save the list again before exporting.');}
-    download($('company-search-list-format').value,result.list);
+    // Export the acknowledged list the user chose, even if the live results change.
+    const result=await api({id:target.id});if(!stillHere())return;
+    if(result.list?.id!==target.id||result.list.criteria?.fingerprint!==target.criteria.fingerprint){
+     if(savedSearch?.id===target.id)savedSearch=null;
+     if(lastSavedCopy?.id===target.id)lastSavedCopy=null;
+     throw Error('This saved list is no longer available. Save the list again before exporting.');
+    }
+    download(format,result.list);
    }
-  }catch(e){if(owner===identity())searchMessage=e.message;}
+  }catch(e){if(stillHere())searchMessage=e.message;}
   finally{searchBusy=false;paintSearch();}
  }
  function renderSearchSnapshot(l){
@@ -238,7 +270,10 @@
    }
    const result=await api({}, {action:command,id:list.id,revision:list.revision,...(command==='buyer'?{domain:b.dataset.domain}:{})});
    if(command==='delete'){
-    if(savedSearch?.id===list.id){searchEpoch++;savedSearch=null;paintSearch();}
+    searchEpoch++;
+    if(savedSearch?.id===list.id)savedSearch=null;
+    if(lastSavedCopy?.id===list.id)lastSavedCopy=null;
+    searchMessage='';paintSearch();
     return showLists();
    }
    if(command==='buyer'){await root.LeadIntelDiscoveryUI?.openListCompany?.(result.candidate);return;}

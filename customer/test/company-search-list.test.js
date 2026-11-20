@@ -14,3 +14,11 @@ test('invalid, oversized and empty snapshots cannot become saved lists; unsafe l
  const row=M.normalizeSearchSnapshot({rows:[{company:'=Formula',website:'javascript:alert(1)',score:null,scoreState:'current',reviewStatus:'Checked',evidence:[{url:'https://valid.example/',quote:'Evidence'},{url:'javascript:bad'}]}]}).rows[0];
  assert.equal(row.website,'');assert.equal(row.score,null);assert.equal(row.reviewStatus,'Needs review');assert.equal(row.evidence.length,1);
 });
+
+test('saving a browser snapshot preserves its fingerprint when text ends at a length limit',()=>{
+ const atLimit=n=>'x'.repeat(n-1)+' more';
+ const snapshot=M.normalizeSearchSnapshot({context:{markets:[atLimit(120)],signals:[atLimit(160)]},
+  rows:[{company:atLimit(180),location:atLimit(300),signals:[atLimit(160)],summary:atLimit(2000),checkedAt:atLimit(80),
+   evidence:[{url:'https://factory.example/',quote:atLimit(2000),date:atLimit(80)}]}]});
+ assert.deepEqual(M.normalizeSearchSnapshot(JSON.parse(JSON.stringify(snapshot))),snapshot);
+});

@@ -224,21 +224,23 @@
  // A saved search is a view of existing research, never a new qualification.
  // Keep its review labels separate from verified signal-list matches.
  function normalizeSearchSnapshot(input={}){
+  // Truncation can expose a trailing space. Re-reading the saved copy must produce the same bytes.
+  const field=(value,limit)=>clean(value,limit).trimEnd();
   const fail=message=>{throw Object.assign(Error(message),{status:400});};
   if(!input||typeof input!=='object')fail('Company results are required.');
   if(!Array.isArray(input.rows)||!input.rows.length||input.rows.length>1000)fail('Save between 1 and 1,000 company results.');
   const rows=input.rows.map(r=>{
    if(!r||typeof r!=='object')fail('Invalid company result.');
-   const company=clean(r.company,180);if(!company)fail('Each company needs a name.');
+   const company=field(r.company,180);if(!company)fail('Each company needs a name.');
    const score=typeof r.score==='number'&&Number.isFinite(r.score)&&r.score>=0&&r.score<=100?r.score:null;
    const scoreState=score===null?'pending':r.scoreState==='current'?'current':'previous';
-   return {company,website:url(r.website),location:clean(r.location,300),score,scoreState,
+   return {company,website:url(r.website),location:field(r.location,300),score,scoreState,
     reviewStatus:r.reviewStatus==='Checked'&&scoreState==='current'?'Checked':'Needs review',
-    signals:(Array.isArray(r.signals)?r.signals:[]).map(s=>clean(s,160)).filter(Boolean).slice(0,30),
-    summary:clean(r.summary,2000),checkedAt:clean(r.checkedAt,80),
-    evidence:(Array.isArray(r.evidence)?r.evidence:[]).filter(e=>e&&url(e.url)).slice(0,60).map(e=>({url:url(e.url),quote:clean(e.quote,2000),date:clean(e.date,80)}))};
+    signals:(Array.isArray(r.signals)?r.signals:[]).map(s=>field(s,160)).filter(Boolean).slice(0,30),
+    summary:field(r.summary,2000),checkedAt:field(r.checkedAt,80),
+    evidence:(Array.isArray(r.evidence)?r.evidence:[]).filter(e=>e&&url(e.url)).slice(0,60).map(e=>({url:url(e.url),quote:field(e.quote,2000),date:field(e.date,80)}))};
   });
-  return {version:1,rows,context:{markets:(Array.isArray(input.context?.markets)?input.context.markets:[]).map(s=>clean(s,120)).slice(0,30),signals:(Array.isArray(input.context?.signals)?input.context.signals:[]).map(s=>clean(s,160)).slice(0,30),sellerWebsite:url(input.context?.sellerWebsite)}};
+  return {version:1,rows,context:{markets:(Array.isArray(input.context?.markets)?input.context.markets:[]).map(s=>field(s,120)).slice(0,30),signals:(Array.isArray(input.context?.signals)?input.context.signals:[]).map(s=>field(s,160)).slice(0,30),sellerWebsite:url(input.context?.sellerWebsite)}};
  }
  function searchSnapshot(view,context){return normalizeSearchSnapshot({context,rows:view.rows.map(row=>{
   const c=row.candidate,q=row.qualification||{},evidence=[c.sourceEvidence,c.evidence,c.buyerFit?.evidence,c.operatingEvidence].flatMap(value=>Array.isArray(value)?value:value&&typeof value==='object'?[value]:[]).filter(e=>e&&typeof e==='object');
