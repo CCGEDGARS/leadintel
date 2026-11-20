@@ -34,3 +34,15 @@ test('crossing the window during a provider response pauses rather than acceptin
  await schedule(f,job.id,{search:async()=>{calls++;now+=1500;return [];},read:async()=>{calls++;now+=1500;return {markdown:'Late source'};},independent:async()=>{calls++;now+=1500;return {status:'not_configured',results:[]};}});
  const row=await readBuyerJob(f.env,workspaceId,{id:job.id});assert.ok(calls>0);assert.equal(row.status,'needs_review');assert.equal(row.phase,'contacts');assert.equal(JSON.parse(row.diagnostic_json).at(-1).code,'run_window');assert.equal(f.DB.raw.prepare("SELECT count(*) n FROM buyer_research_tasks WHERE job_id=? AND phase='contacts' AND status IN ('failed','complete')").get(job.id).n,0,'Interrupted contact dispatch is not a provider-failure or success receipt');
 });
+
+test('a pause from an earlier run window stays in history when a later attempt needs evidence',async t=>{
+ const f=await buyerJobsFixture(t);
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ const at=new Date(Date.now()-3600000).toISOString();
+ const pause={code:'run_window',phase:'review',reason:'Research paused after 30 minutes',at};
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET status='needs_review',phase='done',diagnostic_json=? WHERE id=?").run(JSON.stringify([pause]),job.id);
+ const saved=await publicBuyerJob(f.env,await readBuyerJob(f.env,workspaceId,{id:job.id}));
+ assert.equal(saved.progress.windowPaused,false);
+ assert.doesNotMatch(saved.progress.label,/paused/);
+ assert.deepEqual(saved.diagnostics,[pause]);
+});
