@@ -1951,7 +1951,7 @@ test('an additional checked company retains its original index when selected for
 });
 test('unscored review companies stay accessible without a ranking',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[]});render();
- const main=dom.window.document.getElementById('company-candidates');assert.match(main.textContent,/Unfinished Research/);assert.match(main.textContent,/Awaiting score/);assert.equal(main.querySelectorAll('[data-company-rank]').length,0);assert.match(main.textContent,/Unranked companies · 1/);assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
+ const main=dom.window.document.getElementById('company-candidates');assert.match(main.textContent,/Unfinished Research/);assert.match(main.textContent,/Awaiting score/);assert.equal(main.querySelectorAll('[data-company-rank]').length,0);assert.match(main.textContent,/Awaiting score · 1/);assert.equal(dom.window.document.getElementById('discovery-potential-matches').hidden,true);
 });
 test('a shortfall shows only completed companies and hides an empty additional-results control',()=>{
  const {dom,render}=companyShortlistDisplayFixture({scores:[94,79,55],review:false});render();
@@ -2348,7 +2348,7 @@ test('saved-evidence review preserves the newer rejected assessment and its asse
 test('company comparison rows align name, website, score, status and Review with one Strategy explanation',()=>{
  const f=companyShortlistDisplayFixture({scores:[84,82,81],review:false});f.context.__setDiscovery({...f.context.__discoveryState(),needsRefresh:true});const before=JSON.stringify(f.context.__discoveryState());f.render();
  const root=f.dom.window.document.getElementById('company-candidates'),rows=root.querySelectorAll('details.company-result-row');assert.equal(rows.length,3);assert.equal(root.querySelectorAll('.company-strategy-notice').length,0);
- for(const row of rows){assert.equal(row.open,false);const summary=row.querySelector(':scope > summary');assert.ok(summary.querySelector('.company-row-name'));assert.ok(summary.querySelector('.company-row-website'));assert.equal(summary.querySelector('.company-row-rank,.company-row-score'),null);assert.ok(summary.querySelector('.company-row-status'));assert.match(summary.querySelector('.company-row-review').textContent,/Review/);assert.doesNotMatch(summary.textContent,/Previous score|\/100/);assert.match(row.querySelector('.company-review-assessment').textContent,/Previous score.*\/100/);assert.equal(summary.querySelector('[data-review-action]'),null,'summary only opens details');assert.ok(row.querySelector('.company-row-details [data-review-action="saved-evidence"]'));}
+ for(const [i,row] of rows.entries()){assert.equal(row.open,false);const summary=row.querySelector(':scope > summary');assert.ok(summary.querySelector('.company-row-name'));assert.ok(summary.querySelector('.company-row-website'));assert.equal(summary.querySelector('.company-row-rank').textContent,String(i+1));assert.equal(summary.querySelector('.company-row-score strong').textContent,[84,82,81][i]+'/100');assert.ok(summary.querySelector('.company-row-status'));assert.match(summary.querySelector('.company-row-review').textContent,/Review/);assert.equal(summary.querySelector('.company-row-score small').textContent,'Previous score');assert.match(summary.querySelector('.company-row-status').textContent,/Needs recheck/);assert.match(row.querySelector('.company-review-assessment').textContent,/Previous score.*\/100/);assert.equal(summary.querySelector('[data-review-action]'),null,'summary only opens details');assert.ok(row.querySelector('.company-row-details [data-review-action="saved-evidence"]'));}
  assert.equal(JSON.stringify(f.context.__discoveryState()),before);assert.equal(f.providerCalls(),0);
 });
 test('opening company details survives rerender without saving or starting research',()=>{
@@ -2370,17 +2370,24 @@ test('company disclosure state resets in both lists when the workspace changes',
  f.context.LeadIntelServerBridge={session:{authenticated:true,user:{id:'different-user'}},workspace:{id:'different-workspace'}};f.render();assert.ok([...f.dom.window.document.querySelectorAll('.company-result-row')].every(row=>!row.open));assert.equal(f.dom.window.document.querySelector('.company-other-results').open,false);assert.equal(f.providerCalls(),0);
 });
 
-test('only checked current companies take ranking positions above provisional and previous high scores',()=>{
- const f=companyShortlistDisplayFixture({scores:[99,92,60],review:false});
+test('all recorded company scores rank together while only checked companies count toward the goal',()=>{
+ const f=companyShortlistDisplayFixture({scores:[99,92,60],review:true});
  const [previous,provisional,checked]=f.candidates;
- f.context.__setDiscovery({...f.context.__discoveryState(),candidates:[{...previous,needsRecheck:true},checked],potentialMatches:[{...provisional,qualificationGaps:['Verify company size']}]});
+ const state=f.context.__discoveryState();
+ f.context.__setDiscovery({...state,candidates:[checked,{...previous,needsRecheck:true}],potentialMatches:[...state.potentialMatches,{...provisional,qualificationGaps:['Verify company size']}]});
  f.render();
- const rows=[...f.dom.window.document.querySelectorAll('#company-candidates .company-result-row')];
- assert.deepEqual(rows.map(r=>r.dataset.companyRowKey),[checked.domain,previous.domain,provisional.domain]);
- assert.equal(rows[0].querySelector('.company-row-rank').textContent,'1');
- for(const row of rows.slice(1))assert.equal(row.querySelector('summary .company-row-score,summary .company-row-rank'),null);
- assert.match(rows[1].querySelector('.company-review-assessment').textContent,/Previous score/);
- assert.match(rows[2].querySelector('.company-review-assessment').textContent,/Recorded fit/);
+ const root=f.dom.window.document.getElementById('company-candidates'),rows=[...root.querySelectorAll('details.company-result-row')];
+ assert.deepEqual(rows.slice(0,3).map(row=>row.dataset.companyRowKey),[previous.domain,provisional.domain,checked.domain]);
+ const cells=selector=>rows.map(row=>row.querySelector('summary '+selector)?.textContent??null);
+ assert.deepEqual(cells('.company-row-rank'),['1','2','3',null]);
+ assert.deepEqual(cells('.company-row-score strong'),['99/100','92/100','60/100',null]);
+ assert.deepEqual(cells('.company-row-score small'),['Previous score','Provisional score','Current score',null]);
+ assert.deepEqual(cells('.company-row-status'),['Needs recheck','Needs evidence','Checked','Needs evidence']);
+ assert.match(rows[0].querySelector('.company-review-assessment').textContent,/Previous score/);
+ assert.match(rows[1].querySelector('.company-review-assessment').textContent,/Provisional score/);
+ assert.ok(rows[2].querySelector('.company-card [data-action="select-qualified-buyers"]'));
+ assert.equal(root.querySelectorAll('.company-card').length,1);
+ assert.match(root.querySelector('.company-ranking-summary').textContent,/1 checked company · 0 strong fit/);
  assert.equal(f.providerCalls(),0);
 });
 

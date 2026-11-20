@@ -13,6 +13,7 @@ test('conflict header opens one review surface without choosing or duplicating r
   assert.equal(w.getComputedStyle(d.getElementById('server-conflict-actions')).display,'none');
   assert.equal(w.getComputedStyle(d.getElementById('server-sync-recovery')).display,'none');
   review.focus();review.click();assert.deepEqual(choices,[]);assert.equal(d.getElementById('workspace-attention-drawer').hidden,false);
+  assert.equal(d.activeElement.id,'workspace-sync-title');
   assert.match(d.querySelector('[data-sync-review]').textContent,/both versions/i);
   d.querySelector('[data-sync-choice="server-keep-local"]').click();assert.deepEqual(choices,['server-keep-local']);
   d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape'}));assert.equal(d.getElementById('workspace-attention-drawer').hidden,true);assert.equal(d.activeElement,review);
@@ -48,5 +49,18 @@ test('sync recovery remains the single actionable prerequisite until resolved, t
  assert.equal(w.LeadIntelAttention.list().some(item=>item.id==='stage-5-buyer-quality'),false);
  w.LeadIntelServerBridge.conflict=false;w.LeadIntelServerBridge.status='synced';d.querySelector('.autosave').textContent='Saved';w.LeadIntelWorkspacePersistence.hasUnsavedChanges=()=>false;
  w.LeadIntelAttention.refresh();assert.equal(w.LeadIntelAttention.list().some(item=>item.id==='stage-5-buyer-quality'),true);
+ }finally{w.close();}
+});
+
+test('sync review distinguishes an overlapping company assessment from a missing baseline',()=>{
+ const {w,d,choices}=setup();try{
+  const bridge=w.LeadIntelServerBridge;
+  bridge.conflictDetails={reason:'overlapping_changes',paths:['discovery.potentialMatches[maker.example]']};
+  d.getElementById('topbar-save').click();
+  const note=d.querySelector('[data-sync-review-note]');
+  assert.match(note.textContent,/same pending company research/);
+  bridge.conflictDetails={reason:'baseline_unavailable'};w.LeadIntelAttention.refresh();
+  assert.match(note.textContent,/choice applies to the whole workspace/);
+  assert.deepEqual(choices,[]);
  }finally{w.close();}
 });

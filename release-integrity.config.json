@@ -9358,6 +9358,7 @@
         "function rankedCompanyResults()",
         "data-company-total",
         "companyDisplayPage(groups,0)",
+        "view.rows.filter(row=>row.score!==null)",
         "handleCompanyReviewClick(event)",
         "company-ranking-css=20261116-v1"
       ]
@@ -9369,7 +9370,8 @@
       "status": 200,
       "contains": [
         "company-ranking-engine=20261116-v1",
-        "company-ranking-ui=20261116-v1"
+        "company-ranking-ui=20261116-v1",
+        "company-score-order=20261120-v1"
       ]
     },
     {
@@ -10057,7 +10059,8 @@
         "save-company-search-list",
         "export-company-search-list",
         "result.list?.criteria?.fingerprint!==fingerprint",
-        "renderSearchSnapshot"
+        "renderSearchSnapshot",
+        "M.inScoreOrder(l.results)"
       ]
     },
     {
@@ -10067,6 +10070,7 @@
       "status": 200,
       "contains": [
         "normalizeSearchSnapshot",
+        "results:inScoreOrder(list.results||[])",
         "Review status",
         "Previous \u00b7 needs review"
       ]

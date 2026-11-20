@@ -579,12 +579,12 @@ async function refreshCrmState({render=true}={}){
   if(render)renderAll();recoverRuntime?.();refreshed=true;return true;}finally{if(refreshCrmState.owner===owner){crmRefreshing=false;delete refreshCrmState.owner;if(refreshed)window.dispatchEvent(new CustomEvent('leadintel:crm-refreshed',{detail:{workspaceId}}));}}}
 
 function injectDiscoveryUI(){
-  if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css")+"&company-progress=20261109-v1&company-ranking-css=20261116-v1&company-readability-css=20261117-v1&company-review-queue=20261119-v1";link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
+  if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css")+"&company-progress=20261109-v1&company-ranking-css=20261116-v1&company-readability-css=20261117-v1&company-review-queue=20261119-v1&company-sync-recovery=20261120-v1";link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
   $("continue-to-discovery")?.remove();
   const content=document.querySelector("main.content");if(content&&!$("step-5"))content.insertAdjacentHTML("beforeend",`<section class="step-view" id="step-5" data-step="5">
     <div class="profile-header discovery-header"><div><span class="eyebrow" id="discovery-stage-kicker">Step 4 · Companies</span><h1 id="discovery-stage-title">Find your next customers</h1><p id="discovery-stage-description">LeadIntel searches the selected markets, checks public evidence, verifies company websites and ranks each match against your approved strategy.</p></div><div class="profile-header-actions"><span class="profile-status" id="discovery-status">Ready</span><button class="secondary-btn small" id="back-to-strategy" type="button">← Strategy</button></div></div>
     <div class="strategy-banner discovery-banner"><div><span>Company</span><strong id="discovery-company">—</strong></div><div><span>Market context</span><strong id="discovery-markets">—</strong></div><div><span>Selected companies</span><strong id="discovery-pipeline-count">0</strong><small id="discovery-selection-breakdown" hidden>0 in Pipeline · 0 prospects</small></div></div>
-    <section class="panel strategy-panel discovery-panel"><div class="market-research-head"><div class="section-title"><span class="eyebrow">Company search</span><h3>Find and rank companies</h3><p>Use your profile, active references and known targets to find relevant companies.</p></div></div><section id="company-search-progress" class="company-search-progress" aria-label="Company search progress" hidden><div class="company-search-progress-toolbar" data-company-search-toolbar><strong>Search in progress</strong><button type="button" class="secondary-btn small" data-cancel-company-search>Cancel search</button></div><div data-company-search-content></div></section><div id="company-research-usage" class="company-research-usage"></div><div class="market-research-head"><div class="discovery-controls"><div class="discovery-target-control"><label class="discovery-target-label" id="discovery-target-label" for="discovery-target-count">Strong-fit companies to find</label><div class="discovery-control-row"><select id="discovery-target-count" aria-describedby="discovery-target-help"><option value="5">5 companies</option><option value="10">10 companies</option><option value="20">20 companies</option><option value="25">25 companies</option><option value="50">50 companies</option><option value="custom">Custom number</option></select><button class="primary-btn discovery-run-btn" id="run-company-discovery" type="button">Find companies <span>→</span></button></div><button class="secondary-btn small" id="cancel-company-discovery" type="button" hidden>Cancel search</button><input class="discovery-target-custom" id="discovery-target-custom" type="number" min="1" max="50" step="1" inputmode="numeric" placeholder="Enter number" aria-label="Custom strong-fit company goal" hidden><small id="discovery-target-help">Goal: 1–50 evidence-checked companies scoring 80+. Lower scores remain available for manual review. Buying intent stays unconfirmed.</small><small class="discovery-cost-estimate" id="discovery-cost-estimate" aria-live="polite"></small></div></div></div>
+    <section class="panel strategy-panel discovery-panel"><div class="market-research-head"><div class="section-title"><span class="eyebrow">Company search</span><h3>Find and rank companies</h3><p>Use your profile, active references and known targets to find relevant companies.</p></div></div><section id="company-search-progress" class="company-search-progress" aria-label="Company search progress" hidden><div class="company-search-progress-toolbar" data-company-search-toolbar><strong>Search in progress</strong><button type="button" class="secondary-btn small" data-cancel-company-search>Cancel search</button></div><div data-company-search-content></div></section><div id="company-research-usage" class="company-research-usage"></div><div class="market-research-head"><div class="discovery-controls"><div class="discovery-target-control"><label class="discovery-target-label" id="discovery-target-label" for="discovery-target-count">Strong-fit companies to find</label><div class="discovery-control-row"><select id="discovery-target-count" aria-describedby="discovery-target-help"><option value="5">5 companies</option><option value="10">10 companies</option><option value="20">20 companies</option><option value="25">25 companies</option><option value="50">50 companies</option><option value="custom">Custom number</option></select><button class="primary-btn discovery-run-btn" id="run-company-discovery" type="button">Find companies <span>→</span></button><button class="primary-btn discovery-run-btn" id="company-search-recovery" type="button" hidden></button></div><button class="secondary-btn small" id="cancel-company-discovery" type="button" hidden>Cancel search</button><input class="discovery-target-custom" id="discovery-target-custom" type="number" min="1" max="50" step="1" inputmode="numeric" placeholder="Enter number" aria-label="Custom strong-fit company goal" hidden><small id="discovery-target-help">Goal: 1–50 evidence-checked companies scoring 80+. Lower scores remain available for manual review. Buying intent stays unconfirmed.</small><small class="discovery-cost-estimate" id="discovery-cost-estimate" aria-live="polite"></small></div></div></div>
       <details class="company-search-advanced"><summary>Search options</summary><label for="discovery-web-cap">Maximum web requests for the next run</label><input id="discovery-web-cap" type="number" min="1" max="200" step="1" inputmode="numeric" placeholder="Automatic budget" aria-describedby="discovery-web-cap-help"><small id="discovery-web-cap-help">Searches and page reads share this limit. Saved evidence is reviewed first. AI usage is billed separately.</small><div class="company-workflow-actions"><button class="secondary-btn small" type="button" id="start-broad-company-search" hidden>Search for new companies</button><button class="secondary-btn small" type="button" id="recheck-company-results">Recheck existing companies</button><button class="secondary-btn small" type="button" id="clear-company-results">Clear search results</button><button class="secondary-btn small" type="button" id="manage-company-inputs">Manage reference companies</button><button class="secondary-btn small" type="button" id="manage-known-companies">Add or import known companies</button></div><section id="company-search-preferences" aria-label="Saved search preferences" hidden></section><div class="discovery-funnel" id="discovery-funnel" hidden></div><div id="company-last-run-context"></div></details>
 
 
@@ -875,6 +875,8 @@ async function generateDiscoveryBuyerFit(prompt,runSignal,timeoutMs=COMPANY_EXTR
   },runSignal,timeoutMs);}
 async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDomain="",targetDomains=null,reviewBatchId="",recheckOnly=false,savedEvidenceOnly=false,autoPass=1,campaignTargets=null,campaignPlan=null}={}){
   if(discovery.status==="running")return false;
+  const sync=window.LeadIntelServerBridge;
+  if(sync?.conflict||sync?.resolvingSync){showToast('Review workspace sync before continuing company research.');return false;}
   if(window.LeadIntelPageQuality&&!window.LeadIntelPageQuality.require('companies',targetOnly||recheckOnly?'target-research':'research')){showToast(window.LeadIntelPageQuality.getReport('companies').message);return false;}
   if(savedEvidenceOnly)recheckOnly=true;
   if(recheckOnly)targetOnly=true;
@@ -1792,10 +1794,11 @@ function renderCompanyReviewBatch(){
   const main=mainState(),strategy=window.LeadIntelStrategyIntegrity?.status(main),ready=Boolean(main.website||main.profile?.website)&&Boolean(window.LeadIntelTargeting?.isConfirmed(main))&&strategy?.current===true;
   const identity=JSON.stringify([bridge()?.workspace?.id||'',bridge()?.session?.user?.id||'']);
   const failure=companyReviewStartFailure?.state===discovery&&companyReviewStartFailure.identity===identity&&companyReviewStartFailure.contextKey===plan.contextKey?companyReviewStartFailure.message:'';
-  const blocker=!strategy?.current?(strategy?.reason||'Review and activate Strategy before reviewing companies.'):!ready?'Confirm your website and targeting in Profile before reviewing companies.':'';
+  const syncBlocked=Boolean(window.LeadIntelServerBridge?.conflict||window.LeadIntelServerBridge?.resolvingSync);
+  const blocker=syncBlocked?'Review workspace sync before continuing company research.':!strategy?.current?(strategy?.reason||'Review and activate Strategy before reviewing companies.'):!ready?'Confirm your website and targeting in Profile before reviewing companies.':'';
   const count=active?batch.domains.length:plan.domains.length;
   const summary=plan.interrupted?'The previous review was interrupted. Review again to continue with unfinished companies.':batch?.finishedAt?`${batch.canceled?'Review canceled. ':''}Last batch: ${Number(batch.completedCount)||0} finished; ${Number(batch.pendingCount)||0} still need evidence.`:'';
-  const recovery=window.LeadIntelJourneyProgress?.companyRecoveryAction?.(strategy,main);
+  const recovery=companySearchRecovery(main,strategy);
   const copyHtml=`<h3>${plan.pendingCount?`${plan.pendingCount} ${plan.pendingCount===1?'company':'companies'} awaiting review`:'All saved companies reviewed'}</h3><p>${active?esc(companySearchProgressText()):plan.pendingCount?(blocker?'Saved evidence and earlier scores remain available.':`Review the next ${count} to update their evidence, scores and shortlist ranking.`):'Review the company results and their evidence below.'}</p>${summary?`<small role="status">${esc(summary)}</small>`:''}${blocker||failure?`<p class="company-review-start-issue" role="status" aria-live="polite">${esc(blocker||failure)}</p>`:''}${recovery||!strategy?.current?`<button type="button" class="secondary-btn small" data-company-review-strategy>${esc(recovery?.nextAction||'Review Strategy')}</button>`:''}`;
   const label=active?`Reviewing ${count} ${count===1?'company':'companies'}…`:count?`Review next ${count} ${count===1?'company':'companies'}`:'Review complete';
   // Keep the interactive node alive through worker, CRM and save refreshes.
@@ -1803,7 +1806,7 @@ function renderCompanyReviewBatch(){
   let copy=node.querySelector?.('[data-company-review-copy]'),button=node.querySelector?.('#review-next-companies');
   if(!copy||!button){node.innerHTML=`<div data-company-review-copy>${copyHtml}</div><button id="review-next-companies" class="primary-btn" type="button">${esc(label)}</button>`;copy=node.querySelector?.('[data-company-review-copy]');button=node.querySelector?.('#review-next-companies');}
   if(copy&&copy.innerHTML!==copyHtml)copy.innerHTML=copyHtml;
-  if(button){if(button.textContent!==label)button.textContent=label;button.disabled=running||!ready||!count;}
+  if(button){if(button.textContent!==label)button.textContent=label;button.disabled=running||syncBlocked||!ready||!count;}
   return count;
 }
 function removeResearchReviewCompany(key){
@@ -1869,24 +1872,18 @@ function updateCompanySearchFeedback(control){
 }
 
 function rankedCompanyResults(){return LeadIntelDiscovery.rankCompanyResults(discovery,{assess:qualificationAssessment,isCurrent:companyStrategyCurrent});}
-// Historical scores remain available to review and export. Only completed,
-// current assessments can occupy a position in the visible ranking.
+// rankCompanyResults owns score order and deduplication. Review eligibility
+// controls the available actions independently of a company's list position.
 function companyDisplayGroups(view){
-  const ranked=[],unranked=[];
-  for(const entry of view.rows){
-    if(entry.actionable && entry.scoreState==='current' && entry.storedIndex>=0)ranked.push(entry);
-    else unranked.push(entry);
-  }
-  unranked.sort((a,b)=>String(a.candidate.company||a.key).localeCompare(String(b.candidate.company||b.key))||a.key.localeCompare(b.key));
-  return {ranked,unranked};
+  return {ranked:view.rows.filter(row=>row.score!==null),unranked:view.rows.filter(row=>row.score===null)};
 }
 function companyDisplayPage(groups,start){
   const end=start===0?10:Infinity;
-  const checked=groups.ranked.slice(start,end);
-  const review=groups.unranked.slice(Math.max(0,start-groups.ranked.length),Math.max(0,end-groups.ranked.length));
-  const checkedHtml=checked.length?companyListColumnsHtml()+checked.map((row,i)=>companyRankedCardHtml(row,start+i)).join(''):'';
-  const reviewHtml=review.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Unranked companies · ${groups.unranked.length}</h4>${review.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
-  return checkedHtml+reviewHtml;
+  const scored=groups.ranked.slice(start,end);
+  const pending=groups.unranked.slice(Math.max(0,start-groups.ranked.length),Math.max(0,end-groups.ranked.length));
+  const scoredHtml=scored.length?companyListColumnsHtml()+scored.map((row,i)=>companyRankedCardHtml(row,start+i)).join(''):'';
+  const pendingHtml=pending.length?`<section class="company-unranked-list" aria-label="Unranked companies"><h4>Awaiting score · ${groups.unranked.length}</h4>${pending.map(row=>companyRankedCardHtml(row,null)).join('')}</section>`:'';
+  return scoredHtml+pendingHtml;
 }
 let companyRowScope='',companyRowsOpen=new Map(),companyRowContainers=new WeakMap(),companyRowFocusPending=null;
 function companyRowState(){
@@ -1918,17 +1915,19 @@ function companyStrategyReviewNoticeHtml(view){
   const status=companyDisplayStrategyStatus();
   if(status?.current)return '';
   const message=status?.reason||'Review Strategy before updating company evidence.';
-  return `<p class="company-strategy-notice" role="note"><strong>Saved scores need rechecking.</strong> ${esc(message)} Earlier scores are available in each company’s review.</p>`;
+  return `<p class="company-strategy-notice" role="note"><strong>Saved scores need rechecking.</strong> ${esc(message)} Earlier ratings are labeled Previous score.</p>`;
 }
 function companyRankedCardHtml(entry,rank){
   const c=entry.candidate,domain=canonicalDomain(c.domain||c.website),open=companyRowState().get(entry.key)===true;
-  const review=researchReviewStatus(c),status=review.contextStale||c.needsRecheck?'Needs recheck':rank!==null?'Checked':entry.source==='selected'?'Selected for Buyers':entry.source==='pipeline'?'In pipeline':review.status==='not-qualified'?'Not qualified':'Needs evidence';
+  const checked=entry.actionable&&entry.scoreState==='current'&&entry.storedIndex>=0;
+  const scoreLabel=entry.scoreState==='previous'?'Previous score':entry.actionable?'Current score':'Provisional score';
+  const review=researchReviewStatus(c),status=review.contextStale||c.needsRecheck?'Needs recheck':checked?'Checked':entry.source==='selected'?'Selected for Buyers':entry.source==='pipeline'?'In pipeline':review.status==='not-qualified'?'Not qualified':'Needs evidence';
   const ranked=rank!==null;
-  const gap=!ranked && status==='Needs evidence' ? review.gaps.find(reason=>reason&&!/^Saved company retained/.test(reason)) : '';
-  return `<details class="company-result-row${ranked?'':' company-unranked-row'}" data-company-row-key="${esc(entry.key)}" data-company-rendered-open="${open}"${open?' open':''}><summary class="company-row-summary"><div class="company-row-company">${ranked?`<span class="company-row-rank">${rank+1}</span>`:''}<div><strong class="company-row-name">${esc(c.company)}</strong>${domain?`<a class="company-row-website" href="https://${esc(domain)}/" target="_blank" rel="noopener noreferrer">${esc(domain)}</a>`:''}${gap?`<small class="company-review-gap">${esc(gap)}</small>`:''}</div></div>${ranked?`<div class="company-row-score"><strong>${entry.score}<span>/100</span></strong><small>Current score</small></div>`:''}<div class="company-row-status"><span class="${ranked?'is-checked':review.status==='not-qualified'?'is-not-qualified':'needs-review'}">${status}</span></div><span class="company-row-review"><span class="company-row-open-label">Review</span><span class="company-row-close-label">Close</span><span class="company-row-chevron" aria-hidden="true">⌄</span></span></summary><div class="company-row-details" aria-label="${esc('Details for '+c.company)}">${companyRankedCardBodyHtml(entry,rank)}</div></details>`;
+  const gap=!checked && status==='Needs evidence' ? review.gaps.find(reason=>reason&&!/^Saved company retained/.test(reason)) : '';
+  return `<details class="company-result-row${ranked?'':' company-unranked-row'}" data-company-row-key="${esc(entry.key)}" data-company-rendered-open="${open}"${open?' open':''}><summary class="company-row-summary"><div class="company-row-company">${ranked?`<span class="company-row-rank">${rank+1}</span>`:''}<div><strong class="company-row-name">${esc(c.company)}</strong>${domain?`<a class="company-row-website" href="https://${esc(domain)}/" target="_blank" rel="noopener noreferrer">${esc(domain)}</a>`:''}${gap?`<small class="company-review-gap">${esc(gap)}</small>`:''}</div></div>${ranked?`<div class="company-row-score"><strong>${entry.score}<span>/100</span></strong><small>${scoreLabel}</small></div>`:''}<div class="company-row-status"><span class="${checked?'is-checked':review.status==='not-qualified'?'is-not-qualified':'needs-review'}">${status}</span></div><span class="company-row-review"><span class="company-row-open-label">Review</span><span class="company-row-close-label">Close</span><span class="company-row-chevron" aria-hidden="true">⌄</span></span></summary><div class="company-row-details" aria-label="${esc('Details for '+c.company)}">${companyRankedCardBodyHtml(entry,rank,checked,scoreLabel)}</div></details>`;
 }
-function companyRankedCardBodyHtml(entry,rank){
-  if(rank!==null)return companyCandidateCardHtml({...entry.candidate,storedIndex:entry.storedIndex,qualification:entry.qualification},rank);
+function companyRankedCardBodyHtml(entry,rank,checked,scoreLabel){
+  if(checked)return companyCandidateCardHtml({...entry.candidate,storedIndex:entry.storedIndex,qualification:entry.qualification},rank);
   const c=entry.candidate,{q,gaps,status,contextStale}=researchReviewStatus(c),reviewable=entry.storedIndex>=0||entry.source==='review',reviewBlocked=discovery.status==='running'||companyDisplayStrategyStatus()?.current!==true;
     const buyingSignalReason=gaps.find(reason=>/buying signal/i.test(reason));
     const reasons=gaps.filter(reason=>reason!==buyingSignalReason&&!/^Saved company retained\./.test(reason));
@@ -1936,7 +1935,8 @@ function companyRankedCardBodyHtml(entry,rank){
     const key=researchReviewKey(c);
     const selected=buyerSelectionRows().some(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(c.domain||c.website));
     const lookalike=Number.isFinite(q.lookalikeScore)?`<span class="research-review-reference">Reference similarity ${q.lookalikeScore}/100${q.referenceMatch?.referenceCompany?' · '+esc(q.referenceMatch.referenceCompany):''}</span>`:'';
-    return `<article class="research-check-row company-ranked-review" data-company-key="${esc(entry.key)}" data-company-score="${entry.score??''}" data-score-state="${entry.scoreState}" data-review-status="${status}"><div class="research-check-company"><strong>${esc(c.company)}</strong><span class="research-review-status ${status}">${entry.actionable&&selected?'Checked · selected for Buyers':contextStale?'Needs recheck':status==='needs-evidence'?'Needs more evidence':'Not qualified'}</span></div><a href="https://${esc(canonicalDomain(c.domain||c.website))}/" target="_blank" rel="noopener noreferrer">${esc(canonicalDomain(c.domain||c.website))}</a><p class="company-review-assessment">${entry.scoreState==='previous'?`Previous score · ${entry.score}/100`:entry.scoreState==='current'?`Recorded fit · ${entry.score}/100 · outside the checked ranking`:'Awaiting score'}</p><div class="research-check-tags">${lookalike}${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div>${companySearchFeedbackHtml(c)}<div class="research-review-actions"><button class="secondary-btn small" type="button" data-review-action="recheck" data-review-key="${esc(key)}" ${reviewBlocked||!reviewable?'disabled':''}>Recheck</button><button class="secondary-btn small" type="button" data-review-action="saved-evidence" data-review-key="${esc(key)}" title="No web requests. AI usage is billed separately." ${reviewBlocked||!reviewable?'disabled':''}>Review saved evidence</button><button class="secondary-btn small" type="button" data-review-action="buyers" data-review-key="${esc(key)}" ${selected||!reviewable?'disabled':''}>${selected?'Selected for Buyers ✓':'Move to Buyers'}</button><button ${!reviewable?'disabled':''} class="text-btn research-review-remove" type="button" data-review-action="remove" data-review-key="${esc(key)}">Remove</button></div></article>`;
+    const assessment=entry.score===null?'Awaiting score':scoreLabel+' · '+entry.score+'/100'+(scoreLabel==='Provisional score'?' · evidence review incomplete':'');
+    return `<article class="research-check-row company-ranked-review"${rank===null?'':` data-company-rank="${rank+1}"`} data-company-key="${esc(entry.key)}" data-company-score="${entry.score??''}" data-score-state="${entry.scoreState}" data-review-status="${status}"><div class="research-check-company"><strong>${esc(c.company)}</strong><span class="research-review-status ${status}">${entry.actionable&&selected?'Checked · selected for Buyers':contextStale?'Needs recheck':status==='needs-evidence'?'Needs more evidence':'Not qualified'}</span></div><a href="https://${esc(canonicalDomain(c.domain||c.website))}/" target="_blank" rel="noopener noreferrer">${esc(canonicalDomain(c.domain||c.website))}</a><p class="company-review-assessment">${assessment}</p><div class="research-check-tags">${lookalike}${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div>${companySearchFeedbackHtml(c)}<div class="research-review-actions"><button class="secondary-btn small" type="button" data-review-action="recheck" data-review-key="${esc(key)}" ${reviewBlocked||!reviewable?'disabled':''}>Recheck</button><button class="secondary-btn small" type="button" data-review-action="saved-evidence" data-review-key="${esc(key)}" title="No web requests. AI usage is billed separately." ${reviewBlocked||!reviewable?'disabled':''}>Review saved evidence</button><button class="secondary-btn small" type="button" data-review-action="buyers" data-review-key="${esc(key)}" ${selected||!reviewable?'disabled':''}>${selected?'Selected for Buyers ✓':'Move to Buyers'}</button><button ${!reviewable?'disabled':''} class="text-btn research-review-remove" type="button" data-review-action="remove" data-review-key="${esc(key)}">Remove</button></div></article>`;
 
 }
 function companyReviewToolsHtml(){
@@ -2022,9 +2022,10 @@ function renderCandidates(){void window.LeadIntelCompanyListUI?.refreshSearch?.(
   target.innerHTML=`${selectedNotice}${previousNotice}<div class="market-empty">${message}</div>`;
   return;
 }const rowFocus=rememberCompanyRows(target),outcome=typeof companySearchOutcome==="function"?companySearchOutcome():null;
- const groups=companyDisplayGroups(view),checked=groups.ranked.length,strong=outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length;
- const summary=checked?`${checked} checked companies · ${strong} strong fit (80+)`:'No checked companies yet';
- const more=checked>10?` · Showing top 10 of ${checked}`:'';
+ const groups=companyDisplayGroups(view),checked=ranked.length,strong=outcome?.strongFitCount??ranked.filter(c=>Number(c.qualification.score)>=80).length;
+ const summary=checked?`${checked} checked ${checked===1?'company':'companies'} · ${strong} strong fit (80+)`:'No checked companies yet';
+ const scored=groups.ranked.length;
+ const more=scored>10?` · Showing top 10 of ${scored} by score`:scored?' · Sorted by company fit':'';
  const receipt=$('company-search-progress');
  const showRunNotes=receipt?.hidden!==false || !receipt.querySelector?.('[data-company-search-content]');
  target.innerHTML=`${recovery}${showRunNotes?selectedNotice+previousNotice:''}<p class="discovery-pipeline-instruction company-ranking-summary" role="status" data-company-total="${view.total}"><strong>${summary}${more}</strong>${showRunNotes&&outcome?.note?' · '+esc(outcome.note):''}</p>${companyStrategyReviewNoticeHtml(view)}${companyReviewToolsHtml()}${companyDisplayPage(groups,0)}`;bindDisplayedCompanyOwners(target,view);restoreCompanyRowFocus(target,rowFocus);}
@@ -4561,7 +4562,18 @@ async function cancelCompanyDiscovery(){
   return canceled===true;
 }
 function renderStatus(){if(!discovery)return;const visibleSearchProgress=renderCompanySearchProgress();renderCompanyResearchUsage();const batchCount=renderCompanyReviewBatch();const main=mainState();const ready=Boolean(main?.profile?.website||main?.website);const strategyStatus=window.LeadIntelStrategyIntegrity?.status(main);const formal=Boolean(strategyStatus?.current);const target=selectedDiscoveryTarget();const targetControl=$("discovery-target-count");const customTarget=$("discovery-target-custom");const meta=loadMeta();const customMode=meta.targetMode==="custom"||targetControl?.value==="custom";if(targetControl)targetControl.value=customMode?"custom":String(target||DEFAULT_DISCOVERY_TARGET);if(customTarget){customTarget.hidden=!customMode;if(customMode&&document.activeElement!==customTarget)customTarget.value=String(target);}const gate=$("continue-to-discovery");if(gate){gate.hidden=!formal;gate.disabled=!ready;gate.textContent=ready?"Find matching companies →":"Add website first";}if(!$("discovery-status"))return;const phaseLabels={"buyer-fit":"Checking purchasing fit",extracting:"Extracting",resolving:"Resolving",verifying:"Verifying",following:"Broadening search"};const labels={idle:discovery.needsRefresh?"Recheck":formal?"Ready":"Provisional",running:phaseLabels[discoveryProgress.phase]||"Searching",complete:"Complete",no_results:"No matches",partial:"Partial",error:"Search issue"};const checkedCount=rankedCheckedCompanies().length;$("discovery-status").textContent=discovery.status==="running"?labels.running:!formal?(strategyStatus?.recovery==="research"?"Update market research":strategyStatus?.recovery==="profile"?"Review Profile":"Review Strategy"):discovery.needsRefresh?"Needs recheck":checkedCount?(["error","partial"].includes(discovery.status)?`${labels[discovery.status]} · ${checkedCount} checked retained`:`${checkedCount} checked · select companies`):discovery.status==="complete"?"No checked companies":discovery.status==="no_results"&&companySearchOutcome()?.pendingCount?"Evidence incomplete":labels[discovery.status]||"Ready";$("discovery-company").textContent=main.profile?.companyName||"Company";const markets=(discoveryMarket(main,strategyStatus).opportunities||[]).filter(x=>x.active!==false).map(x=>x.market).filter(Boolean);$("discovery-markets").textContent=[...new Set(markets)].join(" · ")||main.profile?.targetMarkets||main.profile?.currentMarkets?.join?.(" · ")||"Provisional";const targetNote=discovery.savingMode?" · bounded test":target?` · target up to ${target}`:"";const runningText=companySearchProgressText();const text={idle:!formal?(strategyStatus?.reason||'Review and activate the current Strategy before researching companies.'):!window.LeadIntelTargeting?.isConfirmed(main)?"Confirm the four required Targeting answers in Profile before searching for companies.":discovery.needsRefresh?"Saved company scores need rechecking. Existing research and selections are preserved.":formal?"Ready to find companies using the active strategy.":"Company search is ready. Add optional market, ICP or signal context to improve precision.",running:runningText,complete:`${typeof companySearchOutcome!=="function"||companySearchOutcome()?.targetMet?"Company search complete":"Company search paused"} · ${checkedCount} checked companies from ${discovery.rawResults.length} evidence results${targetNote}.`,no_results:companyExtractionMiss()?`Search finished · ${discovery.rawResults.length} evidence results checked across ${Number(discovery.funnel?.evidencePages)||0} unique pages; no company names were extracted${targetNote}.`:`Search finished · ${discovery.rawResults.length} evidence results checked; no company completed all company-fit and evidence checks${targetNote}.`,partial:meta.lastCompanyRun?.persistence==="failed"?"Company research could not be saved in this browser. Keep this page open; existing saved research is preserved.":meta.lastCompanyRun?.canceled?"Company search cancelled · completed evidence and selections were kept.":`Company search partially complete · ${checkedCount} checked companies available; one or more checks were unavailable${targetNote}.`,error:recoveredInterruptedRun?"The previous company search was interrupted before it finished. Retry to continue.":"The search did not complete because one or more provider checks failed or timed out. This is not a confirmed no-match."};const progressStatus=$("company-discovery-status");if(progressStatus){progressStatus.hidden=visibleSearchProgress&&formal&&ready&&meta.lastCompanyRun?.persistence!=="failed"&&(discovery.status==="running"||!discovery.needsRefresh);progressStatus.textContent=ready?(!formal?(strategyStatus?.reason||"Review and approve the current Strategy before researching companies."):discovery.needsRefresh?"Saved company scores need rechecking. Existing research and selections are preserved.":text[discovery.status]||text.idle):"Add your company website to enable the search.";progressStatus.classList?.toggle("is-active",discovery.status==="running");}const run=$("run-company-discovery");const webCap=$("discovery-web-cap");if(webCap)webCap.disabled=discovery.status==="running";const resumeCount=!["idle","running"].includes(discovery.status)&&batchCount>0?batchCount:0;
-  run.disabled=!ready||!formal||discovery.status==="running";
+  const recovery=companySearchRecovery(main,strategyStatus),recoveryButton=$('company-search-recovery');
+  const running=discovery.status==='running';
+  run.disabled=running||Boolean(recovery);
+  if(recoveryButton){
+    const showRecovery=Boolean(recovery)&&!running;
+    run.hidden=showRecovery;recoveryButton.hidden=!showRecovery;
+    recoveryButton.disabled=Boolean(window.LeadIntelServerBridge?.resolvingSync);
+    if(showRecovery)recoveryButton.textContent=recovery.nextAction;
+    if(showRecovery&&progressStatus&&recovery.nextTarget.itemId==='sync-review'){
+      progressStatus.hidden=false;progressStatus.textContent='Review the local and server changes before continuing company research.';
+    }
+  }
   const targetLabel=$('discovery-target-label'),targetHelp=$('discovery-target-help');
   if(targetLabel)targetLabel.textContent=resumeCount?'Saved companies to review':'Strong-fit companies to find';
   if(targetHelp)targetHelp.hidden=Boolean(resumeCount);
@@ -4584,6 +4596,30 @@ function renderStatus(){if(!discovery)return;const visibleSearchProgress=renderC
   const recheck=$("recheck-company-results");if(recheck)recheck.disabled=!ready||!formal||discovery.status==='running'||!existingCompanyResearchTargets().length;
   const clear=$("clear-company-results");if(clear)clear.disabled=discovery.status==='running'||![discovery.candidates,discovery.potentialMatches,discovery.selectedProspects,discovery.rawResults].some(rows=>rows?.length)&&!discovery.lastRunAt;
   const context=$("company-last-run-context");if(context)context.innerHTML=searchRunContextHtml();;}
+function companySearchRecovery(main,strategy){
+  const sync=window.LeadIntelServerBridge;
+  if(sync?.conflict||sync?.resolvingSync)return {nextAction:'Review workspace sync',nextTarget:{itemId:'sync-review'}};
+  if(!main?.website&&!main?.profile?.website)return {nextAction:'Add your company website in Setup',nextTarget:{stageId:1,itemId:'website'}};
+  const recovery=window.LeadIntelJourneyProgress?.companyRecoveryAction?.(strategy,main);
+  if(recovery)return recovery;
+  if(!strategy?.current)return {nextAction:'Review and approve Strategy',nextTarget:{stageId:3,itemId:'strategy'}};
+  if(window.LeadIntelTargeting&&!window.LeadIntelTargeting.isConfirmed(main))return {nextAction:'Confirm targeting in Profile',nextTarget:{stageId:2,itemId:'targeting'}};
+  return null;
+}
+function openCompanySearchRecovery(){
+  const main=mainState(),recovery=companySearchRecovery(main,window.LeadIntelStrategyIntegrity?.status(main));
+  if(!recovery){renderStatus();return;}
+  const {stageId,itemId}=recovery.nextTarget;
+  if(itemId==='sync-review'){
+    if(window.LeadIntelAttention?.open)window.LeadIntelAttention.open();
+    else $('workspace-attention')?.click();
+    return;
+  }
+  if(window.LeadIntelJourney?.reviewMiniStep)window.LeadIntelJourney.reviewMiniStep(stageId,itemId);
+  else if(stageId===3)showStrategyStep();
+  else window.LeadIntelCustomerNavigation?.setStep?.(stageId);
+}
+
 function companyQualificationProfile(main={}){const referenceDomains=(main.referenceCustomers?.rows||[]).map(r=>canonicalDomain(r.website||r.domain));const base={...(main.profile||{}),...window.LeadIntelTargeting?.profileFields?.(main),website:main.website||main.profile?.website,referenceDomains,exclusions:[String(main.answers?.exclusions||'').trim()||main.profile?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(', ')||main.profile?.targetMarkets};return LeadIntelDiscovery.effectiveTargetingProfile(base,discoveryMarket(main));}
 // Cache only preparation of immutable saved context, never a qualification result.
 // Every candidate still passes the current evidence, date, rules and CRM gates.
@@ -4655,14 +4691,11 @@ function refreshResearchBriefViews(retryDomain=''){
 function handleCompanyReviewClick(event){const review=event.target.closest("[data-review-action]");if(review&&!review.disabled){if(review.dataset.reviewKey&&(!review.__leadIntelCompanyOwner||rankedCompanyResults().rows.find(row=>row.key===review.dataset.reviewKey)?.candidate!==review.__leadIntelCompanyOwner))return true;const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="saved-evidence"){void runCompanyDiscovery({recheckOnly:true,savedEvidenceOnly:true,targetDomain:key});return true;}if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false,targetDomain:key});return true;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return true;}if(action==="buyers"){void selectResearchReviewForBuyers(key,review.__leadIntelCompanyOwner);return true;}if(action==="unselect"){unselectResearchReviewForBuyers(key);return true;}if(action==="remove"){removeResearchReviewCompany(key);return true;}if(action==="clear"){clearResearchReview();return true;}}return false;}
 function bindDiscovery(){
  document.addEventListener?.('click',event=>{const button=event.target.closest('[data-translate-company-brief]');if(button)refreshResearchBriefViews(button.dataset.translateCompanyBrief);});
-  $("company-review-batch")?.addEventListener("click",event=>{if(event.target.closest("[data-company-review-strategy]")){
-    const main=mainState(),status=window.LeadIntelStrategyIntegrity?.status(main);
-    const target=window.LeadIntelJourneyProgress?.companyRecoveryAction?.(status,main)?.nextTarget;
-    if(target&&window.LeadIntelJourney?.reviewMiniStep)window.LeadIntelJourney.reviewMiniStep(target.stageId,target.itemId);
-    else if(!status?.current)showStrategyStep();
-    else renderCompanyReviewBatch();
-    return;
-  }if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();});
+  $('company-search-recovery')?.addEventListener('click',openCompanySearchRecovery);
+  $("company-review-batch")?.addEventListener("click",event=>{
+    if(event.target.closest("[data-company-review-strategy]"))openCompanySearchRecovery();
+    else if(event.target.closest("#review-next-companies"))void reviewNextCompanyBatch();
+  });
   window.addEventListener('leadintel:commercial-context-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
   $("discovery-target-list")?.addEventListener("click",event=>{const button=event.target.closest("[data-select-target-buyers]");if(button)selectTargetForBuyers(button.dataset.selectTargetBuyers);});
   $("cancel-company-discovery")?.addEventListener("click",()=>{void cancelCompanyDiscovery();});
@@ -4768,6 +4801,7 @@ function startCompanyResearchFromStrategy(){
   });
   return discovery.status==='running'?{status:'running'}:{status:'blocked',message:'Strategy saved. Company research did not start. Review the Companies page checks and provider connections, then retry.'};
 }
+for(const event of ['leadintel:sync-resolving','leadintel:sync-settled'])window.addEventListener?.(event,()=>{if(discoveryMounted)renderStatus();});
 window.addEventListener?.('leadintel:server-conflict',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:server-synced',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:service-settings-changed',()=>{if(discoveryMounted)renderAll();});

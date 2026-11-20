@@ -558,3 +558,22 @@ test('first concurrent buyer lists survive 409 reconciliation, acknowledged save
  const ack=reloaded.root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.equal(ack.version,5);assert.equal(ack.payload.discovery.people[0].publicEmail,'anna@buyer.example');
  assert.ok(h.values.get(RECOVERY));
 });
+
+test('a 409 while reviewing different pending companies preserves both assessments and retries once',async()=>{
+ const puts=[];let server;
+ const {root,values}=load(async(input,options)=>{
+  puts.push(JSON.parse(options.body));
+  return puts.length===1?Response.json({current:server},{status:409}):Response.json({saved:true,version:5});
+ },{withBridge:true});
+ const base=establishBase(root,values),key='leadintel_customer_v2_discovery';
+ base.discovery.potentialMatches=[{domain:'first.example',score:50},{domain:'second.example',score:60}];
+ values.set(key,JSON.stringify(base.discovery));
+ await root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(base,{workspaceId:'w1',version:3,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ const local=structuredClone(base.discovery);local.potentialMatches[0].score=73;values.set(key,JSON.stringify(local));
+ server={version:4,payload:structuredClone(base)};server.payload.discovery.potentialMatches[1].score=82;
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(puts.length,2);assert.equal(puts[1].version,4);
+ assert.deepEqual(puts[1].payload.discovery.potentialMatches.map(r=>r.score),[73,82]);
+ assert.equal(root.LeadIntelServerBridge.conflict,false);
+});

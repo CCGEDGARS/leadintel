@@ -39,3 +39,26 @@ test('new-policy identity must name the company; a domain footer or another comp
  for(const company of ['Invented Factory','Factory1'])assert.equal(M.assess({...raw,company,identity},config(),[source]),null);
  assert.ok(M.assess({...raw,company:'Factory10',identity},config(),[source]));
 });
+
+test('saved snapshot exports rank every recorded score, preserve ties, and place missing scores after zero',()=>{
+ const rows=[
+  {company:'Awaiting Co',score:null},
+  {company:'First equal',score:54,scoreState:'current',reviewStatus:'Checked'},
+  {company:'Zero Co',score:0,scoreState:'current',reviewStatus:'Checked'},
+  {company:'Provisional Co',score:73,scoreState:'current'},
+  {company:'Previous Co',score:95,scoreState:'previous'},
+  {company:'Second equal',score:54,scoreState:'previous'}
+ ];
+ const snapshot=M.normalizeSearchSnapshot({rows}),before=JSON.stringify(snapshot);
+ const list={name:'Saved search',criteria:{kind:'search_snapshot',context:snapshot.context},results:snapshot.rows};
+ const ordered=M.exportRows(list).slice(1);
+ const expected=['Previous Co','Provisional Co','First equal','Second equal','Zero Co','Awaiting Co'];
+ assert.deepEqual(ordered.map(r=>r[0]),expected);
+ assert.deepEqual(ordered.map(r=>r[3]),[95,73,54,54,0,'']);
+ assert.deepEqual(ordered.map(r=>r[4]),['Previous · needs review','Provisional · needs review','Current','Previous · needs review','Current','Awaiting score']);
+ for(const content of [M.csv(list),new TextDecoder().decode(M.xlsx(list))]){
+  let last=-1;
+  for(const name of expected){const index=content.indexOf(name);assert.ok(index>last,name+' should follow the previous company');last=index;}
+ }
+ assert.equal(JSON.stringify(snapshot),before);
+});
