@@ -28,9 +28,13 @@ const profileAssessment='Return {company,website,excluded,identity:{url,quote},l
 const profileReview='Independently audit the candidate against the read pages, selected profiles, references and opportunities; do not trust its assessment. Return {decision:"pass|needs_evidence|reject",identityConfirmed:boolean,marketConfirmed:boolean,commercialFitConfirmed:boolean,exclusionsChecked:boolean,supportedProfileIds:[],supportedSignalIds:[],reason,gaps:[],followupUrls:[]}. Pass only supported company identity, operating market, commercial application, profile matches and required signals with resolved exclusions. Verify the meaning and attribution of every quote and business comparison. In profile any mode, unsupported optional profiles may be omitted from supportedProfileIds if another selected profile is verified. In profile all mode, every selected profile is mandatory. Unsupported optional signals may be omitted from supportedSignalIds without rejecting valid profile matches; mandatory gaps require needs_evidence. Wrong identity or confirmed exclusion means reject. Missing optional events are not mandatory gaps. Only supplied links can be proposed. Check each retained match against its unadjusted strength when present. For earlier candidates with only a calculated score, audit the source evidence and account for its source and recency adjustments. '+profileRules+' '+profileScoring;
 const profilePlanning='Return {queries:[strings]}. Plan at most eight distinct searches for the selected profiles and list countries. Use Core definitions, selected reference traits for Lookalike, selected buying events for Trigger-led, and source-backed saved opportunity themes for Opportunity-led. Respect profile any/all and signal off/boost/require. In boost mode discover profile fits broadly as well as candidates with selected events. In require mode seek both. Do not add inactive or unselected profiles/signals, or require events for a profiles-only Lookalike search. Use local business language and English; diversify official websites, industry associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps. Do not invent names or URLs. Return no queries only when no useful research remains. '+profileRules;
 // Structured target criteria are decided by business-register facts, not by the
-// model. The model only supplies a quoted statement of the company's activity,
-// which can confirm the industry when the register code says otherwise.
-const industryStatement=' When the criteria select industries, also return industry:{division,url,quote}: the two-digit NACE division of the company\'s main activity and an exact quote from a supplied page on the company\'s own website stating that activity. Omit industry when no supplied page states the activity; never infer it from the company name.';
+// model, so no prompt carries them or the register outcome: a live assessment that
+// saw "25-250 employees, register only" (20 Nov 2026) asked every company website
+// to prove it and kept none. The model only supplies a quoted statement of the
+// company's activity, which can confirm the industry when the register code says otherwise.
+const industryStatement=' Also return industry:{division,url,quote}: the two-digit NACE division of the company\'s main activity and an exact quote from a supplied page on the company\'s own website stating that activity. Omit industry when no supplied page states the activity; never infer it from the company name.';
+const modelCriteria=criteria=>{if(!criteria.target)return criteria;const {target,...rest}=criteria;return rest;};
+const modelCandidate=candidate=>{if(!candidate?.target)return candidate;const {target,...rest}=candidate;return rest;};
 // The planner gets industry names and a size word, never the numbers or the word
 // "register": a live plan (20 Nov 2026) pasted "CVR ... 25-250 ansatte" into every
 // query and searched a company directory instead of companies.
@@ -41,7 +45,6 @@ const targetPlanning=criteria=>{
   +(industries.length?' Industries that qualify: '+industries.join('; ')+'.':'')
   +(Number.isInteger(max)&&max<=1000?' Look for small and mid-sized companies; do not search for large corporations or groups.':'');
 };
-const planningCriteria=criteria=>{if(!criteria.target)return criteria;const {target,...rest}=criteria;return rest;};
 
 function failure(cause,events=[],operation=''){
  const traces=[...(cause.researchTrace||[]),...events];
@@ -182,7 +185,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
        if(outcome.excluded)finishTask(task,outcome.reason,'rejected');
        else{task.candidate=outcome.candidate;task.registerChecked=true;s.reason='Reviewing source evidence before counting a match';}
       }else if(task.candidate&&strict){
-       const review=await generate({stage:'review',criteria,pages,candidate:task.candidate,instructions:profilePolicy?profileReview:reviewInstructions});
+       const review=await generate({stage:'review',criteria:modelCriteria(criteria),pages,candidate:modelCandidate(task.candidate),instructions:profilePolicy?profileReview:reviewInstructions});
        const result=M.reviewResult(task.candidate,review,criteria);
        if(result){
         result.audit={reads:pages.map(p=>({url:p.url,readAt:p.readAt,operationId:p.receipt?.id,providers:p.receipt?.providers||[]})),assessment:task.assessment,review:{...lastOperation}};
@@ -190,7 +193,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
         retain(result);finishTask(task);
        }else{if(review.decision!=='reject')followup(task,review,pages);finishTask(task,(review.gaps||[]).map(g=>clean(g)).join(' · ')||clean(review.reason)||'Required evidence review did not pass.',review.decision==='reject'?'rejected':'needs_evidence');}
       }else{
-       const raw=await generate({stage:'assess',criteria,pages,instructions:profilePolicy?profileAssessment+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
+       const raw=await generate({stage:'assess',criteria:modelCriteria(criteria),pages,instructions:profilePolicy?profileAssessment+(criteria.target?.industries?.length?industryStatement:''):assessmentInstructions});let match=M.assess(raw,profilePolicy?criteria:{...criteria,mode:'any'},pages);
        // Legacy jobs can finish their already-evidenced multi-signal matches.
        // Their older policy is retained and never relabelled as a new review.
        if(!strict&&match){s.partial||={};match=M.mergeResult(s.partial[match.domain],match,criteria);if(Object.keys(s.partial).length<500)s.partial[match.domain]=match;}
@@ -213,7 +216,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
      if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
      const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
      if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){s.failureCode='search_exhausted';s.phase='exhausted';s.reason='The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.';await checkpoint('incomplete');return [row.id];}
-     const plan=await generate({stage:'plan',criteria:planningCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'});
+     const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePolicy?profilePlanning+targetPlanning(criteria):'Return {queries:[strings]}. Plan at most eight distinct company searches for ONLY selected signals and target markets. For Lookalike, use selected reference source-backed operations, products and relevant purchasing applications; no unrelated hiring, investment or tender requirement. Reference countries are not target markets. Use local business language and English. Diversify relevant industry subsegments and official company sites, trade associations and specialist sources. Avoid previous queries and matched companies. Resolve the supplied evidence gaps where useful. Never invent company names. Empty queries only when no further useful research is justified.'});
      const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
      s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);s.phase=queries.length?'researching':'exhausted';s.reason=queries.length?(profilePolicy?'Researching your selected profiles and buying signals':'Researching your selected signals'):'No further useful queries. Completed matches are retained; review the criteria.';
      if(!queries.length)s.failureCode='search_exhausted';await checkpoint(queries.length?'running':'incomplete');if(!queries.length)return [row.id];

@@ -30,7 +30,32 @@ test('the search planner never receives the size rule; it gets the industry name
  assert.match(plan.instructions,/Fabricated metal products/);assert.match(plan.instructions,/Machinery and equipment/);
  assert.match(plan.instructions,/companies' own websites/);assert.match(plan.instructions,/never put employee counts/i);
  assert.match(plan.instructions,/small and mid-sized/,'an employee maximum becomes a size word, not a number');
- assert.deepEqual(assess.criteria.target.industries,['25','28'],'the assessment still sees the frozen criteria');
+ assert.equal(Object.hasOwn(assess.criteria,'target'),false);
+});
+
+// Second live run (20 Nov 2026, list daa2fd4b): the assessment saw "25–250 employees ·
+// register only", asked every company website to prove it and kept none, so the register
+// check, which answers exactly that, never ran.
+test('no reasoning prompt carries the size, industry or register rules; the register alone decides them',async t=>{
+ const f=await setup(t),prompts=[],asked=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...profileServices({count:2,observe:p=>prompts.push(structuredClone(p))}),registry:async query=>{
+  asked.push(query.company);
+  const base={status:'found',registry:'SE-TEST',country:'SE',name:query.company.toUpperCase()+' AB',city:'Stockholm',active:true,statusLabel:'ACTIVE',industry:{code:'289900',label:'Manufacture of special-purpose machinery'},revenue:null,marketingProtected:false,source:{name:'Test register',url:'https://register.example/'+query.company,checkedAt:'2026-11-20T12:00:00.000Z'}};
+  return query.company==='Factory0'?{...base,id:'5500000000',employees:{count:120}}:{...base,id:'5500000001',employees:{count:833}};
+ }};
+ const first=await start(f,{count:1,target:{employees:{min:25,max:250},industries:['28'],registryOnly:true}}),list=await finish(f,first.id);
+ assert.deepEqual([...new Set(prompts.map(p=>p.stage))].sort(),['assess','plan','review']);
+ for(const p of prompts){
+  assert.equal(Object.hasOwn(p.criteria,'target'),false,p.stage+' prompt carries no structured criteria');
+  assert.doesNotMatch(JSON.stringify(p),/"employees"|"registryOnly"|"register"|"checks"/,p.stage+' prompt carries no register facts');
+ }
+ const review=prompts.find(p=>p.stage==='review');
+ assert.equal(review.candidate.company,'Factory0');assert.equal(Object.hasOwn(review.candidate,'target'),false,'the reviewer does not see the register outcome');
+ assert.match(prompts.find(p=>p.stage==='assess').instructions,/industry:\{division,url,quote\}/,'the industry statement is still asked for');
+ assert.equal(list.status,'complete');assert.deepEqual(list.results.map(r=>r.company),['Factory0']);
+ assert.deepEqual(list.results[0].target.checks.map(c=>[c.key,c.status]),[['registry','match'],['industry','match'],['employees','match']],'the kept company still carries its register checks');
+ assert.equal(list.results[0].target.register.id,'5500000000');
+ assert.ok(asked.includes('Factory0'));
 });
 
 test('a list without structured criteria plans exactly as before',async t=>{
