@@ -142,7 +142,7 @@
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       if(!selected){owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};const error=owner.buyerDiscovery.lastError;if(error?.phase==='start'||/^BUYER_JOB_.*MISMATCH$/.test(error?.name||''))delete owner.buyerDiscovery.lastError;}
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
-      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
@@ -178,11 +178,12 @@
       stop=()=>controller.abort();options.signal?.addEventListener('abort',stop,{once:true});
       const entry={scope,controller,promise:null,readOnly};
       entry.promise=(async()=>{
+        const expectedJobId=options.resumeExisting?owner.buyerResearchJob?.id:null;
         let observedJob=await request(scope,'GET',null,null,controller);
         const queueStarted=Date.now();
         // Another tab/server observer may own active research. Never replace it
         // merely because this click selected a different person.
-        while(!readOnly&&observedJob&&matching(scope,observedJob)&&ACTIVE.has(observedJob.status)&&stable([...(observedJob.input?.personIds||[])].map(String).sort())!==stable([...(scope.personIds||[])].sort())){
+        while(!readOnly&&!options.resumeExisting&&observedJob&&matching(scope,observedJob)&&ACTIVE.has(observedJob.status)&&stable([...(observedJob.input?.personIds||[])].map(String).sort())!==stable([...(scope.personIds||[])].sort())){
           if(Date.now()-queueStarted>=observationTimeoutMs)throw Error('This buyer is waiting for the current research to finish. Retry when it completes.');
           await waitForTurn(new Promise(resolve=>setTimeout(resolve,pollMs)),controller.signal,scope.current);
           observedJob=await request(scope,'GET',null,null,controller);
@@ -191,7 +192,13 @@
         if(job&&!matching(scope,job)){options.onMismatch?.(contextFailure(scope,job));job=null;}
         if(!readOnly&&options.resumeExisting){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before resuming buyer research.');
-          if(!job)throw Error('Saved research no longer matches this company. Check its current research first.');
+          if(!job){
+            if(observedJob)throw contextFailure(scope,observedJob);
+            throw Error('Saved research is unavailable. Reopen the company to check its latest progress.');
+          }
+          if(expectedJobId&&job.id!==expectedJobId)throw Error('The saved research was replaced. Reopen the company to see its latest progress.');
+          const savedPeople=(job.input?.personIds||[]).map(String).sort();
+          if(stable(savedPeople)!==stable([...(scope.personIds||[])].sort()))throw Error('The selected buyers have changed. Reopen the company to see its latest progress.');
           if(TERMINAL.has(job.status)&&job.status!=='complete')job=await request(scope,'POST',{action:'resume',jobId:job.id,expectedRevision:job.revision},null,controller);
         }else if(!readOnly){
           if(scope.bridge.conflict)throw Error('Resolve the workspace synchronization conflict before starting or resuming buyer research.');

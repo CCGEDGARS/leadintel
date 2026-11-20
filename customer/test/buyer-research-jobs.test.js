@@ -307,3 +307,17 @@ test('validated matching progress clears an obsolete start error without changin
 test('a matching job needing evidence review clears a false start error while retaining its incomplete state',async()=>{
  const owner=candidate();owner.buyerDiscovery={lastError:{phase:'start',message:'Could not start'}};const h=harness(()=>snapshot(owner,'needs_review',3));await h.client.restore(owner,{profile:{decisionMakers:'COO'}});assert.equal(owner.buyerDiscovery.lastError,undefined);assert.equal(owner.buyerDiscovery.researchIncomplete,true);assert.equal(owner.buyerResearchJob.status,'needs_review');
 });
+
+test('Resume leaves a replacement job and a different buyer committee untouched',async()=>{
+ const owner=candidate();owner.buyerResearchJob={id:'job-1',status:'needs_review'};
+ const job=snapshot(owner,'needs_review',7);
+ for(const [saved,error] of [
+  [{...job,id:'replacement'},/replaced/],
+  [{...job,input:{roles:['Engineering lead']}},/different buyer roles/],
+  [{...job,input:{personIds:['anna']}},/selected buyers have changed/],
+ ]){
+  const h=harness(()=>saved);
+  await assert.rejects(h.client.resume(owner,{profile:{decisionMakers:'COO'}}),error);
+  assert.deepEqual(h.calls.map(call=>call.method),['GET']);
+ }
+});
