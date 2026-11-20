@@ -1,6 +1,7 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelCompanyLists=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const StrategyIntegrity=typeof module==='object'&&module.exports?require('./strategy-integrity.js'):globalThis.LeadIntelStrategyIntegrity;
+ const TargetCriteria=typeof module==='object'&&module.exports?require('./target-criteria.js'):globalThis.LeadIntelTargetCriteria;
  const clean=(v,n=500)=>String(v??'').replace(/\s+/g,' ').trim().slice(0,n);
  function url(v){try{const u=new URL(v);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&!u.port&&u.hostname.includes('.')&&!/^(?:localhost|127\.|10\.|192\.168\.|169\.254\.)|\.local$/.test(u.hostname)?u.href:'';}catch{return '';}}
  const domain=v=>{try{return new URL(url(v)).hostname.replace(/^www\./,'').toLowerCase();}catch{return '';}};
@@ -131,10 +132,13 @@
   if(profiles.some(p=>p.type==='lookalike')&&(!references.length||references.length>15||references.some(r=>!r)))fail('Select 1–15 analyzed references for Lookalike.');
   const weights={};for(const s of signals){const w=Number(raw.weights?.[s.id]??1);if(!Number.isFinite(w)||w<1||w>5)fail('Signal importance must be between 1 and 5.');weights[s.id]=w;}
   const base=available.profile||{},join=values=>[...new Set(values.filter(Boolean))].join('; ');
+  // Optional structured size and industry rules, checked against the business register.
+  if(raw.target&&!TargetCriteria)fail('Target criteria could not be loaded. Reload the page and try again.');
+  const target=raw.target?TargetCriteria.normalize(raw.target):null;
   return {version:3,qualityVersion:PROFILE_VERSION,name:clean(raw.name,120)||'Company list',count,profiles,
    profileMode:raw.profileMode==='all'?'all':'any',signalMode,signals,mode:raw.mode==='all'?'all':'any',weights,
    referenceIds,references,opportunities:profiles.some(p=>p.type==='opportunity-led')?(available.opportunities||[]):[],markets,budget,
-   profile:{website:base.website||'',offers:join(profiles.map(p=>p.offers))||base.offers||'',idealCustomer:join(profiles.map(p=>p.description)),exclusions:join([base.exclusions,...profiles.map(p=>p.exclusions)])}};
+   profile:{website:base.website||'',offers:join(profiles.map(p=>p.offers))||base.offers||'',idealCustomer:join(profiles.map(p=>p.description)),exclusions:join([base.exclusions,...profiles.map(p=>p.exclusions)])},...(target?{target}:{})};
  }
  function sourceProof(pages,e){const page=pages.find(p=>p.url===url(e?.url));return page&&contains(page.text,e.quote)?{url:page.url,quote:clean(e.quote,1000),readAt:page.readAt,date:clean(e.date,40)}:null;}
  function datedProof(pages,e,now){
@@ -199,7 +203,11 @@
    profileMatches.push({kind:'profile',profileId:p.id,type:p.type,name:p.name,...e,...extra,strength,score:Math.min(90,strength),reason:clean(m.reason,700)});
   }
   if(!profileMatches.length||c.profileMode==='all'&&profileMatches.length!==c.profiles.length)return null;
-  return profileScores({company,website,domain:host,location:clean(raw.location.label,180),market:raw.location.market,identity,locationEvidence:location,
+  // A quoted statement of the company's activity on its own read page can later
+  // confirm the industry when the register code says otherwise.
+  const stated=c.target?.industries?.length&&/^\d{2}$/.test(clean(raw.industry?.division,4))?sourceProof(pages,raw.industry):null;
+  const industryEvidence=stated&&domain(stated.url)===host?{division:clean(raw.industry.division,4),url:stated.url,quote:stated.quote}:null;
+  return profileScores({...(industryEvidence?{industryEvidence}:{}),company,website,domain:host,location:clean(raw.location.label,180),market:raw.location.market,identity,locationEvidence:location,
    commercialFit:{...commercial,status:'supported',reason:clean(raw.commercialFit.reason,700),buyingIntent:'unconfirmed'},profileMatches,signalMatches,checkedAt:new Date(now).toISOString(),buyingIntent:'unconfirmed'},c);
  }
  function reviewProfiles(candidate,review,c,now){
@@ -213,7 +221,18 @@
   const result=profileScores({...candidate,profileMatches,signalMatches},c);
   return {...result,quality:{version:PROFILE_VERSION,status:'reviewed',reason:clean(review.reason,1000),checkedAt:new Date(now).toISOString(),checks:['identity','market','selected_profiles','commercial_fit','exclusions',...(c.signalMode==='off'?[]:['selected_buying_signals'])],sourceCount:new Set([result.identity.url,result.locationEvidence.url,result.commercialFit.url,...result.matches.map(m=>m.url)]).size}};
  }
- function criteriaSummary(c){return c.qualityVersion===PROFILE_VERSION?'Profiles ('+c.profileMode+'): '+c.profiles.map(p=>p.name).join(', ')+' · Buying signals: '+({off:'Profiles only',boost:'Prioritize',require:'Require'})[c.signalMode]+(c.signals.length?' ('+c.mode+'): '+c.signals.map(s=>s.name).join(', '):''):c.signals.map(s=>s.name).join(', ')+' · Match '+c.mode;}
+ // Register facts decide the structured rules. A known mismatch removes the
+ // company; missing or unavailable facts keep it with every check marked unknown.
+ function targetOutcome(candidate,facts,c){
+  if(!c?.target||!candidate)return {excluded:false,candidate};
+  const result=TargetCriteria.evaluate(c.target,facts,{industryEvidence:candidate.industryEvidence});
+  const checks=result.checks.map(check=>({...check,detail:clean(check.detail,500)}));
+  if(result.decision==='exclude')return {excluded:true,reason:'Outside the target criteria: '+checks.filter(check=>check.status==='mismatch').map(check=>check.detail).join(' · ')};
+  const register=facts?.status==='found'?{registry:clean(facts.registry,40),id:clean(facts.id,40),name:clean(facts.name,180),city:clean(facts.city,120),marketingProtected:facts.marketingProtected??null,source:facts.source||null,...(facts.group?{group:facts.group}:{})}:null;
+  return {excluded:false,candidate:{...candidate,target:{checks,register}}};
+ }
+ function criteriaSummary(c){return (c.target?TargetCriteria.describe(c.target)+' · ':'')+criteriaText(c);}
+ function criteriaText(c){return c.qualityVersion===PROFILE_VERSION?'Profiles ('+c.profileMode+'): '+c.profiles.map(p=>p.name).join(', ')+' · Buying signals: '+({off:'Profiles only',boost:'Prioritize',require:'Require'})[c.signalMode]+(c.signals.length?' ('+c.mode+'): '+c.signals.map(s=>s.name).join(', '):''):c.signals.map(s=>s.name).join(', ')+' · Match '+c.mode;}
  function mergeResult(previous,current,config){
   if(!current)return previous||null;if(!previous||previous.domain!==current.domain)return current;
   const byId=new Map();for(const m of [...previous.matches,...current.matches])if(config.signals.some(s=>s.id===m.signalId)&&(!byId.has(m.signalId)||byId.get(m.signalId).score<m.score))byId.set(m.signalId,m);
@@ -287,5 +306,5 @@
   for(const [name,text] of Object.entries(files)){const n=enc.encode(name),b=enc.encode(text),checksum=crc(b),h=new Uint8Array(30+n.length),d=new DataView(h.buffer);d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint32(14,checksum,true);d.setUint32(18,b.length,true);d.setUint32(22,b.length,true);d.setUint16(26,n.length,true);h.set(n,30);chunks.push(h,b);const c=new Uint8Array(46+n.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint32(16,checksum,true);v.setUint32(20,b.length,true);v.setUint32(24,b.length,true);v.setUint16(28,n.length,true);v.setUint32(42,offset,true);c.set(n,46);central.push(c);offset+=h.length+b.length;}
   const size=central.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);chunks.push(...central,end);const result=new Uint8Array(offset+size+22);let i=0;for(const c of chunks){result.set(c,i);i+=c.length;}return result;
  }
- return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,criteriaSummary,mergeResult,ranked,inScoreOrder,hasCompanyScore,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
+ return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,targetOutcome,criteriaSummary,mergeResult,ranked,inScoreOrder,hasCompanyScore,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
 });
