@@ -26,7 +26,7 @@ test("Company Discovery handoff has a review dialog with explicit blockers and w
   assert.match(app, /function strategyHandoffModel\(\)/);
   assert.match(app, /function openStrategyHandoff\(\)/);
   assert.match(app, /Monitoring is off/);
-  assert.match(app, /This one-time company search will still run normally/);
+  assert.match(app, /Approval opens Companies without starting research/);
   assert.match(app, /No active ICP/);
   assert.match(app, /No active buying signal/);
   assert.match(app, /Market research is optional/);
@@ -45,7 +45,7 @@ test("pre-flight explains weak signal coverage and provides direct repair action
 
 test("pre-flight blocks zero signals and explains partial research without implying a smaller company list", () => {
   assert.match(app, /No active buying signal[\s\S]{0,240}required/);
-  assert.match(app, /Continue to Companies →/);
+  assert.match(app, /Approve Strategy and open Companies/);
   assert.match(app, /Fewer than 3 evidence sources/);
   assert.match(app, /hasLimitedResults:lowSignalCoverage\|\|lowEvidenceCoverage\|\|incompleteResearch/);
   assert.match(app, /Some research checks were unavailable; your \$\{evidence.length\} saved sources will still be used/);
