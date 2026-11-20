@@ -36,7 +36,8 @@ test('the profile handoff hands over in place instead of forcing a page reload',
   assert.doesNotMatch(profileHandoff,/location\.reload/,'lifecycle rule: never force a page reload as an async research handoff');
   assert.match(profileHandoff,/writeState\(state\);[\s\S]*saveNow[\s\S]*dispatchEvent\(new CustomEvent\('leadintel:company-research-updated',\{detail:\{website:state\.website,profileBuilt:true,step:state\.step\}\}\)\)/,'state is written and saved before the app is told to re-read it');
   const app=read('app.js');
-  assert.match(app,/addEventListener\("leadintel:company-research-updated",\(\)=>\{\s*state=loadState\(\);editMode=false;syncInputsFromState\(\);updateCompleteness\(\);\s*setStep\(state\.step\|\|2\);/,'the app re-reads the saved state and opens the saved step on that event');
+  assert.match(app,/addEventListener\("leadintel:company-research-updated",\(\)=>\{\s*state=loadStateKeepingTypedAnswers\(\);editMode=false;syncInputsFromState\(\);updateCompleteness\(\);\s*setStep\(state\.step\|\|2\);/,'the app re-reads the saved state and opens the saved step on that event');
+  assert.match(app,/function loadStateKeepingTypedAnswers\(\)\{[^\n]*const next=loadState\(\);/,'the guarded reload still reads the saved state');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1&in-place-handoff=20261024-v1/);
   assert.match(supportLoader,/company-profile-handoff\.js\?v=20260924-friendly-workflow-labels-v1&in-place-handoff=20261024-v1/);
 });

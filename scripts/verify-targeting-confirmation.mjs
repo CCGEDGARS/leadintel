@@ -12,6 +12,8 @@ export async function verifyTargetingConfirmation({artifactDir='/tmp/leadintel-t
  try{
   let page=await open();await page.locator('#company-website').fill('seller.example');await page.locator('#activate-website').click();await page.waitForFunction(()=>document.getElementById('website-activation-status')?.dataset.state==='active');await page.locator('[data-target-market="Sweden"]').click();await page.locator('#to-questionnaire').click();await page.locator('#step-2.active').waitFor();
   for(const [id,value] of Object.entries(answers))await page.locator(`[data-question="${id}"]`).fill(value);
+  // A typed answer is committed when its field is left (or after a short typing pause), so leave the last field before simulating an outside edit.
+  await page.locator('[data-question="exclusions"]').blur();
   if(synchronizeReview)await page.evaluate(()=>window.dispatchEvent(new CustomEvent('leadintel:workspace-changed',{detail:{source:'profile-review-status'}})));
   assert.equal(await page.evaluate(()=>Boolean(window.__leadIntelLocalStrategyConflict)),false,'normal answer edits must not create a Strategy conflict');
   if(conflictingEdit){

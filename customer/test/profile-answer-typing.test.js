@@ -9,13 +9,13 @@ const body=source.slice(source.indexOf('function readAnswers('),source.indexOf('
 function runtime(){
   const inputs=[{dataset:{question:'ideal_customer'},value:'Hotels'},{dataset:{question:'priority_offers'},value:'Furniture'}];
   const stored=new Map([['leadintel_customer_v2_outreach',JSON.stringify({items:[{id:'draft',approved:true}]})],['leadintel_customer_v2_discovery',JSON.stringify({})]]);
-  const timers=new Map(),events=[],applied=[],redraws=[];let nextTimer=1,saves=0;
+  const timers=new Map(),events=[],applied=[],redraws=[];let nextTimer=1,saves=0;const savedState={answers:{ideal_customer:'Hotels',priority_offers:'Furniture from research'},answerStatus:{},researchMeta:{generatedAt:'now'}};
   const context={
     state:{answers:{ideal_customer:'Hotels',priority_offers:'Furniture'},answerStatus:{}},targetingSaveError:'',
     document:{querySelectorAll:()=>inputs},
     localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,String(value))},
     LeadIntelStep2Brief:{applyAnswers:(state,changed)=>{applied.push([...changed]);return state;}},
-    saveState:()=>{saves++;return true;},
+    saveState:()=>{saves++;return true;},loadState:()=>JSON.parse(JSON.stringify(savedState)),
     CustomEvent:class{constructor(type,init){this.type=type;this.detail=init?.detail;}},
     window:{dispatchEvent:event=>{events.push(event);return true;},LeadIntelStep2Readiness:{renderReadiness:root=>{redraws.push(root);}}},
     setTimeout:(fn,ms)=>{const id=nextTimer++;timers.set(id,{fn,ms});return id;},clearTimeout:id=>{timers.delete(id);},
@@ -87,6 +87,25 @@ test('the Profile readiness panel is redrawn after typed text is committed, sinc
   r.type(0,'Hotels and offices ');r.pause();assert.equal(r.redraws.length,2,'also when the key changed nothing: the save rewrote the panel');
   r.type(0,'Hotels');r.context.readAnswers({fields:['priority_offers']});assert.equal(r.redraws.length,3,'also when another read absorbs the edit');
   r.context.readAnswers({fields:['priority_offers']});r.context.readAnswers();assert.equal(r.redraws.length,3,'reads without typed text behave as before');
+});
+
+test('a reload of the saved state keeps text typed since the last commit',()=>{
+  const r=runtime();
+  r.type(0,'Hotels and offices');
+  r.context.state=r.context.loadStateKeepingTypedAnswers();
+  assert.equal(r.context.state.answers.ideal_customer,'Hotels and offices','typed text survives the reload');
+  assert.equal(r.context.state.answers.priority_offers,'Furniture from research','other fields come from the saved state');
+  assert.equal(r.context.state.researchMeta.generatedAt,'now');
+  r.pause();assert.deepEqual(r.applied,[['ideal_customer']],'the pending edit is still committed afterwards');assert.equal(r.saves(),1);
+  r.context.state=r.context.loadStateKeepingTypedAnswers();
+  assert.equal(r.context.state.answers.ideal_customer,'Hotels','with nothing pending the saved state is taken as it is');
+});
+
+test('state reloads after website, research and reference events go through the typed-text guard',()=>{
+  const listeners=source.slice(source.indexOf('window.addEventListener("leadintel:website-draft-discarded"'),source.indexOf('\nfunction init(){'));
+  assert.ok(listeners.length>200,'reload listeners found');
+  assert.doesNotMatch(listeners,/state=loadState\(\)/,'no bare reload while an answer may be mid-typing');
+  assert.equal((listeners.match(/state=loadStateKeepingTypedAnswers\(\)/g)||[]).length,4);
 });
 
 test('typed answers are committed when the field is left and before the page goes away',()=>{

@@ -381,6 +381,8 @@ function readAnswers(options={}){
 }
 var ANSWER_COMMIT_DELAY_MS=600,pendingAnswerEdits=new Set(),answerCommitTimer=null;
 function commitPendingAnswers(){if(answerCommitTimer===null&&!pendingAnswerEdits.size)return true;return readAnswers({fields:[]});}
+// A reload of the saved state must not drop text typed since the last commit.
+function loadStateKeepingTypedAnswers(){const typed=[...pendingAnswerEdits].map(id=>[id,state?.answers?.[id]]);const next=loadState();for(const [id,value] of typed)if(typeof value==='string'&&next?.answers)next.answers[id]=value;return next;}
 function validateStep1(){
   readSources();
   if(!state.website){$("step1-error").textContent="Enter a valid company website.";return false;}
@@ -2068,18 +2070,18 @@ function bind(){
     finally{reviewingResearchProfile=false;}
   });
   window.addEventListener("leadintel:open-market-strategy",()=>{if(!state.profile){showToast("Review your company profile first");return;}window.LeadIntelReferenceCustomerUI?.close?.();openMarketStrategy();});
-  window.addEventListener("leadintel:website-draft-discarded",()=>{state=loadState();syncInputsFromState();});
+  window.addEventListener("leadintel:website-draft-discarded",()=>{state=loadStateKeepingTypedAnswers();syncInputsFromState();});
   window.addEventListener("leadintel:website-activated",()=>{
-    state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
+    state=loadStateKeepingTypedAnswers();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;
     setStep(1);
   });
   window.addEventListener("leadintel:company-research-updated",()=>{
-    state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
+    state=loadStateKeepingTypedAnswers();editMode=false;syncInputsFromState();updateCompleteness();
     setStep(state.step||2);
   });
   window.addEventListener("leadintel:reference-customers-updated",()=>{
-    state=loadState();
+    state=loadStateKeepingTypedAnswers();
     if(Number(state.step)===4&&state.profile){ensureMarketStrategySeeded();renderMarketStrategy();}
   });
 }
