@@ -1719,12 +1719,12 @@ function strategyHandoffModel(){
   blockers.push(...conflicts.filter(item=>item.blocking).map(item=>item.message));
   const warnings=conflicts.filter(item=>!item.blocking).map(item=>item.message);
   if(earlierResearch)warnings.push(`${savedEvidence.length} earlier research source${savedEvidence.length===1?' is':'s are'} saved in Profile. This approval uses your current Profile and signals. Earlier research and Opportunity-led matching are excluded until market research is updated.`);
-  else if(!evidence.length)warnings.push("Market research is optional. Company discovery will start from your customer definition, offers, markets and signals, then verify individual companies.");
+  else if(!evidence.length)warnings.push("Market research is optional. Company searches use your customer definition, offers, markets and signals.");
   if(signals.length===1)warnings.push("Only one active buying signal. Companies can be found, but ranking will be narrow. At least 3 active signals are recommended.");
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   if(incompleteResearch&&!earlierResearch)warnings.push(`Some research checks were unavailable; your ${evidence.length} saved sources will still be used.`);
-  if(!monitoring.enabled&&!earlierResearch)warnings.push("Monitoring is off (optional). This one-time company search will still run normally. To enable scheduled checks once Strategy is active, go to Step 2 → Profile → Website Scanning → Monitor websites. Choose websites, buying signals and frequency, tick Enable monitoring, then click Save and close. Scheduled checks use your connected provider credits.");
+  if(!monitoring.enabled&&!earlierResearch)warnings.push("Monitoring is off (optional). To enable scheduled checks once Strategy is active, go to Step 2 → Profile → Website Scanning → Monitor websites. Choose websites, buying signals and frequency, tick Enable monitoring, then click Save and close. Scheduled checks use your connected provider credits.");
   const providerStatus=globalThis.LeadIntelAttention?.providerStatus?.()||null;const providerConnected=provider=>Boolean(globalThis.LeadIntelAttentionModel?.providerConnected?.(providerStatus,provider));
   if(providerStatus){
     if(!providerConnected("apollo"))warnings.push("Apollo is not connected. Buyer identities will come from public sources only; connect Apollo in Settings for decision-maker search.");
@@ -1747,8 +1747,8 @@ function strategyHandoffModel(){
       ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
       ["Evidence",evidence.length+" saved source"+(evidence.length===1?"":"s")],
       ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional) · Set up: Step 2 → Profile → Website Scanning → Monitor websites"],
-      ["Company search",earlierResearch?"Approval opens Companies without starting research.":searchPlan?`Up to ${searchPlan.targetCount} checked companies · up to ${searchPlan.callLimit} Firecrawl calls, billed on your connected plan. AI analysis uses your connected provider.`:"One bounded search using the saved company amount and existing provider limits. Research uses your connected plans."],
-      ["Next", earlierResearch?"Review your existing companies or choose when to start a search.":"Continue starts company research when results are missing or stale. Current checked results are reused. Existing research and selections are preserved; buyer selection stays manual."]
+      ["Company search","Approval opens Companies without starting research."],
+      ["Next",searchPlan?`Choose when to search in Companies. Your saved target is ${searchPlan.targetCount} companies with a limit of ${searchPlan.callLimit} Firecrawl calls. You can adjust both before searching.`:"Choose your search settings in Companies and start when ready."]
     ]
   };
 }
@@ -1779,7 +1779,7 @@ function renderStrategyHandoff(){
   const update=$("update-strategy-research");
   if(update)update.hidden=monitoring||!model.earlierResearch;
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":monitoring?"Approve Strategy & return to monitoring":model.earlierResearch?"Approve Strategy and open Companies":"Continue to Companies →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":monitoring?"Approve Strategy & return to monitoring":"Approve Strategy and open Companies";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
@@ -1882,17 +1882,11 @@ async function activateMarketStrategy(){
     if(monitoring){if(!monitoringApprovalCurrent(monitoringOwner))throw Error('Strategy saved. Monitoring navigation was canceled or changed.');const returned=returnToMonitoring(monitoringOwner);outcome=returned?'pass':'needs-navigation';if(returned)showToast('Strategy approved. Monitoring settings are ready; choose when to run.');return returned;}
     closeStrategyHandoff();const opened=await openDiscoveryAfterActivation();assertStrategyContext(context);
     if(!opened){setActivationFeedback('Companies did not open. Please try again.','error');showToast('Companies did not open. Please try again.');if(button){button.disabled=false;button.textContent='Try Companies Again →';}return false;}
-    if(basis==='profile'){
-      outcome='pass';
-      setActivationFeedback('Strategy saved · review your saved companies or start a search in Companies.','success');
-      showToast('Strategy approved. Companies opened.');
-      return true;
-    }
-    const research=window.LeadIntelDiscoveryUI?.startFromStrategy?.();
-    if(!research||research.status==='blocked'){
-      outcome='needs-research';setActivationFeedback(research?.message||'Strategy saved. Company research is unavailable; refresh the page and retry research in Companies.','error');showToast(research?.message||'Company research unavailable · refresh the page and retry research');return false;
-    }
-    outcome='pass';const feedback=research.status==='ready'?'Strategy saved · checked companies are ready for review.':'Strategy saved · company research is running. Follow its progress in Companies.';setActivationFeedback(feedback,'success');showToast(feedback);return true;
+    // Automatic flows run on the server. Opening Companies must never dispatch a second search.
+    outcome='pass';
+    setActivationFeedback('Strategy saved. Review your list or start a search in Companies.','success');
+    showToast('Strategy approved. Companies opened.');
+    return true;
   }catch(error){
     outcome=error.code==='STRATEGY_STALE'?'stale':'fail';
     if(strategyContextCurrent(context)){if(attemptedApproval&&!approvalSaved){state.market.strategyApproved=false;state.market.strategyApprovedAt='';try{if(strategyReviewCurrent())saveState();}catch{}}setActivationFeedback('Activation not confirmed · '+error.message,'error');showToast(error.message);}
