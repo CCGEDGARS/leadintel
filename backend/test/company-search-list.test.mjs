@@ -18,7 +18,12 @@ test('saved search HTTP/SQL lifecycle: full copy, retry, read, export, isolation
  assert.equal((await (await route(f,null,'foreign',{workspace_id:foreignWorkspaceId,id:list.id})).json()).list,null);
  const bytes=f.DB.raw.prepare('SELECT records_bytes FROM workspace_storage_accounts WHERE workspace_id=?').get(workspaceId).records_bytes;assert.ok(bytes>JSON.stringify(body.snapshot).length);
  for(const action of ['save','buyer','pause','resume'])assert.equal((await route(f,{action,id:list.id,revision:list.revision})).status,400);
- assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM crm_companies').get().n,0);assert.match(M.csv(list),/Source evidence 30/);
+ assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM crm_companies').get().n,0);
+ assert.deepEqual(reopened.results.find(row=>row.company==='Company 30').evidence,body.snapshot.rows[30].evidence);
+ const csv=M.csv(reopened);
+ assert.equal(csv.split('\r\n')[0],'\uFEFF"Rank","Company","Website","Company fit score"');
+ assert.ok(csv.includes('"30","Company 30","https://company30.example/","55"'));
+ assert.doesNotMatch(csv,/Source evidence/);
  assert.equal((await route(f,{action:'delete',id:list.id,revision:0})).status,409);
  assert.equal((await route(f,{action:'delete',id:list.id,revision:list.revision})).status,200);
  assert.equal((await (await route(f,null,'owner',{search_snapshot:body.fingerprint})).json()).list,null);
