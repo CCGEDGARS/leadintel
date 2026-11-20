@@ -247,29 +247,45 @@
   return {company:c.company||c.companyName,website:c.website||('https://'+(c.domain||'')),location:c.location||c.country||c.market||'',score:row.score,scoreState:row.scoreState,reviewStatus:row.actionable?'Checked':'Needs review',signals:(Array.isArray(q.matchedSignals)?q.matchedSignals:Array.isArray(c.matchedSignals)?c.matchedSignals:[]).map(s=>typeof s==='string'?s:s.name||s.label||s.id),summary:c.description||c.summary||c.reason||'',checkedAt:c.qualification?.researchedAt||c.researchedAt||'',evidence:evidence.map(e=>({url:e.url||e.sourceUrl,quote:e.quote||e.description||e.text||e.title,date:e.date||e.publishedAt}))};
  })});}
  // Preserve the recorded order of ties and the original snapshot fingerprint.
+ function hasCompanyScore(row){return Number.isFinite(row.score)&&row.score>=0&&row.score<=100;}
  function inScoreOrder(results){
-  const score=row=>Number.isFinite(row.score)&&row.score>=0&&row.score<=100?row.score:-1;
+  const score=row=>hasCompanyScore(row)?row.score:-1;
   return [...results].sort((a,b)=>score(b)-score(a));
  }
  function exportRows(list){return exportOrderedRows({...list,results:inScoreOrder(list.results||[])});}
  function exportOrderedRows(list){
+  if(list.criteria.kind==='search_snapshot'){
+   const rows=list.results.map((row,index)=>{
+    const scored=hasCompanyScore(row);
+    return [scored?index+1:'',row.company,row.website,scored?row.score:''];
+   });
+   return [['Rank','Company','Website','Company fit score'],...rows];
+  }
   if(list.criteria.qualityVersion===PROFILE_VERSION){
    const c=list.criteria,rows=exportOrderedRows({...list,criteria:{...c,qualityVersion:QUALITY_VERSION}});
    rows[0][4]='Profiles and buying signals';rows[0].push('Profile fit','Buying-signal priority','Matched profiles','Matched buying signals','Profile matching','Buying signal effect','Opportunity evidence');
    for(let i=0;i<list.results.length;i++){const r=list.results[i],row=rows[i+1];row[10]=JSON.stringify({profiles:c.profiles.map(p=>({id:p.id,name:p.name})),profileMode:c.profileMode,signalMode:c.signalMode,signals:c.signals.map(s=>({id:s.id,name:s.name})),signalMatch:c.mode,weights:c.weights,markets:c.markets,references:c.references.map(r=>r.name)});row.push(r.fitScore??'',r.signalScore??'',(r.profileMatches||[]).map(m=>m.name).join('; '),(r.signalMatches||[]).map(m=>m.name).join('; '),c.profileMode,c.signalMode,(r.profileMatches||[]).filter(m=>m.opportunityId).map(m=>[m.opportunityTitle,m.opportunityQuote,m.opportunityUrl].join(' | ')).join('\n'));}
    return rows;
   }
-  if(list.criteria.kind==='search_snapshot')return [['Company','Website','Location','Company fit score','Score status','Review status','Matched signals','Summary','Sources','Evidence','Checked at','Buying intent','List','Search context'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score??'',r.scoreState==='current'?(r.reviewStatus==='Checked'?'Current':'Provisional · needs review'):r.scoreState==='previous'?'Previous · needs review':'Awaiting score',r.reviewStatus,r.signals.join('; '),r.summary,[...new Set(r.evidence.map(e=>e.url))].join('; '),r.evidence.map(e=>[e.quote,e.url,e.date].filter(Boolean).join(' | ')).join('\n'),r.checkedAt,'Unconfirmed',list.name,JSON.stringify(list.criteria.context)])];return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria','Evidence review','Candidate evidence','Reference evidence','Commercial fit'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)}),r.quality?.status==='reviewed'?r.quality.reason:'Earlier evidence policy; separate review not recorded',[r.identity,r.locationEvidence,...r.matches].map(e=>e.quote+' | '+e.url).join('\n'),r.matches.filter(m=>m.referenceQuote).map(m=>m.referenceName+': '+m.referenceQuote+' | '+(m.referenceUrl||'')).join('\n'),r.commercialFit?[r.commercialFit.reason,r.commercialFit.quote,r.commercialFit.url].join(' | '):''])];}
+  return [['Company','Website','Location','Relevance score','Signals','Why it matches','Sources','Checked at','Buying intent','List','Criteria','Evidence review','Candidate evidence','Reference evidence','Commercial fit'],...(list.results||[]).map(r=>[r.company,r.website,r.location,r.score,r.matches.map(m=>m.name).join('; '),r.matches.map(m=>m.reason).join('; '),[...new Set([r.identity.url,r.locationEvidence.url,...r.matches.map(m=>m.url)])].join('; '),r.checkedAt,'Unconfirmed',list.name,JSON.stringify({signals:list.criteria.signals.map(s=>s.name),mode:list.criteria.mode,markets:list.criteria.markets,references:list.criteria.references.map(r=>r.name)}),r.quality?.status==='reviewed'?r.quality.reason:'Earlier evidence policy; separate review not recorded',[r.identity,r.locationEvidence,...r.matches].map(e=>e.quote+' | '+e.url).join('\n'),r.matches.filter(m=>m.referenceQuote).map(m=>m.referenceName+': '+m.referenceQuote+' | '+(m.referenceUrl||'')).join('\n'),r.commercialFit?[r.commercialFit.reason,r.commercialFit.quote,r.commercialFit.url].join(' | '):''])];}
  const safeCell=v=>/^[\s]*[=+@-]/.test(String(v))?"'"+v:String(v??'');
  const csv=list=>'\uFEFF'+exportRows(list).map(row=>row.map(v=>'"'+safeCell(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  function xlsx(list){
   const xml=v=>String(v??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'');
-  const sheet='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+exportRows(list).map((row,i)=>'<row r="'+(i+1)+'">'+row.map((v,j)=>'<c r="'+String.fromCharCode(65+j)+(i+1)+'" t="inlineStr"><is><t xml:space="preserve">'+xml(v)+'</t></is></c>').join('')+'</row>').join('')+'</sheetData></worksheet>';
+  const sheetRows=exportRows(list).map((row,i)=>{
+   const cells=row.map((value,j)=>{
+    const ref=String.fromCharCode(65+j)+(i+1);
+    if(Number.isFinite(value))return '<c r="'+ref+'"><v>'+value+'</v></c>';
+    return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xml(value)+'</t></is></c>';
+   });
+   return '<row r="'+(i+1)+'">'+cells.join('')+'</row>';
+  });
+  const sheet='<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+sheetRows.join('')+'</sheetData></worksheet>';
   const files={'[Content_Types].xml':'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>','_rels/.rels':'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>','xl/workbook.xml':'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Companies" sheetId="1" r:id="rId1"/></sheets></workbook>','xl/_rels/workbook.xml.rels':'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>','xl/worksheets/sheet1.xml':sheet};
   const enc=new TextEncoder(),chunks=[],central=[];let offset=0;
   const crc=bytes=>{let c=0xffffffff;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xedb88320:0);}return (c^0xffffffff)>>>0;};
   for(const [name,text] of Object.entries(files)){const n=enc.encode(name),b=enc.encode(text),checksum=crc(b),h=new Uint8Array(30+n.length),d=new DataView(h.buffer);d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint32(14,checksum,true);d.setUint32(18,b.length,true);d.setUint32(22,b.length,true);d.setUint16(26,n.length,true);h.set(n,30);chunks.push(h,b);const c=new Uint8Array(46+n.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint32(16,checksum,true);v.setUint32(20,b.length,true);v.setUint32(24,b.length,true);v.setUint16(28,n.length,true);v.setUint32(42,offset,true);c.set(n,46);central.push(c);offset+=h.length+b.length;}
   const size=central.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);chunks.push(...central,end);const result=new Uint8Array(offset+size+22);let i=0;for(const c of chunks){result.set(c,i);i+=c.length;}return result;
  }
- return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,criteriaSummary,mergeResult,ranked,inScoreOrder,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
+ return {QUALITY_VERSION,PROFILE_VERSION,recommendedBudget,options,configuration,assess,reviewResult,criteriaSummary,mergeResult,ranked,inScoreOrder,hasCompanyScore,searchSnapshot,normalizeSearchSnapshot,exportRows,csv,xlsx,safeCell,url,domain};
 });

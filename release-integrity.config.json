@@ -10075,8 +10075,8 @@
         "normalizeSearchSnapshot",
         "clean(value,limit).trimEnd()",
         "results:inScoreOrder(list.results||[])",
-        "Review status",
-        "Previous \u00b7 needs review"
+        "'Rank','Company','Website','Company fit score'",
+        "scored?row.score:''"
       ]
     },
     {
@@ -10086,7 +10086,7 @@
       "status": 200,
       "contains": [
         "company-list-save-export=20261119-v1",
-        "saved-list-export=20261120-v1"
+        "saved-list-export=20261120-v2"
       ]
     },
     {

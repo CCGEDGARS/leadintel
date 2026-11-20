@@ -46,7 +46,7 @@
    status.textContent='The current results have changed. Export the saved copy ('+count+' '+(count===1?'company':'companies')+'), or save again to include the changes.';
   }else if(savedSearch)status.textContent='Saved · '+savedSearch.results.length+' companies. Available in CRM → Company lists.';
   else if(view.busy)status.textContent='Wait for the search to finish before saving the list.';
-  else if(view.snapshot)status.textContent='Save all '+view.snapshot.rows.length+' companies before exporting. Review status and sources are included.';
+  else if(view.snapshot)status.textContent='Save all '+view.snapshot.rows.length+' companies before exporting. The download includes rank, company, website and fit score.';
   else status.textContent='Run a company search to save a list.';
  }
  function mountSearch(){
@@ -97,7 +97,7 @@
  }
  function renderSearchSnapshot(l){
   const rows=M.inScoreOrder(l.results).map((r,i)=>{
-   const hasScore=Number.isFinite(r.score)&&r.score>=0&&r.score<=100;
+   const hasScore=M.hasCompanyScore(r);
    const label=!hasScore?'Awaiting score':r.scoreState==='previous'?'Previous score · needs review':r.reviewStatus==='Checked'?'Current score':'Provisional score';
    const website=r.website?'<a href="'+esc(r.website)+'" target="_blank" rel="noopener noreferrer">'+esc(M.domain(r.website))+' ↗</a>':'';
    const sources=r.evidence.map(e=>'<blockquote>'+esc(e.quote)+'</blockquote><a href="'+esc(e.url)+'" target="_blank" rel="noopener noreferrer">Source'+(e.date?' · '+esc(e.date):'')+' ↗</a>').join('');

@@ -7,7 +7,13 @@ test('search snapshot includes the full deduplicated inventory and preserves pre
  assert.ok(snapshot.rows.some(r=>r.scoreState==='current'&&r.reviewStatus==='Checked'));assert.ok(snapshot.rows.some(r=>r.scoreState==='previous'&&r.reviewStatus==='Needs review'));assert.ok(snapshot.rows.some(r=>r.score===null&&r.scoreState==='pending'));
  assert.equal(JSON.stringify(discovery),before);assert.deepEqual(M.normalizeSearchSnapshot(snapshot),snapshot);
  const list={name:'=Unsafe()',criteria:{kind:'search_snapshot',context:snapshot.context},results:snapshot.rows},csv=M.csv(list),xlsx=new TextDecoder().decode(M.xlsx(list));
- assert.match(csv,/Previous · needs review/);assert.match(csv,/Awaiting score/);assert.match(csv,/Exact source evidence 30/);assert.match(csv,/'=Unsafe/);assert.match(csv,/Unconfirmed/);assert.doesNotMatch(csv,/not-exported/);assert.match(xlsx,/Factory 30/);assert.doesNotMatch(xlsx,/<f>/);
+ for(const content of [csv,xlsx]){
+  assert.match(content,/Factory 30/);
+  assert.doesNotMatch(content,/Exact source evidence|needs review|Awaiting score|Unsafe|Unconfirmed|not-exported|Expansion|seller.example/i);
+ }
+ const formulaList={...list,results:[{company:'=SUM(1,2) "Ā"',score:0,website:''}]};
+ assert.match(M.csv(formulaList),/"'=SUM\(1,2\) ""Ā"""/);
+ assert.doesNotMatch(new TextDecoder().decode(M.xlsx(formulaList)),/<f>/);
 });
 test('invalid, oversized and empty snapshots cannot become saved lists; unsafe links and invented zero scores stay out',()=>{
  for(const rows of [[],null,Array(1001).fill({company:'A'}),[{}]])assert.throws(()=>M.normalizeSearchSnapshot({rows}));

@@ -51,11 +51,13 @@ test('saved snapshot exports rank every recorded score, preserve ties, and place
  ];
  const snapshot=M.normalizeSearchSnapshot({rows}),before=JSON.stringify(snapshot);
  const list={name:'Saved search',criteria:{kind:'search_snapshot',context:snapshot.context},results:snapshot.rows};
- const ordered=M.exportRows(list).slice(1);
+ const [header,...ordered]=M.exportRows(list);
+ assert.deepEqual(header,['Rank','Company','Website','Company fit score']);
  const expected=['Previous Co','Provisional Co','First equal','Second equal','Zero Co','Awaiting Co'];
- assert.deepEqual(ordered.map(r=>r[0]),expected);
+ assert.deepEqual(ordered.map(r=>r[1]),expected);
  assert.deepEqual(ordered.map(r=>r[3]),[95,73,54,54,0,'']);
- assert.deepEqual(ordered.map(r=>r[4]),['Previous · needs review','Provisional · needs review','Current','Previous · needs review','Current','Awaiting score']);
+ assert.deepEqual(ordered.map(r=>r[0]),[1,2,3,4,5,'']);
+ assert.ok(ordered.every(row=>row.length===4));
  for(const content of [M.csv(list),new TextDecoder().decode(M.xlsx(list))]){
   let last=-1;
   for(const name of expected){const index=content.indexOf(name);assert.ok(index>last,name+' should follow the previous company');last=index;}
