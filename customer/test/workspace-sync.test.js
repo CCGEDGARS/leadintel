@@ -170,3 +170,24 @@ test('independent first buyer lists merge by stable identity when the baseline h
  assert.equal(Sync.merge(b,l,r).safe,false,'competing identities or email evidence must still require a choice');
  r.discovery.selectedProspects[0].people=[{name:'Unknown buyer'}];assert.equal(Sync.merge(b,l,r).safe,false,'unkeyed evidence cannot be merged speculatively');
 });
+
+test('pending company assessments merge independently and concurrent evidence and score edits stay together',()=>{
+ const b=base(),rows=Array.from({length:31},(_,i)=>({domain:'maker'+i+'.example',qualification:{score:50},evidence:[{quote:'Original source'}]}));
+ b.discovery.potentialMatches=rows;
+ const l=structuredClone(b),r=structuredClone(b);
+ l.discovery.potentialMatches[0].qualification.score=80;
+ r.discovery.potentialMatches[30].qualification.score=70;
+ const merged=Sync.merge(b,l,r);assert.equal(merged.safe,true);
+ assert.deepEqual(merged.payload.discovery.potentialMatches.map(row=>row.qualification.score),[80,...Array(29).fill(50),70]);
+ r.discovery.potentialMatches[0].evidence[0].quote='New server assessment';
+ assert.deepEqual(Sync.merge(b,l,r).conflicts,['discovery.potentialMatches[maker0.example]']);
+ for(const [conflictPreference,expected] of [['local',l],['server',r]]){
+  const chosen=Sync.merge(b,l,r,{conflictPreference}).payload.discovery.potentialMatches;
+  assert.deepEqual(chosen[0],expected.discovery.potentialMatches[0]);assert.equal(chosen[30].qualification.score,70);
+ }
+ for(const variants of [[{},{}],[{domain:'same.example'},{domain:'www.same.example'}]]){
+  const ambiguous={discovery:{potentialMatches:variants}},one=structuredClone(ambiguous),two=structuredClone(ambiguous);
+  one.discovery.potentialMatches[0].score=11;two.discovery.potentialMatches[1].score=22;
+  assert.deepEqual(Sync.merge(ambiguous,one,two).conflicts,['discovery.potentialMatches']);
+ }
+});

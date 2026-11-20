@@ -26,13 +26,14 @@
   }
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
-    if(!RECORD_LISTS.has(path.split('.').at(-1)))return null;
+    const pendingCompanies=path==='discovery.potentialMatches';
+    if(!pendingCompanies&&!RECORD_LISTS.has(path.split('.').at(-1)))return null;
     // Missing baseline lists precede the first retained records. Treat only those
     // baselines as empty; a deleted live list remains a deletion-versus-edit conflict.
     arrays=arrays.map((value,index)=>(index===0||index===2)&&value===undefined?[]:value);
     if(!arrays.every(Array.isArray))return null;
     const rows=arrays.flat();if(!rows.length||!rows.every(object))return null;
-    const field=rows.every(row=>typeof row.id==='string'&&row.id.trim())?'id':rows.every(row=>typeof row.domain==='string'&&row.domain.trim())?'domain':null;
+    const field=!pendingCompanies&&rows.every(row=>typeof row.id==='string'&&row.id.trim())?'id':rows.every(row=>typeof row.domain==='string'&&row.domain.trim())?'domain':null;
     if(!field)return null;
     const maps=arrays.map(rows=>new Map(rows.map(row=>[field==='domain'?row.domain.trim().toLowerCase().replace(/^www\./,''):row.id,row])));
     return maps.every((map,i)=>map.size===arrays[i].length)?maps:null;
@@ -58,6 +59,9 @@
       // browser research body and a cloud excerpt are not competing user edits.
       if(equal(r,br))return l;
       if(equal(l,bl))return r;
+      // A pending assessment keeps its score with its evidence. Competing
+      // edits to that company require a choice even when different fields changed.
+      if(/^discovery\.potentialMatches\[[^\]]+\]$/.test(path))return choose(path,l,r);
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
       if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*|(?:email|linkedin):(?:professional|curiosity|friendly|brutal):[a-z]{2})$/.test(field))return choose(path,l,r);

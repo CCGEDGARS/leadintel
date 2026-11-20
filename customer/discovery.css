@@ -629,7 +629,7 @@
 .buyer-review-dialog [data-scope-review-reason]{min-height:112px;line-height:1.6;padding:14px;resize:vertical}
 .buyer-review-dialog [data-scope-review]{margin-top:16px}
 
-#discovery-selection-breakdown[hidden],#cancel-company-discovery[hidden]{display:none!important}
+#run-company-discovery[hidden],#company-search-recovery[hidden],#discovery-selection-breakdown[hidden],#cancel-company-discovery[hidden]{display:none!important}
 
 /* Step 4: reserve visual priority for company search, progress and shortlist. */
 .company-search-advanced{margin:4px 0 10px;border:0;padding:0;background:transparent}

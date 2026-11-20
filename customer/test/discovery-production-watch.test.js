@@ -337,6 +337,8 @@ test('both Companies scripts and the review layout refresh for returning browser
   assert.equal(sources.find(url=>url.pathname.endsWith('/'+file))?.searchParams.get('company-review-queue'),'20261119-v1',file);
  for(const file of ['discovery-ui.js','company-lists.js','company-lists-ui.js'])
   assert.equal(sources.find(url=>url.pathname.endsWith('/'+file))?.searchParams.get('company-score-order'),'20261120-v1',file);
+ for(const file of ['discovery-ui.js','workspace-sync.js','attention-centre.js'])
+  assert.equal(sources.find(url=>url.pathname.endsWith('/'+file))?.searchParams.get('company-sync-recovery'),'20261120-v1',file);
  const ui=fs.readFileSync(path.join(root,'customer/discovery-ui.js'),'utf8');
  assert.match(ui,/asset\("discovery\.css"\)\+"[^"]*company-review-queue=20261119-v1/);
 });

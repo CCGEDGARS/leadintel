@@ -202,7 +202,7 @@ test('Companies recovery routes eight saved companies to Strategy without spendi
   assert.equal(await page.locator('#review-next-companies').isDisabled(),true);
   assert.match(await page.locator('#company-research-usage summary').textContent(),/61 requests · 60 searches · 1 page reads? · 1 reused/);
  }
- const entryPoints=['.steps [data-workflow-stage="4"] [data-sidebar-next-action]','#journey-stage-guide [data-stage-next-action]','#company-review-batch [data-company-review-strategy]'];
+ const entryPoints=['#company-search-recovery','.steps [data-workflow-stage="4"] [data-sidebar-next-action]','#journey-stage-guide [data-stage-next-action]','#company-review-batch [data-company-review-strategy]'];
  async function checkRecovery(contextIsStale,selectors){
   const state=await page.evaluate(()=>({unapproved:!mainState().market.strategyApproved,stale:LeadIntelStrategyIntegrity.researchContext(mainState()).stale}));
   assert.deepEqual(state,{unapproved:true,stale:contextIsStale});
@@ -214,7 +214,16 @@ test('Companies recovery routes eight saved companies to Strategy without spendi
    await h.companies();
   }
  }
- page=await h.open();await checkRows();await checkRecovery(true,entryPoints.slice(0,1));await saveWorkspace();
+ page=await h.open();await checkRows();
+ await page.evaluate(()=>{LeadIntelServerBridge.conflict=true;dispatchEvent(new CustomEvent('leadintel:server-conflict'));});
+ const primary=page.locator('#company-search-recovery');
+ assert.equal(await primary.textContent(),'Review workspace sync');assert.equal(await page.locator('#run-company-discovery').isVisible(),false);
+ await primary.click();await page.locator('#workspace-attention-drawer [data-sync-review]').waitFor({state:'visible'});
+ assert.equal(await page.evaluate(()=>document.activeElement.id),'workspace-sync-title');
+ assert.equal(await page.evaluate(()=>LeadIntelServerBridge.conflict),true);
+ await page.keyboard.press('Escape');
+ await page.evaluate(()=>{LeadIntelServerBridge.conflict=false;dispatchEvent(new CustomEvent('leadintel:server-synced'));});
+ await checkRecovery(true,entryPoints.slice(0,1));await saveWorkspace();
  assert.deepEqual(retainedCompanyWork((await f.getState()).payload),before);
  page=await h.open();await checkRows();await checkRecovery(true,entryPoints.slice(1));await saveWorkspace();await h.closePage();
  // Change only the research fingerprint in the fixture to exercise the next
