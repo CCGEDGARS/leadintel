@@ -208,7 +208,7 @@ const boundedDiscoveryRuntime = [
  "stage:'Saving retained company evidence',total:2,completed:0,etaSeconds:null stage:'Confirming saved company evidence',completed:1,total:2",
  'function registerCompanySaveRetry( Retained evidence saved · research checks remain incomplete',
  'LeadIntelDiscovery.retainedBuyerQualification(person,',
-  'Contact checks complete for AI evidence review: (terminal||queued)&&progress.stages !terminal&&!queued&&index+1===active',
+  'Contact checks complete for Contact checks pending AI evidence review: (terminal||queued)&&progress.stages !terminal&&!queued&&index+1===active',
   'id="company-search-progress" function renderCompanySearchProgress() data-cancel-company-search discoveryProgress.completed=Math.floor(offset/16)+1 company-progress=20261109-v1',
   'function restoreDiscoveryNavigation() window.LeadIntelCustomerNavigation?.currentStep?.() (!current||current===5)',
   'function buyerContactResearchScope( data-buyer-contact-progress Time estimate not available yet buyerRecheckOutcomes Recheck finished · aria-live="polite"',

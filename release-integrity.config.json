@@ -8106,6 +8106,7 @@
       "status": 200,
       "contains": [
         "Contact checks complete for",
+        "Contact checks pending",
         "AI evidence review:",
         "(terminal||queued)&&progress.stages",
         "!terminal&&!queued&&index+1===active"

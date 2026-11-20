@@ -133,3 +133,14 @@ test('company refresh reuses server dossier and retained buyers across a selecte
  const resumed=await startBuyerJob(f.env,workspaceId,f.users.owner,{...f.body,resumeIncomplete:true,candidate:{...f.candidate,people:[]}});
  const result=JSON.parse(resumed.result_json);assert.equal(result.people.length,saved.people.length);assert.equal(result.buyerDiscovery.companyDossier.status,'complete');
 });
+
+
+test('saved names do not verify a future identity stage or an unsupported later match',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ for(const phase of ['official','dossier','identities']){
+  assert.equal((await publicBuyerJob(f.env,{...job,phase})).progress.stages.identities,false);
+ }
+ assert.equal((await publicBuyerJob(f.env,{...job,phase:'contacts'})).progress.stages.identities,true);
+ const candidate=JSON.parse(job.result_json);candidate.people[0].publicNameUrl='';
+ assert.equal((await publicBuyerJob(f.env,{...job,phase:'contacts',result_json:JSON.stringify(candidate)})).progress.stages.identities,false);
+});
