@@ -875,7 +875,8 @@ async function generateDiscoveryBuyerFit(prompt,runSignal,timeoutMs=COMPANY_EXTR
   },runSignal,timeoutMs);}
 async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDomain="",targetDomains=null,reviewBatchId="",recheckOnly=false,savedEvidenceOnly=false,autoPass=1,campaignTargets=null,campaignPlan=null}={}){
   if(discovery.status==="running")return false;
-  if(bridge()?.conflict||bridge()?.resolvingSync){showToast('Review workspace sync before continuing company research.');return false;}
+  const sync=window.LeadIntelServerBridge;
+  if(sync?.conflict||sync?.resolvingSync){showToast('Review workspace sync before continuing company research.');return false;}
   if(window.LeadIntelPageQuality&&!window.LeadIntelPageQuality.require('companies',targetOnly||recheckOnly?'target-research':'research')){showToast(window.LeadIntelPageQuality.getReport('companies').message);return false;}
   if(savedEvidenceOnly)recheckOnly=true;
   if(recheckOnly)targetOnly=true;
