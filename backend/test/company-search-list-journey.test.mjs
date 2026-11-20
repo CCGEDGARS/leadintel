@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import {journeyFixture,loadPlaywright,workspaceId,sessionToken} from './step5-journey-fixture.mjs';
 import {putCustomerState} from '../src/customer-state.js';
 
@@ -35,11 +36,36 @@ test('Companies Save list → acknowledged export → fresh browser → CRM list
  await p.locator('#save-company-search-list').click();await p.waitForFunction(()=>!document.getElementById('export-company-search-list').disabled);assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM company_lists').get().n,1);
  assert.match(await p.locator('#company-search-list-status').textContent(),/Saved · 31 companies/);
  const artifact='/tmp/leadintel-company-search-list';await fs.mkdir(artifact,{recursive:true});await p.locator('#company-search-list-actions').screenshot({path:artifact+'/desktop.png'});
- for(const type of ['csv','xlsx']){await p.locator('#company-search-list-format').selectOption(type);const event=p.waitForEvent('download');await p.locator('#export-company-search-list').click();const d=await event,path=artifact+'/companies.'+type;await d.saveAs(path);const content=await fs.readFile(path,'utf8');assert.match(content,/Factory 30/);assert.match(content,/Exact source evidence 30/);assert.ok(content.includes(longQuote.slice(0,1999)));assert.match(content,/Previous · needs review/);assert.match(content,/Unconfirmed/);let offset=-1;for(const row of liveRows){const value=type==='csv'?'"'+row.company+'"':'>'+row.company+'<';const next=content.indexOf(value,offset+1);assert.ok(next>offset,row.company+' in '+type+' export');offset=next;}}
+ const websites=await p.evaluate(()=>Object.fromEntries(LeadIntelDiscoveryUI.getCompanyListSnapshot().snapshot.rows.map(row=>[row.company,row.website])));
+ const expectedSheet=[['Rank','Company','Website','Company fit score'],...liveRows.map(row=>[
+  row.rank==='—'?'':row.rank,row.company,websites[row.company],row.score==='—'?'':row.score
+ ])];
+ for(const type of ['csv','xlsx']){
+  await p.locator('#company-search-list-format').selectOption(type);
+  const event=p.waitForEvent('download');
+  await p.locator('#export-company-search-list').click();
+  const file=artifact+'/companies.'+type;
+  await (await event).saveAs(file);
+  if(type==='csv'){
+   const expectedCsv=expectedSheet.map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join(',')).join('\r\n');
+   assert.equal(await fs.readFile(file,'utf8'),'\uFEFF'+expectedCsv);
+  }else{
+   const xml=execFileSync('unzip',['-p',file,'xl/worksheets/sheet1.xml'],{encoding:'utf8'});
+   const actual=await p.evaluate(xml=>Array.from(new DOMParser().parseFromString(xml,'application/xml').querySelectorAll('row'),
+    row=>Array.from(row.children,cell=>cell.textContent)),xml);
+   assert.deepEqual(actual,expectedSheet);
+   assert.match(xml,/<c r="A2"><v>1<\/v><\/c>/);
+  }
+ }
  await p.setViewportSize({width:390,height:900});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await p.locator('#company-search-list-actions').screenshot({path:artifact+'/mobile.png'});
  await p.context().close();p=await open();await p.waitForFunction(()=>!document.getElementById('export-company-search-list').disabled);
  await p.locator('#open-crm').click();await p.locator('#crm-company-lists').click();await p.locator('[data-cl="open"]').first().click();await p.waitForSelector('.cl-table-wrap');assert.equal(await p.locator('.cl-table-wrap tbody tr').count(),31);assert.equal(await p.locator('[data-cl="buyer"]').count(),0);assert.match(await p.locator('.cl-result-heading').textContent(),/Saved search results/);
  assert.deepEqual(await readCompanyRows(p,'.cl-table-wrap tbody tr',true),liveRows);
+ assert.ok((await p.locator('.cl-table-wrap').textContent()).includes(longQuote.trim().slice(0,1999)));
+ const crmDownload=p.waitForEvent('download');
+ await p.locator('[data-cl="csv"]').click();
+ await (await crmDownload).saveAs(artifact+'/reopened.csv');
+ assert.deepEqual(await fs.readFile(artifact+'/reopened.csv'),await fs.readFile(artifact+'/companies.csv'));
  await p.locator('[data-cl="delete"]').click();await p.locator('[data-li-cancel]').click();assert.equal(f.DB.raw.prepare('SELECT COUNT(*) n FROM company_lists').get().n,1);
  await p.locator('[data-cl="delete"]').click();await p.locator('[data-li-accept]').click();await p.waitForFunction(()=>document.querySelector('#company-list-content')?.textContent.includes('No lists yet'));assert.equal(await p.locator('#export-company-search-list').isDisabled(),true);assert.equal(await p.evaluate(()=>LeadIntelDiscoveryUI.getCompanyListSnapshot().snapshot.rows.length),31);
  await p.locator('#save-company-search-list').click();await p.waitForFunction(()=>!document.getElementById('export-company-search-list').disabled);await p.context().close();
