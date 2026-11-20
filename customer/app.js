@@ -360,7 +360,11 @@ async function confirmTargeting(){
 }
 function readAnswers(options={}){
   const editedId=options?.target?.dataset?.question,selected=editedId?new Set([editedId]):Array.isArray(options.fields)?new Set(options.fields):null;
-  const changed=[];document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question;if(selected&&!selected.has(id))return;const value=el.value.trim();if(state.answers[id]!==value)changed.push(id);state.answers[id]=value;});
+  // A key press only records the text. Review status, downstream invalidation, the save and the
+  // context event run once typing pauses, the field is left, or another caller reads the answers.
+  if(editedId&&options.type==='input'){const value=options.target.value.trim();if(state.answers[editedId]!==value){state.answers[editedId]=value;pendingAnswerEdits.add(editedId);}if(answerCommitTimer!==null)clearTimeout(answerCommitTimer);answerCommitTimer=setTimeout(commitPendingAnswers,ANSWER_COMMIT_DELAY_MS);return true;}
+  const typed=answerCommitTimer!==null||pendingAnswerEdits.size>0;if(answerCommitTimer!==null){clearTimeout(answerCommitTimer);answerCommitTimer=null;}
+  const changed=[...pendingAnswerEdits];pendingAnswerEdits.clear();document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question;if(selected&&!selected.has(id))return;const value=el.value.trim();if(state.answers[id]!==value&&!changed.includes(id))changed.push(id);state.answers[id]=value;});
   if(changed.length){
     targetingSaveError="";
     state=globalThis.LeadIntelStep2Brief?.applyAnswers?.(state,changed)||state;
@@ -370,8 +374,13 @@ function readAnswers(options={}){
     if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market.signals||[],state.market.deletedSignalIds);/* keep customer-defined (custom-*) signals when triggers change */}
     try{const key='leadintel_customer_v2_discovery',data=JSON.parse(localStorage.getItem(key)||'{}');data.needsRefresh=true;localStorage.setItem(key,JSON.stringify(data));}catch{}
   }
-  const saved=saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));return saved;
+  const saved=saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));
+  // The Profile readiness panel was last drawn at key time, before this save.
+  if(typed)globalThis.window?.LeadIntelStep2Readiness?.renderReadiness?.(globalThis.window);
+  return saved;
 }
+var ANSWER_COMMIT_DELAY_MS=600,pendingAnswerEdits=new Set(),answerCommitTimer=null;
+function commitPendingAnswers(){if(answerCommitTimer===null&&!pendingAnswerEdits.size)return true;return readAnswers({fields:[]});}
 function validateStep1(){
   readSources();
   if(!state.website){$("step1-error").textContent="Enter a valid company website.";return false;}
@@ -1996,7 +2005,7 @@ function bind(){
   $("add-target-market").addEventListener("click",addCustomTargetMarket);
   $("target-country").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
   $("clear-target-markets").addEventListener("click",()=>setTargetMarkets([]));
-  document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
+  document.querySelectorAll("[data-question]").forEach(el=>{el.addEventListener("input",readAnswers);el.addEventListener("change",commitPendingAnswers);el.addEventListener("blur",commitPendingAnswers);});window.addEventListener("pagehide",commitPendingAnswers);
   $("confirm-targeting")?.addEventListener("click",confirmTargeting);
   document.querySelector(".steps")?.addEventListener("click",e=>{const marker=e.target.closest("[data-step-marker]");if(!marker)return;const journeyStage=Number(marker.dataset.workflowStage);if(journeyStage){window.LeadIntelJourney?.openWorkflowStage?.(journeyStage);return;}openModule(Number(marker.dataset.stepMarker));});
   $("to-questionnaire").addEventListener("click",()=>openModule(2));$("back-to-sources").addEventListener("click",()=>openModule(1));$("analyze-company").addEventListener("click",()=>analyzeCompany(3));
