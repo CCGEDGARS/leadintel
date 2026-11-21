@@ -160,3 +160,64 @@ test('a buyer whom public search names by the company domain label is kept by th
  assert.equal(person.title,'Ejer og direktør');assert.equal(person.organization,'Forge ApS');
  assert.ok(saved.people.some(row=>row.id==='robert'),'the previously kept buyer stays');
 });
+
+test('the registered director from the business register becomes a buyer with official role evidence, looked up once',async t=>{
+ // 21.11 live: the only leader found for a small Danish company stayed "On hold · Current role needs verification"
+ // because the website names nobody; the register publishes who the director is. Invented company and person.
+ const f=await buyerJobsFixture(t);f.body.candidate={...f.body.candidate,market:'Denmark'};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),source='https://apicvr.dk/api/v1/11111111';let lookups=0,asked;
+ const registry=async input=>{lookups++;asked=input;return {status:'found',registry:'DK-CVR',country:'DK',id:'11111111',name:'FORGE INDUSTRIES',active:true,management:[{name:'Rita Holm Dahl',role:'Direktør',since:'2016-05-04'}],source:{name:'CVR (Danish Central Business Register) via apicvr.dk',url:source,checkedAt:'2026-11-21T10:00:00.000Z'}};};
+ const controlled=services({registry});
+ await run(f.env,{jobId:job.id,services:controlled});await run(f.env,{jobId:job.id,services:controlled});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json),person=saved.people.find(row=>row.name==='Rita Holm Dahl');
+ assert.ok(person,'the registered director must be among the saved people: '+JSON.stringify(saved.people.map(row=>[row.name,row.title,row.companyContactSource])));
+ assert.equal(person.title,'Direktør');assert.equal(person.companyContactSource,'registry');assert.equal(person.roleReview.status,'supported');
+ assert.equal(person.corporateRoleEvidence.url,source);assert.equal(person.publicNameUrl,source);
+ assert.equal(lookups,1,'one register lookup serves the job across processing slices');
+ assert.equal(asked.market,'Denmark');assert.equal(asked.company,'Forge Industries');
+ assert.ok(asked.pages.length>0&&asked.pages.every(page=>new URL(page.url).hostname==='forge.example'&&page.text),'the register is asked after the official pages were read, with their text: '+JSON.stringify(asked.pages.map(page=>page.url)));
+ const receipt=f.DB.raw.prepare("SELECT kind,phase,status,result_json FROM buyer_research_tasks WHERE job_id=? AND request_value=?").get(job.id,source);
+ assert.equal(receipt.kind,'read');assert.equal(receipt.phase,'official');assert.equal(receipt.status,'complete');assert.equal(JSON.parse(receipt.result_json).sourceType,'registry');
+ assert.deepEqual({status:saved.buyerDiscovery.registerManagement.status,people:saved.buyerDiscovery.registerManagement.people},{status:'found',people:1});
+ assert.ok(saved.people.some(row=>row.id==='robert'),'the previously kept buyer stays');
+});
+for(const [label,answer] of [['an unsupported market',{status:'unsupported'}],['an ambiguous match',{status:'ambiguous'}],['an advertising-protected company',{status:'protected'}],['a closed company',{status:'found',id:'11111111',name:'FORGE INDUSTRIES',active:false,management:[{name:'Rita Holm Dahl',role:'Direktør',since:''}],source:{url:'https://apicvr.dk/api/v1/11111111'}}],['a register without management',{status:'found',id:'11111111',name:'FORGE INDUSTRIES',active:true,management:[],source:{url:'https://apicvr.dk/api/v1/11111111'}}]])test(label+' adds nobody from the register and is not asked again',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);let lookups=0;
+ const controlled=services({registry:async()=>{lookups++;return answer;}});
+ await run(f.env,{jobId:job.id,services:controlled});await run(f.env,{jobId:job.id,services:controlled});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ assert.deepEqual(saved.people.map(row=>row.name),['Robert Lund']);assert.equal(lookups,1);
+});
+test('a register outage does not fail the job and is retried at most once more',async t=>{
+ const f=await buyerJobsFixture(t),job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);let lookups=0;
+ const controlled=services({registry:async()=>{lookups++;if(lookups===1)throw new TypeError('network');return {status:'unavailable'};}});
+ for(let i=0;i<4;i++)await run(f.env,{jobId:job.id,services:controlled});
+ const row=await readBuyerJob(f.env,workspaceId,{id:job.id});
+ assert.notEqual(row.status,'failed');assert.deepEqual(JSON.parse(row.result_json).people.map(person=>person.name),['Robert Lund']);assert.equal(lookups,2);
+});
+test('a job resumed after its official phase still gets the registered director',async t=>{
+ // The live job of 21.11 was past its official phase when the register step was released.
+ const f=await buyerJobsFixture(t);f.body.candidate={...f.body.candidate,market:'Denmark'};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),source='https://apicvr.dk/api/v1/11111111';
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ await run(f.env,{jobId:job.id,services:services({registry:async()=>({status:'found',id:'11111111',name:'FORGE INDUSTRIES',active:true,management:[{name:'Rita Holm Dahl',role:'Direktør',since:''}],source:{name:'CVR',url:source}})})});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json),person=saved.people.find(row=>row.name==='Rita Holm Dahl');
+ assert.ok(person,JSON.stringify(saved.people.map(row=>[row.name,row.title,row.companyContactSource])));
+ assert.equal(person.companyContactSource,'registry');assert.equal(person.roleReview.status,'supported');
+});
+test('a register receipt that cannot be saved leaves the job running and the answer unrecorded',async t=>{
+ // The source address already carries a failed read that used up its attempts: the receipt is refused.
+ const f=await buyerJobsFixture(t);f.body.candidate={...f.body.candidate,market:'Denmark'};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body),source='https://apicvr.dk/api/v1/11111111';let lookups=0;
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ const {sha256}=await import('../src/security.js');
+ f.DB.raw.prepare("INSERT INTO buyer_research_tasks(job_id,task_key,kind,phase,request_value,status,attempts,error) VALUES(?,?,?,?,?,'failed',2,'read: provider or source unavailable')").run(job.id,await sha256('read|'+source),'read','official',source);
+ const controlled=services({registry:async()=>{lookups++;return {status:'found',id:'11111111',name:'FORGE INDUSTRIES',active:true,management:[{name:'Rita Holm Dahl',role:'Direktør',since:''}],source:{name:'CVR',url:source}};}});
+ for(let i=0;i<4;i++)await run(f.env,{jobId:job.id,services:controlled});
+ const row=await readBuyerJob(f.env,workspaceId,{id:job.id}),saved=JSON.parse(row.result_json);
+ assert.doesNotMatch(row.diagnostic_json,/identities: bounded work limit reached/);
+ assert.deepEqual(saved.people.map(person=>person.name),['Robert Lund']);
+ assert.deepEqual({status:saved.buyerDiscovery.registerManagement.status,people:saved.buyerDiscovery.registerManagement.people},{status:'unavailable',people:0});
+ assert.equal(lookups,2);
+});
+

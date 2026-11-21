@@ -2740,9 +2740,11 @@
       if(!lines.some(line=>/^#{1,2}\s/.test(line)&&companyNameMatches(line.replace(/^#+\s*/,''),candidate.company))&&!companyNameMatches(clean(row.title).split(/\s+[|–—-]\s+/)[0],candidate.company))continue;
       let current=true;
       for(let i=0;i<lines.length;i++){
-        const line=lines[i];if(/^#/.test(line)){current=!/former|previous|tidigare|historical/i.test(line);continue;}if(!current)continue;
+        const line=lines[i];if(/^#/.test(line)){current=!/former|previous|tidigare|tidligere|historical/i.test(line);continue;}if(!current)continue;
         const cells=line.split('|').map(value=>clean(value).replace(/\s*\([^)]*\)\s*$/,'').trim()).filter(Boolean);
-        const role=cells.find(value=>rolePattern.test(value))||(rolePattern.test(line)?line:'');if(!role)continue;
+        // The plain Danish "Direktør" is the registered executive only in a structured register answer;
+        // on scraped register pages it also heads former, parent-company and functional entries.
+        const role=cells.find(value=>rolePattern.test(value)||row.sourceType==='registry'&&/^Direktør$/iu.test(value))||(rolePattern.test(line)?line:'');if(!role)continue;
         const rawName=cells.find(value=>value!==role&&hasFullBuyerName(value))||lines[i+1]||'';
         const name=rawName.replace(/\s*\([^)]*\)\s*$/,'').replace(/^Namn\s*/,'').trim();
         if(!/^\p{Lu}[\p{L}’'.-]+(?:[ \t]+\p{Lu}[\p{L}’'.-]+){1,4}$/u.test(name)||!hasFullBuyerName(name))continue;

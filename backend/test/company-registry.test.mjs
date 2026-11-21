@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {registryMarket,lookupCompanyFacts} from '../src/company-registry.js';
+import {registryMarket,lookupCompanyFacts,lookupCompanyManagement,registerManagementPage} from '../src/company-registry.js';
+import '../../customer/discovery-engine.js';
 
 // Response shapes recorded from the public CVR JSON API on 20 Nov 2026; names and numbers are invented.
 const entity=(extra={})=>({vat:11111111,name:'NORDSTÅL A/S',city:'Give',protected:false,phone:null,email:null,website:null,startdate:'2008-05-20',enddate:null,employees:120,industrycode:251100,industrydesc:'Fremstilling af metalkonstruktioner og dele heraf',status:'NORMAL',bankrupt:false,companytypeshort:'A/S',...extra});
@@ -136,3 +137,91 @@ test('at most four requests serve one company',async()=>{
  const {calls}=await lookup({pages},{});
  assert.equal(calls.length,4);
 });
+
+// Registered management. Shape recorded from the public CVR JSON API on 21 Nov 2026: the single-company record
+// carries "direktion" with name, role, type, address and start date; the name search returns the key empty.
+// Names are invented.
+const director={name:'Rita Holm Dahl',role:'DIREKTØR',type:'PERSON',cvr:null,address:'Smedevej 1',zipcode:7323,city:'Give',country:'DK',startdate:'2016-05-04'};
+const management=(input,routes,options={})=>{const a=api(routes);return lookupCompanyManagement({market:'Denmark',company:'Nordstål A/S',website:'https://www.nordstaal.example/',pages:[],...input},{fetch:a.fetch,now:Date.parse('2026-11-20T18:00:00Z'),...options}).then(result=>({result,calls:a.calls}));};
+test('registered management comes from the single-company record: natural persons with a known role, name and start date only',async()=>{
+ const record=entity({direktion:[director,{...director,name:'Dahl Holding ApS',type:'VIRKSOMHED',cvr:44444444},{...director,name:'Karl Berg Olsen',type:'VIRKSOMHED',cvr:55555555},{...director,name:'Jens Holm',role:'UKENDT ROLLE'},{...director,name:'  Bo   Krag ',startdate:null}]});
+ const {result,calls}=await management({},{'/search/company/Nordstål':json([entity({direktion:[]})]),'/11111111':json(record)});
+ assert.deepEqual(result,{status:'found',registry:'DK-CVR',country:'DK',id:'11111111',name:'NORDSTÅL A/S',active:true,
+  management:[{name:'Rita Holm Dahl',role:'Direktør',since:'2016-05-04'},{name:'Bo Krag',role:'Direktør',since:''}],
+  source:{name:'CVR (Danish Central Business Register) via apicvr.dk',url:'https://apicvr.dk/api/v1/11111111',checkedAt:'2026-11-20T18:00:00.000Z'}});
+ assert.ok(!/Smedevej|7323/.test(JSON.stringify(result)),'the register publishes addresses of directors; they are not taken');
+ assert.deepEqual(calls.map(call=>new URL(call.url).pathname),['/api/v1/search/company/Nordst%C3%A5l','/api/v1/11111111']);
+});
+test('no management is reported unless the register settled on exactly this company',async()=>{
+ const member=entity({vat:55555555,name:'Nordstål Montage A/S',employees:40});
+ const group=await management({company:'Nordstål'},{'/search/company/Nordstål':json([member]),'/55555555':json(entity({vat:55555555,direktion:[director]}))});
+ assert.deepEqual(group.result,{status:'ambiguous'});assert.equal(group.calls.length,1,'a group member is not the company; its directors are not read');
+ assert.deepEqual((await management({},{'/search/company/Nordstål':json([])})).result,{status:'not_found'});
+ assert.deepEqual((await management({market:'Sweden'},{})).result,{status:'unsupported'});
+ assert.deepEqual((await management({},{'/search/company/Nordstål':json({},500)})).result,{status:'unavailable'});
+});
+test('a failed or mismatching single-company record is unavailable, never an empty management',async()=>{
+ const search={'/search/company/Nordstål':json([entity()])};
+ assert.deepEqual((await management({},{...search,'/11111111':json({},503)})).result,{status:'unavailable'});
+ assert.deepEqual((await management({},{...search,'/11111111':json(entity({vat:99999999,direktion:[director]}))})).result,{status:'unavailable'});
+ assert.deepEqual((await management({},{...search,'/11111111':()=>{throw new TypeError('network');}})).result,{status:'unavailable'});
+ const controller=new AbortController();controller.abort(new Error('stopped'));
+ await assert.rejects(management({},search,{signal:controller.signal}),/stopped/);
+});
+
+// Naming a person needs a stricter match than company facts (adversarial review, 21 Nov): each case below made
+// the facts lookup settle on another company, whose director would have become the target's "supported" leader.
+const withDirector=(extra={})=>entity({direktion:[director],...extra});
+const ownPage=text=>[{url:'https://www.nordstaal.example/kontakt',text}];
+test('a number printed on the company’s pages names its directors only when the legal name is the company’s',async()=>{
+ const agency=withDirector({vat:22334455,name:'PIXELVÆRK ApS'}),parent=withDirector({vat:44444444,name:'Dahl Industri Holding A/S'});
+ assert.deepEqual((await management({pages:ownPage('Webdesign og hosting: Pixelværk ApS, CVR 22334455')},{'/22334455':json(agency)})).result,{status:'ambiguous'});
+ assert.deepEqual((await management({pages:ownPage('En del af Dahl Industri Holding A/S (CVR-nr. 44444444)')},{'/44444444':json(parent)})).result,{status:'ambiguous'});
+ const own=await management({pages:ownPage('Nordstål A/S · CVR 11111111')},{'/11111111':json(withDirector())});
+ assert.equal(own.result.status,'found');assert.deepEqual(own.result.management.map(person=>person.name),['Rita Holm Dahl']);
+});
+test('a holding company on the same domain, a namesake on another domain and a namesake chosen by staff name nobody',async()=>{
+ const holdingOnDomain=withDirector({vat:22222222,name:'Nordstål Holding A/S',website:'www.nordstaal.example'});
+ assert.deepEqual((await management({},{'/search/company/Nordstål':json([holdingOnDomain]),'/22222222':json(holdingOnDomain)})).result,{status:'ambiguous'});
+ const elsewhere=withDirector({website:'www.nordstaal-fisk.example',email:'kontor@nordstaal-fisk.example'});
+ assert.deepEqual((await management({},{'/search/company/Nordstål':json([elsewhere]),'/11111111':json(elsewhere)})).result,{status:'ambiguous'});
+ const otherSiteOwnMail=withDirector({website:'www.nordstaal-shop.example',email:'salg@nordstaal.example'});
+ assert.equal((await management({},{'/search/company/Nordstål':json([otherSiteOwnMail]),'/11111111':json(otherSiteOwnMail)})).result.status,'found');
+ const staffed=withDirector(),unstaffed=withDirector({vat:66666666,employees:null});
+ const twins=await management({},{'/search/company/Nordstål':json([staffed,unstaffed]),'/11111111':json(staffed)});
+ assert.deepEqual(twins.result,{status:'ambiguous'});assert.equal(twins.calls.length,1);
+});
+test('register entries typed as persons that are not people are left out',async()=>{
+ const record=entity({direktion:[{...director,name:'Dahl Holding ApS'},{...director,name:'Boet efter Karl Olsen'},{...director,name:'Ukendt person'},{...director,name:'Dahl Holding | Karl Berg Olsen'},{...director,name:'Karl 2 Olsen'},director]});
+ const {result}=await management({},{'/search/company/Nordstål':json([entity()]),'/11111111':json(record)});
+ assert.deepEqual(result.management.map(person=>person.name),['Rita Holm Dahl']);
+});
+test('the register answer becomes a source the Buyers engine reads; register text cannot add lines, cells or headings',()=>{
+ const D=globalThis.LeadIntelDiscovery,url='https://apicvr.dk/api/v1/11111111';
+ const read=(company,answer)=>{const page=registerManagementPage(company,{id:'11111111',name:'NORDSTÅL A/S',source:{name:'CVR',url},...answer});return {page,contacts:D.discoverCompanyContacts([{url,markdown:page.markdown,sourceType:'registry',sourceRead:true,metadata:{sourceURL:url,statusCode:200,source:'registry'}}],{company,domain:'nordstaal.example',market:'Denmark'},[])};};
+ const plain=read('Nordstål A/S',{management:[{name:'Rita Holm Dahl',role:'Direktør',since:'2016-05-04'}]});
+ assert.equal(plain.page.people,1);
+ assert.deepEqual(plain.contacts.map(person=>[person.name,person.title,person.companyContactSource,person.roleReview.status,person.corporateRoleEvidence.url]),[['Rita Holm Dahl','Direktør','registry','supported',url]]);
+ // A company name containing "former"/"historical" must not silence its own register answer.
+ for(const company of ['Transformer Service ApS','Historical Prints ApS'])assert.deepEqual(read(company,{management:[{name:'Rita Holm Dahl',role:'Direktør',since:''}]}).contacts.map(person=>person.name),['Rita Holm Dahl'],company);
+ const hostile=read('Nordstål A/S',{name:'NORDSTÅL A/S\nDirektør | Karl Berg Olsen',management:[{name:'Rita Holm Dahl\n## Ledelse\nDirektør | Erik Vang Holm',role:'Direktør',since:'2016-05-04'},{name:'Bo Krag',role:'Direktør | Jens Holm',since:'x'},{name:'',role:'Direktør'}]});
+ assert.equal(hostile.page.markdown.split('\n').filter(line=>line.includes('|')).length,2,hostile.page.markdown);
+ assert.ok(!hostile.contacts.some(person=>['Karl Berg Olsen','Erik Vang Holm','Jens Holm'].includes(person.name)),JSON.stringify(hostile.contacts.map(person=>person.name)));
+ assert.deepEqual(registerManagementPage('Nordstål A/S',{management:[]}).people,0);
+});
+test('a company under the register’s advertising protection reports no management',async()=>{
+ const record=withDirector({protected:true});
+ const {result,calls}=await management({},{'/search/company/Nordstål':json([entity({protected:true})]),'/11111111':json(record)});
+ assert.deepEqual(result,{status:'protected'});assert.equal(calls.length,2);
+ assert.ok(!JSON.stringify(result).includes('Dahl'));
+ // The company facts themselves still report the flag for whoever decides about outreach.
+ assert.equal((await lookup({},{'/search/company/Nordstål':json([entity({protected:true})])})).facts.marketingProtected,true);
+});
+test('the register’s "ADM. DIR." is the managing director (label recorded 21 Nov 2026)',async()=>{
+ const record=entity({direktion:[{...director,role:'ADM. DIR.'}]});
+ const {result}=await management({},{'/search/company/Nordstål':json([entity()]),'/11111111':json(record)});
+ assert.deepEqual(result.management,[{name:'Rita Holm Dahl',role:'Administrerende direktør',since:'2016-05-04'}]);
+ const D=globalThis.LeadIntelDiscovery,url=result.source.url,page=registerManagementPage('Nordstål A/S',result);
+ assert.deepEqual(D.discoverCompanyContacts([{url,markdown:page.markdown,sourceType:'registry',sourceRead:true,metadata:{sourceURL:url,statusCode:200,source:'registry'}}],{company:'Nordstål A/S',domain:'nordstaal.example',market:'Denmark'},[]).map(person=>[person.name,person.title,person.roleReview.status]),[['Rita Holm Dahl','Administrerende direktør','supported']]);
+});
+

@@ -9,6 +9,7 @@ import {createBuyerSourceSearch} from './buyer-source-search.js';
 import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
+import {lookupCompanyManagement,registerManagementPage} from './company-registry.js';
 import '../../customer/discovery-engine.js';
 import '../../customer/company-dossier.js';
 const D=globalThis.LeadIntelDiscovery,C=globalThis.LeadIntelCompanyDossier;
@@ -159,6 +160,29 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
       resultDiagnostics:[...(candidate.buyerDiscovery?.resultDiagnostics||[]),...directory.diagnostics].slice(-500),providerStatus:{...(candidate.buyerDiscovery?.providerStatus||{}),identity:{status:directory.status,results:directory.results,accepted:directory.people.length}}};
     if(directory.people.length)acquirePeople();
     if(['review','paid'].includes(phase)&&(candidate.people||[]).some(person=>!before.has(person.id))){phase='contacts';phaseMs=0;phaseRuns=0;}
+   }
+   // The national business register names the registered management: independent company evidence for a
+   // leadership role where the website names nobody. It runs once the official pages have been read (a number
+   // printed on them identifies the company best). The answer is kept as a read receipt (the person's source)
+   // and, only after that receipt is saved, as a marker in the candidate, so slices and resumes reuse it.
+   // The step never fails the job: an outage or a refused receipt is retried once and then left.
+   const register=candidate.buyerDiscovery?.registerManagement;
+   if(input.scope!=='selected_buyers'&&!['official','done'].includes(phase)&&(!register||register.status==='unavailable'&&Number(register.attempts)<2)){
+    const before=new Set((candidate.people||[]).map(person=>person.id)),sliceEnds=error=>controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error?.code);let answer,added=false;
+    try{answer=await (services.registry||lookupCompanyManagement)({market:candidate.market,company:candidate.company,website:candidate.website||candidate.domain,pages:rows.filter(source=>source.sourceRead===true).map(source=>({url:source.url,text:String(source.markdown||'')}))},{signal:controller.signal});}
+    catch(error){if(sliceEnds(error))throw error;answer={status:'unavailable'};}
+    await guard();
+    let outcome=['found','unsupported','ambiguous','not_found','protected'].includes(answer?.status)?answer.status:'unavailable';
+    const page=outcome==='found'&&answer.active!==false?registerManagementPage(candidate.company,answer):{people:0},url=page.people?C.url(answer.source?.url):'';
+    if(url)try{
+     const receipt=await task('read',url,async()=>({url,markdown:page.markdown,links:[],sourceType:'registry',metadata:{sourceURL:url,statusCode:200,source:'registry'},sourceRead:true,extractedAt:new Date().toISOString()}),{phase:'official'});
+     if(receipt?.sourceType==='registry')added=true;else outcome='unavailable';
+    }catch(error){if(sliceEnds(error))throw error;outcome='unavailable';}
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),registerManagement:{status:outcome,id:String(answer?.id||'').slice(0,40),people:added?page.people:0,attempts:Number(register?.attempts||0)+1,checkedAt:new Date().toISOString()}};
+    if(added){
+     acquiredRows=(await allRows()).filter(source=>source.sourceRead===true);acquirePeople();
+     if(['review','paid'].includes(phase)&&(candidate.people||[]).some(person=>!before.has(person.id))){phase='contacts';phaseMs=0;phaseRuns=0;}
+    }
    }
    if(phase==='official'){
     await D.runOfficialContactResearch(candidate,{rows,search,readPage:read,signal:controller.signal,guard,force:false,maxDurationMs:Math.min(remaining,180000),seedUrls:(candidate.people||[]).flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(url=>D.canonicalDomain(url)===candidate.domain),onCheckpoint:acquirePeople});acquiredRows=(await allRows()).filter(r=>r.sourceRead===true);acquirePeople();

@@ -31,6 +31,9 @@ function printedNumbers(pages,domain){
  return [...numbers];
 }
 
+// How the lookup settled on an entity; read by the management lookup, which needs a stricter match than facts do.
+const SETTLED_BY=new WeakMap();
+const settle=(entity,now,basis)=>{const result=facts(entity,now);SETTLED_BY.set(result,basis);return result;};
 function facts(entity,now){
  const id=String(entity.vat);
  return {status:'found',registry:'DK-CVR',country:'DK',id,name:String(entity.name||''),city:String(entity.city||''),active:isActive(entity),statusLabel:String(entity.status||''),
@@ -61,11 +64,11 @@ async function denmark({company,website,pages},{fetch,signal,now,baseUrl=DK_BASE
   if(entity===unavailable)return outcome('unavailable');
   if(entity&&entity.vat)byNumber.push(entity);
  }
- if(byNumber.length===1)return facts(byNumber[0],now);
+ if(byNumber.length===1)return settle(byNumber[0],now,'number');
  const wanted=comparable(company);
  if(byNumber.length>1){
   const named=byNumber.filter(entity=>comparable(entity.name)===wanted);
-  return named.length===1?facts(named[0],now):outcome('ambiguous');
+  return named.length===1?settle(named[0],now,'number'):outcome('ambiguous');
  }
 
  const term=withoutLegalForm(company).replace(/\//g,' ').replace(/\s+/g,' ').trim();
@@ -79,10 +82,10 @@ async function denmark({company,website,pages},{fetch,signal,now,baseUrl=DK_BASE
  // it counts only for an entity that reports employees.
  const onDomain=entity=>Boolean(domain)&&(host(entity.website)===domain||Number.isFinite(entity.employees)&&emailHost(entity.email)===domain);
  const sameName=active.filter(entity=>comparable(entity.name)===wanted);
- if(sameName.length===1)return facts(sameName[0],now);
+ if(sameName.length===1)return settle(sameName[0],now,'name');
  if(sameName.length>1){
   const located=sameName.filter(onDomain);
-  if(located.length===1)return facts(located[0],now);
+  if(located.length===1)return settle(located[0],now,'name+domain');
   const staffed=sameName.filter(entity=>Number.isFinite(entity.employees));
   return staffed.length===1?facts(staffed[0],now):outcome('ambiguous');
  }
@@ -105,4 +108,54 @@ async function denmark({company,website,pages},{fetch,signal,now,baseUrl=DK_BASE
 export async function lookupCompanyFacts(input={},{fetch=globalThis.fetch,signal,now=Date.now(),baseUrl}={}){
  if(registryMarket(input.market)!=='DK')return {status:'unsupported'};
  return denmark(input,{fetch,signal,now,baseUrl});
+}
+
+// Registered executive management (CVR "direktion") of the company the facts lookup settled on. The name
+// search returns the list empty, so the single-company record is read. Only natural persons with a known
+// role, and only name, role and start date: the register also publishes directors' addresses, which are
+// not taken. A group member standing in for a group name is not the company, so it reports nobody.
+//
+// Naming a person needs a stricter match than company facts. The entity must have been settled by a number
+// printed on the company's own pages, by the one active entity with the same legal name, or by that name plus
+// the company's domain; its legal name must equal the company name (a printed number can belong to a web
+// agency or a parent, a shared domain to a holding company); and a registered website on another domain
+// with no e-mail on the company's domain contradicts the match. Anything else is "ambiguous": nobody.
+// A company under the register's advertising protection is "protected": nobody either.
+const DK_MANAGEMENT_ROLES=new Map([['DIREKTØR','Direktør'],['ADM. DIR.','Administrerende direktør']]);
+const NOT_A_PERSON=/(?:^|\s)(?:aps|a\/s|i\/s|k\/s|p\/s|ivs|holding|fonden|fond|boet|ukendt)(?:\s|$)|[\d|#\[\]()<>]/i;
+export async function lookupCompanyManagement(input={},{fetch=globalThis.fetch,signal,now=Date.now(),baseUrl=DK_BASE}={}){
+ const found=await lookupCompanyFacts(input,{fetch,signal,now,baseUrl});
+ if(found.status!=='found')return {status:found.status};
+ if(found.group||!['number','name','name+domain'].includes(SETTLED_BY.get(found)))return {status:'ambiguous'};
+ if(signal?.aborted)throw signal.reason;
+ let record;
+ try{
+  const timeout=AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const response=await fetch(baseUrl+'/'+found.id,{headers:{Accept:'application/json','User-Agent':'LeadIntel company facts'},signal:signal?AbortSignal.any([signal,timeout]):timeout});
+  if(!response.ok)return {status:'unavailable'};
+  record=await response.json();
+ }catch(cause){if(signal?.aborted)throw signal.reason;return {status:'unavailable'};}
+ if(!record||String(record.vat)!==found.id)return {status:'unavailable'};
+ const domain=host(input.website),registered=host(record.website);
+ if(!comparable(input.company)||comparable(record.name)!==comparable(input.company)||domain&&registered&&registered!==domain&&emailHost(record.email)!==domain)return {status:'ambiguous'};
+ // Advertising protection ("reklamebeskyttelse"): the register's data on such a company "ikke må benyttes af
+ // private juridiske enheder med henblik på direkte markedsføring". Buyers research exists for outreach, so
+ // the register names nobody for a protected company; how the rule applies to a given product is a legal
+ // question that code must not settle the permissive way.
+ if(record.protected===true)return {status:'protected'};
+ const management=(Array.isArray(record.direktion)?record.direktion:[]).slice(0,20)
+  .filter(person=>person&&person.type==='PERSON'&&typeof person.name==='string'&&person.name.trim()&&!NOT_A_PERSON.test(person.name.trim().replace(/\s+/g,' ')))
+  .map(person=>({name:person.name.trim().replace(/\s+/g,' '),role:DK_MANAGEMENT_ROLES.get(String(person.role??'').trim().toUpperCase())||'',since:/^\d{4}-\d{2}-\d{2}$/.test(person.startdate||'')?person.startdate:''}))
+  .filter(person=>person.role).slice(0,8);
+ return {status:'found',registry:found.registry,country:found.country,id:found.id,name:found.name,active:found.active,management,source:found.source};
+}
+
+// The register answer as the read source the Buyers engine understands (its register path reads
+// "role | name" lines under the company heading). Register text is data: characters that carry meaning in
+// that format are removed. The second heading keeps a company name such as "Transformer Service" from being
+// read by the engine as a "former" section.
+export function registerManagementPage(company,answer={}){
+ const cell=(value,limit)=>String(value??'').replace(/[|#\[\]()<>\r\n]+/g,' ').replace(/\s+/g,' ').trim().slice(0,limit);
+ const people=(Array.isArray(answer.management)?answer.management:[]).map(person=>({name:cell(person?.name,120),role:cell(person?.role,60),since:/^\d{4}-\d{2}-\d{2}$/.test(person?.since||'')?person.since:''})).filter(person=>person.name&&person.role).slice(0,8);
+ return {people:people.length,markdown:['# '+cell(company,180),'','Business register: '+cell(answer.source?.name||answer.registry||'register',120)+', registration '+cell(answer.id,40)+(answer.name?' · '+cell(answer.name,180):''),'','## Registered management','',...people.map(person=>person.role+' | '+person.name+(person.since?' (since '+person.since+')':''))].join('\n')};
 }

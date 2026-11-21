@@ -279,3 +279,21 @@ test('"Ex" in a title is explosion protection, not a former role; only "Ex-" bef
  assert.deepEqual(kept(steel,[row('Erik Lind - Ex Engineering Manager at Holm Steel AB','Erik Lind. Ex Engineering Manager at Holm Steel AB.')]).map(p=>p[0]),['Erik Lind']);
 });
 
+// The Danish business register lists the executive management as "Direktør". The existing register path
+// (Swedish, Norwegian, Latvian … registers) must read that role from a register source and from nothing else.
+test('a register source naming the "Direktør" yields a leader with official role evidence',()=>{
+ const url='https://apicvr.dk/api/v1/11111111',page=markdown=>({url,markdown,sourceType:'registry',sourceRead:true,metadata:{sourceURL:url,statusCode:200,source:'registry'}});
+ const contacts=D.discoverCompanyContacts([page('# Nordby Smede & Maskinfabrik ApS\n\nBusiness register: CVR, registration 11111111\n\nDirektør | Rita Holm Dahl (since 2016-05-04)\nSalgsdirektør | Bo Krag\n')],nsmf,[]);
+ assert.deepEqual(contacts.map(p=>[p.name,p.title,p.companyContactSource,p.roleReview.status,p.corporateRoleEvidence.url]),[['Rita Holm Dahl','Direktør','registry','supported',url]]);
+ const profile={decisionMakers:nsmf.roles},retained=D.retainBuyerIdentities(D.mergeBuyerPool([],contacts,profile),profile,nsmf);
+ assert.deepEqual(retained.map(p=>[p.name,p.matchedBuyerRole||D.rankedBuyerShortlist(retained,profile,nsmf).people[0]?.matchedBuyerRole]),[['Rita Holm Dahl','Executive leadership']]);
+ // Another company's register page, an unread page and an ordinary web page give nobody.
+ assert.deepEqual(D.discoverCompanyContacts([page('# Holm Steel A/S\n\nDirektør | Rita Holm Dahl\n')],nsmf,[]),[]);
+ assert.deepEqual(D.discoverCompanyContacts([{...page('# Nordby Smede & Maskinfabrik ApS\n\nDirektør | Rita Holm Dahl\n'),sourceRead:false}],nsmf,[]),[]);
+ assert.deepEqual(D.discoverCompanyContacts([{url:'https://www.blog.example/nsmf',markdown:'# Nordby Smede & Maskinfabrik ApS\n\nDirektør | Rita Holm Dahl\n',sourceRead:true}],nsmf,[]),[]);
+});
+test('on a scraped register page the plain "Direktør" is not taken, and a Danish "former management" section is skipped',()=>{
+ const proff={url:'https://www.proff.dk/firma/nordby-smede/123',sourceRead:true,markdown:'# Nordby Smede & Maskinfabrik ApS\n\n## Ledelse\n\nAdministrerende direktør | Rita Holm Dahl\nDirektør | Bo Krag\n\n## Tidligere ledelse\n\nAdministrerende direktør | Karl Berg Olsen (2009-2015)\n\n## Moderselskab: Dahl Holding ApS\n\nDirektør | Erik Vang Holm\n'};
+ assert.deepEqual(D.discoverCompanyContacts([proff],nsmf,[]).map(p=>[p.name,p.title]),[['Rita Holm Dahl','Administrerende direktør']]);
+});
+
