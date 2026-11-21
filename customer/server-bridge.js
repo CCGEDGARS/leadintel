@@ -239,7 +239,8 @@
   }
   async function recoverAcknowledgedCheckpoint(state,workspaceId){
     if(bridge.workspace?.id!==workspaceId||!bridge.session?.authenticated||resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,workspaceId)||!Number.isSafeInteger(Number(state?.version))||Number(state.version)<bridge.stateVersion)return false;
-    if(await root.LeadIntelWorkspacePersistence?.matchesAcknowledgedWrite?.(state,workspaceId)!==true||bridge.workspace?.id!==workspaceId||!bridge.session?.authenticated||resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,workspaceId)||Number(state.version)<bridge.stateVersion)return false;
+    // Our own save counts whether its answer arrived (acknowledged) or the server committed it without the answer reaching us (attempted).
+    if(await root.LeadIntelWorkspacePersistence?.matchesAcknowledgedWrite?.(state,workspaceId)!==true&&await root.LeadIntelWorkspacePersistence?.matchesAttemptedWrite?.(state,workspaceId)!==true||bridge.workspace?.id!==workspaceId||!bridge.session?.authenticated||resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,workspaceId)||Number(state.version)<bridge.stateVersion)return false;
     // The exact payload and revision came from our acknowledged PUT. Advance
     // only the CAS revision; keep the old full baseline and all newer local
     // evidence until the next complete save establishes a durable replacement.

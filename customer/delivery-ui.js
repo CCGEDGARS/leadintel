@@ -4,7 +4,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
   const ASSET_VERSION="20260924-workspace-content-english-v1";
-const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260925-apollo-buyer-search-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&step7-delivery=20261102-v1&profile-research-preservation=20261119-v1";
+const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260925-apollo-buyer-search-v1&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&step7-delivery=20261102-v1&profile-research-preservation=20261119-v1&unanswered-save=20261121-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}&messages-reliability=20261031-v1&delivery-reliability=20261031-v1&step7-delivery=20261102-v1`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();

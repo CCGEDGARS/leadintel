@@ -27,7 +27,7 @@
   ]);
 
   let snapshotEncoded=null,snapshotDecoded=null;
-  let acknowledgedWrite=null;
+  let acknowledgedWrite=null,attemptedWrites=[];
   let nativeFetch=null;
   let dirtySinceSave=false;
   let saveBusy=false;
@@ -95,6 +95,23 @@
     if(!candidates.length)return false;
     try{const text=acknowledgementText(state.payload),hash=await acknowledgementHash(text);return acknowledgementScope(workspaceId)===account&&candidates.some(value=>value.payload_hash?value.payload_hash===hash:value.payloadText===text);}catch{return false;}
   }
+  // A save can be committed by the server while its answer never reaches this browser (request limit, dropped
+  // connection). Keep the digest of what each save sent so the server's copy of such a save is recognised as our own
+  // instead of being treated as a competing edit. In memory only: it serves the tab that sent the save.
+  function rememberAttemptedWrite(workspaceId,baseVersion,payload,account){
+    if(account===null||!workspaceId||!Number.isSafeInteger(baseVersion)||baseVersion<0)return;
+    let text;try{text=acknowledgementText(payload);}catch{return;}
+    const entry={workspace_id:workspaceId,account_context:account,base_version:baseVersion,payload_hash:null,payloadText:text};
+    attemptedWrites=[...attemptedWrites.filter(value=>value.workspace_id===workspaceId&&value.account_context===account&&value.base_version>=baseVersion).slice(-3),entry];
+    acknowledgementHash(text).then(hash=>{entry.payload_hash=hash;delete entry.payloadText;},()=>{});
+  }
+  async function matchesAttemptedWrite(state,workspaceId){
+    const account=acknowledgementScope(workspaceId),version=Number(state?.version);if(account===null||state?.workspace_id!==undefined&&state.workspace_id!==workspaceId||!Number.isSafeInteger(version)||version<0||!isObject(state?.payload))return false;
+    const candidates=attemptedWrites.filter(value=>value.workspace_id===workspaceId&&value.account_context===account&&value.base_version<version);
+    if(!candidates.length)return false;
+    try{const text=acknowledgementText(state.payload),hash=await acknowledgementHash(text);return acknowledgementScope(workspaceId)===account&&candidates.some(value=>value.payload_hash?value.payload_hash===hash:value.payloadText===text);}catch{return false;}
+  }
+  function clearAttemptedWrites(workspaceId,version,account){attemptedWrites=attemptedWrites.filter(value=>!(value.workspace_id===workspaceId&&value.account_context===account&&value.base_version<version));}
   function clearAcknowledgedWrite(workspaceId,version,account){
     if(account===null||acknowledgementScope(workspaceId)!==account)return;
     if(acknowledgedWrite?.workspace_id===workspaceId&&acknowledgedWrite.account_context===account&&acknowledgedWrite.version<=version)acknowledgedWrite=null;
@@ -385,13 +402,14 @@
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
         if(!leadintelPreparedSync)next.payload=await prepareSyncPayload(next.payload,{explicitSaved:!forceReset&&(explicitSave||isExplicitlySaved())});
+        rememberAttemptedWrite(writeWorkspaceId,Number(next.version),next.payload,writeAccount);
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(error=>{if(response.ok)throw error;return {};});if(requestInit.signal?.aborted)throw requestInit.signal.reason||new DOMException('Workspace save canceled','AbortError');
         // The network response and body are complete. Durable browser storage
         // remains awaited, but must not be rejected by the network deadline.
         leadintelNetworkReadComplete?.();const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved())){
           const workspaceId=url.searchParams.get("workspace_id"),version=Number(result.version);
-          await rememberAcknowledgedWrite(workspaceId,version,next.payload,writeAccount);
+          await rememberAcknowledgedWrite(workspaceId,version,next.payload,writeAccount);clearAttemptedWrites(workspaceId,version,writeAccount);
           await snapshotFromServerPayload(next.payload,{workspaceId,version,localData:localDataAtPutStart,dirty:!sameWorkspaceContent(currentWorkspaceData(),localDataAtPutStart)});
           clearAcknowledgedWrite(workspaceId,version,writeAccount);
         }}
@@ -501,5 +519,5 @@
 
   const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();}).catch(cause=>{root.LeadIntelLocalRecoveryWarning={code:'snapshot_read_failed',message:String(cause?.message||cause)};root.console?.warn?.('LeadIntel recovery snapshot is unavailable; continuing authenticated server verification without modifying the stored recovery pointer.',cause);});
   function syncBudget(){return lastSyncBudget;}
-  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,syncedProfileAnswer,matchesAcknowledgedWrite,reuseAcknowledgedSave,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,isAcknowledgedBaseline,syncedBase,syncedProfileAnswer,matchesAcknowledgedWrite,matchesAttemptedWrite,reuseAcknowledgedSave,saveWorkspace,renderPersistenceStatus,handleResetClick,syncBudget,prepareSyncPayload,encodeRecoveryRecord};
 })(typeof globalThis!=="undefined"?globalThis:this);

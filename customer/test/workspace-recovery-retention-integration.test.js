@@ -71,6 +71,60 @@ test('a genuine cloud edit after the lost snapshot acknowledgement still reaches
  const {f,r}=await ackFailureRuntime();addPaidCheckpoint(r);const remote=r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload);remote.discovery.researchAudit.entries=[{id:'paid-read-remote',operation:'scrape',outcome:'readable',credits:1}];const response=await f.server.fetch('https://fixture.test/api/customer/state?workspace_id=w',{method:'PUT',body:JSON.stringify({version:2,payload:remote})});assert.equal(response.status,200);
  const result=await r.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});assert.equal(result.saved,false);assert.equal(result.conflict,true);assert.equal(r.root.LeadIntelServerBridge.conflictDetails.reason,'overlapping_changes');assert.equal(f.server.version,3);assert.equal(r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload).discovery.researchAudit.entries[0].id,'paid-read-remote');assert.equal(JSON.parse(r.root.localStorage.getItem(DISCOVERY)).researchAudit.entries[0].id,'paid-read-local');assert.ok(f.values.has(RECOVERY),'both versions remain recoverable');
 });
+// A save the server commits but whose answer never reaches the browser (the 15 s request limit, a dropped connection).
+async function unansweredSaveRuntime({commit=true}={}){
+ const f=cleanOwnerFixture(true),r=await ownerRuntime(f);r.root.crypto.subtle=require('node:crypto').webcrypto.subtle;
+ await r.root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(f.p,{workspaceId:'w',version:1,localData:f.data});await r.root.__init();
+ Object.assign(r.root.LeadIntelServerBridge,{workspaceRecordCodec:'workspace-records-v1',workspaceCompressionCodec:'workspace-lzw-v2',workspaceMaxSyncBytes:8*1024*1024});
+ const discovery=JSON.parse(r.root.localStorage.getItem(DISCOVERY));discovery.researchAudit={requestId:'controlled-owned-run',entries:[]};r.root.localStorage.setItem(DISCOVERY,JSON.stringify(discovery));
+ addPaidCheckpoint(r,'paid-read-first');
+ const fetch=f.server.fetch;let lose=true;
+ f.server.fetch=async(input,options={})=>{if(lose&&options.method==='PUT'){lose=false;if(commit){const response=await fetch.call(f.server,input,options);assert.equal(response.status,200);}throw new DOMException('LeadIntel request timed out','TimeoutError');}return fetch.call(f.server,input,options);};
+ await assert.rejects(r.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true}));
+ assert.equal(f.server.version,commit?2:1);assert.equal(r.root.LeadIntelServerBridge.stateVersion,1,'the browser never learned the new revision');assert.equal(r.root.LeadIntelServerBridge.conflict,false);
+ return {f,r};
+}
+const auditIds=payload=>payload.discovery.researchAudit.entries.map(entry=>entry.id).join(',');
+test('a save the server applied but never answered is recognised by its exact content, so the next edit saves instead of conflicting with itself',{timeout:90000},async()=>{
+ const {f,r}=await unansweredSaveRuntime();
+ addPaidCheckpoint(r,'paid-read-second');
+ const result=await r.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(result.version,3);assert.equal(r.root.LeadIntelServerBridge.conflict,false);assert.equal(f.server.version,3);
+ assert.equal(auditIds(r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload)),'paid-read-first,paid-read-second');
+ assert.equal(f.values.has(RECOVERY),false,'no conflict record is written for the user\'s own save');
+ assert.equal(r.root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+});
+test('an unanswered save never hides a genuine cloud edit made after it',{timeout:90000},async()=>{
+ const {f,r}=await unansweredSaveRuntime();
+ const remote=r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload);remote.discovery.researchAudit.entries=[{id:'paid-read-remote',operation:'scrape',outcome:'readable',credits:1}];
+ assert.equal((await f.server.fetch('https://fixture.test/api/customer/state?workspace_id=w',{method:'PUT',body:JSON.stringify({version:2,payload:remote})})).status,200);
+ addPaidCheckpoint(r,'paid-read-second');
+ const result=await r.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,false);assert.equal(result.conflict,true);assert.equal(f.server.version,3);
+ assert.equal(auditIds(r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload)),'paid-read-remote');
+ assert.equal(auditIds({discovery:JSON.parse(r.root.localStorage.getItem(DISCOVERY))}),'paid-read-first,paid-read-second');
+ assert.ok(f.values.has(RECOVERY),'both versions remain recoverable');
+});
+test('an attempted-save match is exact: same content, same workspace, a revision above the one it was sent on',{timeout:90000},async()=>{
+ const {f,r}=await unansweredSaveRuntime(),p=r.root.LeadIntelWorkspacePersistence,state={version:2,payload:f.server.payload};
+ assert.equal(typeof p.matchesAttemptedWrite,'function');
+ assert.equal(await p.matchesAttemptedWrite(state,'w'),true);
+ assert.equal(await p.matchesAttemptedWrite({...state,version:1},'w'),false,'the revision it was sent on is not a committed copy');
+ assert.equal(await p.matchesAttemptedWrite(state,'other'),false);assert.equal(await p.matchesAttemptedWrite({...state,workspace_id:'other'},'w'),false);
+ const changed=clone(state);changed.payload.meta.persistence.explicit_saved=false;assert.equal(await p.matchesAttemptedWrite(changed,'w'),false,'any difference in content is a different save');
+ assert.equal(await p.matchesAcknowledgedWrite(state,'w'),false,'an unanswered save is never reported as acknowledged');
+ // After a switch to another workspace under the same account, a save attempted in the first one proves nothing about the second.
+ const bridge=r.root.LeadIntelServerBridge,previous=bridge.workspace;bridge.workspace={...previous,id:'other'};
+ try{assert.equal(await p.matchesAttemptedWrite(state,'other'),false,'an attempt belongs to the workspace it was sent for');}finally{bridge.workspace=previous;}
+ assert.equal(await p.matchesAttemptedWrite(state,'w'),true);
+});
+test('a save that never reached the server leaves nothing to recognise and the next save goes through normally',{timeout:90000},async()=>{
+ const {f,r}=await unansweredSaveRuntime({commit:false});
+ addPaidCheckpoint(r,'paid-read-second');
+ const result=await r.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(result.version,2);assert.equal(f.server.version,2);
+ assert.equal(auditIds(r.root.LeadIntelStateBudget.restoreFromSync(f.server.payload)),'paid-read-first,paid-read-second');
+});
 test('receipt matching is exact across every payload field, workspace and account context',{timeout:90000},async()=>{
  const {f,r}=await ackFailureRuntime(),p=r.root.LeadIntelWorkspacePersistence,state={version:2,payload:f.server.payload};assert.equal(await p.matchesAcknowledgedWrite(state,'w'),true);assert.equal(await p.matchesAcknowledgedWrite({...state,version:3},'w'),false);assert.equal(await p.matchesAcknowledgedWrite(state,'other'),false);assert.equal(await p.matchesAcknowledgedWrite({...state,workspace_id:'other'},'w'),false);
  const changed=clone(state);changed.payload.meta.persistence.explicit_saved=false;assert.equal(await p.matchesAcknowledgedWrite(changed,'w'),false,'even persistence metadata is part of the exact acknowledgement');
