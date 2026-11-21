@@ -221,12 +221,20 @@ for(const phase of ['fetch','json'])sqliteTest('provider deadline settles ignore
  try{pending=run(f);const result=await Promise.race([pending.then(r=>r.json()),new Promise(resolve=>oldTimer(()=>resolve('did_not_settle'),100))]);assert.notEqual(result,'did_not_settle');assert.equal(result.run.status,'failed');assert.equal(result.run.reason,'provider_timeout');assert.equal(f.db.raw.prepare('SELECT lease_id FROM market_monitoring_configs').get().lease_id,null);}finally{release();if(pending)await pending;globalThis.fetch=oldFetch;globalThis.setTimeout=oldTimer;AbortSignal.timeout=oldTimeout;}
 });
 
-sqliteTest('a search whose page reading outlasts the query limit is repeated without reading and its results are kept as unread',async()=>{
- const f=await connectedFixture(),oldFetch=globalThis.fetch,oldTimer=globalThis.setTimeout,bodies=[];let reading=true;
- // Only the page-reading request meets a shortened limit; the plain searches keep the real one, so load cannot time them out.
- globalThis.setTimeout=(fn,ms,...args)=>oldTimer(fn,ms===30000&&reading?5:ms,...args);
+// The 30 s query limit is fired by the page-reading request itself, once that request has reached the provider.
+// No wall clock is involved: a shortened timer raced the preparation before the request and lost on a slow
+// machine (the query timed out before anything was sent — CI, 21 Nov), and could also cut a plain search short.
+function queryLimitDuringPageReading(plainAnswer){
+ const oldFetch=globalThis.fetch,oldTimer=globalThis.setTimeout,bodies=[];let limit=null,armed=true;
+ globalThis.setTimeout=(fn,ms,...args)=>{if(ms===30000&&armed){limit=()=>fn(...args);return oldTimer(()=>{},0);}return oldTimer(fn,ms,...args);};
  // Reading the result pages never finishes; the same search without reading answers at once.
- globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);bodies.push(body);if(!body.scrapeOptions)return Response.json({data:[evidence()]});return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{reading=false;reject(options.signal.reason);},{once:true}));};
+ globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);bodies.push(body);if(!body.scrapeOptions)return plainAnswer();
+  return new Promise((_resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});if(armed&&limit){const fire=limit;limit=null;oldTimer(fire,0);}});};
+ return {bodies,oldTimer,disarm(){armed=false;limit=null;},restore(){globalThis.fetch=oldFetch;globalThis.setTimeout=oldTimer;}};
+}
+
+sqliteTest('a search whose page reading outlasts the query limit is repeated without reading and its results are kept as unread',async()=>{
+ const f=await connectedFixture(),harness=queryLimitDuringPageReading(()=>Response.json({data:[evidence()]})),{bodies}=harness;
  try{
   const result=(await (await run(f)).json()).run;
   const reading=bodies.filter(body=>body.scrapeOptions),plain=bodies.filter(body=>!body.scrapeOptions);
@@ -241,20 +249,18 @@ sqliteTest('a search whose page reading outlasts the query limit is repeated wit
   assert.equal(stored.status,'partial');assert.equal(stored.source_count,1);assert.match(stored.error_message,/page reading timed out/);
   assert.equal(f.db.raw.prepare('SELECT COUNT(*) n FROM market_monitoring_evidence').get().n,1);
   assert.equal(f.db.raw.prepare('SELECT lease_id FROM market_monitoring_configs').get().lease_id,null);
- }finally{globalThis.fetch=oldFetch;globalThis.setTimeout=oldTimer;}
+ }finally{harness.restore();}
 });
 
 sqliteTest('a plain search that also fails after slow page reading counts as a failed query, and a canceled run is not retried',async()=>{
- const f=await connectedFixture(),oldFetch=globalThis.fetch,oldTimer=globalThis.setTimeout;let bodies=[],reading=true;
- globalThis.setTimeout=(fn,ms,...args)=>oldTimer(fn,ms===30000&&reading?5:ms,...args);
- globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);bodies.push(body);if(!body.scrapeOptions)return Response.json({success:false,error:'upstream failure'});return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{reading=false;reject(options.signal.reason);},{once:true}));};
+ const f=await connectedFixture(),harness=queryLimitDuringPageReading(()=>Response.json({success:false,error:'upstream failure'})),{bodies,oldTimer}=harness;
  try{
   const result=(await (await run(f)).json()).run;
   assert.equal(result.status,'failed');assert.match(result.reason,/research queries? failed/);assert.doesNotMatch(result.reason,/page reading timed out/);
-  bodies=[];reading=false;const controller=new AbortController();const pending=run(f,controller.signal);while(!bodies.length)await new Promise(resolve=>oldTimer(resolve,1));controller.abort();
+  bodies.length=0;harness.disarm();const controller=new AbortController();const pending=run(f,controller.signal);while(!bodies.length)await new Promise(resolve=>oldTimer(resolve,1));controller.abort();
   const canceled=(await (await pending).json()).run;
   assert.equal(canceled.status,'failed');assert.equal(canceled.reason,'request_canceled');assert.equal(bodies.length,1,'the canceled reading request is the only one sent');assert.equal(bodies.filter(body=>!body.scrapeOptions).length,0,'a canceled request is not repeated as a plain search');
- }finally{globalThis.fetch=oldFetch;globalThis.setTimeout=oldTimer;}
+ }finally{harness.restore();}
 });
 
 sqliteTest('HTTP 200 provider success false cannot become a successful empty research receipt',async()=>{
