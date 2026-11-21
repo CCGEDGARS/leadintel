@@ -39,7 +39,7 @@ async function firecrawlSearch(env,workspaceId,query,limit,assertFresh,requestSi
  return boundedProviderOperation(async(signal,check)=>{
   const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');check();await assertFresh();check();
   const direct=query.operation==='scrape';
-  const response=await requestFirecrawl(env,workspaceId,direct?'scrape':'search',{credential,signal,payload:direct?{url:query.url,formats:['markdown'],onlyMainContent:true}:{query:query.query,limit,scrapeOptions:{formats:['markdown']}},purpose:'market_monitoring'});check();
+  const response=await requestFirecrawl(env,workspaceId,direct?'scrape':'search',{credential,signal,payload:direct?{url:query.url,formats:['markdown'],onlyMainContent:true}:query.searchOnly?{query:query.query,limit}:{query:query.query,limit,scrapeOptions:{formats:['markdown']}},purpose:'market_monitoring'});check();
   const payload=await response.json();check();await assertFresh();check();
   if(!response.ok||payload?.success===false){const exhausted=creditFailure(response.status,payload?.error||payload?.message);if(exhausted)await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});check();throw failure(exhausted?'provider_credits_exhausted':[401,403].includes(response.status)?'provider_auth_failed':response.status===429?'provider_rate_limited':'provider_query_failed',502);}
   await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'recovered',source:credential.source});check();
@@ -58,7 +58,7 @@ async function runWorkspaceMonitoring(env,row,triggerType='scheduled',request,du
  const scheduled=triggerType==='scheduled';
  const claim=await env.DB.prepare(`UPDATE ${ms.table} SET lease_id=?,lease_expires_at=? WHERE ${ms.where} ${ms.id==='legacy'?'':'AND archived=0'} AND revision=? AND (lease_id IS NULL OR lease_expires_at<=?) ${scheduled?'AND enabled=1 AND next_run_at IS ? AND (next_run_at IS NULL OR next_run_at<=?)':''}`).bind(runId,leaseExpires,...ms.args,row.revision,new Date(start).toISOString(),...(scheduled?[row.next_run_at??null,dueAt]:[])).run();
  if(!changed(claim))return {workspaceId,status:'skipped',reason:'monitoring_already_running_or_changed'};
- let sources=0,alerts=0,failures=0,queries=[],mandatorySources=[],completed='',status='failed',reason='',currentState;
+ let sources=0,alerts=0,failures=0,unreadQueries=0,queries=[],mandatorySources=[],completed='',status='failed',reason='',currentState;const slowSources=new Set();
  const creator=row.created_by,sessionHash=request?await sha256(cookieValue(request,'leadintel_session')):'';
  const assertFresh=async()=>{
   if(request?.signal.aborted)throw failure('request_canceled',499);
@@ -91,7 +91,13 @@ async function runWorkspaceMonitoring(env,row,triggerType='scheduled',request,du
   for(const query of queries){
    await assertFresh();
    try{
-    const results=await firecrawlSearch(env,workspaceId,query,config.researchDepth==='deep'?8:5,assertFresh,request?.signal,start+300000-Date.now());
+    // Reading every result page can outlast the per-query limit on a slow source. Do not lose the query:
+    // repeat it as a plain search and keep what it returns as unread; later queries of that source skip the reading.
+    const limit=config.researchDepth==='deep'?8:5,sourceKey=query.customSource||query.sourceType||'',plain=()=>{unreadQueries++;return firecrawlSearch(env,workspaceId,{...query,searchOnly:true},limit,assertFresh,request?.signal,start+300000-Date.now());};
+    let results;
+    if(query.operation!=='scrape'&&slowSources.has(sourceKey))results=await plain();
+    else try{results=await firecrawlSearch(env,workspaceId,query,limit,assertFresh,request?.signal,start+300000-Date.now());}
+    catch(cause){if(cause?.code!=='provider_timeout'||query.operation==='scrape')throw cause;slowSources.add(sourceKey);results=await plain();}
     const scoringSignals=query.signalIds?.length?query.signalIds.map(id=>signalMap.get(id)).filter(Boolean):signals;
     for(const item of results){
      if(!universal&&isTenderSignal({name:item.title,keywords:item.description})&&!(config.sourceTypes.includes('tenders')&&signals.some(isTenderSignal)))continue;
@@ -114,7 +120,7 @@ async function runWorkspaceMonitoring(env,row,triggerType='scheduled',request,du
     }
    }catch(cause){if(cause.code&&cause.code!=='provider_query_failed'&&!(universal&&cause.code==='provider_timeout'))throw cause;failures++;}
   }
-  await assertFresh();status=failures===0?'completed':sources?'partial':'failed';reason=failures?`${failures} research queries failed`:'';
+  await assertFresh();const unread=Math.max(0,unreadQueries-failures);status=failures===0?(unread?'partial':'completed'):sources?'partial':'failed';reason=[failures?`${failures} research queries failed`:'',unread&&status!=='failed'?`${unread} ${unread===1?'query':'queries'} kept search results only: page reading timed out`:''].filter(Boolean).join('; ');
  }catch(cause){reason=typeof cause.code==='string'?cause.code:cause.name==='TimeoutError'?'provider_timeout':cause.name==='AbortError'?'request_canceled':'monitoring_run_failed';status='failed';}
  finally{
   completed=new Date().toISOString();
