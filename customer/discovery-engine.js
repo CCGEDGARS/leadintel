@@ -1455,7 +1455,12 @@
   }
   function isExecutiveBuyer(person={}){
     const title=clean(person.title);
-    if(/\b(assistant|associate|advisor|adviser|former|previous|past|tidigare)\b|assistant to|executive assistant|\b(?:CEO|COO)\s+(?:staff|office|support)\b|chief of staff/i.test(title))return false;
+    if(/\b(assistant|associate|advisor|adviser|former|previous|past|tidigare|tidligere|assistent|fhv)\b|forhenværende|assistant to|executive assistant|\b(?:CEO|COO)\s+(?:staff|office|support)\b|chief of staff/i.test(title))return false;
+    // Danish company leadership. Every part of the title must itself be a leadership form (or a neutral
+    // companion such as "partner"), so "Salgsdirektør", "Sekretær for adm. direktør", "Tidl. adm. direktør",
+    // "Direktør, Europa" and "Kunde / Ejer" are not read as leading the company.
+    const danishParts=title.split(/\s+(?:og|and|&)\s+|\s*[\/,()]\s*/iu).map(part=>part.trim()).filter(Boolean),danishLeader=/^(?:direktør|adm\.?\s*direktør|adm\.?\s*dir\.?|administrerende direktør|ejer|medejer|indehaver|medindehaver)$/iu;
+    if(danishParts.some(part=>danishLeader.test(part))&&danishParts.every(part=>danishLeader.test(part)||/^(?:partner|stifter|founder|ceo|owner)$/iu.test(part)))return true;
     const authority=(person.decisionEvidence||[]).some(row=>companyIdentityDomain(row.url)===companyIdentityDomain(person.publicNameUrl)&&clean(row.quote).toLowerCase().includes(clean(person.publicName||person.name).toLowerCase())&&/full authority/i.test(row.quote)&&/report(?:s|ing)? directly to (?:the )?CEO/i.test(row.quote)&&/delivery area|project/i.test(row.quote));
     if(/\b(?:area|delivery) director\b/i.test(title)&&authority)return true;
     return /\b(?:CEO|COO|chief executive officer|chief operating officer|managing director|division head|divisional director|head of (?:a |the )?(?:division|business area)|business area (?:head|director)|senior vice president,? business area|direktör,? affärsområde|verkställande direktör|koncernchef|affärsområdeschef)\b/i.test(title)||/^(?:owner|business owner|managing partner|founder\s*(?:&|and)\s*(?:owner|CEO))$/i.test(title)||/^(?:group |company )?president(?:\s*(?:&|and)\s*CEO)?$/i.test(title);
@@ -1474,7 +1479,7 @@
     let best=null;
     roles.forEach((role,index)=>{
       if(role==='Executive leadership'&&!isExecutiveBuyer(person))return;
-      const normalizedRole=clean(role).toLowerCase();const aliases=localBuyerRoleAliases(role,"Sweden").map(value=>value.toLowerCase());const exact=role==='Executive leadership'&&isExecutiveBuyer(person)||aliases.some(alias=>title===alias||title.includes(alias))||roleAliasMatch(title,role);
+      const normalizedRole=clean(role).toLowerCase();const aliases=[...new Set(LOCAL_ROLE_MARKETS.flatMap(market=>localBuyerRoleAliases(role,market)))].map(value=>value.toLowerCase());const exact=role==='Executive leadership'&&isExecutiveBuyer(person)||aliases.some(alias=>title===alias||title.includes(alias))||roleAliasMatch(title,role);
       const wanted=new Set(roleSpecificTokens(role));const actual=new Set(roleSpecificTokens(title));
       const overlap=[...wanted].filter(token=>actual.has(token)).length;
       if(!exact&&!overlap)return;
@@ -1511,14 +1516,17 @@
     if(/production|operations|plant|mine|mining|factory|manufactur/i.test(context))add('Operations Director','Plant Manager','Production Manager','Maintenance Manager');
     add(...base);return [...base,...roles.filter(role=>!base.includes(role))].slice(0,16);
   }
+  const LOCAL_ROLE_MARKETS=['Sweden','Denmark'];
+  function danishMarket(market=''){return marketRule(market)?.code==='dk';}
   function localBuyerRoleAliases(role='',market=''){
-    if(role==='Executive leadership')return ['CEO','Chief Executive Officer','COO','Chief Operating Officer','Managing Director','Division Head','Head of Business Area','Business Area Director','Senior Vice President, Business Area','Direktör, Affärsområde','President','Owner','Managing Partner',...(/sweden|svensk/i.test(clean(market))?['Verkställande direktör','Koncernchef','Affärsområdeschef']:[])];
+    if(role==='Executive leadership')return ['CEO','Chief Executive Officer','COO','Chief Operating Officer','Managing Director','Division Head','Head of Business Area','Business Area Director','Senior Vice President, Business Area','Direktör, Affärsområde','President','Owner','Managing Partner',...(/sweden|svensk/i.test(clean(market))?['Verkställande direktör','Koncernchef','Affärsområdeschef']:[]),...(danishMarket(market)?['Administrerende direktør','Adm. direktør','Direktør','Ejer','Indehaver','Medejer']:[])];
     const value=clean(role),aliases=[value],swedish=/sweden|svensk|gällivare|malmberget|kiruna|stockholm/i.test(clean(market));
     // Equivalent functional leadership titles share role fit in every market.
     const director=value.match(/^(.+?) director$/i),head=value.match(/^head of (.+)$/i);
     if(director)aliases.push('Head of '+director[1], 'Director of '+director[1], director[1]+' Head', 'Chief '+director[1]+' Officer');
     if(head)aliases.push(head[1]+' Director', 'Director of '+head[1]);
     if(swedish){const map=[[/procurement director|purchasing director/i,['Inköpschef']],[/procurement manager|purchasing manager/i,['Inköpschef','Inköpsansvarig']],[/^(?:procurement|purchasing)$/i,['Inköpschef','Inköpsansvarig','Inköpare','Strategiskt inköp']],[/strategic sourcing/i,['Strategisk inköpare','Strategiskt inköp']],[/project director/i,['Projektchef']],[/project manager/i,['Projektledare','Projektansvarig']],[/engineering director|technical director/i,['Teknisk chef','Ingenjörschef']],[/engineering manager|technical manager/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/^(?:engineering|technical)$/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/operations|plant|site manager/i,['Driftchef','Anläggningschef','Platschef','Site Manager']],[/^design engineer$/i,['Konstruktör','Ordermottagare/konstruktör']],[/production/i,['Produktionschef']],[/maintenance/i,['Underhållschef']],[/capex|investment/i,['Investeringschef','Investeringsprojektledare']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
+    if(danishMarket(market)){const map=[[/procurement director|purchasing director/i,['Indkøbschef','Indkøbsdirektør']],[/procurement manager|purchasing manager/i,['Indkøbschef','Indkøber','Indkøbsansvarlig']],[/^(?:procurement|purchasing)$/i,['Indkøbschef','Indkøber','Indkøbsansvarlig']],[/strategic sourcing/i,['Strategisk indkøber']],[/project director/i,['Projektdirektør','Projektchef']],[/project manager/i,['Projektleder']],[/engineering director|technical director/i,['Teknisk direktør','Teknisk chef']],[/engineering manager|technical manager/i,['Teknisk chef']],[/^(?:engineering|technical)$/i,['Teknisk chef']],[/operations|plant|site manager|factory/i,['Driftschef','Fabrikschef','Driftsleder']],[/^design engineer$/i,['Konstruktør']],[/production/i,['Produktionschef','Produktionsleder']],[/maintenance/i,['Vedligeholdelseschef']],[/workshop|foreman/i,['Værkfører']],[/\bhr\b|human resources|personnel/i,['HR-chef','Personalechef']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
     return [...new Set(aliases)].slice(0,8);
   }
   function buyerOpportunityTerms(candidate={}){
@@ -1558,7 +1566,8 @@
   }
   function buyerResearchPlan(candidate={},profile={}){
     const roles=opportunityBuyerRoles(candidate,profile),company=clean(candidate.company),domain=companyIdentityDomain(candidate.domain),terms=buyerOpportunityTerms(candidate),expanded=[...new Set(roles.flatMap(role=>localBuyerRoleAliases(role,candidate.market)))],queries=[];
-    if(domain)queries.push('site:'+domain+' (CEO OR \"Chief Executive Officer\" OR COO OR \"Managing Director\" OR \"Verkställande direktör\") (leadership OR management OR team OR ledning)');
+    const danish=danishMarket(candidate.market);
+    if(domain)queries.push(danish?'site:'+domain+' (CEO OR "Administrerende direktør" OR Direktør OR Ejer OR Indehaver) (ledelse OR medarbejdere OR kontakt OR "om os")':'site:'+domain+' (CEO OR \"Chief Executive Officer\" OR COO OR \"Managing Director\" OR \"Verkställande direktör\") (leadership OR management OR team OR ledning)');
     // Give every planned role a first pass before spending the budget on variants.
     // Include local aliases in that pass so later roles are not English-only.
     for(const role of roles){
@@ -1569,7 +1578,7 @@
       const titles=localBuyerRoleAliases(role,candidate.market).map(alias=>'"'+alias+'"').join(' OR ');
       queries.push(('"'+company+'" ('+titles+') '+terms.slice(0,2).map(term=>'"'+term+'"').join(' ')).trim());
     }
-    for(const term of terms.slice(0,3))queries.push('"'+company+'" "'+term+'" (project OR procurement OR engineering OR operations OR inköp OR projektchef OR projektledare)');
+    for(const term of terms.slice(0,3))queries.push('"'+company+'" "'+term+'" (project OR procurement OR engineering OR operations OR '+(danish?'indkøb OR projektchef OR projektleder':'inköp OR projektchef OR projektledare')+')');
     // Company verification precedes identity discovery: do not execute every
     // person-query variant twice as a prerequisite to starting the buyer search.
     const dossierOffer=clean(candidate.buyerFit?.purchase||profile.priorityOffers||candidate.fitDescription||'commercial fit',700),dossierRoles=roles.join('; '),dossierTerms=terms.slice(0,3).join('; ');
@@ -1762,7 +1771,7 @@
   }
   function retainBuyerIdentities(pool=[],profile={},candidate={}){
     const ranked=rankedBuyerShortlist(pool,profile,candidate).people,ids=new Set(ranked.map(buyerIdentity));
-    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&!isOfficeContactRole(person.title)&&(!candidate.company||!person.organization||companyNameMatches(person.organization,candidate.company)));
+    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&!isOfficeContactRole(person.title)&&(!candidate.company||!person.organization||targetEmployerMatches(person.organization,candidate)));
     const relevant=selectDecisionMakers(known,profile,20),ordered=[...relevant,...known.filter(person=>!relevant.some(row=>buyerIdentity(row)===buyerIdentity(person)))];
     return [...ranked,...ordered.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10).map(person=>{
       const previous=pool.filter(row=>clean(row.id)&&String(row.id)===String(person.id)&&buyerIdentity(row)===buyerIdentity(person)&&clean(row.organization)===clean(person.organization));
@@ -1774,8 +1783,8 @@
     return !isOfficeContactRole(person.title)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'
       &&hasFullBuyerName(person.publicName||person.name)
       &&Boolean(person.identitySource==='apollo'||normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))
-      &&(!candidate.company||companyNameMatches(person.organization,candidate.company))
-      &&!/\b(former|formerly|previous|past|tidigare)\b/i.test(clean(person.title));
+      &&(!candidate.company||targetEmployerMatches(person.organization,candidate))
+      &&!FORMER_ROLE.test(clean(person.title));
   }
   function rankedBuyerShortlist(pool=[],profile={},candidate={}){
     const eligible=pool.filter(person=>sourcedBuyerIdentity(person,candidate));
@@ -1876,7 +1885,7 @@
     const identityProfile=normalizeLinkedInUrl(person.publicNameUrl);
     const retained=safeLinkedInIdentityEvidence(person.linkedinIdentityEvidence);
     const matchedProfile=retained&&retained.url===profile&&retained.name.toLowerCase()===clean(person.publicName||person.name).toLowerCase()&&companyNameMatches(retained.organization,candidate.company)&&companyNameMatches(retained.organization,person.organization);
-    const supported=Boolean(candidate.company&&person.organization&&companyNameMatches(person.organization,candidate.company)&&hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url)===profile||identityProfile===profile||matchedProfile));
+    const supported=Boolean(candidate.company&&person.organization&&targetEmployerMatches(person.organization,candidate)&&hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&(person.identitySource==='apollo'&&normalizeLinkedInUrl(person.linkedin_url)===profile||identityProfile===profile||matchedProfile));
     return {status:supported?'automatic':'review_required',url:profile,reason:supported?'Name, employer and role matched in identity evidence':'Profile match needs identity review'};
   }
   function buyerDisplayTitle(value=''){
@@ -2434,7 +2443,7 @@
   function buyerFunction(role=''){
     const value=clean(role);
     if(value==='Executive leadership'||isExecutiveBuyer({title:value}))return 'Executive';
-    return /procure|purchas|sourc|inköp|inkop|buyer/i.test(value)?'Procurement / sourcing':/engineer|technical|tekn|ingenjör/i.test(value)?'Engineering':/operations|plant|production|maintenance|drift|anlägg|produktion|underhåll/i.test(value)?'Operations':/project|projekt|capex|investment/i.test(value)?'Projects':/ceo|chief executive|managing director|verkställande/i.test(value)?'Executive':value;
+    return /procure|purchas|sourc|inköp|inkop|indkøb|buyer/i.test(value)?'Procurement / sourcing':/engineer|technical|tekn|ingenjör/i.test(value)?'Engineering':/operations|plant|production|maintenance|drift|anlägg|produktion|underhåll|fabrik|værkfører|vedligehold/i.test(value)?'Operations':/project|projekt|capex|investment/i.test(value)?'Projects':/ceo|chief executive|managing director|verkställande/i.test(value)?'Executive':value;
   }
   function buyerEntityScopeReason(person={},candidate={}){
     if(!clean(candidate.market)||!clean(candidate.company))return '';
@@ -2492,7 +2501,7 @@
     return countries.size&&!countries.has(market)?'Named official contact card is listed in another country; responsibility for '+clean(candidate.market)+' requires review.':'';
   }
   function qualifyBuyer(person={},profile={},candidate={},options={}){
-    const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company)||companyBrandMatches(person.organization,candidate.domain),directory=person.identitySource==='apollo';
+    const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company)||companyBrandMatches(person.organization,candidate.domain)||employerLabelMatchesDomain(person.organization,candidate),directory=person.identitySource==='apollo';
     const blocked=[];
     const agent=safeBuyerAgent(candidate.publicResearch?.buyerAgent,candidate.domain),agentPerson=agent?.people.find(row=>row.personId===String(person.id));
     if(agentPerson?.identity==='conflict')blocked.push('Buyer Agent found conflicting current employment evidence');
@@ -2508,7 +2517,7 @@
     const market=normalizeMarket(candidate.market),country=normalizeMarket(person.country||(/^UK\b/i.test(clean(person.title))?'United Kingdom':''));
     if(market&&country&&market!==country)blocked.push('Buyer country differs from target market; opportunity responsibility must be reviewed');
     if(!employer)blocked.push('Employer mismatch');if(!source&&!directory)blocked.push('Identity source missing');if(!match)blocked.push('Required role not matched');
-    if(/\b(former|formerly|previous|past|tidigare)\b/i.test(clean(person.title)))blocked.push('Former role');
+    if(FORMER_ROLE.test(clean(person.title)))blocked.push('Former role');
     if(candidate.buyerRolesChanged)blocked.push('Buying roles changed; research again');
     if((candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
@@ -2631,7 +2640,7 @@
     const domain=canonicalDomain(candidate.domain),name=clean(person.publicName||person.name).toLowerCase();
     const valid=validPublishedPhone;
     if(!domain||!clean(person.id)||!hasFullBuyerName(name)||person.identityStatus==='pending'||person.nameVerification==='pending'||candidate.buyerRolesChanged||person.opportunityScope?.status==='review_required'||person.linkedinProfileReview?.status==='review_required')return '';
-    if(person.organization&&candidate.company&&!companyNameMatches(person.organization,candidate.company))return '';
+    if(person.organization&&candidate.company&&!targetEmployerMatches(person.organization,candidate))return '';
     if([...(candidate.publicResearch?.conflicts||[]),...(candidate.publicResearch?.aiReview?.conflicts||[])].some(row=>String(row.person_id)===String(person.id)))return '';
     const companyId=options.companyId||candidate.crmId;
     const profiles=[person.publicLinkedinUrl,person.linkedin_url,person.public_linkedin_url,contact.public_linkedin_url,contact.linkedin_url,contact.linkedinUrl,contact.profile?.linkedinUrl].filter(Boolean).map(value=>normalizeLinkedInUrl(value).replace(/^https?:\/\/(?:[a-z0-9-]+\.)*linkedin\.com(?=\/)/i,'https://linkedin.com'));
@@ -2677,6 +2686,27 @@
     const brand=domainBrand(domain),squashed=squashCompanyName(name);
     return Boolean(brand&&squashed&&brand.length>=4&&squashed===brand);
   }
+  const LEGAL_FORMS='aps|a\\/s|i\\/s|k\\/s|p\\/s|ivs|ab|as|asa|oy|oyj|gmbh|ltd|llc|inc|plc|sia|uab|oü';
+  function companyLegalForm(name){
+    const match=clean(name).toLowerCase().replace(/[.\s]+$/u,'').match(new RegExp('(?:^|\\s)('+LEGAL_FORMS+')$','u'));
+    return match?match[1]:'';
+  }
+  // The employer written as the label of the company's registered domain, with or without a legal form:
+  // "NSMF ApS" for nsmf.dk. Nothing but the label and a legal form may be there ("NSMF Group ApS" is another
+  // entity), and a legal form that differs from the target's own names another entity. requireLegalForm
+  // additionally demands the target's own legal form on the label ("NSMF ApS" for "… ApS").
+  function employerLabelMatchesDomain(label,candidate={},{requireLegalForm=false}={}){
+    const brand=domainBrand(candidate.domain||''),text=clean(label).replace(/[.\s]+$/u,''),form=companyLegalForm(text),target=companyLegalForm(candidate.company);
+    const core=(form?text.slice(0,text.length-form.length):text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
+    return Boolean(brand&&brand.length>=4&&core===brand&&(!requireLegalForm||form&&form===target)&&(!form||!target||form===target));
+  }
+  // One employer rule for the identity gates after tracing. They compared the full company name only, so a
+  // buyer whose source names the employer by the domain label was traced and then dropped before the page.
+  function targetEmployerMatches(organization,candidate={}){
+    return companyNameMatches(organization,candidate.company)||employerLabelMatchesDomain(organization,candidate);
+  }
+  // A role that is over, in the languages the engine reads titles in.
+  const FORMER_ROLE=/(?<![\p{L}\p{N}])(?:former|formerly|previous|past|tidigare|f\.d|före detta|pensionerad|tidligere|tidl|forhenværende|fhv|pensioneret)(?![\p{L}\p{N}])/iu;
 
   function isOfficeContactRole(value){return /^(?:head office|headquarters|corporate office)$/i.test(clean(value));}
   function namedStaffRole(value){
@@ -3019,6 +3049,53 @@
     const employerPhrase=part=>{const match=clean(part).match(new RegExp('^(?:.*'+employmentLead+')?([^-–—|·:]{2,120}?)\\s*$','iu'));return match?clean(match[1]):'';};
     const supportedEmployer=phrase=>Boolean(phrase)&&!/(?:supplier|customer|partner|client|leverantör)/i.test(phrase)&&(companyNameMatches(phrase,companyText)||companyBrandMatches(phrase,profile.companyDomain||''));
     const multiWordTarget=companyText.split(/\s+/).length>=2,brand=domainBrand(profile.companyDomain||''),hasEmploymentLead=new RegExp(employmentLead,'iu');
+    // Headline evidence: a LinkedIn profile headline that itself states a plain current role at the target,
+    // accepted without the full company name anywhere in the result. It is a separate, narrower rule beside
+    // the existing ones. The employer must be the domain label WITH the target's own legal form ("NSMF ApS"
+    // for nsmf.dk and "… ApS"; a bare "Atlas", a town "Aarhus" or "NSMF A/S" is not enough) or the literal
+    // full name; the role must be a plain current title (no second employer, no board, supplier, customer,
+    // interim, consultant, former or incoming wording); and nothing near the company in the description may
+    // say former, dated, customer or supplier.
+    const target={company:companyText,domain:profile.companyDomain||''},relationWords=/(?:supplier|customer|partner|client|leverantör|leverandør|kunde)/i;
+    const labelEmployer=phrase=>Boolean(phrase)&&!relationWords.test(phrase)&&employerLabelMatchesDomain(phrase,target,{requireLegalForm:true});
+    // The literal full name counts where a bare name suffix already counted ("Projektledare LKAB").
+    const namedEmployer=phrase=>labelEmployer(phrase)||Boolean(phrase)&&clean(phrase).toLowerCase()===companyText.toLowerCase()&&(!brand||multiWordTarget||squashCompanyName(companyText)===brand);
+    const notPlain=new RegExp('(?<![\\p{L}\\p{N}])(?:at|hos|på|ved|vid|i|for|för|of|från|from|fra|bei|chez|med|til|till|via|with|bestyrelsesmedlem|bestyrelsesformand|bestyrelse|styrelseledamot|styrelseordförande|styrelse|board|leverandør|leverantör|supplier|kunde|kund|customer|client|interim|konsulent|consultant|indlejet|ekstern|external|freelance|freelancer|selvstændig|udlånt|udstationeret|vikar|midlertidig|temporary|kommende|incoming|tiltrædende|afgående|outgoing|'+LEGAL_FORMS+')(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])ex-|@','iu');
+    const plainRole=role=>role.length>=2&&role.length<=60&&role.split(/\s+/).length<=5&&!/[,;:|()]/.test(role)&&!notPlain.test(role);
+    // "Ejer og direktør i NSMF ApS og Holm Steel A/S": Danish, Norwegian and Swedish headlines put "i" or
+    // "ved" before the employer and may name two companies. A conjunction separates two companies only
+    // where the name before it is closed by a legal form, so one company whose name contains "og" is not cut in two.
+    const localEmployment=text=>{
+      const lead=text.match(/\s(?:i|ved)\s+/iu);if(!lead)return null;
+      const role=clean(text.slice(0,lead.index)),rest=clean(text.slice(lead.index+lead[0].length).replace(/[.\s]+$/u,''));
+      if(!rest||!plainRole(role))return null;
+      if(namedEmployer(rest))return {part:text,employer:rest,role};
+      for(const join of rest.matchAll(/\s+(?:og|och|and|&)\s+/giu)){
+        const left=clean(rest.slice(0,join.index)),right=clean(rest.slice(join.index+join[0].length));
+        if(!companyLegalForm(left))continue;
+        const employer=[left,right].find(namedEmployer);
+        if(employer)return {part:text,employer,role};
+      }
+      return null;
+    };
+    const contraWords=/(?<![\p{L}\p{N}])(?:tidligere|tidl|forhenværende|fhv|pensioneret|tidigare|f\.d|före detta|pensionerad|former|formerly|previous|previously|past|retired|left|forladt|fratrådt|stoppet|kunde|kunder|kund|customer|client|klient|leverandør|leverantör|supplier|leverer|rådgiver|konsulent|consultant|advisor|adviser)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])ex-|(?:19|20)\d{2}\s*(?:-|–|—|til|to|till)\s*(?:\p{L}{3,4}\.?\s*)?(?:19|20)\d{2}/iu;
+    const targetMention=new RegExp([escaped,brand&&'(?<![\\p{L}\\p{N}])'+brand+'(?![\\p{L}\\p{N}])'].filter(Boolean).join('|')||'(?!)','giu');
+    const contradicted=text=>[...String(text||'').matchAll(targetMention)].some(mention=>contraWords.test(String(text).slice(Math.max(0,mention.index-80),mention.index+mention[0].length+40)));
+    const headlineEmployment=(titleParts,description)=>{
+      const texts=titleParts.map(part=>clean(part)).filter(text=>text&&!/^LinkedIn$/i.test(text));
+      for(const text of texts){
+        if(relationWords.test(text))continue;
+        let found=localEmployment(text);
+        // Only words that mean "employed at"; "for", "with", "of" and "from" also describe clients and origins.
+        const stated=found?null:text.match(/^(.{2,80}?)\s+(?:at|hos|på|bei|chez|@)\s+([^-–—|·:]{2,120}?)[.\s]*$/iu);
+        if(stated&&labelEmployer(clean(stated[2]))&&plainRole(clean(stated[1])))found={part:text,employer:clean(stated[2]),role:clean(stated[1])};
+        if(!found&&labelEmployer(text)){const role=texts.find(other=>other!==text&&!labelEmployer(other))||'';if(plainRole(role))found={part:text,employer:text,role};}
+        if(!found)continue;
+        if(texts.some(other=>other!==text&&other!==found.role&&FORMER_ROLE.test(other))||contradicted(description))return null;
+        return found;
+      }
+      return null;
+    };
     const officialClaims=[];
     for(const row of rows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
@@ -3070,7 +3147,8 @@
       diagnostic.parsing='complete';
       const context=[parts.slice(1).join(' | '),description].join('\n');
       const employment=employmentPattern.exec(context);
-      const titleEvidence=parts.slice(1).map(part=>{
+      const headline=linkedIn&&!profile.collectAllCompanyContacts&&!profile.includeIndexedCompanyContacts?headlineEmployment(parts.slice(1),description):null;
+      const titleEvidence=headline||parts.slice(1).map(part=>{
         const text=clean(part);if(/(?:supplier|customer|partner|client|leverantör)/i.test(text))return null;
         if(hasEmploymentLead.test(text)){const phrase=employerPhrase(text);return phrase&&phrase!==text&&supportedEmployer(phrase)?{part:text,employer:phrase}:null;}
         if(!new RegExp('\\s+'+escaped+'$','iu').test(text))return null;
@@ -3086,18 +3164,19 @@
       const explicitCompany=Boolean(explicitCompanyPart);
       const evidencedEmployer=titleEvidence?.employer||(explicitCompanyPart&&!companyNameMatches(explicitCompanyPart,companyText)?clean(explicitCompanyPart):'');
       const officialSource=companyIdentityDomain(rawUrl)===companyIdentityDomain(profile.companyDomain||'');
-      if(!companyText||!companyPattern.test(context)||(!employment&&!explicitCompany&&!officialSource&&!titleEmploymentPart&&!snippetEmployer)){reject('companyVerification','Result has no exact target-company employment evidence');continue;}
+      if(!companyText||!(companyPattern.test(context)||headline)||(!employment&&!explicitCompany&&!officialSource&&!titleEmploymentPart&&!snippetEmployer)){reject('companyVerification','Result has no exact target-company employment evidence');continue;}
       // A past job elsewhere must not invalidate an explicitly current target role.
       const formerPattern=new RegExp('(?:former|previous|past|ex-|formerly|worked at|tidigare)[^.!?\\n|]{0,100}'+escaped,'iu');
       if(formerPattern.test(parts.slice(1).join(' | '))||(!companyPattern.test(parts.slice(1).join(' | '))&&formerPattern.test(description))){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       let role=clean((profile.includeIndexedCompanyContacts?parts.slice(1):parts).find(part=>part!==name&&!supportedEmployer(part)&&!/^LinkedIn$/i.test(part))||'');
-      if(titleEmploymentPart)role=clean(titleEmploymentPart.replace(new RegExp('(?:'+employmentLead+'|\\s+)'+evidencedEmployer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','iu'),''));
+      if(titleEvidence?.role)role=titleEvidence.role;else if(titleEmploymentPart)role=clean(titleEmploymentPart.replace(new RegExp('(?:'+employmentLead+'|\\s+)'+evidencedEmployer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','iu'),''));
       if(employment?.[1]&&!(profile.includeIndexedCompanyContacts&&role&&(explicitCompany||titleEmploymentPart))){
         const employmentRole=clean(employment[1]),namedLead=new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:\\s*,\\s*|\\s+(?:is|är)\\s+)','iu');
         if(profile.includeIndexedCompanyContacts&&!namedLead.test(employmentRole)&&(hasContactEmploymentSubject(employmentRole)||!linkedIn&&!officialSource)){reject('companyVerification','Employment statement does not establish the parsed person as its subject');continue;}
         role=profile.includeIndexedCompanyContacts?employmentRole.replace(namedLead,''):employmentRole.replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       }
       role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
+      if(FORMER_ROLE.test(role)){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
       if(malformedBuyerRole(role)){reject('roleMatching','Parsed role contains website navigation or markup');continue;}
       const relevance=roleRelevance({title:role},buyerSelectionRoles(profile));

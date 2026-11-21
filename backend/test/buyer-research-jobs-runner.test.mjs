@@ -143,3 +143,20 @@ test('exhausted dossier budget advances to buyers without another provider reque
  await run(f.env,{jobId:job.id,services:services({dossier:async()=>assert.fail('exhausted phase must advance')})});
  const saved=await readBuyerJob(f.env,workspaceId,{id:job.id});assert.equal(saved.phase,'identities');assert.match(saved.diagnostic_json,/time limit reached/);assert.equal(JSON.parse(saved.result_json).people.length,1);
 });
+
+test('a buyer whom public search names by the company domain label is kept by the durable job',async t=>{
+ // 21.11 live: the durable job traced identities without the company domain, so a headline that names the
+ // employer by its domain label with the company's legal form ("… i Forge ApS") could never match, and the
+ // identity gates after it compared the full company name only. Invented company and person.
+ const f=await buyerJobsFixture(t);
+ f.body.candidate={...f.body.candidate,company:'Forge Industries ApS',people:f.body.candidate.people.map(person=>({...person,organization:'Forge Industries ApS'}))};
+ const job=await startBuyerJob(f.env,workspaceId,f.users.owner,f.body);
+ f.DB.raw.prepare("UPDATE buyer_research_jobs SET phase='identities' WHERE id=?").run(job.id);
+ const found=()=>Object.assign([{url:'https://dk.linkedin.com/in/rita-dahl-1',title:'Rita Dahl - Ejer og direktør i Forge ApS og Dahl Steel A/S.',description:'Capital owner and CEO of Forge ApS & Dahl Steel A/S.'}],{searchProviders:['grounded'],researchTrace:[{provider:'grounded',status:'succeeded',operation:'search',results:1}]});
+ await run(f.env,{jobId:job.id,services:services({search:async query=>query.includes('linkedin.com/in/')?found():emptySearch()})});
+ const saved=JSON.parse((await readBuyerJob(f.env,workspaceId,{id:job.id})).result_json);
+ const person=saved.people.find(row=>row.name==='Rita Dahl');
+ assert.ok(person,'the found owner-director must be among the saved people: '+JSON.stringify(saved.people.map(row=>[row.name,row.title,row.organization])));
+ assert.equal(person.title,'Ejer og direktør');assert.equal(person.organization,'Forge ApS');
+ assert.ok(saved.people.some(row=>row.id==='robert'),'the previously kept buyer stays');
+});
