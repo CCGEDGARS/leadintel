@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
-import {requestFirecrawl,reportedFirecrawlCredits,FIRECRAWL_RECEIPT_EVENT} from '../src/firecrawl-request.js';
+import {requestFirecrawl,reportedFirecrawlCredits,FIRECRAWL_RECEIPT_EVENT,firecrawlFileLimits} from '../src/firecrawl-request.js';
 import {readFirecrawlUsage,isFirecrawlUsageQuestion,firecrawlUsageAnswer,firecrawlUsageWindow} from '../src/firecrawl-usage.js';
 import {providerCreditIssue} from '../src/provider-credit-health.js';
 import {runCopilotTurn,shouldUseExternalResearch} from '../src/copilot-service.js';
@@ -76,3 +76,30 @@ test('dated investigation uses the requested UTC day and does not present newer 
 test('every metered backend Firecrawl call uses the shared audited transport',()=>{
   for(const file of fs.readdirSync(new URL('../src/',import.meta.url)).filter(f=>f.endsWith('.js'))){const text=fs.readFileSync(new URL('../src/'+file,import.meta.url),'utf8');if(file!=='firecrawl-request.js')assert.doesNotMatch(text,/(?:fetch|fetchImpl)\(['"`]https:\/\/api\.firecrawl\.dev\/v2\/(?:scrape|search)/,file);}
 });
+
+// 21 Nov 2026, live: one Buyers contact search sent as "search and read the pages" cost 906 credits (estimate 10).
+// Among its eight results were long PDFs that merely shared a word with the company name; Firecrawl bills a PDF
+// one credit per page and the platform sent no page limit anywhere.
+test('every page read carries a PDF page limit: ten pages for a requested page, two for a page read from search results',()=>{
+  assert.deepEqual(firecrawlFileLimits('scrape',{url:'https://a.example/x.pdf',formats:['markdown']}),{url:'https://a.example/x.pdf',formats:['markdown'],parsers:[{type:'pdf',maxPages:10},'image']});
+  assert.deepEqual(firecrawlFileLimits('search',{query:'q',limit:8,scrapeOptions:{formats:['markdown']}}),{query:'q',limit:8,scrapeOptions:{formats:['markdown'],parsers:[{type:'pdf',maxPages:2},'image']}});
+  // A plain search reads nothing, so it gets nothing; a caller's own choice, including "no file parsing", is kept.
+  assert.deepEqual(firecrawlFileLimits('search',{query:'q',limit:8}),{query:'q',limit:8});
+  assert.deepEqual(firecrawlFileLimits('scrape',{url:'https://a.example/',parsers:[]}),{url:'https://a.example/',parsers:[]});
+  assert.deepEqual(firecrawlFileLimits('search',{query:'q',scrapeOptions:{formats:['markdown'],parsers:[{type:'pdf',maxPages:1}]}}).scrapeOptions.parsers,[{type:'pdf',maxPages:1}]);
+  const original={query:'q',scrapeOptions:{formats:['markdown']}};firecrawlFileLimits('search',original);assert.deepEqual(original,{query:'q',scrapeOptions:{formats:['markdown']}},'the caller’s payload is not changed');
+  const page={url:'https://a.example/x.pdf'};firecrawlFileLimits('scrape',page);assert.deepEqual(page,{url:'https://a.example/x.pdf'});
+});
+test('the limit is what actually reaches Firecrawl, and the receipt fingerprint describes the request as sent',async t=>{
+  const f=fixture(t),bodies=[];
+  const fetchImpl=async(_url,options)=>{bodies.push(JSON.parse(options.body));return Response.json({success:true,data:[],creditsUsed:2});};
+  await requestFirecrawl(f.env,'w','search',{credential:f.credential,payload:{query:'"Rita Dahl" "Nordby Smede" ("@gmail.com")',limit:8,scrapeOptions:{formats:['markdown']}},fetchImpl,purpose:'buyer_research'});
+  await requestFirecrawl(f.env,'w','scrape',{credential:f.credential,payload:{url:'https://nordby.example/katalog.pdf',formats:['markdown']},fetchImpl,purpose:'buyer_research'});
+  await requestFirecrawl(f.env,'w','search',{credential:f.credential,payload:{query:'plain',limit:8},fetchImpl,purpose:'buyer_research'});
+  assert.deepEqual(bodies[0].scrapeOptions.parsers,[{type:'pdf',maxPages:2},'image']);
+  assert.deepEqual(bodies[1].parsers,[{type:'pdf',maxPages:10},'image']);
+  assert.equal('parsers' in bodies[2],false);assert.equal('scrapeOptions' in bodies[2],false);
+  const receipts=f.raw.prepare('SELECT metadata_json FROM audit_events WHERE event_type=? ORDER BY rowid').all(FIRECRAWL_RECEIPT_EVENT).map(row=>JSON.parse(row.metadata_json));
+  assert.equal(receipts.length,3);assert.equal(new Set(receipts.map(row=>row.fingerprint)).size,3);
+});
+

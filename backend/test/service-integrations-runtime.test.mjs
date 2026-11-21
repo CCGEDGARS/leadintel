@@ -384,7 +384,8 @@ sqliteTest('signed-in deeper research preserves explicitly requested Markdown ex
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'Latvian expansion evidence',limit:4,scrapeOptions:{formats:['markdown']}}}),env,{});
     assert.equal(response.status,200);assert.equal(calls.length,1);
-    assert.deepEqual(JSON.parse(calls[0].options.body),{query:'Latvian expansion evidence',limit:4,scrapeOptions:{formats:['markdown']}});
+    // The requested Markdown extraction is kept; the shared transport adds its PDF page limit for pages read from results.
+    assert.deepEqual(JSON.parse(calls[0].options.body),{query:'Latvian expansion evidence',limit:4,scrapeOptions:{formats:['markdown'],parsers:[{type:'pdf',maxPages:2},'image']}});
   }finally{globalThis.fetch=originalFetch;}
 });
 

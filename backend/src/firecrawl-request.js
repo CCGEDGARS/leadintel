@@ -24,9 +24,22 @@ async function receipt(env,workspaceId,value){
   }catch{ /* A missing receipt must never be represented as zero billed usage. */ }
 }
 const lastPruned=new Map();
+// Firecrawl bills a PDF one credit per page and parses every page unless told otherwise, also for pages read
+// from search results. Without a limit one contact search whose results held unrelated long PDFs cost 906
+// credits (21 Nov 2026). Every read gets a page limit here, in the one transport all paths share: a requested
+// page ten PDF pages, a search result two. Image reading stays on as before. A caller that sets `parsers`
+// itself, including an empty list, keeps its choice.
+export const FIRECRAWL_PDF_PAGES=Object.freeze({scrape:10,searchResult:2});
+export function firecrawlFileLimits(kind,payload={}){
+  const parsers=pages=>[{type:'pdf',maxPages:pages},'image'];
+  if(kind==='scrape')return payload.parsers===undefined?{...payload,parsers:parsers(FIRECRAWL_PDF_PAGES.scrape)}:payload;
+  if(kind==='search'&&payload.scrapeOptions&&typeof payload.scrapeOptions==='object'&&payload.scrapeOptions.parsers===undefined)return {...payload,scrapeOptions:{...payload.scrapeOptions,parsers:parsers(FIRECRAWL_PDF_PAGES.searchResult)}};
+  return payload;
+}
 // The only metered Firecrawl transport. No automatic provider retries or inferred charges.
-export async function requestFirecrawl(env,workspaceId,kind,{credential,payload={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0}={}){
+export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:requested={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0}={}){
   if(!['search','scrape'].includes(kind)||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
+  const payload=firecrawlFileLimits(kind,requested);
   const requestSignal=signal||AbortSignal.timeout(45000);requestSignal.throwIfAborted();
   const started=Date.now(),id=crypto.randomUUID(),at=new Date(started).toISOString();
   const fingerprint=await sha256(JSON.stringify([workspaceId,kind,ordered(payload)]));
