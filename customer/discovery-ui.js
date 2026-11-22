@@ -4800,7 +4800,7 @@ async function openListCompany(row){
   const candidate=existing||{company:row.company,domain:key,website:row.website,crmId:row.crmId,market:row.market,people:[],peopleStatus:'idle',buyerSearchMode:'user_selected_target',qualified:false,qualificationGaps:['List relevance is not confirmed buying intent'],evidence:row.matches.map(m=>({url:m.url,excerpt:m.quote,sourceRead:true})),companyListEvidence:row};
   if(!candidate.crmId)candidate.crmId=row.crmId;
   const roles=LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate);if(roles&&!candidate.buyerRoles)candidate.buyerRoles=roles;
-  rememberSelectedProspect(candidate);focusBuyerCompany(candidate);saveDiscovery();renderAll();void startSelectedBuyerResearch(candidate);return true;
+  rememberSelectedProspect(candidate);focusBuyerCompany(candidate);setJourneyFocus('buyers',{scroll:false});saveDiscovery();renderAll();void startSelectedBuyerResearch(candidate);return true;
 }
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
 function companySearchPlan(){

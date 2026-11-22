@@ -113,3 +113,21 @@ test('the Pipeline handoff receives the same acknowledged CRM identity as the sa
  Object.assign(ctx,{candidateIsActionable:()=>true,qualificationAssessment:()=>({matchedSignals:[]}),LeadIntelCrm:{canonicalDomain:D.canonicalDomain,mapDiscoveryCandidateToCrm:()=>({company:{}})},refreshCrmState:async()=>{},saveLocalPipeline:c=>{handedOff=c;}});b.saveCrmCompany=async()=>({ok:true,company:{id:'acknowledged-company',normalized_domain:'example.com',workspace_id:'one',lifecycle_status:'prospect'}});b.addCrmToPipeline=async()=>({ok:true});
  assert.equal(await ctx.saveCandidate(0,{pipeline:true}),true);assert.equal(handedOff.crmId,'acknowledged-company');assert.equal(candidate.crmId,handedOff.crmId);
 });
+
+function listCompanyRuntime(){
+ const r=runtime(),ctx=r.ctx;
+ Object.assign(ctx,{canonicalDomain:D.canonicalDomain,mainState:()=>({}),LeadIntelDiscovery:{...D,buyerRolesForTarget:()=>''},focusBuyerCompany:company=>r.calls.push('focus:'+company.domain),rememberSelectedProspect:company=>{if(!ctx.discovery.selectedProspects.includes(company))ctx.discovery.selectedProspects.push(company);}});
+ return {...r,row:{company:'Example',domain:'example.com',website:'https://example.com/',crmId:'crm',market:'Denmark',matches:[]}};
+}
+test('Find buyers in a saved list opens Buyers for a company whose buyers are already saved, without new research',async()=>{
+ for(const state of [{people:[{name:'Anna Andersson'}],peopleStatus:'complete'},{buyerDiscovery:{checkedAt:'2026-11-21'}},{peopleStatus:'empty'},{peopleStatus:'error'}]){
+  const {ctx,candidate,calls,row}=listCompanyRuntime();Object.assign(candidate,state);
+  assert.equal(await ctx.openListCompany(row),true);await new Promise(setImmediate);
+  assert.deepEqual(calls,['focus:example.com','buyers'],'the saved company must be focused and the Buyers step shown');
+ }
+});
+test('Find buyers in a saved list still starts research once for a company with no buyer research',async()=>{
+ const {ctx,calls,row}=listCompanyRuntime();
+ assert.equal(await ctx.openListCompany(row),true);await new Promise(setImmediate);await new Promise(setImmediate);
+ assert.equal(calls[0],'focus:example.com');assert.equal(calls.filter(call=>call==='example.com').length,1,'research starts exactly once');assert.ok(calls.includes('buyers'));
+});
