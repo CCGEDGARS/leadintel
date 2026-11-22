@@ -1771,7 +1771,7 @@
   }
   function retainBuyerIdentities(pool=[],profile={},candidate={}){
     const ranked=rankedBuyerShortlist(pool,profile,candidate).people,ids=new Set(ranked.map(buyerIdentity));
-    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&!isOfficeContactRole(person.title)&&(!candidate.company||!person.organization||targetEmployerMatches(person.organization,candidate)));
+    const known=pool.filter(person=>hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!isNonPersonBuyerHeading(person.publicName||person.name)&&!malformedBuyerRole(person.title)&&!publicationRole(person.title)&&!isOfficeContactRole(person.title)&&(!candidate.company||!person.organization||targetEmployerMatches(person.organization,candidate)));
     const relevant=selectDecisionMakers(known,profile,20),ordered=[...relevant,...known.filter(person=>!relevant.some(row=>buyerIdentity(row)===buyerIdentity(person)))];
     return [...ranked,...ordered.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10).map(person=>{
       const previous=pool.filter(row=>clean(row.id)&&String(row.id)===String(person.id)&&buyerIdentity(row)===buyerIdentity(person)&&clean(row.organization)===clean(person.organization));
@@ -1780,7 +1780,7 @@
     });
   }
   function sourcedBuyerIdentity(person,candidate){
-    return !isOfficeContactRole(person.title)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'
+    return !isOfficeContactRole(person.title)&&!publicationRole(person.title)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'
       &&hasFullBuyerName(person.publicName||person.name)
       &&Boolean(person.identitySource==='apollo'||normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))
       &&(!candidate.company||targetEmployerMatches(person.organization,candidate))

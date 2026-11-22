@@ -435,3 +435,15 @@ test('job titles that begin like those phrases are kept in the all-contacts read
   assert.notEqual(trace.diagnostics.find(entry=>entry.parsedTitle===title)?.rejectionReason,'Parsed role describes a publication, not a job',title);
  }
 });
+// 22.11: people the engine saved before that rule keep such a title in the saved pool. The roster built from
+// the pool must not show them: a new run rejects the same row, so a saved one may not outlive it.
+const storedPerson=(title,extra={})=>({id:'public-x',name:'Mette Krog',publicName:'Mette Krog',title,organization:nsmf.company,companyContactSource:'public_identity',publicNameUrl:'https://dk.linkedin.com/posts/mette-krog-1a2b3c_x-activity-1',publicLinkedinUrl:'',matchedBuyerRole:'Production manager',...extra});
+const rosterTitles=people=>D.retainBuyerIdentities(D.mergeBuyerPool(people,[],profileFor(nsmf)),profileFor(nsmf),{company:nsmf.company,domain:nsmf.domain}).map(person=>person.title);
+for(const title of ['LinkedIn post about production leadership','Post identifies Lars Bak as production manager','Public LinkedIn profile describes her as team lead for operational purchasing'])test(`a person saved earlier with "${title}" as the job title is not kept in the roster`,()=>{
+ assert.deepEqual(rosterTitles([storedPerson(title)]),[]);
+ assert.deepEqual(rosterTitles([storedPerson(title,{publicNameUrl:'',publicLinkedinUrl:'https://dk.linkedin.com/in/mette-krog-1a2b3c'})]),[]);
+});
+test('people saved with a job title stay in the roster, also beside one saved with a publication description',()=>{
+ for(const title of ['Production manager','Purchasing manager and author of the company blog','Post Production Manager'])assert.deepEqual(rosterTitles([storedPerson(title)]),[title],title);
+ assert.deepEqual(rosterTitles([storedPerson('LinkedIn post about production leadership'),storedPerson('Production manager',{id:'public-y',name:'Lars Bak',publicName:'Lars Bak',publicNameUrl:'https://www.nsmf.dk/team'})]),['Production manager']);
+});
