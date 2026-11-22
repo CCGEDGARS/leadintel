@@ -297,3 +297,141 @@ test('on a scraped register page the plain "Direktør" is not taken, and a Danis
  assert.deepEqual(D.discoverCompanyContacts([proff],nsmf,[]).map(p=>[p.name,p.title]),[['Rita Holm Dahl','Administrerende direktør']]);
 });
 
+
+// 21 Nov live (L35): the AI search provider returned a LinkedIn post (a /posts/ address) under a title it wrote
+// itself, "<name> — LinkedIn post about production leadership at <company>". The "role at company" reading
+// took "LinkedIn post about production leadership" as the person's role, and the page showed that entry as a
+// researched buyer matched to Production manager. The words describe the publication, not its author's job.
+const postAddress='https://dk.linkedin.com/posts/mette-krog-1a2b3c_produktion-ledelse-activity-7300000000000000000-AbCd';
+test('the title a search provider wrote for a LinkedIn post never becomes a role',()=>{
+ const rows=[row(`Mette Krog — LinkedIn post about production leadership at ${nsmf.company}`,'A post about how a workshop plans its production week.',postAddress)];
+ const trace=traced(nsmf,rows);
+ assert.deepEqual(trace.people.map(person=>[person.name,person.title]),[]);
+ assert.equal(trace.diagnostics.at(-1).rejectionReason,'Parsed role describes a publication, not a job');
+ assert.deepEqual(kept(nsmf,rows),[]);
+});
+test('a profile with a plain role is still kept when a post of the same company stands beside it',()=>{
+ const rows=[row(`Mette Krog — LinkedIn post about production leadership at ${nsmf.company}`,'A post about how a workshop plans its production week.',postAddress),row(`Lars Bak - Production manager at ${nsmf.company}`,`Lars Bak. Production manager at ${nsmf.company}.`)];
+ assert.deepEqual(kept(nsmf,rows).map(person=>person.slice(0,2)),[['Lars Bak','Production manager']]);
+});
+
+// The cause behind L35 (two adversarial reviews, 22 Nov): the words read as a role were not a role. The AI search
+// provider writes its own titles and sentences about a page ("<name> — LinkedIn post about production leadership
+// at <company>", "Post identifies <someone else> as production manager at <company>", "Public LinkedIn profile
+// describes her as team lead ... at <company>"), and "role at company" took whatever stood before "at <company>".
+// In seven saved live runs this produced three of 39 people. Rejecting the provider's rows as such was wrong
+// twice over: a page read after such a result keeps the result's tag (real staff were dropped), and the
+// provider's sentence is also what says "formerly" (former employees passed). So the test is on the words: a
+// phrase that describes a publication, or a sentence about someone, is never a role; where the title holds a
+// role, that one is used.
+const model=(title,description,url)=>({...row(title,description,url),evidenceKind:'model_summary',buyerSource:'grounded',searchProvider:'grounded'});
+const brandt={company:'Brandt Conveyor Group A/S',domain:'brandtconveyor.dk',market:'Denmark',roles:'Head of Procurement; Purchasing manager; Supply chain manager'};
+const providerTitle=`Mette Krog — LinkedIn post about production leadership at ${nsmf.company}`;
+for(const [origin,make] of [['search provider',model],['search engine',row]])for(const address of ['https://www.facebook.com/nordbysmede/posts/123','https://www.nsmf.dk/nyheder/produktion','https://lnkd.in/dXyZ1a'])test(`a publication described in a result title is not a role: ${new URL(address).hostname}, ${origin} row`,()=>{
+ const trace=traced(nsmf,[make(providerTitle,'A post about how a workshop plans its production week.',address)]);
+ assert.deepEqual(trace.people.map(person=>[person.name,person.title]),[]);
+ assert.equal(trace.diagnostics.at(-1).rejectionReason,'Parsed role describes a publication, not a job');
+});
+test('a sentence that names someone else does not give that role to the person in the title',()=>{
+ const rows=[model('Mette Krog — post about the workshop',`Post identifies Lars Bak as production manager at ${nsmf.company}.`,'https://www.facebook.com/nordbysmede/posts/9')];
+ assert.deepEqual(traced(nsmf,rows).people.map(person=>[person.name,person.title]),[]);
+});
+test('on a profile the role comes from the title when the sentence about the profile is not a role',()=>{
+ const rows=[model(`Lise Holm — Operational purchasing team lead, ${brandt.company}`,`Public LinkedIn profile describes her as team lead for operational purchasing at ${brandt.company}. Relevant purchasing lead.`,linkedIn('lise-holm-4d5e6f'))];
+ assert.deepEqual(traced(brandt,rows).people.map(person=>[person.name,person.title]),[['Lise Holm','Operational purchasing team lead']]);
+});
+test('a plain statement in a snippet is still read as the role',()=>{
+ const rows=[row('Lise Holm | LinkedIn',`Lise Holm is Purchasing manager at ${brandt.company}. Experience: ${brandt.company}.`,linkedIn('lise-holm-4d5e6f'))];
+ assert.deepEqual(traced(brandt,rows).people.map(person=>[person.name,person.title]),[['Lise Holm','Purchasing manager']]);
+});
+test('job titles that contain the same words are kept',()=>{
+ for(const title of ['Post Production Manager','Production manager, Profile Extrusion']){
+  const rows=[row(`Lars Bak - ${title} at ${nsmf.company}`,`Lars Bak. ${title} at ${nsmf.company}.`)];
+  assert.deepEqual(traced(nsmf,rows).people.map(person=>[person.name,person.title]),[['Lars Bak',title]],title);
+ }
+});
+test("the same title on a profile's activity feed is not a role either",()=>{
+ const feed='https://dk.linkedin.com/in/mette-krog-1a2b3c/recent-activity/all/';
+ for(const result of [model(providerTitle,'',feed),row(providerTitle,'A post about how a workshop plans its production week.',feed)])assert.deepEqual(traced(nsmf,[result]).people.map(person=>[person.name,person.title]),[]);
+});
+// Guards from the second review: what a rule about the provider's rows must never do again.
+test('an official staff page read after a search provider result still yields its staff',()=>{
+ const found={url:'https://www.nsmf.dk/kontakt',title:'Kontakt | NSMF',description:'The contact page lists the team.',evidenceKind:'model_summary',buyerSource:'grounded'};
+ const read={...found,markdown:'## Team\n\nLars Bak\nProduction manager\n\nMette Krog\nPurchasing manager\n',sourceRead:true};
+ assert.deepEqual(traced(nsmf,[found,read]).people.map(person=>[person.name,person.title,person.companyContactSource]).sort(),[['Lars Bak','Production manager','official_staff'],['Mette Krog','Purchasing manager','official_staff']]);
+});
+for(const [label,title,description] of [
+ ['formerly',`Anna Berg - Purchasing manager - NSMF ApS | LinkedIn`,`Anna Berg formerly worked at ${nsmf.company}; she now leads purchasing at Holm Steel A/S.`],
+ ['tidligere','Anna Berg - Indkøbschef i NSMF ApS | LinkedIn','Anna Berg, tidligere indkøbschef i NSMF ApS, nu hos Holm Steel A/S.'],
+ ['a customer of','Anna Berg - Indkøbschef i NSMF ApS | LinkedIn','Anna Berg is purchasing manager at Holm Steel A/S, a customer of NSMF ApS.']
+])test(`a search provider's sentence that says "${label}" still rejects the profile headline`,()=>{
+ assert.deepEqual(traced(nsmf,[model(title,description,linkedIn('anna-berg-7a8b9c'))]).people.map(person=>[person.name,person.title]),[]);
+});
+// Third review: a sentence that is not taken as the role must still be heard when it says "former" (with the
+// full company name in the title nothing else checks it), and the same defect in other words.
+for(const [label,title,description,url] of [
+ ['describes ... formerly, on a profile',`Anna Berg - Purchasing manager - ${nsmf.company} | LinkedIn`,`Profile describes Anna Berg as formerly purchasing manager at ${nsmf.company}.`,linkedIn('anna-berg-x1')],
+ ['identifies ... previous, on a profile',`Anna Berg - Purchasing manager - ${nsmf.company} | LinkedIn`,`Post identifies Anna Berg as previous purchasing manager at ${nsmf.company}.`,linkedIn('anna-berg-x2')],
+ ['mentions ... former, on a news site',`Anna Berg - Purchasing manager - ${nsmf.company}`,`The article mentions Anna Berg as the former purchasing manager at ${nsmf.company}.`,'https://www.example-news.dk/a/1'],
+ ['opslag om tidligere, on a profile',`Anna Berg - Indkøbschef - ${nsmf.company} | LinkedIn`,`Opslag om tidligere indkøbschef hos ${nsmf.company}.`,linkedIn('anna-berg-x3')]
+])test(`a former employee named so in a sentence about a publication is not kept: ${label}`,()=>{
+ assert.deepEqual(traced(nsmf,[model(title,description,url)]).people.map(person=>[person.name,person.title]),[]);
+});
+for(const words of ['Facebook post on production leadership','Update about production leadership','Comment on production leadership','Press release about production leadership','quoted in an article on production leadership','Mentioned as production manager in a post','Search result lists her as production manager'])test(`not a job title: "${words}"`,()=>{
+ const trace=traced(nsmf,[row(`Mette Krog — ${words} at ${nsmf.company}`,'A text about how a workshop plans its production week.','https://www.facebook.com/nordbysmede/posts/77')]);
+ assert.deepEqual(trace.people.map(person=>[person.name,person.title]),[]);
+});
+// Fourth review: taking the title's role instead of the sentence is only right when the employer is evidenced
+// without that sentence; otherwise the row is read exactly as before this change.
+test('a sentence about someone else or about an article is not employer evidence for the person in the title',()=>{
+ for(const [title,statement,url] of [
+  ['Mette Krog - Purchasing manager',`Lars Bak is sales assistant at ${nsmf.company}.`,'https://www.example-news.dk/a/2'],
+  ['Mette Krog - Purchasing manager at Holm Steel A/S',`Lars Bak is sales assistant at ${nsmf.company}.`,'https://www.example-news.dk/a/7'],
+  ['Mette Krog - Purchasing manager | LinkedIn',`Lars Bak er sælger hos ${nsmf.company}.`,linkedIn('mette-krog-1x2y3z')],
+  ['Mette Krog - Purchasing manager',`Article about the new paint line at ${nsmf.company}.`,'https://www.example-news.dk/a/5'],
+  ['Mette Krog - Purchasing manager',`Post identifies Lars Bak as sales assistant at ${nsmf.company}.`,'https://www.example-news.dk/a/6']
+ ])assert.deepEqual(kept(nsmf,[row(title,statement,url)]),[],title+' / '+statement);
+});
+test('a statement with the person as its subject is still the role, also with a middle name',()=>{
+ for(const statement of [`Mette Krog is Purchasing manager at ${nsmf.company}.`,`Mette Louise Krog is currently Purchasing manager at ${nsmf.company}.`]){
+  assert.deepEqual(traced(nsmf,[row('Mette Krog | LinkedIn',statement+` Experience: ${nsmf.company}.`,linkedIn('mette-krog-5q6r7s'))]).people.map(person=>[person.name,person.title]),[['Mette Krog','Purchasing manager']],statement);
+ }
+});
+test('a role with a clause after it is read as before',()=>{
+ for(const title of ['Purchasing manager and author of the monthly sourcing column','Purchasing manager, featured in a trade paper']){
+  const rows=[row(`Mette Krog - ${title} at ${nsmf.company}`,`Mette Krog. ${title} at ${nsmf.company}.`)];
+  assert.deepEqual(traced(nsmf,rows).people.map(person=>[person.name,person.title]),[['Mette Krog',title]],title);
+ }
+});
+test('job titles that only resemble those phrases are kept',()=>{
+ for(const title of ['LinkedIn Marketing and Production manager','Production manager, Customer Stories','Head of Production, Updates and Releases']){
+  const rows=[row(`Lars Bak - ${title} at ${nsmf.company}`,`Lars Bak. ${title} at ${nsmf.company}.`)];
+  assert.deepEqual(traced(nsmf,rows).people.map(person=>[person.name,person.title]),[['Lars Bak',title]],title);
+ }
+});
+test('a contact-directory summary "<name>, based in <place>, is currently a <role> at <company>" still gives the role',()=>{
+ // Found by comparing the live engine with this change row by row over seven saved runs: the "is" in such a
+ // summary belongs to the person named just before it, not to another subject.
+ const rows=[row('Mette Krog Email & Phone Number - RocketReach',`# Mette Krog Email & Phone Number ### Mette Krog Summary - Mette Krog, based in Aarhus, is currently a Purchasing manager at ${nsmf.company}.`,'https://rocketreach.co/mette-krog-email_1234567')];
+ assert.deepEqual(traced(nsmf,rows).people.map(person=>[person.name,person.title]),[['Mette Krog','Purchasing manager']]);
+});
+// Fifth review: the title's role is kept instead of the sentence only when the title itself names the employer and
+// the sentence says nothing about leaving or about another relation; everything else is read exactly as before.
+for(const [label,title,description,url] of [
+ ['a post about her last day',`Mette Krog - Purchasing manager - ${nsmf.company}`,`LinkedIn post about her last day at ${nsmf.company}.`,'https://dk.linkedin.com/posts/mette-krog_last-day-activity-1'],
+ ['a post about leaving',`Mette Krog - Purchasing manager - ${nsmf.company}`,`Post about leaving her job at ${nsmf.company}.`,'https://dk.linkedin.com/posts/mette-krog_farewell-activity-2'],
+ ['a Danish farewell post',`Mette Krog - Purchasing manager - ${nsmf.company}`,`Opslag om hendes afsked hos ${nsmf.company}.`,'https://dk.linkedin.com/posts/mette-krog_pension-activity-3'],
+ ['a case study about a customer on the company site','Mette Krog - Purchasing manager | Holm Steel A/S',`Case study about Holm Steel deliveries at ${nsmf.company}.`,'https://nsmf.dk/cases/holm-steel']
+])test(`the title's role is not kept when the sentence is ${label}`,()=>{
+ assert.deepEqual(traced(nsmf,[row(title,description,url)]).people.map(person=>[person.name,person.title]),[]);
+});
+test('website-contacts mode does not keep the title role over the sentence',()=>{
+ const rows=[model(`Lise Holm — Operational purchasing team lead, ${brandt.company}`,`Public LinkedIn profile describes her as team lead for operational purchasing at ${brandt.company}.`,linkedIn('lise-holm-4d5e6f'))];
+ assert.deepEqual(D.tracePublicBuyers(rows,brandt.company,{...profileFor(brandt),includeIndexedCompanyContacts:true}).people.map(person=>person.title).filter(title=>title==='Public LinkedIn profile describes her as team lead for operational purchasing'),[]);
+});
+test('job titles that begin like those phrases are kept in the all-contacts reading',()=>{
+ for(const title of ['Listings on Marketplaces Lead','Company Profile Manager','Public Profile Lead','Results Associate Director','Interviews with Customers Lead','Updates on Supply Chain Lead','Podcast by Sales Lead','Post Production Manager','Named Account Manager','Blog Editor']){
+  const trace=D.tracePublicBuyers([{url:'https://www.nsmf.dk/team',title:`Lars Bak - ${title} - ${nsmf.company}`,description:`Lars Bak. ${title}.`,sourceRead:true,markdown:`Lars Bak\n${title}`}],nsmf.company,{...profileFor(nsmf),collectAllCompanyContacts:true});
+  assert.notEqual(trace.diagnostics.find(entry=>entry.parsedTitle===title)?.rejectionReason,'Parsed role describes a publication, not a job',title);
+ }
+});

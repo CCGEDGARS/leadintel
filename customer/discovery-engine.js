@@ -3038,6 +3038,25 @@
     return mergeCompanyContacts(previous,[...matched,...registeredCompanyContacts(rows,candidate)],candidate).map(person=>matchBuyerScopeEvidence(person,official,candidate));
   }
 
+  // Words that begin with the description of a publication ("LinkedIn post about production leadership",
+  // "Press release about ...", "Public LinkedIn profile describes her as ...") or with a sentence about someone
+  // ("Post identifies Lars Bak as production manager", "Mentioned as ...", "Search result lists her as ...") are
+  // not a job title. Search providers write such titles and sentences about a page themselves, and "role at
+  // company" takes whatever stands before "at <company>". Only the beginning is judged: a real role followed
+  // by such a clause ("Purchasing manager and author of ...") is read as before.
+  function publicationRole(value){
+    const text=clean(value);
+    return /^(?:(?:public|professional)\s+)?linkedin(?:\s+(?:posts?|profiles?|pages?|articles?|activity|directory|search|results?|company|professional|jobs?|listings?)\b|$)/i.test(text)
+      ||/^(?:\S+\s+){0,2}(?:post|article|listing|announcement|update|comment|story|thread|press\s+release|news\s+item|blog|blog\s+post|podcast|episode|case\s+study|indlæg|opslag|inlägg|beitrag)\s+(?:about|on|identif\p{L}*|describ\p{L}*|mention(?:s|ed|ing)|announc\p{L}*|nam(?:es|ing)|shared|written|om|über)(?=\s|$)/iu.test(text)
+      ||/^(?:\S+\s+){0,2}interview\s+(?:with|about|on)(?=\s|$)/i.test(text)
+      ||/^(?:public|professional|company)\s+(?:professional\s+)?profile(?:\s+(?:of|for|on|at|page|associat(?:es|ed)|describ\p{L}*|identif\p{L}*|lists|shows|mentions|says|states)\b|$)/iu.test(text)
+      ||/^(?:\S+\s+){0,2}(?:profile|page|result)\s+(?:identif\p{L}*|describ\p{L}*|mentions|lists|shows|says|states|associat(?:es|ed)|names)\s+\S/iu.test(text)
+      ||/^(?:mentioned|listed|described|identified|referenced|quoted|named|cited|tagged|featured)\s+(?:as|in)\b/i.test(text)
+      ||/^author\s+of\b/i.test(text);
+  }
+  // Words in such a sentence that speak of leaving or of another relation to the company. Where they occur the
+  // title's role is not kept over the sentence and the row is read as before.
+  const LEFT_OR_RELATED=/(?<![\p{L}\p{N}])(?:left|leav\p{L}*|last\s+day|farewell|goodbye|retir\p{L}*|pension\p{L}*|resign\p{L}*|step(?:s|ping|ped)?\s+down|replac\p{L}*|successor\p{L}*|afsked\p{L}*|fratr\p{L}*|forlad\p{L}*|forlod|stopp\p{L}*|slut\p{L}*|lämna\p{L}*|avsked\p{L}*|verl(?:ässt|assen|ieß)\p{L}*|abschied\p{L}*|customers?|kunde\p{L}*|kund\p{L}*|suppliers?|leverand\p{L}*|leverant\p{L}*|partners?|clients?|cases?|referenc\p{L}*|alumn\p{L}*)(?![\p{L}\p{N}])/iu;
   function malformedBuyerRole(value){return /https?:\/\/|\]\(|#{2,}|\b[\w-]+\.(?:com|org|net|se|lv|uk)\//i.test(clean(value));}
   function tracePublicBuyers(rows=[],company='',profile={}){
     const people=[],diagnostics=[],seen=new Set(),companyText=clean(company);
@@ -3172,15 +3191,23 @@
       if(formerPattern.test(parts.slice(1).join(' | '))||(!companyPattern.test(parts.slice(1).join(' | '))&&formerPattern.test(description))){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       let role=clean((profile.includeIndexedCompanyContacts?parts.slice(1):parts).find(part=>part!==name&&!supportedEmployer(part)&&!/^LinkedIn$/i.test(part))||'');
       if(titleEvidence?.role)role=titleEvidence.role;else if(titleEmploymentPart)role=clean(titleEmploymentPart.replace(new RegExp('(?:'+employmentLead+'|\\s+)'+evidencedEmployer.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*$','iu'),''));
-      if(employment?.[1]&&!(profile.includeIndexedCompanyContacts&&role&&(explicitCompany||titleEmploymentPart))){
+      // In Buyers a "role at company" sentence that begins as the description of a publication does not replace a
+      // role the title already holds, provided the title itself names the employer and the sentence says nothing
+      // of leaving or of another relation; "former" in it rejects. In every other case the row is read as before
+      // and the final check decides.
+      const statedRole=employment?.[1]?clean(employment[1]):'',afterName=value=>clean(value).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[–—|·:,-]\\s*','iu'),'');
+      const keepTitleRole=!profile.includeIndexedCompanyContacts&&Boolean(role)&&!publicationRole(afterName(role))&&publicationRole(statedRole)&&!LEFT_OR_RELATED.test(statedRole)&&(explicitCompany||Boolean(titleEmploymentPart));
+      if(keepTitleRole&&FORMER_ROLE.test(statedRole)){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
+      if(employment?.[1]&&!keepTitleRole&&!(profile.includeIndexedCompanyContacts&&role&&(explicitCompany||titleEmploymentPart))){
         const employmentRole=clean(employment[1]),namedLead=new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:\\s*,\\s*|\\s+(?:is|är)\\s+)','iu');
         if(profile.includeIndexedCompanyContacts&&!namedLead.test(employmentRole)&&(hasContactEmploymentSubject(employmentRole)||!linkedIn&&!officialSource)){reject('companyVerification','Employment statement does not establish the parsed person as its subject');continue;}
         role=profile.includeIndexedCompanyContacts?employmentRole.replace(namedLead,''):employmentRole.replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       }
-      role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
+      role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'').replace(/[\s,;:]+$/u,'');
       if(FORMER_ROLE.test(role)){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
       if(malformedBuyerRole(role)){reject('roleMatching','Parsed role contains website navigation or markup');continue;}
+      if(publicationRole(afterName(role))){reject('roleMatching','Parsed role describes a publication, not a job');continue;}
       const relevance=roleRelevance({title:role},buyerSelectionRoles(profile));
       if(!role||!relevance&&!profile.collectAllCompanyContacts){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
       if(profile.includeIndexedCompanyContacts&&!isIndependentContactPerson({name,title:role})){reject('roleMatching','Result contains a heading, contact-page title or networking text rather than a named employment role');continue;}
