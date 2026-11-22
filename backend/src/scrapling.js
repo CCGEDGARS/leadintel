@@ -1,6 +1,15 @@
 const clean=(value,max=1000)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);
 const failure=(message,failureKind,code,httpStatus)=>Object.assign(new Error(message),{failureKind,code,...(httpStatus?{httpStatus}:{})});
 
+// The service returns whatever text it can pull out of the bytes it fetched. For a PDF or another binary file that is
+// the file itself decoded as text, which is not a page that was read.
+function binaryDocument(text){
+  if(text.startsWith('%PDF-'))return true;
+  const sample=text.slice(0,4000);let unreadable=0;
+  for(let i=0;i<sample.length;i++){const code=sample.charCodeAt(i);if(code===0xfffd||(code<32&&code!==9&&code!==10&&code!==13))unreadable++;}
+  return unreadable>sample.length/10;
+}
+
 export function scraplingConfigured(env={}){
   const raw=clean(env.SCRAPLING_SERVICE_URL||'',500);if(!raw)return false;
   try{const url=new URL(raw);return url.protocol==='https:'&&Boolean(url.hostname)&&!url.username&&!url.password;}catch{return false;}
@@ -39,6 +48,7 @@ export async function fetchWithScrapling(env={},targetUrl,{signal,timeoutMs=3500
   }
   const markdown=String(payload?.data?.markdown||'').trim();const metadata=payload?.data?.metadata||{};
   if(payload?.success!==true||!markdown||metadata.source!=='scrapling-fallback')throw failure('Invalid Scrapling response','invalid_response','SCRAPLING_INVALID_RESPONSE');
+  if(binaryDocument(markdown))throw failure('Scrapling target returned blocked or unreadable content','blocked_content','SCRAPLING_BLOCKED_CONTENT');
   let sourceUrl='';try{sourceUrl=new URL(String(metadata.sourceURL||metadata.url||target.href)).href;}catch{throw failure('Invalid Scrapling response','invalid_response','SCRAPLING_INVALID_RESPONSE');}
   return {success:true,data:{markdown:markdown.slice(0,60000),links:Array.isArray(payload?.data?.links)?payload.data.links.filter(link=>typeof link==='string').slice(0,200):[],metadata:{...metadata,title:clean(metadata.title||new URL(sourceUrl).hostname,180),sourceURL:sourceUrl,url:sourceUrl,statusCode:Number(metadata.statusCode)||200,source:'scrapling-fallback',fetchedAt:clean(metadata.fetchedAt||new Date().toISOString(),80)}}};
 }
