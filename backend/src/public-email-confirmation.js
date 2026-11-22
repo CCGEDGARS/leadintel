@@ -24,7 +24,7 @@ export async function confirmPublicWorkEmail(env,context,companyId,input={}, {lo
     if(!attributable(row)){
       sourceMethod='public_scrape';
       const credential=await requireWorkspaceServiceCredential(env,context.workspaceId,'firecrawl');
-      await guard();const response=await requestFirecrawl(env,context.workspaceId,'scrape',{credential,payload:{url:source,formats:['markdown'],onlyMainContent:false},signal:AbortSignal.timeout(20000),purpose:'email_source_check'});
+      await guard();const response=await requestFirecrawl(env,context.workspaceId,'scrape',{credential,payload:{url:source,formats:['markdown'],onlyMainContent:false},signal:AbortSignal.timeout(20000),purpose:'email_source_check',meter:context.firecrawlMeter});
       if(!response.ok)throw Object.assign(new Error('Official email-source check is unavailable'),{status:502});
       const payload=await response.json();row=payload.data||payload;
     }

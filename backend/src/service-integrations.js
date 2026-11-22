@@ -304,7 +304,7 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
       researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
       if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();
       return {success:true,data:{...data,metadata:{...data.metadata,source:'firecrawl'}},researchTrace};
-    }catch(cause){failed('firecrawl',cause,started,budget,attempt);check();}
+    }catch(cause){if(cause?.code==='CREDIT_LIMIT')throw cause;failed('firecrawl',cause,started,budget,attempt);check();}
   }
   check();
   if(hasScrapling){budget=Math.max(1,Math.min(35000,remaining()));attempt=attemptSignal(budget);started=Date.now();try{const result=await fetchWithScrapling(env,url,{signal:attempt,timeoutMs:budget});check();if(!valid(result.data))throw blocked();researchTrace.push({provider:'scrapling',operation:'extract',status:'succeeded',results:1});return {...result,researchTrace};}catch(cause){failed('scrapling',cause,started,budget,attempt);check();}}

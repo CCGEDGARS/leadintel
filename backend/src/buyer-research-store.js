@@ -1,6 +1,6 @@
 import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
-import {buyerCreditWindowKey,buyerRunCreditLimit,readBuyerCredits} from './buyer-research-credits.js';
+import {buyerCreditWindowKey,buyerCreditLimitFor,readBuyerCredits} from './buyer-research-credits.js';
 import {prepareBuyerRecheck} from './buyer-recheck-plan.js';
 import {sha256} from './security.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
@@ -14,10 +14,17 @@ export const stmt=(env,sql,...args)=>env.DB.prepare(sql).bind(...args);
 export const parse=(text,fallback={})=>{try{return JSON.parse(text);}catch{return fallback;}};
 function currentWindowPause(row,input,diagnostics){
  const last=diagnostics.at(-1);
- if(row.status!=='needs_review'||row.last_error||last?.code!=='run_window')return null;
+ if(row.status!=='needs_review'||row.last_error)return null;
  // Jobs resumed by older versions can still have the previous window's pause at the end of their history.
- if(Date.parse(last.at)<Date.parse(input.executionWindowStartedAt))return null;
- return last;
+ const started=Date.parse(input.executionWindowStartedAt);
+ if(last?.code==='run_window')return Date.parse(last.at)<started?null:last;
+ // A pause at the credit limit holds until the job is resumed, also when another note was written after it.
+ for(let index=diagnostics.length-1;index>=0;index--){
+  const entry=diagnostics[index];
+  if(entry?.code==='resumed'||Date.parse(entry?.at)<started)return null;
+  if(entry?.code==='credit_limit')return entry;
+ }
+ return null;
 }
 const allowed="('owner','researcher','sales')";
 export const authoritySql=`EXISTS(SELECT 1 FROM sessions s JOIN workspace_members m ON m.user_id=s.user_id WHERE s.token_hash=buyer_research_jobs.session_hash AND s.user_id=buyer_research_jobs.requested_by AND s.expires_at>datetime('now') AND m.workspace_id=buyer_research_jobs.workspace_id AND m.role IN ${allowed}) AND (json_extract(buyer_research_jobs.input_json,'$.taskId') IS NULL OR EXISTS(SELECT 1 FROM copilot_research_tasks t WHERE t.id=json_extract(buyer_research_jobs.input_json,'$.taskId') AND t.workspace_id=buyer_research_jobs.workspace_id AND t.status='running' AND (json_extract(t.input_json,'$.plan.paidMode')<>'saved_policy' OR EXISTS(SELECT 1 FROM additional_contact_policies p WHERE p.workspace_id=t.workspace_id AND p.provider=json_extract(t.input_json,'$.paidPolicy.provider') AND p.enabled=json_extract(t.input_json,'$.paidPolicy.enabled') AND p.phone_enabled=json_extract(t.input_json,'$.paidPolicy.phoneEnabled') AND p.daily_limit=json_extract(t.input_json,'$.paidPolicy.dailyLimit') AND p.monthly_limit=json_extract(t.input_json,'$.paidPolicy.monthlyLimit') AND p.automatic_buyer_limit=json_extract(t.input_json,'$.paidPolicy.automaticBuyerLimit') AND p.max_per_company=json_extract(t.input_json,'$.paidPolicy.maxPerCompany')))))`;
@@ -66,7 +73,7 @@ export async function readBuyerJob(env,workspaceId,{id,domain}={}){
 export async function recoverInterruptedContactJob(env,{jobId}={}){
  // One-time repair of the old cumulative-timeout behavior. GET remains read-only;
  // only the scheduler may resume the latest still-authorized saved request.
- const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status IN ('needs_review','complete') AND phase='done' AND COALESCE(json_extract(diagnostic_json,'$[#-1].code'),'')<>'run_window' AND COALESCE(json_extract(input_json,'$.recheck.version'),0)=0 AND updated_at>datetime('now','-30 days') AND ((COALESCE(json_extract(input_json,'$.contactSourceScope'),'')<>? AND json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.status') IN ('partial','error') AND COALESCE(json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.discoveryScope'),'')<>?) OR (json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1) OR (COALESCE(json_extract(input_json,'$.contactSchedulingVersion'),0)<1 AND COALESCE(json_extract(input_json,'$.contactSchedulingRecoveryVersion'),0)<1 AND json_extract(result_json,'$.publicResearch.accountability.status')='partial' AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget') OR (COALESCE(json_extract(input_json,'$.executionContinuationVersion'),0)<4 AND (json_extract(result_json,'$.publicResearch.buyerAgent.status')='needs_review' OR json_extract(result_json,'$.publicResearch.aiReview.status')='complete' OR EXISTS(SELECT 1 FROM buyer_research_tasks t WHERE t.job_id=buyer_research_jobs.id AND t.status='running')))) AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,...(jobId?[jobId]:[])).all();
+ const rows=await stmt(env,`SELECT * FROM buyer_research_jobs WHERE status IN ('needs_review','complete') AND phase='done' AND COALESCE(json_extract(diagnostic_json,'$[#-1].code'),'') NOT IN ('run_window','credit_limit') AND COALESCE(json_extract(input_json,'$.recheck.version'),0)=0 AND updated_at>datetime('now','-30 days') AND ((COALESCE(json_extract(input_json,'$.contactSourceScope'),'')<>? AND json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.status') IN ('partial','error') AND COALESCE(json_extract(result_json,'$.buyerDiscovery.officialContactInventory.research.discoveryScope'),'')<>?) OR (json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget' AND COALESCE(json_extract(input_json,'$.contactContinuationVersion'),0)<1) OR (COALESCE(json_extract(input_json,'$.contactSchedulingVersion'),0)<1 AND COALESCE(json_extract(input_json,'$.contactSchedulingRecoveryVersion'),0)<1 AND json_extract(result_json,'$.publicResearch.accountability.status')='partial' AND json_extract(result_json,'$.publicResearch.accountability.stopReason')='time_budget') OR (COALESCE(json_extract(input_json,'$.executionContinuationVersion'),0)<4 AND (json_extract(result_json,'$.publicResearch.buyerAgent.status')='needs_review' OR json_extract(result_json,'$.publicResearch.aiReview.status')='complete' OR EXISTS(SELECT 1 FROM buyer_research_tasks t WHERE t.job_id=buyer_research_jobs.id AND t.status='running')))) AND NOT EXISTS(SELECT 1 FROM buyer_research_jobs newer WHERE newer.workspace_id=buyer_research_jobs.workspace_id AND newer.domain=buyer_research_jobs.domain AND newer.rowid>buyer_research_jobs.rowid) AND ${authoritySql} ${jobId?'AND id=?':''} ORDER BY updated_at LIMIT 3`,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,D.OFFICIAL_CONTACT_RESEARCH_POLICY.scopeVersion,...(jobId?[jobId]:[])).all();
  for(const row of rows.results||[]){
   const input=parse(row.input_json),context=await workspaceBuyerContext(env,row.workspace_id,input.taskId),matches=input.workspaceContext===context.hash,diagnostics=parse(row.diagnostic_json,[]),executionRepair=Number(input.contactContinuationVersion||0)>=1;
   const candidate=parse(row.result_json,input.candidate),{contactOptions}=await loadBuyerContactContext(env,{workspaceId:row.workspace_id},candidate),phase=resumePhase(candidate,input,contactOptions);
@@ -174,8 +181,8 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  // is absent, never zero. Shown only: nothing is stopped by it.
  let credits=null;
  try{
-  const count=await readBuyerCredits(env,row.id,buyerCreditWindowKey(row,input)),researched=input.scope==='selected_buyers'?(input.personIds||[]).length:(candidate.people||[]).length,expected=buyerRunCreditLimit(researched);
-  credits={used:count.window.used,reported:count.window.reported,unreported:count.window.unreported,requests:count.window.requests,unreportedRequests:count.window.unreportedRequests,expected,aboveExpected:['contacts','review','paid','done'].includes(row.phase)&&count.window.used>expected,total:count.total.used,totalUnreported:count.total.unreported,totalUnreportedRequests:count.total.unreportedRequests};
+  const count=await readBuyerCredits(env,row.id,buyerCreditWindowKey(row,input)),researched=input.scope==='selected_buyers'?(input.personIds||[]).length:(candidate.people||[]).length,expected=buyerCreditLimitFor(env,row.workspace_id,researched);
+  credits={used:count.window.used,reported:count.window.reported,unreported:count.window.unreported,requests:count.window.requests,unreportedRequests:count.window.unreportedRequests,expected,aboveExpected:['contacts','review','paid','done'].includes(row.phase)&&count.window.counted>expected,total:count.total.used,totalUnreported:count.total.unreported,totalUnreportedRequests:count.total.unreportedRequests};
  }catch{}
  const timing={estimate,lastResultAt,runWindow,nextAttemptAt:row.status==='queued'&&Number(row.next_at)>0?new Date(Number(row.next_at)).toISOString():null};
  // The input roster may already contain names before the worker reaches discovery.

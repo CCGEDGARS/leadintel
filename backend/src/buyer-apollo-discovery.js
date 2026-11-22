@@ -14,7 +14,7 @@ export async function discoverApolloBuyerIdentities({candidate,profile,task,sear
           return {status:'succeeded',executed:true,people:(response.people||[]).slice(0,25),reason:'Identity-only discovery · 0 API credits; contact reveal is separate'};
         }catch(cause){
           await guard();
-          if(['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(cause.code))throw cause;
+          if(['TIME_BUDGET','RUN_WINDOW','CREDIT_LIMIT','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(cause.code))throw cause;
           const code=/^SERVICE_APOLLO_[A-Z_]+$/.test(cause.code||'')?cause.code:'SERVICE_APOLLO_UNAVAILABLE';
           const skipped=cause.executed===false;
           return {status:skipped?'skipped':'failed',executed:!skipped,people:[],code,reason:skipped?code==='SERVICE_APOLLO_DISCOVERY_DISABLED'?'Apollo people discovery is disabled':'Connect your Apollo key in Settings for free people discovery':'Apollo free people discovery was unavailable',httpStatus:cause.httpStatus||null};

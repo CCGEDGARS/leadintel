@@ -20,7 +20,7 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
     if(payload.success===false||!Array.isArray(rows))throw Error('Public search returned an invalid result list');
     await check();observe({provider:'firecrawl',operation:'search',status:'succeeded',results:rows.length});
     if(rows.length&&!diversify)return rowsWithSource(rows,'firecrawl');primaryRows=rowsWithSource(rows,'firecrawl');empty=rows.length===0;
-   }catch(error){await check();observe({provider:'firecrawl',operation:'search',status:'failed',reason:String(error.message||'Public search unavailable').slice(0,180)});}
+   }catch(error){if(error?.code==='CREDIT_LIMIT')throw error;await check();observe({provider:'firecrawl',operation:'search',status:'failed',reason:String(error.message||'Public search unavailable').slice(0,180)});}
   }
   await check();
   try{

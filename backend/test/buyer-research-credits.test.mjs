@@ -40,9 +40,11 @@ test('a meter adds reported credits and, apart from them, the worst case of requ
   assert.deepEqual(counted(f,row.id),[{window_started_at:key,reported:7,unreported:18,requests:3,unreported_requests:1}]);
   const later=createBuyerCreditMeter(f.env,row.id,'2026-11-23T08:00:00.000Z');await later.charge({reported:5,worstCase:10});
   const read=await readBuyerCredits(f.env,row.id,key);
-  assert.deepEqual(read.window,{reported:7,unreported:18,requests:3,unreportedRequests:1,used:25});
-  assert.deepEqual(read.total,{reported:12,unreported:18,requests:4,unreportedRequests:1,used:30});
-  assert.deepEqual((await readBuyerCredits(f.env,row.id,'never-started')).window,{reported:0,unreported:0,requests:0,unreportedRequests:0,used:0});
+  // `unreportedEstimate` and `counted` (stage 2): the same requests at their ordinary price, which is what counts
+  // toward the limit; without an estimate from the caller the worst case stands in.
+  assert.deepEqual(read.window,{reported:7,unreported:18,unreportedEstimate:18,requests:3,unreportedRequests:1,used:25,counted:25});
+  assert.deepEqual(read.total,{reported:12,unreported:18,unreportedEstimate:18,requests:4,unreportedRequests:1,used:30,counted:30});
+  assert.deepEqual((await readBuyerCredits(f.env,row.id,'never-started')).window,{reported:0,unreported:0,unreportedEstimate:0,requests:0,unreportedRequests:0,used:0,counted:0});
 });
 
 test('a count that could not be written goes in with the next one, or when the slice ends',async t=>{
@@ -62,7 +64,7 @@ test('the transport tells the meter what each sent request cost, and nothing for
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>answer(7)});
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>answer()});
   await assert.rejects(requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/team'},meter,fetchImpl:async()=>{throw Error('connection reset');}}),/connection reset/);
-  assert.deepEqual(charges,[{reported:7,worstCase:18},{reported:null,worstCase:18},{reported:null,worstCase:10}]);
+  assert.deepEqual(charges,[{reported:7,worstCase:18,estimate:10},{reported:null,worstCase:18,estimate:10},{reported:null,worstCase:10,estimate:1}]);
   charges.length=0;
   // 22 Nov live: three page reads that Firecrawl answered with an error and one the platform gave up on were
   // counted at 40 credits; the balance fell by one. Firecrawl bills a returned document, so an error answer costs
@@ -72,7 +74,7 @@ test('the transport tells the meter what each sent request cost, and nothing for
   await requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/soft'},meter,fetchImpl:async()=>Response.json({success:false,error:'Scrape failed'})});
   assert.deepEqual(charges,[],'An error answer without a reported cost is not billed');
   await requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/billed'},meter,fetchImpl:async()=>Response.json({success:false,error:'Scrape failed after the check',creditsUsed:5},{status:500})});
-  assert.deepEqual(charges,[{reported:5,worstCase:10}],'A cost the error answer reports is counted');
+  assert.deepEqual(charges,[{reported:5,worstCase:10,estimate:1}],'A cost the error answer reports is counted');
   charges.length=0;
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>Response.json({error:'Payment required'},{status:402})});
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>Response.json({error:'Rate limit'},{status:429,headers:{'Retry-After':'1'}})});

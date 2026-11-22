@@ -57,7 +57,9 @@ export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:
   if(!['search','scrape'].includes(kind)||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
   const payload=firecrawlFileLimits(kind,requested);
   const requestSignal=signal||AbortSignal.timeout(45000);requestSignal.throwIfAborted();
-  const charge=async reported=>{if(!meter)return;try{await meter.charge({reported,worstCase:firecrawlRequestCeiling(kind,payload)});}catch{ /* Counting never changes what the request returns. */ }};
+  // A job whose run window has reached its credit limit sends nothing more (throws with code CREDIT_LIMIT).
+  meter?.admit?.();
+  const charge=async reported=>{if(!meter)return;try{await meter.charge({reported,worstCase:firecrawlRequestCeiling(kind,payload),estimate:firecrawlRequestEstimate(kind,payload)});}catch{ /* Counting never changes what the request returns. */ }};
   const started=Date.now(),id=crypto.randomUUID(),at=new Date(started).toISOString();
   const fingerprint=await sha256(JSON.stringify([workspaceId,kind,ordered(payload)]));
   const base={version:1,id,at,kind,purpose:FIRECRAWL_PURPOSES.includes(purpose)?purpose:'interactive_research',fingerprint,requestedResults:kind==='search'?Math.max(1,Math.min(100,Math.floor(Number(payload.limit)||4))):null,scrapeResults:kind==='search'&&Boolean(payload.scrapeOptions),estimateBasis:'standard-search-and-scrape-20261023; estimate only, not a provider invoice'};

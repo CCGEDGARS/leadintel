@@ -6,7 +6,7 @@ import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
-import {buyerCreditWindowKey,createBuyerCreditMeter} from './buyer-research-credits.js';
+import {buyerCreditWindowKey,buyerCreditLimitFor,createBuyerCreditMeter,readBuyerCredits} from './buyer-research-credits.js';
 import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
@@ -63,7 +63,11 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
   // What this job's own Firecrawl requests cost is counted per run window (one explicit start or resume).
-  const creditMeter=createBuyerCreditMeter(env,row.id,buyerCreditWindowKey(row,input));
+  // When the window has reached what a company of this size usually needs, the next Firecrawl request is refused
+  // and the slice ends as a pause (stage 2). A count that cannot be read holds nothing back.
+  const creditWindow=buyerCreditWindowKey(row,input);let creditSpent=0;
+  try{creditSpent=(await readBuyerCredits(env,row.id,creditWindow)).window.counted;}catch{ /* counting never stops a job */ }
+  const creditMeter=createBuyerCreditMeter(env,row.id,creditWindow,{spent:creditSpent,limit:()=>buyerCreditLimitFor(env,row.workspace_id,input.scope==='selected_buyers'?(input.personIds||[]).length:(candidate.people||[]).length),onLimit:error=>controller.abort(error)});
   const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal,meter:creditMeter});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
   const inflightTasks=new Map(),contactTasks=new Set();
@@ -91,8 +95,10 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     const saved=await scopedWrite(args=>stmt(env,`UPDATE buyer_research_tasks SET status='complete',result_json=?,error='',updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,JSON.stringify(result),row.id,key,...args));
     if(!saved.meta.changes)throw lost();changed++;return result;
    }catch(error){
+    // A refusal at the credit limit ends the whole slice as a pause, whoever raised it.
+    if(error.code==='CREDIT_LIMIT'&&!controller.signal.aborted)controller.abort(error);
     // Do not let an expired, canceled or revoked worker record a late receipt.
-    if(accepting&&!controller.signal.aborted&&!['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code))await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
+    if(accepting&&!controller.signal.aborted&&!['TIME_BUDGET','RUN_WINDOW','CREDIT_LIMIT','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error.code))await stmt(env,`UPDATE buyer_research_tasks SET status='failed',error=?,updated_at=CURRENT_TIMESTAMP WHERE job_id=? AND task_key=? AND ${writeGuard}`,errorReason(error,kind),row.id,key,row.id,lease,clock(),contextVersion).run();
     throw error;
    }
   };
@@ -171,7 +177,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    // The step never fails the job: an outage or a refused receipt is retried once and then left.
    const register=candidate.buyerDiscovery?.registerManagement;
    if(input.scope!=='selected_buyers'&&!['official','done'].includes(phase)&&(!register||register.status==='unavailable'&&Number(register.attempts)<2)){
-    const before=new Set((candidate.people||[]).map(person=>person.id)),sliceEnds=error=>controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error?.code);let answer,added=false;
+    const before=new Set((candidate.people||[]).map(person=>person.id)),sliceEnds=error=>controller.signal.aborted||['TIME_BUDGET','RUN_WINDOW','CREDIT_LIMIT','LEASE_EXPIRED','CANCELED','CONTEXT_CHANGED'].includes(error?.code);let answer,added=false;
     try{answer=await (services.registry||lookupCompanyManagement)({market:candidate.market,company:candidate.company,website:candidate.website||candidate.domain,pages:rows.filter(source=>source.sourceRead===true).map(source=>({url:source.url,text:String(source.markdown||'')}))},{signal:controller.signal});}
     catch(error){if(sliceEnds(error))throw error;answer={status:'unavailable'};}
     await guard();
@@ -228,7 +234,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
     }else{
     const member=await stmt(env,'SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?',row.workspace_id,row.requested_by).first();
     const paidGuard=async()=>guard();paidGuard.writeAuthority=()=>({sql:writeGuard,args:[row.id,lease,clock(),contextVersion]});
-    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup,onContinuation:scope=>{paidContinuation=scope;}});
+    const finished=await runBuyerPaidResearch(env,{workspaceId:row.workspace_id,userId:row.requested_by,role:member?.role,firecrawlMeter:{charge:cost=>creditMeter.charge(cost)}},candidate,{intent:input.paidResearch,jobId:row.id,guard:paidGuard,signal:controller.signal,lookup:services.paidLookup,onContinuation:scope=>{paidContinuation=scope;}});
     if(!finished&&candidate.publicResearch.paidResearch.code===PAID_PRIORITY_RESEARCH_REQUIRED){phase='contacts';diagnostics.push({phase,reason:'Completing the newly displayed buyer’s deeper public checks before resuming the saved paid attempt',at:new Date().toISOString()});}
     else if(finished)phase='done';
     }
@@ -244,6 +250,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    const phaseAdvanced=phase!==row.phase;
    if(phaseAdvanced){phaseMs=0;phaseRuns=0;}
    if(error.code==='RUN_WINDOW'||controller.signal.reason?.code==='RUN_WINDOW'){status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='run_window';diagnostics.push({phase,code:'run_window',reason:BUYER_RUN_WINDOW_REASON,at:new Date().toISOString()});}
+   else if(error.code==='CREDIT_LIMIT'||controller.signal.reason?.code==='CREDIT_LIMIT'){
+    // The pause keeps the phase the slice started in: an engine step that swallowed the refusal may have moved on.
+    phase=row.phase;status='needs_review';report.status=report.status==='complete'?'complete':'partial';report.stopReason='credit_limit';diagnostics.push({phase,code:'credit_limit',reason:(error.code==='CREDIT_LIMIT'?error:controller.signal.reason).message,at:new Date().toISOString()});}
    else if(error.code==='CANCELED'||error.code==='CONTEXT_CHANGED')status='canceled';
    else if(error.code==='LEASE_EXPIRED'||error.code==='PHASE_DEFERRED')status='queued';
    else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if((phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
