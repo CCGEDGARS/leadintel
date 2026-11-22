@@ -59,15 +59,18 @@
     runtimeErrors.filter(error=>{const text=clean(error?.message||'');if(!text||seenRuntime.has(text))return false;seenRuntime.add(text);return true;}).slice(-3).forEach(error=>items.push({id:`runtime-${clean(error?.id||items.length+1,80)}`,severity:'recommendation',title:'Workspace needs attention',detail:'A page component stopped unexpectedly. Reload the workspace to recover; your saved data is not affected.',technical:clean(error?.message||''),target:{type:'runtime'}}));
     // Task history survives for inspection. Only the latest attempt in each
     // research scope describes its present health, regardless of history order.
-    const latestTasks=new Map();
+    const latestTasks=new Map(),stoppedInScope=new Map();
     for(const task of tasks){
       const meta=task.metadata||{},scope=task.type==='decision-maker-search'?buyerTaskScope(task,workspaceId):task.type==='company-discovery'?[task.type,meta.workspaceId||'',meta.flowId||''].join('|'):meta.domain||meta.companyDomain||meta.contactId?[task.type,meta.workspaceId||'',meta.flowId||'',meta.domain||meta.companyDomain||'',meta.contactId||'',task.title||''].join('|'):task.id;
+      if(FAILED.has(task.status)){const stopped=stoppedInScope.get(scope)||[];stopped.push(clean(task?.id,120));stoppedInScope.set(scope,stopped);}
       const previous=latestTasks.get(scope);
       if(!previous||Number(task.startedAt||task.updatedAt||0)>Number(previous.startedAt||previous.updatedAt||0))latestTasks.set(scope,task);
     }
-    [...latestTasks.values()].forEach(task=>{
+    // A stopped card can be dismissed. It names every stopped attempt of its
+    // job, so removing the card does not surface an older attempt in its place.
+    [...latestTasks.entries()].forEach(([scope,task])=>{
       const id=clean(task?.id,120);if(!id)return;
-      if(FAILED.has(task.status))items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task needs attention',120),detail:clean(task.error||task.stage||'The task did not finish.'),target:{type:'tasks'}});
+      if(FAILED.has(task.status))items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task needs attention',120),detail:clean(task.error||task.stage||'The task did not finish.'),target:{type:'tasks'},taskIds:(stoppedInScope.get(scope)||[]).filter(Boolean)});
       else if(['running','queued'].includes(task.status)&&now-Number(task.updatedAt||now)>STALL_MS)items.push({id:`task-${id}`,severity:'recommendation',title:clean(task.title||'Background task may be stalled',120),detail:'No progress has been reported for more than three minutes.',target:{type:'tasks'}});
     });
     const current=model.find(stage=>stage?.active===true)||model.find(stage=>stage?.active==null&&stage?.status==='current');
