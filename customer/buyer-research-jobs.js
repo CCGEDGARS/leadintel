@@ -95,6 +95,12 @@
       if(input?.roles&&stable(roles(input.roles))!==stable(rolesFor(scope.owner,scope.profile)))return false;
       return true;
     }
+    // The run window of a job that has ended: when it was, without the countdown to its deadline, which the server
+    // works out again at every read.
+    function endedTiming(timing){
+      if(!timing?.runWindow)return timing||{};
+      const {expired,remainingMs,...window}=timing.runWindow;return {...timing,runWindow:window};
+    }
     function apply(scope,job,options){
       if(!scope.current()||!matching(scope,job))return false;
       const previous=references.get(scope.owner);if(previous?.id===job.id&&Number(job.revision)<Number(previous.revision))return false;
@@ -142,7 +148,11 @@
       owner.publicContactStatus=running?'loading':job.status==='complete'?'complete':'error';
       if(!selected){owner.buyerDiscovery={...(owner.buyerDiscovery||{}),researchIncomplete:job.status!=='complete'};const error=owner.buyerDiscovery.lastError;if(error?.phase==='start'||/^BUYER_JOB_.*MISMATCH$/.test(error?.name||''))delete owner.buyerDiscovery.lastError;}
       const ref={id:job.id,personIds:selectedIds?selectedIds.map(String):null,contextKey:job.contextKey||'',revision:Number(job.revision)||0,status:job.status,updatedAt:job.updatedAt||'',startedAt:job.createdAt||(previous?.id===job.id?previous.startedAt:null)||new Date().toISOString()};references.set(owner,ref);owner.buyerResearchJob=ref;
-      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Math.max(0,Math.floor((Date.now()-Date.parse(ref.startedAt))/1000)),timing:job.progress?.timing||{},credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
+      // This progress is kept on the company, and the company list is saved with the workspace. For a job that no
+      // longer runs it must not depend on when the job is read, or every reading makes an untouched workspace count
+      // as changed and sends it to the server again: so how long the job ran, not how long ago it started.
+      const elapsedMs=(running?Date.now():Date.parse(job.updatedAt))-Date.parse(ref.startedAt);
+      owner.buyerResearchProgress={phase:running?job.phase||'company':job.status==='complete'?'complete':'error',label:job.progress?.label||'Buyer research needs review',step:({official:1,dossier:2,identities:3,company:1,roles:2,people:3,identity:4,contacts:4,review:5,paid:5})[job.phase]||1,total:5,executionStatus:job.status,aiReviewStatus:job.quality?.aiReviewStatus||'not_assessed',startedAt:ref.startedAt,elapsedSeconds:Number.isFinite(elapsedMs)?Math.max(0,Math.floor(elapsedMs/1000)):0,timing:running?job.progress?.timing||{}:endedTiming(job.progress?.timing),credits:job.progress?.credits||null,windowPaused:job.progress?.windowPaused,stages:job.progress?.stages,connection:'connected',completedChecks:Number(job.progress?.completed)||0,inProgressChecks:Number(job.progress?.inProgress)||0,checkpointAt:job.progress?.lastActivityAt||job.updatedAt,jobId:job.id,diagnostics:(job.diagnostics||[]).slice(-10),...options.progressFields};
       if(job.crm)options.hydrateCrm?.(owner,job.crm);
       if(scope.restoreReceipts&&!ACTIVE.has(job.status)&&receiptOwners.length===(owner.people||[]).length&&Array.isArray(job.savedBuyerResearch))root.LeadIntelDiscovery?.restoreBuyerResearchReceipts?.(owner,job.savedBuyerResearch);
       scope.acceptRoster();options.onProgress?.({...job.progress,phase:job.phase,job,status:job.status});options.persist?.(owner,job);return true;
