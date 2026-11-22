@@ -52,7 +52,10 @@ export function firecrawlRequestCeiling(kind,payload={}){
 // What a request with no reported cost counts toward a job's credit limit: the ordinary price of its kind, and for
 // the read of a PDF address its page limit, because Firecrawl bills a PDF per page (22 Nov 2026, live: six
 // interrupted PDF reads of one company site cost about ten credits each).
-const unreportedRequestEstimate=(kind,payload)=>kind==='scrape'&&/\.pdf(?:$|[?#])/i.test(String(payload?.url||''))?firecrawlRequestCeiling(kind,payload):firecrawlRequestEstimate(kind,payload);
+// An address whose path names a PDF file (not one that only mentions a PDF in its query or fragment). Such a read is
+// billed per page, and the Scrapling fallback cannot parse it.
+export const pdfAddress=url=>{try{return /\.pdf$/i.test(new URL(String(url||'')).pathname);}catch{return false;}};
+const unreportedRequestEstimate=(kind,payload)=>kind==='scrape'&&pdfAddress(payload?.url)?firecrawlRequestCeiling(kind,payload):firecrawlRequestEstimate(kind,payload);
 // The only metered Firecrawl transport. No automatic provider retries or inferred charges.
 // `meter` (optional) is told what each sent request cost: the reported credits, or none with the request's worst
 // case when a request succeeded or was given up on without a reported cost. Firecrawl bills a returned document,

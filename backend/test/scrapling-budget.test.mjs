@@ -15,16 +15,17 @@ const extracted=()=>new Response(JSON.stringify({success:true,data:{markdown:'So
 function waitOrAbort(ms,signal){return new Promise((resolve,reject)=>{const aborted=()=>{clearTimeout(timer);reject(signal.reason);};const timer=setTimeout(()=>{signal.removeEventListener('abort',aborted);resolve();},ms);signal.addEventListener('abort',aborted,{once:true});if(signal.aborted)aborted();});}
 
 // Removing the downstream reserve reproduces the dossier's 3+12+3 seconds starvation.
+// The reserve is a third of the page's time (page-read-time.test.mjs), so the fallback answers within that here.
 test('dossier deadline leaves enough time for a sequential Scrapling extraction after slow earlier tools',async()=>{
  const {env,close}=await fixture(),old=globalThis.fetch,calls=[];let active=0,maxActive=0;
- globalThis.fetch=async(url,{signal,...options})=>{calls.push(String(url));active++;maxActive=Math.max(maxActive,active);try{if(String(url).includes('scrapling.example')){await waitOrAbort(600,signal);return extracted();}await waitOrAbort(5000,signal);throw Error('unexpected');}finally{active--;}};
+ globalThis.fetch=async(url,{signal,...options})=>{calls.push(String(url));active++;maxActive=Math.max(maxActive,active);try{if(String(url).includes('scrapling.example')){await waitOrAbort(400,signal);return extracted();}await waitOrAbort(5000,signal);throw Error('unexpected');}finally{active--;}};
  try{const result=await readPublicBuyerPage(env,'w1','https://company.example/team',{signal:AbortSignal.timeout(1800),totalTimeoutMs:1800,directTimeoutMs:300,firecrawlTimeoutMs:1200});assert.equal(result.data.metadata.source,'scrapling-fallback');assert.deepEqual(result.researchTrace.map(x=>[x.provider,x.status]),[['direct','failed'],['firecrawl','failed'],['scrapling','succeeded']]);assert.equal(calls.length,3);assert.equal(maxActive,1);}finally{globalThis.fetch=old;close();}
 });
 
 // The mandatory contact reader uses a 25-second page ceiling (scaled here).
 test('mandatory page deadline reserves a usable fallback window instead of spending it all on direct and Firecrawl',async()=>{
  const {env,close}=await fixture(),old=globalThis.fetch;let calls=0;
- globalThis.fetch=async(url,{signal})=>{calls++;if(String(url).includes('scrapling.example')){await waitOrAbort(900,signal);return extracted();}await waitOrAbort(5000,signal);throw Error('unexpected');};
+ globalThis.fetch=async(url,{signal})=>{calls++;if(String(url).includes('scrapling.example')){await waitOrAbort(600,signal);return extracted();}await waitOrAbort(5000,signal);throw Error('unexpected');};
  try{const result=await readPublicBuyerPage(env,'w1','https://company.example/team',{signal:AbortSignal.timeout(2500),totalTimeoutMs:2500,directTimeoutMs:1000,firecrawlTimeoutMs:2000});assert.equal(result.data.metadata.source,'scrapling-fallback');assert.equal(calls,3);assert.equal(result.researchTrace[0].failureKind,'timeout');assert.equal(result.researchTrace[1].failureKind,'timeout');}finally{globalThis.fetch=old;close();}
 });
 

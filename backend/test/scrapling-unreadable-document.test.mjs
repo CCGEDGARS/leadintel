@@ -76,6 +76,8 @@ function waitOrAbort(ms,signal){return new Promise((resolve,reject)=>{const abor
 
 // The production sequence of 22 Nov: the site refuses the direct read, the Firecrawl read is cut off, the fallback
 // answers with the file's bytes. The page was then saved as read from 'scrapling-fallback'.
+// (An address that names a PDF is no longer given to the fallback at all, page-read-time.test.mjs; this is a
+// document whose address does not say what it is.)
 test('a document that only the fallback could fetch, as bytes, leaves the page unread and says why',async()=>{
   const {env:workspaceEnv,close}=await workspace(),calls=[];
   const impl=async(url,{signal}={})=>{
@@ -85,7 +87,7 @@ test('a document that only the fallback could fetch, as bytes, leaves the page u
     await waitOrAbort(5000,signal);throw Error('unexpected');
   };
   try{
-    await withFetch(impl,()=>assert.rejects(readPublicBuyerPage(workspaceEnv,'w1','https://company.example/wp-content/uploads/2025/07/EPD.pdf',{totalTimeoutMs:1500,directTimeoutMs:300,firecrawlTimeoutMs:1000}),cause=>{
+    await withFetch(impl,()=>assert.rejects(readPublicBuyerPage(workspaceEnv,'w1','https://company.example/udbud/document?id=5512',{totalTimeoutMs:1500,directTimeoutMs:300,firecrawlTimeoutMs:1000}),cause=>{
       assert.equal(cause.status,502);
       const last=cause.researchTrace.at(-1);
       assert.deepEqual([last.provider,last.status,last.failureKind,last.code],['scrapling','failed','blocked_content','SCRAPLING_BLOCKED_CONTENT']);

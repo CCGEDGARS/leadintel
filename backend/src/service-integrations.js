@@ -1,4 +1,4 @@
-import {requestFirecrawl} from './firecrawl-request.js';
+import {requestFirecrawl,pdfAddress} from './firecrawl-request.js';
 import {apolloWebhookSigningSecret} from './apollo-crm-webhook.js';
 import {exposePublishedEmailHtml} from './published-email-html.js';
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
@@ -279,7 +279,10 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
   if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
   const totalBudget=Math.max(100,Math.min(55000,Math.floor(Number(totalTimeoutMs)||25000))),deadline=Date.now()+totalBudget;
   const pageSignal=AbortSignal.any([signal,AbortSignal.timeout(totalBudget)]),remaining=()=>Math.max(0,deadline-Date.now());
-  const hasScrapling=scraplingConfigured(env),reserve=hasScrapling?Math.min(15000,Math.floor(totalBudget*.6)):0;
+  // Time held back from Firecrawl for the Scrapling fallback after it: a third of the page's time (it was 60 %, which
+  // left Firecrawl 4-7 of 18 seconds; it was cut off and still charged, while the fallback answers in a few seconds).
+  // The fallback returns a PDF's bytes, not its text, so for an address that names a PDF it is not asked and nothing is held back.
+  const hasScrapling=scraplingConfigured(env),fallback=hasScrapling&&!pdfAddress(url),reserve=fallback?Math.min(6000,Math.floor(totalBudget/3)):0;
   const researchTrace=[],unused=provider=>researchTrace.push({provider,operation:'extract',status:'skipped',results:0,reason:'Earlier extractor succeeded'});
   const check=()=>{if(pageSignal.aborted||remaining()<=0){const timedOut=pageSignal.reason?.name==='TimeoutError'||remaining()<=0;throw Object.assign(new Error(timedOut?'Public extraction deadline exceeded':'Public extraction canceled'),{status:timedOut?504:499,researchTrace});}};
   const valid=page=>{const text=String(page?.markdown||page?.content||'').trim();return text.length>=40&&!(/just a moment|access denied|verify you are human|cloudflare ray id/i.test(text)&&text.length<1600);};
@@ -307,8 +310,8 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
     }catch(cause){if(cause?.code==='CREDIT_LIMIT')throw cause;failed('firecrawl',cause,started,budget,attempt);check();}
   }
   check();
-  if(hasScrapling){budget=Math.max(1,Math.min(35000,remaining()));attempt=attemptSignal(budget);started=Date.now();try{const result=await fetchWithScrapling(env,url,{signal:attempt,timeoutMs:budget});check();if(!valid(result.data))throw blocked();researchTrace.push({provider:'scrapling',operation:'extract',status:'succeeded',results:1});return {...result,researchTrace};}catch(cause){failed('scrapling',cause,started,budget,attempt);check();}}
-  else researchTrace.push({provider:'scrapling',operation:'extract',status:'skipped',results:0,reason:'Fallback not configured'});
+  if(fallback){budget=Math.max(1,Math.min(35000,remaining()));attempt=attemptSignal(budget);started=Date.now();try{const result=await fetchWithScrapling(env,url,{signal:attempt,timeoutMs:budget});check();if(!valid(result.data))throw blocked();researchTrace.push({provider:'scrapling',operation:'extract',status:'succeeded',results:1});return {...result,researchTrace};}catch(cause){failed('scrapling',cause,started,budget,attempt);check();}}
+  else researchTrace.push({provider:'scrapling',operation:'extract',status:'skipped',results:0,reason:hasScrapling?'Fallback does not read PDF documents':'Fallback not configured'});
   throw Object.assign(new Error('Public source extraction unavailable'),{status:502,researchTrace});
 }
 async function forwardFirecrawl(request,env,cors,workspaceId,kind,operationId){
