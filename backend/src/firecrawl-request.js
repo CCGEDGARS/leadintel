@@ -51,7 +51,8 @@ export function firecrawlRequestCeiling(kind,payload={}){
 }
 // The only metered Firecrawl transport. No automatic provider retries or inferred charges.
 // `meter` (optional) is told what each sent request cost: the reported credits, or none with the request's worst
-// case when Firecrawl reported nothing. A refused request (402, 429) and one that was never sent cost nothing.
+// case when a request succeeded or was given up on without a reported cost. Firecrawl bills a returned document,
+// so an error answer (also 402 and 429) costs nothing unless it reports a cost; a request never sent costs nothing.
 export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:requested={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0,meter}={}){
   if(!['search','scrape'].includes(kind)||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
   const payload=firecrawlFileLimits(kind,requested);
@@ -81,6 +82,6 @@ export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:
   const rows=Array.isArray(result?.data)?result.data:Array.isArray(result?.data?.web)?result.data.web:Array.isArray(result?.web)?result.web:[];
   await save({sent:true,outcome:exhausted?'credits_exhausted':response.status===429?'rate_limited_upstream':succeeded?'succeeded':'failed',httpStatus:response.status,reportedCredits:reportedFirecrawlCredits(result),estimatedCredits:firecrawlRequestEstimate(kind,payload),results:kind==='search'?rows.length:succeeded?1:0});
   const reported=reportedFirecrawlCredits(result);
-  if(reported!==null||!exhausted&&response.status!==429)await charge(reported);
+  if(reported!==null||succeeded)await charge(reported);
   return response;
 }

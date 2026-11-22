@@ -62,8 +62,17 @@ test('the transport tells the meter what each sent request cost, and nothing for
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>answer(7)});
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>answer()});
   await assert.rejects(requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/team'},meter,fetchImpl:async()=>{throw Error('connection reset');}}),/connection reset/);
+  assert.deepEqual(charges,[{reported:7,worstCase:18},{reported:null,worstCase:18},{reported:null,worstCase:10}]);
+  charges.length=0;
+  // 22 Nov live: three page reads that Firecrawl answered with an error and one the platform gave up on were
+  // counted at 40 credits; the balance fell by one. Firecrawl bills a returned document, so an error answer costs
+  // nothing unless it reports a cost itself; only the request nobody waited for stays unknown.
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:{query:'q',limit:8},meter,fetchImpl:async()=>Response.json({success:false,error:'Internal error'},{status:500})});
-  assert.deepEqual(charges,[{reported:7,worstCase:18},{reported:null,worstCase:18},{reported:null,worstCase:10},{reported:null,worstCase:2}]);
+  await requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/blocked'},meter,fetchImpl:async()=>Response.json({success:false,error:'This website is not supported'},{status:403})});
+  await requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/soft'},meter,fetchImpl:async()=>Response.json({success:false,error:'Scrape failed'})});
+  assert.deepEqual(charges,[],'An error answer without a reported cost is not billed');
+  await requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url:'https://company.example/billed'},meter,fetchImpl:async()=>Response.json({success:false,error:'Scrape failed after the check',creditsUsed:5},{status:500})});
+  assert.deepEqual(charges,[{reported:5,worstCase:10}],'A cost the error answer reports is counted');
   charges.length=0;
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>Response.json({error:'Payment required'},{status:402})});
   await requestFirecrawl(f.env,workspaceId,'search',{credential,payload:reading,meter,fetchImpl:async()=>Response.json({error:'Rate limit'},{status:429,headers:{'Retry-After':'1'}})});
