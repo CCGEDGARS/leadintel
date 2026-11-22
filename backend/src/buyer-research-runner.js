@@ -6,6 +6,7 @@ import {loadBuyerContactContext} from './buyer-contact-context.js';
 import {sha256} from './security.js';
 import {researchWorkspaceDossier} from './company-dossier.js';
 import {createBuyerSourceSearch} from './buyer-source-search.js';
+import {buyerCreditWindowKey,createBuyerCreditMeter} from './buyer-research-credits.js';
 import {readPublicBuyerPage,searchWorkspaceApolloPeople} from './service-integrations.js';
 import {discoverApolloBuyerIdentities} from './buyer-apollo-discovery.js';
 import {reviewWorkspaceBuyerEvidence,searchWorkspaceBuyerContact} from './ai-routes.js';
@@ -61,7 +62,9 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
   input.apolloIdentityReceipts=Array.isArray(input.apolloIdentityReceipts)?input.apolloIdentityReceipts.slice(0,4):[];
   let report=candidate.publicResearch?.accountability||D.createBuyerResearchAccountability();candidate.publicResearch={...(candidate.publicResearch||{}),accountability:report,researchScope:input.scope,researchedPersonIds:input.personIds};
   const observe=entry=>D.recordBuyerResearchTool(report,entry);
-  const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal});
+  // What this job's own Firecrawl requests cost is counted per run window (one explicit start or resume).
+  const creditMeter=createBuyerCreditMeter(env,row.id,buyerCreditWindowKey(row,input));
+  const nativeSearch=services.search||createBuyerSourceSearch(env,row.workspace_id,{guard,observe,signal:controller.signal,meter:creditMeter});
   const scopedWrite=async(build,checkpoint=false)=>{for(let attempt=0;attempt<3;attempt++){const args=await current(checkpoint),result=await build(args).run();if(result.meta.changes)return result;}throw lost();};
   const inflightTasks=new Map(),contactTasks=new Set();
   const readProjection=(value,requested)=>D.buyerSourceReadLocation(candidate,requested,value)?{...value,sourceRead:true}:{url:value.url,metadata:{sourceURL:value.metadata?.sourceURL,url:value.metadata?.url,statusCode:value.metadata?.statusCode},sourceRead:false};
@@ -110,7 +113,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    return {rows:normalized,providers:rows.searchProviders||[],researchTrace:rows.researchTrace||[]};
   }));
   const read=async url=>task('read',C.url(url),async()=>{
-   let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
+   let raw;try{raw=await (services.read||((url,signal)=>readPublicBuyerPage(env,row.workspace_id,url,{signal,totalTimeoutMs:18000,directTimeoutMs:3000,firecrawlTimeoutMs:12000,meter:creditMeter})))(url,controller.signal);}catch(error){for(const entry of error.researchTrace||[])observe(entry);throw error;}
    const page=raw?.data||raw||{};
    if(raw?.success===false||page.error||Number(page.metadata?.statusCode)>=400)throw Error('Source read unavailable');
    const supplied=[page.url,page.metadata?.sourceURL,page.metadata?.url].filter(v=>v!==undefined&&v!==null).map(C.url),actual=supplied[0]||C.url(url),text=String(page.markdown||page.content||page.text||'').slice(0,60000);
@@ -246,7 +249,7 @@ export async function runBuyerResearchJobs(env,{now=Date.now(),maxJobs=2,windowM
    else if(controller.signal.aborted||error.code==='TIME_BUDGET'){status='queued';if(!phaseAdvanced){phaseMs+=Math.max(1,clock()-start);phaseRuns=phase==='contacts'&&changed>0?0:phaseRuns+1;if((phaseExhausted(phase,phaseMs,phaseRuns)||input.recheck&&phase==='contacts'&&phaseMs>=input.recheck.maxActiveMs)){diagnostics.push({phase,reason:'Phase time budget reached; saved work retained',at:new Date().toISOString()});phase=nextPhase[phase]||'done';phaseMs=0;phaseRuns=0;}}}
    else{status='needs_review';diagnostics.push({phase,reason:error.code==='TASK_REQUIRED_CHECK'?error.message:errorReason(error,phase),at:new Date().toISOString()});}
   }finally{
-   accepting=false;clearTimeout(timer);controller.abort();
+   accepting=false;clearTimeout(timer);controller.abort();await creditMeter.flush();
    // Count only actual completed read tasks in this job, including the official
    // phase before person research starts. Retained history is not a new read.
    const completedReads=(await allRows()).filter(r=>r.sourceRead===true&&D.canonicalDomain(r.url)===row.domain);

@@ -36,11 +36,27 @@ export function firecrawlFileLimits(kind,payload={}){
   if(kind==='search'&&payload.scrapeOptions&&typeof payload.scrapeOptions==='object'&&payload.scrapeOptions.parsers===undefined)return {...payload,scrapeOptions:{...payload.scrapeOptions,parsers:parsers(FIRECRAWL_PDF_PAGES.searchResult)}};
   return payload;
 }
+// The most one request can cost with the page limits above: what a count uses when Firecrawl reported nothing.
+const pdfPageLimit=parsers=>{
+  if(!Array.isArray(parsers))return null;
+  const pdf=parsers.find(parser=>parser==='pdf'||parser?.type==='pdf');
+  if(!pdf)return 1;
+  const pages=Math.floor(Number(pdf.maxPages));
+  return Number.isFinite(pages)&&pages>0?pages:null;
+};
+export function firecrawlRequestCeiling(kind,payload={}){
+  if(kind==='scrape')return Math.max(1,pdfPageLimit(payload.parsers)??FIRECRAWL_PDF_PAGES.scrape);
+  const limit=Math.max(1,Math.min(100,Math.floor(Number(payload.limit)||4)));
+  return 2*Math.ceil(limit/10)+(payload.scrapeOptions?limit*Math.max(1,pdfPageLimit(payload.scrapeOptions.parsers)??FIRECRAWL_PDF_PAGES.searchResult):0);
+}
 // The only metered Firecrawl transport. No automatic provider retries or inferred charges.
-export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:requested={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0}={}){
+// `meter` (optional) is told what each sent request cost: the reported credits, or none with the request's worst
+// case when Firecrawl reported nothing. A refused request (402, 429) and one that was never sent cost nothing.
+export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:requested={},signal,fetchImpl=fetch,purpose='interactive_research',waitBudgetMs=0,meter}={}){
   if(!['search','scrape'].includes(kind)||!workspaceId||!credential?.apiKey)throw Error('A workspace Firecrawl connection is required');
   const payload=firecrawlFileLimits(kind,requested);
   const requestSignal=signal||AbortSignal.timeout(45000);requestSignal.throwIfAborted();
+  const charge=async reported=>{if(!meter)return;try{await meter.charge({reported,worstCase:firecrawlRequestCeiling(kind,payload)});}catch{ /* Counting never changes what the request returns. */ }};
   const started=Date.now(),id=crypto.randomUUID(),at=new Date(started).toISOString();
   const fingerprint=await sha256(JSON.stringify([workspaceId,kind,ordered(payload)]));
   const base={version:1,id,at,kind,purpose:FIRECRAWL_PURPOSES.includes(purpose)?purpose:'interactive_research',fingerprint,requestedResults:kind==='search'?Math.max(1,Math.min(100,Math.floor(Number(payload.limit)||4))):null,scrapeResults:kind==='search'&&Boolean(payload.scrapeOptions),estimateBasis:'standard-search-and-scrape-20261023; estimate only, not a provider invoice'};
@@ -57,12 +73,14 @@ export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:
   requestSignal.throwIfAborted();
   let response;
   try{response=await fetchImpl('https://api.firecrawl.dev/v2/'+kind,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',Authorization:`Bearer ${credential.apiKey}`},body:JSON.stringify(payload),signal:requestSignal});}
-  catch(cause){await save({sent:true,outcome:requestSignal.aborted?'interrupted':'network_error',httpStatus:null,reportedCredits:null,estimatedCredits:firecrawlRequestEstimate(kind,payload),results:0});throw cause;}
+  catch(cause){await save({sent:true,outcome:requestSignal.aborted?'interrupted':'network_error',httpStatus:null,reportedCredits:null,estimatedCredits:firecrawlRequestEstimate(kind,payload),results:0});await charge(null);throw cause;}
   let result;try{result=await response.clone().json();}catch{}
   const exhausted=creditFailure(response.status,result?.error||result?.message),succeeded=response.ok&&result?.success!==false&&Boolean(result);
   if(response.status===429)await recordFirecrawlRateLimit(env,workspaceId,kind,parseRetryAfterMs(response,result));
   if(exhausted||succeeded)await recordProviderCredit(env,{workspaceId,provider:'firecrawl',kind:exhausted?'failed':'recovered',source:'customer'});
   const rows=Array.isArray(result?.data)?result.data:Array.isArray(result?.data?.web)?result.data.web:Array.isArray(result?.web)?result.web:[];
   await save({sent:true,outcome:exhausted?'credits_exhausted':response.status===429?'rate_limited_upstream':succeeded?'succeeded':'failed',httpStatus:response.status,reportedCredits:reportedFirecrawlCredits(result),estimatedCredits:firecrawlRequestEstimate(kind,payload),results:kind==='search'?rows.length:succeeded?1:0});
+  const reported=reportedFirecrawlCredits(result);
+  if(reported!==null||!exhausted&&response.status!==429)await charge(reported);
   return response;
 }

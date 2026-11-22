@@ -1,5 +1,6 @@
 import '../../customer/strategy-integrity.js';
 import {buyerRunWindow} from './buyer-research-window.js';
+import {buyerCreditWindowKey,buyerRunCreditLimit,readBuyerCredits} from './buyer-research-credits.js';
 import {prepareBuyerRecheck} from './buyer-recheck-plan.js';
 import {sha256} from './security.js';
 import {loadBuyerContactContext} from './buyer-contact-context.js';
@@ -167,6 +168,15 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const estimate=durations.length>=5?{lowerSeconds:durations[Math.floor((durations.length-1)*.5)],upperSeconds:durations[Math.ceil((durations.length-1)*.9)],samples:durations.length}:null;
  const lastResultAt=(totals.results||[]).filter(item=>item.status==='complete').map(item=>iso(item.last_activity_at)).filter(Boolean).sort().at(-1)||null;
  const runWindow=buyerRunWindow(row,input);
+ // What this job has spent at Firecrawl: in the current run window and in all, beside what a run of this size is
+ // expected to stay under. The size is the people this run researches (the selected ones, or the whole roster),
+ // and "above expected" is only said once they are known, from the contacts phase on. A count that cannot be read
+ // is absent, never zero. Shown only: nothing is stopped by it.
+ let credits=null;
+ try{
+  const count=await readBuyerCredits(env,row.id,buyerCreditWindowKey(row,input)),researched=input.scope==='selected_buyers'?(input.personIds||[]).length:(candidate.people||[]).length,expected=buyerRunCreditLimit(researched);
+  credits={used:count.window.used,reported:count.window.reported,unreported:count.window.unreported,requests:count.window.requests,unreportedRequests:count.window.unreportedRequests,expected,aboveExpected:['contacts','review','paid','done'].includes(row.phase)&&count.window.used>expected,total:count.total.used,totalUnreported:count.total.unreported,totalUnreportedRequests:count.total.unreportedRequests};
+ }catch{}
  const timing={estimate,lastResultAt,runWindow,nextAttemptAt:row.status==='queued'&&Number(row.next_at)>0?new Date(Number(row.next_at)).toISOString():null};
  // The input roster may already contain names before the worker reaches discovery.
  const pastIdentityStage=['contacts','review','paid','done'].includes(row.phase);
@@ -174,7 +184,7 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  const stages={official:D.officialContactCoveragePassed(candidate),dossier:candidate.buyerDiscovery?.companyDossier?.status==='complete'&&!candidate.buyerDiscovery?.companyDossier?.lastAttempt,identities,contacts:D.buyerResearchCoveragePassed(candidate,{contactOptions}),review:quality.aiReviewStatus==='complete'&&(!input.paidResearch||['complete','disabled'].includes(candidate.publicResearch?.paidResearch?.status))};
  const diagnostics=parse(row.diagnostic_json,[]),paused=currentWindowPause(row,input,diagnostics);
  const labels={official:'Reading official company sources',dossier:'Researching the company',identities:'Finding decision-makers',contacts:'Checking contact evidence',review:'Reviewing buyer evidence',paid:'Researching approved paid channels',done:'Research saved'};
- return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
+ return {id:row.id,domain:row.domain,retainedEvidenceRecovered:recoverRetained,contextKey:row.context_key,crm,input:{paidResearch:Boolean(input.paidResearch),company:input.candidate?.company,domain:row.domain,profile:input.profile,roles:input.roles,personIds:input.scope==='selected_buyers'?input.personIds:[],scope:input.scope},status:row.status,phase:row.phase,resumePhase:resumePhase(candidate,input,contactOptions),revision:row.revision,createdAt,updatedAt,candidate,quality,diagnostics:[...diagnostics,...(row.last_error?[{phase:row.phase,reason:row.last_error}]:[])],progress:{timing,stages,credits,windowPaused:Boolean(paused),executionStatus:row.status,completed:Number(completed),total,inProgress:row.status==='running'?Number((totals.results||[]).find(r=>r.status==='running')?.n)||0:0,lastActivityAt,label:paused?paused.reason:activity|| (row.status==='needs_review'?'Research saved · '+(quality.gaps[0]||'review remaining gaps'):input.recheck&&row.phase==='contacts'?Object.values(input.recheck.plans).some(plan=>plan.queries.length)?'Checking missing contact details · alternative public sources':'Rechecking saved sources · no untried alternative queries':labels[row.phase]||row.phase.replaceAll('_',' '))}};
 }
 export async function startBuyerJob(env,workspaceId,user,body,trusted=null){
  const stored=await workspaceBuyerContext(env,workspaceId,trusted?.taskId),input=normalizeBuyerInput(body,stored.payload);

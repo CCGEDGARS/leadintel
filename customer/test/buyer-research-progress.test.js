@@ -93,3 +93,33 @@ test('official-source work never presents saved people as a completed later stag
  assert.equal(doc.querySelectorAll('li.done').length,0);
  assert.equal(doc.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'0');dom.window.close();
 });
+
+// 22 Nov 2026: one Buyers run spent about 2,700 Firecrawl credits and nothing on the page said so. The server now
+// counts what each run spends; the panel shows that number, says what part of it is a worst-case figure for
+// requests Firecrawl did not report, and says when a run has spent more than a company of this size usually needs.
+function progressPanel(credits){
+ const vm=require('node:vm'),ctx={Date,esc:value=>String(value??'')};vm.createContext(ctx);
+ vm.runInContext(ui.slice(ui.indexOf('function buyerResearchProgressHtml('),ui.indexOf('async function findExecutiveBuyer(')),ctx);
+ return ctx.buyerResearchProgressHtml({company:'Forge Industries',buyerResearchJob:{id:'job-1',status:'running'},buyerResearchProgress:{jobId:'job-1',phase:'contacts',label:'Checking contact evidence',step:4,total:5,executionStatus:'running',startedAt:new Date().toISOString(),timing:{},stages:{},completedChecks:3,...(credits===undefined?{}:{credits})}});
+}
+test('the research panel says what the run has spent at Firecrawl',()=>{
+ const html=progressPanel({used:111,reported:111,unreported:0,requests:40,unreportedRequests:0,expected:300,aboveExpected:false,total:111});
+ assert.match(html,/Firecrawl credits used by this research: <strong>111<\/strong>/);
+ assert.doesNotMatch(html,/did not report|usually needs/);
+});
+test('the panel says which part of the number is a worst case and when the run is above what its size usually needs',()=>{
+ const html=progressPanel({used:258,reported:240,unreported:18,requests:41,unreportedRequests:1,expected:200,aboveExpected:true,total:258});
+ assert.match(html,/Firecrawl credits used by this research: <strong>258<\/strong>/);
+ assert.match(html,/includes up to 18 for 1 request whose cost Firecrawl did not report/);
+ assert.match(html,/more than the 200 a company of this size usually needs/);
+ assert.match(progressPanel({used:60,reported:24,unreported:36,requests:9,unreportedRequests:2,expected:300,aboveExpected:false,total:60}),/includes up to 36 for 2 requests whose cost Firecrawl did not report/);
+});
+test('without a count from the server the panel shows no number at all',()=>{
+ for(const credits of [undefined,null,{},{used:'unknown'}])assert.doesNotMatch(progressPanel(credits),/Firecrawl credits used/);
+});
+test('after a resume the panel still shows everything the research has spent, beside the part since the resume',()=>{
+ const html=progressPanel({used:0,reported:0,unreported:0,requests:0,unreportedRequests:0,expected:1100,aboveExpected:false,total:2700,totalUnreported:140,totalUnreportedRequests:10});
+ assert.match(html,/Firecrawl credits used by this research: <strong>2700<\/strong> · 0 since it was last resumed/);
+ assert.match(html,/includes up to 140 for 10 requests whose cost Firecrawl did not report/);
+ assert.doesNotMatch(progressPanel({used:111,reported:111,unreported:0,requests:40,unreportedRequests:0,expected:300,aboveExpected:false,total:111,totalUnreported:0,totalUnreportedRequests:0}),/since it was last resumed/);
+});

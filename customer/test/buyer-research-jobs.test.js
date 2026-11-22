@@ -321,3 +321,12 @@ test('Resume leaves a replacement job and a different buyer committee untouched'
   assert.deepEqual(h.calls.map(call=>call.method),['GET']);
  }
 });
+test('the progress the page keeps carries the credit count the server sent, and none when it sent none',async()=>{
+ const owner=candidate(),credits={used:258,reported:240,unreported:18,requests:41,unreportedRequests:1,expected:200,aboveExpected:true,total:258};
+ const withCount=harness(()=>({...snapshot(owner,'needs_review',3),progress:{completed:1,total:1,label:'Public source checks',credits}}));
+ await withCount.client.restore(owner,{profile:{decisionMakers:'COO'}});
+ assert.deepEqual(owner.buyerResearchProgress.credits,credits);
+ const other=candidate(),without=harness(()=>snapshot(other,'needs_review',3));
+ await without.client.restore(other,{profile:{decisionMakers:'COO'}});
+ assert.equal(other.buyerResearchProgress.credits,null);
+});

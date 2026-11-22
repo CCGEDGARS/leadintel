@@ -275,7 +275,7 @@ async function extractionFallback(env,url,access,workspaceId,credential,status,s
   await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{operation_id:operationId,source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status,researchTrace}});
   return {...direct,researchTrace};
 }
-export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,totalTimeoutMs=25000,directTimeoutMs=10000,firecrawlTimeoutMs=20000,purpose='buyer_research'}={}){
+export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortController().signal,totalTimeoutMs=25000,directTimeoutMs=10000,firecrawlTimeoutMs=20000,purpose='buyer_research',meter}={}){
   if(!publicResearchUrl(url))throw Object.assign(new Error('A valid public research URL is required'),{status:400});
   const totalBudget=Math.max(100,Math.min(55000,Math.floor(Number(totalTimeoutMs)||25000))),deadline=Date.now()+totalBudget;
   const pageSignal=AbortSignal.any([signal,AbortSignal.timeout(totalBudget)]),remaining=()=>Math.max(0,deadline-Date.now());
@@ -299,7 +299,7 @@ export async function readPublicBuyerPage(env,workspaceId,url,{signal=new AbortC
   if(credential){
     check();budget=Math.max(1,Math.min(Number(firecrawlTimeoutMs)||20000,20000,remaining()-reserve));attempt=attemptSignal(budget);started=Date.now();
     try{
-      const response=await requestFirecrawl(env,workspaceId,'scrape',{credential,payload:{url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0},signal:attempt,purpose});
+      const response=await requestFirecrawl(env,workspaceId,'scrape',{credential,payload:{url,formats:['markdown','links'],onlyMainContent:false,waitFor:2000,maxAge:0},signal:attempt,purpose,meter});
       const payload=await response.json(),data=payload.data||payload;check();attempt.throwIfAborted();if(!response.ok)throw Object.assign(new Error('Extractor HTTP failure'),{httpStatus:response.status,failureKind:[401,403].includes(response.status)?'authentication':'http'});if(payload.success===false||!valid(data))throw blocked();
       researchTrace.push({provider:'firecrawl',operation:'extract',status:'succeeded',results:1});unused('scrapling');
       if(credential.source==='customer')await env.DB.prepare("UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'").bind(workspaceId).run();

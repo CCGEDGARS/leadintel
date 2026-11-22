@@ -2,7 +2,7 @@ import {requestFirecrawl} from './firecrawl-request.js';
 import {requireWorkspaceServiceCredential} from './service-integrations.js';
 import {searchWorkspaceWeb} from './ai-routes.js';
 // Public research only. This boundary never invokes paid contact reveal APIs.
-export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research'}={}){
+export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},observe=()=>{},credential=requireWorkspaceServiceCredential,grounded=searchWorkspaceWeb,fetchImpl=fetch,signal,scrapeResults=true,primaryTimeoutMs=25000,purpose='buyer_research',meter}={}){
  let unavailable=false,connection;
  const rowsWithSource=(rows,provider)=>{const values=rows.map(row=>({...row,buyerSource:provider,searchProvider:provider}));Object.defineProperty(values,'searchProviders',{value:[provider]});return values;};
  return async function search(query,{limit=8,diversify=false,signal:requestSignal}={}){
@@ -13,7 +13,7 @@ export function createBuyerSourceSearch(env,workspaceId,{guard=async()=>{},obser
    await check();
    if(connection)try{
     const timeout=Math.min(diversify?12000:25000,Math.max(1000,primaryTimeoutMs));
-    const response=await requestFirecrawl(env,workspaceId,'search',{credential:connection,payload:{query,limit,...(scrapeResults?{scrapeOptions:{formats:['markdown']}}:{})},signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout),fetchImpl,purpose});
+    const response=await requestFirecrawl(env,workspaceId,'search',{credential:connection,payload:{query,limit,...(scrapeResults?{scrapeOptions:{formats:['markdown']}}:{})},signal:querySignal?AbortSignal.any([querySignal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout),fetchImpl,purpose,meter});
     await check();
     if(!response.ok){if([401,402,403,409,429].includes(response.status))unavailable=true;throw Error(`Public search HTTP ${response.status}`);}
     const payload=await response.json(),rows=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web;
