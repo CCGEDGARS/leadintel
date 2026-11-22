@@ -151,6 +151,8 @@ export async function publicBuyerJob(env,row,{recoverRetained=false}={}){
  if(!row)return null;const input=parse(row.input_json);let candidate=parse(row.result_json,input.candidate||{});
  if(recoverRetained)candidate=await retainedJobCandidate(env,row,input,candidate);
  candidate=D.reconcileBuyerEvidence(candidate,{trustedAgentSources:true});
+ // A person saved before f5036bf8 with the description of a publication as the job title is not handed out.
+ if(Array.isArray(candidate.people))candidate.people=candidate.people.filter(person=>!D.publicationRole(person?.title));
  const totals=await stmt(env,"SELECT status,count(*) n,MAX(updated_at) last_activity_at FROM buyer_research_tasks WHERE job_id=? GROUP BY status",row.id).all();
  const activeTask=input.recheck&&row.status==='running'?await stmt(env,"SELECT kind,request_value FROM buyer_research_tasks WHERE job_id=? AND status='running' ORDER BY updated_at DESC LIMIT 1",row.id).first():null;
  const activity=activeTask?.kind==='read'?'Reading public contact evidence':activeTask?.kind==='independent'?'Cross-checking contact evidence':activeTask?.kind==='search'?(/gmail|googlemail/i.test(activeTask.request_value)?'Searching public Gmail business-contact listings':/linkedin/i.test(activeTask.request_value)?'Checking LinkedIn identity':'Searching public contact sources'):'';

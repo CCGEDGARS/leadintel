@@ -177,7 +177,7 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
         if(previous.length===1)person.buyerQualification=LeadIntelDiscovery.retainedBuyerQualification({...person,buyerQualification:previous[0].buyerQualification},profile,candidate);
       }
       const visible=LeadIntelDiscovery.retainBuyerIdentities(saved,profile,candidate),ids=new Set(visible.map(person=>String(person.id)));
-      candidate.people=[...visible,...(candidate.people||[]).filter(person=>!ids.has(String(person.id))&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending')].slice(0,10);
+      candidate.people=[...visible,...(candidate.people||[]).filter(person=>!ids.has(String(person.id))&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending'&&!LeadIntelDiscovery.publicationRole(person.title))].slice(0,10);
       LeadIntelDiscovery.restoreBuyerResearchReceipts(candidate,retainedReceipts);
     }return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
 function registerCompanySaveRetry(taskId,run){

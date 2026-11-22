@@ -15,3 +15,17 @@ test('actual UI reload and channel rendering retain all four researched people t
   }
  }finally{r.close();}
 });
+// 22 Nov live: after the engine stopped keeping a saved person whose job title is the description of a
+// publication, the Buyers step still showed that person. The reload put back every saved person the rebuilt
+// roster had left out, as long as the name was a full name.
+test('a reload does not put back a saved person whose job title is the description of a publication',()=>{
+ const r=runtime();try{
+  r.c.LeadIntelDiscovery=D;
+  const people=[{...r.person,id:'local-0',name:'Anna Buyer',publicName:'Anna Buyer',title:'LinkedIn post about production leadership'},{...r.person,id:'local-1',name:'Bob Buyer',publicName:'Bob Buyer',title:'Procurement Director'},{...r.person,id:'local-2',name:'Cara Buyer',publicName:'Cara Buyer',title:'Public LinkedIn profile describes her as team lead for operational purchasing'}];
+  const candidate={...r.candidate,people};receipts(candidate);
+  candidate.buyerDiscovery={pool:people.map(person=>({...person})),companyContacts:[]};
+  r.storage.set(r.eval('DISCOVERY_STORAGE_KEY'),JSON.stringify({selectedProspects:[candidate]}));
+  const loaded=r.c.loadDiscovery().selectedProspects[0];
+  assert.deepEqual(Array.from(loaded.people,person=>person.title),['Procurement Director']);
+ }finally{r.close();}
+});
