@@ -18,7 +18,9 @@ export async function fetchWithScrapling(env={},targetUrl,{signal,timeoutMs=3500
   const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(budget)]):AbortSignal.timeout(budget);
   let response,payload;
   try{
-    response=await fetch(serviceUrl.href,{method:'POST',headers,redirect:'error',body:JSON.stringify({url:target.href,timeout_ms:budget}),signal:requestSignal});
+    // Workers reject redirect:'error' before sending anything. 'manual' hands back a redirect answer unfollowed,
+    // and it is refused below like any other answer that is not a success.
+    response=await fetch(serviceUrl.href,{method:'POST',headers,redirect:'manual',body:JSON.stringify({url:target.href,timeout_ms:budget}),signal:requestSignal});
     payload=await response.json().catch(()=>null);
     requestSignal.throwIfAborted();
   }catch{

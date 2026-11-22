@@ -43,5 +43,5 @@ test('Scrapling authentication failure retains safe category and HTTP status wit
 test('Scrapling adapter bounds service extraction to its caller budget and refuses endpoint redirects',async()=>{
  const old=globalThis.fetch;let request;
  globalThis.fetch=async(url,options)=>{request=options;return extracted();};
- try{await fetchWithScrapling({SCRAPLING_SERVICE_URL:'https://scrapling.example/api/scrapling'},'https://company.example/team',{timeoutMs:1200});assert.equal(JSON.parse(request.body).timeout_ms,1200);assert.equal(request.redirect,'error');}finally{globalThis.fetch=old;}
+ try{await fetchWithScrapling({SCRAPLING_SERVICE_URL:'https://scrapling.example/api/scrapling'},'https://company.example/team',{timeoutMs:1200});assert.equal(JSON.parse(request.body).timeout_ms,1200);assert.equal(request.redirect,'manual','Workers reject redirect:\'error\'; a redirect answer is refused by its status (workers-fetch-redirect.test.mjs)');}finally{globalThis.fetch=old;}
 });

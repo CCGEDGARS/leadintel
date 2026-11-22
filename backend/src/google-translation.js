@@ -29,7 +29,7 @@ async function bounded(operation,parent,timeoutMs){
 async function requestGoogle(apiKey,q,target,{fetchImpl=fetch,signal,timeoutMs=15000}={}){
  if(typeof apiKey!=='string'||!apiKey.trim())throw failure('Connect Google Cloud Translation for this workspace first',409);
  return bounded(async boundedSignal=>{
-  let response;try{response=await fetchImpl(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8','x-goog-api-key':apiKey},body:JSON.stringify({q,source:'en',target,format:'text',model:'nmt'}),signal:boundedSignal,redirect:'error'});}catch{throw failure('Google Cloud Translation could not be reached. Retry your translation.');}
+  let response;try{response=await fetchImpl(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8','x-goog-api-key':apiKey},body:JSON.stringify({q,source:'en',target,format:'text',model:'nmt'}),signal:boundedSignal,redirect:'manual'});}catch{throw failure('Google Cloud Translation could not be reached. Retry your translation.');}
   if(!response.ok)throw failure(response.status===429?'Google Cloud Translation quota is unavailable. Check your connection.':'Google Cloud Translation rejected the request. Check your connection.');
   let payload;try{const text=await response.text();if(text.length>200000)throw Error();payload=JSON.parse(text);}catch{throw failure('Google Cloud Translation returned an invalid response');}
   const rows=payload?.data?.translations;if(!Array.isArray(rows)||rows.length!==q.length||rows.some(row=>!row||typeof row.translatedText!=='string'||!row.translatedText.trim()||row.translatedText.length>80000||row.model&&row.model!=='nmt'))throw failure('Google Cloud Translation returned an incomplete response');
