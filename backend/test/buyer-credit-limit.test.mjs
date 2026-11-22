@@ -291,3 +291,17 @@ test('the view calls a run "above expected" by the same count that pauses it, no
   assert.equal(credits.used,290,'The page still shows the worst case');assert.equal(credits.expected,200);
   assert.equal(credits.aboveExpected,false,'119 counted toward a limit of 200');
 });
+
+// 22 Nov live (Midtjydsk Beton, limit lowered to 30): a run window counted 30 credits where Firecrawl billed 93.
+// Seventeen page reads had been interrupted and counted at one credit each; six of them were PDF files of the
+// company's site, which are billed per page up to the page limit.
+test('an interrupted read of a PDF address counts toward the limit at its page limit, any other page at one credit',async t=>{
+  const {f}=await job(t),charges=[],meter={charge:async value=>{charges.push(value);}};
+  const interrupted=url=>assert.rejects(requestFirecrawl(f.env,workspaceId,'scrape',{credential,payload:{url},meter,fetchImpl:async()=>{throw Error('connection reset');}}),/connection reset/);
+  await interrupted('https://company.example/wp-content/uploads/2025/04/EPD_901412-beton.pdf');
+  await interrupted('https://company.example/files/Leverand%C3%B8rvejledning.PDF?download=1');
+  await interrupted('https://company.example/docs/guide.pdf#page=2');
+  await interrupted('https://company.example/om-os');
+  await interrupted('https://company.example/pdf-guides/');
+  assert.deepEqual(charges.map(charge=>[charge.worstCase,charge.estimate]),[[10,10],[10,10],[10,10],[10,1],[10,1]]);
+});

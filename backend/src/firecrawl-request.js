@@ -49,6 +49,10 @@ export function firecrawlRequestCeiling(kind,payload={}){
   const limit=Math.max(1,Math.min(100,Math.floor(Number(payload.limit)||4)));
   return 2*Math.ceil(limit/10)+(payload.scrapeOptions?limit*Math.max(1,pdfPageLimit(payload.scrapeOptions.parsers)??FIRECRAWL_PDF_PAGES.searchResult):0);
 }
+// What a request with no reported cost counts toward a job's credit limit: the ordinary price of its kind, and for
+// the read of a PDF address its page limit, because Firecrawl bills a PDF per page (22 Nov 2026, live: six
+// interrupted PDF reads of one company site cost about ten credits each).
+const unreportedRequestEstimate=(kind,payload)=>kind==='scrape'&&/\.pdf(?:$|[?#])/i.test(String(payload?.url||''))?firecrawlRequestCeiling(kind,payload):firecrawlRequestEstimate(kind,payload);
 // The only metered Firecrawl transport. No automatic provider retries or inferred charges.
 // `meter` (optional) is told what each sent request cost: the reported credits, or none with the request's worst
 // case when a request succeeded or was given up on without a reported cost. Firecrawl bills a returned document,
@@ -59,7 +63,7 @@ export async function requestFirecrawl(env,workspaceId,kind,{credential,payload:
   const requestSignal=signal||AbortSignal.timeout(45000);requestSignal.throwIfAborted();
   // A job whose run window has reached its credit limit sends nothing more (throws with code CREDIT_LIMIT).
   meter?.admit?.();
-  const charge=async reported=>{if(!meter)return;try{await meter.charge({reported,worstCase:firecrawlRequestCeiling(kind,payload),estimate:firecrawlRequestEstimate(kind,payload)});}catch{ /* Counting never changes what the request returns. */ }};
+  const charge=async reported=>{if(!meter)return;try{await meter.charge({reported,worstCase:firecrawlRequestCeiling(kind,payload),estimate:unreportedRequestEstimate(kind,payload)});}catch{ /* Counting never changes what the request returns. */ }};
   const started=Date.now(),id=crypto.randomUUID(),at=new Date(started).toISOString();
   const fingerprint=await sha256(JSON.stringify([workspaceId,kind,ordered(payload)]));
   const base={version:1,id,at,kind,purpose:FIRECRAWL_PURPOSES.includes(purpose)?purpose:'interactive_research',fingerprint,requestedResults:kind==='search'?Math.max(1,Math.min(100,Math.floor(Number(payload.limit)||4))):null,scrapeResults:kind==='search'&&Boolean(payload.scrapeOptions),estimateBasis:'standard-search-and-scrape-20261023; estimate only, not a provider invoice'};
