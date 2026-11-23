@@ -185,7 +185,7 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
   // no other lane holds through the same steps as the one-lane loop below; one lane at a time searches or plans when
   // nothing is left to claim. Model answers are streamed, which frees the Worker's connection slot after about a second.
   const runLanes=async count=>{
-   const busy=new Set(),cooled=new Set();packing=true;let stop=null,feeding=null,readStreak=0,waiters=[];
+   const busy=new Set(),cooled=new Set(),feeders=new Set(),FEEDERS=3;packing=true;let stop=null,drained=null,feedDown=null,readStreak=0,waiters=[];
    const wake=()=>{const all=waiters;waiters=[];for(const resolve of all)resolve();};
    const halt=reason=>{stop||=reason;wake();};
    const claim=()=>{for(const task of s.pending){if(held.has(task)||cooled.has(task))continue;const site=M.domain(task.url);if(busy.has(site))continue;held.add(task);busy.add(site);return task;}return null;};
@@ -195,16 +195,17 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     if(s.operations>=s.allowance)throw error('Research allowance reached.','allowance',409);
     const r={id:++s.operations,operation:kind,target:clean(target,500),status:'started',at:new Date().toISOString()};
     s.operationTotals.started++;s.receipts.push(r);s.receipts=s.receipts.slice(-250);(s.flying||=[]).push(r.id);lane.last=r;
-    const events=lane.events=[],family=kind==='page_read'?'page_read:':'model:';
+    // `answer`: a model answer about a page. A register check or a search plan says nothing about those.
+    const events=lane.events=[],family=kind==='page_read'?'page_read:':kind==='search'?'search:':target==='search plan'?'plan:':'model:',answer=family==='model:'&&kind!=='register_check';
     await checkpoint();
     // `short`: the slice was ending and this operation got less than its full time.
     const budget=Math.max(1,Math.min(25000,windowMs-(clock()-start)-2000)),timeout=AbortSignal.timeout(budget),signal=AbortSignal.any([controller.signal,timeout]);lane.short=budget<20000;
     let abort;const canceled=new Promise((_,reject)=>{abort=()=>reject(error('Research operation timed out.','timeout',504));signal.addEventListener('abort',abort,{once:true});});
     try{
      const result=await Promise.race([Promise.resolve().then(()=>fn(signal,r,events)),canceled]);await guard();
-     r.status='complete';s.operationTotals.complete++;if(kind==='page_read')readStreak=0;else if(kind!=='register_check'){s.modelStreak=0;s.modelDone=(s.modelDone||0)+1;}   // a register check says nothing about the model
+     r.status='complete';s.operationTotals.complete++;if(kind==='page_read')readStreak=0;else if(kind==='search'){s.searchStreak=0;s.searchDone=(s.searchDone||0)+1;}else if(answer){s.modelStreak=0;s.modelDone=(s.modelDone||0)+1;}
      // A success ends the retry count of its own kind only: a page that reads well says nothing about the model.
-     if(!s.retryKey||s.retryKey.startsWith(family)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
+     if(!s.retryKey||s.retryKey.startsWith(family)&&(family!=='model:'||answer)){s.failures=0;s.retryKey='';s.nextAttemptAt=0;s.failureCode='';}
      return result;
     }catch(e){r.status='failed';if(e.code)r.failure=clean(e.code,40);if(e.detail)r.detail=clean(e.detail,80);s.operationTotals.failed++;for(const trace of e.researchTrace||[])events.push(safeEvent(trace));try{e.operationFailure=true;}catch{}throw e;}
     finally{signal.removeEventListener('abort',abort);if(events.length)r.providers=events.slice(0,10);s.flying=(s.flying||[]).filter(id=>id!==r.id);}
@@ -287,42 +288,84 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     }else{halt({issue,key:family+issue.code});return;}
     await checkpoint().catch(cause=>halt({fatal:cause}));
    };
-   const feed=async()=>{
-    if(stop)return;
-    if(s.queryIndex<s.queries.length){
-     const q=s.queries[s.queryIndex],rows=await operation('search',q,async signal=>{const found=await search(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;});
+   // Feeding the lanes. Searches and the next search plan run while the lanes are still at work: up to three searches at
+   // once as soon as few unclaimed pages are left, and a new plan as soon as the queries are used up. In the first live
+   // run with lanes (23 Nov 2026) seven lanes stood still for two minutes while the eighth finished one company, because
+   // the plan waited for every lane, and one search that timed out put the whole list to sleep for thirty seconds.
+   const unclaimed=()=>{let free=0;for(const task of s.pending)if(!held.has(task)&&!cooled.has(task))free++;return free;};
+   const feedFailed=(lane,e,again)=>{
+    if(broken){halt({fatal:broken});return;}
+    if(e.code==='slice_finished'||controller.signal.aborted){again();return;}
+    if(e.code==='authority'||/WORKSPACE_STORAGE_FULL/.test(String(e.message))){halt({fatal:e});return;}
+    if(e.code==='allowance'){again();halt({allowance:true});return;}
+    if(!e.operationFailure){halt({fatal:e});return;}
+    if(e.code==='timeout'&&lane.short){again();return;}
+    const issue=failure(e,lane.events,lane.last?.operation),search=lane.last?.operation==='search';
+    again();
+    // Feeding that does not work stops new feeding for this slice, not the lanes: they first finish the pages already
+    // found, and when nothing is left the list waits or ends as before (`feedDown`). One search that fails is tried again
+    // later; three in a row with no search success between them, counted across slices, are the search service's. A plan
+    // that fails is not asked again in this slice. Missing credits, a lost connection and a rate limit stop every lane.
+    if(issue.retry&&issue.code!=='rate_limit'){
+     if(!search)feedDown||={issue,key:'plan:'+issue.code};
+     else{s.searchStreak=(s.searchStreak||0)+1;if(s.searchStreak>=3)feedDown||={issue,key:'search:'+issue.code};}
+    }else halt({issue,key:(search?'search:':'plan:')+issue.code});
+   };
+   const feedSearch=async()=>{
+    const index=s.queryIndex++,q=s.queries[index],me={last:null,events:[]};
+    try{
+     const rows=await laneOperation(me,'search',q,async(signal,receipt,events)=>{
+      const run=services.search||createBuyerSourceSearch(env,row.workspace_id,{purpose:'company_list',guard,observe:r=>events.push(safeEvent(r)),scrapeResults:false,primaryTimeoutMs:12000});
+      const found=await run(q,{limit:10,signal}),rows=Array.isArray(found)?found:found?.results;if(!Array.isArray(rows))throw error('Search response needs retry.','invalid_response');return rows;
+     });
      for(const hit of rows.slice(0,10)){const url=M.url(hit.url);if(url&&!s.seen.includes(url)&&s.seen.length<4000&&!s.results.some(r=>r.domain===M.domain(url))){s.seen.push(url);s.pending.push({url});}}
-     s.queryIndex++;s.phase='researching';await checkpoint();return;
+     s.phase='researching';await checkpoint();
+    }catch(e){
+     // The query is added to the end of the queries for a later try; the planned queries stay where they are (other
+     // searches in flight know their places). It is held against the query only when another search has succeeded since
+     // its last failure (the service works, this query does not): twice, and it is not tried again.
+     feedFailed(me,e,()=>{
+      const misses=s.searchMisses||={},miss=misses[q]||{n:0},done=s.searchDone||0;
+      if(e.operationFailure&&!(e.code==='timeout'&&me.short)&&(miss.at===undefined||done>miss.at)){miss.n++;miss.at=done;misses[q]=miss;}
+      if(miss.n<2&&s.queries.indexOf(q,s.queryIndex)<0)s.queries.push(q);   // not when it already waits further on
+     });
+     await checkpoint().catch(cause=>halt({fatal:cause}));
     }
+   };
+   const feedPlan=async()=>{
+    const me={last:null,events:[]};
     if(s.roundStart){s.noProgressRounds=(s.seen.length===s.roundStart.seen&&s.results.length===s.roundStart.matches)?(s.noProgressRounds||0)+1:0;s.roundStart=null;}
     const maxRounds=Math.max(10,Math.ceil(criteria.count/5));
-    if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){halt({end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'});return;}
-    const plan=await generate({stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)});
-    const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
-    s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);
-    if(!queries.length){halt({end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'No further useful queries. Completed matches are retained; review the criteria.'});return;}
-    s.phase='researching';s.reason='Researching your selected profiles and buying signals';await checkpoint();
+    if(s.round>=maxRounds||s.noProgressRounds>=3||s.seen.length>=4000){drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'The bounded search plan finished below target. Saved matches passed their checks; no weaker matches were added to fill the list.'};return;}
+    try{
+     const prompt={stage:'plan',criteria:modelCriteria(criteria),previousQueries:s.queries,alreadyMatched:s.results.map(r=>r.company),gaps:s.reviews.slice(-12),round:s.round,instructions:profilePlanning+targetPlanning(criteria)};
+     const plan=await laneOperation(me,'analysis','search plan',(signal,receipt)=>ask(prompt,signal,receipt,true));
+     const queries=[...new Set((Array.isArray(plan.queries)?plan.queries:[]).map(q=>clean(q,350)).filter(q=>q&&!s.queries.some(old=>old.toLowerCase()===q.toLowerCase())))].slice(0,8);
+     s.round++;s.roundStart={seen:s.seen.length,matches:s.results.length};s.queries.push(...queries);
+     if(!queries.length)drained={end:'incomplete',code:'search_exhausted',phase:'exhausted',reason:'No further useful queries. Completed matches are retained; review the criteria.'};
+     else{s.phase='researching';s.reason='Researching your selected profiles and buying signals';}
+     await checkpoint();
+    }catch(e){feedFailed(me,e,()=>{});await checkpoint().catch(cause=>halt({fatal:cause}));}
    };
-   const settleFeed=e=>{
-    if(e.code==='slice_finished'||controller.signal.aborted)return;
-    if(e.code==='authority'||/WORKSPACE_STORAGE_FULL/.test(String(e.message))){halt({fatal:e});return;}
-    if(e.code==='allowance'){halt({allowance:true});return;}
-    halt({issue:failure(e,operationEvents,lastOperation?.operation),key:[lastOperation?.operation,lastOperation?.target].join(':')});
+   const refill=()=>{
+    if(stop||drained||feedDown)return;
+    const start=work=>{const run=work().catch(cause=>halt({fatal:cause})).finally(()=>{feeders.delete(run);wake();});feeders.add(run);};
+    while(feeders.size<FEEDERS&&s.queryIndex<s.queries.length&&unclaimed()+feeders.size*5<count*2)start(feedSearch);
+    if(!feeders.size&&s.queryIndex>=s.queries.length&&unclaimed()<count)start(feedPlan);
    };
    const lane=async index=>{
     const me={index,last:null,events:[]};
     while(!stop&&!controller.signal.aborted&&clock()-start<windowMs-10000){
      if(s.results.length>=criteria.count){halt({done:true});break;}
      if(s.operations>=s.allowance){halt({allowance:true});break;}
+     refill();
      const task=claim();
      if(!task){
-      if(feeding){await feeding;continue;}
-      // Nothing to claim and nothing to search for: the lanes still at work may add follow-up pages.
-      if(s.queryIndex>=s.queries.length&&held.size){await new Promise(resolve=>waiters.push(resolve));continue;}
-      // Only pages that could not be read in this slice are left: they are for the next slice, not a reason to plan new searches.
-      if(s.queryIndex>=s.queries.length&&s.pending.some(page=>cooled.has(page))){halt({rest:true});break;}
-      feeding=feed().catch(settleFeed).finally(()=>{feeding=null;wake();});
-      await feeding;continue;
+      // Nothing to claim. While another lane or a search is at work, wait for it; otherwise the slice is over.
+      if(held.size||feeders.size){await new Promise(resolve=>waiters.push(resolve));continue;}
+      // Only pages that could not be read in this slice are left: they are for the next slice.
+      if(s.pending.some(page=>cooled.has(page))){halt({rest:true});break;}
+      halt(feedDown||drained||{rest:true});break;
      }
      try{await step(me,task);}
      catch(e){await settle(me,task,e);}
@@ -330,12 +373,14 @@ export async function runCompanyListJobs(env,{jobId,now=Date.now(),windowMs=4500
     }
    };
    await Promise.all(Array.from({length:count},(_,index)=>lane(index).catch(cause=>halt({fatal:cause}))));
+   // A search or plan still in flight ends with the slice's time; its query goes back, its result is stored.
+   await Promise.all([...feeders]);
    await writes;
    if(broken)throw broken;
    if(stop?.fatal)throw stop.fatal;
    if(s.results.length>=criteria.count){s.reason='Requested number of matching companies reached';s.phase='done';s.failureCode='';await checkpoint('complete');return [row.id];}
    if(stop?.allowance||s.operations>=s.allowance){await allowance();return [row.id];}
-   if(stop?.end){s.failureCode=stop.code;s.phase=stop.phase;s.reason=stop.reason;await checkpoint(stop.end);return [row.id];}
+   if(stop?.end){s.failureCode=stop.code;s.phase=stop.phase;s.reason=stop.reason;s.nextAttemptAt=0;await checkpoint(stop.end);return [row.id];}
    if(stop?.issue){
     const issue=stop.issue;s.failures=s.retryKey===stop.key?(s.failures||0)+1:1;s.retryKey=stop.key;s.failureCode=issue.code;
     if(issue.retry&&s.failures<3){s.nextAttemptAt=now+(s.failures===1?30000:120000);s.phase='retrying';s.reason=issue.reason+' Retrying automatically ('+s.failures+'/2); no extra allowance is granted.';await checkpoint('queued');}

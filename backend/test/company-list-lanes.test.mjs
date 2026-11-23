@@ -286,3 +286,127 @@ test('a register check is not counted as a model answer, and Resume clears the c
  assert.equal(resumed.status,200,await resumed.clone().text());
  assert.equal(stateOf(g,broken.id).modelStreak,0);
 });
+
+// Feeding the lanes. In the first live run with lanes (23 Nov 2026) seven lanes stood still for two minutes while the
+// eighth finished one company: the next search plan waited until no lane held a page, searches ran one at a time,
+// and one search that timed out put the whole list to sleep for thirty seconds.
+const pagesOf=query=>({first:[0,1],second:[2,3,4],third:[5,6,7],fourth:[8,9]})[query].map(i=>({url:`https://factory${i}.example/`}));
+
+test('the next plan and several searches run while a lane is still busy with a slow page',async t=>{
+ const f=await setup(t,4),base=profileServices({count:10}),log=[];let searching=0,most=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  // The first search fills every lane, so no plan is due before the lanes have taken their pages.
+  search:async q=>{searching++;most=Math.max(most,searching);log.push('search '+q+' starts');await pause(40);searching--;return ({first:[0,1,2,3],second:[4,5],third:[6,7],fourth:[8,9]})[q].map(i=>({url:`https://factory${i}.example/`}));},
+  read:async url=>{if(host(url)==='factory0.example'){await pause(400);log.push('slow page read');}else await pause(5);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan'){log.push('plan '+p.round);return {queries:p.round===0?['first']:p.round===1?['second','third','fourth']:[]};}await pause(5);return base.generate(p);}};
+ const list=await startBare(f,{count:10});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const state=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,10);
+ assert.ok(log.indexOf('plan 1')<log.indexOf('slow page read'),'the second plan was asked before the slow page was read: '+log.join(' | '));
+ assert.ok(log.indexOf('search second starts')<log.indexOf('slow page read'),'and its searches started');
+ assert.ok(most>=2&&most<=3,'searches at once: '+most);
+});
+
+test('a search that fails once does not put the list to sleep: the lanes go on and the query is tried again',async t=>{
+ const f=await setup(t,4),base=profileServices({count:10});let failures=0;const asked=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{asked.push(q);await pause(10);if(q==='second'&&!failures){failures++;throw new Error('Search request failed (503)');}return pagesOf(q);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round===0?['first','second','third']:[]};await pause(5);return base.generate(p);}};
+ const list=await startBare(f,{count:8});
+ await runCompanyListJobs(f.env,{jobId:list.id,windowMs:45000});
+ const state=stateOf(f,list.id);
+ assert.equal(statusOf(f,list.id),'complete','finished in one slice');
+ assert.ok(!state.nextAttemptAt);
+ assert.equal(asked.filter(q=>q==='second').length,2,'the failed query was asked again');
+ assert.deepEqual(state.results.map(r=>r.company).sort(),['Factory0','Factory1','Factory2','Factory3','Factory4','Factory5','Factory6','Factory7']);
+ assert.equal(state.receipts.filter(r=>r.operation==='search'&&r.status==='failed').length,1,'the failed search is on the record');
+});
+
+test('a search that fails twice is left out and the list goes on with the other queries',async t=>{
+ const f=await setup(t,4),base=profileServices({count:10});const asked=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{asked.push(q);await pause(10);if(q==='second')throw new Error('Search request failed (503)');return pagesOf(q);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round===0?['first','second','third','fourth']:[]};await pause(5);return base.generate(p);}};
+ const list=await startBare(f,{count:10});
+ for(let i=0;i<4&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id);
+ assert.equal(asked.filter(q=>q==='second').length,2);
+ assert.deepEqual(state.results.map(r=>r.company).sort(),['Factory0','Factory1','Factory5','Factory6','Factory7','Factory8','Factory9']);
+ assert.equal(statusOf(f,list.id),'incomplete');assert.equal(state.failureCode,'search_exhausted');
+});
+
+test('when no search works the lanes stop and the list retries later, three times, then ends as a provider failure',async t=>{
+ const f=await setup(t,4),base=profileServices({count:6});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{await pause(5);throw new Error('Search request failed (503)');},
+  generate:async p=>p.stage==='plan'?{queries:p.round===0?['first','second','third','fourth']:[]}:base.generate(p)};
+ const list=await startBare(f,{count:6}),trail=[];
+ for(let i=0;i<8&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});const state=stateOf(f,list.id);trail.push(statusOf(f,list.id)+' '+(state.nextAttemptAt?'waits':'')+' '+(state.failureCode||''));}
+ const state=stateOf(f,list.id);
+ assert.deepEqual(trail,['queued waits provider_temporary','queued waits provider_temporary','incomplete  provider_temporary']);
+ assert.match(state.reason,/Automatic retries stopped after three attempts/);
+ assert.ok(state.operations<=14,'operations: '+state.operations);
+ assert.ok(state.queries.length<=13,'at most three retried queries are added per slice (four planned, three slices): '+state.queries.length);
+});
+
+// Found by the fourth review of the feeding (23 Nov 2026), each with a proving test.
+test('two searches that fail while others are in flight lose no query and repeat none that succeeded',async t=>{
+ const f=await setup(t,8),base=profileServices({count:1}),calls=new Map(),ok=[];const number=q=>Number(q.slice(1));
+ const down=()=>Object.assign(new Error('Search request failed (503)'),{status:503});
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{const n=(calls.get(q)||0)+1;calls.set(q,n);
+   if(q==='q0'&&n===1){await pause(5);throw down();}
+   if(q==='q1'&&n===1){await pause(15);throw down();}
+   await pause(30);ok.push(q);return Array.from({length:2},(_,k)=>({url:`https://factory${number(q)*10+k}.example/`}));},
+  read:async url=>{await pause(40);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?[]:['q0','q1','q2','q3','q4','q5']};await pause(40);return base.generate(p);}};
+ const list=await startBare(f,{count:30,budget:300});
+ for(let i=0;i<6&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id);
+ assert.deepEqual(state.queries.slice(0,6),['q0','q1','q2','q3','q4','q5'],'the planned queries stay where they were');
+ assert.deepEqual([...ok].sort(),['q0','q1','q2','q3','q4','q5'],'every query was searched successfully exactly once');
+ assert.equal(calls.get('q0'),2);assert.equal(calls.get('q1'),2);
+ assert.equal(state.results.length,12);
+});
+
+test('when searching stops working, the lanes first finish the pages already found, and only then the list waits',async t=>{
+ const f=await setup(t,4),base=profileServices({count:1});let searches=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>{if(searches++){await pause(3);throw Object.assign(new Error('Search request failed (503)'),{status:503});}return Array.from({length:6},(_,k)=>({url:`https://factory${k}.example/`}));},
+  read:async url=>{await pause(10);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan')return {queries:p.round?['r'+p.round+'a','r'+p.round+'b']:['q0','q1','q2','q3']};await pause(10);return base.generate(p);}};
+ const list=await startBare(f,{count:20,budget:300}),trail=[];
+ for(let i=0;i<8&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});const state=stateOf(f,list.id);trail.push(statusOf(f,list.id)+' kept='+state.results.length+' pending='+state.pending.length+' '+(state.failureCode||''));}
+ const state=stateOf(f,list.id);
+ assert.equal(trail[0],'queued kept=6 pending=0 provider_temporary','the first slice finishes all six pages before it waits: '+trail.join(' | '));
+ assert.equal(statusOf(f,list.id),'incomplete');
+ assert.equal(state.results.length,6);assert.equal(state.pending.length,0);
+ assert.match(state.reason,/Automatic retries stopped after three attempts/);
+});
+
+test('a search plan that is refused is asked at most three times, however long the lanes work',async t=>{
+ const f=await setup(t,4),base=profileServices({count:1});let plans=0;
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async()=>Array.from({length:10},(_,k)=>({url:`https://factory${k}.example/`})),
+  read:async url=>{await pause(30);return base.read(url);},
+  generate:async p=>{if(p.stage==='plan'){plans++;await pause(5);return p.round?['a list is not an answer']:{queries:['q0']};}await pause(30);return base.generate(p);}};
+ const list=await startBare(f,{count:20,budget:300});
+ for(let i=0;i<8&&active(f,list.id);i++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id);
+ assert.equal(state.results.length,10,'the pages found were all finished');
+ assert.ok(plans-1<=3,'the refused plan was asked '+(plans-1)+' times');
+ assert.equal(statusOf(f,list.id),'incomplete');
+});
+
+test('after a search outage of two slices the queries are still there: every planned query is searched and its pages kept',async t=>{
+ const f=await setup(t,4),base=profileServices({count:10});let slice=0;const ok=[];
+ f.env.COMPANY_LIST_TEST_SERVICES={...base,
+  search:async q=>{await pause(5);if(slice<2)throw new Error('Search request failed (503)');ok.push(q);return pagesOf(q);},
+  generate:async p=>p.stage==='plan'?{queries:p.round===0?['first','second','third','fourth']:[]}:base.generate(p)};
+ const list=await startBare(f,{count:10});
+ for(;slice<8&&active(f,list.id);slice++){const before=stateOf(f,list.id);await runCompanyListJobs(f.env,{jobId:list.id,now:Math.max(Date.now(),(before.nextAttemptAt||0)+1),windowMs:45000});}
+ const state=stateOf(f,list.id);
+ assert.deepEqual([...new Set(ok)].sort(),['first','fourth','second','third']);
+ assert.equal(statusOf(f,list.id),'complete');assert.equal(state.results.length,10);
+});
