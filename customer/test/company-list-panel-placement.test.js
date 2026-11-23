@@ -46,3 +46,23 @@ test('without the Company search card the panel still mounts next to its context
  assert.ok(panel);
  assert.equal(panel.nextElementSibling.id,'event-discovery-panel');
 });
+
+// Found live on 23 Nov 2026: after one visit to Buyers the panel was gone from the Companies stage until the page
+// was reloaded. A listener hid the panel itself on the Buyers stage, and going back by the sidebar announced nothing
+// that would show it again. Inside the search card the panel needs no hiding of its own: the page hides the card.
+test('a visit to Buyers does not hide the panel inside the search card; going back needs no announcement',t=>{
+ const document=mount(t,step),window=document.defaultView,panel=document.getElementById('company-list-panel');
+ window.dispatchEvent(new window.CustomEvent('leadintel:journey-focus-changed',{detail:{focus:'buyers'}}));
+ assert.equal(panel.hidden,false,'the panel leaves the hiding to its card');
+ panel.hidden=true;   // a panel hidden by an earlier release of the page
+ window.dispatchEvent(new window.CustomEvent('leadintel:journey-focus-changed',{detail:{focus:'buyers'}}));
+ assert.equal(panel.hidden,false);
+});
+
+test('a panel mounted outside a search card is still hidden on Buyers and shown again on Companies',t=>{
+ const document=mount(t,'<main id="step-5"><div id="company-search-context"></div><details id="event-discovery-panel"></details></main>'),window=document.defaultView,panel=document.getElementById('company-list-panel');
+ window.dispatchEvent(new window.CustomEvent('leadintel:journey-focus-changed',{detail:{focus:'buyers'}}));
+ assert.equal(panel.hidden,true);
+ window.dispatchEvent(new window.CustomEvent('leadintel:journey-focus-changed',{detail:{focus:'companies'}}));
+ assert.equal(panel.hidden,false);
+});

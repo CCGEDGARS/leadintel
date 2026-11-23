@@ -316,7 +316,9 @@
    current=result.list;render();
   },command==='review'||command==='start',({new:'Loading the list criteria…',lists:'Loading your company lists…',open:'Opening the list…'})[command]||'');
  }
- root.addEventListener('leadintel:journey-focus-changed',e=>{if($('company-list-panel'))$('company-list-panel').hidden=e.detail?.focus==='buyers';});
+ // Inside the search card the panel is hidden with the card on the Buyers stage. Hiding the panel itself left it hidden
+  // after a return to Companies by the sidebar, which announces no focus change (found live on 23 Nov 2026).
+  root.addEventListener('leadintel:journey-focus-changed',e=>{const panel=$('company-list-panel');if(panel)panel.hidden=!panel.closest('.discovery-panel')&&e.detail?.focus==='buyers';});
  root.LeadIntelCompanyListUI={mount,refreshSearch,open: id=>action(()=>id?open(id):showLists())};
  const init=()=>{mount();mountSearch();const observer=new MutationObserver(()=>{if(!$('company-list-panel'))mount();mountCrm();mountSearch();});observer.observe(document.body,{childList:true,subtree:true});};
  for(const type of ['leadintel:server-ready','leadintel:session-changed','leadintel:account-changed','storage'])root.addEventListener(type,()=>{synchronize();void refreshSearch();});
