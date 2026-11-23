@@ -6,6 +6,9 @@ compatibility_date = "2026-07-20"
 # Server-side PIN verifier; creator access still requires the platform owner session.
 CREATOR_LIBRARY_PIN_SHA256 = "4fc779c823fd37ed61f66a6ae37c9dffed06bb295f3902d2fa9d485aa741a724"
 WORKSPACE_STORAGE_ENABLED = "true"
+# Company lists: how many companies one research slice works on at once (see runLanes in
+# src/company-list-research.js). "1" is one operation at a time, the behaviour before 23 Nov 2026; at most 8.
+COMPANY_LIST_LANES = "8"
 STRIPE_ACCOUNT_ID = "acct_1Gn4gwGqAtOWOEjZ"
 STRIPE_LIVEMODE = "true"
 STRIPE_STORAGE_BILLING_ENABLED = "false"
